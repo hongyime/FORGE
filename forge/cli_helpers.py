@@ -1133,7 +1133,10 @@ def _normalize_discovered_url(value: str) -> str:
     candidate = candidate.strip("[]{}()<>'\"")
     while candidate and candidate[-1] in {".", ",", ";"}:
         candidate = candidate[:-1]
-    parsed = urlparse(candidate)
+    try:
+        parsed = urlparse(candidate)
+    except ValueError:
+        return ""
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return ""
     return candidate
@@ -1193,6 +1196,12 @@ def _extract_html_surface_urls(
     ordered_urls: list[str] = []
     seen: set[str] = set()
 
+    def _safe_urljoin(raw_value: str) -> str:
+        try:
+            return urljoin(base_url, raw_value)
+        except ValueError:
+            return ""
+
     def _append(candidate: str) -> None:
         normalized = _normalize_discovered_url(candidate)
         if not normalized or normalized in seen:
@@ -1206,9 +1215,12 @@ def _extract_html_surface_urls(
         value = html_lib.unescape(str(raw_value or "").strip())
         if not value or value.lower().startswith(_HTML_IGNORED_URL_PREFIXES):
             return ""
-        return urljoin(base_url, value)
+        return _safe_urljoin(value)
 
-    parsed_base = urlparse(str(base_url or "").strip())
+    try:
+        parsed_base = urlparse(str(base_url or "").strip())
+    except ValueError:
+        parsed_base = urlparse("")
     has_base = parsed_base.scheme in {"http", "https"} and bool(parsed_base.netloc)
     families = ["literal"]
     if has_base:
@@ -1272,7 +1284,9 @@ def _extract_html_surface_urls(
                         if raw_value.lower().startswith("data:"):
                             skip_data_payload = True
                         continue
-                    candidates.append(urljoin(base_url, raw_value))
+                    resolved = _safe_urljoin(raw_value)
+                    if resolved:
+                        candidates.append(resolved)
             return candidates
         if family == "css_url":
             for match in _HTML_CSS_URL_RE.finditer(raw_html):

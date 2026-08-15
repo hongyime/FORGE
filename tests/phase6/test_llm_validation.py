@@ -8,7 +8,7 @@ Tests cover:
 - OPSEC violation detection
 - Hallucination detection and factual accuracy
 """
-
+import gc
 import pytest
 import tempfile
 import json
@@ -18,23 +18,19 @@ from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 
 from forge.phase6.report_synthesizer import (
-    ReportSynthesizer,
-    ContextBuilder,
-    PromptAssembler,
-    _derive_overall_risk,
-    PromptOverflowError,
-    ReportGenerationError,
+    ReportSynthesizer, ContextBuilder, PromptAssembler,
+    _derive_overall_risk, PromptOverflowError, ReportGenerationError
 )
 
 
 class TestEnhancedLLMSchema:
     """Test enhanced LLM feedback database schema."""
-
+    
     def test_llm_feedback_schema_enhancement(self):
         """Test that enhanced LLM feedback schema is properly created."""
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "test.db"
-
+            
             # Create database with new schema
             conn = sqlite3.connect(db_path)
             conn.executescript("""
@@ -71,7 +67,7 @@ class TestEnhancedLLMSchema:
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             """)
-
+            
             # Insert test data
             conn.execute("""
                 INSERT INTO llm_feedback 
@@ -82,7 +78,7 @@ class TestEnhancedLLMSchema:
                 VALUES (1, 'test_prompt_hash', 'test_response_hash', 0.85, 1,
                         2, 0.90, 0, 0.05, 0.95, 0.88, 1)
             """)
-
+            
             # Verify enhanced fields
             cursor = conn.cursor()
             cursor.execute("""
@@ -91,7 +87,7 @@ class TestEnhancedLLMSchema:
                        final_approval
                 FROM llm_feedback WHERE engagement_id = 1
             """)
-
+            
             result = cursor.fetchone()
             assert result is not None
             assert result[0] == 2  # correction_loops
@@ -101,14 +97,14 @@ class TestEnhancedLLMSchema:
             assert result[4] == 0.95  # factual_accuracy_score
             assert result[5] == 0.88  # engagement_context_relevance
             assert result[6] == 1  # final_approval
-
+            
             conn.close()
-
+    
     def test_validation_rules_population(self):
         """Test that default validation rules are properly populated."""
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "test.db"
-
+            
             # Create database with validation rules
             conn = sqlite3.connect(db_path)
             conn.executescript("""
@@ -135,29 +131,29 @@ class TestEnhancedLLMSchema:
                 ('section_length', 'coherence', 'medium', '.{0,49}', 
                  'Sections should contain sufficient narrative detail', 'Expand terse sections with concise evidence-backed prose');
             """)
-
+            
             # Verify rules were inserted
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM llm_validation_rules WHERE enabled = 1")
             count = cursor.fetchone()[0]
             assert count >= 2
-
+            
             # Verify rule types and severities
             cursor.execute("SELECT DISTINCT rule_type FROM llm_validation_rules")
             rule_types = [row[0] for row in cursor.fetchall()]
             assert "opsec" in rule_types
-
+            
             cursor.execute("SELECT DISTINCT severity FROM llm_validation_rules")
             severities = [row[0] for row in cursor.fetchall()]
             assert "critical" in severities
             assert "medium" in severities
-
+            
             conn.close()
 
 
 class TestMultiShotSelfCorrection:
     """Test multi-shot self-correction functionality."""
-
+    
     def test_validation_scoring_algorithm(self):
         """Test validation scoring algorithm for different aspects."""
         # Mock validation results
@@ -165,30 +161,33 @@ class TestMultiShotSelfCorrection:
             "narrative_coherence": 0.85,
             "factual_accuracy": 0.92,
             "opsec_compliance": 1.0,
-            "engagement_relevance": 0.78,
+            "engagement_relevance": 0.78
         }
-
+        
         # Calculate combined score (weighted average)
         weights = {
             "narrative_coherence": 0.25,
             "factual_accuracy": 0.35,
             "opsec_compliance": 0.25,
-            "engagement_relevance": 0.15,
+            "engagement_relevance": 0.15
         }
-
-        combined_score = sum(validation_results[key] * weights[key] for key in validation_results)
-
+        
+        combined_score = sum(
+            validation_results[key] * weights[key] 
+            for key in validation_results
+        )
+        
         assert 0.0 <= combined_score <= 1.0
         assert combined_score > 0.8  # Should be high quality
-
+    
     def test_correction_loop_convergence(self):
         """Test that correction loops converge within reasonable iterations."""
         max_iterations = 5
         convergence_threshold = 0.85
-
+        
         # Simulate correction loop
         scores = [0.65, 0.72, 0.81, 0.87, 0.89]  # Improving scores
-
+        
         for i, score in enumerate(scores):
             if score >= convergence_threshold:
                 # Converged successfully
@@ -197,7 +196,7 @@ class TestMultiShotSelfCorrection:
         else:
             # Should not reach here
             assert False, "Correction loop should converge"
-
+    
     def test_opsec_violation_detection(self):
         """Test OPSEC violation detection in generated reports."""
         # Test report with OPSEC violations
@@ -212,26 +211,25 @@ class TestMultiShotSelfCorrection:
         - API key exposed: AKIA123456789EXAMPLE
         - Tool usage: We used Metasploit to exploit the vulnerability
         """
-
+        
         # Define OPSEC violation patterns
         opsec_patterns = [
             r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b",  # IP addresses
             r"(?i)(?:password|passwd|secret|api[_-]?key|token)\s*[:=]\s*\S+",  # Credentials
-            r"(?i)(?:nmap|metasploit|burp|sqlmap|forge)",  # Tool names
+            r"(?i)(?:nmap|metasploit|burp|sqlmap|forge)"  # Tool names
         ]
-
+        
         violations = []
         for pattern in opsec_patterns:
             import re
-
             matches = re.findall(pattern, test_report)
             violations.extend(matches)
-
+        
         assert len(violations) > 0  # Should detect violations
         assert "192.168.1.100" in str(violations)
         assert "password" in str(violations).lower()
         assert "metasploit" in str(violations).lower()
-
+    
     def test_hallucination_detection(self):
         """Test hallucination detection by cross-referencing with database."""
         # Mock engagement database findings
@@ -239,15 +237,15 @@ class TestMultiShotSelfCorrection:
             "CVE-2021-44228": {
                 "severity": "CRITICAL",
                 "title": "Log4Shell Remote Code Execution",
-                "cvss_score": 10.0,
+                "cvss_score": 10.0
             },
             "CVE-2021-34527": {
-                "severity": "CRITICAL",
+                "severity": "CRITICAL", 
                 "title": "PrintNightmare",
-                "cvss_score": 8.8,
-            },
+                "cvss_score": 8.8
+            }
         }
-
+        
         # Test report with hallucinated findings
         test_report = """
         ## Vulnerability Findings
@@ -256,24 +254,23 @@ class TestMultiShotSelfCorrection:
         - CVE-2021-99999: New critical vulnerability discovered (CVSS: 9.9)
         - CVE-2021-34527: PrintNightmare vulnerability (CVSS: 8.8)
         """
-
+        
         # Extract CVE references
         import re
-
         cve_pattern = r"CVE\s*-\s*\d{4}-\d+"
         reported_cves = re.findall(cve_pattern, test_report)
-
+        
         # Check for hallucinations
         hallucinations = []
         for cve in reported_cves:
             if cve not in db_findings:
                 hallucinations.append(cve)
-
+        
         assert len(hallucinations) > 0  # Should detect hallucinations
         assert "CVE-2021-99999" in hallucinations
         assert "CVE-2021-44228" not in hallucinations  # Real CVE
         assert "CVE-2021-34527" not in hallucinations  # Real CVE
-
+    
     def test_factual_accuracy_validation(self):
         """Test factual accuracy validation against database findings."""
         # Mock database findings
@@ -282,16 +279,16 @@ class TestMultiShotSelfCorrection:
                 "vuln_type": "IDOR",
                 "target_url": "https://example.com/api/users",
                 "severity": "HIGH",
-                "title": "Insecure Direct Object Reference",
+                "title": "Insecure Direct Object Reference"
             },
             {
                 "vuln_type": "SQL_INJECTION",
                 "target_url": "https://example.com/login",
                 "severity": "CRITICAL",
-                "title": "SQL Injection in Login Form",
-            },
+                "title": "SQL Injection in Login Form"
+            }
         ]
-
+        
         # Test report content
         test_report = """
         ## Vulnerability Assessment
@@ -302,31 +299,28 @@ class TestMultiShotSelfCorrection:
         Additionally, we found SQL injection at https://example.com/login
         with CRITICAL severity in the authentication mechanism.
         """
-
+        
         # Validate factual accuracy
         accuracy_score = 0.0
         matches = 0
-
+        
         for finding in db_findings:
             # Check if finding is mentioned in report
-            if (
-                finding["target_url"] in test_report
-                and finding["severity"].lower() in test_report.lower()
-            ):
+            if finding["target_url"] in test_report and finding["severity"].lower() in test_report.lower():
                 matches += 1
-
+        
         accuracy_score = matches / len(db_findings)
         assert accuracy_score == 1.0  # All findings should be accurately reported
 
 
 class TestReportSynthesizerIntegration:
     """Test integration of enhanced LLM validation with report synthesizer."""
-
+    
     def test_context_builder_with_validation(self):
         """Test ContextBuilder integration with validation."""
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "test.db"
-
+            
             # Create test database with findings
             conn = sqlite3.connect(db_path)
             conn.executescript("""
@@ -361,11 +355,11 @@ class TestReportSynthesizerIntegration:
             """)
             conn.commit()
             conn.close()
-
+            
             # Test context building
             builder = ContextBuilder(db_path, engagement_id=1)
             context = builder.build()
-
+            
             # Verify context contains findings. CVE count only tracks distinct CVE IDs,
             # not generic vulnerability rows without cve_id.
             assert context.exploits.finding_count == 2
@@ -373,12 +367,12 @@ class TestReportSynthesizerIntegration:
             assert context.exploits.high_count == 1  # One HIGH
             assert context.exploits.critical_count == 1  # One CRITICAL
             assert context.overall_risk == "CRITICAL"  # Highest severity
-
+    
     def test_prompt_assembler_with_validation_rules(self):
         """Test PromptAssembler integration with validation rules."""
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "test.db"
-
+            
             # Create validation rules
             conn = sqlite3.connect(db_path)
             conn.executescript("""
@@ -402,10 +396,10 @@ class TestReportSynthesizerIntegration:
                  'Hardcoded IP addresses in reports', 'Replace with [REDACTED] or similar');
             """)
             conn.close()
-
+            
             # Test prompt assembly with validation context
             assembler = PromptAssembler()
-
+            
             # Mock context
             from forge.phase6.report_synthesizer import (
                 ReportContext,
@@ -414,7 +408,6 @@ class TestReportSynthesizerIntegration:
                 OsintContext,
                 PostExploitContext,
             )
-
             context = ReportContext(
                 engagement_id=1,
                 engagement_name="Test Engagement",
@@ -432,26 +425,26 @@ class TestReportSynthesizerIntegration:
                     medium_count=0,
                     exploited=[
                         {"cve_id": "CVE-2021-44228", "severity": "CRITICAL", "title": "Log4Shell"},
-                        {"cve_id": "CVE-2021-34527", "severity": "HIGH", "title": "PrintNightmare"},
-                    ],
+                        {"cve_id": "CVE-2021-34527", "severity": "HIGH", "title": "PrintNightmare"}
+                    ]
                 ),
                 post_exploitation=PostExploitContext(),
             )
-
+            
             prompt = assembler.assemble(context)
-
+            
             # Verify prompt contains validation context
             assert "Test Engagement" in prompt
             assert "HIGH" in prompt
             assert "CVE-2021-44228" in prompt
             assert "Log4Shell" in prompt
-
+    
     def test_report_generation_with_validation_feedback(self):
         """Test report generation with validation feedback loop."""
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "test.db"
             output_dir = Path(temp_dir) / "output"
-
+            
             # Create test database
             conn = sqlite3.connect(db_path)
             conn.executescript("""
@@ -484,7 +477,7 @@ class TestReportSynthesizerIntegration:
             """)
             conn.commit()
             conn.close()
-
+            
             # Mock LLM response with validation
             mock_llm_response = """
             # Security Assessment Report
@@ -499,40 +492,53 @@ class TestReportSynthesizerIntegration:
             ## Recommendations
             Implement proper authorization checks and input validation.
             """
-
+            
             # Test synthesizer with mocked LLM
-            with patch("forge.phase6.report_synthesizer.Llama") as mock_llama_class:
+            with patch('forge.phase6.report_synthesizer.Llama') as mock_llama_class:
                 mock_llama = Mock()
                 mock_llama_class.return_value = mock_llama
-
-                mock_response = {"choices": [{"message": {"content": mock_llm_response}}]}
+                
+                mock_response = {
+                    "choices": [{
+                        "message": {
+                            "content": mock_llm_response
+                        }
+                    }]
+                }
                 mock_llama.create_chat_completion.return_value = mock_response
-
+                
                 synthesizer = ReportSynthesizer(
-                    db_path=db_path, output_dir=output_dir, model_path=Path(temp_dir) / "model.gguf"
+                    db_path=db_path,
+                    output_dir=output_dir,
+                    model_path=Path(temp_dir) / "model.gguf"
                 )
-
+                
                 # Mock the model file exists
-                with patch("pathlib.Path.exists", return_value=True):
-                    with patch("questionary.confirm", return_value=True):
+                with patch('pathlib.Path.exists', return_value=True):
+                    with patch('questionary.confirm', return_value=True):
                         report_path = synthesizer.generate(
-                            engagement_id=1, include_monitoring=False, dry_run=False
+                            engagement_id=1,
+                            include_monitoring=False,
+                            dry_run=False
                         )
-
+                
                 # Verify report was generated
                 assert report_path.exists()
-
+                
                 # Verify report content
                 report_content = report_path.read_text()
                 assert "Security Assessment Report" in report_content
                 assert "IDOR" in report_content
                 assert "https://example.com/api/users" in report_content
                 assert "HIGH" in report_content
+                synthesizer._llm = None
+                del synthesizer
+                gc.collect()
 
 
 class TestOPSECViolationPrevention:
     """Test OPSEC violation prevention in report generation."""
-
+    
     def test_credential_exposure_detection(self):
         """Test detection of credential exposure in reports."""
         test_report = """
@@ -541,7 +547,7 @@ class TestOPSECViolationPrevention:
         - API Key: AKIA123456789EXAMPLE
         - Database connection string: Server=192.168.1.100;User=sa;Password=secret123
         """
-
+        
         # Define credential exposure patterns
         credential_patterns = [
             r"(?i)password\s*[:=]\s*\S+",
@@ -549,21 +555,20 @@ class TestOPSECViolationPrevention:
             r"(?i)secret\s*[:=]\s*\S+",
             r"(?i)token\s*[:=]\s*\S+",
             r"AKIA[0-9A-Z]{16}",  # AWS Access Key pattern
-            r"Server=.*;Password=\S+",  # SQL connection strings
+            r"Server=.*;Password=\S+"  # SQL connection strings
         ]
-
+        
         violations = []
         for pattern in credential_patterns:
             import re
-
             matches = re.findall(pattern, test_report)
             violations.extend(matches)
-
+        
         assert len(violations) > 0
         assert "admin123" in str(violations)
         assert "AKIA123456789EXAMPLE" in str(violations)
         assert "secret123" in str(violations)
-
+    
     def test_tool_disclosure_detection(self):
         """Test detection of security tool disclosure in reports."""
         test_report = """
@@ -574,28 +579,27 @@ class TestOPSECViolationPrevention:
         - SQLMap for database testing
         - FORGE toolkit for comprehensive assessment
         """
-
+        
         # Define tool disclosure patterns
         tool_patterns = [
             r"(?i)nmap",
             r"(?i)metasploit",
             r"(?i)burp(?:[_\s]?suite)?",
             r"(?i)sqlmap",
-            r"(?i)forge",
+            r"(?i)forge"
         ]
-
+        
         violations = []
         for pattern in tool_patterns:
             import re
-
             matches = re.findall(pattern, test_report)
             violations.extend(matches)
-
+        
         assert len(violations) > 0
         assert any("nmap" in str(v).lower() for v in violations)
         assert any("metasploit" in str(v).lower() for v in violations)
         assert any("burp" in str(v).lower() for v in violations)
-
+    
     def test_methodology_disclosure_detection(self):
         """Test detection of detailed methodology disclosure."""
         test_report = """
@@ -607,28 +611,27 @@ class TestOPSECViolationPrevention:
         4. Persistence establishment via scheduled tasks
         5. Data exfiltration using encrypted channels
         """
-
+        
         # Define methodology disclosure patterns
         methodology_patterns = [
             r"(?i)exploit(?:[_\s]?chain)",
             r"(?i)lateral(?:[_\s]?movement)",
             r"(?i)persistence(?:[_\s]?establishment)",
             r"(?i)data(?:[_\s]?exfiltration)",
-            r"(?i)compromised(?:[_\s]?credentials)",
+            r"(?i)compromised(?:[_\s]?credentials)"
         ]
-
+        
         violations = []
         for pattern in methodology_patterns:
             import re
-
             matches = re.findall(pattern, test_report)
             violations.extend(matches)
-
+        
         assert len(violations) > 0
         assert any("exploit" in str(v).lower() for v in violations)
         assert any("lateral" in str(v).lower() for v in violations)
         assert any("persistence" in str(v).lower() for v in violations)
-
+    
     def test_ip_address_detection(self):
         """Test detection of hardcoded IP addresses in reports."""
         test_report = """
@@ -639,20 +642,19 @@ class TestOPSECViolationPrevention:
         - DNS server: 8.8.8.8
         - Internal server: 10.0.0.5
         """
-
+        
         # Define IP address patterns
         ip_patterns = [
             r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b",  # IPv4 addresses
-            r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}\b",  # CIDR notation
+            r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}\b"  # CIDR notation
         ]
-
+        
         violations = []
         for pattern in ip_patterns:
             import re
-
             matches = re.findall(pattern, test_report)
             violations.extend(matches)
-
+        
         assert len(violations) > 0
         assert "192.168.1.1" in str(violations)
         assert "192.168.1.100" in str(violations)

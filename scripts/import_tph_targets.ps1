@@ -39,22 +39,93 @@ function Get-EnvFileValue {
     return ""
 }
 
+function Test-TcpPort {
+    param(
+        [Parameter(Mandatory = $true)][string]$HostName,
+        [Parameter(Mandatory = $true)][int]$Port,
+        [int]$TimeoutMilliseconds = 1000
+    )
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $asyncResult = $client.BeginConnect($HostName, $Port, $null, $null)
+        $connected = $asyncResult.AsyncWaitHandle.WaitOne(
+            [Math]::Max(100, $TimeoutMilliseconds),
+            $false
+        )
+        if (-not $connected) {
+            return $false
+        }
+        $client.EndConnect($asyncResult)
+        return $client.Connected
+    } catch {
+        return $false
+    } finally {
+        $client.Close()
+    }
+}
+
+function Get-TargetFeedDiagnostics {
+    param(
+        [Parameter(Mandatory = $true)][string]$Url,
+        [Parameter(Mandatory = $true)][string]$TphEnvPath
+    )
+    $parts = [System.Collections.Generic.List[string]]::new()
+    try {
+        $uri = [uri]$Url
+        if ($uri.Host -and $uri.Port -gt 0) {
+            $portReachable = Test-TcpPort -HostName $uri.Host -Port $uri.Port
+            $parts.Add("tcp=$($uri.Host):$($uri.Port) reachable=$portReachable")
+        }
+    } catch {
+        $parts.Add("url_parse_error=$($_.Exception.Message)")
+    }
+
+    $envExists = Test-Path -LiteralPath $TphEnvPath
+    $parts.Add("tph_env_exists=$envExists")
+    try {
+        $tphRepoPath = Split-Path -Parent $TphEnvPath
+        $composePath = Join-Path $tphRepoPath "docker-compose.yml"
+        $parts.Add("compose_file=$composePath exists=$(Test-Path -LiteralPath $composePath)")
+    } catch {
+        $parts.Add("compose_file_check_error=$($_.Exception.Message)")
+    }
+    return ($parts -join "; ")
+}
+
 function Wait-TargetFeed {
     param(
         [Parameter(Mandatory = $true)][string]$Url,
         [Parameter(Mandatory = $true)][hashtable]$Headers,
-        [Parameter(Mandatory = $true)][int]$TimeoutSeconds
+        [Parameter(Mandatory = $true)][int]$TimeoutSeconds,
+        [Parameter(Mandatory = $true)][string]$TphEnvPath
     )
     $deadline = (Get-Date).AddSeconds([Math]::Max(1, $TimeoutSeconds))
+    $attempt = 0
+    $lastError = ""
+    Write-Host "waiting for target feed url=$Url timeout_seconds=$TimeoutSeconds"
     do {
+        $attempt += 1
         try {
-            Invoke-RestMethod -Uri $Url -Headers $Headers -Method Get -TimeoutSec 5 | Out-Null
+            $remainingSeconds = [Math]::Max(
+                1,
+                [int][Math]::Ceiling(($deadline - (Get-Date)).TotalSeconds)
+            )
+            Invoke-RestMethod -Uri $Url -Headers $Headers -Method Get -TimeoutSec ([Math]::Min(5, $remainingSeconds)) | Out-Null
+            Write-Host "target feed reachable attempts=$attempt"
             return
         } catch {
-            Start-Sleep -Seconds 3
+            $lastError = $_.Exception.Message
+            $sleepSeconds = [Math]::Min(
+                3,
+                [Math]::Max(0, [int][Math]::Floor(($deadline - (Get-Date)).TotalSeconds))
+            )
+            if ($sleepSeconds -gt 0) {
+                Start-Sleep -Seconds $sleepSeconds
+            }
         }
     } while ((Get-Date) -lt $deadline)
-    throw "target feed did not become reachable before timeout: $Url"
+    $diagnostics = Get-TargetFeedDiagnostics -Url $Url -TphEnvPath $TphEnvPath
+    throw "target feed did not become reachable before timeout: $Url; attempts=$attempt; last_error=$lastError; $diagnostics"
 }
 
 function Add-FeedLimit {
@@ -98,7 +169,7 @@ if (-not $RoeId) {
 
 $feedUrl = Add-FeedLimit -Url $ApiUrl -LimitValue $Limit
 $headers = @{ "X-Monitor-Key" = $env:TPH_MONITOR_KEY }
-Wait-TargetFeed -Url $feedUrl -Headers $headers -TimeoutSeconds $WaitSeconds
+Wait-TargetFeed -Url $feedUrl -Headers $headers -TimeoutSeconds $WaitSeconds -TphEnvPath $TphEnvPath
 
 $args = @(
     "-m", "forge.cli",

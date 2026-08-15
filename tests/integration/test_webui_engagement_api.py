@@ -6,17 +6,28 @@ import sqlite3
 import time
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
-pytest.importorskip("jose")
-
 from forge.audit.manifest import write_run_audit_manifest
+from forge.db.control import (
+    connect_control_db,
+    mark_engagement_index_missing,
+    upsert_engagement_index,
+    upsert_membership,
+)
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
+from forge.graph.assets import (
+    upsert_asset_entity,
+    upsert_asset_relationship,
+    upsert_ownership_claim,
+)
 from forge.phase6.report_synthesizer import ReportSynthesizer
 from forge.reporting.dashboard import generate_dashboard
+from forge.remediation import connectors as remediation_connectors
 from forge.webui.app import create_app
 from forge.webui.auth import mint_token
 
@@ -65,6 +76,13 @@ def _build_engagement(tmp_path: Path, *, include_distributed_task: bool = False)
                 '2026-07-08T22:14:09',
                 '2026-07-09T09:44:12'
             )
+            """
+        )
+        con.execute(
+            """
+            INSERT OR IGNORE INTO workspace_memberships
+                (workspace_id, subject, role, permissions_json)
+            VALUES ('default', 'delta-one', 'owner', '["*"]')
             """
         )
         con.executemany(
@@ -436,7 +454,7 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     _build_engagement(tmp_path, include_distributed_task=True)
 
@@ -690,7 +708,7 @@ def test_engagement_detail_surfaces_old_scope_denials_without_scope_payload(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path, include_distributed_task=True)
     _insert_scope_denial_review_rows(db_path)
@@ -745,6 +763,7 @@ def test_engagement_detail_surfaces_raw_export_report_family(tmp_path: Path, mon
         "engagement_1001_report_20260709T014412.json",
         "engagement_1001_report_20260709T014412.pdf",
         "engagement_1001_report_20260709T014412.csv",
+        "engagement_1001_report_20260709T014412.html",
     ):
         (reports_dir / artifact_name).unlink()
     (reports_dir / "engagement_1001_raw_export_20260709T014412.json").write_text(
@@ -1098,10 +1117,10 @@ def test_engagement_detail_prefers_latest_report_family_and_preserves_history(
         list_resp = client.get("/api/engagements", headers=headers)
         assert list_resp.status_code == 200, list_resp.text
         items = list_resp.json()["items"]
-        assert items[0]["report_count"] == 8
+        assert items[0]["report_count"] == 9
         assert items[0]["report_family_count"] == 2
         assert items[0]["latest_report_family"] == "engagement_1001_report_20260709T014412"
-        assert items[0]["latest_report_export_count"] == 4
+        assert items[0]["latest_report_export_count"] == 5
         assert items[0]["has_prior_report_generations"] is True
 
         detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
@@ -1109,7 +1128,7 @@ def test_engagement_detail_prefers_latest_report_family_and_preserves_history(
         detail = detail_resp.json()
         assert detail["report_family_count"] == 2
         assert detail["latest_report_family"] == "engagement_1001_report_20260709T014412"
-        assert detail["latest_report_export_count"] == 4
+        assert detail["latest_report_export_count"] == 5
         assert detail["has_prior_report_generations"] is True
         assert (
             detail["report_summary"]["artifact_name"]
@@ -1138,6 +1157,7 @@ def test_engagement_detail_prefers_latest_report_family_and_preserves_history(
             "engagement_1001_report_20260709T014412.json",
             "engagement_1001_report_20260709T014412.pdf",
             "engagement_1001_report_20260709T014412.csv",
+            "engagement_1001_report_20260709T014412.html",
             "engagement_1001_report_20260708T230000.md",
             "engagement_1001_report_20260708T230000.json",
             "engagement_1001_report_20260708T230000.pdf",
@@ -1180,6 +1200,18 @@ def test_engagement_detail_api_excludes_report_prefix_collisions(
         "record_type,engagement_id,title\nsummary,10010,\n",
         encoding="utf-8",
     )
+    colliding_audit = "audit_10010_manifest_20260709T014512.json"
+    (reports_dir / colliding_audit).write_text(
+        json.dumps(
+            {
+                "engagement_id": 10010,
+                "manifest_hash": "wrong-engagement",
+                "verification_status": "verified",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
 
     app = create_app()
     with TestClient(app) as client:
@@ -1193,6 +1225,11 @@ def test_engagement_detail_api_excludes_report_prefix_collisions(
             headers=headers,
         )
         assert colliding_artifact_resp.status_code == 404
+        colliding_audit_resp = client.get(
+            f"/api/engagements/engagement-1001-acme-example/artifacts/{colliding_audit}",
+            headers=headers,
+        )
+        assert colliding_audit_resp.status_code == 404
 
     artifact_names = {artifact["name"] for artifact in detail["artifacts"]}
     preview_names = {preview["name"] for preview in detail["report_previews"]}
@@ -1200,6 +1237,7 @@ def test_engagement_detail_api_excludes_report_prefix_collisions(
 
     assert detail["report_summary"]["findings_checksum"] == "sha256:test-checksum-1001"
     assert all(not name.startswith("engagement_10010") for name in artifact_names)
+    assert colliding_audit not in artifact_names
     assert all(not name.startswith("engagement_10010") for name in preview_names)
     assert all(not name.startswith("engagement_10010") for name in history_names)
 
@@ -2263,6 +2301,18 @@ def test_engagement_detail_api_surfaces_slack_validation_proof_on_finding_rows(
     try:
         con.execute(
             """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES (
+                1001, 'slack', 'T9B2D6F4/U7A3C9K2', 'VALIDATED',
+                'slack_auth_test', 200, ?, ?, '2026-07-09T10:14:00'
+            )
+            """,
+            (proof, proof),
+        )
+        con.execute(
+            """
             INSERT INTO vulnerability_findings
                 (engagement_id, vuln_type, target_url, parameter, severity, title,
                  description, evidence, found_at)
@@ -2613,7 +2663,7 @@ def test_web_root_serves_react_console_and_generated_data(tmp_path: Path, monkey
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
 
     data_root = tmp_path / "reports" / "dashboard" / "data"
@@ -2636,8 +2686,16 @@ def test_web_root_serves_react_console_and_generated_data(tmp_path: Path, monkey
         command_center_resp = client.get("/command-center")
         assert command_center_resp.status_code == 200, command_center_resp.text
         assert "FORGE Command Center" in command_center_resp.text
+        assert '"/ws/progress?engagement_id="' in command_center_resp.text
+        assert '["forge-progress", bearer]' in command_center_resp.text
 
-        data_resp = client.get("/data/engagements.json")
+        unauth_data_resp = client.get("/data/engagements.json")
+        assert unauth_data_resp.status_code == 401, unauth_data_resp.text
+
+        data_resp = client.get(
+            "/data/engagements.json",
+            headers={"Authorization": f"Bearer {mint_token('console-viewer')}"},
+        )
         assert data_resp.status_code == 200, data_resp.text
         assert data_resp.json()["items"] == []
 
@@ -2649,7 +2707,7 @@ def test_engagement_create_and_seed_crud_routes(tmp_path: Path, monkeypatch) -> 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     _build_engagement(tmp_path)
 
@@ -2748,6 +2806,33 @@ def test_engagement_create_and_seed_crud_routes(tmp_path: Path, monkeypatch) -> 
         assert patched_detail["operator"] == "architect-two"
         assert patched_detail["tags"] == ["priority-high", "beta-expanded"]
         assert patched_detail["slug"] == "engagement-1002-beta-example-updated"
+        with sqlite3.connect(tmp_path / ".forge_data" / "control.db") as con:
+            patched_memberships = con.execute(
+                """
+                SELECT workspace_id, subject, role
+                FROM workspace_memberships
+                ORDER BY workspace_id, subject
+                """
+            ).fetchall()
+        assert ("default", "architect", "owner") in patched_memberships
+        assert ("default", "architect-two", "owner") not in patched_memberships
+        spoofed_patch_operator_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "architect-two",
+                    workspace_id="default",
+                    permissions=("engagements:read",),
+                )
+            )
+        }
+        spoofed_patch_operator_detail = client.get(
+            "/api/engagements/engagement-1002-beta-example-updated",
+            headers=spoofed_patch_operator_headers,
+        )
+        assert spoofed_patch_operator_detail.status_code == 404, (
+            spoofed_patch_operator_detail.text
+        )
 
         delete_resp = client.delete(
             f"/api/engagements/engagement-1002-beta-example-updated/seeds/{phone_seed_id}",
@@ -2763,6 +2848,1989 @@ def test_engagement_create_and_seed_crud_routes(tmp_path: Path, monkeypatch) -> 
         assert "+15550002222" not in final_detail["seeds"]
         assert final_detail["counts"]["engagement_seeds"] == 2
         assert final_detail["tags"] == ["priority-high", "beta-expanded"]
+
+
+def test_engagement_routes_enforce_workspace_boundary(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    _build_engagement(tmp_path)
+
+    app = create_app()
+    with TestClient(app) as client:
+        alpha_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "alpha-user",
+                    workspace_id="alpha",
+                    permissions=("engagements:create", "engagements:read", "engagements:write"),
+                )
+            )
+        }
+        beta_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "beta-user",
+                    workspace_id="beta",
+                    permissions=("engagements:create", "engagements:read", "engagements:write"),
+                )
+            )
+        }
+
+        forbidden_create = client.post(
+            "/api/engagements",
+            json={
+                "name": "Forbidden Workspace",
+                "workspace_id": "beta",
+                "seeds": ["forbidden.example"],
+            },
+            headers=alpha_headers,
+        )
+        assert forbidden_create.status_code == 403, forbidden_create.text
+
+        alpha_create = client.post(
+            "/api/engagements",
+            json={
+                "name": "Alpha Workspace",
+                "status": "ACTIVE",
+                "operator": "spoofed-alpha-owner",
+                "seeds": ["alpha.example"],
+            },
+            headers=alpha_headers,
+        )
+        assert alpha_create.status_code == 200, alpha_create.text
+        alpha = alpha_create.json()
+        assert alpha["id"] == 1002
+        assert alpha["workspace_id"] == "alpha"
+
+        beta_create = client.post(
+            "/api/engagements",
+            json={
+                "name": "Beta Workspace",
+                "status": "ACTIVE",
+                "seeds": ["beta.example"],
+            },
+            headers=beta_headers,
+        )
+        assert beta_create.status_code == 200, beta_create.text
+        beta = beta_create.json()
+        assert beta["id"] == 1003
+        assert beta["workspace_id"] == "beta"
+
+        control_db = tmp_path / ".forge_data" / "control.db"
+        assert control_db.is_file()
+        with sqlite3.connect(control_db) as con:
+            index_rows = con.execute(
+                """
+                SELECT engagement_id, workspace_id, slug
+                FROM engagement_index
+                ORDER BY engagement_id
+                """
+            ).fetchall()
+            membership_rows = con.execute(
+                """
+                SELECT workspace_id, subject, role
+                FROM workspace_memberships
+                ORDER BY workspace_id, subject
+                """
+            ).fetchall()
+        assert index_rows == [
+            (1002, "alpha", alpha["slug"]),
+            (1003, "beta", beta["slug"]),
+        ]
+        assert ("alpha", "alpha-user", "owner") in membership_rows
+        assert ("beta", "beta-user", "owner") in membership_rows
+        assert ("alpha", "spoofed-alpha-owner", "owner") not in membership_rows
+
+        alpha_list = client.get("/api/engagements", headers=alpha_headers)
+        assert alpha_list.status_code == 200, alpha_list.text
+        assert {item["id"] for item in alpha_list.json()["items"]} == {1002}
+
+        alpha_intruder_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "alpha-intruder",
+                    workspace_id="alpha",
+                    permissions=("engagements:read",),
+                )
+            )
+        }
+        intruder_list = client.get("/api/engagements", headers=alpha_intruder_headers)
+        assert intruder_list.status_code == 200, intruder_list.text
+        assert intruder_list.json()["items"] == []
+        intruder_detail = client.get(
+            f"/api/engagements/{alpha['slug']}",
+            headers=alpha_intruder_headers,
+        )
+        assert intruder_detail.status_code == 404, intruder_detail.text
+        spoofed_operator_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "spoofed-alpha-owner",
+                    workspace_id="alpha",
+                    permissions=("engagements:read",),
+                )
+            )
+        }
+        spoofed_operator_detail = client.get(
+            f"/api/engagements/{alpha['slug']}",
+            headers=spoofed_operator_headers,
+        )
+        assert spoofed_operator_detail.status_code == 404, spoofed_operator_detail.text
+
+        alpha_read_only_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "alpha-user",
+                    workspace_id="alpha",
+                    permissions=("engagements:read",),
+                )
+            )
+        }
+        read_only_create = client.post(
+            "/api/engagements",
+            json={"name": "Read Only Create", "seeds": ["readonly.example"]},
+            headers=alpha_read_only_headers,
+        )
+        assert read_only_create.status_code == 403, read_only_create.text
+        assert read_only_create.json()["detail"] == "Missing required permission: engagements:create"
+
+        alpha_wildcard_intruder_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "alpha-wildcard-intruder",
+                    workspace_id="alpha",
+                    permissions=("*",),
+                )
+            )
+        }
+        wildcard_intruder_list = client.get(
+            "/api/engagements",
+            headers=alpha_wildcard_intruder_headers,
+        )
+        assert wildcard_intruder_list.status_code == 200, wildcard_intruder_list.text
+        assert wildcard_intruder_list.json()["items"] == []
+
+        beta_list = client.get("/api/engagements", headers=beta_headers)
+        assert beta_list.status_code == 200, beta_list.text
+        assert {item["id"] for item in beta_list.json()["items"]} == {1003}
+
+        alpha_data = client.get("/data/engagements.json", headers=alpha_headers)
+        assert alpha_data.status_code == 200, alpha_data.text
+        assert {item["id"] for item in alpha_data.json()["items"]} == {1002}
+
+        beta_slug = beta["slug"]
+        cross_data_detail = client.get(
+            f"/data/engagements/{beta_slug}.json",
+            headers=alpha_headers,
+        )
+        assert cross_data_detail.status_code == 404, cross_data_detail.text
+
+        cross_detail = client.get(f"/api/engagements/{beta_slug}", headers=alpha_headers)
+        assert cross_detail.status_code == 404, cross_detail.text
+
+        cross_update = client.patch(
+            f"/api/engagements/{beta_slug}",
+            json={"status": "COMPLETE"},
+            headers=alpha_headers,
+        )
+        assert cross_update.status_code == 404, cross_update.text
+
+        cross_seed_list = client.get(
+            f"/api/engagements/{beta_slug}/seeds",
+            headers=alpha_headers,
+        )
+        assert cross_seed_list.status_code == 404, cross_seed_list.text
+
+        cross_vuln_summary = client.get(
+            f"/api/engagements/{beta['id']}/vuln-summary",
+            headers=alpha_headers,
+        )
+        assert cross_vuln_summary.status_code == 404, cross_vuln_summary.text
+
+        beta_detail = client.get(f"/api/engagements/{beta_slug}", headers=beta_headers)
+        assert beta_detail.status_code == 200, beta_detail.text
+        assert beta_detail.json()["workspace_id"] == "beta"
+
+
+def test_engagement_list_and_detail_use_fresh_control_index_fast_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+    with sqlite3.connect(db_path) as con:
+        con.execute(
+            """
+            INSERT OR IGNORE INTO workspace_memberships
+                (workspace_id, subject, role, permissions_json)
+            VALUES ('default', 'delta-one', 'owner', '["*"]')
+            """
+        )
+        con.commit()
+    cached_summary = {
+        "db": "1001.db",
+        "id": 1001,
+        "slug": "engagement-1001-acme-example",
+        "name": "Acme Example",
+        "workspace_id": "default",
+        "status": "ACTIVE",
+        "operator": "delta-one",
+        "created_at": "2026-07-08T22:14:09",
+        "updated_at": "2026-07-09T09:44:12",
+        "seeds": ["cached-control-index.example"],
+        "counts": {},
+    }
+    control_con = connect_control_db(tmp_path / ".forge_data")
+    try:
+        upsert_engagement_index(
+            control_con,
+            engagement_id=1001,
+            workspace_id="default",
+            db_path=db_path,
+            slug="engagement-1001-acme-example",
+            name="Acme Example",
+            status="ACTIVE",
+            operator="delta-one",
+            created_at="2026-07-08T22:14:09",
+            updated_at="2026-07-09T09:44:12",
+            summary=cached_summary,
+        )
+        upsert_membership(
+            control_con,
+            workspace_id="default",
+            subject="delta-one",
+            role="owner",
+            permissions_json='["*"]',
+        )
+        control_con.commit()
+    finally:
+        control_con.close()
+
+    app = create_app()
+    headers = {
+        "Authorization": (
+            "Bearer "
+            + mint_token(
+                "delta-one",
+                permissions=("engagements:read",),
+            )
+        )
+    }
+    client = TestClient(app)
+    try:
+        list_resp = client.get("/api/engagements", headers=headers)
+        assert list_resp.status_code == 200, list_resp.text
+        assert list_resp.json()["items"][0]["seeds"] == ["cached-control-index.example"]
+
+        detail_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example",
+            headers=headers,
+        )
+        assert detail_resp.status_code == 200, detail_resp.text
+        assert detail_resp.json()["id"] == 1001
+        assert "acme.example" in detail_resp.json()["seeds"]
+    finally:
+        client.close()
+
+
+def test_engagement_index_tombstone_route_filters_by_workspace(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    monkeypatch.setenv("FORGE_CONTROL_TOMBSTONE_RETENTION_DAYS", "off")
+    data_dir = tmp_path / ".forge_data"
+    (data_dir / "engagements").mkdir(parents=True)
+
+    control_con = connect_control_db(data_dir)
+    try:
+        upsert_engagement_index(
+            control_con,
+            engagement_id=4001,
+            workspace_id="alpha",
+            db_path=data_dir / "engagements" / "4001.db",
+            slug="engagement-4001-alpha",
+            name="Alpha",
+            status="ACTIVE",
+            operator="alpha-user",
+            updated_at="2026-08-10T00:00:01",
+            summary={"id": 4001, "slug": "engagement-4001-alpha", "workspace_id": "alpha"},
+        )
+        upsert_engagement_index(
+            control_con,
+            engagement_id=4002,
+            workspace_id="beta",
+            db_path=data_dir / "engagements" / "4002.db",
+            slug="engagement-4002-beta",
+            name="Beta",
+            status="ACTIVE",
+            operator="beta-user",
+            updated_at="2026-08-10T00:00:02",
+            summary={"id": 4002, "slug": "engagement-4002-beta", "workspace_id": "beta"},
+        )
+        mark_engagement_index_missing(control_con, 4001)
+        mark_engagement_index_missing(control_con, 4002)
+        upsert_membership(
+            control_con,
+            workspace_id="alpha",
+            subject="alpha-user",
+            role="owner",
+            permissions_json='["*"]',
+        )
+        upsert_membership(
+            control_con,
+            workspace_id="beta",
+            subject="beta-user",
+            role="owner",
+            permissions_json='["*"]',
+        )
+        control_con.commit()
+    finally:
+        control_con.close()
+
+    app = create_app()
+    with TestClient(app) as client:
+        alpha_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "alpha-user",
+                    permissions=("engagements:read",),
+                    workspace_id="alpha",
+                )
+            )
+        }
+        response = client.get("/api/engagements/index/tombstones", headers=alpha_headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["items"] == [
+            {
+                "engagement_id": 4001,
+                "workspace_id": "alpha",
+                "slug": "engagement-4001-alpha",
+                "name": "Alpha",
+                "status": "ACTIVE",
+                "operator": "alpha-user",
+                "db_path": str((data_dir / "engagements" / "4001.db").resolve()),
+                "db_exists": False,
+                "last_seen_at": response.json()["items"][0]["last_seen_at"],
+                "missing_since": response.json()["items"][0]["missing_since"],
+            }
+        ]
+        assert response.json()["items"][0]["missing_since"]
+
+
+def test_engagement_index_tombstone_route_purges_expired_rows(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    monkeypatch.setenv("FORGE_CONTROL_TOMBSTONE_RETENTION_DAYS", "0")
+    data_dir = tmp_path / ".forge_data"
+    (data_dir / "engagements").mkdir(parents=True)
+
+    control_con = connect_control_db(data_dir)
+    try:
+        upsert_engagement_index(
+            control_con,
+            engagement_id=4003,
+            workspace_id="alpha",
+            db_path=data_dir / "engagements" / "4003.db",
+            slug="engagement-4003-alpha",
+            name="Alpha",
+            status="ACTIVE",
+            operator="alpha-user",
+            updated_at="2026-08-10T00:00:03",
+            summary={"id": 4003, "slug": "engagement-4003-alpha", "workspace_id": "alpha"},
+        )
+        mark_engagement_index_missing(control_con, 4003)
+        control_con.commit()
+    finally:
+        control_con.close()
+
+    app = create_app()
+    with TestClient(app) as client:
+        alpha_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "alpha-user",
+                    permissions=("engagements:read",),
+                    workspace_id="alpha",
+                )
+            )
+        }
+        response = client.get("/api/engagements/index/tombstones", headers=alpha_headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["items"] == []
+
+    with sqlite3.connect(data_dir / "control.db") as con:
+        remaining = con.execute(
+            "SELECT COUNT(*) FROM engagement_index WHERE engagement_id=4003"
+        ).fetchone()[0]
+    assert remaining == 0
+
+
+def test_remediation_workflow_routes_enforce_roles_and_track_state(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT OR IGNORE INTO workspace_memberships
+                (workspace_id, subject, role, permissions_json)
+            VALUES ('default', 'delta-one', 'operator', '[]')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+    control_con = connect_control_db(tmp_path / ".forge_data")
+    try:
+        upsert_membership(
+            control_con,
+            workspace_id="default",
+            subject="delta-one",
+            role="operator",
+        )
+        control_con.commit()
+    finally:
+        control_con.close()
+
+    app = create_app()
+    with TestClient(app) as client:
+        write_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("remediation:write",),
+                )
+            )
+        }
+        create_resp = client.post(
+            "/api/engagements/engagement-1001-acme-example/remediation",
+            json={
+                "finding_table": "vulnerability_findings",
+                "finding_id": 1,
+                "owner": "appsec",
+                "sla_due_at": "2026-08-20T00:00:00",
+                "status": "assigned",
+                "ticket_system": "github",
+                "ticket_ref": "SEC-1001",
+                "ticket_url": "https://github.com/acme/sec/issues/1001",
+                "metadata": {"source": "unit"},
+            },
+            headers=write_headers,
+        )
+        assert create_resp.status_code == 200, create_resp.text
+        item = create_resp.json()["item"]
+        item_id = int(item["id"])
+        assert item["finding_ref"] == "1"
+        assert item["title"] == "Validated Firebase data exposure"
+        assert item["severity"] == "HIGH"
+        assert item["owner"] == "appsec"
+        assert item["sla_due_at"] == "2026-08-20T00:00:00"
+        assert item["status"] == "assigned"
+        assert item["ticket_system"] == "github"
+        assert item["ticket_ref"] == "SEC-1001"
+        assert item["metadata"] == {"source": "unit"}
+
+        denied_read = client.get(
+            "/api/engagements/engagement-1001-acme-example/remediation",
+            headers=write_headers,
+        )
+        assert denied_read.status_code == 403, denied_read.text
+        assert denied_read.json()["detail"] == "Missing required permission: remediation:read"
+
+        read_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("remediation:read",),
+                )
+            )
+        }
+        list_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/remediation",
+            headers=read_headers,
+        )
+        assert list_resp.status_code == 200, list_resp.text
+        payload = list_resp.json()
+        assert payload["items"][0]["id"] == item_id
+        assert payload["review_queue"]["summary"]["attention_required"] == 0
+        assert payload["summary"] == {
+            "total": 1,
+            "open": 0,
+            "risk_accepted": 0,
+            "retest_pending": 0,
+            "resolved": 0,
+            "with_ticket": 1,
+            "with_owner": 1,
+            "with_sla": 1,
+            "risk_acceptance_review_due": 0,
+            "risk_acceptance_expired": 0,
+            "risk_acceptance_expiring_soon": 0,
+            "risk_acceptance_missing_expiry": 0,
+            "risk_acceptance_invalid_expiry": 0,
+        }
+
+        denied_export = client.get(
+            "/api/engagements/engagement-1001-acme-example/remediation/export",
+            params={"format": "csv"},
+            headers=read_headers,
+        )
+        assert denied_export.status_code == 403, denied_export.text
+        assert denied_export.json()["detail"] == "Missing required permission: remediation:export"
+
+        export_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("remediation:export",),
+                )
+            )
+        }
+        csv_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/remediation/export",
+            params={"format": "csv"},
+            headers=export_headers,
+        )
+        assert csv_resp.status_code == 200, csv_resp.text
+        assert csv_resp.headers["content-type"].startswith("text/csv")
+        assert (
+            csv_resp.headers["content-disposition"]
+            == 'attachment; filename="engagement_1001_remediation.csv"'
+        )
+        assert "id,engagement_id,finding_table" in csv_resp.text
+        assert "risk_acceptance_expires_at" in csv_resp.text
+        assert "risk_acceptance_review_status" in csv_resp.text
+        assert "Validated Firebase data exposure" in csv_resp.text
+        assert "SEC-1001" in csv_resp.text
+
+        json_export_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/remediation/export",
+            params={"format": "json"},
+            headers=export_headers,
+        )
+        assert json_export_resp.status_code == 200, json_export_resp.text
+        json_export = json_export_resp.json()
+        assert json_export["filename"] == "engagement_1001_remediation.json"
+        assert json_export["summary"]["total"] == 1
+        assert json_export["items"][0]["ticket_ref"] == "SEC-1001"
+        assert json_export["review_queue"]["summary"]["attention_required"] == 0
+        assert json_export["items"][0]["risk_acceptance_expires_at"] == ""
+        assert json_export["items"][0]["risk_acceptance_review_status"] == ""
+        assert json_export["items"][0]["risk_acceptance_review_due"] is False
+
+        retest_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("remediation:write", "remediation:retest"),
+                )
+            )
+        }
+        denied_linked_retest = client.post(
+            f"/api/engagements/engagement-1001-acme-example/remediation/{item_id}/request-retest",
+            json={
+                "target": "fixture://proof-packs/firebase-fixed",
+                "target_kind": "fixture",
+                "method": "fix_verification",
+                "mode": "lab",
+                "approve": True,
+            },
+            headers=retest_headers,
+        )
+        assert denied_linked_retest.status_code == 403, denied_linked_retest.text
+        assert (
+            denied_linked_retest.json()["detail"]
+            == "Missing required permission: active_validation:write"
+        )
+
+        linked_retest_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=(
+                        "remediation:write",
+                        "remediation:retest",
+                        "active_validation:write",
+                        "active_validation:approve",
+                    ),
+                )
+            )
+        }
+        linked_retest_resp = client.post(
+            f"/api/engagements/engagement-1001-acme-example/remediation/{item_id}/request-retest",
+            json={
+                "target": "fixture://proof-packs/firebase-fixed",
+                "target_kind": "fixture",
+                "method": "fix_verification",
+                "mode": "lab",
+                "approve": True,
+                "approval_note": "Safe lab replay.",
+            },
+            headers=linked_retest_headers,
+        )
+        assert linked_retest_resp.status_code == 200, linked_retest_resp.text
+        linked_retest = linked_retest_resp.json()
+        assert linked_retest["status"] == "requested"
+        assert linked_retest["remediation_item"]["status"] == "retest_pending"
+        assert linked_retest["remediation_item"]["retest_status"] == "pending"
+        assert linked_retest["active_validation_job"]["method"] == "fix_verification"
+        assert linked_retest["active_validation_job"]["mode"] == "lab"
+        assert (
+            linked_retest["active_validation_job"]["metadata"]["source"]
+            == "remediation_retest"
+        )
+
+        denied_accept = client.patch(
+            f"/api/engagements/engagement-1001-acme-example/remediation/{item_id}",
+            json={
+                "status": "risk_accepted",
+                "risk_acceptance_reason": "Accepted through 2026 renewal window.",
+            },
+            headers=write_headers,
+        )
+        assert denied_accept.status_code == 403, denied_accept.text
+        assert denied_accept.json()["detail"] == "Missing required permission: remediation:accept"
+
+        accept_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("remediation:write", "remediation:accept"),
+                )
+            )
+        }
+        missing_expiry_accept = client.patch(
+            f"/api/engagements/engagement-1001-acme-example/remediation/{item_id}",
+            json={
+                "status": "risk_accepted",
+                "risk_acceptance_reason": "Accepted through 2026 renewal window.",
+            },
+            headers=accept_headers,
+        )
+        assert missing_expiry_accept.status_code == 400, missing_expiry_accept.text
+        assert (
+            missing_expiry_accept.json()["detail"]
+            == "risk_acceptance_expires_at is required."
+        )
+
+        accepted_resp = client.patch(
+            f"/api/engagements/engagement-1001-acme-example/remediation/{item_id}",
+            json={
+                "status": "risk_accepted",
+                "risk_acceptance_reason": "Accepted through 2026 renewal window.",
+                "risk_acceptance_expires_at": "2999-12-31T00:00:00Z",
+            },
+            headers=accept_headers,
+        )
+        assert accepted_resp.status_code == 200, accepted_resp.text
+        accepted = accepted_resp.json()["item"]
+        assert accepted["status"] == "risk_accepted"
+        assert accepted["risk_accepted_by"] == "delta-one"
+        assert accepted["risk_accepted_at"]
+        assert accepted["risk_acceptance_expires_at"] == "2999-12-31T00:00:00Z"
+        assert accepted["risk_acceptance_review_status"] == "current"
+        assert accepted["risk_acceptance_review_due"] is False
+
+        accepted_list_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/remediation",
+            headers=read_headers,
+        )
+        assert accepted_list_resp.status_code == 200, accepted_list_resp.text
+        accepted_summary = accepted_list_resp.json()["summary"]
+        assert accepted_summary["risk_accepted"] == 1
+        assert accepted_summary["risk_acceptance_review_due"] == 0
+        assert accepted_summary["risk_acceptance_expired"] == 0
+
+        denied_retest = client.patch(
+            f"/api/engagements/engagement-1001-acme-example/remediation/{item_id}",
+            json={"status": "retest_pending", "retest_status": "pending"},
+            headers=accept_headers,
+        )
+        assert denied_retest.status_code == 403, denied_retest.text
+        assert denied_retest.json()["detail"] == "Missing required permission: remediation:retest"
+
+        retest_resp = client.patch(
+            f"/api/engagements/engagement-1001-acme-example/remediation/{item_id}",
+            json={"status": "retest_pending", "retest_status": "pending"},
+            headers=retest_headers,
+        )
+        assert retest_resp.status_code == 200, retest_resp.text
+        retest_item = retest_resp.json()["item"]
+        assert retest_item["status"] == "retest_pending"
+        assert retest_item["retest_status"] == "pending"
+        assert retest_item["retest_requested_at"]
+        queue_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/remediation/review-queue",
+            headers=read_headers,
+        )
+        assert queue_resp.status_code == 200, queue_resp.text
+        queue_payload = queue_resp.json()
+        assert queue_payload["summary"]["attention_required"] == 1
+        assert queue_payload["summary"]["retest_pending"] == 1
+        assert queue_payload["items"][0]["id"] == item_id
+        assert queue_payload["items"][0]["queue_reason_labels"] == ["retest pending"]
+
+    with sqlite3.connect(db_path) as con:
+        actions = [
+            row[0]
+            for row in con.execute(
+                """
+                SELECT action
+                FROM audit_log
+                WHERE engagement_id=1001 AND phase='remediation'
+                ORDER BY id
+                """
+            ).fetchall()
+        ]
+    assert actions == [
+        "remediation_upsert",
+        "remediation_export",
+        "remediation_export",
+        "remediation_retest_requested",
+        "remediation_update",
+        "remediation_update",
+    ]
+
+
+def test_continuous_monitoring_routes_track_snapshot_diffs_and_alerts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    app = create_app()
+    with TestClient(app) as client:
+        read_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("monitoring:read",),
+                )
+            )
+        }
+        write_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("monitoring:write",),
+                )
+            )
+        }
+        workflow_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("monitoring:write", "remediation:write"),
+                )
+            )
+        }
+
+        denied_read = client.get(
+            "/api/engagements/engagement-1001-acme-example/monitoring",
+            headers=write_headers,
+        )
+        assert denied_read.status_code == 403, denied_read.text
+        assert denied_read.json()["detail"] == "Missing required permission: monitoring:read"
+
+        policy_resp = client.post(
+            "/api/engagements/engagement-1001-acme-example/monitoring/policies",
+            json={
+                "name": "Hourly passive",
+                "interval_minutes": 60,
+                "mode": "passive",
+                "metadata": {"source": "unit"},
+            },
+            headers=write_headers,
+        )
+        assert policy_resp.status_code == 200, policy_resp.text
+        policy = policy_resp.json()["policy"]
+        assert policy["name"] == "Hourly passive"
+        assert policy["schedule_interval_minutes"] == 60
+        assert policy["mode"] == "passive"
+        assert policy["next_run_at"]
+
+        baseline_resp = client.post(
+            "/api/engagements/engagement-1001-acme-example/monitoring/snapshots",
+            json={"policy_id": policy["id"], "snapshot_kind": "manual"},
+            headers=write_headers,
+        )
+        assert baseline_resp.status_code == 200, baseline_resp.text
+        baseline = baseline_resp.json()
+        assert baseline["changes"] == []
+        assert baseline["alerts"] == []
+        assert baseline["snapshot"]["summary"]["asset_count"] >= 2
+        assert baseline["snapshot"]["summary"]["finding_count"] >= 2
+
+        con = sqlite3.connect(db_path)
+        try:
+            con.execute(
+                """
+                INSERT INTO hosts (engagement_id, ip, hostname, os_family, host_context, discovered_at)
+                VALUES (1001, '203.0.113.20', 'vpn.acme.example', 'linux', '{}',
+                        '2026-07-09T10:01:00')
+                """
+            )
+            con.execute(
+                """
+                INSERT INTO vulnerability_findings
+                    (engagement_id, vuln_type, target_url, parameter, severity, title, description, evidence)
+                VALUES
+                    (1001, 'EXPOSED_VPN', 'https://vpn.acme.example', 'vpn',
+                     'CRITICAL', 'Exposed VPN admin surface',
+                     'Continuous monitoring detected a new externally visible VPN admin surface.',
+                     '{"source":"monitoring-test"}')
+                """
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        diff_resp = client.post(
+            "/api/engagements/engagement-1001-acme-example/monitoring/snapshots",
+            json={"policy_id": policy["id"], "snapshot_kind": "scheduled"},
+            headers=write_headers,
+        )
+        assert diff_resp.status_code == 200, diff_resp.text
+        diff_payload = diff_resp.json()
+        changes = diff_payload["changes"]
+        assert {
+            (change["entity_type"], change["change_type"], change["entity_key"])
+            for change in changes
+        } >= {
+            ("asset", "added", "host:vpn.acme.example"),
+            (
+                "finding",
+                "added",
+                "finding:vuln:exposed_vpn:https://vpn.acme.example:vpn",
+            ),
+        }
+        assert any(alert["severity"] == "CRITICAL" for alert in diff_payload["alerts"])
+        alert_id = int(diff_payload["alerts"][0]["id"])
+
+        overview_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/monitoring",
+            headers=read_headers,
+        )
+        assert overview_resp.status_code == 200, overview_resp.text
+        overview = overview_resp.json()
+        assert overview["policies"][0]["last_snapshot_id"] == diff_payload["snapshot"]["id"]
+        assert overview["latest_snapshot"]["id"] == diff_payload["snapshot"]["id"]
+        assert any(alert["status"] == "open" for alert in overview["open_alerts"])
+
+        route_resp = client.post(
+            "/api/engagements/engagement-1001-acme-example/monitoring/routes",
+            json={
+                "name": "appsec-local",
+                "channel": "jsonl",
+                "destination": "monitoring-alerts.jsonl",
+                "min_severity": "HIGH",
+                "alert_type": "finding_added",
+                "owner": "appsec",
+                "escalation": "business-hours",
+            },
+            headers=write_headers,
+        )
+        assert route_resp.status_code == 200, route_resp.text
+        route = route_resp.json()["route"]
+        assert route["owner"] == "appsec"
+        assert route["min_severity"] == "HIGH"
+
+        suppression_resp = client.post(
+            "/api/engagements/engagement-1001-acme-example/monitoring/suppressions",
+            json={
+                "entity_prefix": "host:maintenance.",
+                "severity": "LOW",
+                "reason": "maintenance window",
+                "expires_at": "2099-01-01T00:00:00Z",
+            },
+            headers=write_headers,
+        )
+        assert suppression_resp.status_code == 200, suppression_resp.text
+        suppression = suppression_resp.json()["suppression"]
+        assert suppression["created_by"] == "delta-one"
+        assert suppression["active"] is True
+
+        routed_overview_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/monitoring",
+            headers=read_headers,
+        )
+        assert routed_overview_resp.status_code == 200, routed_overview_resp.text
+        routed_overview = routed_overview_resp.json()
+        assert routed_overview["alert_routes"][0]["name"] == "appsec-local"
+        assert routed_overview["alert_suppressions"][0]["reason"] == "maintenance window"
+
+        denied_remediation_resp = client.post(
+            f"/api/engagements/engagement-1001-acme-example/monitoring/alerts/{alert_id}/remediation",
+            json={},
+            headers=write_headers,
+        )
+        assert denied_remediation_resp.status_code == 403, denied_remediation_resp.text
+        assert denied_remediation_resp.json()["detail"] == "Missing required permission: remediation:write"
+
+        remediation_resp = client.post(
+            f"/api/engagements/engagement-1001-acme-example/monitoring/alerts/{alert_id}/remediation",
+            json={"sla_days": 7, "ticket_ref": "SEC-1001"},
+            headers=workflow_headers,
+        )
+        assert remediation_resp.status_code == 200, remediation_resp.text
+        remediation_item = remediation_resp.json()["item"]
+        assert remediation_item["finding_table"] == "monitoring_alerts"
+        assert remediation_item["finding_ref"] == str(alert_id)
+        assert remediation_item["owner"] == "appsec"
+        assert remediation_item["status"] == "assigned"
+        assert remediation_item["ticket_ref"] == "SEC-1001"
+        assert remediation_item["metadata"]["selected_route"]["name"] == "appsec-local"
+        sync_ticket_resp = client.post(
+            f"/api/engagements/engagement-1001-acme-example/remediation/{remediation_item['id']}/sync-ticket",
+            json={},
+            headers=workflow_headers,
+        )
+        assert sync_ticket_resp.status_code == 200, sync_ticket_resp.text
+        assert sync_ticket_resp.json()["sync_count"] == 1
+        ticket_payload = json.loads(
+            (tmp_path / ".forge_data" / "remediation_tickets.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()[0]
+        )
+        assert ticket_payload["action"] == "update"
+        assert ticket_payload["remediation_item"]["ticket_ref"] == "SEC-1001"
+
+        early_due_resp = client.post(
+            "/api/engagements/engagement-1001-acme-example/monitoring/run-due",
+            json={"now": "2026-07-09T09:00:00Z"},
+            headers=write_headers,
+        )
+        assert early_due_resp.status_code == 200, early_due_resp.text
+        assert early_due_resp.json()["run_count"] == 0
+
+        con = sqlite3.connect(db_path)
+        try:
+            con.execute(
+                """
+                UPDATE monitoring_policies
+                SET next_run_at='2026-07-09T10:00:00Z'
+                WHERE id=?
+                """,
+                (policy["id"],),
+            )
+            con.execute(
+                """
+                INSERT INTO cloud_assets
+                    (engagement_id, asset_type, identifier, provider_identifier, source, metadata_json)
+                VALUES
+                    (1001, 'aws_s3', 'acme-new-public-bucket', 'acme-new-public-bucket',
+                     'monitoring-test', '{}')
+                """
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        due_resp = client.post(
+            "/api/engagements/engagement-1001-acme-example/monitoring/run-due",
+            json={"now": "2026-07-09T10:00:00Z"},
+            headers=write_headers,
+        )
+        assert due_resp.status_code == 200, due_resp.text
+        due_payload = due_resp.json()
+        assert due_payload["run_count"] == 1
+        due_run = due_payload["runs"][0]
+        assert due_run["snapshot"]["snapshot_kind"] == "scheduled"
+        assert due_run["policy"]["last_snapshot_id"] == due_run["snapshot"]["id"]
+        assert due_run["policy"]["last_run_at"]
+        assert due_run["policy"]["next_run_at"]
+        assert any(
+            change["entity_key"] == "cloud:aws_s3:acme-new-public-bucket"
+            and change["change_type"] == "added"
+            for change in due_run["changes"]
+        )
+
+        ack_resp = client.patch(
+            f"/api/engagements/engagement-1001-acme-example/monitoring/alerts/{alert_id}",
+            json={"status": "acknowledged"},
+            headers=write_headers,
+        )
+        assert ack_resp.status_code == 200, ack_resp.text
+        assert ack_resp.json()["alert"]["status"] == "acknowledged"
+
+        detail_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example",
+            headers={
+                "Authorization": (
+                    "Bearer "
+                    + mint_token(
+                        "delta-one",
+                        permissions=("engagements:read", "monitoring:read"),
+                    )
+                )
+            },
+        )
+        assert detail_resp.status_code == 200, detail_resp.text
+        detail_payload = detail_resp.json()
+        detail_sections = detail_payload["sections"]
+        assert detail_payload["counts"]["monitoring_policies"] == 1
+        assert detail_payload["counts"]["monitoring_snapshots"] == 3
+        assert detail_payload["counts"]["monitoring_changes"] >= 3
+        assert detail_payload["counts"]["monitoring_alerts"] >= 3
+        assert detail_payload["counts"]["monitoring_trend_points"] == 3
+        assert detail_payload["counts"]["monitoring_alert_routes"] == 1
+        assert detail_payload["counts"]["monitoring_alert_suppressions"] == 1
+        assert detail_payload["counts"]["remediation_items"] == 1
+        assert detail_sections["monitoring_policies"][0]["Name"] == "Hourly passive"
+        assert detail_sections["monitoring_alert_routes"][0]["Name"] == "appsec-local"
+        assert detail_sections["monitoring_alert_routes"][0]["Owner"] == "appsec"
+        assert detail_sections["monitoring_alert_suppressions"][0]["Reason"] == "maintenance window"
+        assert detail_sections["remediation_items"][0]["Owner"] == "appsec"
+        assert detail_sections["remediation_items"][0]["Ticket"] == "SEC-1001"
+        assert detail_sections["monitoring_snapshots"][0]["Kind"] == "scheduled"
+        assert detail_sections["monitoring_trend_points"][0]["Added"] == "1"
+        assert detail_sections["monitoring_trend_points"][0]["Open Alerts"] == "1"
+        assert any(
+            row["Entity"] == "host:vpn.acme.example"
+            for row in detail_sections["monitoring_changes"]
+        )
+        assert any(
+            row["Entity"] == "cloud:aws_s3:acme-new-public-bucket"
+            for row in detail_sections["monitoring_alerts"]
+        )
+
+    with sqlite3.connect(db_path) as con:
+        actions = [
+            row[0]
+            for row in con.execute(
+                """
+                SELECT action
+                FROM audit_log
+                WHERE engagement_id=1001 AND phase='monitoring'
+                ORDER BY id
+                """
+            ).fetchall()
+        ]
+    assert actions == [
+        "monitoring_policy_upsert",
+        "monitoring_snapshot_create",
+        "monitoring_snapshot_create",
+        "monitoring_alert_route_upsert",
+        "monitoring_alert_suppression_add",
+        "monitoring_policy_due_run",
+        "monitoring_alert_update",
+    ]
+    with sqlite3.connect(db_path) as con:
+        remediation_actions = [
+            row[0]
+            for row in con.execute(
+                """
+                SELECT action
+                FROM audit_log
+                WHERE engagement_id=1001 AND phase='remediation'
+                ORDER BY id
+                """
+            ).fetchall()
+        ]
+    assert remediation_actions == [
+        "monitoring_alert_remediation_upsert",
+        "remediation_ticket_sync",
+    ]
+
+
+def test_command_center_controls_require_explicit_permissions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    _build_engagement(tmp_path)
+
+    app = create_app()
+    with TestClient(app) as client:
+        member_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("engagements:read",),
+                )
+            )
+        }
+
+        execute_resp = client.post(
+            "/api/actions/action-1/execute",
+            json={"engagement_id": 1001},
+            headers=member_headers,
+        )
+        assert execute_resp.status_code == 403, execute_resp.text
+        assert execute_resp.json()["detail"] == "Missing required permission: actions:execute"
+
+        approve_resp = client.post(
+            "/api/actions/action-1/approve",
+            json={"engagement_id": 1001},
+            headers=member_headers,
+        )
+        assert approve_resp.status_code == 403, approve_resp.text
+        assert approve_resp.json()["detail"] == "Missing required permission: actions:approve"
+
+        sentry_resp = client.post(
+            "/api/sentry/toggle",
+            json={"engagement_id": 1001, "enabled": True},
+            headers=member_headers,
+        )
+        assert sentry_resp.status_code == 403, sentry_resp.text
+        assert sentry_resp.json()["detail"] == "Missing required permission: sentry:write"
+
+        emergency_resp = client.post(
+            "/api/sentry/emergency-stop",
+            json={"engagement_id": 1001},
+            headers=member_headers,
+        )
+        assert emergency_resp.status_code == 403, emergency_resp.text
+        assert (
+            emergency_resp.json()["detail"]
+            == "Missing required permission: sentry:emergency_stop"
+        )
+
+        sentry_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("engagements:read", "sentry:write", "sentry:emergency_stop"),
+                )
+            )
+        }
+        allowed_toggle = client.post(
+            "/api/sentry/toggle",
+            json={"engagement_id": 1001, "enabled": True},
+            headers=sentry_headers,
+        )
+        assert allowed_toggle.status_code == 200, allowed_toggle.text
+        assert allowed_toggle.json()["state"]["enabled"] is True
+
+
+def test_remediation_owner_propagation_route_uses_asset_graph(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        entity_id = upsert_asset_entity(
+            con,
+            engagement_id=1001,
+            entity_key="finding:vulnerability:1",
+            entity_type="finding",
+            label="Validated Firebase data exposure",
+            source_table="vulnerability_findings",
+            source_id=1,
+            confidence=0.9,
+            metadata={"source": "test"},
+        )
+        upsert_ownership_claim(
+            con,
+            engagement_id=1001,
+            entity_id=entity_id,
+            owner_ref="appsec",
+            owner_kind="team",
+            owner_display="AppSec",
+            claim_type="manual",
+            confidence=0.95,
+            source="operator",
+            evidence={"reason": "finding owner"},
+        )
+        con.execute(
+            """
+            INSERT INTO remediation_items
+                (id, engagement_id, finding_table, finding_id, finding_ref,
+                 title, severity, owner, status, metadata_json)
+            VALUES
+                (77, 1001, 'vulnerability_findings', 1, '1',
+                 'Validated Firebase data exposure', 'HIGH', NULL, 'open', '{}')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    app = create_app()
+    with TestClient(app) as client:
+        missing_write_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("assets:read",),
+                )
+            )
+        }
+        denied_write = client.post(
+            "/api/engagements/engagement-1001-acme-example/remediation/draft-from-asset-graph",
+            json={"limit": 5},
+            headers=missing_write_headers,
+        )
+        assert denied_write.status_code == 403, denied_write.text
+        assert (
+            denied_write.json()["detail"]
+            == "Missing required permission: remediation:write"
+        )
+
+        missing_assets_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("remediation:write",),
+                )
+            )
+        }
+        denied = client.post(
+            "/api/engagements/engagement-1001-acme-example/remediation/propagate-owners",
+            json={},
+            headers=missing_assets_headers,
+        )
+        assert denied.status_code == 403, denied.text
+        assert denied.json()["detail"] == "Missing required permission: assets:read"
+
+        allowed_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("remediation:write", "assets:read"),
+                )
+            )
+        }
+        response = client.post(
+            "/api/engagements/engagement-1001-acme-example/remediation/propagate-owners",
+            json={},
+            headers=allowed_headers,
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        propagated = next(item for item in payload["items"] if item["id"] == 77)
+
+    assert payload["status"] == "propagated"
+    assert payload["assigned_count"] == 1
+    assert propagated["owner"] == "appsec"
+    assert propagated["status"] == "assigned"
+    assert propagated["metadata"]["owner_source"] == "asset_graph"
+    assert propagated["metadata"]["asset_owner"]["entity_key"] == "finding:vulnerability:1"
+
+
+def test_remediation_draft_from_asset_graph_route_is_idempotent_and_reviewable(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        entry_id = upsert_asset_entity(
+            con,
+            engagement_id=1001,
+            entity_key="asset:internet:public",
+            entity_type="asset",
+            label="Public Internet",
+            confidence=0.95,
+            metadata={"asset_role": "internet_entrypoint"},
+        )
+        finding_id = upsert_asset_entity(
+            con,
+            engagement_id=1001,
+            entity_key="finding:vulnerability:asset-graph-public-bucket",
+            entity_type="finding",
+            label="Public bucket exposure",
+            confidence=0.9,
+            metadata={
+                "severity": "CRITICAL",
+                "standards": {"cisa_kev": True, "attack_techniques": ["T1530"]},
+                "evidence_url": "https://proof.example.test/path?token=do-not-store",
+            },
+        )
+        upsert_asset_relationship(
+            con,
+            engagement_id=1001,
+            source_entity_id=entry_id,
+            target_entity_id=finding_id,
+            relationship_type="has_finding",
+            confidence=0.9,
+            evidence={"match": "public_to_finding", "secret": "do-not-store-edge"},
+        )
+        upsert_ownership_claim(
+            con,
+            engagement_id=1001,
+            entity_id=finding_id,
+            owner_ref="cloud-team",
+            owner_kind="team",
+            owner_display="Cloud Team",
+            claim_type="explicit",
+            confidence=0.9,
+            source="test",
+            evidence={"token": "do-not-store-owner"},
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    app = create_app()
+    with TestClient(app) as client:
+        missing_assets_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("remediation:write",),
+                )
+            )
+        }
+        denied = client.post(
+            "/api/engagements/engagement-1001-acme-example/remediation/draft-from-asset-graph",
+            json={"limit": 5},
+            headers=missing_assets_headers,
+        )
+        assert denied.status_code == 403, denied.text
+        assert denied.json()["detail"] == "Missing required permission: assets:read"
+
+        allowed_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("remediation:write", "assets:read"),
+                )
+            )
+        }
+        first = client.post(
+            "/api/engagements/engagement-1001-acme-example/remediation/draft-from-asset-graph",
+            json={"limit": "5"},
+            headers=allowed_headers,
+        )
+        assert first.status_code == 200, first.text
+        first_payload = first.json()
+        second = client.post(
+            "/api/engagements/engagement-1001-acme-example/remediation/draft-from-asset-graph",
+            json={"limit": 5},
+            headers=allowed_headers,
+        )
+        assert second.status_code == 200, second.text
+        second_payload = second.json()
+        invalid = client.post(
+            "/api/engagements/engagement-1001-acme-example/remediation/draft-from-asset-graph",
+            json={"limit": 0},
+            headers=allowed_headers,
+        )
+
+    drafted = [
+        item for item in first_payload["items"] if item["finding_table"] == "asset_graph"
+    ]
+    redrafted = [
+        item for item in second_payload["items"] if item["finding_table"] == "asset_graph"
+    ]
+
+    assert first_payload["status"] == "drafted"
+    assert first_payload["drafted_count"] >= 1
+    assert len(drafted) == first_payload["drafted_count"]
+    assert len({item["finding_ref"] for item in redrafted}) == len(redrafted)
+    assert all(not item["finding_ref"].startswith("remediation:") for item in redrafted)
+    assert first_payload["summary"]["total"] == len(drafted)
+    seeded_draft = next(
+        item
+        for item in drafted
+        if item["finding_ref"] == "finding:vulnerability:asset-graph-public-bucket"
+    )
+    assert seeded_draft["severity"] == "CRITICAL"
+    assert seeded_draft["owner"] == "cloud-team"
+    assert seeded_draft["status"] == "assigned"
+    assert seeded_draft["metadata"]["candidate"]["reason"] in {
+        "high_value_fix",
+        "public_entrypoint",
+        "remediate_highest_risk_finding",
+        "unowned_risk",
+    }
+    assert "do-not-store" not in json.dumps(first_payload, sort_keys=True)
+    assert first_payload["review_queue"]["summary"]["missing_ticket"] >= 1
+    assert invalid.status_code == 400, invalid.text
+    assert invalid.json()["detail"] == "limit must be at least 1."
+
+
+def test_remediation_ticket_sync_route_delivers_to_soar_and_siem(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    monkeypatch.setenv("WEBUI_TINES_TOKEN", "webui_tines_secret")
+    monkeypatch.setenv("WEBUI_SPLUNK_TOKEN", "webui_splunk_secret")
+    monkeypatch.setenv("WEBUI_TORQ_TOKEN", "webui_torq_secret")
+    db_path = _build_engagement(tmp_path)
+    requests: list[Any] = []
+    data_dir = tmp_path / ".forge_data"
+
+    class _FakeResponse:
+        status = 200
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, *_args: object) -> bool:
+            return False
+
+        def read(self) -> bytes:
+            return b'{"ok": true}'
+
+    def fake_urlopen(request: Any, timeout: float = 0) -> _FakeResponse:
+        requests.append(request)
+        assert timeout == 10.0
+        return _FakeResponse()
+
+    monkeypatch.setattr(remediation_connectors.urllib.request, "urlopen", fake_urlopen)
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT OR IGNORE INTO workspace_memberships
+                (workspace_id, subject, role, permissions_json)
+            VALUES ('default', 'delta-one', 'operator', '[]')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO remediation_items
+                (id, engagement_id, finding_table, finding_id, finding_ref,
+                 title, severity, owner, status, ticket_system, ticket_ref,
+                 updated_at, metadata_json)
+            VALUES
+                (88, 1001, 'vulnerability_findings', 1, '1',
+                 'Validated Firebase data exposure', 'HIGH', 'appsec', 'assigned',
+                 'tracker', 'SEC-88', '2026-07-09T10:00:00Z', '{}')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+    control_con = connect_control_db(data_dir)
+    try:
+        upsert_membership(
+            control_con,
+            workspace_id="default",
+            subject="delta-one",
+            role="operator",
+        )
+        upsert_engagement_index(
+            control_con,
+            engagement_id=1001,
+            workspace_id="default",
+            db_path=db_path,
+            slug="engagement-1001-acme-example",
+            name="Acme Example",
+            status="ACTIVE",
+            operator="delta-one",
+            created_at="2026-07-08T22:14:09",
+            updated_at="2026-07-09T09:44:12",
+            summary={"id": 1001, "slug": "engagement-1001-acme-example", "workspace_id": "default"},
+        )
+        control_con.commit()
+    finally:
+        control_con.close()
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {
+            "Authorization": (
+                "Bearer " + mint_token("delta-one", permissions=("remediation:write",))
+            )
+        }
+        response = client.post(
+            "/api/engagements/engagement-1001-acme-example/remediation/88/sync-ticket",
+            json={
+                "force": True,
+                "tines_webhook_url": "https://tenant.tines.com/webhook/secret-ticket-path?token=ignored",
+                "tines_token_env": "WEBUI_TINES_TOKEN",
+                "splunk_hec_url": "https://splunk.example:8088/services/collector/event?token=bad",
+                "splunk_hec_token_env": "WEBUI_SPLUNK_TOKEN",
+                "splunk_index": "security",
+                "splunk_source": "forge-webui",
+                "torq_webhook_url": "https://hooks.torq.io/v1/webhooks/super-hidden-torq-hook?foo=bar",
+                "torq_token_env": "WEBUI_TORQ_TOKEN",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+
+    tines_request, splunk_request, torq_request = requests
+    tines_body = json.loads(tines_request.data.decode("utf-8"))
+    splunk_body = json.loads(splunk_request.data.decode("utf-8"))
+    torq_body = json.loads(torq_request.data.decode("utf-8"))
+    connector_destinations = {
+        item["connector"]: item["destination"] for item in payload["connectors"]
+    }
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        events = con.execute(
+            """
+            SELECT connector, destination, metadata_json
+            FROM remediation_ticket_events
+            WHERE remediation_item_id=88
+            ORDER BY connector
+            """
+        ).fetchall()
+    finally:
+        con.close()
+    event_destinations = {row["connector"]: row["destination"] for row in events}
+    event_metadata = {row["connector"]: json.loads(row["metadata_json"]) for row in events}
+    persisted_text = "\n".join(
+        [*(row["destination"] for row in events), *(row["metadata_json"] for row in events)]
+    )
+
+    assert payload["sync_count"] == 4
+    assert payload["failure_count"] == 0
+    assert set(connector_destinations) == {"jsonl", "tines", "splunk_hec", "torq"}
+    assert len(requests) == 3
+    assert tines_request.full_url == "https://tenant.tines.com/webhook/secret-ticket-path?token=ignored"
+    assert tines_request.get_header("Authorization") == "Bearer webui_tines_secret"
+    assert tines_body["platform"] == "tines"
+    assert tines_body["remediation_item"]["title"] == "Validated Firebase data exposure"
+    assert splunk_request.full_url == "https://splunk.example:8088/services/collector/event"
+    assert splunk_request.get_header("Authorization") == "Splunk webui_splunk_secret"
+    assert splunk_body["index"] == "security"
+    assert splunk_body["source"] == "forge-webui"
+    assert splunk_body["event"]["event_type"] == "remediation.ticket"
+    assert torq_request.full_url == "https://hooks.torq.io/v1/webhooks/super-hidden-torq-hook?foo=bar"
+    assert torq_request.get_header("Authorization") == "Bearer webui_torq_secret"
+    assert torq_body["platform"] == "torq"
+    assert event_destinations["tines"].startswith("https://tenant.tines.com/redacted-webhook-path-")
+    assert event_destinations["splunk_hec"] == "https://splunk.example:8088/services/collector/event"
+    assert event_destinations["torq"].startswith("https://hooks.torq.io/redacted-webhook-path-")
+    assert event_metadata["tines"]["automation_platform"] == "tines"
+    assert event_metadata["splunk_hec"]["automation_platform"] == "splunk_hec"
+    assert event_metadata["torq"]["automation_platform"] == "torq"
+    assert "secret-ticket-path" not in persisted_text
+    assert "super-hidden-torq-hook" not in persisted_text
+    assert "webui_tines_secret" not in persisted_text
+    assert "webui_splunk_secret" not in persisted_text
+    assert "webui_torq_secret" not in persisted_text
+
+
+def test_engagement_member_needs_surface_specific_permissions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    _build_engagement(tmp_path, include_distributed_task=True)
+
+    app = create_app()
+    with TestClient(app) as client:
+        member_headers = {
+            "Authorization": (
+                "Bearer "
+                + mint_token(
+                    "delta-one",
+                    permissions=("engagements:read",),
+                )
+            )
+        }
+        checks: list[tuple[str, str, dict[str, Any], str]] = [
+            (
+                "GET",
+                "/api/automation/suggestions",
+                {"params": {"engagement_id": 1001}},
+                "automation:read",
+            ),
+            (
+                "POST",
+                "/api/automation/execute",
+                {
+                    "json": {
+                        "engagement_id": 1001,
+                        "action": "recon:crawl",
+                        "params": {"target": "https://app.acme.example"},
+                    }
+                },
+                "automation:execute",
+            ),
+            (
+                "POST",
+                "/api/automation/playbook",
+                {"json": {"engagement_id": 1001, "playbook": "recon_full", "target": "acme.example"}},
+                "automation:execute",
+            ),
+            ("GET", "/api/engagements/1001/runs", {}, "runs:read"),
+            ("POST", "/api/engagements/1001/runs/kill-chain", {"json": {}}, "runs:execute"),
+            ("POST", "/api/engagements/1001/runs/stop", {"json": {}}, "runs:control"),
+            ("GET", "/api/engagements/1001/logs", {}, "logs:read"),
+            ("GET", "/api/engagements/1001/artifacts/missing.txt", {}, "artifacts:read"),
+            (
+                "POST",
+                "/api/scans/start",
+                {"params": {"engagement_id": 1001, "task_key": "crawl:app"}},
+                "scans:write",
+            ),
+            (
+                "POST",
+                "/api/tasks/enqueue",
+                {
+                    "json": {
+                        "engagement_id": 1001,
+                        "task_type": "crawl",
+                        "target": "https://app.acme.example",
+                    }
+                },
+                "tasks:write",
+            ),
+            ("GET", "/api/tasks", {"params": {"engagement_id": 1001}}, "tasks:read"),
+            ("GET", "/api/workers", {"params": {"engagement_id": 1001}}, "workers:read"),
+            ("GET", "/api/queue/metrics", {"params": {"engagement_id": 1001}}, "queue:read"),
+            ("GET", "/api/scans/1001/progress", {}, "scans:read"),
+            ("GET", "/api/engagements/1001/assets", {}, "assets:read"),
+            ("GET", "/api/engagements/1001/asset-graph", {}, "assets:read"),
+            (
+                "POST",
+                "/api/engagements/1001/asset-graph/rebuild",
+                {"json": {}},
+                "assets:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/asset-graph/ownership-claims",
+                {"json": {"entity_key": "cloud:aws_s3:acme-assets", "owner_ref": "appsec"}},
+                "assets:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/asset-graph/attribution",
+                {"json": {"records": [{"entity_key": "cloud:aws_s3:acme-assets"}]}},
+                "assets:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/asset-graph/ownership-conflicts/resolve",
+                {"json": {"entity_key": "cloud:aws_s3:acme-assets", "owner_ref": "appsec"}},
+                "assets:write",
+            ),
+            (
+                "GET",
+                "/api/engagements/1001/active-validation",
+                {},
+                "active_validation:read",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/active-validation/jobs",
+                {"json": {"target_ref": "host:app.acme.example"}},
+                "active_validation:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/active-validation/jobs/1/approve",
+                {"json": {}},
+                "active_validation:approve",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/active-validation/jobs/1/run",
+                {"json": {}},
+                "active_validation:run",
+            ),
+            ("GET", "/api/engagements/1001/vuln-summary", {}, "findings:read"),
+            (
+                "GET",
+                "/api/engagements/1001/remediation",
+                {},
+                "remediation:read",
+            ),
+            (
+                "GET",
+                "/api/engagements/1001/remediation/review-queue",
+                {},
+                "remediation:read",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/remediation",
+                {
+                    "json": {
+                        "finding_table": "manual",
+                        "finding_ref": "manual-1",
+                        "title": "Manual remediation",
+                        "severity": "LOW",
+                    }
+                },
+                "remediation:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/remediation/propagate-owners",
+                {"json": {}},
+                "remediation:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/remediation/draft-from-asset-graph",
+                {"json": {"limit": 1}},
+                "remediation:write",
+            ),
+            (
+                "GET",
+                "/api/engagements/1001/remediation/export",
+                {},
+                "remediation:export",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/remediation/1/sync-ticket",
+                {"json": {}},
+                "remediation:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/remediation/1/request-retest",
+                {"json": {}},
+                "remediation:write",
+            ),
+            (
+                "GET",
+                "/api/engagements/1001/monitoring",
+                {},
+                "monitoring:read",
+            ),
+            (
+                "GET",
+                "/api/engagements/1001/connectors",
+                {},
+                "connectors:read",
+            ),
+            (
+                "GET",
+                "/api/engagements/1001/connector-secrets",
+                {},
+                "connectors:read",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/connector-secrets",
+                {
+                    "json": {
+                        "connector_id": "shodan_host_lookup",
+                        "secret_name": "FORGE_SHODAN_API_KEY",
+                        "secret_value": "redacted-test-value",
+                    }
+                },
+                "connectors:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/monitoring/policies",
+                {"json": {"name": "Hourly passive", "interval_minutes": 60}},
+                "monitoring:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/monitoring/routes",
+                {"json": {"name": "local", "channel": "jsonl"}},
+                "monitoring:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/monitoring/suppressions",
+                {"json": {"reason": "maintenance window"}},
+                "monitoring:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/monitoring/snapshots",
+                {"json": {}},
+                "monitoring:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/monitoring/run-due",
+                {"json": {}},
+                "monitoring:write",
+            ),
+            (
+                "PATCH",
+                "/api/engagements/1001/monitoring/alerts/1",
+                {"json": {"status": "acknowledged"}},
+                "monitoring:write",
+            ),
+            (
+                "POST",
+                "/api/engagements/1001/monitoring/alerts/1/remediation",
+                {"json": {}},
+                "monitoring:write",
+            ),
+            ("GET", "/api/engagements/1001/asset-tree", {}, "assets:read"),
+            (
+                "GET",
+                "/api/assets/203.0.113.10/context",
+                {"params": {"engagement_id": 1001}},
+                "assets:read",
+            ),
+            (
+                "GET",
+                "/api/assets/203.0.113.10/actions",
+                {"params": {"engagement_id": 1001}},
+                "actions:read",
+            ),
+            ("GET", "/api/timeline", {"params": {"engagement_id": 1001}}, "timeline:read"),
+            ("GET", "/data/missing.json", {}, "dashboard:data:read"),
+        ]
+
+        for method, path, kwargs, permission in checks:
+            response = client.request(method, path, headers=member_headers, **kwargs)
+            assert response.status_code == 403, f"{method} {path}: {response.text}"
+            assert response.json()["detail"] == f"Missing required permission: {permission}"
+
+
+def test_task_queue_scan_routes_surface_authorized_payloads(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path, include_distributed_task=True)
+    with sqlite3.connect(db_path) as con:
+        con.execute(
+            """
+            INSERT INTO worker_heartbeats
+                (engagement_id, worker_id, status, last_task_key, last_error,
+                 tasks_completed, tasks_failed, heartbeat_at, updated_at)
+            VALUES
+                (1001, 'worker-a', 'running', 'validate:key:42:20260709T094414',
+                 NULL, 3, 1, datetime('now'), '2026-07-09T09:45:00')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO queue_metrics
+                (engagement_id, queued_count, running_count, done_count, failed_count, sampled_at)
+            VALUES
+                (1001, 1, 0, 0, 0, '2026-07-09T09:45:01')
+            """
+        )
+        con.commit()
+
+    app = create_app()
+    headers = {
+        "Authorization": (
+            "Bearer "
+            + mint_token(
+                "delta-one",
+                permissions=(
+                    "scans:write",
+                    "scans:read",
+                    "tasks:read",
+                    "workers:read",
+                    "queue:read",
+                ),
+            )
+        )
+    }
+    with TestClient(app) as client:
+        start_resp = client.post(
+            "/api/scans/start",
+            params={"engagement_id": 1001, "task_key": "crawl:app"},
+            headers=headers,
+        )
+        tasks_resp = client.get("/api/tasks", params={"engagement_id": 1001}, headers=headers)
+        workers_resp = client.get("/api/workers", params={"engagement_id": 1001}, headers=headers)
+        metrics_resp = client.get(
+            "/api/queue/metrics",
+            params={"engagement_id": 1001, "limit": 1},
+            headers=headers,
+        )
+        progress_resp = client.get("/api/scans/1001/progress", headers=headers)
+
+    assert start_resp.status_code == 200, start_resp.text
+    assert start_resp.json() == {"status": "started"}
+    assert tasks_resp.status_code == 200, tasks_resp.text
+    assert tasks_resp.json()["items"][0]["task_key"] == "validate:key:42:20260709T094414"
+    assert workers_resp.status_code == 200, workers_resp.text
+    assert workers_resp.json()["items"][0]["worker_id"] == "worker-a"
+    assert metrics_resp.status_code == 200, metrics_resp.text
+    assert metrics_resp.json()["latest_snapshot"] == {
+        "queued": 1,
+        "running": 0,
+        "done": 0,
+        "failed": 0,
+        "sampled_at": "2026-07-09T09:45:01",
+    }
+    assert progress_resp.status_code == 200, progress_resp.text
+    progress_items = progress_resp.json()["items"]
+    assert progress_items[0]["task_key"] == "crawl:app"
+    assert progress_items[0]["status"] == "running"
 
 
 def test_engagement_seed_routes_canonicalize_url_variants(
@@ -2813,6 +4881,37 @@ def test_engagement_seed_routes_canonicalize_url_variants(
         )
         assert duplicate_resp.status_code == 200, duplicate_resp.text
         assert len(duplicate_resp.json()["items"]) == 2
+
+        cloud_ref_resp = client.post(
+            "/api/engagements/engagement-1002-gamma-urls/seeds",
+            json={"seed_value": "cloud_ref:aws_s3:GammaBucket"},
+            headers=headers,
+        )
+        assert cloud_ref_resp.status_code == 200, cloud_ref_resp.text
+        assert cloud_ref_resp.json()["seed"]["seed_type"] == "cloud_ref"
+        assert cloud_ref_resp.json()["seed"]["seed_value"] == "aws_s3:gammabucket"
+
+        cloud_ref_dupe_resp = client.post(
+            "/api/engagements/engagement-1002-gamma-urls/seeds",
+            json={"seed_value": "s3://GammaBucket/private/config.json"},
+            headers=headers,
+        )
+        assert cloud_ref_dupe_resp.status_code == 200, cloud_ref_dupe_resp.text
+        cloud_refs = [
+            (item["seed_value"], item["seed_type"])
+            for item in cloud_ref_dupe_resp.json()["items"]
+            if item["seed_type"] == "cloud_ref"
+        ]
+        assert cloud_refs == [("aws_s3:gammabucket", "cloud_ref")]
+
+        provider_cloud_ref_resp = client.post(
+            "/api/engagements/engagement-1002-gamma-urls/seeds",
+            json={"seed_value": "HTTPS://Gamma.SUPABASE.CO:443/rest#details"},
+            headers=headers,
+        )
+        assert provider_cloud_ref_resp.status_code == 200, provider_cloud_ref_resp.text
+        assert provider_cloud_ref_resp.json()["seed"]["seed_type"] == "cloud_ref"
+        assert provider_cloud_ref_resp.json()["seed"]["seed_value"] == "https://gamma.supabase.co/rest"
 
         phone_resp = client.post(
             "/api/engagements/engagement-1002-gamma-urls/seeds",
@@ -3562,6 +5661,9 @@ def test_run_progress_bridge_republishes_when_queue_metrics_change_without_step_
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    monkeypatch.setenv("FORGE_WEB_PROGRESS_POLL_INTERVAL", "0.05")
     db_path = _build_engagement(tmp_path)
 
     con = sqlite3.connect(db_path)

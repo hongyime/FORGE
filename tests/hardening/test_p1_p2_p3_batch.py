@@ -107,6 +107,17 @@ class TestDoctorCommandRegisteredExactlyOnce:
             f"they cause dead-code drift over time."
         )
 
+    def test_doctor_reports_provider_discovery_readiness(self) -> None:
+        cli_text = Path("forge/cli.py").read_text(encoding="utf-8", errors="replace")
+        operator_text = Path("forge/cli_operator.py").read_text(encoding="utf-8", errors="replace")
+        doctor_text = Path("forge/doctor.py").read_text(encoding="utf-8", errors="replace")
+        assert "run_doctor_command" in cli_text
+        assert "doctor_payload_json" in operator_text
+        assert "run_doctor(console=console)" in operator_text
+        assert "from forge.providers.discovery import discover_backends" in doctor_text
+        assert "provider_probe_timeout_s: float = 0.75" in doctor_text
+        assert '"LLM Providers"' in doctor_text
+
 
 class TestWizardPassesScopeOverride:
     """P2-B03: phase1/wizard.py must pass scope_override to scan_engagement."""
@@ -264,12 +275,13 @@ class TestScopeManifestPathAllowlist:
 
 
 class TestWebuiCanonicalisationIncludesCloudRef:
-    """P2-B13: webui _canonical_seed_value canonicalises cloud_ref URLs."""
+    """P2-B13: webui canonical_seed_value canonicalises cloud_ref URLs."""
 
     def test_source_lists_cloud_ref(self) -> None:
-        text = Path("forge/webui/app.py").read_text(encoding="utf-8")
-        assert 'in {"url", "apk_url", "cloud_ref"}' in text, (
-            "webui _canonical_seed_value must canonicalise cloud_ref URLs "
+        text = Path("forge/webui/seeds.py").read_text(encoding="utf-8")
+        assert 'normalized_type == "cloud_ref"' in text
+        assert "canonical_http_url_value(value)" in text, (
+            "webui canonical_seed_value must canonicalise cloud_ref URLs "
             "to avoid trailing-slash / casing duplicates."
         )
 

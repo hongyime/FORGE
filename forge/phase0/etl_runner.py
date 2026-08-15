@@ -272,10 +272,14 @@ CREATE TRIGGER IF NOT EXISTS cve_ai AFTER INSERT ON cve BEGIN
     VALUES (new.id, new.cve_id, new.description);
 END;
 CREATE TABLE IF NOT EXISTS cvss_scores (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    cve_id   TEXT    NOT NULL UNIQUE REFERENCES cve(cve_id),
-    cvss_v3  REAL,
-    cvss_v2  REAL
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    cve_id          TEXT    NOT NULL UNIQUE REFERENCES cve(cve_id),
+    cvss_v4         REAL,
+    cvss_v4_vector  TEXT,
+    cvss_v3         REAL,
+    cvss_v3_vector  TEXT,
+    cvss_v2         REAL,
+    cvss_v2_vector  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_cvss_cve ON cvss_scores(cve_id);
 """

@@ -6,7 +6,7 @@ Drives a workflow through 3 stages via the API, then queries:
     * GET /workflows/{id}/history?limit=2
     * GET /workflows/{id}/history?since=<ts>
     * GET /workflows/{id}/replay        -> timeline with elapsed seconds
-    * Both endpoints return empty list (NOT 404) for unknown workflow_id.
+    * Both endpoints return 404 for unknown workflow_id.
 """
 
 from __future__ import annotations
@@ -17,6 +17,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from forge.api.app import create_app
+from forge.api.deps import reset_dependencies
+from forge.webui.auth import mint_token
 
 
 @pytest.fixture
@@ -24,13 +26,29 @@ def client(tmp_path, monkeypatch) -> TestClient:
     db = tmp_path / "forge_state.db"
     monkeypatch.setenv("FORGE_STATE_DB_URL", f"sqlite:///{db}")
     monkeypatch.setenv("FORGE_AUDIT_LOG_DISABLE", "1")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+    reset_dependencies()
     app = create_app()
-    with TestClient(app) as c:
-        yield c
+    try:
+        with TestClient(app) as c:
+            yield c
+    finally:
+        reset_dependencies()
+
+
+def _headers(*permissions: str) -> dict[str, str]:
+    granted = (*permissions, "workspaces:any")
+    return {
+        "Authorization": f"Bearer {mint_token('platform-test', permissions=granted)}"
+    }
 
 
 def _start_and_advance_three_stages(client: TestClient) -> str:
-    resp = client.post("/workflows", json={"definition": "mvp"})
+    resp = client.post(
+        "/workflows",
+        json={"definition": "mvp"},
+        headers=_headers("workflows:write", "workflows:read"),
+    )
     assert resp.status_code in (200, 201), resp.text
     wid = resp.json()["workflow_id"]
     for stage_payload in (
@@ -41,20 +59,24 @@ def _start_and_advance_three_stages(client: TestClient) -> str:
         resp = client.post(
             f"/workflows/{wid}/advance",
             json={"stage_result": stage_payload},
+            headers=_headers("workflows:write", "workflows:read"),
         )
         assert resp.status_code == 200, resp.text
     return wid
 
 
 def test_status_unknown_workflow_returns_404(client: TestClient) -> None:
-    resp = client.get("/workflows/does-not-exist/status")
+    resp = client.get(
+        "/workflows/does-not-exist/status",
+        headers=_headers("workflows:read"),
+    )
     assert resp.status_code == 404, resp.text
     assert resp.json()["detail"] == "workflow_not_found:does-not-exist"
 
 
 def test_history_endpoint_returns_chronological_rows(client: TestClient) -> None:
     wid = _start_and_advance_three_stages(client)
-    resp = client.get(f"/workflows/{wid}/history")
+    resp = client.get(f"/workflows/{wid}/history", headers=_headers("workflows:read"))
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["workflow_id"] == wid
@@ -70,7 +92,10 @@ def test_history_endpoint_returns_chronological_rows(client: TestClient) -> None
 
 def test_history_limit_caps_row_count(client: TestClient) -> None:
     wid = _start_and_advance_three_stages(client)
-    resp = client.get(f"/workflows/{wid}/history?limit=2")
+    resp = client.get(
+        f"/workflows/{wid}/history?limit=2",
+        headers=_headers("workflows:read"),
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["count"] == 2
@@ -80,32 +105,41 @@ def test_history_limit_caps_row_count(client: TestClient) -> None:
 @pytest.mark.parametrize("limit", ["0", "-1"])
 def test_history_rejects_non_positive_limit(client: TestClient, limit: str) -> None:
     wid = _start_and_advance_three_stages(client)
-    resp = client.get(f"/workflows/{wid}/history?limit={limit}")
+    resp = client.get(
+        f"/workflows/{wid}/history?limit={limit}",
+        headers=_headers("workflows:read"),
+    )
     assert resp.status_code == 422
 
 
 def test_history_since_filter(client: TestClient) -> None:
     wid = _start_and_advance_three_stages(client)
-    full = client.get(f"/workflows/{wid}/history").json()
+    full = client.get(
+        f"/workflows/{wid}/history",
+        headers=_headers("workflows:read"),
+    ).json()
     midpoint = full["history"][len(full["history"]) // 2]["recorded_at"]
-    resp = client.get(f"/workflows/{wid}/history?since={midpoint}")
+    resp = client.get(
+        f"/workflows/{wid}/history?since={midpoint}",
+        headers=_headers("workflows:read"),
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert all(r["recorded_at"] >= midpoint for r in body["history"])
 
 
-def test_history_unknown_workflow_returns_empty_list_not_404(client: TestClient) -> None:
-    resp = client.get("/workflows/does-not-exist/history")
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body["workflow_id"] == "does-not-exist"
-    assert body["count"] == 0
-    assert body["history"] == []
+def test_history_unknown_workflow_returns_404(client: TestClient) -> None:
+    resp = client.get(
+        "/workflows/does-not-exist/history",
+        headers=_headers("workflows:read"),
+    )
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["detail"] == "workflow_not_found:does-not-exist"
 
 
 def test_replay_endpoint_returns_timeline_with_elapsed(client: TestClient) -> None:
     wid = _start_and_advance_three_stages(client)
-    resp = client.get(f"/workflows/{wid}/replay")
+    resp = client.get(f"/workflows/{wid}/replay", headers=_headers("workflows:read"))
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["workflow_id"] == wid
@@ -131,19 +165,26 @@ def test_replay_endpoint_returns_timeline_with_elapsed(client: TestClient) -> No
         assert expected_keys <= set(e.keys()), f"missing keys: {e}"
 
 
-def test_replay_unknown_returns_empty_timeline(client: TestClient) -> None:
-    resp = client.get("/workflows/missing-wf/replay")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["count"] == 0
-    assert body["timeline"] == []
+def test_replay_unknown_returns_404(client: TestClient) -> None:
+    resp = client.get(
+        "/workflows/missing-wf/replay",
+        headers=_headers("workflows:read"),
+    )
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "workflow_not_found:missing-wf"
 
 
 def test_history_isolation_between_workflows(client: TestClient) -> None:
     wid_a = _start_and_advance_three_stages(client)
     wid_b = _start_and_advance_three_stages(client)
-    a = client.get(f"/workflows/{wid_a}/history").json()
-    b = client.get(f"/workflows/{wid_b}/history").json()
+    a = client.get(
+        f"/workflows/{wid_a}/history",
+        headers=_headers("workflows:read"),
+    ).json()
+    b = client.get(
+        f"/workflows/{wid_b}/history",
+        headers=_headers("workflows:read"),
+    ).json()
     assert a["workflow_id"] == wid_a
     assert b["workflow_id"] == wid_b
     assert a["history"] and b["history"]

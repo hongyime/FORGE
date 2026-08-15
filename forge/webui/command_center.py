@@ -2144,8 +2144,12 @@ def build_dashboard_html() -> str:
 
     function connectWs() {
       if (!bearer) return;
+      const engagement = selectedEngagement();
+      if (!engagement) return;
       if (ws && ws.readyState === WebSocket.OPEN) return;
-      ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/progress");
+      const url = (location.protocol === "https:" ? "wss://" : "ws://") +
+        location.host + "/ws/progress?engagement_id=" + encodeURIComponent(String(engagement));
+      ws = new WebSocket(url, ["forge-progress", bearer]);
       ws.onmessage = async (event) => {
         let payload = {};
         try { payload = JSON.parse(event.data); } catch (_) {}

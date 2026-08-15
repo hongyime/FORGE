@@ -14,8 +14,20 @@ from typing import Any
 GENESIS_HASH = "0" * 64
 
 _SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_EXCLUDED_TABLES = {"run_audit_manifests", "validation_claims", "task_progress"}
+_EXCLUDED_TABLES = {
+    "audit_reviews",
+    "retention_policies",
+    "retention_run_items",
+    "retention_runs",
+    "run_audit_manifests",
+    "validation_claims",
+    "task_progress",
+}
 _EXCLUDED_TABLE_REASONS = {
+    "audit_reviews": "post-run human review state must not alter evidence hashes",
+    "retention_policies": "operator retention policy state must not alter evidence hashes",
+    "retention_run_items": "retention execution detail is audited separately",
+    "retention_runs": "retention execution ledger is audited separately",
     "run_audit_manifests": "manifest storage is self-verified separately",
     "task_progress": "transient resume checkpoint state",
     "validation_claims": "transient validation lease state",
@@ -295,7 +307,7 @@ def _rebuild_manifest_for_verification(
         "previous_manifest_hash": previous_hash,
         "database": {
             "name": Path(db_path).name,
-            "excluded_tables": _excluded_table_entries(conn),
+            "excluded_tables": _stored_excluded_table_entries(conn, payload),
             "tables": _table_digests_for_verification(
                 conn,
                 payload.get("database"),
@@ -312,6 +324,27 @@ def _rebuild_manifest_for_verification(
         previous_manifest_hash=previous_hash,
         manifest_json=manifest_json,
     )
+
+
+def _stored_excluded_table_entries(
+    conn: sqlite3.Connection,
+    payload: dict[str, Any],
+) -> list[dict[str, str]]:
+    database = payload.get("database")
+    if not isinstance(database, dict):
+        return _excluded_table_entries(conn)
+    entries = database.get("excluded_tables")
+    if not isinstance(entries, list):
+        return _excluded_table_entries(conn)
+    sanitized: list[dict[str, str]] = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        table = str(item.get("table") or "").strip()
+        reason = str(item.get("reason") or "").strip()
+        if table:
+            sanitized.append({"table": table, "reason": reason})
+    return sorted(sanitized, key=lambda item: item["table"])
 
 
 def _utc_now() -> str:
@@ -654,7 +687,27 @@ def _artifact_candidates(
         report_dir = report.parent
         for name in _graph_artifact_names(engagement_id):
             paths.add(report_dir / name)
+        for artifact_path in _metadata_artifact_paths(metadata, report_dir=report_dir):
+            paths.add(artifact_path)
     return paths
+
+
+def _metadata_artifact_paths(metadata: dict[str, Any], *, report_dir: Path) -> list[Path]:
+    values = metadata.get("artifact_paths")
+    if not isinstance(values, list):
+        return []
+    candidates: list[Path] = []
+    resolved_report_dir = report_dir.resolve()
+    for value in values:
+        if not isinstance(value, str) or not value.strip():
+            continue
+        path = _resolve_path(Path(value).expanduser()).resolve()
+        try:
+            path.relative_to(resolved_report_dir)
+        except ValueError:
+            continue
+        candidates.append(path)
+    return candidates
 
 
 def _loads_dict(value: str) -> dict[str, Any]:

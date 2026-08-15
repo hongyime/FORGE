@@ -6,6 +6,7 @@ import time
 
 from typer.testing import CliRunner
 
+import forge.cli_helpers as cli_helpers
 from forge.cli import (
     HtmlFetchSpec,
     ModuleDispatchSpec,
@@ -685,6 +686,76 @@ def test_kill_chain_url_seed_with_at_query_stays_url(tmp_path, monkeypatch) -> N
     finally:
         con.close()
 
+    control_db = tmp_path / ".forge_data" / "control.db"
+    control_con = sqlite3.connect(control_db)
+    try:
+        index_row = control_con.execute(
+            """
+            SELECT slug, summary_json
+            FROM engagement_index
+            WHERE engagement_id=1001
+            """
+        ).fetchone()
+    finally:
+        control_con.close()
+    assert index_row is not None
+    assert index_row[0].startswith("engagement-1001-auto-url-")
+    assert seed_url in index_row[1]
+
+
+def test_kill_chain_literal_cloud_ref_seed_promotes_cloud_inventory(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+
+    kill_chain(
+        seed="cloud_ref:aws_s3:GammaBucket",
+        related_seed=[
+            "s3://GammaBucket/private/config.json",
+            "HTTPS://Gamma.SUPABASE.CO:443/rest#details",
+        ],
+        engagement="1002",
+        max_iter=1,
+        tor=False,
+        dry_run=True,
+        attack_mode=False,
+        skip_cloud=True,
+        skip_keyscan=True,
+        parallel_fanout=1,
+        report_provider="template",
+        report_max_loops=0,
+    )
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1002.db"
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = con.execute(
+            """
+            SELECT seed_value, seed_type
+            FROM engagement_seeds
+            WHERE engagement_id=1002
+            ORDER BY id
+            """
+        ).fetchall()
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier, provider_identifier, source
+            FROM cloud_assets
+            WHERE engagement_id=1002
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert seeds.count(("aws_s3:gammabucket", "cloud_ref")) == 1
+    assert ("https://gamma.supabase.co/rest", "cloud_ref") in seeds
+    assert cloud_assets == [
+        ("aws_s3", "gammabucket", "gammabucket", "kill_chain_seed_url"),
+        ("supabase", "gamma", "gamma", "kill_chain_seed_url"),
+    ]
+
 
 def test_osint_emailrep_forwards_batch_arguments_to_reputation_lookup(
     monkeypatch,
@@ -980,6 +1051,29 @@ def test_extract_html_surface_urls_resolves_relative_links_and_dedupes_literals(
     ]
 
 
+def test_extract_html_surface_urls_ignores_malformed_bracketed_urls() -> None:
+    payload = """
+    <html><body>
+    <a href="https://pay.stripe.com[bad]/receipts/payment/attr">Bad attr</a>
+    <img srcset="https://pay.stripe.com[bad]/receipts/payment/srcset 2x, /logo.png 1x">
+    <script>
+    window.receipt = "https://pay.stripe.com[bad]/receipts/payment/123";
+    fetch('/api/status');
+    </script>
+    </body></html>
+    """
+
+    extracted = _extract_html_surface_urls(
+        payload,
+        base_url="https://acme.example/start",
+    )
+
+    assert extracted == [
+        "https://acme.example/logo.png",
+        "https://acme.example/api/status",
+    ]
+
+
 def test_extract_html_surface_urls_batches_url_families_and_preserves_order(
     monkeypatch,
 ) -> None:
@@ -997,7 +1091,7 @@ def test_extract_html_surface_urls_batches_url_families_and_preserves_order(
         calls.append((list(items), max_workers))
         return [worker(item) for item in items]
 
-    monkeypatch.setattr("forge.cli._run_inprocess_batch", _fake_run_inprocess_batch)
+    monkeypatch.setattr(cli_helpers, "_run_inprocess_batch", _fake_run_inprocess_batch)
     payload = """
     https://literal.acme.example/landing
     <a href="/first">First</a>

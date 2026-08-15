@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,6 +48,32 @@ class FindingSpec:
     resource_id: str | None = None
     compliance_control: str | None = None
     remediation_cli: str | None = None
+
+
+def finding_synthesis_audit_result(
+    summary: FindingSynthesisSummary,
+    *,
+    pass_label: str,
+) -> str:
+    return (
+        f"pass={pass_label} "
+        f"inserted={summary.inserted} "
+        f"updated={summary.updated} "
+        f"removed={summary.removed} "
+        f"active={summary.active_findings} "
+        f"severity_summary={json.dumps(summary.severity_summary, sort_keys=True)}"
+    )
+
+
+def finding_synthesis_log_message(summary: FindingSynthesisSummary) -> str | None:
+    if not (summary.inserted or summary.updated or summary.removed):
+        return None
+    return (
+        f"inserted={summary.inserted} "
+        f"updated={summary.updated} "
+        f"removed={summary.removed} "
+        f"active={summary.active_findings}"
+    )
 
 
 def _table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:

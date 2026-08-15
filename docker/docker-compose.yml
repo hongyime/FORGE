@@ -1,23 +1,93 @@
-version: "3.9"
+# FORGE production self-host stack.
+#
+# This compose file is intentionally hardened for local reverse-proxy exposure:
+# app ports bind to 127.0.0.1, services run as the non-root image user, state is
+# Postgres-backed, and remote audit bundles default to the /remote-audit volume.
 
-# FORGE Autonomous Security Platform - Docker Compose stack.
-# Validates Requirements 12.1, 12.2, 12.3, 12.4, 12.5.
-#
-# Services:
-#   redis        - shared message bus
-#   forge-api    - FastAPI gateway (uvicorn) exposing /health, /workflows, /reports
-#   forge-worker - AgentLoop runner consuming bus messages and dispatching agents
-#
-# Horizontal scaling:
-#   docker compose up --scale forge-worker=3
-#
-# Worker resumes incomplete workflows on restart via
-# WorkflowEngine.resume_incomplete_workflows().
+name: forge
+
+x-forge-build: &forge-build
+  context: ..
+  dockerfile: docker/Dockerfile
+  target: runtime
+
+x-forge-env: &forge-env
+  FORGE_DEPLOYMENT_PROFILE: production
+  FORGE_ENV: production
+  FORGE_DATA_DIR: /data
+  FORGE_SAFE_MODE: "1"
+  FORGE_REQUIRE_SCOPE_MANIFEST: "1"
+  FORGE_WEB_ENABLED: "1"
+  FORGE_WEB_HOST: 0.0.0.0
+  FORGE_WEB_PORT: "8080"
+  FORGE_WEB_AUTH: jwt
+  FORGE_WEB_SECRET_KEY: "${FORGE_WEB_SECRET_KEY:?set FORGE_WEB_SECRET_KEY >=32 chars}"
+  FORGE_WEB_BOOTSTRAP_TOKEN: "${FORGE_WEB_BOOTSTRAP_TOKEN:?set FORGE_WEB_BOOTSTRAP_TOKEN >=32 chars}"
+  FORGE_ENGAGEMENT_KEY: "${FORGE_ENGAGEMENT_KEY:?set FORGE_ENGAGEMENT_KEY >=32 chars}"
+  FORGE_SECURITY_HEADERS_DISABLE: "0"
+  FORGE_SECURITY_HSTS_SECONDS: "${FORGE_SECURITY_HSTS_SECONDS:-31536000}"
+  FORGE_PUBLIC_BASE_URL: "${FORGE_PUBLIC_BASE_URL:?set FORGE_PUBLIC_BASE_URL to the external https URL}"
+  FORGE_TLS_TERMINATED_BY: "${FORGE_TLS_TERMINATED_BY:-reverse-proxy}"
+  FORGE_DISTRIBUTED_ENABLED: "1"
+  FORGE_REDIS_URL: redis://redis:6379/0
+  FORGE_STATE_DB_URL: "postgresql+asyncpg://forge:${FORGE_POSTGRES_PASSWORD:?set FORGE_POSTGRES_PASSWORD}@postgres:5432/forge"
+  FORGE_AUDIT_DB_URL: "postgresql+asyncpg://forge:${FORGE_POSTGRES_PASSWORD:?set FORGE_POSTGRES_PASSWORD}@postgres:5432/forge"
+  FORGE_AUDIT_LOG_PATH: /data/audit/audit.jsonl
+  FORGE_AUDIT_BUNDLE_REMOTE_URI: "${FORGE_AUDIT_BUNDLE_REMOTE_URI:-file:///remote-audit}"
+  FORGE_AUDIT_BUNDLE_REMOTE_SCOPE: "${FORGE_AUDIT_BUNDLE_REMOTE_SCOPE:?set customer/workspace audit scope}"
+  FORGE_PLUGIN_DIR: /plugins
+  FORGE_SCOPE_JSON: "${FORGE_SCOPE_JSON:-}"
+  FORGE_GOVERNANCE_RULES: "${FORGE_GOVERNANCE_RULES:-}"
+  FORGE_LLM_PROVIDER: "${FORGE_LLM_PROVIDER:-llama_cpp}"
+  FORGE_LLM_MODEL_PATH: "${FORGE_LLM_MODEL_PATH:-}"
+  FORGE_PROVIDER_TIMEOUT: "${FORGE_PROVIDER_TIMEOUT:-5}"
+  FORGE_HEARTBEAT_INTERVAL: "${FORGE_HEARTBEAT_INTERVAL:-30}"
+  FORGE_TELEMETRY_THRESHOLD_MS: "${FORGE_TELEMETRY_THRESHOLD_MS:-5000}"
+  FORGE_MESSAGE_RETRY_MAX: "${FORGE_MESSAGE_RETRY_MAX:-3}"
+  FORGE_MESSAGE_ACK_TIMEOUT: "${FORGE_MESSAGE_ACK_TIMEOUT:-60}"
+  FORGE_LOG_LEVEL: "${FORGE_LOG_LEVEL:-INFO}"
+
+x-forge-service: &forge-service
+  image: "forge-toolkit:${FORGE_IMAGE_TAG:-local}"
+  restart: unless-stopped
+  init: true
+  user: "1000:1000"
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=128m
+  volumes:
+    - forge-data:/data
+    - forge-plugins:/plugins:ro
+    - forge-remote-audit:/remote-audit
+    - forge-models:/home/forge/.cache/forge/models:ro
+  networks:
+    - forge-net
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: forge
+      POSTGRES_USER: forge
+      POSTGRES_PASSWORD: "${FORGE_POSTGRES_PASSWORD:?set FORGE_POSTGRES_PASSWORD}"
+    volumes:
+      - forge-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forge -d forge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - forge-net
+
   redis:
     image: redis:7-alpine
-    container_name: forge-redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -29,10 +99,8 @@ services:
       - forge-net
 
   forge-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: forge-api
+    <<: *forge-service
+    build: *forge-build
     command:
       - uvicorn
       - forge.api.app:app
@@ -41,26 +109,9 @@ services:
       - --port
       - "8000"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${FORGE_API_PORT:-8000}:8000"
     environment:
-      FORGE_REDIS_URL: redis://redis:6379/0
-      FORGE_STATE_DB_URL: sqlite:////data/forge_state.db
-      FORGE_AUDIT_DB_URL: sqlite:////data/forge_audit.db
-      FORGE_PLUGIN_DIR: /app/plugins
-      FORGE_LLM_PROVIDER: ${FORGE_LLM_PROVIDER:-llama_cpp}
-      FORGE_LLM_MODEL_PATH: ${FORGE_LLM_MODEL_PATH:-}
-      FORGE_PROVIDER_TIMEOUT: ${FORGE_PROVIDER_TIMEOUT:-5}
-      FORGE_HEARTBEAT_INTERVAL: ${FORGE_HEARTBEAT_INTERVAL:-30}
-      FORGE_SAFE_MODE: ${FORGE_SAFE_MODE:-1}
-      FORGE_SCOPE_JSON: ${FORGE_SCOPE_JSON:-}
-      FORGE_GOVERNANCE_RULES: ${FORGE_GOVERNANCE_RULES:-}
-      FORGE_TELEMETRY_THRESHOLD_MS: ${FORGE_TELEMETRY_THRESHOLD_MS:-5000}
-      FORGE_MESSAGE_RETRY_MAX: ${FORGE_MESSAGE_RETRY_MAX:-3}
-      FORGE_MESSAGE_ACK_TIMEOUT: ${FORGE_MESSAGE_ACK_TIMEOUT:-60}
-      FORGE_LOG_LEVEL: ${FORGE_LOG_LEVEL:-INFO}
-    volumes:
-      - forge-data:/data
-      - ./plugins:/app/plugins:ro
+      <<: *forge-env
     healthcheck:
       test:
         - CMD-SHELL
@@ -70,47 +121,60 @@ services:
       retries: 5
       start_period: 15s
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - forge-net
-    restart: unless-stopped
+
+  forge-webui:
+    <<: *forge-service
+    build: *forge-build
+    command:
+      - uvicorn
+      - forge.webui.app:create_app
+      - --factory
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    ports:
+      - "127.0.0.1:${FORGE_WEB_PORT:-8080}:8080"
+    environment:
+      <<: *forge-env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'python -c "import urllib.request, sys; urllib.request.urlopen(''http://localhost:8080/health'', timeout=3); sys.exit(0)" || exit 1'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   forge-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *forge-service
+    build: *forge-build
     command: ["python", "-m", "forge.core.runner"]
     environment:
-      FORGE_REDIS_URL: redis://redis:6379/0
-      FORGE_STATE_DB_URL: sqlite:////data/forge_state.db
-      FORGE_AUDIT_DB_URL: sqlite:////data/forge_audit.db
-      FORGE_PLUGIN_DIR: /app/plugins
-      FORGE_LLM_PROVIDER: ${FORGE_LLM_PROVIDER:-llama_cpp}
-      FORGE_LLM_MODEL_PATH: ${FORGE_LLM_MODEL_PATH:-}
-      FORGE_PROVIDER_TIMEOUT: ${FORGE_PROVIDER_TIMEOUT:-5}
-      FORGE_HEARTBEAT_INTERVAL: ${FORGE_HEARTBEAT_INTERVAL:-30}
-      FORGE_SAFE_MODE: ${FORGE_SAFE_MODE:-1}
-      FORGE_SCOPE_JSON: ${FORGE_SCOPE_JSON:-}
-      FORGE_GOVERNANCE_RULES: ${FORGE_GOVERNANCE_RULES:-}
-      FORGE_TELEMETRY_THRESHOLD_MS: ${FORGE_TELEMETRY_THRESHOLD_MS:-5000}
-      FORGE_MESSAGE_RETRY_MAX: ${FORGE_MESSAGE_RETRY_MAX:-3}
-      FORGE_MESSAGE_ACK_TIMEOUT: ${FORGE_MESSAGE_ACK_TIMEOUT:-60}
-      FORGE_LOG_LEVEL: ${FORGE_LOG_LEVEL:-INFO}
-    volumes:
-      - forge-data:/data
-      - ./plugins:/app/plugins:ro
+      <<: *forge-env
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - forge-net
-    restart: unless-stopped
     deploy:
       replicas: ${FORGE_WORKER_REPLICAS:-1}
 
 volumes:
   forge-data:
+  forge-models:
+  forge-plugins:
+  forge-postgres:
+  forge-remote-audit:
 
 networks:
   forge-net:

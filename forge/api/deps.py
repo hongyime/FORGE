@@ -19,7 +19,12 @@ import logging
 from functools import lru_cache
 
 import os
+import sqlite3
 from typing import TYPE_CHECKING, cast
+from collections.abc import Iterator
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 if TYPE_CHECKING:
     from forge.providers.base import LLMProvider
@@ -30,7 +35,9 @@ from forge.audit.logger import AuditLogger
 from forge.bus.base import MessageBus
 from forge.bus.redis_bus import create_message_bus
 from forge.config import PlatformSettings
+from forge.config import ForgeConfig
 from forge.core.agent_registry import AgentRegistry
+from forge.db.control import connect_control_db
 from forge.governance.policy_engine import PolicyEngine
 from forge.governance.safe_mode import SafeModeEnforcer
 from forge.governance.scope_gate import ScopeGate
@@ -38,10 +45,13 @@ from forge.plugins.executor import PluginExecutor
 from forge.plugins.loader import PluginLoader
 from forge.providers.registry import ProviderRegistry
 from forge.workflow import StateStore, WorkflowEngine
+from forge.webui.auth import Principal, verify_principal
 
 __all__ = [
+    "get_current_principal",
     "get_audit",
     "get_bus",
+    "get_control_db",
     "get_plugin_executor",
     "get_plugin_loader",
     "get_policy_engine",
@@ -54,10 +64,62 @@ __all__ = [
     "get_settings",
     "get_state_store",
     "get_workflow_engine",
+    "require_permission",
     "reset_dependencies",
 ]
 
 _LOG = logging.getLogger(__name__)
+_AUTH_SCHEME = HTTPBearer(auto_error=False)
+
+
+def get_current_principal(
+    creds: HTTPAuthorizationCredentials | None = Depends(_AUTH_SCHEME),
+) -> Principal:
+    """Return the authenticated platform API principal."""
+    if creds is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authorization token.",
+        )
+    try:
+        principal = verify_principal(creds.credentials)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    if principal is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization token.",
+        )
+    return principal
+
+
+def require_permission(permission: str):
+    """Build a dependency that requires a specific platform permission."""
+
+    def _require_permission(
+        principal: Principal = Depends(get_current_principal),
+    ) -> Principal:
+        if not principal.has_permission(permission):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Missing required permission: {permission}",
+            )
+        return principal
+
+    return _require_permission
+
+
+def get_control_db() -> Iterator[sqlite3.Connection]:
+    """Yield the shared workspace/engagement control DB for platform tenancy."""
+    data_dir = ForgeConfig.load().data_dir
+    con = connect_control_db(data_dir, check_same_thread=False)
+    try:
+        yield con
+    finally:
+        con.close()
 
 
 @lru_cache(maxsize=1)

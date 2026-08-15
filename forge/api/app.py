@@ -23,6 +23,7 @@ from fastapi import FastAPI
 
 from forge.api.deps import get_bus, get_state_store
 from forge.api.routes import health, reports, workflows
+from forge.security_headers import install_security_headers
 
 __all__ = ["app", "create_app"]
 
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
         ),
         lifespan=lifespan,
     )
+    install_security_headers(fastapi_app, surface="api")
     fastapi_app.include_router(health.router)
     fastapi_app.include_router(workflows.router)
     fastapi_app.include_router(reports.router)

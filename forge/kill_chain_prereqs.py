@@ -3,14 +3,351 @@ from __future__ import annotations
 import os
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
 PrerequisiteRecord = dict[str, object]
+KillChainPrereqAuditCallback = Callable[..., object]
+KillChainPrereqChildArgvHardener = Callable[[Sequence[str]], list[str]]
+KillChainPrereqDispatchSpecFactory = Callable[[list[str], str], object]
 
 _MOBILE_ARTIFACT_PATTERNS = ("*.apk", "*.aab", "*.xapk", "*.apkm", "*.apks", "*.ipa")
+
+
+@dataclass(frozen=True)
+class KillChainPrereqAuditCallbacks:
+    auto_run: Callable[[str], None]
+    prompted: Callable[[str], None]
+
+
+@dataclass(frozen=True)
+class KillChainPrereqFlowRuntime:
+    console_print: Callable[[str], None]
+    log: Callable[[str, str], None]
+    complete_run: Callable[[dict[str, object]], None]
+    run_inprocess_batch: Any
+    run_module_batch: Any
+    run_module: Callable[[list[str], str], int]
+    dispatch_spec_type: Callable[..., object]
+    harden_child_argv: Callable[..., list[str]]
+    progress_callback: Any
+    stdin: Any
+    stdout: Any
+    input_func: Callable[[str], str] = input
+
+
+def kill_chain_prereq_flow_runtime(
+    *,
+    console_print: Callable[[str], None],
+    log: Callable[[str, str], None],
+    complete_run: Callable[[dict[str, object]], None],
+    run_inprocess_batch: Any,
+    run_module_batch: Any,
+    run_module: Callable[[list[str], str], int],
+    dispatch_spec_type: Callable[..., object],
+    harden_child_argv: Callable[..., list[str]],
+    progress_callback: Any,
+    stdin: Any,
+    stdout: Any,
+    input_func: Callable[[str], str] = input,
+) -> KillChainPrereqFlowRuntime:
+    return KillChainPrereqFlowRuntime(
+        console_print=console_print,
+        log=log,
+        complete_run=complete_run,
+        run_inprocess_batch=run_inprocess_batch,
+        run_module_batch=run_module_batch,
+        run_module=run_module,
+        dispatch_spec_type=dispatch_spec_type,
+        harden_child_argv=harden_child_argv,
+        progress_callback=progress_callback,
+        stdin=stdin,
+        stdout=stdout,
+        input_func=input_func,
+    )
+
+
+def kill_chain_prereq_detection_audit_result(
+    detected: Sequence[PrerequisiteRecord],
+    *,
+    auto_run_detected: bool,
+    include_offensive_prereqs: bool,
+) -> str:
+    return (
+        f"detected={len(detected)} auto_run={auto_run_detected} "
+        f"offensive_prereqs={include_offensive_prereqs}"
+    )
+
+
+def emit_kill_chain_prereq_detection_audit(
+    *,
+    audit_callback: KillChainPrereqAuditCallback,
+    db_path: str | Path,
+    engagement_id: int,
+    target: str,
+    detected: Sequence[PrerequisiteRecord],
+    auto_run_detected: bool,
+    include_offensive_prereqs: bool,
+) -> str:
+    result = kill_chain_prereq_detection_audit_result(
+        detected,
+        auto_run_detected=auto_run_detected,
+        include_offensive_prereqs=include_offensive_prereqs,
+    )
+    audit_callback(
+        db_path,
+        engagement_id,
+        "orchestrator",
+        "kill_chain",
+        "prereq_detection",
+        target=target,
+        result=result,
+    )
+    return result
+
+
+def detect_and_audit_kill_chain_prerequisites(
+    *,
+    audit_callback: KillChainPrereqAuditCallback,
+    db_path: Path,
+    engagement_id: int,
+    engagement: str,
+    domain: str,
+    auto_run_detected: bool,
+    include_offensive_prereqs: bool,
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+) -> list[PrerequisiteRecord]:
+    detected = detect_kill_chain_prerequisites(
+        db_path=db_path,
+        engagement_id=engagement_id,
+        engagement=engagement,
+        domain=domain,
+        include_offensive_prereqs=include_offensive_prereqs,
+        cwd=cwd,
+        env=env,
+    )
+    emit_kill_chain_prereq_detection_audit(
+        audit_callback=audit_callback,
+        db_path=db_path,
+        engagement_id=engagement_id,
+        target=domain,
+        detected=detected,
+        auto_run_detected=auto_run_detected,
+        include_offensive_prereqs=include_offensive_prereqs,
+    )
+    return detected
+
+
+def kill_chain_prereq_audit_callback(
+    *,
+    audit_callback: KillChainPrereqAuditCallback,
+    db_path: str | Path,
+    engagement_id: int,
+    target: str,
+    action: str,
+) -> Callable[[str], None]:
+    def _audit(result: str) -> None:
+        audit_callback(
+            db_path,
+            engagement_id,
+            "orchestrator",
+            "kill_chain",
+            action,
+            target=target,
+            result=result,
+        )
+
+    return _audit
+
+
+def kill_chain_prereq_audit_callbacks(
+    *,
+    audit_callback: KillChainPrereqAuditCallback,
+    db_path: str | Path,
+    engagement_id: int,
+    target: str,
+) -> KillChainPrereqAuditCallbacks:
+    return KillChainPrereqAuditCallbacks(
+        auto_run=kill_chain_prereq_audit_callback(
+            audit_callback=audit_callback,
+            db_path=db_path,
+            engagement_id=engagement_id,
+            target=target,
+            action="prereq_auto_run",
+        ),
+        prompted=kill_chain_prereq_audit_callback(
+            audit_callback=audit_callback,
+            db_path=db_path,
+            engagement_id=engagement_id,
+            target=target,
+            action="prereq_prompted",
+        ),
+    )
+
+
+def kill_chain_prereq_child_argv_hardener(
+    *,
+    harden_child_argv: Callable[..., list[str]],
+    roe_id: str,
+    scope_manifest: str,
+) -> KillChainPrereqChildArgvHardener:
+    def _harden(argv: Sequence[str]) -> list[str]:
+        return harden_child_argv(argv, roe_id=roe_id, scope_manifest=scope_manifest)
+
+    return _harden
+
+
+def kill_chain_prereq_dispatch_spec_factory(
+    dispatch_spec_type: Callable[..., object],
+) -> KillChainPrereqDispatchSpecFactory:
+    def _make_dispatch_spec(cmd_argv: list[str], label: str) -> object:
+        return dispatch_spec_type(cmd_argv=cmd_argv, label=label)
+
+    return _make_dispatch_spec
+
+
+def kill_chain_prereq_is_interactive(stdin: Any, stdout: Any) -> bool:
+    return bool(stdin.isatty() and stdout.isatty())
+
+
+def handle_kill_chain_prerequisite_flow_with_runtime(
+    detected: Sequence[PrerequisiteRecord],
+    *,
+    auto_run_detected: bool,
+    parallel_workers: int,
+    audit_callbacks: KillChainPrereqAuditCallbacks,
+    runtime: KillChainPrereqFlowRuntime,
+    roe_id: str,
+    scope_manifest: str,
+) -> None:
+    handle_kill_chain_prerequisite_flow(
+        detected,
+        auto_run_detected=auto_run_detected,
+        parallel_workers=parallel_workers,
+        console_print=runtime.console_print,
+        log=runtime.log,
+        complete_run=runtime.complete_run,
+        audit_auto_run=audit_callbacks.auto_run,
+        audit_prompted=audit_callbacks.prompted,
+        run_inprocess_batch=runtime.run_inprocess_batch,
+        run_module_batch=runtime.run_module_batch,
+        run_module=runtime.run_module,
+        make_dispatch_spec=kill_chain_prereq_dispatch_spec_factory(runtime.dispatch_spec_type),
+        harden_child_argv=kill_chain_prereq_child_argv_hardener(
+            harden_child_argv=runtime.harden_child_argv,
+            roe_id=roe_id,
+            scope_manifest=scope_manifest,
+        ),
+        progress_callback=runtime.progress_callback,
+        is_tty=kill_chain_prereq_is_interactive(runtime.stdin, runtime.stdout),
+        input_func=runtime.input_func,
+    )
+
+
+def run_kill_chain_prerequisites_with_runtime(
+    *,
+    audit_callback: KillChainPrereqAuditCallback,
+    db_path: Path,
+    engagement_id: int,
+    engagement: str,
+    domain: str,
+    auto_run_detected: bool,
+    include_offensive_prereqs: bool,
+    parallel_workers: int,
+    runtime: KillChainPrereqFlowRuntime,
+    roe_id: str,
+    scope_manifest: str,
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+) -> list[PrerequisiteRecord]:
+    detected = detect_and_audit_kill_chain_prerequisites(
+        audit_callback=audit_callback,
+        db_path=db_path,
+        engagement_id=engagement_id,
+        engagement=engagement,
+        domain=domain,
+        auto_run_detected=auto_run_detected,
+        include_offensive_prereqs=include_offensive_prereqs,
+        cwd=cwd,
+        env=env,
+    )
+    audit_callbacks = kill_chain_prereq_audit_callbacks(
+        audit_callback=audit_callback,
+        db_path=db_path,
+        engagement_id=engagement_id,
+        target=domain,
+    )
+    handle_kill_chain_prerequisite_flow_with_runtime(
+        detected,
+        auto_run_detected=auto_run_detected,
+        parallel_workers=parallel_workers,
+        audit_callbacks=audit_callbacks,
+        runtime=runtime,
+        roe_id=roe_id,
+        scope_manifest=scope_manifest,
+    )
+    return detected
+
+
+def run_kill_chain_prerequisites_with_cli_hooks(
+    *,
+    audit_callback: KillChainPrereqAuditCallback,
+    db_path: Path,
+    engagement_id: int,
+    engagement: str,
+    domain: str,
+    auto_run_detected: bool,
+    include_offensive_prereqs: bool,
+    parallel_workers: int,
+    console_print: Callable[[str], None],
+    log: Callable[[str, str], None],
+    complete_run: Callable[[dict[str, object]], None],
+    run_inprocess_batch: Any,
+    run_module_batch: Any,
+    run_module: Callable[[list[str], str], int],
+    dispatch_spec_type: Callable[..., object],
+    harden_child_argv: Callable[..., list[str]],
+    progress_callback: Any,
+    stdin: Any,
+    stdout: Any,
+    input_func: Callable[[str], str],
+    roe_id: str,
+    scope_manifest: str,
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+) -> list[PrerequisiteRecord]:
+    return run_kill_chain_prerequisites_with_runtime(
+        audit_callback=audit_callback,
+        db_path=db_path,
+        engagement_id=engagement_id,
+        engagement=engagement,
+        domain=domain,
+        auto_run_detected=auto_run_detected,
+        include_offensive_prereqs=include_offensive_prereqs,
+        parallel_workers=parallel_workers,
+        runtime=kill_chain_prereq_flow_runtime(
+            console_print=console_print,
+            log=log,
+            complete_run=complete_run,
+            run_inprocess_batch=run_inprocess_batch,
+            run_module_batch=run_module_batch,
+            run_module=run_module,
+            dispatch_spec_type=dispatch_spec_type,
+            harden_child_argv=harden_child_argv,
+            progress_callback=progress_callback,
+            stdin=stdin,
+            stdout=stdout,
+            input_func=input_func,
+        ),
+        roe_id=roe_id,
+        scope_manifest=scope_manifest,
+        cwd=cwd,
+        env=env,
+    )
 
 
 def handle_kill_chain_prerequisite_flow(

@@ -1,0 +1,87 @@
+image:
+  repository: forge-toolkit
+  tag: local
+  pullPolicy: IfNotPresent
+
+replicaCount:
+  api: 1
+  webui: 1
+  worker: 1
+
+service:
+  apiPort: 8000
+  webPort: 8080
+
+publicBaseUrl: ""
+tlsTerminatedBy: ingress
+securityHstsSeconds: 31536000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: forge.example.com
+      apiPath: /api
+      webPath: /
+  tls: []
+
+storage:
+  data:
+    size: 20Gi
+    storageClassName: ""
+  remoteAudit:
+    size: 10Gi
+    storageClassName: ""
+
+postgres:
+  host: forge-postgres
+  port: 5432
+  database: forge
+  user: forge
+
+redis:
+  url: redis://forge-redis:6379/0
+
+secrets:
+  existingSecretName: ""
+  webSecretKey: ""
+  webBootstrapToken: ""
+  engagementKey: ""
+  postgresPassword: ""
+  auditBundleRemoteScope: ""
+
+externalSecrets:
+  enabled: false
+  refreshInterval: 1h
+  secretStoreRef:
+    name: forge-secret-store
+    kind: ClusterSecretStore
+  remoteRefs:
+    webSecretKey:
+      key: forge/web-secret-key
+    webBootstrapToken:
+      key: forge/web-bootstrap-token
+    engagementKey:
+      key: forge/engagement-key
+    postgresPassword:
+      key: forge/postgres-password
+    auditBundleRemoteScope:
+      key: forge/audit-bundle-remote-scope
+
+env:
+  FORGE_LOG_LEVEL: INFO
+  FORGE_PROVIDER_TIMEOUT: "5"
+  FORGE_HEARTBEAT_INTERVAL: "30"
+  FORGE_TELEMETRY_THRESHOLD_MS: "5000"
+  FORGE_MESSAGE_RETRY_MAX: "3"
+  FORGE_MESSAGE_ACK_TIMEOUT: "60"
+
+resources:
+  api: {}
+  webui: {}
+  worker: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

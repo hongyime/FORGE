@@ -16,6 +16,27 @@ Migration index
   0007  v7.2 tables: vulnerability_findings, cloud_assets, key_scanner_findings
   0019  provider_identifier exact cloud/provider identifier columns
   0022  cloud asset provenance metadata
+  0028  remediation workflow items
+  0029  continuous monitoring snapshots and alerts
+  0030  continuous monitoring trend aggregates
+  0031  monitoring alert delivery records
+  0032  monitoring alert routing and suppressions
+  0033  monitoring alerts as remediation sources
+  0034  remediation ticket connector events
+  0035  GitHub Issues remediation ticket connector
+  0036  Jira remediation ticket connector
+  0037  ServiceNow remediation ticket connector
+  0038  Asset graph primitive and ownership claims
+  0039  Active validation jobs and runs
+  0040  Asset graph evidence nodes and provenance edges
+  0041  Vulnerability standards metadata columns
+  0042  Secrets lifecycle and suppression workflow tables
+  0043  Audit manifest human review records
+  0044  Retention policy dry-run/apply records
+  0045  SOAR remediation connectors
+  0046  Remediation risk acceptance expiry
+  0047  Encrypted connector secrets
+  0049  Asset graph remediation source
 
 Design constraints:
   - All ALTER TABLE statements use `IF NOT EXISTS` workaround (SQLite
@@ -1167,6 +1188,1410 @@ def _m0026_cloud_ref_seed_type(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _m0027_workspace_rbac_foundation(conn: sqlite3.Connection) -> None:
+    """Add local workspace and membership primitives for enterprise controls."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS workspaces (
+            workspace_id  TEXT PRIMARY KEY,
+            name          TEXT      NOT NULL,
+            metadata_json TEXT      NOT NULL DEFAULT '{}',
+            created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS workspace_memberships (
+            workspace_id     TEXT      NOT NULL,
+            subject          TEXT      NOT NULL,
+            role             TEXT      NOT NULL DEFAULT 'operator',
+            permissions_json TEXT      NOT NULL DEFAULT '[]',
+            created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (workspace_id, subject)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workspace_memberships_subject
+            ON workspace_memberships (subject, workspace_id);
+
+        INSERT OR IGNORE INTO workspaces (workspace_id, name, metadata_json)
+        VALUES ('default', 'Default Workspace', '{}');
+        """
+    )
+
+    if _table_sql_contains(conn, "engagements", "engagements"):
+        _safe_alter(
+            conn,
+            "ALTER TABLE engagements ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'default'",
+        )
+        conn.execute(
+            """
+            UPDATE engagements
+            SET workspace_id='default'
+            WHERE workspace_id IS NULL OR TRIM(workspace_id) = ''
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_engagements_workspace
+                ON engagements (workspace_id, id)
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO workspace_memberships
+                (workspace_id, subject, role, permissions_json)
+            SELECT DISTINCT workspace_id, operator, 'owner', '["*"]'
+            FROM engagements
+            WHERE operator IS NOT NULL AND TRIM(operator) <> ''
+            """
+        )
+
+    conn.commit()
+
+
+def _m0028_remediation_workflow_items(conn: sqlite3.Connection) -> None:
+    """Add remediation workflow records for owner/SLA/ticket/retest state."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS remediation_items (
+            id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id          INTEGER NOT NULL REFERENCES engagements(id),
+            finding_table          TEXT    NOT NULL DEFAULT 'vulnerability_findings'
+                                     CHECK (finding_table IN (
+                                         'vulnerability_findings',
+                                         'key_scanner_findings',
+                                         'cloud_validation_results',
+                                         'passive_vulns',
+                                         'monitoring_alerts',
+                                         'asset_graph',
+                                         'manual'
+                                     )),
+            finding_id             INTEGER,
+            finding_ref            TEXT    NOT NULL,
+            title                  TEXT    NOT NULL,
+            severity               TEXT    NOT NULL DEFAULT 'INFO'
+                                     CHECK (severity IN ('CRITICAL','HIGH','MEDIUM','LOW','INFO')),
+            owner                  TEXT,
+            sla_due_at             TEXT,
+            status                 TEXT    NOT NULL DEFAULT 'open'
+                                     CHECK (status IN (
+                                         'open',
+                                         'assigned',
+                                         'in_progress',
+                                         'risk_accepted',
+                                         'retest_pending',
+                                         'resolved',
+                                         'false_positive'
+                                     )),
+            risk_acceptance_reason TEXT,
+            risk_accepted_by       TEXT,
+            risk_accepted_at       TIMESTAMP,
+            risk_acceptance_expires_at TEXT,
+            retest_status          TEXT    NOT NULL DEFAULT 'not_requested'
+                                     CHECK (retest_status IN (
+                                         'not_requested',
+                                         'pending',
+                                         'passed',
+                                         'failed',
+                                         'blocked'
+                                     )),
+            retest_requested_at    TIMESTAMP,
+            retested_at            TIMESTAMP,
+            ticket_system          TEXT,
+            ticket_ref             TEXT,
+            ticket_url             TEXT,
+            metadata_json          TEXT    NOT NULL DEFAULT '{}',
+            created_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, finding_table, finding_ref)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_remediation_items_engagement
+            ON remediation_items (engagement_id, status, severity);
+
+        CREATE INDEX IF NOT EXISTS idx_remediation_items_owner
+            ON remediation_items (engagement_id, owner, sla_due_at);
+        """
+    )
+    conn.commit()
+
+
+def _m0029_continuous_monitoring(conn: sqlite3.Connection) -> None:
+    """Add continuous monitoring policies, snapshots, diffs, and alerts."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS monitoring_policies (
+            id                         INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id              INTEGER NOT NULL REFERENCES engagements(id),
+            name                       TEXT    NOT NULL,
+            enabled                    INTEGER NOT NULL DEFAULT 1
+                                       CHECK (enabled IN (0, 1)),
+            schedule_interval_minutes  INTEGER NOT NULL DEFAULT 1440
+                                       CHECK (schedule_interval_minutes >= 15),
+            mode                       TEXT    NOT NULL DEFAULT 'passive'
+                                       CHECK (mode IN ('passive','standard','active_validation')),
+            last_snapshot_id           INTEGER REFERENCES monitoring_snapshots(id),
+            last_run_at                TEXT,
+            next_run_at                TEXT,
+            metadata_json              TEXT    NOT NULL DEFAULT '{}',
+            created_at                 TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at                 TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_monitoring_policies_engagement
+            ON monitoring_policies (engagement_id, enabled, next_run_at);
+
+        CREATE TABLE IF NOT EXISTS monitoring_snapshots (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id   INTEGER NOT NULL REFERENCES engagements(id),
+            policy_id       INTEGER REFERENCES monitoring_policies(id),
+            snapshot_kind   TEXT    NOT NULL DEFAULT 'manual'
+                            CHECK (snapshot_kind IN ('manual','scheduled','rerun')),
+            state_hash      TEXT    NOT NULL,
+            state_json      TEXT    NOT NULL,
+            summary_json    TEXT    NOT NULL,
+            created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_monitoring_snapshots_engagement
+            ON monitoring_snapshots (engagement_id, created_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS monitoring_changes (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id         INTEGER NOT NULL REFERENCES engagements(id),
+            baseline_snapshot_id  INTEGER REFERENCES monitoring_snapshots(id),
+            snapshot_id           INTEGER NOT NULL REFERENCES monitoring_snapshots(id),
+            entity_type           TEXT    NOT NULL CHECK (entity_type IN ('asset','finding')),
+            entity_key            TEXT    NOT NULL,
+            change_type           TEXT    NOT NULL CHECK (change_type IN ('added','removed','changed')),
+            severity              TEXT    NOT NULL DEFAULT 'INFO'
+                                  CHECK (severity IN ('CRITICAL','HIGH','MEDIUM','LOW','INFO')),
+            before_json           TEXT,
+            after_json            TEXT,
+            created_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (snapshot_id, entity_type, entity_key, change_type)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_monitoring_changes_snapshot
+            ON monitoring_changes (engagement_id, snapshot_id, change_type, severity);
+
+        CREATE TABLE IF NOT EXISTS monitoring_alerts (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id   INTEGER NOT NULL REFERENCES engagements(id),
+            policy_id       INTEGER REFERENCES monitoring_policies(id),
+            snapshot_id     INTEGER NOT NULL REFERENCES monitoring_snapshots(id),
+            change_id       INTEGER REFERENCES monitoring_changes(id),
+            alert_type      TEXT    NOT NULL,
+            severity        TEXT    NOT NULL DEFAULT 'INFO'
+                            CHECK (severity IN ('CRITICAL','HIGH','MEDIUM','LOW','INFO')),
+            title           TEXT    NOT NULL,
+            status          TEXT    NOT NULL DEFAULT 'open'
+                            CHECK (status IN ('open','acknowledged','resolved')),
+            metadata_json   TEXT    NOT NULL DEFAULT '{}',
+            created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_monitoring_alerts_engagement
+            ON monitoring_alerts (engagement_id, status, severity, created_at DESC);
+        """
+    )
+    conn.commit()
+
+
+def _m0030_monitoring_trend_points(conn: sqlite3.Connection) -> None:
+    """Add persisted monitoring trend aggregates for snapshot history."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS monitoring_trend_points (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id     INTEGER NOT NULL REFERENCES engagements(id),
+            policy_id         INTEGER REFERENCES monitoring_policies(id),
+            snapshot_id       INTEGER NOT NULL REFERENCES monitoring_snapshots(id),
+            observed_at       TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            asset_count       INTEGER NOT NULL DEFAULT 0,
+            finding_count     INTEGER NOT NULL DEFAULT 0,
+            critical_count    INTEGER NOT NULL DEFAULT 0,
+            high_count        INTEGER NOT NULL DEFAULT 0,
+            medium_count      INTEGER NOT NULL DEFAULT 0,
+            low_count         INTEGER NOT NULL DEFAULT 0,
+            info_count        INTEGER NOT NULL DEFAULT 0,
+            added_count       INTEGER NOT NULL DEFAULT 0,
+            removed_count     INTEGER NOT NULL DEFAULT 0,
+            changed_count     INTEGER NOT NULL DEFAULT 0,
+            alert_count       INTEGER NOT NULL DEFAULT 0,
+            open_alert_count  INTEGER NOT NULL DEFAULT 0,
+            summary_json      TEXT    NOT NULL DEFAULT '{}',
+            created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (snapshot_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_monitoring_trend_points_engagement
+            ON monitoring_trend_points (engagement_id, observed_at DESC, id DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_monitoring_trend_points_policy
+            ON monitoring_trend_points (engagement_id, policy_id, observed_at DESC);
+
+        INSERT OR IGNORE INTO monitoring_trend_points (
+            engagement_id,
+            policy_id,
+            snapshot_id,
+            observed_at,
+            asset_count,
+            finding_count,
+            critical_count,
+            high_count,
+            medium_count,
+            low_count,
+            info_count,
+            added_count,
+            removed_count,
+            changed_count,
+            alert_count,
+            open_alert_count,
+            summary_json
+        )
+        SELECT
+            s.engagement_id,
+            s.policy_id,
+            s.id,
+            COALESCE(s.created_at, CURRENT_TIMESTAMP),
+            COALESCE(CAST(json_extract(s.summary_json, '$.asset_count') AS INTEGER), 0),
+            COALESCE(CAST(json_extract(s.summary_json, '$.finding_count') AS INTEGER), 0),
+            COALESCE(CAST(json_extract(s.summary_json, '$.severity_summary.CRITICAL') AS INTEGER), 0),
+            COALESCE(CAST(json_extract(s.summary_json, '$.severity_summary.HIGH') AS INTEGER), 0),
+            COALESCE(CAST(json_extract(s.summary_json, '$.severity_summary.MEDIUM') AS INTEGER), 0),
+            COALESCE(CAST(json_extract(s.summary_json, '$.severity_summary.LOW') AS INTEGER), 0),
+            COALESCE(CAST(json_extract(s.summary_json, '$.severity_summary.INFO') AS INTEGER), 0),
+            COALESCE(changes.added_count, 0),
+            COALESCE(changes.removed_count, 0),
+            COALESCE(changes.changed_count, 0),
+            COALESCE(alerts.alert_count, 0),
+            COALESCE(alerts.open_alert_count, 0),
+            s.summary_json
+        FROM monitoring_snapshots s
+        LEFT JOIN (
+            SELECT
+                snapshot_id,
+                SUM(CASE WHEN change_type='added' THEN 1 ELSE 0 END) AS added_count,
+                SUM(CASE WHEN change_type='removed' THEN 1 ELSE 0 END) AS removed_count,
+                SUM(CASE WHEN change_type='changed' THEN 1 ELSE 0 END) AS changed_count
+            FROM monitoring_changes
+            GROUP BY snapshot_id
+        ) changes ON changes.snapshot_id=s.id
+        LEFT JOIN (
+            SELECT
+                snapshot_id,
+                COUNT(*) AS alert_count,
+                SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) AS open_alert_count
+            FROM monitoring_alerts
+            GROUP BY snapshot_id
+        ) alerts ON alerts.snapshot_id=s.id;
+        """
+    )
+    conn.commit()
+
+
+def _m0031_monitoring_alert_deliveries(conn: sqlite3.Connection) -> None:
+    """Add idempotent delivery records for monitoring alert adapters."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS monitoring_alert_deliveries (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id  INTEGER NOT NULL REFERENCES engagements(id),
+            alert_id       INTEGER NOT NULL REFERENCES monitoring_alerts(id),
+            channel        TEXT    NOT NULL CHECK (channel IN ('jsonl','stdout','webhook')),
+            destination    TEXT    NOT NULL DEFAULT '',
+            status         TEXT    NOT NULL DEFAULT 'pending'
+                           CHECK (status IN ('pending','delivered','failed','skipped')),
+            attempt_count  INTEGER NOT NULL DEFAULT 0,
+            last_error     TEXT,
+            delivered_at   TEXT,
+            metadata_json  TEXT    NOT NULL DEFAULT '{}',
+            created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (alert_id, channel, destination)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_monitoring_alert_deliveries_engagement
+            ON monitoring_alert_deliveries (engagement_id, status, channel, updated_at DESC);
+        """
+    )
+    conn.commit()
+
+
+def _m0032_monitoring_alert_routing(conn: sqlite3.Connection) -> None:
+    """Add local alert routing and suppression policy tables."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS monitoring_alert_routes (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id  INTEGER NOT NULL REFERENCES engagements(id),
+            name           TEXT    NOT NULL,
+            enabled        INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+            min_severity   TEXT    NOT NULL DEFAULT 'INFO'
+                           CHECK (min_severity IN ('CRITICAL','HIGH','MEDIUM','LOW','INFO')),
+            alert_type     TEXT    NOT NULL DEFAULT '',
+            entity_prefix  TEXT    NOT NULL DEFAULT '',
+            channel        TEXT    NOT NULL CHECK (channel IN ('jsonl','stdout','webhook')),
+            destination    TEXT    NOT NULL DEFAULT '',
+            owner          TEXT    NOT NULL DEFAULT '',
+            escalation     TEXT    NOT NULL DEFAULT '',
+            metadata_json  TEXT    NOT NULL DEFAULT '{}',
+            created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_monitoring_alert_routes_engagement
+            ON monitoring_alert_routes (engagement_id, enabled, min_severity, channel);
+
+        CREATE TABLE IF NOT EXISTS monitoring_alert_suppressions (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id  INTEGER NOT NULL REFERENCES engagements(id),
+            alert_type     TEXT    NOT NULL DEFAULT '',
+            entity_key     TEXT    NOT NULL DEFAULT '',
+            entity_prefix  TEXT    NOT NULL DEFAULT '',
+            severity       TEXT    NOT NULL DEFAULT ''
+                           CHECK (severity IN ('','CRITICAL','HIGH','MEDIUM','LOW','INFO')),
+            reason         TEXT    NOT NULL,
+            created_by     TEXT    NOT NULL DEFAULT '',
+            expires_at     TEXT,
+            metadata_json  TEXT    NOT NULL DEFAULT '{}',
+            created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_monitoring_alert_suppressions_engagement
+            ON monitoring_alert_suppressions (engagement_id, alert_type, severity, expires_at);
+        """
+    )
+    conn.commit()
+
+
+def _m0033_monitoring_alert_remediation_sources(conn: sqlite3.Connection) -> None:
+    """Allow monitoring alerts to be tracked as first-class remediation items."""
+    if not _table_sql_contains(conn, "remediation_items", "'monitoring_alerts'"):
+        _rebuild_table(
+            conn,
+            "remediation_items",
+            """
+            CREATE TABLE remediation_items (
+                id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id          INTEGER NOT NULL REFERENCES engagements(id),
+                finding_table          TEXT    NOT NULL DEFAULT 'vulnerability_findings'
+                                         CHECK (finding_table IN (
+                                             'vulnerability_findings',
+                                             'key_scanner_findings',
+                                             'cloud_validation_results',
+                                              'passive_vulns',
+                                              'monitoring_alerts',
+                                              'asset_graph',
+                                              'manual'
+                                          )),
+                finding_id             INTEGER,
+                finding_ref            TEXT    NOT NULL,
+                title                  TEXT    NOT NULL,
+                severity               TEXT    NOT NULL DEFAULT 'INFO'
+                                         CHECK (severity IN ('CRITICAL','HIGH','MEDIUM','LOW','INFO')),
+                owner                  TEXT,
+                sla_due_at             TEXT,
+                status                 TEXT    NOT NULL DEFAULT 'open'
+                                         CHECK (status IN (
+                                             'open',
+                                             'assigned',
+                                             'in_progress',
+                                             'risk_accepted',
+                                             'retest_pending',
+                                             'resolved',
+                                             'false_positive'
+                                         )),
+                risk_acceptance_reason TEXT,
+                risk_accepted_by       TEXT,
+                risk_accepted_at       TIMESTAMP,
+                risk_acceptance_expires_at TEXT,
+                retest_status          TEXT    NOT NULL DEFAULT 'not_requested'
+                                         CHECK (retest_status IN (
+                                             'not_requested',
+                                             'pending',
+                                             'passed',
+                                             'failed',
+                                             'blocked'
+                                         )),
+                retest_requested_at    TIMESTAMP,
+                retested_at            TIMESTAMP,
+                ticket_system          TEXT,
+                ticket_ref             TEXT,
+                ticket_url             TEXT,
+                metadata_json          TEXT    NOT NULL DEFAULT '{}',
+                created_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (engagement_id, finding_table, finding_ref)
+            )
+            """,
+            [
+                """
+                CREATE INDEX IF NOT EXISTS idx_remediation_items_engagement
+                    ON remediation_items (engagement_id, status, severity)
+                """,
+                """
+                CREATE INDEX IF NOT EXISTS idx_remediation_items_owner
+                    ON remediation_items (engagement_id, owner, sla_due_at)
+                """,
+            ],
+        )
+    conn.commit()
+
+
+def _m0034_remediation_ticket_events(conn: sqlite3.Connection) -> None:
+    """Track idempotent remediation ticket connector sync attempts."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS remediation_ticket_events (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id       INTEGER NOT NULL REFERENCES engagements(id),
+            remediation_item_id INTEGER NOT NULL REFERENCES remediation_items(id),
+            connector           TEXT    NOT NULL CHECK (connector IN ('jsonl','stdout','webhook','github_issues')),
+            destination         TEXT    NOT NULL,
+            action              TEXT    NOT NULL CHECK (action IN ('create','update')),
+            status              TEXT    NOT NULL CHECK (status IN ('delivered','failed')),
+            item_updated_at     TEXT    NOT NULL DEFAULT '',
+            attempt_count       INTEGER NOT NULL DEFAULT 1,
+            last_error          TEXT,
+            delivered_at        TEXT,
+            metadata_json       TEXT    NOT NULL DEFAULT '{}',
+            created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (remediation_item_id, connector, destination, item_updated_at)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_remediation_ticket_events_engagement
+            ON remediation_ticket_events (engagement_id, status, connector, updated_at DESC);
+        """
+    )
+    conn.commit()
+
+
+def _m0035_github_issues_remediation_connector(conn: sqlite3.Connection) -> None:
+    """Allow remediation ticket events to record GitHub Issues sync attempts."""
+    if not _table_sql_contains(conn, "remediation_ticket_events", "'github_issues'"):
+        _rebuild_table(
+            conn,
+            "remediation_ticket_events",
+            """
+            CREATE TABLE remediation_ticket_events (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id       INTEGER NOT NULL REFERENCES engagements(id),
+                remediation_item_id INTEGER NOT NULL REFERENCES remediation_items(id),
+                connector           TEXT    NOT NULL CHECK (connector IN ('jsonl','stdout','webhook','github_issues')),
+                destination         TEXT    NOT NULL,
+                action              TEXT    NOT NULL CHECK (action IN ('create','update')),
+                status              TEXT    NOT NULL CHECK (status IN ('delivered','failed')),
+                item_updated_at     TEXT    NOT NULL DEFAULT '',
+                attempt_count       INTEGER NOT NULL DEFAULT 1,
+                last_error          TEXT,
+                delivered_at        TEXT,
+                metadata_json       TEXT    NOT NULL DEFAULT '{}',
+                created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (remediation_item_id, connector, destination, item_updated_at)
+            )
+            """,
+            [
+                """
+                CREATE INDEX IF NOT EXISTS idx_remediation_ticket_events_engagement
+                    ON remediation_ticket_events (engagement_id, status, connector, updated_at DESC)
+                """,
+            ],
+        )
+    conn.commit()
+
+
+def _m0036_jira_remediation_connector(conn: sqlite3.Connection) -> None:
+    """Allow remediation ticket events to record Jira sync attempts."""
+    if not _table_sql_contains(conn, "remediation_ticket_events", "'jira'"):
+        _rebuild_table(
+            conn,
+            "remediation_ticket_events",
+            """
+            CREATE TABLE remediation_ticket_events (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id       INTEGER NOT NULL REFERENCES engagements(id),
+                remediation_item_id INTEGER NOT NULL REFERENCES remediation_items(id),
+                connector           TEXT    NOT NULL CHECK (connector IN ('jsonl','stdout','webhook','github_issues','jira')),
+                destination         TEXT    NOT NULL,
+                action              TEXT    NOT NULL CHECK (action IN ('create','update')),
+                status              TEXT    NOT NULL CHECK (status IN ('delivered','failed')),
+                item_updated_at     TEXT    NOT NULL DEFAULT '',
+                attempt_count       INTEGER NOT NULL DEFAULT 1,
+                last_error          TEXT,
+                delivered_at        TEXT,
+                metadata_json       TEXT    NOT NULL DEFAULT '{}',
+                created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (remediation_item_id, connector, destination, item_updated_at)
+            )
+            """,
+            [
+                """
+                CREATE INDEX IF NOT EXISTS idx_remediation_ticket_events_engagement
+                    ON remediation_ticket_events (engagement_id, status, connector, updated_at DESC)
+                """,
+            ],
+        )
+    conn.commit()
+
+
+def _m0037_servicenow_remediation_connector(conn: sqlite3.Connection) -> None:
+    """Allow remediation ticket events to record ServiceNow sync attempts."""
+    if not _table_sql_contains(conn, "remediation_ticket_events", "'servicenow'"):
+        _rebuild_table(
+            conn,
+            "remediation_ticket_events",
+            """
+            CREATE TABLE remediation_ticket_events (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id       INTEGER NOT NULL REFERENCES engagements(id),
+                remediation_item_id INTEGER NOT NULL REFERENCES remediation_items(id),
+                connector           TEXT    NOT NULL CHECK (connector IN ('jsonl','stdout','webhook','github_issues','jira','servicenow')),
+                destination         TEXT    NOT NULL,
+                action              TEXT    NOT NULL CHECK (action IN ('create','update')),
+                status              TEXT    NOT NULL CHECK (status IN ('delivered','failed')),
+                item_updated_at     TEXT    NOT NULL DEFAULT '',
+                attempt_count       INTEGER NOT NULL DEFAULT 1,
+                last_error          TEXT,
+                delivered_at        TEXT,
+                metadata_json       TEXT    NOT NULL DEFAULT '{}',
+                created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (remediation_item_id, connector, destination, item_updated_at)
+            )
+            """,
+            [
+                """
+                CREATE INDEX IF NOT EXISTS idx_remediation_ticket_events_engagement
+                    ON remediation_ticket_events (engagement_id, status, connector, updated_at DESC)
+                """,
+            ],
+        )
+    conn.commit()
+
+
+def _m0045_soar_remediation_connectors(conn: sqlite3.Connection) -> None:
+    """Allow remediation ticket events to record Tines, Splunk HEC, and Torq delivery."""
+    required = ("'tines'", "'splunk_hec'", "'torq'")
+    if not all(_table_sql_contains(conn, "remediation_ticket_events", token) for token in required):
+        _rebuild_table(
+            conn,
+            "remediation_ticket_events",
+            """
+            CREATE TABLE remediation_ticket_events (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id       INTEGER NOT NULL REFERENCES engagements(id),
+                remediation_item_id INTEGER NOT NULL REFERENCES remediation_items(id),
+                connector           TEXT    NOT NULL CHECK (connector IN ('jsonl','stdout','webhook','github_issues','jira','servicenow','tines','splunk_hec','torq')),
+                destination         TEXT    NOT NULL,
+                action              TEXT    NOT NULL CHECK (action IN ('create','update')),
+                status              TEXT    NOT NULL CHECK (status IN ('delivered','failed')),
+                item_updated_at     TEXT    NOT NULL DEFAULT '',
+                attempt_count       INTEGER NOT NULL DEFAULT 1,
+                last_error          TEXT,
+                delivered_at        TEXT,
+                metadata_json       TEXT    NOT NULL DEFAULT '{}',
+                created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (remediation_item_id, connector, destination, item_updated_at)
+            )
+            """,
+            [
+                """
+                CREATE INDEX IF NOT EXISTS idx_remediation_ticket_events_engagement
+                    ON remediation_ticket_events (engagement_id, status, connector, updated_at DESC)
+                """,
+            ],
+        )
+    conn.commit()
+
+
+def _m0046_remediation_risk_acceptance_expiry(conn: sqlite3.Connection) -> None:
+    """Add review/expiry timestamps for accepted remediation risk."""
+    if not _table_sql_contains(conn, "remediation_items", "remediation_items"):
+        conn.commit()
+        return
+    _safe_alter(conn, "ALTER TABLE remediation_items ADD COLUMN risk_acceptance_expires_at TEXT")
+    columns = {
+        str(row[1])
+        for row in conn.execute("PRAGMA table_info(remediation_items)").fetchall()
+    }
+    if {"engagement_id", "status", "risk_acceptance_expires_at"} <= columns:
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_remediation_items_risk_expiry
+                ON remediation_items (engagement_id, status, risk_acceptance_expires_at)
+            """
+        )
+    conn.commit()
+
+
+def _m0047_connector_secrets(conn: sqlite3.Connection) -> None:
+    """Create engagement-scoped encrypted connector secret store."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS connector_secrets (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id    INTEGER NOT NULL REFERENCES engagements(id),
+            connector_id     TEXT    NOT NULL,
+            secret_name      TEXT    NOT NULL,
+            secret_value_enc TEXT    NOT NULL,
+            secret_ref       TEXT    NOT NULL DEFAULT '',
+            key_hint         TEXT    NOT NULL DEFAULT '',
+            metadata_json    TEXT    NOT NULL DEFAULT '{}',
+            created_by       TEXT    NOT NULL DEFAULT '',
+            updated_by       TEXT    NOT NULL DEFAULT '',
+            created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, connector_id, secret_name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_connector_secrets_engagement
+            ON connector_secrets (engagement_id, connector_id, secret_name);
+        """
+    )
+    conn.commit()
+
+
+def _m0048_active_validation_http_security_headers(conn: sqlite3.Connection) -> None:
+    """Expand active-validation methods for HTTP security-header observation."""
+    row = conn.execute("PRAGMA foreign_keys").fetchone()
+    foreign_keys_enabled = bool(row and int(row[0] or 0))
+    if foreign_keys_enabled:
+        conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        _rebuild_table(
+            conn,
+            "active_validation_jobs",
+            """
+            CREATE TABLE active_validation_jobs (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id      INTEGER NOT NULL REFERENCES engagements(id),
+                target_ref         TEXT    NOT NULL,
+                target_kind        TEXT    NOT NULL DEFAULT 'asset'
+                                   CHECK (target_kind IN (
+                                       'asset',
+                                       'host',
+                                       'service',
+                                       'cloud',
+                                       'identity',
+                                       'finding',
+                                       'fixture',
+                                       'other'
+                                   )),
+                method             TEXT    NOT NULL
+                                   CHECK (method IN (
+                                       'fixture_replay',
+                                       'control_simulation',
+                                       'http_reachability',
+                                       'http_security_headers',
+                                       'fix_verification'
+                                   )),
+                mode               TEXT    NOT NULL DEFAULT 'dry_run'
+                                   CHECK (mode IN ('dry_run','lab','read_only_live')),
+                status             TEXT    NOT NULL DEFAULT 'queued'
+                                   CHECK (status IN (
+                                       'queued',
+                                       'approved',
+                                       'running',
+                                       'completed',
+                                       'blocked',
+                                       'failed',
+                                       'cancelled'
+                                   )),
+                approved           INTEGER NOT NULL DEFAULT 0 CHECK (approved IN (0,1)),
+                roe_id             TEXT    NOT NULL DEFAULT '',
+                scope_manifest_ref TEXT    NOT NULL DEFAULT '',
+                scope_manifest_hash TEXT   NOT NULL DEFAULT '',
+                safe_profile       TEXT    NOT NULL DEFAULT 'non_destructive',
+                max_steps          INTEGER NOT NULL DEFAULT 1
+                                   CHECK (max_steps >= 1 AND max_steps <= 50),
+                requested_by       TEXT    NOT NULL DEFAULT '',
+                approved_by        TEXT    NOT NULL DEFAULT '',
+                approval_note      TEXT    NOT NULL DEFAULT '',
+                metadata_json      TEXT    NOT NULL DEFAULT '{}',
+                created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                approved_at        TIMESTAMP,
+                updated_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            post_sql=[
+                """
+                CREATE INDEX IF NOT EXISTS idx_active_validation_jobs_engagement
+                    ON active_validation_jobs (engagement_id, status, mode, updated_at DESC)
+                """
+            ],
+        )
+        _rebuild_table(
+            conn,
+            "active_validation_runs",
+            """
+            CREATE TABLE active_validation_runs (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+                job_id        INTEGER NOT NULL REFERENCES active_validation_jobs(id),
+                status        TEXT    NOT NULL
+                              CHECK (status IN ('running','completed','blocked','failed')),
+                result        TEXT    NOT NULL DEFAULT '',
+                operator      TEXT    NOT NULL DEFAULT '',
+                evidence_json TEXT    NOT NULL DEFAULT '{}',
+                error         TEXT    NOT NULL DEFAULT '',
+                started_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                completed_at  TIMESTAMP,
+                created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            post_sql=[
+                """
+                CREATE INDEX IF NOT EXISTS idx_active_validation_runs_job
+                    ON active_validation_runs (engagement_id, job_id, created_at DESC)
+                """
+            ],
+        )
+        conn.commit()
+    finally:
+        if foreign_keys_enabled:
+            conn.execute("PRAGMA foreign_keys = ON")
+
+
+def _m0038_asset_graph_primitive(conn: sqlite3.Connection) -> None:
+    """Create canonical asset graph and ownership claim tables."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS asset_entities (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id  INTEGER NOT NULL REFERENCES engagements(id),
+            entity_key     TEXT    NOT NULL,
+            entity_type    TEXT    NOT NULL
+                           CHECK (entity_type IN (
+                               'asset',
+                               'seed',
+                               'host',
+                               'service',
+                               'identity',
+                               'cloud',
+                               'evidence',
+                               'secret',
+                               'finding',
+                               'validation',
+                               'remediation',
+                               'ticket',
+                               'owner',
+                               'organization',
+                               'other'
+                           )),
+            label          TEXT    NOT NULL,
+            source_table   TEXT,
+            source_id      INTEGER,
+            confidence     REAL    NOT NULL DEFAULT 0.5
+                           CHECK (confidence >= 0.0 AND confidence <= 1.0),
+            metadata_json  TEXT    NOT NULL DEFAULT '{}',
+            first_seen_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_seen_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, entity_key)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_asset_entities_engagement
+            ON asset_entities (engagement_id, entity_type, updated_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_asset_entities_source
+            ON asset_entities (engagement_id, source_table, source_id);
+
+        CREATE TABLE IF NOT EXISTS asset_relationships (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id       INTEGER NOT NULL REFERENCES engagements(id),
+            source_entity_id    INTEGER NOT NULL REFERENCES asset_entities(id),
+            target_entity_id    INTEGER NOT NULL REFERENCES asset_entities(id),
+            relationship_type   TEXT    NOT NULL
+                                CHECK (relationship_type IN (
+                                    'derived_from',
+                                    'corroborates',
+                                    'conflicts_with',
+                                    'same_entity',
+                                    'related_asset',
+                                    'runs_service',
+                                    'has_identity',
+                                    'references_cloud',
+                                    'supported_by',
+                                    'validated_by',
+                                    'has_finding',
+                                    'remediates',
+                                    'tracked_by',
+                                    'owned_by',
+                                    'routed_to',
+                                    'observed_in',
+                                    'other'
+                                )),
+            confidence          REAL    NOT NULL DEFAULT 0.5
+                                CHECK (confidence >= 0.0 AND confidence <= 1.0),
+            source_table        TEXT    NOT NULL DEFAULT 'system',
+            source_id           INTEGER NOT NULL DEFAULT 0,
+            evidence_json       TEXT    NOT NULL DEFAULT '{}',
+            created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (
+                engagement_id,
+                source_entity_id,
+                target_entity_id,
+                relationship_type,
+                source_table,
+                source_id
+            )
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_asset_relationships_engagement
+            ON asset_relationships (engagement_id, relationship_type, updated_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_asset_relationships_source
+            ON asset_relationships (engagement_id, source_entity_id, relationship_type);
+
+        CREATE TABLE IF NOT EXISTS asset_ownership_claims (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id  INTEGER NOT NULL REFERENCES engagements(id),
+            entity_id      INTEGER NOT NULL REFERENCES asset_entities(id),
+            owner_kind     TEXT    NOT NULL DEFAULT 'team'
+                           CHECK (owner_kind IN (
+                               'team',
+                               'person',
+                               'email',
+                               'workspace',
+                               'organization',
+                               'third_party',
+                               'cloud_account',
+                               'service',
+                               'unknown'
+                           )),
+            owner_ref      TEXT    NOT NULL,
+            owner_display  TEXT    NOT NULL DEFAULT '',
+            claim_type     TEXT    NOT NULL DEFAULT 'inferred'
+                           CHECK (claim_type IN (
+                               'explicit',
+                               'inferred',
+                               'route',
+                               'scope',
+                               'cloud_account',
+                               'manual'
+                           )),
+            confidence     REAL    NOT NULL DEFAULT 0.5
+                           CHECK (confidence >= 0.0 AND confidence <= 1.0),
+            source         TEXT    NOT NULL DEFAULT 'system',
+            status         TEXT    NOT NULL DEFAULT 'active'
+                           CHECK (status IN ('active','needs_review','rejected','superseded')),
+            evidence_json  TEXT    NOT NULL DEFAULT '{}',
+            created_by     TEXT    NOT NULL DEFAULT '',
+            created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, entity_id, owner_kind, owner_ref, claim_type, source)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_asset_ownership_claims_entity
+            ON asset_ownership_claims (engagement_id, entity_id, status, confidence DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_asset_ownership_claims_owner
+            ON asset_ownership_claims (engagement_id, owner_kind, owner_ref, status);
+        """
+    )
+    conn.commit()
+
+
+def _m0039_active_validation_lane(conn: sqlite3.Connection) -> None:
+    """Create separately gated active-validation job/run tables."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS active_validation_jobs (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id      INTEGER NOT NULL REFERENCES engagements(id),
+            target_ref         TEXT    NOT NULL,
+            target_kind        TEXT    NOT NULL DEFAULT 'asset'
+                               CHECK (target_kind IN (
+                                   'asset',
+                                   'host',
+                                   'service',
+                                   'cloud',
+                                   'identity',
+                                   'finding',
+                                   'fixture',
+                                   'other'
+                               )),
+            method             TEXT    NOT NULL
+                               CHECK (method IN (
+                                   'fixture_replay',
+                                   'control_simulation',
+                                   'http_reachability',
+                                   'fix_verification'
+                               )),
+            mode               TEXT    NOT NULL DEFAULT 'dry_run'
+                               CHECK (mode IN ('dry_run','lab','read_only_live')),
+            status             TEXT    NOT NULL DEFAULT 'queued'
+                               CHECK (status IN (
+                                   'queued',
+                                   'approved',
+                                   'running',
+                                   'completed',
+                                   'blocked',
+                                   'failed',
+                                   'cancelled'
+                               )),
+            approved           INTEGER NOT NULL DEFAULT 0 CHECK (approved IN (0,1)),
+            roe_id             TEXT    NOT NULL DEFAULT '',
+            scope_manifest_ref TEXT    NOT NULL DEFAULT '',
+            scope_manifest_hash TEXT   NOT NULL DEFAULT '',
+            safe_profile       TEXT    NOT NULL DEFAULT 'non_destructive',
+            max_steps          INTEGER NOT NULL DEFAULT 1
+                               CHECK (max_steps >= 1 AND max_steps <= 50),
+            requested_by       TEXT    NOT NULL DEFAULT '',
+            approved_by        TEXT    NOT NULL DEFAULT '',
+            approval_note      TEXT    NOT NULL DEFAULT '',
+            metadata_json      TEXT    NOT NULL DEFAULT '{}',
+            created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            approved_at        TIMESTAMP,
+            updated_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_active_validation_jobs_engagement
+            ON active_validation_jobs (engagement_id, status, mode, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS active_validation_runs (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+            job_id        INTEGER NOT NULL REFERENCES active_validation_jobs(id),
+            status        TEXT    NOT NULL
+                          CHECK (status IN ('running','completed','blocked','failed')),
+            result        TEXT    NOT NULL DEFAULT '',
+            operator      TEXT    NOT NULL DEFAULT '',
+            evidence_json TEXT    NOT NULL DEFAULT '{}',
+            error         TEXT    NOT NULL DEFAULT '',
+            started_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            completed_at  TIMESTAMP,
+            created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_active_validation_runs_job
+            ON active_validation_runs (engagement_id, job_id, created_at DESC);
+        """
+    )
+    conn.commit()
+
+
+def _m0040_asset_graph_evidence_nodes(conn: sqlite3.Connection) -> None:
+    """Expand graph enums for first-class evidence nodes and provenance edges."""
+    needs_entities = not _table_sql_contains(conn, "asset_entities", "'evidence'")
+    needs_relationships = not _table_sql_contains(conn, "asset_relationships", "'supported_by'")
+    if not (needs_entities or needs_relationships):
+        conn.commit()
+        return
+
+    row = conn.execute("PRAGMA foreign_keys").fetchone()
+    foreign_keys_enabled = bool(row and int(row[0] or 0))
+    if foreign_keys_enabled:
+        conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        if needs_entities:
+            _rebuild_table(
+                conn,
+                "asset_entities",
+                """
+                CREATE TABLE asset_entities (
+                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                    engagement_id  INTEGER NOT NULL REFERENCES engagements(id),
+                    entity_key     TEXT    NOT NULL,
+                    entity_type    TEXT    NOT NULL
+                                   CHECK (entity_type IN (
+                                       'asset',
+                                       'seed',
+                                       'host',
+                                       'service',
+                                       'identity',
+                                       'cloud',
+                                       'evidence',
+                                       'secret',
+                                       'finding',
+                                       'validation',
+                                       'remediation',
+                                       'ticket',
+                                       'owner',
+                                       'organization',
+                                       'other'
+                                   )),
+                    label          TEXT    NOT NULL,
+                    source_table   TEXT,
+                    source_id      INTEGER,
+                    confidence     REAL    NOT NULL DEFAULT 0.5
+                                   CHECK (confidence >= 0.0 AND confidence <= 1.0),
+                    metadata_json  TEXT    NOT NULL DEFAULT '{}',
+                    first_seen_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_seen_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (engagement_id, entity_key)
+                )
+                """,
+                [
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_asset_entities_engagement
+                        ON asset_entities (engagement_id, entity_type, updated_at DESC)
+                    """,
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_asset_entities_source
+                        ON asset_entities (engagement_id, source_table, source_id)
+                    """,
+                ],
+            )
+        if needs_relationships:
+            _rebuild_table(
+                conn,
+                "asset_relationships",
+                """
+                CREATE TABLE asset_relationships (
+                    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                    engagement_id       INTEGER NOT NULL REFERENCES engagements(id),
+                    source_entity_id    INTEGER NOT NULL REFERENCES asset_entities(id),
+                    target_entity_id    INTEGER NOT NULL REFERENCES asset_entities(id),
+                    relationship_type   TEXT    NOT NULL
+                                        CHECK (relationship_type IN (
+                                            'derived_from',
+                                            'corroborates',
+                                            'conflicts_with',
+                                            'same_entity',
+                                            'related_asset',
+                                            'runs_service',
+                                            'has_identity',
+                                            'references_cloud',
+                                            'supported_by',
+                                            'validated_by',
+                                            'has_finding',
+                                            'remediates',
+                                            'tracked_by',
+                                            'owned_by',
+                                            'routed_to',
+                                            'observed_in',
+                                            'other'
+                                        )),
+                    confidence          REAL    NOT NULL DEFAULT 0.5
+                                        CHECK (confidence >= 0.0 AND confidence <= 1.0),
+                    source_table        TEXT    NOT NULL DEFAULT 'system',
+                    source_id           INTEGER NOT NULL DEFAULT 0,
+                    evidence_json       TEXT    NOT NULL DEFAULT '{}',
+                    created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (
+                        engagement_id,
+                        source_entity_id,
+                        target_entity_id,
+                        relationship_type,
+                        source_table,
+                        source_id
+                    )
+                )
+                """,
+                [
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_asset_relationships_engagement
+                        ON asset_relationships (engagement_id, relationship_type, updated_at DESC)
+                    """,
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_asset_relationships_source
+                        ON asset_relationships (engagement_id, source_entity_id, relationship_type)
+                    """,
+                ],
+            )
+        violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+        if violations:
+            raise RuntimeError(f"asset graph evidence migration left foreign key violations: {violations[:5]}")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        if foreign_keys_enabled:
+            conn.execute("PRAGMA foreign_keys = ON")
+
+
+def _m0041_vulnerability_standards_metadata(conn: sqlite3.Connection) -> None:
+    """Add CTEM standards metadata columns to vulnerability findings."""
+    if not _table_sql_contains(conn, "vulnerability_findings", "vulnerability_findings"):
+        conn.commit()
+        return
+    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cve_id TEXT")
+    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cvss_version TEXT NOT NULL DEFAULT ''")
+    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cvss_vector TEXT NOT NULL DEFAULT ''")
+    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cwe_ids TEXT NOT NULL DEFAULT '[]'")
+    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cpe_matches TEXT NOT NULL DEFAULT '[]'")
+    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN epss_score REAL")
+    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN epss_percentile REAL")
+    _safe_alter(
+        conn,
+        "ALTER TABLE vulnerability_findings ADD COLUMN cisa_kev INTEGER NOT NULL DEFAULT 0 CHECK (cisa_kev IN (0, 1))",
+    )
+    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cisa_kev_due_date TEXT NOT NULL DEFAULT ''")
+    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN attack_techniques TEXT NOT NULL DEFAULT '[]'")
+    _safe_alter(
+        conn,
+        "ALTER TABLE vulnerability_findings ADD COLUMN stix_external_refs_json TEXT NOT NULL DEFAULT '[]'",
+    )
+    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN standards_json TEXT NOT NULL DEFAULT '{}'")
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_vuln_findings_cve
+            ON vulnerability_findings (engagement_id, cve_id)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_vuln_findings_kev
+            ON vulnerability_findings (engagement_id, cisa_kev, severity)
+        """
+    )
+    conn.commit()
+
+
+def _m0042_secret_lifecycle_workflow(conn: sqlite3.Connection) -> None:
+    """Create local/no-key secrets lifecycle and suppression workflow tables."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS secret_lifecycle_items (
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id            INTEGER NOT NULL REFERENCES engagements(id),
+            key_finding_id           INTEGER NOT NULL REFERENCES key_scanner_findings(id),
+            lifecycle_status         TEXT    NOT NULL DEFAULT 'open'
+                                     CHECK (lifecycle_status IN (
+                                         'open',
+                                         'owner_routed',
+                                         'revocation_guided',
+                                         'revoked',
+                                         'suppressed',
+                                         'risk_accepted'
+                                     )),
+            owner                    TEXT    NOT NULL DEFAULT '',
+            owner_source             TEXT    NOT NULL DEFAULT '',
+            revocation_guidance_json TEXT    NOT NULL DEFAULT '{}',
+            prevention_guidance_json TEXT    NOT NULL DEFAULT '{}',
+            suppression_id           INTEGER,
+            suppressed               INTEGER NOT NULL DEFAULT 0 CHECK (suppressed IN (0, 1)),
+            metadata_json            TEXT    NOT NULL DEFAULT '{}',
+            created_at               TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at               TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, key_finding_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_secret_lifecycle_engagement
+            ON secret_lifecycle_items (engagement_id, lifecycle_status, suppressed);
+
+        CREATE TABLE IF NOT EXISTS secret_suppressions (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id   INTEGER NOT NULL REFERENCES engagements(id),
+            key_finding_id  INTEGER REFERENCES key_scanner_findings(id),
+            service         TEXT    NOT NULL DEFAULT '',
+            pattern_name    TEXT    NOT NULL DEFAULT '',
+            source_url      TEXT    NOT NULL DEFAULT '',
+            reason          TEXT    NOT NULL,
+            status          TEXT    NOT NULL DEFAULT 'active'
+                            CHECK (status IN ('active','expired','revoked')),
+            expires_at      TEXT,
+            created_by      TEXT    NOT NULL DEFAULT '',
+            evidence_json   TEXT    NOT NULL DEFAULT '{}',
+            created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, key_finding_id, service, pattern_name, source_url, status)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_secret_suppressions_engagement
+            ON secret_suppressions (engagement_id, status, expires_at);
+        """
+    )
+    conn.commit()
+
+
+def _m0043_audit_reviews(conn: sqlite3.Connection) -> None:
+    """Create append-only human review records for run audit manifests."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS audit_reviews (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id    INTEGER NOT NULL REFERENCES engagements(id),
+            run_id           INTEGER REFERENCES engagement_runs(id),
+            manifest_hash    TEXT    NOT NULL DEFAULT '',
+            review_status    TEXT    NOT NULL
+                             CHECK (review_status IN (
+                                 'pending',
+                                 'approved',
+                                 'needs_changes',
+                                 'rejected',
+                                 'attested'
+                             )),
+            reviewer         TEXT    NOT NULL,
+            comment          TEXT    NOT NULL DEFAULT '',
+            attestation_json TEXT    NOT NULL DEFAULT '{}',
+            legal_hold       INTEGER NOT NULL DEFAULT 0 CHECK (legal_hold IN (0, 1)),
+            created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_audit_reviews_engagement
+            ON audit_reviews (engagement_id, created_at DESC, id DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_audit_reviews_run
+            ON audit_reviews (engagement_id, run_id, id DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_audit_reviews_manifest
+            ON audit_reviews (manifest_hash, id DESC);
+        """
+    )
+    conn.commit()
+
+
+def _m0049_asset_graph_remediation_source(conn: sqlite3.Connection) -> None:
+    """Allow asset-graph fix candidates to become local remediation items."""
+    if _table_sql_contains(conn, "remediation_items", "'asset_graph'"):
+        conn.commit()
+        return
+    _rebuild_table(
+        conn,
+        "remediation_items",
+        """
+        CREATE TABLE remediation_items (
+            id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id          INTEGER NOT NULL REFERENCES engagements(id),
+            finding_table          TEXT    NOT NULL DEFAULT 'vulnerability_findings'
+                                     CHECK (finding_table IN (
+                                         'vulnerability_findings',
+                                         'key_scanner_findings',
+                                         'cloud_validation_results',
+                                         'passive_vulns',
+                                         'monitoring_alerts',
+                                         'asset_graph',
+                                         'manual'
+                                     )),
+            finding_id             INTEGER,
+            finding_ref            TEXT    NOT NULL,
+            title                  TEXT    NOT NULL,
+            severity               TEXT    NOT NULL DEFAULT 'INFO'
+                                     CHECK (severity IN ('CRITICAL','HIGH','MEDIUM','LOW','INFO')),
+            owner                  TEXT,
+            sla_due_at             TEXT,
+            status                 TEXT    NOT NULL DEFAULT 'open'
+                                     CHECK (status IN (
+                                         'open',
+                                         'assigned',
+                                         'in_progress',
+                                         'risk_accepted',
+                                         'retest_pending',
+                                         'resolved',
+                                         'false_positive'
+                                     )),
+            risk_acceptance_reason TEXT,
+            risk_accepted_by       TEXT,
+            risk_accepted_at       TIMESTAMP,
+            risk_acceptance_expires_at TEXT,
+            retest_status          TEXT    NOT NULL DEFAULT 'not_requested'
+                                     CHECK (retest_status IN (
+                                         'not_requested',
+                                         'pending',
+                                         'passed',
+                                         'failed',
+                                         'blocked'
+                                     )),
+            retest_requested_at    TIMESTAMP,
+            retested_at            TIMESTAMP,
+            ticket_system          TEXT,
+            ticket_ref             TEXT,
+            ticket_url             TEXT,
+            metadata_json          TEXT    NOT NULL DEFAULT '{}',
+            created_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, finding_table, finding_ref)
+        )
+        """,
+        [
+            """
+            CREATE INDEX IF NOT EXISTS idx_remediation_items_engagement
+                ON remediation_items (engagement_id, status, severity)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_remediation_items_owner
+                ON remediation_items (engagement_id, owner, sla_due_at)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_remediation_items_risk_expiry
+                ON remediation_items (engagement_id, status, risk_acceptance_expires_at)
+            """,
+        ],
+    )
+    conn.commit()
+
+
+def _m0044_retention_policies(conn: sqlite3.Connection) -> None:
+    """Create retention policy and execution trail tables."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS retention_policies (
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id            INTEGER NOT NULL REFERENCES engagements(id),
+            name                     TEXT    NOT NULL DEFAULT 'default',
+            enabled                  INTEGER NOT NULL DEFAULT 1
+                                     CHECK (enabled IN (0, 1)),
+            audit_review_days        INTEGER CHECK (audit_review_days IS NULL OR audit_review_days >= 1),
+            monitoring_days          INTEGER CHECK (monitoring_days IS NULL OR monitoring_days >= 1),
+            remediation_event_days   INTEGER CHECK (remediation_event_days IS NULL OR remediation_event_days >= 1),
+            retention_run_days       INTEGER CHECK (retention_run_days IS NULL OR retention_run_days >= 1),
+            legal_hold_override      INTEGER NOT NULL DEFAULT 0
+                                     CHECK (legal_hold_override IN (0, 1)),
+            metadata_json            TEXT    NOT NULL DEFAULT '{}',
+            created_at               TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at               TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_retention_policies_engagement
+            ON retention_policies (engagement_id, enabled, name);
+
+        CREATE TABLE IF NOT EXISTS retention_runs (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id  INTEGER NOT NULL REFERENCES engagements(id),
+            policy_id      INTEGER REFERENCES retention_policies(id),
+            policy_name    TEXT    NOT NULL DEFAULT 'default',
+            mode           TEXT    NOT NULL CHECK (mode IN ('preview','apply')),
+            status         TEXT    NOT NULL CHECK (status IN ('completed','blocked','skipped','failed')),
+            operator       TEXT    NOT NULL DEFAULT '',
+            summary_json   TEXT    NOT NULL DEFAULT '{}',
+            created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_retention_runs_engagement
+            ON retention_runs (engagement_id, created_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS retention_run_items (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            retention_run_id INTEGER NOT NULL REFERENCES retention_runs(id),
+            engagement_id    INTEGER NOT NULL REFERENCES engagements(id),
+            category         TEXT    NOT NULL,
+            table_name       TEXT    NOT NULL DEFAULT '',
+            retention_days   INTEGER,
+            cutoff_at        TEXT    NOT NULL DEFAULT '',
+            eligible_count   INTEGER NOT NULL DEFAULT 0,
+            deleted_count    INTEGER NOT NULL DEFAULT 0,
+            skipped_count    INTEGER NOT NULL DEFAULT 0,
+            reason           TEXT    NOT NULL DEFAULT '',
+            created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_retention_run_items_run
+            ON retention_run_items (retention_run_id, category);
+        """
+    )
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — ordered by version number
 # ---------------------------------------------------------------------------
@@ -1202,6 +2627,29 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     ),
     (25, "artifact_queue_attempts", _m0025_artifact_queue_attempts),
     (26, "cloud_ref_seed_type", _m0026_cloud_ref_seed_type),
+    (27, "workspace_rbac_foundation", _m0027_workspace_rbac_foundation),
+    (28, "remediation_workflow_items", _m0028_remediation_workflow_items),
+    (29, "continuous_monitoring", _m0029_continuous_monitoring),
+    (30, "monitoring_trend_points", _m0030_monitoring_trend_points),
+    (31, "monitoring_alert_deliveries", _m0031_monitoring_alert_deliveries),
+    (32, "monitoring_alert_routing", _m0032_monitoring_alert_routing),
+    (33, "monitoring_alert_remediation_sources", _m0033_monitoring_alert_remediation_sources),
+    (34, "remediation_ticket_events", _m0034_remediation_ticket_events),
+    (35, "github_issues_remediation_connector", _m0035_github_issues_remediation_connector),
+    (36, "jira_remediation_connector", _m0036_jira_remediation_connector),
+    (37, "servicenow_remediation_connector", _m0037_servicenow_remediation_connector),
+    (38, "asset_graph_primitive", _m0038_asset_graph_primitive),
+    (39, "active_validation_lane", _m0039_active_validation_lane),
+    (40, "asset_graph_evidence_nodes", _m0040_asset_graph_evidence_nodes),
+    (41, "vulnerability_standards_metadata", _m0041_vulnerability_standards_metadata),
+    (42, "secret_lifecycle_workflow", _m0042_secret_lifecycle_workflow),
+    (43, "audit_reviews", _m0043_audit_reviews),
+    (44, "retention_policies", _m0044_retention_policies),
+    (45, "soar_remediation_connectors", _m0045_soar_remediation_connectors),
+    (46, "remediation_risk_acceptance_expiry", _m0046_remediation_risk_acceptance_expiry),
+    (47, "connector_secrets", _m0047_connector_secrets),
+    (48, "active_validation_http_security_headers", _m0048_active_validation_http_security_headers),
+    (49, "asset_graph_remediation_source", _m0049_asset_graph_remediation_source),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)
@@ -1233,6 +2681,7 @@ def run_migrations(conn: sqlite3.Connection) -> None:
     current_version: int = row[0] if row[0] is not None else 0
 
     if current_version == TARGET_VERSION:
+        _repair_current_schema_drift(conn, current_version=current_version)
         return  # Already up to date.
 
     pending = [(v, name, fn) for v, name, fn in _MIGRATIONS if v > current_version]
@@ -1250,6 +2699,30 @@ def run_migrations(conn: sqlite3.Connection) -> None:
             raise
 
     _LOG.info("DB schema up to date (v%d → v%d).", current_version, TARGET_VERSION)
+    _repair_current_schema_drift(conn, current_version=TARGET_VERSION)
+
+
+def _repair_current_schema_drift(conn: sqlite3.Connection, *, current_version: int) -> None:
+    """
+    Repair additive migration-owned columns for DBs already marked current.
+
+    Long-lived local engagement DBs can carry a target schema version from a
+    previous working-tree state while missing additive columns introduced into a
+    migration during iterative development. Keep this narrowly scoped to
+    idempotent additive repairs that the version gate would otherwise skip.
+    """
+    if current_version < 46:
+        return
+    if not _table_sql_contains(conn, "remediation_items", "remediation_items"):
+        return
+    remediation_columns = {
+        str(row[1])
+        for row in conn.execute("PRAGMA table_info(remediation_items)").fetchall()
+    }
+    if "risk_acceptance_expires_at" in remediation_columns:
+        return
+    _LOG.info("Repairing remediation_items risk_acceptance_expires_at schema drift...")
+    _m0046_remediation_risk_acceptance_expiry(conn)
 
 
 # ---------------------------------------------------------------------------

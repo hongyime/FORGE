@@ -15,7 +15,7 @@ def _prepare(tmp_path: Path, monkeypatch) -> Path:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     return _build_engagement(tmp_path)
 

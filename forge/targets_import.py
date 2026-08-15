@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -15,11 +17,72 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 
 from forge.config import ForgeConfig
+from forge.db.control import index_engagement_db_file
 from forge.db.session import get_engagement_db
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
 
 TARGET_FEED_SCHEMA_VERSION = "target-feed.v1"
-SUPPORTED_TARGET_TYPES = {"domain", "url"}
+TARGET_IMPORT_MONITORING_POLICY_NAME = "Target import seed exposure"
+TARGET_IMPORT_MONITORING_INTERVAL_MINUTES = 60
+SUPPORTED_TARGET_TYPES = {
+    "apk_url",
+    "artifact_url",
+    "auto",
+    "cloud_ref",
+    "company",
+    "domain",
+    "email",
+    "email_address",
+    "fqdn",
+    "handle",
+    "host",
+    "hostname",
+    "ip",
+    "ip_address",
+    "ipv4",
+    "ipv6",
+    "name",
+    "organization",
+    "person",
+    "phone",
+    "subdomain",
+    "tel",
+    "telephone",
+    "url",
+    "username",
+    "web_url",
+    "website",
+}
+CANONICAL_TARGET_TYPES = {
+    "apk_url",
+    "cloud_ref",
+    "company",
+    "domain",
+    "email",
+    "ipv4",
+    "ipv6",
+    "name",
+    "phone",
+    "subdomain",
+    "url",
+    "username",
+}
+TARGET_TYPE_ALIASES = {
+    "artifact_url": "artifact_url",
+    "email_address": "email",
+    "fqdn": "auto",
+    "handle": "username",
+    "host": "auto",
+    "hostname": "auto",
+    "ip": "auto",
+    "ip_address": "auto",
+    "organization": "company",
+    "person": "name",
+    "tel": "phone",
+    "telephone": "phone",
+    "web_url": "url",
+    "website": "url",
+}
 
 
 @dataclass(frozen=True)
@@ -124,6 +187,7 @@ def import_targets(
             continue
 
         engagement_id, created = _create_or_reuse_engagement(cfg, item, existing_targets)
+        _ensure_target_import_monitoring(cfg, engagement_id=engagement_id, item=item)
         manifest_path = _write_scope_manifest(cfg, engagement_id, item, roe_id)
         started = False
         if (
@@ -208,13 +272,17 @@ def _normalize_start_limit(start_limit: int | None) -> int | None:
 def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
     if not isinstance(raw_item, dict):
         return None
-    target_type = str(raw_item.get("target_type") or "").strip().lower()
-    if target_type not in SUPPORTED_TARGET_TYPES:
+    raw_target_type = str(raw_item.get("target_type") or "").strip().lower()
+    if raw_target_type not in SUPPORTED_TARGET_TYPES:
         return None
     target_value = str(raw_item.get("target_value") or "").strip()
-    canonical_value = _canonical_target_value(target_type, target_value)
-    if not canonical_value:
+    try:
+        normalized = _normalize_target_value(raw_target_type, target_value)
+    except ValueError:
         return None
+    if normalized is None:
+        return None
+    target_type, canonical_value = normalized
     target_key = external_target_key(target_type, canonical_value)
     return TargetFeedItem(
         target_type=target_type,
@@ -228,25 +296,183 @@ def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
     )
 
 
+def _normalize_target_value(raw_target_type: str, value: str) -> tuple[str, str] | None:
+    target_type = TARGET_TYPE_ALIASES.get(raw_target_type, raw_target_type)
+    if target_type == "auto":
+        target_type = _classify_target_value(value)
+    if target_type == "artifact_url":
+        canonical_url = _canonical_http_url_value(value)
+        if not canonical_url:
+            return None
+        target_type = "apk_url" if _is_mobile_bundle_target_url(canonical_url) else "url"
+        if target_type == "url" and _url_is_cloud_target(canonical_url):
+            target_type = "cloud_ref"
+        return target_type, canonical_url
+    if target_type not in CANONICAL_TARGET_TYPES:
+        return None
+    canonical_value = _canonical_target_value(target_type, value)
+    if not canonical_value:
+        return None
+    if target_type in {"domain", "subdomain"} and _hostname_is_cloud_target(canonical_value):
+        return "cloud_ref", canonical_value
+    if target_type == "url" and _url_is_cloud_target(canonical_value):
+        return "cloud_ref", canonical_value
+    return target_type, canonical_value
+
+
 def _canonical_target_value(target_type: str, value: str) -> str:
     text = " ".join(str(value or "").strip().split())
     if not text:
         return ""
-    if target_type == "domain":
+    if target_type in {"domain", "subdomain"}:
         if "://" in text or "/" in text or "@" in text:
             return ""
         return text.lower().strip(".")
-    parsed = urlsplit(text)
+    if target_type in {"url", "apk_url"}:
+        return _canonical_http_url_value(text)
+    if target_type == "cloud_ref":
+        return _canonical_cloud_target_value(text)
+    if target_type == "email":
+        candidate = text.lower()
+        return candidate if re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", candidate) else ""
+    if target_type == "phone":
+        return _normalize_phone_target_value(text)
+    if target_type == "username":
+        username = text[1:] if text.startswith("@") else text
+        if re.match(r"^[A-Za-z0-9_.\-]{2,32}$", username):
+            return f"@{username.lower()}"
+        return ""
+    if target_type in {"ipv4", "ipv6"}:
+        return _canonical_ip_target_value(text, target_type)
+    if target_type in {"name", "company"}:
+        return text[:160]
+    return ""
+
+
+def _canonical_http_url_value(value: str) -> str:
+    parsed = urlsplit(value)
     if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
         return ""
     host = (parsed.hostname or "").lower().strip(".")
     if not host:
         return ""
-    netloc = host
-    if parsed.port:
-        netloc = f"{host}:{parsed.port}"
+    netloc = f"[{host}]" if ":" in host and not host.startswith("[") else host
+    try:
+        port = parsed.port
+    except ValueError:
+        return ""
+    if port:
+        netloc = f"{netloc}:{port}"
     path = parsed.path or "/"
     return urlunsplit((parsed.scheme.lower(), netloc, path, "", ""))
+
+
+def _canonical_cloud_target_value(value: str) -> str:
+    try:
+        from forge.engagement_orchestrator import _canonical_cloud_ref_value  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        _canonical_cloud_ref_value = None
+
+    if _canonical_cloud_ref_value is not None:
+        canonical_ref = _canonical_cloud_ref_value(value)
+        if canonical_ref:
+            return canonical_ref
+
+    canonical_url = _canonical_http_url_value(value)
+    if canonical_url and _url_is_cloud_target(canonical_url):
+        return canonical_url
+
+    host = " ".join(str(value or "").strip().split()).lower().strip(".")
+    if host and "://" not in host and "/" not in host and "@" not in host and _hostname_is_cloud_target(host):
+        return host
+    return ""
+
+
+def _canonical_ip_target_value(value: str, target_type: str) -> str:
+    try:
+        parsed = ipaddress.ip_address(value)
+    except ValueError:
+        return ""
+    if target_type == "ipv4" and parsed.version != 4:
+        return ""
+    if target_type == "ipv6" and parsed.version != 6:
+        return ""
+    return str(parsed)
+
+
+def _classify_target_value(value: str) -> str:
+    try:
+        from forge.engagement_orchestrator import _classify_seed_value  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return _fallback_classify_target_value(value)
+    target_type = str(_classify_seed_value(str(value or "")) or "").strip().lower()
+    return target_type if target_type in CANONICAL_TARGET_TYPES else ""
+
+
+def _fallback_classify_target_value(value: str) -> str:
+    text = " ".join(str(value or "").strip().split())
+    if not text:
+        return ""
+    lowered = text.lower()
+    if re.match(r"^\+\d{6,15}$", text):
+        return "phone"
+    if re.match(r"^@[a-z0-9_.\-]{2,32}$", lowered):
+        return "username"
+    try:
+        parsed_ip = ipaddress.ip_address(text)
+        return "ipv6" if parsed_ip.version == 6 else "ipv4"
+    except ValueError:
+        pass
+    if _canonical_cloud_target_value(text):
+        return "cloud_ref"
+    parsed = urlsplit(text)
+    if parsed.scheme.lower() in {"http", "https"} and parsed.netloc:
+        return "apk_url" if _is_mobile_bundle_target_url(text) else "url"
+    if re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", text):
+        return "email"
+    if _hostname_is_cloud_target(lowered):
+        return "cloud_ref"
+    if re.match(
+        r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(?:\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$",
+        lowered.lstrip("*."),
+    ):
+        return "domain"
+    return ""
+
+
+def _is_mobile_bundle_target_url(value: str) -> bool:
+    try:
+        from forge.engagement_orchestrator import _is_mobile_bundle_url  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        parsed = urlsplit(value)
+        return parsed.scheme.lower() in {"http", "https"} and parsed.path.lower().endswith(
+            (".apk", ".ipa", ".aab", ".apkm", ".apks", ".xapk")
+        )
+    return bool(_is_mobile_bundle_url(str(value or "")))
+
+
+def _hostname_is_cloud_target(hostname: str) -> bool:
+    try:
+        from forge.engagement_orchestrator import _hostname_is_cloud_ref  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return False
+    return bool(_hostname_is_cloud_ref(str(hostname or "")))
+
+
+def _url_is_cloud_target(value: str) -> bool:
+    parsed = urlsplit(str(value or ""))
+    return bool(parsed.netloc and _hostname_is_cloud_target(parsed.netloc))
+
+
+def _normalize_phone_target_value(value: str) -> str:
+    try:
+        from forge.engagement_orchestrator import _normalize_phone_seed_value  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        candidate = re.sub(r"[^\d+]", "", str(value or "").strip())
+        if candidate.startswith("00") and len(candidate) > 3:
+            candidate = f"+{candidate[2:]}"
+        return candidate if re.match(r"^\+\d{6,15}$", candidate) else ""
+    return str(_normalize_phone_seed_value(value) or "")
 
 
 def external_target_key(target_type: str, canonical_target_value: str) -> str:
@@ -327,8 +553,88 @@ def _create_or_reuse_engagement(
         conn.commit()
     finally:
         conn.close()
+    index_engagement_db_file(cfg.data_dir, db_path, engagement_id=engagement_id)
     existing_targets[item.target_key] = engagement_id
     return engagement_id, True
+
+
+def _ensure_target_import_monitoring(
+    cfg: ForgeConfig,
+    *,
+    engagement_id: int,
+    item: TargetFeedItem,
+) -> None:
+    from forge.monitoring.continuous import (  # noqa: PLC0415
+        create_monitoring_snapshot,
+        upsert_monitoring_policy,
+    )
+
+    db_path = cfg.engagement_db_path(str(engagement_id))
+    con = get_engagement_db(db_path)
+    try:
+        policy_row = con.execute(
+            """
+            SELECT id, last_snapshot_id
+            FROM monitoring_policies
+            WHERE engagement_id=? AND name=?
+            LIMIT 1
+            """,
+            (engagement_id, TARGET_IMPORT_MONITORING_POLICY_NAME),
+        ).fetchone()
+        if policy_row is None:
+            policy = upsert_monitoring_policy(
+                con,
+                engagement_id=engagement_id,
+                name=TARGET_IMPORT_MONITORING_POLICY_NAME,
+                enabled=True,
+                schedule_interval_minutes=TARGET_IMPORT_MONITORING_INTERVAL_MINUTES,
+                mode="passive",
+                metadata={
+                    "external_feed": TARGET_FEED_SCHEMA_VERSION,
+                    "external_target_key": item.target_key,
+                    "refresh": {"type": "seed_exposure"},
+                    "source": "target_import",
+                    "target_type": item.target_type,
+                },
+            )
+        else:
+            policy = {
+                "id": int(policy_row["id"]),
+                "last_snapshot_id": (
+                    int(policy_row["last_snapshot_id"])
+                    if policy_row["last_snapshot_id"] is not None
+                    else None
+                ),
+            }
+
+        if policy.get("last_snapshot_id"):
+            return
+        snapshot = create_monitoring_snapshot(
+            con,
+            engagement_id=engagement_id,
+            policy_id=int(policy["id"]),
+            snapshot_kind="manual",
+            refresh={
+                "status": "completed",
+                "source": "target_import",
+                "target_type": item.target_type,
+            },
+        )
+        con.execute(
+            """
+            INSERT INTO audit_log (engagement_id, phase, module, action, target, result, operator)
+            VALUES (?, 'monitoring', 'target_import', 'monitoring_policy_seeded', ?, ?, ?)
+            """,
+            (
+                engagement_id,
+                TARGET_IMPORT_MONITORING_POLICY_NAME,
+                f"snapshot={snapshot['snapshot']['id']} target={item.target_type}",
+                cfg.operator,
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
 
 
 def _external_target_engagement_index(cfg: ForgeConfig) -> dict[str, int]:
@@ -356,10 +662,30 @@ def _external_target_engagement_index(cfg: ForgeConfig) -> dict[str, int]:
 
 
 def _scope_json_for_item(item: TargetFeedItem) -> dict[str, list[str]]:
-    if item.target_type == "domain":
-        return {"domains": [item.canonical_value], "urls": []}
-    host = str(urlsplit(item.canonical_value).hostname or "").lower().strip(".")
-    return {"domains": [host] if host else [], "urls": [item.canonical_value]}
+    scope: dict[str, list[str]] = {"domains": [], "urls": []}
+    if item.target_type in {"domain", "subdomain"}:
+        scope["domains"] = [item.canonical_value]
+    elif item.target_type in {"url", "apk_url"}:
+        host = str(urlsplit(item.canonical_value).hostname or "").lower().strip(".")
+        scope["domains"] = [host] if host else []
+        scope["urls"] = [item.canonical_value]
+    elif item.target_type == "cloud_ref":
+        parsed = urlsplit(item.canonical_value)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            host = str(parsed.hostname or "").lower().strip(".")
+            scope["domains"] = [host] if host else []
+            scope["urls"] = [item.canonical_value]
+        elif _hostname_is_cloud_target(item.canonical_value):
+            scope["domains"] = [item.canonical_value]
+        scope["authorized_seeds"] = [item.canonical_value]
+    elif item.target_type in {"ipv4", "ipv6"}:
+        parsed_ip = ipaddress.ip_address(item.canonical_value)
+        prefix = 32 if parsed_ip.version == 4 else 128
+        scope["ip_ranges"] = [f"{parsed_ip}/{prefix}"]
+        scope["authorized_seeds"] = [item.canonical_value]
+    else:
+        scope["authorized_seeds"] = [item.canonical_value]
+    return scope
 
 
 def _write_scope_manifest(
@@ -374,8 +700,9 @@ def _write_scope_manifest(
     scope = _scope_json_for_item(item)
     payload = {
         "roe_id": str(roe_id or "").strip(),
-        "domains": scope["domains"],
-        "urls": scope["urls"],
+        "domains": scope.get("domains", []),
+        "ip_ranges": scope.get("ip_ranges", []),
+        "urls": scope.get("urls", []),
         "authorized_seeds": [item.canonical_value],
         "metadata": {
             "external_feed": TARGET_FEED_SCHEMA_VERSION,

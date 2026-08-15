@@ -19,14 +19,36 @@ from __future__ import annotations
 import os
 import time
 import uuid
+from dataclasses import dataclass
+from collections.abc import Iterable
 
 import jwt
 from jwt.exceptions import PyJWTError
+
+from forge.webui.rbac import (
+    DEFAULT_ROLES,
+    LEGACY_PERMISSIONS,
+    normalize_claim_tuple,
+    permission_matches,
+    permissions_for_roles,
+)
 
 
 _ALLOWED_ALGORITHMS: tuple[str, ...] = ("HS256",)
 _ISSUER = "forge-webui"
 _AUDIENCE = "forge-webui"
+_DEFAULT_WORKSPACE_ID = "default"
+
+
+@dataclass(frozen=True)
+class Principal:
+    subject: str
+    workspace_id: str = _DEFAULT_WORKSPACE_ID
+    roles: tuple[str, ...] = DEFAULT_ROLES
+    permissions: tuple[str, ...] = LEGACY_PERMISSIONS
+
+    def has_permission(self, permission: str) -> bool:
+        return permission_matches(self.permissions, permission)
 
 
 def _is_dev_profile() -> bool:
@@ -53,10 +75,25 @@ def validate_jwt_secret() -> None:
     _secret()
 
 
-def mint_token(subject: str, ttl_seconds: int = 3600) -> str:
+def mint_token(
+    subject: str,
+    ttl_seconds: int = 3600,
+    *,
+    workspace_id: str = _DEFAULT_WORKSPACE_ID,
+    roles: Iterable[str] | None = None,
+    permissions: Iterable[str] | None = None,
+) -> str:
     now = int(time.time())
+    role_claims = normalize_claim_tuple(roles, DEFAULT_ROLES)
+    if permissions is None and roles is not None:
+        permission_claims = permissions_for_roles(role_claims)
+    else:
+        permission_claims = normalize_claim_tuple(permissions, LEGACY_PERMISSIONS)
     payload = {
         "sub": subject,
+        "workspace_id": workspace_id.strip() or _DEFAULT_WORKSPACE_ID,
+        "roles": list(role_claims),
+        "permissions": list(permission_claims),
         "iat": now,
         "nbf": now,
         "exp": now + ttl_seconds,
@@ -67,7 +104,7 @@ def mint_token(subject: str, ttl_seconds: int = 3600) -> str:
     return jwt.encode(payload, _secret(), algorithm="HS256")
 
 
-def verify_token(token: str) -> str | None:
+def verify_principal(token: str) -> Principal | None:
     try:
         payload = jwt.decode(
             token,
@@ -90,4 +127,22 @@ def verify_token(token: str) -> str | None:
     subject = payload.get("sub")
     if not isinstance(subject, str) or not subject:
         return None
-    return subject
+    workspace_id = payload.get("workspace_id")
+    if not isinstance(workspace_id, str) or not workspace_id.strip():
+        workspace_id = _DEFAULT_WORKSPACE_ID
+    roles = normalize_claim_tuple(payload.get("roles"), DEFAULT_ROLES)
+    if "permissions" not in payload and "roles" in payload:
+        permissions = permissions_for_roles(roles)
+    else:
+        permissions = normalize_claim_tuple(payload.get("permissions"), LEGACY_PERMISSIONS)
+    return Principal(
+        subject=subject,
+        workspace_id=workspace_id.strip(),
+        roles=roles,
+        permissions=permissions,
+    )
+
+
+def verify_token(token: str) -> str | None:
+    principal = verify_principal(token)
+    return principal.subject if principal is not None else None

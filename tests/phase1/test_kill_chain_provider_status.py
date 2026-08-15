@@ -116,9 +116,12 @@ def _run_status_case(
     factories: dict[str, Callable[[str], dict[str, Any]]],
     *,
     max_iter: int,
+    seed: str = ROOT_DOMAIN,
     runs: int = 1,
     module_fail_stages: set[str] | None = None,
     manifest_domains: list[str] | None = None,
+    manifest_urls: list[str] | None = None,
+    authorized_seeds: list[str] | None = None,
     dry_run: bool = False,
     use_scope_manifest: bool = True,
     skip_keyscan: bool = True,
@@ -134,7 +137,8 @@ def _run_status_case(
                 {
                     "roe_id": "ROE-TEST-2026-07",
                     "domains": manifest_domains or [ROOT_DOMAIN],
-                    "authorized_seeds": [ROOT_DOMAIN],
+                    "urls": manifest_urls or [],
+                    "authorized_seeds": authorized_seeds or [seed],
                 }
             ),
             encoding="utf-8",
@@ -153,7 +157,7 @@ def _run_status_case(
 
     for _ in range(max(1, int(runs))):
         kill_chain(
-            seed=ROOT_DOMAIN,
+            seed=seed,
             engagement="1001",
             max_iter=max_iter,
             tor=False,
@@ -428,6 +432,40 @@ def test_synthesized_out_of_scope_root_is_not_dispatched(
     assert len(evil_denials) == 1
     assert "reason=scope_manifest_denied" in evil_denials[0]
     assert f"scope_manifest={(tmp_path / 'roe-scope.json').resolve().as_posix()}" in evil_denials[0]
+
+
+def test_url_only_scope_manifest_skips_initial_derived_root_fanouts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    url_seed = "https://us06web.zoom.us/j/2514215505"
+
+    db_path, attempts = _run_status_case(
+        tmp_path,
+        monkeypatch,
+        {
+            "G": lambda domain: _dns_result(domain, "completed"),
+            "H": lambda domain: _rdap_result(domain, "skipped", "http_status_404"),
+            "I": lambda domain: _archive_result(domain, "completed"),
+        },
+        max_iter=1,
+        seed=url_seed,
+        manifest_domains=["us06web.zoom.us"],
+        manifest_urls=[url_seed],
+        authorized_seeds=[url_seed],
+    )
+
+    assert all(target != "zoom.us" for _stage, target in attempts)
+    metadata = _latest_run_metadata(db_path)
+    assert "zoom.us" not in list(metadata.get("root_domains") or [])
+    denied_rows = _audit_actions(db_path, "root_domain_scope_denied")
+    zoom_denials = [
+        result
+        for target, result in denied_rows
+        if target == "zoom.us"
+    ]
+    assert len(zoom_denials) == 1
+    assert "reason=scope_manifest_denied" in zoom_denials[0]
 
 
 def test_authorized_synthesized_root_enters_root_fanouts(

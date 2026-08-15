@@ -570,7 +570,10 @@ def test_context_builder_exports_standalone_reportable_key_findings(
         (
             "huggingface",
             "huggingface_whoami_v2",
-            "Hugging Face auth ok: user=acme-mlops user_profile_present=true",
+            (
+                "Hugging Face auth ok: user=acme-mlops "
+                "user_profile_present=true profile_hash=0123456789abcdef"
+            ),
         ),
         (
             "netlify",

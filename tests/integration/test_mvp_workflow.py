@@ -51,9 +51,22 @@ from forge.workflow import (
     StateStore,
     WorkflowEngine,
 )
+from forge.webui.auth import mint_token
 
 
 _LOG = logging.getLogger(__name__)
+
+
+@pytest.fixture(autouse=True)
+def _platform_api_auth_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
+
+
+def _api_headers(*permissions: str) -> dict[str, str]:
+    granted = (*permissions, "workspaces:any")
+    return {
+        "Authorization": f"Bearer {mint_token('platform-test', permissions=granted)}"
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -485,7 +498,10 @@ class TestApiReportRoute:
         app.dependency_overrides[get_state_store] = lambda: _Store()
         try:
             with TestClient(app) as client:
-                response = client.get(f"/reports/{workflow_id}")
+                response = client.get(
+                    f"/reports/{workflow_id}",
+                    headers=_api_headers("reports:read"),
+                )
         finally:
             app.dependency_overrides.clear()
             reset_dependencies()
@@ -533,7 +549,10 @@ class TestApiReportRoute:
         app.dependency_overrides[get_state_store] = lambda: _Store()
         try:
             with TestClient(app) as client:
-                response = client.get(f"/reports/{workflow_id}")
+                response = client.get(
+                    f"/reports/{workflow_id}",
+                    headers=_api_headers("reports:read"),
+                )
         finally:
             app.dependency_overrides.clear()
             reset_dependencies()
@@ -594,7 +613,10 @@ class TestApiReportRoute:
         app.dependency_overrides[get_state_store] = lambda: _Store()
         try:
             with TestClient(app) as client:
-                response = client.get(f"/reports/{workflow_id}")
+                response = client.get(
+                    f"/reports/{workflow_id}",
+                    headers=_api_headers("reports:read"),
+                )
         finally:
             app.dependency_overrides.clear()
             reset_dependencies()
@@ -652,7 +674,10 @@ class TestApiReportRoute:
         app.dependency_overrides[get_state_store] = lambda: _Store()
         try:
             with TestClient(app) as client:
-                response = client.get(f"/reports/{workflow_id}")
+                response = client.get(
+                    f"/reports/{workflow_id}",
+                    headers=_api_headers("reports:read"),
+                )
         finally:
             app.dependency_overrides.clear()
             reset_dependencies()

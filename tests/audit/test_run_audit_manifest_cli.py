@@ -121,6 +121,59 @@ def test_audit_manifest_verify_cli_reports_ok_and_tamper(
     assert signature["algorithm"] == "HMAC-SHA256"
     assert signature["signer_id"] == "cli-test"
 
+    remote_root = tmp_path / "remote-audit"
+    remote_path = tmp_path / "manifest-remote.zip"
+    monkeypatch.setenv("FORGE_TEST_AUDIT_REMOTE_URI", str(remote_root))
+    monkeypatch.setenv("FORGE_TEST_AUDIT_REMOTE_SCOPE", "customer-acme")
+    remote_export = runner.invoke(
+        app,
+        [
+            "audit",
+            "manifest-export",
+            "--engagement",
+            "1001",
+            "--run-id",
+            str(run_id),
+            "--output",
+            str(remote_path),
+            "--remote-store",
+            "--remote-uri-env",
+            "FORGE_TEST_AUDIT_REMOTE_URI",
+            "--remote-scope-env",
+            "FORGE_TEST_AUDIT_REMOTE_SCOPE",
+            "--json",
+        ],
+    )
+    assert remote_export.exit_code == 0, remote_export.output
+    remote_payload = json.loads(remote_export.output)
+    assert remote_payload["remote_store"]["scope"] == "customer-acme"
+    stored_path = Path(remote_payload["remote_store"]["storage_path"])
+    receipt_path = Path(remote_payload["remote_store"]["receipt_path"])
+    assert stored_path.is_file()
+    assert receipt_path.is_file()
+    assert stored_path.read_bytes() == remote_path.read_bytes()
+    assert str(stored_path).startswith(str(remote_root))
+    assert "FORGE_TEST_AUDIT_REMOTE_URI" not in json.dumps(remote_payload)
+
+    missing_remote = runner.invoke(
+        app,
+        [
+            "audit",
+            "manifest-export",
+            "--engagement",
+            "1001",
+            "--run-id",
+            str(run_id),
+            "--remote-store",
+            "--remote-uri-env",
+            "FORGE_MISSING_AUDIT_REMOTE_URI",
+            "--remote-scope-env",
+            "FORGE_MISSING_AUDIT_REMOTE_SCOPE",
+        ],
+    )
+    assert missing_remote.exit_code == 1
+    assert "remote audit bundle storage is not configured" in missing_remote.output
+
     verify_signed = runner.invoke(
         app,
         [

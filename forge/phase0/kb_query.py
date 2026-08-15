@@ -360,19 +360,27 @@ def get_cvss(cve_id: str) -> Optional[float]:
     """
     Return the highest available CVSS score for *cve_id*.
 
-    Prefers CVSSv3; falls back to CVSSv2. Cached — CVE scores are immutable.
+    Prefers CVSSv4, then CVSSv3, then CVSSv2. Cached — CVE scores are immutable.
 
     :param cve_id: e.g. 'CVE-2021-44228'
     :returns: Float score 0.0–10.0 or None if CVE not in cache.
     """
     with _nvd_conn() as conn:
+        columns = _cvss_score_columns(conn)
+        cvss_v4_expr = "cvss_v4" if "cvss_v4" in columns else "NULL AS cvss_v4"
+        cvss_v3_expr = "cvss_v3" if "cvss_v3" in columns else "NULL AS cvss_v3"
+        cvss_v2_expr = "cvss_v2" if "cvss_v2" in columns else "NULL AS cvss_v2"
         row = conn.execute(
-            "SELECT cvss_v3, cvss_v2 FROM cvss_scores WHERE cve_id = ?",
+            f"SELECT {cvss_v4_expr}, {cvss_v3_expr}, {cvss_v2_expr} FROM cvss_scores WHERE cve_id = ?",
             (cve_id,),
         ).fetchone()
     if not row:
         return None
-    return row["cvss_v3"] if row["cvss_v3"] is not None else row["cvss_v2"]
+    return (
+        row["cvss_v4"]
+        if row["cvss_v4"] is not None
+        else row["cvss_v3"] if row["cvss_v3"] is not None else row["cvss_v2"]
+    )
 
 
 def get_cve(cve_id: str) -> Optional[dict]:
@@ -380,20 +388,40 @@ def get_cve(cve_id: str) -> Optional[dict]:
     Return full CVE record from NVD cache.
 
     :param cve_id: e.g. 'CVE-2021-44228'
-    :returns: Dict with keys: cve_id, description, cvss_v3, cvss_v2, severity,
-              published_at, modified_at, cpe_matches.
+    :returns: Dict with keys: cve_id, description, cvss_v4, cvss_v3, cvss_v2,
+              vector strings when present, severity, published_at, modified_at,
+              and cpe_matches.
     """
     with _nvd_conn() as conn:
+        columns = _cvss_score_columns(conn)
+        cvss_v4_expr = "s.cvss_v4" if "cvss_v4" in columns else "NULL"
+        cvss_v4_vector_expr = "s.cvss_v4_vector" if "cvss_v4_vector" in columns else "NULL"
+        cvss_v3_expr = "s.cvss_v3" if "cvss_v3" in columns else "NULL"
+        cvss_v3_vector_expr = "s.cvss_v3_vector" if "cvss_v3_vector" in columns else "NULL"
+        cvss_v2_expr = "s.cvss_v2" if "cvss_v2" in columns else "NULL"
+        cvss_v2_vector_expr = "s.cvss_v2_vector" if "cvss_v2_vector" in columns else "NULL"
         row = conn.execute(
             "SELECT c.cve_id, c.description, c.severity, "
             "       c.published_at, c.modified_at, c.cpe_matches, "
-            "       s.cvss_v3, s.cvss_v2 "
+            f"       {cvss_v4_expr} AS cvss_v4, "
+            f"       {cvss_v4_vector_expr} AS cvss_v4_vector, "
+            f"       {cvss_v3_expr} AS cvss_v3, "
+            f"       {cvss_v3_vector_expr} AS cvss_v3_vector, "
+            f"       {cvss_v2_expr} AS cvss_v2, "
+            f"       {cvss_v2_vector_expr} AS cvss_v2_vector "
             "FROM cve c "
             "LEFT JOIN cvss_scores s ON c.cve_id = s.cve_id "
             "WHERE c.cve_id = ?",
             (cve_id,),
         ).fetchone()
     return dict(row) if row else None
+
+
+def _cvss_score_columns(conn: sqlite3.Connection) -> set[str]:
+    return {
+        str(row[1])
+        for row in conn.execute("PRAGMA table_info(cvss_scores)").fetchall()
+    }
 
 
 # ---------------------------------------------------------------------------

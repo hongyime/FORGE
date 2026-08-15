@@ -153,6 +153,12 @@
   background: rgba(142, 92, 12, 0.18);
 }
 
+.status-pill.is-danger {
+  color: #ffd0cf;
+  border-color: rgba(255, 122, 122, 0.36);
+  background: rgba(153, 38, 46, 0.22);
+}
+
 .status-pill.is-muted {
   color: #d1d9ef;
 }
@@ -244,6 +250,7 @@
 
 .compose-grid .seed-compose-shell,
 .compose-grid .tags-compose-shell,
+.compose-grid .workspace-admin-table,
 .compose-grid .compose-actions {
   grid-column: 1 / -1;
 }
@@ -570,6 +577,91 @@
   font-size: 0.8rem;
 }
 
+.active-validation-form,
+.active-validation-approval-grid,
+.audit-review-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.graph-filter textarea {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(111, 146, 196, 0.24);
+  background: rgba(2, 7, 15, 0.55);
+  color: var(--text-main);
+  font: inherit;
+  resize: vertical;
+}
+
+.active-validation-scope-field {
+  grid-column: 1 / -1;
+}
+
+.connector-secret-value-field {
+  grid-column: 1 / -1;
+}
+
+.audit-review-comment-field {
+  grid-column: 1 / -1;
+}
+
+.remediation-risk-field {
+  grid-column: 1 / -1;
+}
+
+.remediation-command-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.remediation-command-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(111, 146, 196, 0.2);
+  background: rgba(2, 7, 15, 0.44);
+}
+
+.remediation-command-card strong {
+  overflow-wrap: anywhere;
+  font-size: 0.95rem;
+}
+
+.active-validation-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.active-validation-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(111, 146, 196, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.active-validation-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.active-validation-card-head strong {
+  overflow-wrap: anywhere;
+  font-size: 0.96rem;
+}
+
 .findings-stack {
   display: flex;
   flex-direction: column;
@@ -829,6 +921,21 @@
 .timeline-item strong {
   display: block;
   margin-bottom: 6px;
+}
+
+.operational-timeline-item {
+  grid-template-columns: 170px minmax(0, 1fr);
+}
+
+.operational-timeline-item .token-wrap {
+  margin: 8px 0;
+}
+
+.operational-timeline-item p,
+.operational-timeline-item .token,
+.operational-timeline-item .status-pill,
+.operational-timeline-item .severity-pill {
+  overflow-wrap: anywhere;
 }
 
 .timeline-time {

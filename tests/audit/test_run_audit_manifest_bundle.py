@@ -12,6 +12,10 @@ from forge.audit.manifest_bundle import (
     export_run_audit_manifest_bundle,
     verify_run_audit_manifest_bundle_signature,
 )
+from forge.audit.remote_storage import (
+    parse_remote_store,
+    store_audit_manifest_bundle_remote,
+)
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.engagement_orchestrator import EngagementRunTracker
@@ -189,6 +193,82 @@ def test_manifest_bundle_can_include_hmac_signature(tmp_path: Path) -> None:
     )
     assert verified.ok is True
     assert verified.signer_id == "ci-test"
+
+
+def test_manifest_bundle_remote_store_is_scoped_append_only(tmp_path: Path) -> None:
+    db_path = tmp_path / "1001.db"
+    run_id = _bootstrap(db_path)
+    out_path = tmp_path / "signed.zip"
+    remote_root = tmp_path / "remote-store"
+
+    con = sqlite3.connect(db_path)
+    try:
+        bundle = export_run_audit_manifest_bundle(
+            con,
+            db_path=db_path,
+            engagement_id=1001,
+            run_id=run_id,
+            output_path=out_path,
+            exported_at="2026-07-20T02:12:00+00:00",
+            signing_key="test-signing-key",
+        )
+    finally:
+        con.close()
+
+    store = parse_remote_store(str(remote_root), scope="customer-acme")
+    receipt = store_audit_manifest_bundle_remote(
+        bundle,
+        engagement_id=1001,
+        run_id=run_id,
+        store=store,
+        stored_at="2026-07-20T02:13:00+00:00",
+    )
+
+    assert receipt.already_present is False
+    assert receipt.receipt_already_present is False
+    assert receipt.storage_path.is_file()
+    assert receipt.receipt_path.is_file()
+    assert receipt.storage_path.read_bytes() == out_path.read_bytes()
+    assert receipt.storage_path.parent == remote_root / "customer-acme" / "engagement_1001" / f"run_{run_id}"
+    receipt_payload = json.loads(receipt.receipt_path.read_text(encoding="utf-8"))
+    assert receipt_payload["schema"] == "forge.run_audit_manifest_remote_store.v1"
+    assert receipt_payload["append_only"] is True
+    assert receipt_payload["bundle_sha256"] == bundle.bundle_sha256
+    assert "manifest_json" not in receipt.receipt_path.read_text(encoding="utf-8")
+
+    second_receipt = store_audit_manifest_bundle_remote(
+        bundle,
+        engagement_id=1001,
+        run_id=run_id,
+        store=store,
+        stored_at="2026-07-20T02:14:00+00:00",
+    )
+    assert second_receipt.already_present is True
+    assert second_receipt.receipt_already_present is True
+
+    receipt.storage_path.write_bytes(b"tampered\n")
+    try:
+        store_audit_manifest_bundle_remote(bundle, engagement_id=1001, run_id=run_id, store=store)
+    except ValueError as exc:
+        assert "different content" in str(exc)
+    else:  # pragma: no cover - defensive assertion.
+        raise AssertionError("expected append-only conflict")
+
+
+def test_manifest_bundle_remote_store_rejects_unsafe_scope_and_uri(tmp_path: Path) -> None:
+    assert parse_remote_store(str(tmp_path), scope="acme_01").scope == "acme_01"
+    try:
+        parse_remote_store("https://example.test/bucket", scope="acme")
+    except ValueError as exc:
+        assert "supports only file:// or mounted paths" in str(exc)
+    else:  # pragma: no cover - defensive assertion.
+        raise AssertionError("expected unsupported URI error")
+    try:
+        parse_remote_store(str(tmp_path), scope="../acme")
+    except ValueError as exc:
+        assert "scope must be" in str(exc)
+    else:  # pragma: no cover - defensive assertion.
+        raise AssertionError("expected unsafe scope error")
 
 
 def test_manifest_bundle_signature_verifier_detects_tampered_payload(tmp_path: Path) -> None:

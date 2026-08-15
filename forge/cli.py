@@ -21,6 +21,10 @@ Usage:
     forge exploit correlate --engagement <id>
     forge post shell --engagement <id>
     forge report generate --engagement <id>
+    forge connectors list --json
+    forge workspaces list --json
+    forge retention preview --engagement <id>
+    forge doctor
     forge clean --engagement <id>
 """
 
@@ -33,7 +37,6 @@ import html as html_lib
 import logging
 import os
 import re
-import signal
 import sys
 import sqlite3
 import subprocess
@@ -60,16 +63,58 @@ logger = logging.getLogger(__name__)
 
 import typer
 from rich.console import Console
+from typer import rich_utils
 
 from forge import VERSION
 from forge.config import ForgeConfig
-from forge.utils.kill_chain_options import (
-    normalize_kill_chain_max_iter,
-    normalize_kill_chain_synthesis_depth,
-    normalize_kill_chain_validation_batch_limit,
+from forge.utils.kill_chain_runtime import (
+    load_kill_chain_scope_manifest_metadata,
+    normalize_kill_chain_runtime_options,
+    prime_kill_chain_attack_mode_env,
+)
+from forge.orchestration.seed_promotion import (
+    promote_cloud_asset_seed_refs as _promote_cloud_asset_seed_refs_for_engagement,
+    promote_email_localpart_seed_refs as _promote_email_localpart_seed_refs_for_engagement,
+    promote_pending_cloud_targets as _promote_pending_cloud_targets_for_engagement,
+    promote_social_url_seed_refs as _promote_social_url_seed_refs_for_engagement,
+)
+from forge.orchestration.synthesis import synthesis_summary_log_message
+from forge.utils.kill_chain_seed_helpers import (
+    dedupe_initial_seed_entries as _dedupe_initial_seed_entries,
+    derive_domain_for_seed as _derive_domain_for_seed,
+    derive_hostname_for_seed as _derive_hostname_for_seed,
+    excluded_host_for_seed_routing as _excluded_host_for_seed_routing,
+    extract_cloud_asset_seed_refs as _extract_cloud_asset_seed_refs,
+    host_context_json as _host_context_json,
+    is_placeholder_host_ip as _is_placeholder_host_ip,
+    looks_like_company_name as _looks_like_company_name,
+    looks_like_person_name as _looks_like_person_name,
+    normalize_root_domain as _normalize_root_domain,
+    prepare_classified_seed as _prepare_classified_seed_entry,
+    prepare_initial_seed_route as _prepare_initial_seed_route,
+)
+from forge.cli_compat import (
+    auth_brute,
+    auth_bypass,
+    clean,
+    exploit_correlate,
+    vuln_idor,
+    vuln_mark_fp,
+    vuln_passive,
+    vuln_summary,
+    vuln_verify,
+)
+from forge.cli_registry import build_forge_cli_apps, register_extracted_cli_commands
+from forge.cli_runtime import CliRuntimeError, configure_cli_runtime
+from forge.cli_kill_chain import register_kill_chain_command
+from forge.cli_recon import (
+    _RECON_SUBDOMAIN_STDOUT_SAMPLE,
+    _print_recon_subdomain_summary,
 )
 
 console = Console(stderr=True)
+# Keep long operational flag names readable in Typer/Rich help output.
+rich_utils.MAX_WIDTH = 120
 
 
 from forge.cli_helpers import (  # noqa: F401, E402
@@ -153,62 +198,26 @@ from forge.cli_helpers import (  # noqa: F401, E402
 
 
 # ---------------------------------------------------------------------------
-# Root application
+# Root application and sub-app registration
 # ---------------------------------------------------------------------------
-app = typer.Typer(
-    name="forge",
-    help="FORGE — Full-Spectrum Red Team Platform (v{ver})".format(ver=VERSION),
-    add_completion=False,
-    no_args_is_help=True,
-    pretty_exceptions_show_locals=False,  # OPSEC: never leak locals to terminal
+_cli_apps = build_forge_cli_apps(
+    root_help="FORGE — Full-Spectrum Red Team Platform (v{ver})".format(ver=VERSION)
 )
-
-
-# ---------------------------------------------------------------------------
-# Phase sub-apps (lazy import to keep startup < 1 s)
-# ---------------------------------------------------------------------------
-
-
-def _make_sub(name: str, help_text: str) -> typer.Typer:
-    return typer.Typer(name=name, help=help_text, no_args_is_help=True)
-
-
-kb_app = _make_sub("kb", "Phase 0 — Knowledge Base ETL")
-recon_app = _make_sub("recon", "Phase 1 — Reconnaissance")
-osint_app = _make_sub("osint", "Phase 2 — Intelligence Operations")
-evasion_app = _make_sub("evasion", "Phase 3 — Payload Preparation")
-exploit_app = _make_sub("exploit", "Phase 4 — Vulnerability Correlation")
-vuln_app = _make_sub("vuln", "Phase 4 — Web Vulnerability Discovery")
-cloud_app = _make_sub("cloud", "Phase 4 — Cloud Misconfiguration Scanning")
-graph_app = _make_sub("graph", "Phase 4 — Attack Path Visualization")
-web_app = _make_sub("web", "Web Interface — Orchestration and Visibility")
-auth_app = _make_sub("auth", "Authentication Testing — Brute and Bypass")
-post_app = _make_sub("post", "Phase 5 — Advanced Operations")
-report_app = _make_sub("report", "Phase 6 — Reporting")
-audit_app = _make_sub("audit", "Audit Evidence — Manifest Verification")
-targets_app = _make_sub("targets", "Target feed import")
-
-# Public groups (visible in `forge --help`): kb, graph, report.
-# Internal groups (hidden but still functional): recon, osint, evasion,
-# exploit, vuln, cloud, web, auth, post. The kill-chain composes them.
-app.add_typer(kb_app)
-app.add_typer(recon_app, hidden=True)
-app.add_typer(osint_app, hidden=True)
-app.add_typer(evasion_app, hidden=True)
-app.add_typer(exploit_app, hidden=True)
-app.add_typer(vuln_app, hidden=True)
-app.add_typer(cloud_app, hidden=True)
-app.add_typer(graph_app)
-app.add_typer(web_app, hidden=True)
-app.add_typer(auth_app, hidden=True)
-app.add_typer(post_app, hidden=True)
-app.add_typer(report_app)
-app.add_typer(audit_app)
-app.add_typer(targets_app)
-
-from forge.audit.cli import register_audit_commands as _register_audit_commands  # noqa: E402
-
-_register_audit_commands(audit_app)
+app = _cli_apps.app
+kb_app = _cli_apps.kb_app
+recon_app = _cli_apps.recon_app
+osint_app = _cli_apps.osint_app
+evasion_app = _cli_apps.evasion_app
+exploit_app = _cli_apps.exploit_app
+vuln_app = _cli_apps.vuln_app
+cloud_app = _cli_apps.cloud_app
+graph_app = _cli_apps.graph_app
+web_app = _cli_apps.web_app
+auth_app = _cli_apps.auth_app
+post_app = _cli_apps.post_app
+report_app = _cli_apps.report_app
+demo_app = _cli_apps.demo_app
+standards_app = _cli_apps.standards_app
 
 
 # ---------------------------------------------------------------------------
@@ -247,1151 +256,45 @@ def _root_callback(
         return
 
     cfg = ForgeConfig.load()
-    if offline_strict or cfg.offline_strict:
-        # Patch socket at process level — no module escape possible.
-        import socket  # noqa: PLC0415
-
-        _deny = lambda *a, **kw: (_ for _ in ()).throw(  # noqa: E731
-            OSError("FORGE_OFFLINE_STRICT: outbound network calls are disabled.")
-        )
-        socket.socket = _deny  # type: ignore[assignment]
-
-    # Tor Expert Bundle management (PRD v7.2 §12.4).
-    # If FORGE_PROXY points to localhost Tor, start the daemon if not running.
-    # --no-tor (or FORGE_NO_TOR=1) short-circuits this — critical for offline
-    # commands and for scaffolding into non-repo directories where the vendor
-    # tor bundle isn't present.
-    if no_tor:
-        # When operator explicitly opts out of Tor, ALSO clear FORGE_PROXY
-        # from the process env so downstream modules don't route through a
-        # SOCKS proxy pointing at a dead 127.0.0.1:9050. Otherwise every
-        # httpx/curl_cffi call fails with `curl (7) Failed to connect`.
-        # Cleared only for this process; .env file is untouched.
-        import os
-
-        os.environ.pop("FORGE_PROXY", None)
-
-    if cfg.is_tor_requested and not (offline_strict or cfg.offline_strict) and not no_tor:
-        from forge.opsec.tor import TorManager  # noqa: PLC0415
-        import atexit  # noqa: PLC0415
-
-        tor = TorManager()
-        if tor.start():
-            atexit.register(tor.stop)
-        else:
-            console.print("[bold red]OPSEC ERROR:[/bold red] Failed to bootstrap Tor daemon.")
-            raise typer.Exit(code=1)
-
-
-@web_app.command("start")
-def web_start(
-    host: Optional[str] = typer.Option(None, "--host"),
-    port: Optional[int] = typer.Option(None, "--port"),
-    daemon: bool = typer.Option(False, "--daemon"),
-) -> None:
-    cfg = ForgeConfig.load()
-    web_host = host or cfg.web_host
-    web_port = port or cfg.web_port
-    if daemon:
-        cmd = [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "forge.webui.app:create_app",
-            "--factory",
-            "--host",
-            web_host,
-            "--port",
-            str(web_port),
-        ]
-        proc = subprocess.Popen(cmd)
-        pid_file = cfg.data_dir / "webui.pid"
-        pid_file.write_text(str(proc.pid), encoding="utf-8")
-        console.print(f"[green]Web interface started in background (PID {proc.pid}).[/green]")
-        console.print(f"[green]URL:[/green] http://{web_host}:{web_port}")
-        return
-    from forge.webui.app import create_server  # noqa: PLC0415
-
-    console.print(f"[green]Starting web interface on http://{web_host}:{web_port}[/green]")
-    server = create_server(host=web_host, port=web_port)
-    server.run()
-
-
-@web_app.command("stop")
-def web_stop() -> None:
-    cfg = ForgeConfig.load()
-    pid_file = cfg.data_dir / "webui.pid"
-    if not pid_file.exists():
-        console.print("[yellow]No running web interface PID file found.[/yellow]")
-        raise typer.Exit(code=0)
-    pid_raw = pid_file.read_text(encoding="utf-8").strip()
-    if not pid_raw.isdigit():
-        pid_file.unlink(missing_ok=True)
-        console.print("[yellow]Invalid PID file removed.[/yellow]")
-        raise typer.Exit(code=1)
-    pid = int(pid_raw)
     try:
-        os.kill(pid, signal.SIGTERM)
-        console.print(f"[green]Stopped web interface process {pid}.[/green]")
-    except Exception as exc:
-        console.print(f"[bold red]ERROR:[/bold red] Could not stop process {pid}: {exc}")
-        raise typer.Exit(code=1)
-    finally:
-        pid_file.unlink(missing_ok=True)
-
-
-@web_app.command("status")
-def web_status(
-    host: Optional[str] = typer.Option(None, "--host"),
-    port: Optional[int] = typer.Option(None, "--port"),
-) -> None:
-    import socket  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    web_host = host or cfg.web_host
-    web_port = port or cfg.web_port
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(1.0)
-    try:
-        connected = sock.connect_ex((web_host, web_port)) == 0
-    finally:
-        sock.close()
-    if connected:
-        console.print(f"[green]Web interface is running at http://{web_host}:{web_port}[/green]")
-    else:
-        console.print(f"[yellow]Web interface is not listening at {web_host}:{web_port}[/yellow]")
-
-
-@targets_app.command("import")
-def targets_import(
-    feed_url: Optional[str] = typer.Option(
-        None,
-        "--feed-url",
-        help="HTTP(S) target feed URL using schema target-feed.v1.",
-    ),
-    feed_file: Optional[Path] = typer.Option(
-        None,
-        "--feed-file",
-        help="Local target feed JSON file using schema target-feed.v1.",
-    ),
-    auth_header_env: Optional[str] = typer.Option(
-        None,
-        "--auth-header-env",
-        help="Environment variable containing the feed auth header value.",
-    ),
-    roe_id: Optional[str] = typer.Option(
-        None,
-        "--roe-id",
-        envvar="FORGE_ROE_ID",
-        help="Rules-of-engagement reference required with --start.",
-    ),
-    start: bool = typer.Option(
-        False,
-        "--start",
-        help="Start the passive kill-chain for each imported target.",
-    ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Parse and dedupe the feed without writing engagement data or starting runs.",
-    ),
-    limit: Optional[int] = typer.Option(
-        None,
-        "--limit",
-        help="Maximum feed items to import after dedupe. Default 100, max 1000.",
-    ),
-    max_iter: int = typer.Option(
-        3,
-        "--max-iter",
-        help="Passive kill-chain max iterations when --start is used.",
-    ),
-    start_limit: Optional[int] = typer.Option(
-        None,
-        "--start-limit",
-        help="Maximum new passive kill-chain runs to launch during this import.",
-    ),
-) -> None:
-    """Import generic sanitized target feeds into one engagement per target."""
-    try:
-        from forge.targets_import import import_targets as _import_targets  # noqa: PLC0415
-
-        results = _import_targets(
-            feed_url=feed_url,
-            feed_file=feed_file,
-            auth_header_env=auth_header_env,
-            roe_id=roe_id,
-            start=start,
-            dry_run=dry_run,
-            limit=limit,
-            max_iter=max_iter,
-            start_limit=start_limit,
+        configure_cli_runtime(
+            cfg,
+            offline_strict=offline_strict,
+            no_tor=no_tor,
+            console=console,
         )
-    except Exception as exc:
-        raise typer.BadParameter(str(exc)) from exc
-
-    created = sum(1 for item in results if item.created)
-    reused = sum(1 for item in results if item.engagement_id is not None and not item.created)
-    started = sum(1 for item in results if item.started)
-    if dry_run:
-        console.print(f"[green]DRY RUN:[/green] {len(results)} target(s) parsed and deduped.")
-        return
-    console.print(
-        f"[green]Imported:[/green] {len(results)} target(s), "
-        f"created={created}, reused={reused}, started={started}"
-    )
-    for result in results:
-        console.print(
-            f"  engagement={result.engagement_id} "
-            f"target={result.target_type}:{result.target_value} "
-            f"manifest={result.scope_manifest}"
-        )
+    except CliRuntimeError as exc:
+        raise typer.Exit(code=1) from exc
 
 
-@web_app.command("enqueue")
-def web_enqueue(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    task_type: str = typer.Option(..., "--task-type"),
-    target: Optional[str] = typer.Option(None, "--target"),
-    priority: int = typer.Option(100, "--priority"),
-) -> None:
-    from forge.distributed.coordinator import QueueCoordinator  # noqa: PLC0415
-    from forge.distributed.scheduler import ScheduledTask, TaskScheduler  # noqa: PLC0415
+register_extracted_cli_commands(
+    _cli_apps,
+    console=console,
+    config_cls=ForgeConfig,
+    audit_func=_cli_audit,
+    require_roe=_direct_cli_require_roe,
+    load_scope_lists=_direct_cli_load_scope_lists,
+)
+from forge.cli_recon import REGISTERED_RECON_COMMANDS as _REGISTERED_RECON_COMMANDS  # noqa: E402
 
-    cfg = ForgeConfig.load()
-    coordinator = QueueCoordinator(redis_url=cfg.redis_url)
-    scheduler = TaskScheduler(db_path=cfg.engagement_db_path(engagement), queue=coordinator)
-    payload = {"task_type": task_type.strip().lower(), "target": (target or "").strip()}
-    task_key = f"{payload['task_type']}:{payload['target'] or 'default'}"
-    scheduler.schedule(
-        ScheduledTask(
-            engagement_id=int(engagement),
-            task_key=task_key,
-            payload=payload,
-            priority=priority,
-        )
-    )
-    console.print(f"[green]Task queued:[/green] {task_key}")
+globals().update(_REGISTERED_RECON_COMMANDS)
 
 
-@web_app.command("worker-once")
-def web_worker_once(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    worker_id: str = typer.Option("worker-1", "--worker-id"),
-) -> None:
-    from forge.distributed.coordinator import QueueCoordinator  # noqa: PLC0415
-    from forge.distributed.runnable import ScheduledTaskRunner  # noqa: PLC0415
-    from forge.distributed.scheduler import TaskScheduler  # noqa: PLC0415
-    from forge.distributed.worker import Worker  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    db_path = cfg.engagement_db_path(engagement)
-    coordinator = QueueCoordinator(redis_url=cfg.redis_url)
-    scheduler = TaskScheduler(db_path=db_path, queue=coordinator)
-    worker = Worker(
-        worker_id=worker_id,
-        queue=coordinator,
-        scheduler=scheduler,
-        handler=ScheduledTaskRunner(db_path),
-        handler_execution_mode="process",
-    )
-    consumed = worker.run_once()
-    if consumed:
-        console.print("[green]Worker executed one queued task.[/green]")
-    else:
-        console.print("[yellow]No queued tasks available.[/yellow]")
-
-
-@web_app.command("worker-loop")
-def web_worker_loop(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    worker_id: str = typer.Option("worker-1", "--worker-id"),
-    idle_sleep: float = typer.Option(0.5, "--idle-sleep"),
-) -> None:
-    from forge.distributed.coordinator import QueueCoordinator  # noqa: PLC0415
-    from forge.distributed.runnable import ScheduledTaskRunner  # noqa: PLC0415
-    from forge.distributed.scheduler import TaskScheduler  # noqa: PLC0415
-    from forge.distributed.worker import Worker  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    db_path = cfg.engagement_db_path(engagement)
-    coordinator = QueueCoordinator(redis_url=cfg.redis_url)
-    scheduler = TaskScheduler(db_path=db_path, queue=coordinator)
-    worker = Worker(
-        worker_id=worker_id,
-        queue=coordinator,
-        scheduler=scheduler,
-        handler=ScheduledTaskRunner(db_path),
-        handler_execution_mode="process",
-    )
-    console.print(f"[green]Worker loop started:[/green] {worker_id}")
-    worker.run_forever(idle_sleep_seconds=idle_sleep)
-
-
-@web_app.command("automation-loop")
-def web_automation_loop(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-) -> None:
-    from forge.distributed.coordinator import QueueCoordinator  # noqa: PLC0415
-    from forge.distributed.scheduler import TaskScheduler  # noqa: PLC0415
-    from forge.utils.automation import AutomationEngine  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    db_path = cfg.engagement_db_path(engagement)
-    coordinator = QueueCoordinator(redis_url=cfg.redis_url)
-    scheduler = TaskScheduler(db_path=db_path, queue=coordinator)
-
-    engine = AutomationEngine(engagement_id=int(engagement), queue=coordinator, scheduler=scheduler)
-    console.print(f"[green]Automation Engine loop started for engagement:[/green] {engagement}")
-    engine.run_event_loop()
-
-
-# ---------------------------------------------------------------------------
-# Phase 0 — Knowledge Base
-# ---------------------------------------------------------------------------
-
-
-@kb_app.command("sync")
-def kb_sync(
-    force: bool = typer.Option(False, "--force", help="Force full re-sync."),
-    source: Optional[str] = typer.Option(
-        None, "--source", help="Limit sync to a single source (lolbas|gtfobins|nvd|exploitdb)."
-    ),
-) -> None:
-    """Sync offline knowledge bases (LOLBAS, GTFOBins, NVD, Exploit-DB)."""
-    from forge.phase0.etl_runner import run_etl  # noqa: PLC0415
-
-    run_etl(force=force, source_filter=source)
-
-
-@kb_app.command("status")
-def kb_status() -> None:
-    """Show KB staleness report for all data sources."""
-    from forge.phase0.etl_runner import print_staleness_report  # noqa: PLC0415
-
-    print_staleness_report()
-
-
-@kb_app.command("fetch-breach")
-def kb_fetch_breach(
-    url: Optional[str] = typer.Option(
-        None,
-        "--url",
-        help="HTTP(S) URL of a breach dump (SQLite .db, CSV, JSON, or archive).",
-    ),
-    src_file: Optional[str] = typer.Option(
-        None,
-        "--file",
-        help="Local path to a breach dump to copy into .forge_data/breach/.",
-    ),
-    name: Optional[str] = typer.Option(
-        None,
-        "--name",
-        help="Output filename (default: derive from URL/file basename).",
-    ),
-    force: bool = typer.Option(
-        False,
-        "--force",
-        help="Overwrite an existing dump with the same name.",
-    ),
-) -> None:
-    """Download a breach dump to ``.forge_data/breach/`` for Module 2-A queries.
-
-    Supports either ``--url`` (remote fetch via curl_cffi) or ``--file``
-    (local copy). Once downloaded, point ``forge osint breach`` at it:
-
-        forge osint breach --engagement <id> --db .forge_data/breach/<name>
-
-    NOTE: FORGE ships no breach corpus. Operator is responsible for sourcing
-    lawful dumps (own honeypot data, CIT0DAY / COMB from research archives,
-    etc.) with a valid authorisation trail.
-    """
-    import shutil as _sh  # noqa: PLC0415
-    import urllib.parse  # noqa: PLC0415
-
-    if (url is None) == (src_file is None):
-        console.print("[bold red]ERROR:[/bold red] specify exactly one of --url or --file")
-        raise typer.Exit(code=2)
-
-    cfg = ForgeConfig.load()
-    breach_dir = cfg.data_dir / "breach"
-    breach_dir.mkdir(parents=True, exist_ok=True)
-
-    if url:
-        parsed = urllib.parse.urlparse(url)
-        out_name = name or Path(parsed.path).name or "breach_dump.db"
-    else:
-        assert src_file is not None
-        out_name = name or Path(src_file).name
-
-    out_path = breach_dir / out_name
-    if out_path.exists() and not force:
-        console.print(
-            f"[bold red]ERROR:[/bold red] {out_path} already exists. Use --force to overwrite."
-        )
-        raise typer.Exit(code=1)
-
-    if url:
-        console.print(f"[cyan]Fetching[/cyan] {url}")
-        try:
-            from curl_cffi import requests as _req  # noqa: PLC0415
-
-            resp = _req.get(url, timeout=300, allow_redirects=True)
-            resp.raise_for_status()
-            out_path.write_bytes(resp.content)
-        except Exception as exc:
-            console.print(f"[bold red]Fetch failed:[/bold red] {exc}")
-            raise typer.Exit(code=1)
-    else:
-        assert src_file is not None
-        src_path = Path(src_file).expanduser().resolve()
-        if not src_path.exists():
-            console.print(f"[bold red]Not found:[/bold red] {src_path}")
-            raise typer.Exit(code=1)
-        _sh.copy2(src_path, out_path)
-
-    console.print(
-        f"[green]Breach dump ready:[/green] {out_path}  ({out_path.stat().st_size:,} bytes)"
-    )
-    console.print(f"[dim]Next:[/dim] forge osint breach --engagement <id> --db {out_path}")
-
-
-# ---------------------------------------------------------------------------
-# Phase 1 — Reconnaissance
-# ---------------------------------------------------------------------------
-
-
-@recon_app.command("wizard")
-def recon_wizard(
-    engagement: str = typer.Option(..., "--engagement", "-e", help="Engagement ID or name."),
-) -> None:
-    """Launch interactive engagement wizard."""
-    from forge.phase1.wizard import run_wizard  # noqa: PLC0415
-
-    run_wizard(engagement_id=engagement)
-
-
-@recon_app.command("subdomains")
-def recon_subdomains(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    domain: str = typer.Option(..., "--domain", "-d"),
-    resume: bool = typer.Option(True, "--resume/--no-resume"),
-    scope_manifest: Optional[str] = typer.Option(
-        None,
-        "--scope-manifest",
-        help="Scope manifest path/JSON for direct subdomain-enum gating.",
-    ),
-) -> None:
-    """Enumerate subdomains for a target domain."""
-    from forge.phase1.subdomain_enum import enumerate_subdomains  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    db_path = cfg.engagement_db_path(engagement)
-    _direct_cli_load_scope_lists(
-        engagement_id=int(engagement),
-        db_path=db_path,
-        scope_manifest=scope_manifest,
-        target=domain,
-        seed_type="domain",
-    )
-    found = enumerate_subdomains(
-        engagement_id=engagement,
-        domain=domain,
-        resume=resume,
-        db_path=db_path,
-        operator=str(getattr(cfg, "operator", "operator") or "operator"),
-    )
-    from forge.cli import console
-
-    _print_recon_subdomain_summary(console, domain, found)
-
-
-_RECON_SUBDOMAIN_STDOUT_SAMPLE = 15
-
-
-def _print_recon_subdomain_summary(
-    stream: Console,
-    domain: str,
-    found: Any,
-) -> None:
-    """P2/P3 audit fix #5: give operator a stdout summary after subdomain enum.
-
-    Prior behaviour printed the count only via ``console.print`` while the
-    actual hostnames stayed in the logger, so operators running with the
-    logger silenced saw an empty terminal. Now we render the count plus a
-    bounded sample of hostnames (``_RECON_SUBDOMAIN_STDOUT_SAMPLE``) and a
-    concise ``... and N more`` tail when the result set exceeds the sample.
-    """
-    hostnames: list[str] = []
-    for entry in found or ():
-        if isinstance(entry, str):
-            host = entry.strip()
-        elif isinstance(entry, dict):
-            host = str(
-                entry.get("hostname")
-                or entry.get("host")
-                or entry.get("subdomain")
-                or entry.get("name")
-                or ""
-            ).strip()
-        else:
-            host = str(getattr(entry, "hostname", "") or getattr(entry, "host", "") or "").strip()
-        if host:
-            hostnames.append(host)
-
-    count = len(hostnames)
-    stream.print(
-        f"\n[bold green]Recon Subdomains Complete[/bold green]: "
-        f"Found [cyan]{count}[/cyan] subdomain{'s' if count != 1 else ''} for [magenta]{domain}[/magenta]."
-    )
-
-    if count == 0:
-        return
-
-    sample = hostnames[:_RECON_SUBDOMAIN_STDOUT_SAMPLE]
-    for host in sample:
-        stream.print(f"  [dim]•[/dim] {host}")
-    remaining = count - len(sample)
-    if remaining > 0:
-        stream.print(f"  [dim]... and {remaining} more (see engagement DB / dashboard)[/dim]")
-
-
-@recon_app.command("crawl")
-def recon_crawl(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    target: str = typer.Option(..., "--target"),
-    depth: int = typer.Option(2, "--depth"),
-    screenshot: bool = typer.Option(False, "--screenshot"),
-    scope_manifest: Optional[str] = typer.Option(
-        None,
-        "--scope-manifest",
-        help="Scope manifest path/JSON for direct live crawl gating.",
-    ),
-) -> None:
-    from forge.phase1.crawler import crawl_target_sync  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    db_path = cfg.engagement_db_path(engagement)
-    scope_values, url_prefixes = _direct_cli_load_scope_lists(
-        engagement_id=int(engagement),
-        db_path=db_path,
-        scope_manifest=scope_manifest,
-        target=target,
-        seed_type="url",
-    )
-    screenshot_dir = cfg.data_dir / "engagements" / engagement / "screenshots"
-    rows = crawl_target_sync(
-        engagement_id=int(engagement),
-        target_url=target,
-        db_path=db_path,
-        depth=depth,
-        timeout=float(cfg.browser_timeout),
-        screenshot=screenshot and cfg.screenshot_enabled,
-        screenshot_dir=screenshot_dir,
-        scope_values=scope_values,
-        url_prefixes=url_prefixes,
-        require_scope=True,
-    )
-    console.print(f"[green]Crawled pages:[/green] {len(rows)}")
-
-
-@recon_app.command("ports")
-def recon_ports(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    timeout: float = typer.Option(0.35, "--timeout"),
-    enhanced: bool = typer.Option(True, "--enhanced/--basic"),
-    scope_manifest: Optional[str] = typer.Option(
-        None,
-        "--scope-manifest",
-        help="Scope manifest path/JSON for direct live port-scan gating.",
-    ),
-) -> None:
-    from forge.phase1.port_scanner import scan_engagement, scan_engagement_enhanced  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    db_path = cfg.engagement_db_path(engagement)
-    scope_values, _url_prefixes = _direct_cli_load_scope_lists(
-        engagement_id=int(engagement),
-        db_path=db_path,
-        scope_manifest=scope_manifest,
-    )
-    if not scope_values:
-        raise typer.BadParameter(
-            "direct recon ports requires domain/IP scope in --scope-manifest or engagement scope_json."
-        )
-    if enhanced:
-        findings = scan_engagement_enhanced(
-            engagement_id=engagement,
-            db_path=db_path,
-            timeout=timeout,
-            use_shodan=cfg.shodan_key is not None,
-            detect_cdn=cfg.cdn_detection,
-            detect_waf=cfg.waf_detection,
-            scope_override=scope_values,
-        )
-        console.print(f"[green]Enhanced open-port findings:[/green] {len(findings)}")
-        return
-    findings_basic = scan_engagement(
-        engagement_id=engagement,
-        db_path=db_path,
-        timeout=timeout,
-        scope_override=scope_values,
-    )
-    console.print(f"[green]Basic open-port findings:[/green] {len(findings_basic)}")
+# Phase 1 recon commands extracted to forge/cli_recon.py.
 
 
 # Phase 2 OSINT commands extracted to forge/cli_osint.py
 
-# ---------------------------------------------------------------------------
-# Phase 3 — Evasion & Payload Generation
-# ---------------------------------------------------------------------------
+# Phase command direct-import compatibility adapters live in forge/cli_compat.py.
 
 
-@evasion_app.command("generate")
-def evasion_generate(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    technique: str = typer.Option(..., "--technique", help="Obfuscation technique identifier."),
-    target_os: str = typer.Option("windows", "--os", help="windows|linux|macos"),
-    strip_metadata: bool = typer.Option(True, "--strip-metadata/--no-strip-metadata"),
-) -> None:
-    """Generate an obfuscated payload using the 6-criterion matrix (Phase 3)."""
-    import os  # noqa: PLC0415
-
-    from forge.config import is_offensive_enabled, prompt_offensive_upgrade  # noqa: PLC0415
-
-    if not is_offensive_enabled():
-        if not prompt_offensive_upgrade("Phase 3 payload generation"):
-            console.print(
-                "[bold red]ERROR:[/bold red] Phase 3 payload generation is disabled "
-                "(FORGE_SAFE_MODE=1). Set FORGE_SAFE_MODE=0 to enable offensive modules."
-            )
-            raise typer.Exit(code=1)
-
-    from forge.phase3.payload_builder import EncodingChain, PayloadBuilder  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    out_dir = cfg.templates_dir(engagement)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    os_key = (target_os or "windows").strip().lower()
-    template_by_os = {
-        "windows": "powershell_reverse.j2",
-        "linux": "bash_reverse.j2",
-        "macos": "python_reverse.j2",
-    }
-    template_name = template_by_os.get(os_key)
-    if template_name is None:
-        console.print(f"[bold red]ERROR:[/bold red] Unsupported target OS: {target_os!r}")
-        raise typer.Exit(code=1)
-
-    chain = EncodingChain()
-    technique_key = (technique or "").strip().lower()
-    steps_by_technique = {
-        "ps_obf": ["base64", "char_insert"],
-        "bash_obf": ["gzip_b64", "char_insert"],
-        "py_obf": ["base64", "xor"],
-        "std": ["base64"],
-    }
-    for step in steps_by_technique.get(technique_key, ["base64"]):
-        chain.add(step)
-
-    lhost = os.environ.get("FORGE_LHOST", "127.0.0.1")
-    lport = int(os.environ.get("FORGE_LPORT", "443"))
-
-    builder = PayloadBuilder(
-        obfuscate=True,
-        stealth_level=4 if strip_metadata else 3,
-    )
-    payload = builder.build(
-        template_name=template_name,
-        context={"lhost": lhost, "lport": lport},
-        chain=chain,
-        lport=lport,
-    )
-    output_path = out_dir / f"phase3_{technique_key or 'std'}_{os_key}.txt"
-    sha256 = builder.write_payload(payload, output_path=output_path, use_encoded=True)
-    console.print(f"[green]Payload generated:[/green] {output_path}")
-    console.print(f"[green]SHA256:[/green] {sha256}")
-
-
-# ---------------------------------------------------------------------------
-# Phase 4 — Exploit Correlation & Vulnerability Discovery
-# ---------------------------------------------------------------------------
-
-
-@exploit_app.command("correlate")
-def exploit_correlate(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    host: Optional[str] = typer.Option(None, "--host"),
-) -> None:
-    """Correlate discovered services with Exploit-DB and NVD (Phase 4)."""
-    from forge.phase4.exploit_correlator import ExploitCorrelator  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    db_path = cfg.engagement_db_path(engagement)
-    engagement_id = int(engagement)
-
-    _cli_audit(
-        db_path,
-        engagement_id,
-        "phase4",
-        "exploit_correlator",
-        "correlate_start",
-        target=host,
-    )
-
-    with direct_connect(db_path) as con:
-        try:
-            con.execute(
-                "DELETE FROM exploit_suggestions WHERE engagement_id=?",
-                (engagement_id,),
-            )
-            con.commit()
-        except sqlite3.OperationalError:
-            pass
-
-    try:
-        correlator = ExploitCorrelator(
-            db_path=db_path,
-            engagement_id=engagement_id,
-            cache_db=cfg.exploitdb_path,
-        )
-    except sqlite3.OperationalError as exc:
-        _cli_audit(
-            db_path,
-            engagement_id,
-            "phase4",
-            "exploit_correlator",
-            "correlate_skipped",
-            target=host,
-            result=f"cache_open_failed: {type(exc).__name__}: {str(exc)[:120]}",
-        )
-        console.print(
-            "[yellow]WARNING:[/yellow] Exploit-DB cache missing; skipping correlate. "
-            "Run 'forge kb sync --source exploitdb --force' to enable."
-        )
-        console.print("[green]Exploit suggestions generated:[/green] 0")
-        return
-    try:
-        suggestions = correlator.correlate_all()
-        if host:
-            with direct_connect(db_path) as con:
-                try:
-                    ids = con.execute(
-                        """
-                        SELECT id
-                        FROM hosts
-                        WHERE engagement_id=?
-                          AND (ip=? OR hostname=?)
-                        """,
-                        (engagement_id, host, host),
-                    ).fetchall()
-                except sqlite3.OperationalError:
-                    ids = con.execute(
-                        """
-                        SELECT id
-                        FROM hosts
-                        WHERE engagement_id=?
-                          AND ip=?
-                        """,
-                        (engagement_id, host),
-                    ).fetchall()
-                allowed_ids = [row[0] for row in ids]
-                if not allowed_ids:
-                    console.print(
-                        f"[yellow]No host matched filter {host!r}; no suggestions kept.[/yellow]"
-                    )
-                    con.execute(
-                        "DELETE FROM exploit_suggestions WHERE engagement_id=?",
-                        (engagement_id,),
-                    )
-                else:
-                    placeholders = ",".join(["?"] * len(allowed_ids))
-                    con.execute(
-                        f"""
-                        DELETE FROM exploit_suggestions
-                        WHERE engagement_id=?
-                          AND host_id NOT IN ({placeholders})
-                        """,
-                        (engagement_id, *allowed_ids),
-                    )
-                con.commit()
-        console.print(f"[green]Exploit suggestions generated:[/green] {len(suggestions)}")
-        _cli_audit(
-            db_path,
-            engagement_id,
-            "phase4",
-            "exploit_correlator",
-            "correlate_complete",
-            target=host,
-            result=f"suggestions={len(suggestions)}",
-        )
-    except Exception as exc:
-        _cli_audit(
-            db_path,
-            engagement_id,
-            "phase4",
-            "exploit_correlator",
-            "correlate_failed",
-            target=host,
-            result=f"{type(exc).__name__}: {str(exc)[:180]}",
-        )
-        raise
-    finally:
-        correlator.close()
-
-
-# ---------------------------------------------------------------------------
-# Phase 4 — Web Vulnerability Discovery (vuln sub-app)
-# ---------------------------------------------------------------------------
-
-
-@vuln_app.command("idor")
-def vuln_idor(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    target: str = typer.Option(..., "--target", help="Base URL of target application."),
-    depth: int = typer.Option(3, "--depth", help="Maximum crawl depth."),
-    delay: float = typer.Option(1.5, "--delay", help="Seconds between requests."),
-    cookie: Optional[str] = typer.Option(None, "--cookie", help="Path to cookie jar file."),
-    header: Optional[str] = typer.Option(
-        None,
-        "--header",
-        help='Extra auth header, e.g. "Authorization: Bearer tok".',
-    ),
-    dry_run: bool = typer.Option(False, "--dry-run"),
-    roe_id: Optional[str] = typer.Option(
-        None,
-        "--roe-id",
-        envvar="FORGE_ROE_ID",
-        help="ROE identifier required before direct live IDOR probes.",
-    ),
-    scope_manifest: Optional[str] = typer.Option(
-        None,
-        "--scope-manifest",
-        help="Scope manifest path/JSON for direct live IDOR scan gating.",
-    ),
-) -> None:
-    """Discover IDOR vulnerabilities by crawling and probing ID parameters (Module 4-D).
-
-    OPSEC: Sends real HTTP requests to the target. Requires explicit engagement
-    authorisation covering this application. A questionary.confirm() prompt is
-    shown before scanning begins.
-    """
-    from forge.config import ForgeConfig  # noqa: PLC0415
-    from forge.phase4.param_probe import IDORScanner  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    db_path = cfg.engagement_db_path(engagement)
-    if not dry_run:
-        _direct_cli_require_roe(roe_id, command_name="vuln idor")
-    scope_values, url_prefixes = _direct_cli_load_scope_lists(
-        engagement_id=int(engagement),
-        db_path=db_path,
-        scope_manifest=scope_manifest,
-        target=target,
-        seed_type="url",
-    )
-    scanner = IDORScanner(db_path=db_path, engagement_id=int(engagement))
-    scanner.scan(
-        target_url=target,
-        depth=depth,
-        delay=delay,
-        cookie_jar=Path(cookie) if cookie else None,
-        extra_header=header,
-        dry_run=dry_run,
-        scope_values=scope_values,
-        url_prefixes=url_prefixes,
-        require_scope=True,
-    )
-
-
-@vuln_app.command("passive")
-def vuln_passive(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    target: Optional[str] = typer.Option(None, "--target"),
-    input_file: Optional[str] = typer.Option(None, "--input-file"),
-    proxy: Optional[str] = typer.Option(None, "--proxy"),
-    max_workers: Optional[int] = typer.Option(
-        None,
-        "--max-workers",
-        min=1,
-        max=4,
-        help=(
-            "Max workers for engagement-backed passive HTTP collection. "
-            "Defaults to FORGE_PASSIVE_HTTP_MAX_WORKERS or 1."
-        ),
-    ),
-    scope_manifest: Optional[str] = typer.Option(
-        None,
-        "--scope-manifest",
-        help="Scope manifest path/JSON for direct passive HTTP collection gating.",
-    ),
-) -> None:
-    from forge.phase2.xray_runner import (  # noqa: PLC0415
-        ingest_passive_file,
-        run_passive_http_collection,
-        run_passive_http_collection_for_engagement,
-    )
-
-    cfg = ForgeConfig.load()
-    db_path = cfg.engagement_db_path(engagement)
-    passive_max_workers = max_workers if isinstance(max_workers, int) else None
-    inserted = 0
-    if input_file:
-        inserted += ingest_passive_file(int(engagement), db_path, Path(input_file))
-    if target:
-        _direct_cli_load_scope_lists(
-            engagement_id=int(engagement),
-            db_path=db_path,
-            scope_manifest=scope_manifest,
-            target=target,
-            seed_type="url",
-        )
-        inserted += run_passive_http_collection(
-            int(engagement),
-            db_path=db_path,
-            target_url=target,
-            proxy=proxy,
-        )
-    if not input_file and not target:
-        inserted += run_passive_http_collection_for_engagement(
-            int(engagement),
-            db_path=db_path,
-            proxy=proxy,
-            max_workers=passive_max_workers,
-        )
-    console.print(f"[green]Passive findings ingested:[/green] {inserted}")
-
-
-@vuln_app.command("verify")
-def vuln_verify(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    vuln_id: str = typer.Option(..., "--id"),
-) -> None:
-    from forge.phase2.xray_runner import mark_vuln_verified  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    ok = mark_vuln_verified(cfg.engagement_db_path(engagement), vuln_id=vuln_id)
-    if ok:
-        console.print(f"[green]Marked verified:[/green] {vuln_id}")
-    else:
-        console.print(f"[yellow]No finding updated for:[/yellow] {vuln_id}")
-
-
-@vuln_app.command("mark-fp")
-def vuln_mark_fp(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    vuln_id: str = typer.Option(..., "--id"),
-) -> None:
-    from forge.phase2.xray_runner import mark_vuln_false_positive  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    ok = mark_vuln_false_positive(cfg.engagement_db_path(engagement), vuln_id=vuln_id)
-    if ok:
-        console.print(f"[green]Marked false positive:[/green] {vuln_id}")
-    else:
-        console.print(f"[yellow]No finding updated for:[/yellow] {vuln_id}")
-
-
-@vuln_app.command("summary")
-def vuln_summary(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-) -> None:
-    from forge.phase2.xray_runner import summarize_passive_vulns  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    summary = summarize_passive_vulns(int(engagement), cfg.engagement_db_path(engagement))
-    console.print("[bold]Passive Vulnerability Summary[/bold]")
-    for severity in ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"):
-        console.print(f"{severity:8} {summary.get(severity, 0)}")
-
-
-# Phase 4 Cloud commands extracted to forge/cli_cloud.py
-
-
-# Phase 4 Graph commands extracted to forge/cli_graph.py
-
-
-@auth_app.command("brute")
-def auth_brute(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    target: str = typer.Option(..., "--target"),
-    username: str = typer.Option("admin", "--username"),
-    dictionary_type: str = typer.Option("dynamic", "--dictionary-type"),
-    max_attempts: Optional[int] = typer.Option(None, "--max-attempts"),
-    roe_id: Optional[str] = typer.Option(
-        None,
-        "--roe-id",
-        envvar="FORGE_ROE_ID",
-        help="ROE identifier required before direct live auth brute-force checks.",
-    ),
-    scope_manifest: Optional[str] = typer.Option(
-        None,
-        "--scope-manifest",
-        help="Scope manifest path/JSON for direct live auth brute-force gating.",
-    ),
-) -> None:
-    import httpx  # noqa: PLC0415
-
-    from forge.utils.intel.credential_generator import generate_dynamic_passwords  # noqa: PLC0415
-    from forge.utils.intel.evasion import build_evasion_headers, evasion_sleep  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    _direct_cli_require_roe(roe_id, command_name="auth brute")
-    db_path = cfg.engagement_db_path(engagement)
-    _direct_cli_load_scope_lists(
-        engagement_id=int(engagement),
-        db_path=db_path,
-        scope_manifest=scope_manifest,
-        target=target,
-        seed_type="url",
-    )
-    attempts_limit = max_attempts or cfg.auth_max_attempts
-    host = (urlparse(target).hostname or "target").strip()
-    if dictionary_type == "dynamic":
-        candidates = generate_dynamic_passwords(host, limit=attempts_limit)
-    else:
-        candidates = generate_dynamic_passwords(host, limit=attempts_limit)
-    conn = direct_connect(db_path)
-    success = 0
-    tested = 0
-    try:
-        for password in candidates[:attempts_limit]:
-            headers = build_evasion_headers()
-            try:
-                response = httpx.post(
-                    target,
-                    data={"username": username, "password": password},
-                    headers=headers,
-                    timeout=8.0,
-                    follow_redirects=False,
-                )
-                body_lower = response.text.lower()
-                ok = response.status_code in {200, 302} and any(
-                    token in body_lower for token in ("dashboard", "logout", "welcome")
-                )
-                response_hint = body_lower[:200]
-                status_code = response.status_code
-            except Exception as exc:
-                ok = False
-                response_hint = str(exc)[:200]
-                status_code = 0
-            conn.execute(
-                """
-                INSERT INTO auth_test_results (
-                    engagement_id, target_url, form_data, attack_type, success, response_data
-                ) VALUES (?, ?, ?, 'brute-force', ?, ?)
-                """,
-                (
-                    int(engagement),
-                    target,
-                    f'{{"username":"{username}","password":"***"}}',
-                    1 if ok else 0,
-                    f'{{"status_code":{status_code},"hint":{json.dumps(response_hint)}}}',
-                ),
-            )
-            tested += 1
-            if ok:
-                success += 1
-            if cfg.auth_rate_limit > 0:
-                evasion_sleep()
-                time.sleep(max(0.0, 60.0 / float(cfg.auth_rate_limit)))
-        conn.commit()
-    finally:
-        conn.close()
-    console.print(f"[green]Auth brute attempts:[/green] {tested}")
-    console.print(f"[green]Auth brute successes:[/green] {success}")
-
-
-@auth_app.command("bypass")
-def auth_bypass(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    target: str = typer.Option(..., "--target"),
-    technique: str = typer.Option("sql-injection", "--technique"),
-    roe_id: Optional[str] = typer.Option(
-        None,
-        "--roe-id",
-        envvar="FORGE_ROE_ID",
-        help="ROE identifier required before direct live auth-bypass checks.",
-    ),
-    scope_manifest: Optional[str] = typer.Option(
-        None,
-        "--scope-manifest",
-        help="Scope manifest path/JSON for direct live auth-bypass gating.",
-    ),
-) -> None:
-    from forge.phase4.auth_bypass import run_bypass_assessment  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    _direct_cli_require_roe(roe_id, command_name="auth bypass")
-    db_path = cfg.engagement_db_path(engagement)
-    scope_values, url_prefixes = _direct_cli_load_scope_lists(
-        engagement_id=int(engagement),
-        db_path=db_path,
-        scope_manifest=scope_manifest,
-        target=target,
-        seed_type="url",
-    )
-    result = run_bypass_assessment(
-        engagement_id=int(engagement),
-        db_path=db_path,
-        target_url=target,
-        technique=technique,
-        scope_values=scope_values,
-        url_prefixes=url_prefixes,
-        require_scope=True,
-    )
-    if result.success:
-        console.print(
-            f"[bold yellow]Potential bypass detected[/bold yellow] "
-            f"{result.technique} @ {result.target_url}"
-        )
-    else:
-        console.print(f"[green]No bypass detected[/green] {result.technique} @ {result.target_url}")
-
-
-# Phase 5 Post commands extracted to forge/cli_post.py
-
-
-# Phase 6 Report commands extracted to forge/cli_report.py
-
-# ---------------------------------------------------------------------------
-# Utility commands
-# ---------------------------------------------------------------------------
-
-
-@app.command("clean")
-def clean(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    confirm: bool = typer.Option(False, "--confirm", help="Skip interactive confirmation prompt."),
-) -> None:
-    """
-    Securely wipe all on-disk artifacts for an engagement.
-
-    Shreds payload files, credential caches, exfiltration staging, and
-    removes the engagement DB. Irreversible.
-    """
-    if not confirm:
-        import questionary  # noqa: PLC0415
-
-        ok = questionary.confirm(
-            f"Permanently destroy all artifacts for engagement {engagement!r}?"
-        ).ask()
-        if not ok:
-            raise typer.Exit()
-
-    from forge.opsec.cleanup import run_clean  # noqa: PLC0415
-
-    run_clean(engagement_id=engagement)
-
-
-@app.command("kill-chain")
 def kill_chain(
     seed: str = typer.Argument(
         ...,
         help="ANY identifier: domain (target.example), IP (10.0.0.5), email "
-        "(user@x.com), phone (+15551234567), username (@handle), "
-        'company name ("Acme Corp"), or full name in quotes '
-        '("FORGE Operator").',
+             "(user@x.com), phone (+15551234567), username (@handle), "
+             "company name (\"Acme Corp\"), or full name in quotes "
+             "(\"FORGE Operator\").",
     ),
     related_seed: Optional[list[str]] = typer.Option(
         None,
@@ -1399,11 +302,9 @@ def kill_chain(
         help="Additional seed belonging to the same engagement. Repeat the flag for multi-seed runs.",
     ),
     engagement: Optional[str] = typer.Option(
-        None,
-        "--engagement",
-        "-e",
+        None, "--engagement", "-e",
         help="Engagement ID. Omit to auto-derive next available ID and "
-        "auto-create the engagement row with the seed as scope.",
+             "auto-create the engagement row with the seed as scope.",
     ),
     resume: bool = typer.Option(
         True,
@@ -1411,26 +312,22 @@ def kill_chain(
         help="Reuse persisted seed-run state and skip fan-outs already completed for this engagement.",
     ),
     max_iter: int = typer.Option(
-        15,
-        "--max-iter",
-        help="Spider iterations (default 15, max 20). Loop breaks early on stable snapshot.",
+        7, "--max-iter",
+        help="Spider iterations (default 7, max 10). Loop breaks early on stable snapshot.",
     ),
     tor: bool = typer.Option(
-        False,
-        "--tor",
+        False, "--tor",
         help="Route every subcommand through vendored Tor. Adds ~5s per module for bootstrap.",
     ),
     dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
+        False, "--dry-run",
         help="Log every intended action without executing outbound calls. Nothing hits the network.",
     ),
     attack_mode: bool = typer.Option(
-        True,
-        "--attack-mode/--no-attack-mode",
+        True, "--attack-mode/--no-attack-mode",
         help="ACTIVE recon (DEFAULT ON): port scan + credential validation "
-        "(SSH/SMB/RDP/FTP/HTTP). Pass --no-attack-mode for passive-only. "
-        "Requires --roe-id + --scope-manifest (or env vars) for any live run.",
+             "(SSH/SMB/RDP/FTP/HTTP). Pass --no-attack-mode for passive-only. "
+             "Requires --roe-id + --scope-manifest (or env vars) for any live run.",
     ),
     roe_id: Optional[str] = typer.Option(
         None,
@@ -1451,13 +348,11 @@ def kill_chain(
         ),
     ),
     skip_cloud: bool = typer.Option(
-        False,
-        "--skip-cloud",
+        False, "--skip-cloud",
         help="Skip cloud discovery (Supabase/Firebase/Amplify/GCP/Vercel/Netlify).",
     ),
     skip_keyscan: bool = typer.Option(
-        False,
-        "--skip-keyscan",
+        False, "--skip-keyscan",
         help="Skip GitHub keyscan (protects FORGE_GITHUB_TOKEN quota).",
     ),
     parallel_fanout: int = typer.Option(
@@ -1506,6 +401,7 @@ def kill_chain(
     ),
     include_offensive_prereqs: bool = typer.Option(
         False,
+        "--include-offensive",
         "--include-offensive-prereqs",
         help=(
             "Include manual-only evasion, brute-force, auth-bypass, and "
@@ -1528,111 +424,71 @@ def kill_chain(
     land in .forge_data/engagements/<engagement_id>.db plus a Phase 6
     Markdown report + Maltego graph workspace artifacts.
     """
-    from typer.models import ArgumentInfo as _ArgumentInfo, OptionInfo as _OptionInfo  # noqa: PLC0415
-
-    def _is_typer_default(value: object) -> bool:
-        return isinstance(value, (_OptionInfo, _ArgumentInfo))
-
-    def _normalize_roe_id(value: object) -> str:
-        return " ".join(str(value or "").strip().split())[:160]
-
-    related_seed = None if _is_typer_default(related_seed) else related_seed
-    engagement = None if _is_typer_default(engagement) else engagement
-    resume = True if _is_typer_default(resume) else bool(resume)
     try:
-        max_iter = normalize_kill_chain_max_iter(
-            None if _is_typer_default(max_iter) else max_iter,
-            default=7,
+        runtime_options = normalize_kill_chain_runtime_options(
+            related_seed=related_seed,
+            engagement=engagement,
+            resume=resume,
+            max_iter=max_iter,
+            tor=tor,
+            dry_run=dry_run,
+            attack_mode=attack_mode,
+            roe_id=roe_id,
+            scope_manifest=scope_manifest,
+            skip_cloud=skip_cloud,
+            skip_keyscan=skip_keyscan,
+            parallel_fanout=parallel_fanout,
+            report_provider=report_provider,
+            report_max_loops=report_max_loops,
+            auto_run_detected=auto_run_detected,
+            go_hard=go_hard,
+            include_offensive_prereqs=include_offensive_prereqs,
         )
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
-    tor = False if _is_typer_default(tor) else bool(tor)
-    dry_run = False if _is_typer_default(dry_run) else bool(dry_run)
-    attack_mode = bool(attack_mode)
-    roe_id = (
-        os.environ.get("FORGE_ROE_ID", "")
-        if _is_typer_default(roe_id) or roe_id is None
-        else str(roe_id)
-    )
-    roe_id = _normalize_roe_id(roe_id)
-    scope_manifest = (
-        os.environ.get("FORGE_SCOPE_MANIFEST", "")
-        if _is_typer_default(scope_manifest) or scope_manifest is None
-        else str(scope_manifest)
-    )
-    scope_manifest = str(scope_manifest or "").strip()
-    skip_cloud = False if _is_typer_default(skip_cloud) else bool(skip_cloud)
-    skip_keyscan = False if _is_typer_default(skip_keyscan) else bool(skip_keyscan)
-    parallel_fanout = 4 if _is_typer_default(parallel_fanout) else int(parallel_fanout)
-    report_provider = None if _is_typer_default(report_provider) else report_provider
-    report_max_loops = None if _is_typer_default(report_max_loops) else report_max_loops
-    auto_run_detected = True if _is_typer_default(auto_run_detected) else bool(auto_run_detected)
-    # `include_offensive_prereqs` auto-follows `attack_mode` when the operator
-    # didn't override it. With attack_mode default ON (with ROE/scope), Phase 3
-    # payload generation and Phase 5 post-exploitation prereqs become part of
-    # the runnable detected-prereq flow instead of manual hints. Passing
-    # `--no-attack-mode` or explicit `--include-offensive-prereqs=False` still
-    # suppresses them.
-    if _is_typer_default(include_offensive_prereqs):
-        include_offensive_prereqs = bool(attack_mode)
-    else:
-        include_offensive_prereqs = bool(include_offensive_prereqs)
-
-    # `go_hard` follows the same Typer default normalization so callers
-    # invoking `kill_chain()` directly (tests, other command paths) get
-    # a plain bool instead of a `typer.OptionInfo`.
-    go_hard = False if _is_typer_default(go_hard) else bool(go_hard)
-
-    # ─── --go-hard: maximum aggression overrides ───────────────────────
-    if go_hard:
-        max_iter = 20
-        parallel_fanout = 8
-        auto_run_detected = True
-        os.environ.setdefault("FORGE_COMMONCRAWL_INDEX_LIMIT", "5")
-        os.environ.setdefault("FORGE_COMMONCRAWL_RESULTS_PER_INDEX", "5000")
-        os.environ.setdefault("FORGE_IDENTITY_LOOKUP_MAX_WORKERS", "3")
 
     # ─── Compatibility aliases for internal loop code (was 14 flags) ───
     # The kill-chain body still references the pre-consolidation names.
     # Rather than rewrite ~30 references, map them here once.
-    use_tor = tor
-    max_iterations = max_iter
-    dry_run_all = dry_run
-    dry_run_keyscan = dry_run  # dry_run supersedes both dry-run flags
-    active_recon = attack_mode
-    credential_validate = attack_mode
-    resume_enabled = resume
-    no_playwright = False  # Playwright is always on now
-    wayback_full = True  # Wayback is always full-paginated
-    report_provider = str(report_provider or "").strip() or None
-    if report_max_loops is not None and int(report_max_loops) < 0:
-        raise typer.BadParameter("--report-max-loops must be zero or greater.")
-    live_launch = not dry_run_all
-    require_scope_manifest = live_launch
-    if live_launch and not roe_id:
-        raise typer.BadParameter(
-            "live kill-chain execution requires --roe-id or FORGE_ROE_ID. "
-            "Use --dry-run to preview without live execution."
+    related_seed = runtime_options.related_seed
+    engagement = runtime_options.engagement
+    resume = runtime_options.resume
+    max_iter = runtime_options.max_iter
+    tor = runtime_options.tor
+    dry_run = runtime_options.dry_run
+    attack_mode = runtime_options.attack_mode
+    roe_id = runtime_options.roe_id
+    scope_manifest = runtime_options.scope_manifest
+    skip_cloud = runtime_options.skip_cloud
+    skip_keyscan = runtime_options.skip_keyscan
+    parallel_fanout = runtime_options.parallel_fanout
+    report_provider = runtime_options.report_provider
+    report_max_loops = runtime_options.report_max_loops
+    auto_run_detected = runtime_options.auto_run_detected
+    go_hard = runtime_options.go_hard
+    include_offensive_prereqs = runtime_options.include_offensive_prereqs
+    use_tor = runtime_options.use_tor
+    max_iterations = runtime_options.max_iterations
+    dry_run_all = runtime_options.dry_run_all
+    dry_run_keyscan = runtime_options.dry_run_keyscan
+    active_recon = runtime_options.active_recon
+    credential_validate = runtime_options.credential_validate
+    resume_enabled = runtime_options.resume_enabled
+    no_playwright = runtime_options.no_playwright
+    wayback_full = runtime_options.wayback_full
+    parallel_workers = runtime_options.parallel_workers
+    synthesis_depth_limit = runtime_options.synthesis_depth_limit
+    pending_validation_batch_limit = runtime_options.pending_validation_batch_limit
+    live_launch = runtime_options.live_launch
+    require_scope_manifest = runtime_options.require_scope_manifest
+    try:
+        scope_manifest_metadata = load_kill_chain_scope_manifest_metadata(
+            runtime_options,
+            load_scope_manifest=_load_scope_manifest,
+            reject_broad_scope_manifest_for_live=_reject_broad_scope_manifest_for_live,
         )
-    if require_scope_manifest and not scope_manifest:
-        raise typer.BadParameter(
-            "live kill-chain execution requires --scope-manifest or "
-            "FORGE_SCOPE_MANIFEST so live execution is bounded to explicit authorization. "
-            "Use --dry-run to preview without live execution."
-        )
-    scope_manifest_metadata: dict[str, Any] | None = None
-    if scope_manifest:
-        try:
-            scope_manifest_metadata = _load_scope_manifest(scope_manifest)
-            if live_launch:
-                _reject_broad_scope_manifest_for_live(scope_manifest_metadata)
-            manifest_roe_id = str(scope_manifest_metadata.get("roe_id") or "").strip()
-            if manifest_roe_id and roe_id and manifest_roe_id != roe_id:
-                raise ValueError(
-                    f"scope manifest roe_id {manifest_roe_id!r} does not match --roe-id {roe_id!r}"
-                )
-        except Exception as exc:  # noqa: BLE001
-            raise typer.BadParameter(f"invalid --scope-manifest: {exc}") from exc
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     # ─── Attack-mode auto-fire env vars ─────────────────────────────────
     # When attack_mode is ON and we have a live launch with valid ROE +
     # scope-manifest, prime the downstream automation bypasses so:
@@ -1642,187 +498,25 @@ def kill_chain(
     # `FORGE_SAFE_MODE=1` still wins — safe-mode overrides everything.
     # Scope gates (`assert_in_scope`, `_direct_cli_load_scope_lists`) are NOT
     # bypassed; every module still validates targets against the manifest.
-    if attack_mode and live_launch and roe_id and scope_manifest:
-        os.environ.setdefault("FORGE_ATTACK_MODE_AUTO", "1")
-        os.environ.setdefault("FORGE_KEYSCAN_ASSUME_YES", "1")
-        os.environ.setdefault("FORGE_POST_LATERAL_ASSUME_YES", "1")
-    try:
-        parallel_workers = max(1, min(8, int(parallel_fanout or 4)))
-    except (TypeError, ValueError):
-        parallel_workers = 2
+    prime_kill_chain_attack_mode_env(runtime_options)
     module_timeout_seconds = _module_subprocess_timeout_seconds()
     identity_lookup_workers = _identity_lookup_max_workers()
     validation_workers = _validation_max_workers()
     artifact_processor_worker_cap = _artifact_processor_max_workers()
     artifact_processor_workers = min(parallel_workers, artifact_processor_worker_cap)
-    try:
-        synthesis_depth_limit = normalize_kill_chain_synthesis_depth(
-            os.environ.get("FORGE_KILL_CHAIN_SYNTHESIS_DEPTH"),
-            default=3,
-        )
-        pending_validation_batch_limit = normalize_kill_chain_validation_batch_limit(
-            os.environ.get("FORGE_KILL_CHAIN_VALIDATION_BATCH_LIMIT"),
-            default=16,
-        )
-    except ValueError as exc:
-        raise typer.BadParameter(str(exc)) from exc
     import sys as _sys_kc  # noqa: PLC0415
 
     from forge.config import ForgeConfig  # noqa: PLC0415
     from pathlib import Path as _Path  # noqa: PLC0415
     import re as _re  # noqa: PLC0415
     import socket as _socket  # noqa: PLC0415
-    import ipaddress as _ipaddress  # noqa: PLC0415
-
-    _COMPANY_SUFFIXES = {
-        "co",
-        "company",
-        "corp",
-        "corporation",
-        "group",
-        "holdings",
-        "inc",
-        "incorporated",
-        "llc",
-        "limited",
-        "ltd",
-        "plc",
-        "pte",
-        "pty",
-    }
-    _SOCIAL_PLATFORM_DOMAINS = (
-        "about.me",
-        "bitbucket.org",
-        "bsky.app",
-        "bsky.social",
-        "dev.to",
-        "facebook.com",
-        "threads.com",
-        "threads.net",
-        "github.com",
-        "gitlab.com",
-        "gravatar.com",
-        "instagram.com",
-        "keybase.io",
-        "linkedin.com",
-        "medium.com",
-        "news.ycombinator.com",
-        "reddit.com",
-        "t.me",
-        "telegram.me",
-        "twitter.com",
-        "x.com",
-        "youtube.com",
-    )
-    _MASTODON_INSTANCE_DOMAINS = (
-        "fosstodon.org",
-        "hachyderm.io",
-        "infosec.exchange",
-        "mas.to",
-        "mastodon.cloud",
-        "mastodon.online",
-        "mastodon.social",
-        "mstdn.party",
-        "mstdn.social",
-    )
-    _MANAGED_CLOUD_PROVIDER_DOMAINS = (
-        "amplifyapp.com",
-        "amazonaws.com",
-        "appspot.com",
-        "blob.core.windows.net",
-        "cloudfunctions.net",
-        "digitaloceanspaces.com",
-        "dfs.core.windows.net",
-        "firebaseapp.com",
-        "firebasestorage.googleapis.com",
-        "firebaseio.com",
-        "github.io",
-        "gitlab.io",
-        "netlify.com",
-        "netlify.app",
-        "pages.dev",
-        "r2.cloudflarestorage.com",
-        "r2.dev",
-        "storage.cloud.google.com",
-        "storage.googleapis.com",
-        "supabase.co",
-        "vercel.app",
-        "web.core.windows.net",
-        "web.app",
-        "workers.dev",
-    )
-    _AWS_S3_URL_PATTERNS = (
-        _re.compile(
-            r"https?://([a-z0-9.\-]+)\.s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com(?:/|$)",
-            _re.IGNORECASE,
-        ),
-        _re.compile(
-            r"https?://s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com/([a-z0-9.\-]{3,63})(?:/|$)",
-            _re.IGNORECASE,
-        ),
-        _re.compile(
-            r"https?://([a-z0-9.\-]+)\.s3-website(?:[.-][a-z0-9-]+)?\.amazonaws\.com(?:/|$)",
-            _re.IGNORECASE,
-        ),
-        _re.compile(
-            r"https?://s3-website(?:[.-][a-z0-9-]+)?\.amazonaws\.com/([a-z0-9.\-]{3,63})(?:/|$)",
-            _re.IGNORECASE,
-        ),
-    )
-    _DO_SPACES_URL_PATTERNS = (
-        _re.compile(
-            r"https?://([a-z0-9.\-]{3,63})\.([a-z0-9\-]+)\.digitaloceanspaces\.com(?:/|$)",
-            _re.IGNORECASE,
-        ),
-        _re.compile(
-            r"https?://([a-z0-9\-]+)\.digitaloceanspaces\.com/([a-z0-9.\-]{3,63})(?:/|$)",
-            _re.IGNORECASE,
-        ),
-    )
-    _GCS_URL_PATTERNS = (
-        _re.compile(
-            r"https?://storage\.googleapis\.com/([a-zA-Z0-9._\-]{3,222})(?:/|$)",
-            _re.IGNORECASE,
-        ),
-        _re.compile(
-            r"https?://([a-zA-Z0-9._\-]{3,222})\.storage\.googleapis\.com(?:/|$)",
-            _re.IGNORECASE,
-        ),
-        _re.compile(
-            r"https?://storage\.cloud\.google\.com/([a-zA-Z0-9._\-]{3,222})(?:/|$)",
-            _re.IGNORECASE,
-        ),
-        _re.compile(
-            r"https?://firebasestorage\.googleapis\.com/(?:v0/)?b/([a-zA-Z0-9._\-]{3,222})/o(?:[/?#]|$)",
-            _re.IGNORECASE,
-        ),
-    )
-    _AZURE_BLOB_URL_PATTERNS = (
-        _re.compile(
-            r"https?://([a-z0-9\-]{3,24})\.blob\.core\.windows\.net/([^/?#]+)",
-            _re.IGNORECASE,
-        ),
-    )
-    _AZURE_STATIC_WEBSITE_HOST_RE = _re.compile(
-        r"^([a-z0-9\-]{3,24})(?:\.[a-z0-9\-]+)?\.web\.core\.windows\.net$",
-        _re.IGNORECASE,
+    from forge.engagement_orchestrator import (  # noqa: PLC0415
+        _canonical_cloud_ref_value,
+        _hostname_is_cloud_ref,
+        _parse_literal_cloud_ref,
     )
 
     # ─── Classify the seed and derive routing context ─────────────────
-    def _looks_like_company_name(value: str) -> bool:
-        tokens = [token.strip(".,") for token in value.strip().split() if token.strip(".,")]
-        if len(tokens) < 2:
-            return False
-        return any(token.lower() in _COMPANY_SUFFIXES for token in tokens)
-
-    def _looks_like_person_name(value: str) -> bool:
-        tokens = [token for token in value.strip().split() if token]
-        if len(tokens) < 2 or len(tokens) > 4:
-            return False
-        if any(token.lower().strip(".,") in _COMPANY_SUFFIXES for token in tokens):
-            return False
-        return all(_re.match(r"^[A-Za-z][A-Za-z\-']*$", token) for token in tokens)
-
     def _classify_seed(value: str) -> str:
         v = value.strip()
         if _re.match(r"^\+\d{6,15}$", v):
@@ -1838,74 +532,28 @@ def kill_chain(
         if parsed.scheme in {"http", "https"} and parsed.netloc:
             if _is_mobile_bundle_url(v):
                 return "apk_url"
+            if _hostname_is_cloud_ref(parsed.netloc):
+                return "cloud_ref"
             return "url"
         if _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", v):
             return "email"
-        if _re.match(
-            r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$", v.lower()
-        ):
+        if _canonical_cloud_ref_value(v):
+            return "cloud_ref"
+        cloud_ref_host = v.lower()
+        if cloud_ref_host.startswith("*."):
+            cloud_ref_host = cloud_ref_host[2:]
+        if _hostname_is_cloud_ref(cloud_ref_host):
+            return "cloud_ref"
+        if _re.match(r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$",
+                     v.lower()):
             return "domain"
         if _looks_like_company_name(v):
             return "company"
         if _looks_like_person_name(v):
             return "name"
         raise typer.BadParameter(
-            f"cannot classify seed {value!r}. Give a domain, URL, IPv4/IPv6, email, "
-            "phone (+NNN...), username (@handle), company name, or full name in quotes."
-        )
-
-    def _normalize_root_domain(host: str) -> str:
-        labels = [part for part in host.lower().strip(".").split(".") if part]
-        if len(labels) >= 2:
-            return ".".join(labels[-2:])
-        return host.lower().strip(".")
-
-    def _host_context_json(
-        discovery: str,
-        *,
-        synthetic_ip: bool = False,
-        **extra: Any,
-    ) -> str:
-        payload: dict[str, Any] = {"discovery": discovery}
-        if synthetic_ip:
-            payload["synthetic_ip"] = True
-        payload.update(extra)
-        return json.dumps(payload)
-
-    def _is_placeholder_host_ip(value: str) -> bool:
-        text = str(value or "").strip()
-        if not text or text in {"0.0.0.0", "::", "::0"}:
-            return True
-        try:
-            parsed_ip = _ipaddress.ip_address(text)
-        except ValueError:
-            return False
-        if parsed_ip.is_unspecified:
-            return True
-        if parsed_ip.version == 4 and parsed_ip in _ipaddress.ip_network("198.18.0.0/15"):
-            return True
-        return False
-
-    def _excluded_host_for_seed_routing(hostname: str) -> bool:
-        host = hostname.strip().lower().lstrip(".")
-        if host.startswith("www."):
-            host = host[4:]
-        if any(
-            host == domain or host.endswith(f".{domain}") for domain in _SOCIAL_PLATFORM_DOMAINS
-        ):
-            return True
-        if (
-            any(
-                host == domain or host.endswith(f".{domain}")
-                for domain in _MASTODON_INSTANCE_DOMAINS
-            )
-            or host.startswith("mastodon.")
-            or host.startswith("mstdn.")
-        ):
-            return True
-        return any(
-            host == domain or host.endswith(f".{domain}")
-            for domain in _MANAGED_CLOUD_PROVIDER_DOMAINS
+            f"cannot classify seed {value!r}. Give a domain, URL, cloud ref, IPv4/IPv6, "
+            "email, phone (+NNN...), username (@handle), company name, or full name in quotes."
         )
 
     initial_seed_values: list[str] = []
@@ -1914,97 +562,13 @@ def kill_chain(
         if value:
             initial_seed_values.append(value)
 
-    def _derive_hostname_for_seed(value: str, kind: str, *, allow_email_domain: bool = True) -> str:
-        if kind == "domain":
-            hostname = value.lower().strip().strip(".")
-        elif kind == "subdomain":
-            hostname = value.lower().strip().strip(".")
-        elif kind in {"url", "apk_url"}:
-            parsed = urlparse(value)
-            hostname = str(parsed.hostname or "").strip().lower().strip(".")
-        elif kind == "email" and allow_email_domain:
-            hostname = value.split("@", 1)[1].lower().strip().strip(".")
-        else:
-            hostname = ""
-        if not hostname or "." not in hostname or _excluded_host_for_seed_routing(hostname):
-            return ""
-        return hostname
-
-    def _derive_domain_for_seed(value: str, kind: str, *, allow_email_domain: bool = True) -> str:
-        hostname = _derive_hostname_for_seed(
-            value,
-            kind,
-            allow_email_domain=allow_email_domain,
-        )
-        if hostname:
-            return _normalize_root_domain(hostname)
-        if kind in {"ipv4", "ipv6"}:
-            try:
-                hostname, _a, _l = _socket.gethostbyaddr(value)
-                return _normalize_root_domain(hostname) if "." in hostname else ""
-            except (_socket.herror, _socket.gaierror, OSError):
-                return ""
-        return ""
-
     def _prepare_classified_seed(seed_value: str) -> dict[str, str]:
-        value = str(seed_value or "").strip()
-        seed_type_value = _classify_seed(value)
-        return {
-            "value": _canonical_initial_seed_value(value, seed_type_value),
-            "seed_type": seed_type_value,
-        }
-
-    def _canonical_initial_seed_value(seed_value: str, seed_type_value: str) -> str:
-        value = str(seed_value or "").strip()
-        if seed_type_value == "email":
-            return value.lower()
-        if seed_type_value == "domain":
-            return value.lower().strip(".")
-        if seed_type_value in {"ipv4", "ipv6"}:
-            try:
-                return str(ipaddress.ip_address(value))
-            except ValueError:
-                return value.lower()
-        if seed_type_value in {"url", "apk_url"}:
-            return _canonical_http_url_value(value) or value
-        return value
-
-    def _initial_seed_dedupe_key(seed_entry: dict[str, str]) -> tuple[str, str]:
-        entry_type = str(seed_entry.get("seed_type") or "").strip()
-        entry_value = str(seed_entry.get("value") or "").strip()
-        if entry_type == "username":
-            return entry_type, entry_value.lower().lstrip("@")
-        if entry_type in {"name", "company"}:
-            return entry_type, " ".join(entry_value.casefold().split())
-        return entry_type, entry_value.lower()
-
-    def _dedupe_initial_seed_entries(seed_entries: list[dict[str, str]]) -> list[dict[str, str]]:
-        deduped: list[dict[str, str]] = []
-        seen: set[tuple[str, str]] = set()
-        for seed_entry in seed_entries:
-            key = _initial_seed_dedupe_key(seed_entry)
-            if not key[1] or key in seen:
-                continue
-            seen.add(key)
-            deduped.append(seed_entry)
-        return deduped
-
-    def _prepare_initial_seed_route(seed_entry: dict[str, str]) -> dict[str, Any]:
-        seed_value = str(seed_entry["value"])
-        entry_type = str(seed_entry["seed_type"])
-        return {
-            "value": seed_value,
-            "seed_type": entry_type,
-            "scope_values": [seed_value, f"*.{seed_value}"]
-            if entry_type == "domain"
-            else [seed_value],
-            "derived_domain": _derive_domain_for_seed(seed_value, entry_type),
-            "username_seed": seed_value.lstrip("@") if entry_type == "username" else "",
-            "phone_seed": seed_value if entry_type == "phone" else "",
-            "name_seed": seed_value if entry_type == "name" else "",
-            "company_seed": seed_value if entry_type == "company" else "",
-            "ip_seed": seed_value.strip().lower() if entry_type in {"ipv4", "ipv6"} else "",
-        }
+        return _prepare_classified_seed_entry(
+            seed_value,
+            classify_seed_value=_classify_seed,
+            canonical_http_url_value=_canonical_http_url_value,
+            canonical_cloud_ref_value=_canonical_cloud_ref_value,
+        )
 
     classified_seed_candidates = _run_inprocess_batch(
         initial_seed_values,
@@ -2042,203 +606,17 @@ def kill_chain(
                 f"{denied_preview}. Update the manifest or use --dry-run."
             )
 
-    def _extract_cloud_asset_seed_refs(value: str) -> list[tuple[str, str]]:
-        parsed = urlparse(str(value or "").strip())
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            return []
-        url = str(value or "").strip()
-        hostname = str(parsed.hostname or "").strip().lower().strip(".")
-        refs: list[tuple[str, str]] = []
-        seen: set[tuple[str, str]] = set()
-
-        def _append(asset_type: str, identifier: str) -> None:
-            key = (str(asset_type or "").strip().lower(), str(identifier or "").strip().lower())
-            if key[0] and key[1] and key not in seen:
-                seen.add(key)
-                refs.append(key)
-
-        if hostname.endswith(".supabase.co"):
-            project_ref = hostname.split(".supabase.co", 1)[0].strip(".")
-            _append("supabase", project_ref)
-        for firebase_suffix in (".firebaseio.com", ".firebaseapp.com", ".web.app"):
-            if hostname.endswith(firebase_suffix):
-                project_ref = hostname.split(firebase_suffix, 1)[0].strip(".")
-                _append("firebase", project_ref)
-                break
-        for asset_type, pattern in (
-            ("amplify", _re.compile(r"^([a-z0-9\-]+)\.amplifyapp\.com$", _re.IGNORECASE)),
-            (
-                "gcp_appspot",
-                _re.compile(r"^([a-z0-9\-]+)(?:\.[a-z0-9\-]+)?\.appspot\.com$", _re.IGNORECASE),
-            ),
-            (
-                "gcp_cloudfunctions",
-                _re.compile(r"^[a-z0-9\-]+-([a-z0-9\-]+)\.cloudfunctions\.net$", _re.IGNORECASE),
-            ),
-            ("cloudflare_pages", _re.compile(r"^([a-z0-9\-]+)\.pages\.dev$", _re.IGNORECASE)),
-            (
-                "cloudflare_worker",
-                _re.compile(
-                    r"^[a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)+\.workers\.dev$",
-                    _re.IGNORECASE,
-                ),
-            ),
-            (
-                "cloudflare_r2",
-                _re.compile(
-                    r"^[a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)?\.r2\.(?:dev|cloudflarestorage\.com)$",
-                    _re.IGNORECASE,
-                ),
-            ),
-            ("github_pages", _re.compile(r"^[a-z0-9][a-z0-9\-]*\.github\.io$", _re.IGNORECASE)),
-            (
-                "gitlab_pages",
-                _re.compile(
-                    r"^[a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)*\.gitlab\.io$",
-                    _re.IGNORECASE,
-                ),
-            ),
-            ("netlify", _re.compile(r"^([a-z0-9\-]+)\.netlify\.(?:app|com)$", _re.IGNORECASE)),
-            ("vercel", _re.compile(r"^([a-z0-9\-]+)\.vercel\.app$", _re.IGNORECASE)),
-        ):
-            match = pattern.fullmatch(hostname)
-            if not match:
-                continue
-            project_ref = (
-                hostname
-                if asset_type
-                in {"cloudflare_worker", "cloudflare_r2", "github_pages", "gitlab_pages"}
-                else str(match.group(1) or "").strip(".")
-            )
-            if asset_type == "gcp_cloudfunctions":
-                path = str(parsed.path or "").rstrip("/")
-                _append(asset_type, f"{parsed.scheme}://{hostname}{path}")
-            else:
-                _append(asset_type, project_ref)
-            break
-        for pattern in _AWS_S3_URL_PATTERNS:
-            match = pattern.search(url)
-            if match:
-                _append("aws_s3", match.group(1))
-                break
-        for pattern in _DO_SPACES_URL_PATTERNS:
-            match = pattern.search(url)
-            if not match:
-                continue
-            if pattern is _DO_SPACES_URL_PATTERNS[0]:
-                bucket, region = match.group(1), match.group(2)
-            else:
-                region, bucket = match.group(1), match.group(2)
-            _append("do_spaces", f"{region}/{bucket}")
-            break
-        for pattern in _GCS_URL_PATTERNS:
-            match = pattern.search(url)
-            if match:
-                _append("gcs", match.group(1))
-                break
-        static_site_match = _AZURE_STATIC_WEBSITE_HOST_RE.fullmatch(hostname)
-        if static_site_match:
-            _append("azure_blob", f"{static_site_match.group(1)}/$web")
-        for pattern in _AZURE_BLOB_URL_PATTERNS:
-            match = pattern.search(url)
-            if match:
-                _append("azure_blob", f"{match.group(1)}/{match.group(2)}")
-                break
-        return refs
-
     def _promote_cloud_asset_seed_refs(con: Any, seed_value: str) -> None:
-        for asset_type, identifier in _extract_cloud_asset_seed_refs(seed_value):
-            try:
-                con.execute(
-                    """
-                    INSERT OR IGNORE INTO cloud_assets
-                        (engagement_id, asset_type, identifier, provider_identifier, source)
-                    VALUES (?, ?, ?, ?, 'kill_chain_seed_url')
-                    """,
-                    (engagement_id, asset_type, identifier, identifier),
-                )
-            except Exception:  # noqa: BLE001
-                pass
+        _promote_cloud_asset_seed_refs_for_engagement(
+            con,
+            engagement_id,
+            seed_value,
+            extract_cloud_asset_seed_refs=_extract_cloud_asset_seed_refs,
+            parse_literal_cloud_ref=_parse_literal_cloud_ref,
+        )
 
     def _promote_pending_cloud_targets(con: Any, targets: Iterable[dict[str, Any]]) -> int:
-        inserted = 0
-        for target in targets:
-            asset_type = str(target.get("service") or "").strip().lower()
-            provider_identifier = str(target.get("ref") or "").strip()
-            identifier = provider_identifier.lower()
-            if not asset_type or not identifier:
-                continue
-            try:
-                cursor = con.execute(
-                    """
-                    INSERT INTO cloud_assets
-                        (engagement_id, asset_type, identifier, provider_identifier, source)
-                    VALUES (?, ?, ?, ?, 'kill_chain_cloud_ref')
-                    ON CONFLICT(engagement_id, asset_type, identifier) DO UPDATE SET
-                        provider_identifier = CASE
-                            WHEN cloud_assets.provider_identifier IS NULL
-                              OR TRIM(cloud_assets.provider_identifier) = ''
-                              OR cloud_assets.provider_identifier = cloud_assets.identifier
-                            THEN excluded.provider_identifier
-                            ELSE cloud_assets.provider_identifier
-                        END
-                    """,
-                    (engagement_id, asset_type, identifier, provider_identifier),
-                )
-                inserted += int(getattr(cursor, "rowcount", 0) or 0)
-            except Exception:  # noqa: BLE001
-                continue
-        return inserted
-
-    def _lookup_engagement_seed_id(con: Any, seed_value: str, seed_type: str) -> int | None:
-        try:
-            row = con.execute(
-                """
-                SELECT id
-                FROM engagement_seeds
-                WHERE engagement_id=? AND seed_value=? AND seed_type=?
-                LIMIT 1
-                """,
-                (engagement_id, seed_value, seed_type),
-            ).fetchone()
-        except Exception:  # noqa: BLE001
-            return None
-        if not row:
-            return None
-        try:
-            return int(row[0])
-        except (TypeError, ValueError, IndexError):
-            return None
-
-    def _insert_seed_relation(
-        con: Any,
-        source_seed_id: int | None,
-        target_seed_id: int | None,
-        *,
-        relation_type: str,
-        confidence: float,
-        evidence: dict[str, object],
-    ) -> None:
-        if source_seed_id is None or target_seed_id is None or source_seed_id == target_seed_id:
-            return
-        try:
-            con.execute(
-                """
-                INSERT OR IGNORE INTO seed_relations
-                    (engagement_id, source_seed_id, target_seed_id, relation_type, confidence, evidence_json)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    engagement_id,
-                    source_seed_id,
-                    target_seed_id,
-                    relation_type,
-                    float(confidence),
-                    json.dumps(evidence, sort_keys=True),
-                ),
-            )
-        except Exception:  # noqa: BLE001
-            return
+        return _promote_pending_cloud_targets_for_engagement(con, engagement_id, targets)
 
     def _promote_social_url_seed_refs(
         con: Any,
@@ -2252,156 +630,32 @@ def kill_chain(
             _classify_seed_value as _classify_engagement_seed_value,
         )
 
-        profile_stub = {"profile_url": seed_value}
-        platform = _EngagementSynthesisEngine._social_profile_platform_hint(profile_stub)
-        if not platform:
-            return
-        url_seed_id = _lookup_engagement_seed_id(con, seed_value, entry_type)
-        if url_seed_id is None:
-            return
-
-        handle = _EngagementSynthesisEngine._extract_social_profile_handle_from_url(seed_value)
-        if handle:
-            _upsert_engagement_seed(
-                con,
-                handle,
-                "username",
-                source="cross_reference",
-                status="pending",
-                depth=1,
-                confidence=0.78,
-            )
-            username_seed_id = _lookup_engagement_seed_id(con, handle, "username")
-            _insert_seed_relation(
-                con,
-                url_seed_id,
-                username_seed_id,
-                relation_type="derived_from",
-                confidence=0.78,
-                evidence={"rule": evidence_rule, "platform": platform},
-            )
-
-            domain_handle = str(handle or "").strip().lower()
-            if platform == "bluesky" and _classify_engagement_seed_value(domain_handle) == "domain":
-                _upsert_engagement_seed(
-                    con,
-                    domain_handle,
-                    "domain",
-                    source="cross_reference",
-                    status="pending",
-                    depth=1,
-                    confidence=0.82,
-                )
-                domain_seed_id = _lookup_engagement_seed_id(con, domain_handle, "domain")
-                _insert_seed_relation(
-                    con,
-                    url_seed_id,
-                    domain_seed_id,
-                    relation_type="derived_from",
-                    confidence=0.82,
-                    evidence={
-                        "rule": "social_profile_domain_handle",
-                        "platform": platform,
-                        "source_rule": evidence_rule,
-                    },
-                )
-
-        company_name = _EngagementSynthesisEngine._social_profile_company_name(
-            profile_stub,
-            source_label="operator_seed_url",
-            platform=platform,
+        _promote_social_url_seed_refs_for_engagement(
+            con,
+            engagement_id,
+            seed_value,
+            entry_type,
+            upsert_engagement_seed=_upsert_engagement_seed,
+            platform_hint=_EngagementSynthesisEngine._social_profile_platform_hint,
+            extract_handle=_EngagementSynthesisEngine._extract_social_profile_handle_from_url,
+            extract_company_name=_EngagementSynthesisEngine._social_profile_company_name,
+            extract_profile_name=_EngagementSynthesisEngine._social_profile_name,
+            classify_seed_value=_classify_engagement_seed_value,
+            evidence_rule=evidence_rule,
         )
-        if company_name:
-            _upsert_engagement_seed(
-                con,
-                company_name,
-                "company",
-                source="cross_reference",
-                status="pending",
-                depth=1,
-                confidence=0.76,
-            )
-            company_seed_id = _lookup_engagement_seed_id(con, company_name, "company")
-            _insert_seed_relation(
-                con,
-                url_seed_id,
-                company_seed_id,
-                relation_type="derived_from",
-                confidence=0.76,
-                evidence={"rule": evidence_rule, "platform": platform},
-            )
-
-        full_name = _EngagementSynthesisEngine._social_profile_name(profile_stub)
-        if full_name:
-            _upsert_engagement_seed(
-                con,
-                full_name,
-                "name",
-                source="cross_reference",
-                status="pending",
-                depth=1,
-                confidence=0.74,
-            )
-            name_seed_id = _lookup_engagement_seed_id(con, full_name, "name")
-            _insert_seed_relation(
-                con,
-                url_seed_id,
-                name_seed_id,
-                relation_type="derived_from",
-                confidence=0.74,
-                evidence={"rule": evidence_rule, "platform": platform},
-            )
 
     def _promote_email_localpart_seed_refs(
         con: Any,
         email_value: str,
         usernames: Iterable[str],
     ) -> None:
-        normalized_email = str(email_value or "").strip().lower()
-        if not normalized_email or "@" not in normalized_email:
-            return
-        handles = [
-            str(username or "").strip() for username in usernames if str(username or "").strip()
-        ]
-        if not handles:
-            return
-
-        email_seed_id = _lookup_engagement_seed_id(con, normalized_email, "email")
-        if email_seed_id is None:
-            _upsert_engagement_seed(
-                con,
-                normalized_email,
-                "email",
-                source="discovered",
-                status="pending",
-                depth=1,
-                confidence=0.9,
-            )
-            email_seed_id = _lookup_engagement_seed_id(con, normalized_email, "email")
-        if email_seed_id is None:
-            return
-
-        for handle in handles:
-            username_seed_id = _lookup_engagement_seed_id(con, handle, "username")
-            if username_seed_id is None:
-                _upsert_engagement_seed(
-                    con,
-                    handle,
-                    "username",
-                    source="cross_reference",
-                    status="pending",
-                    depth=2,
-                    confidence=0.72,
-                )
-                username_seed_id = _lookup_engagement_seed_id(con, handle, "username")
-            _insert_seed_relation(
-                con,
-                email_seed_id,
-                username_seed_id,
-                relation_type="derived_from",
-                confidence=0.72,
-                evidence={"rule": "email_localpart_username"},
-            )
+        _promote_email_localpart_seed_refs_for_engagement(
+            con,
+            engagement_id,
+            email_value,
+            usernames,
+            upsert_engagement_seed=_upsert_engagement_seed,
+        )
 
     # ─── Auto-derive engagement ID if omitted ────────────────────────
     # Uses the same monotonic sequence as the web API/dashboard create path.
@@ -2419,23 +673,19 @@ def kill_chain(
     # Ensure the engagement row exists (create if missing so downstream
     # scope_gate / audit_log FKs don't fail on a fresh ID).
     import sqlite3 as _sq_init  # noqa: PLC0415
-
     _db_path_init = cfg.engagement_db_path(engagement)
     _fresh = not _db_path_init.exists()
     if _fresh:
         from forge.db.schema import apply_schema  # noqa: PLC0415
-
         _con_init = _sq_init.connect(str(_db_path_init))
         try:
             apply_schema(_con_init)
             try:
                 from forge.db.migrations import run_migrations  # noqa: PLC0415
-
                 run_migrations(_con_init)
             except Exception:  # noqa: BLE001
                 pass
             import json as _json_init  # noqa: PLC0415
-
             _scope_list: list[str] = []
             for prepared_seed in prepared_initial_seed_routes:
                 for scope_value in prepared_seed["scope_values"]:
@@ -2446,19 +696,16 @@ def kill_chain(
                     "INSERT OR IGNORE INTO engagements "
                     "(id, name, scope_json, status, operator) "
                     "VALUES (?, ?, ?, 'ACTIVE', ?)",
-                    (
-                        int(engagement),
-                        f"auto:{seed_type}:{seed[:30]}",
-                        _json_init.dumps(_scope_list),
-                        cfg.operator,
-                    ),
+                    (int(engagement), f"auto:{seed_type}:{seed[:30]}",
+                     _json_init.dumps(_scope_list), cfg.operator),
                 )
                 _con_init.commit()
             except (_sq_init.OperationalError, _sq_init.IntegrityError):
                 pass
         finally:
             _con_init.close()
-        console.print(f"[dim]Auto-created engagement {engagement} (seed_type={seed_type})[/dim]")
+        console.print(f"[dim]Auto-created engagement {engagement} "
+                      f"(seed_type={seed_type})[/dim]")
     # Derive the "domain" that legacy fan-outs (subdomain enum, DNS,
     # Wayback, RDAP, harvest, crawler) expect. For non-domain seeds we
     # skip those fan-outs and route to specialised modules instead.
@@ -2487,6 +734,12 @@ def kill_chain(
             _run_migrations(_con_schema)
         finally:
             _con_schema.close()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from forge.db.control import index_engagement_db_file as _index_engagement_db_file  # noqa: PLC0415
+
+        _index_engagement_db_file(cfg.data_dir, db_path, engagement_id=engagement_id)
     except Exception:  # noqa: BLE001
         pass
 
@@ -2537,28 +790,103 @@ def kill_chain(
     except Exception:  # noqa: BLE001
         pass
 
+    root_scope_denied_cache: set[str] = set()
+
+    def _record_root_domain_scope_denied(root_domain: str, reason: str) -> None:
+        normalized_root = _normalize_root_domain(str(root_domain or "").strip().lower().strip("."))
+        if not normalized_root or normalized_root in root_scope_denied_cache:
+            return
+        root_scope_denied_cache.add(normalized_root)
+        _cli_audit(
+            db_path,
+            engagement_id,
+            "scope_gate",
+            "kill_chain",
+            "root_domain_scope_denied",
+            target=normalized_root,
+            result=(
+                f"root_domain={normalized_root} "
+                f"reason={reason} "
+                f"scope_manifest={str(scope_manifest_metadata.get('source') or '') if isinstance(scope_manifest_metadata, dict) else ''}"
+            )[:500],
+        )
+
+    def _initial_root_domain_scope_decision(value: str) -> dict[str, object]:
+        raw_root = str(value or "").strip().lower().strip(".")
+        if not raw_root:
+            return {"allowed": False, "reason": "empty"}
+        root = _normalize_root_domain(raw_root)
+        if not root or "." not in root:
+            return {"allowed": False, "reason": "invalid_root_domain", "root_domain": root}
+        if _excluded_host_for_seed_routing(root):
+            return {"allowed": False, "reason": "excluded_host", "root_domain": root}
+        if not (isinstance(scope_manifest_metadata, dict) and scope_manifest_metadata):
+            return {"allowed": True, "reason": "no_scope_manifest", "root_domain": root}
+        recursive_scope = _validate_scope_manifest_seed_values(
+            scope_manifest_metadata,
+            [{"value": root, "seed_type": "domain"}],
+        )
+        authorized = list(recursive_scope.get("authorized") or [])
+        if authorized:
+            first = authorized[0] if isinstance(authorized[0], dict) else {}
+            return {
+                "allowed": True,
+                "reason": "allowed",
+                "root_domain": root,
+                "matched": str(first.get("matched") or first.get("seed_value") or ""),
+            }
+        return {
+            "allowed": False,
+            "reason": "scope_manifest_denied",
+            "root_domain": root,
+            "scope_manifest_source": str(scope_manifest_metadata.get("source") or ""),
+        }
+
+    def _append_initial_root_domain(value: str) -> None:
+        decision = _initial_root_domain_scope_decision(value)
+        normalized_root = str(decision.get("root_domain") or "").strip()
+        if not normalized_root or normalized_root in root_domains:
+            return
+        if bool(decision.get("allowed")):
+            root_domains.append(normalized_root)
+            return
+        _record_root_domain_scope_denied(
+            normalized_root,
+            str(decision.get("reason") or "scope_manifest_denied"),
+        )
+
     step_start = _time.time()
     _tor_prefix = [] if use_tor else ["--no-tor"]
     root_domains: list[str] = []
     if domain:
-        root_domains.append(domain)
+        _append_initial_root_domain(domain)
     for prepared_seed in prepared_initial_seed_routes:
-        derived_domain = str(prepared_seed["derived_domain"] or "")
-        if derived_domain and derived_domain not in root_domains:
-            root_domains.append(derived_domain)
+        _append_initial_root_domain(str(prepared_seed["derived_domain"] or ""))
     extra_username_seeds = [
-        str(item["username_seed"]) for item in additional_seed_routes if item["username_seed"]
+        str(item["username_seed"])
+        for item in additional_seed_routes
+        if item["username_seed"]
     ]
     extra_phone_seeds = [
-        str(item["phone_seed"]) for item in additional_seed_routes if item["phone_seed"]
+        str(item["phone_seed"])
+        for item in additional_seed_routes
+        if item["phone_seed"]
     ]
     extra_name_seeds = [
-        str(item["name_seed"]) for item in additional_seed_routes if item["name_seed"]
+        str(item["name_seed"])
+        for item in additional_seed_routes
+        if item["name_seed"]
     ]
     extra_company_seeds = [
-        str(item["company_seed"]) for item in additional_seed_routes if item["company_seed"]
+        str(item["company_seed"])
+        for item in additional_seed_routes
+        if item["company_seed"]
     ]
-    extra_ip_seeds = [str(item["ip_seed"]) for item in additional_seed_routes if item["ip_seed"]]
+    extra_ip_seeds = [
+        str(item["ip_seed"])
+        for item in additional_seed_routes
+        if item["ip_seed"]
+    ]
     processed_emails: set[str] = set()
     processed_social_handles: set[str] = set()
     processed_keyscan_targets: set[str] = set()
@@ -2608,24 +936,6 @@ def kill_chain(
         "seed_relations",
     )
 
-    def _strip_console_markup(value: str) -> str:
-        cleaned = _re.sub(r"\[[^\]]+\]", "", str(value or ""))
-        collapsed = " ".join(cleaned.split())
-        return collapsed.strip()
-
-    def _infer_run_phase(step: str) -> str:
-        lowered = _strip_console_markup(step).lower()
-        if not lowered:
-            return str(run_progress_state.get("phase") or "running")
-        match = _re.match(r"^iteration\s+(\d+)", lowered)
-        if match:
-            return f"iteration_{match.group(1)}"
-        match = _re.match(r"^(\d+)\.", lowered)
-        if match:
-            return f"iteration_{match.group(1)}"
-        normalized = _re.sub(r"[^a-z0-9]+", "_", lowered).strip("_")
-        return normalized or str(run_progress_state.get("phase") or "running")
-
     def _live_execution_policy_metadata() -> dict[str, object]:
         live_allowed = not dry_run_all
         requires_roe = live_allowed
@@ -2666,183 +976,55 @@ def kill_chain(
         }
 
     def _engagement_run_metadata(*, phase: str | None = None) -> dict[str, object]:
-        active_phase = str(phase or run_progress_state.get("phase") or "running")
-        recent_steps = run_progress_state.get("recent_steps")
-        if not isinstance(recent_steps, list):
-            recent_steps = []
-        counts = run_progress_state.get("counts")
-        if not isinstance(counts, dict):
-            counts = {}
-        queue_metrics = run_progress_state.get("queue_metrics")
-        if not isinstance(queue_metrics, dict):
-            queue_metrics = {}
-        pending_work_counts = run_progress_state.get("pending_work_counts")
-        if not isinstance(pending_work_counts, dict):
-            pending_work_counts = {}
-        last_iteration_delta = run_progress_state.get("last_iteration_delta")
-        if not isinstance(last_iteration_delta, dict):
-            last_iteration_delta = {}
-        last_iteration_stable = run_progress_state.get("last_iteration_stable")
-        active_batch_eta_seconds = run_progress_state.get("active_batch_eta_seconds")
-        active_artifact_eta_seconds = run_progress_state.get("active_artifact_eta_seconds")
-        active_validation_eta_seconds = run_progress_state.get("active_validation_eta_seconds")
-        active_finalization_eta_seconds = run_progress_state.get("active_finalization_eta_seconds")
-        return {
-            "phase": active_phase,
-            "seed_values": initial_seed_values,
-            "root_domains": list(root_domains),
-            "processed_emails": len(processed_emails),
-            "processed_social_handles": len(processed_social_handles),
-            "processed_keyscan_targets": len(processed_keyscan_targets),
-            "processed_cloud_refs": len(processed_cloud_refs),
-            "processed_host_surfaces": len(processed_host_surfaces),
-            "processed_phone_seeds": len(processed_phone_seeds),
-            "processed_ip_seeds": len(processed_ip_seeds),
-            "processed_username_seeds": len(processed_username_seeds),
-            "processed_name_seeds": len(processed_name_seeds),
-            "processed_company_seeds": len(processed_company_seeds),
-            "parallel_fanout": parallel_workers,
-            "artifact_processor_max_workers": artifact_processor_workers,
-            "artifact_processor_worker_cap": artifact_processor_worker_cap,
-            "synthesis_depth_limit": synthesis_depth_limit,
-            "pending_validation_batch_limit": pending_validation_batch_limit,
-            "skip_cloud": skip_cloud,
-            "skip_keyscan": skip_keyscan,
-            "resume_enabled": resume_enabled,
-            "dry_run": dry_run_all,
-            "attack_mode": attack_mode,
-            "include_offensive_prereqs": include_offensive_prereqs,
-            "roe_id": roe_id,
-            "live_probing_allowed": not dry_run_all,
-            "tool_execution_allowed": not dry_run_all,
-            "scope_manifest_source": (
-                str(scope_manifest_metadata.get("source") or "")
-                if isinstance(scope_manifest_metadata, dict)
-                else ""
-            ),
-            "live_execution_policy": _live_execution_policy_metadata(),
-            "report_provider": report_provider or "default",
-            "report_max_loops": report_max_loops,
-            "last_step": str(run_progress_state.get("last_step") or ""),
-            "last_message": str(run_progress_state.get("last_message") or ""),
-            "last_step_elapsed_seconds": float(
-                run_progress_state.get("last_step_elapsed_seconds") or 0.0
-            ),
-            "last_step_at": str(run_progress_state.get("last_step_at") or ""),
-            "active_batch_label": str(run_progress_state.get("active_batch_label") or ""),
-            "active_batch_eta_seconds": (
-                round(float(active_batch_eta_seconds), 1)
-                if isinstance(active_batch_eta_seconds, (int, float))
-                and not isinstance(active_batch_eta_seconds, bool)
-                else None
-            ),
-            "active_artifact_stage_label": str(
-                run_progress_state.get("active_artifact_stage_label") or ""
-            ),
-            "active_artifact_eta_seconds": (
-                round(float(active_artifact_eta_seconds), 1)
-                if isinstance(active_artifact_eta_seconds, (int, float))
-                and not isinstance(active_artifact_eta_seconds, bool)
-                else None
-            ),
-            "active_validation_stage_label": str(
-                run_progress_state.get("active_validation_stage_label") or ""
-            ),
-            "active_validation_eta_seconds": (
-                round(float(active_validation_eta_seconds), 1)
-                if isinstance(active_validation_eta_seconds, (int, float))
-                and not isinstance(active_validation_eta_seconds, bool)
-                else None
-            ),
-            "active_finalization_stage_label": str(
-                run_progress_state.get("active_finalization_stage_label") or ""
-            ),
-            "active_finalization_eta_seconds": (
-                round(float(active_finalization_eta_seconds), 1)
-                if isinstance(active_finalization_eta_seconds, (int, float))
-                and not isinstance(active_finalization_eta_seconds, bool)
-                else None
-            ),
-            "recent_steps": list(recent_steps)[-8:],
-            "counts": dict(counts),
-            "queue_metrics": {
-                str(group): {str(label): int(count or 0) for label, count in values.items()}
-                for group, values in queue_metrics.items()
-                if isinstance(values, dict)
+        return kill_chain_engagement_run_metadata(
+            run_progress_state,
+            phase=phase,
+            seed_values=initial_seed_values,
+            root_domains=list(root_domains),
+            processed_counts={
+                "processed_emails": len(processed_emails),
+                "processed_social_handles": len(processed_social_handles),
+                "processed_keyscan_targets": len(processed_keyscan_targets),
+                "processed_cloud_refs": len(processed_cloud_refs),
+                "processed_host_surfaces": len(processed_host_surfaces),
+                "processed_phone_seeds": len(processed_phone_seeds),
+                "processed_ip_seeds": len(processed_ip_seeds),
+                "processed_username_seeds": len(processed_username_seeds),
+                "processed_name_seeds": len(processed_name_seeds),
+                "processed_company_seeds": len(processed_company_seeds),
             },
-            "pending_work_counts": {
-                str(label): int(count or 0) for label, count in pending_work_counts.items()
+            runtime_metadata={
+                "parallel_fanout": parallel_workers,
+                "artifact_processor_max_workers": artifact_processor_workers,
+                "artifact_processor_worker_cap": artifact_processor_worker_cap,
+                "synthesis_depth_limit": synthesis_depth_limit,
+                "pending_validation_batch_limit": pending_validation_batch_limit,
+                "skip_cloud": skip_cloud,
+                "skip_keyscan": skip_keyscan,
+                "resume_enabled": resume_enabled,
+                "dry_run": dry_run_all,
+                "attack_mode": attack_mode,
+                "include_offensive_prereqs": include_offensive_prereqs,
+                "roe_id": roe_id,
+                "live_probing_allowed": not dry_run_all,
+                "tool_execution_allowed": not dry_run_all,
+                "scope_manifest_source": (
+                    str(scope_manifest_metadata.get("source") or "")
+                    if isinstance(scope_manifest_metadata, dict)
+                    else ""
+                ),
+                "report_provider": report_provider or "default",
+                "report_max_loops": report_max_loops,
             },
-            "pending_work_total": int(run_progress_state.get("pending_work_total") or 0),
-            "last_iteration_delta": dict(last_iteration_delta),
-            "last_iteration_stable": last_iteration_stable
-            if isinstance(last_iteration_stable, bool)
-            else None,
-        }
+            live_execution_policy=_live_execution_policy_metadata(),
+        )
 
     def _current_run_progress_payload() -> dict[str, object]:
-        queue_metrics = run_progress_state.get("queue_metrics")
-        if not isinstance(queue_metrics, dict):
-            queue_metrics = {}
-        active_batch_eta_seconds = run_progress_state.get("active_batch_eta_seconds")
-        active_artifact_eta_seconds = run_progress_state.get("active_artifact_eta_seconds")
-        active_validation_eta_seconds = run_progress_state.get("active_validation_eta_seconds")
-        active_finalization_eta_seconds = run_progress_state.get("active_finalization_eta_seconds")
-        return {
-            "phase": str(run_progress_state.get("phase") or ""),
-            "last_step": str(run_progress_state.get("last_step") or ""),
-            "last_message": str(run_progress_state.get("last_message") or ""),
-            "last_step_elapsed_seconds": round(
-                float(run_progress_state.get("last_step_elapsed_seconds") or 0.0), 3
-            ),
-            "last_step_at": str(run_progress_state.get("last_step_at") or ""),
-            "current_iteration": last_iteration,
-            "run_kind": "kill_chain",
-            "counts": dict(run_progress_state.get("counts") or {}),
-            "queue_metrics": {
-                str(group): dict(values)
-                for group, values in queue_metrics.items()
-                if isinstance(values, dict)
-            },
-            "pending_work_counts": dict(run_progress_state.get("pending_work_counts") or {}),
-            "pending_work_total": int(run_progress_state.get("pending_work_total") or 0),
-            "last_iteration_delta": dict(run_progress_state.get("last_iteration_delta") or {}),
-            "last_iteration_stable": run_progress_state.get("last_iteration_stable"),
-            "active_batch_label": str(run_progress_state.get("active_batch_label") or ""),
-            "active_batch_eta_seconds": (
-                round(float(active_batch_eta_seconds), 1)
-                if isinstance(active_batch_eta_seconds, (int, float))
-                and not isinstance(active_batch_eta_seconds, bool)
-                else None
-            ),
-            "active_artifact_stage_label": str(
-                run_progress_state.get("active_artifact_stage_label") or ""
-            ),
-            "active_artifact_eta_seconds": (
-                round(float(active_artifact_eta_seconds), 1)
-                if isinstance(active_artifact_eta_seconds, (int, float))
-                and not isinstance(active_artifact_eta_seconds, bool)
-                else None
-            ),
-            "active_validation_stage_label": str(
-                run_progress_state.get("active_validation_stage_label") or ""
-            ),
-            "active_validation_eta_seconds": (
-                round(float(active_validation_eta_seconds), 1)
-                if isinstance(active_validation_eta_seconds, (int, float))
-                and not isinstance(active_validation_eta_seconds, bool)
-                else None
-            ),
-            "active_finalization_stage_label": str(
-                run_progress_state.get("active_finalization_stage_label") or ""
-            ),
-            "active_finalization_eta_seconds": (
-                round(float(active_finalization_eta_seconds), 1)
-                if isinstance(active_finalization_eta_seconds, (int, float))
-                and not isinstance(active_finalization_eta_seconds, bool)
-                else None
-            ),
-        }
+        return current_run_progress_payload(
+            run_progress_state,
+            current_iteration=last_iteration,
+            run_kind="kill_chain",
+        )
 
     def _flush_run_progress_state() -> None:
         if engagement_run_tracker is None or engagement_run_handle is None:
@@ -2873,164 +1055,60 @@ def kill_chain(
             pass
 
     def _record_batch_progress(label: str, metrics: dict[str, object]) -> None:
-        if not label:
-            return
-        queue_metrics = run_progress_state.get("queue_metrics")
-        if not isinstance(queue_metrics, dict):
-            queue_metrics = {}
-        queue_metrics["fanout_batch"] = {
-            key: int(metrics.get(key) or 0)
-            for key in (
-                "total",
-                "workers",
-                "running",
-                "pending",
-                "queue_depth",
-                "completed",
-                "failed",
-            )
-        }
-        run_progress_state["queue_metrics"] = queue_metrics
-        run_progress_state["active_batch_label"] = label
-        eta_seconds = metrics.get("eta_seconds")
-        run_progress_state["active_batch_eta_seconds"] = (
-            round(float(eta_seconds), 1)
-            if isinstance(eta_seconds, (int, float)) and not isinstance(eta_seconds, bool)
-            else None
-        )
-        _flush_run_progress_state()
+        if record_run_progress_queue_group(
+            run_progress_state,
+            queue_group="fanout_batch",
+            active_label_key="active_batch_label",
+            active_eta_key="active_batch_eta_seconds",
+            label=label,
+            metrics=metrics,
+        ):
+            _flush_run_progress_state()
 
     def _record_artifact_progress(label: str, metrics: dict[str, object]) -> None:
-        if not label:
-            return
-        queue_metrics = run_progress_state.get("queue_metrics")
-        if not isinstance(queue_metrics, dict):
-            queue_metrics = {}
-        queue_metrics["artifact_processor"] = {
-            key: int(metrics.get(key) or 0)
-            for key in (
-                "total",
-                "workers",
-                "running",
-                "pending",
-                "queue_depth",
-                "completed",
-                "failed",
-            )
-        }
-        run_progress_state["queue_metrics"] = queue_metrics
-        run_progress_state["active_artifact_stage_label"] = label
-        eta_seconds = metrics.get("eta_seconds")
-        run_progress_state["active_artifact_eta_seconds"] = (
-            round(float(eta_seconds), 1)
-            if isinstance(eta_seconds, (int, float)) and not isinstance(eta_seconds, bool)
-            else None
-        )
-        _flush_run_progress_state()
+        if record_run_progress_queue_group(
+            run_progress_state,
+            queue_group="artifact_processor",
+            active_label_key="active_artifact_stage_label",
+            active_eta_key="active_artifact_eta_seconds",
+            label=label,
+            metrics=metrics,
+        ):
+            _flush_run_progress_state()
 
     def _record_artifact_cumulative_metrics(
         *,
         queued_local: int = 0,
         artifact_summary: object | None = None,
     ) -> None:
-        queue_metrics = run_progress_state.get("queue_metrics")
-        if not isinstance(queue_metrics, dict):
-            queue_metrics = {}
-        existing = queue_metrics.get("artifact_processor_cumulative")
-        if not isinstance(existing, dict):
-            existing = {}
-
-        cumulative = {
-            "local_intake_queued": int(existing.get("local_intake_queued") or 0),
-            "invocations": int(existing.get("invocations") or 0),
-            "processed": int(existing.get("processed") or 0),
-            "failed": int(existing.get("failed") or 0),
-            "skipped": int(existing.get("skipped") or 0),
-            "firebase_projects": int(existing.get("firebase_projects") or 0),
-            "supabase_configs": int(existing.get("supabase_configs") or 0),
-            "discovered_seeds": int(existing.get("discovered_seeds") or 0),
-        }
-
-        if queued_local:
-            cumulative["local_intake_queued"] += max(0, int(queued_local))
-
-        if artifact_summary is not None:
-            cumulative["invocations"] += 1
-            cumulative["processed"] += max(0, int(getattr(artifact_summary, "processed", 0) or 0))
-            cumulative["failed"] += max(0, int(getattr(artifact_summary, "failed", 0) or 0))
-            cumulative["skipped"] += max(0, int(getattr(artifact_summary, "skipped", 0) or 0))
-            cumulative["firebase_projects"] += max(
-                0,
-                int(getattr(artifact_summary, "firebase_projects", 0) or 0),
-            )
-            cumulative["supabase_configs"] += max(
-                0,
-                int(getattr(artifact_summary, "supabase_configs", 0) or 0),
-            )
-            cumulative["discovered_seeds"] += max(
-                0,
-                int(getattr(artifact_summary, "discovered_seeds", 0) or 0),
-            )
-
-        queue_metrics["artifact_processor_cumulative"] = cumulative
-        run_progress_state["queue_metrics"] = queue_metrics
-        _flush_run_progress_state()
+        if update_artifact_processor_cumulative_metrics(
+            run_progress_state,
+            queued_local=queued_local,
+            artifact_summary=artifact_summary,
+        ):
+            _flush_run_progress_state()
 
     def _record_validation_progress(label: str, metrics: dict[str, object]) -> None:
-        if not label:
-            return
-        queue_metrics = run_progress_state.get("queue_metrics")
-        if not isinstance(queue_metrics, dict):
-            queue_metrics = {}
-        queue_metrics["validation_batch"] = {
-            key: int(metrics.get(key) or 0)
-            for key in (
-                "total",
-                "workers",
-                "running",
-                "pending",
-                "queue_depth",
-                "completed",
-                "failed",
-            )
-        }
-        run_progress_state["queue_metrics"] = queue_metrics
-        run_progress_state["active_validation_stage_label"] = label
-        eta_seconds = metrics.get("eta_seconds")
-        run_progress_state["active_validation_eta_seconds"] = (
-            round(float(eta_seconds), 1)
-            if isinstance(eta_seconds, (int, float)) and not isinstance(eta_seconds, bool)
-            else None
-        )
-        _flush_run_progress_state()
+        if record_run_progress_queue_group(
+            run_progress_state,
+            queue_group="validation_batch",
+            active_label_key="active_validation_stage_label",
+            active_eta_key="active_validation_eta_seconds",
+            label=label,
+            metrics=metrics,
+        ):
+            _flush_run_progress_state()
 
     def _record_finalization_progress(label: str, metrics: dict[str, object]) -> None:
-        if not label:
-            return
-        queue_metrics = run_progress_state.get("queue_metrics")
-        if not isinstance(queue_metrics, dict):
-            queue_metrics = {}
-        queue_metrics["finalization_batch"] = {
-            key: int(metrics.get(key) or 0)
-            for key in (
-                "total",
-                "workers",
-                "running",
-                "pending",
-                "queue_depth",
-                "completed",
-                "failed",
-            )
-        }
-        run_progress_state["queue_metrics"] = queue_metrics
-        run_progress_state["active_finalization_stage_label"] = label
-        eta_seconds = metrics.get("eta_seconds")
-        run_progress_state["active_finalization_eta_seconds"] = (
-            round(float(eta_seconds), 1)
-            if isinstance(eta_seconds, (int, float)) and not isinstance(eta_seconds, bool)
-            else None
-        )
-        _flush_run_progress_state()
+        if record_run_progress_queue_group(
+            run_progress_state,
+            queue_group="finalization_batch",
+            active_label_key="active_finalization_stage_label",
+            active_eta_key="active_finalization_eta_seconds",
+            label=label,
+            metrics=metrics,
+        ):
+            _flush_run_progress_state()
 
     # ─── Persist the seeds themselves into the DB so downstream modules see them ─
     def _upsert_engagement_seed(
@@ -3046,9 +1124,7 @@ def kill_chain(
     ) -> None:
         metadata_payload = metadata if isinstance(metadata, dict) else {}
         try:
-            metadata_json = (
-                json.dumps(metadata_payload, sort_keys=True) if metadata_payload else "{}"
-            )
+            metadata_json = json.dumps(metadata_payload, sort_keys=True) if metadata_payload else "{}"
         except (TypeError, ValueError):
             metadata_json = "{}"
         try:
@@ -3084,7 +1160,6 @@ def kill_chain(
 
     def _persist_seed() -> None:
         import sqlite3 as _sq2  # noqa: PLC0415
-
         con = _sq2.connect(db_path)
         try:
             for index, seed_entry in enumerate(classified_seeds):
@@ -3113,15 +1188,11 @@ def kill_chain(
                         con.execute(
                             "INSERT INTO hosts (engagement_id, ip, hostname, os_family, host_context) "
                             "VALUES (?, ?, ?, 'unknown', ?)",
-                            (
-                                engagement_id,
-                                "0.0.0.0",
-                                seed_value.lower(),
-                                _host_context_json(
-                                    "kill_chain_seed",
-                                    synthetic_ip=True,
-                                ),
-                            ),
+                            (engagement_id, "0.0.0.0", seed_value.lower(),
+                             _host_context_json(
+                                 "kill_chain_seed",
+                                 synthetic_ip=True,
+                             )),
                         )
                     except (_sq2.IntegrityError, _sq2.OperationalError):
                         pass
@@ -3130,23 +1201,21 @@ def kill_chain(
                         con.execute(
                             "INSERT INTO hosts (engagement_id, ip, hostname, os_family, host_context) "
                             "VALUES (?, ?, ?, 'unknown', ?)",
-                            (
-                                engagement_id,
-                                seed_value,
-                                "",
-                                _host_context_json("kill_chain_seed"),
+                            (engagement_id, seed_value, "",
+                             _host_context_json("kill_chain_seed"),
                             ),
                         )
                     except (_sq2.IntegrityError, _sq2.OperationalError):
                         pass
-                elif entry_type in {"url", "apk_url"}:
+                elif entry_type in {"url", "apk_url", "cloud_ref"}:
                     _promote_cloud_asset_seed_refs(con, seed_value)
-                    _promote_social_url_seed_refs(
-                        con,
-                        seed_value,
-                        entry_type,
-                        evidence_rule="operator_social_url_extract",
-                    )
+                    if entry_type in {"url", "apk_url"}:
+                        _promote_social_url_seed_refs(
+                            con,
+                            seed_value,
+                            entry_type,
+                            evidence_rule="operator_social_url_extract",
+                        )
             con.commit()
         finally:
             con.close()
@@ -3155,59 +1224,33 @@ def kill_chain(
     seed_run_tracker = None
 
     _cli_audit(
-        db_path,
-        engagement_id,
-        "orchestrator",
-        "kill_chain",
-        "kill_chain_start",
-        target=seed,
-        result=(
-            f"seed_type={seed_type} seed_count={len(classified_seeds)} "
-            f"root_domains={','.join(root_domains) if root_domains else '-'} "
-            f"skip_keyscan={skip_keyscan} "
-            f"skip_cloud={skip_cloud} tor={tor} dry_run={dry_run} "
-            f"attack_mode={attack_mode} live_probe={not dry_run_all} "
-            f"auto_run_detected={auto_run_detected} "
-            f"roe_id={roe_id or '-'} "
-            f"scope_manifest={'present' if scope_manifest_metadata else '-'} "
-            f"max_iter={max_iter}"
-        ),
+        db_path, engagement_id, "orchestrator", "kill_chain",
+        "kill_chain_start", target=seed,
+        result=(f"seed_type={seed_type} seed_count={len(classified_seeds)} "
+                f"root_domains={','.join(root_domains) if root_domains else '-'} "
+                f"skip_keyscan={skip_keyscan} "
+                f"skip_cloud={skip_cloud} tor={tor} dry_run={dry_run} "
+                f"attack_mode={attack_mode} live_probe={not dry_run_all} "
+                f"auto_run_detected={auto_run_detected} "
+                f"roe_id={roe_id or '-'} "
+                f"scope_manifest={'present' if scope_manifest_metadata else '-'} "
+                f"max_iter={max_iter}"),
     )
 
     def _publish_run_progress(step: str, msg: str = "", *, force: bool = False) -> None:
         if engagement_run_tracker is None or engagement_run_handle is None:
             return
-        step_text = _strip_console_markup(step)[:160]
-        msg_text = _strip_console_markup(msg)[:320]
-        if not step_text:
-            return
-        if (
-            not force
-            and step_text == str(run_progress_state.get("last_step") or "")
-            and msg_text == str(run_progress_state.get("last_message") or "")
-        ):
-            return
         elapsed = _time.time() - step_start
-        run_progress_state["phase"] = _infer_run_phase(step_text)
-        run_progress_state["last_step"] = step_text
-        run_progress_state["last_message"] = msg_text
-        run_progress_state["last_step_elapsed_seconds"] = round(elapsed, 3)
-        run_progress_state["last_step_at"] = _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime())
-        recent_steps = run_progress_state.get("recent_steps")
-        if not isinstance(recent_steps, list):
-            recent_steps = []
-        recent_steps.append(
-            {
-                "step": step_text,
-                "message": msg_text,
-                "phase": str(run_progress_state.get("phase") or ""),
-                "iteration": last_iteration,
-                "elapsed_seconds": round(elapsed, 3),
-                "at": str(run_progress_state.get("last_step_at") or ""),
-            }
-        )
-        run_progress_state["recent_steps"] = recent_steps[-8:]
-        _flush_run_progress_state()
+        if update_kill_chain_run_progress_state(
+            run_progress_state,
+            step=step,
+            message=msg,
+            elapsed_seconds=elapsed,
+            current_iteration=last_iteration,
+            timestamp=_time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
+            force=force,
+        ):
+            _flush_run_progress_state()
 
     def _log(step: str, msg: str = "") -> None:
         elapsed = _time.time() - step_start
@@ -3256,14 +1299,11 @@ def kill_chain(
                 progress_label_prefix=label,
             )
         if dry_run_all:
-            _log(label, f"[yellow]DRY-RUN-ALL[/yellow] would run: forge {' '.join(cmd_argv)}")
+            _log(label, f"[yellow]DRY-RUN-ALL[/yellow] would run: "
+                        f"forge {' '.join(cmd_argv)}")
             _cli_audit(
-                db_path,
-                engagement_id,
-                "orchestrator",
-                "kill_chain",
-                "dry_run_all_step",
-                target=label,
+                db_path, engagement_id, "orchestrator", "kill_chain",
+                "dry_run_all_step", target=label,
                 result="forge " + " ".join(cmd_argv),
             )
             _finalize_module_seed_runs(
@@ -3282,11 +1322,8 @@ def kill_chain(
             timeout_seconds=module_timeout_seconds,
         )
         if proc.returncode != 0:
-            _log(
-                label,
-                f"[yellow]exit={proc.returncode}[/yellow] "
-                f"stderr={proc.stderr[-200:] if proc.stderr else 'none'}",
-            )
+            _log(label, f"[yellow]exit={proc.returncode}[/yellow] "
+                        f"stderr={proc.stderr[-200:] if proc.stderr else 'none'}")
             _finalize_module_seed_runs(
                 run_handles,
                 base_metadata_value=base_metadata,
@@ -3525,42 +1562,22 @@ def kill_chain(
         error: str | None = None,
         extra_metadata: Optional[dict[str, object]] = None,
     ) -> dict[str, object] | None:
-        handle, seed_ctx = item
-        if handle is None:
-            return None
-        final_metadata: dict[str, object] = {
-            **base_metadata_value,
-            **dict(seed_ctx.get("metadata", {}) or {}),
-        }
-        if extra_metadata:
-            final_metadata.update(extra_metadata)
-        return {
-            "handle": handle,
-            "status": status,
-            "output_count": int(output_count),
-            "error": error,
-            "metadata": final_metadata,
-        }
+        return seed_run_finalization_entry(
+            item,
+            base_metadata_value=base_metadata_value,
+            status=status,
+            output_count=output_count,
+            error=error,
+            extra_metadata=extra_metadata,
+        )
 
     def _apply_module_seed_run_finalization_entry(
         item: dict[str, object] | None,
     ) -> str | None:
-        if item is None:
-            return None
-        handle = item.get("handle")
-        if handle is None:
-            return None
-        status = str(item.get("status") or "").strip()
-        if not status:
-            return None
-        _finish_seed_run(
-            handle,
-            status=status,
-            output_count=int(item.get("output_count") or 0),
-            error=cast(str | None, item.get("error")),
-            metadata=cast(Optional[dict[str, object]], item.get("metadata")),
+        return apply_seed_run_finalization_entry(
+            item,
+            finish_seed_run=_finish_seed_run,
         )
-        return status
 
     def _finalize_module_seed_runs(
         run_handles: Sequence[tuple[object, dict[str, object]]],
@@ -3572,35 +1589,21 @@ def kill_chain(
         extra_metadata: Optional[dict[str, object]] = None,
         progress_label_prefix: str,
     ) -> None:
-        if seed_run_tracker is None or not run_handles:
-            return
-        prep_progress_label = f"{progress_label_prefix} seed-run finalize prep"
-        merge_progress_label = f"{progress_label_prefix} seed-run finalize"
-        if len(run_handles) > 1 and parallel_workers > 1:
-            _log(
-                prep_progress_label,
-                f"[dim]parallel parse x{min(parallel_workers, len(run_handles))}[/dim]",
-            )
-        prepared_finalization_entries = _run_inprocess_batch(
-            list(run_handles),
-            lambda item: _prepare_module_seed_run_finalization_entry(
-                item,
-                base_metadata_value=base_metadata_value,
-                status=status,
-                output_count=output_count,
-                error=error,
-                extra_metadata=extra_metadata,
-            ),
-            max_workers=parallel_workers,
-            progress_label=prep_progress_label,
+        finalize_seed_run_batch(
+            run_handles,
+            seed_run_tracker=seed_run_tracker,
+            base_metadata_value=base_metadata_value,
+            status=status,
+            output_count=output_count,
+            error=error,
+            extra_metadata=extra_metadata,
+            finish_seed_run=_finish_seed_run,
+            run_inprocess_batch=_run_inprocess_batch,
+            run_ordered_inprocess_apply_batch=_run_ordered_inprocess_apply_batch,
             progress_callback=_record_batch_progress,
-        )
-        _run_ordered_inprocess_apply_batch(
-            prepared_finalization_entries,
-            _apply_module_seed_run_finalization_entry,
-            progress_label=merge_progress_label,
-            progress_callback=_record_batch_progress,
-            order_note="seed-run finalization order preserved",
+            log=_log,
+            parallel_workers=parallel_workers,
+            progress_label_prefix=progress_label_prefix,
         )
 
     def _fetch_target_html(url: str, timeout: float = 15.0) -> str:
@@ -3608,7 +1611,8 @@ def kill_chain(
             import httpx  # noqa: PLC0415
             from forge.utils.intel.http_pacing import web_fetch_get  # noqa: PLC0415
 
-            with httpx.Client(follow_redirects=True, timeout=timeout, verify=False) as client:  # noqa: S501
+            with httpx.Client(follow_redirects=True, timeout=timeout,
+                              verify=False) as client:  # noqa: S501
                 r = web_fetch_get(client, url)
                 return r.text or ""
         except Exception:  # noqa: BLE001
@@ -3632,17 +1636,17 @@ def kill_chain(
                 try:
                     ctx = browser.new_context(
                         ignore_https_errors=True,
-                        user_agent=(
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                            "AppleWebKit/537.36 (KHTML, like Gecko) "
-                            "Chrome/120.0.0.0 Safari/537.36"
-                        ),
+                        user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                    "Chrome/120.0.0.0 Safari/537.36"),
                     )
                     page = ctx.new_page()
-                    page.goto(url, timeout=int(timeout * 1000), wait_until="domcontentloaded")
+                    page.goto(url, timeout=int(timeout * 1000),
+                              wait_until="domcontentloaded")
                     # Give SPA JS a moment to fetch + render
                     try:
-                        page.wait_for_load_state("networkidle", timeout=5000)
+                        page.wait_for_load_state("networkidle",
+                                                  timeout=5000)
                     except Exception:  # noqa: BLE001
                         pass
                     html = page.content() or ""
@@ -3800,9 +1804,7 @@ def kill_chain(
             rec = raw_records if isinstance(raw_records, dict) else {}
             for tgt in rec.get("CNAME", []):
                 normalized_target = tgt.rstrip(".").lower()
-                if normalized_target == root_domain or normalized_target.endswith(
-                    "." + root_domain
-                ):
+                if normalized_target == root_domain or normalized_target.endswith("." + root_domain):
                     discovered_targets.add(normalized_target)
             for txt in rec.get("TXT", []):
                 lowered_txt = txt.lower()
@@ -3836,8 +1838,8 @@ def kill_chain(
         result: dict[str, object] = {}
         try:
             import httpx  # noqa: PLC0415
-
-            with httpx.Client(follow_redirects=True, timeout=timeout, verify=False) as c:  # noqa: S501
+            with httpx.Client(follow_redirects=True, timeout=timeout,
+                              verify=False) as c:  # noqa: S501
                 r = c.get(f"https://rdap.org/domain/{domain_name}")
                 if r.status_code != 200:
                     status = "skipped" if int(r.status_code) == 404 else "failed"
@@ -3879,16 +1881,16 @@ def kill_chain(
                         if len(row) >= 4 and row[0] == "fn":
                             registrar = str(row[3])
                             break
-        ns = [n.get("ldhName", "").lower() for n in data.get("nameservers", []) if n.get("ldhName")]
+        ns = [n.get("ldhName", "").lower()
+              for n in data.get("nameservers", []) if n.get("ldhName")]
         result["registrant_emails"] = emails
         result["registrar"] = registrar
         result["related_nameservers"] = ns
         result["_forge_status"] = "completed"
         return result
 
-    def _wayback_urls(
-        domain_name: str, timeout: float = 15.0, limit: int = 500
-    ) -> dict[str, object]:
+    def _wayback_urls(domain_name: str, timeout: float = 15.0,
+                      limit: int = 500) -> dict[str, object]:
         """Query archive.org CDX API for every URL ever crawled under
         <domain>/*. Returns unique original URLs. Empty on failure.
 
@@ -4062,21 +2064,14 @@ def kill_chain(
             e = m.group(1).lower().strip()
             if "@" in e and "." in e.split("@")[-1]:
                 emails.add(e)
-        for m in _re.finditer(r"[a-zA-Z0-9_.+\-]+@[a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+", html):
+        for m in _re.finditer(
+            r'[a-zA-Z0-9_.+\-]+@[a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+', html
+        ):
             e = m.group(0).lower().strip(".")
             # Filter garbage / example emails
-            if not any(
-                bad in e
-                for bad in (
-                    "example.",
-                    "test@",
-                    "@example",
-                    "sentry.io",
-                    "wixpress.com",
-                    "@2x.png",
-                    "@sha256",
-                )
-            ):
+            if not any(bad in e for bad in ("example.", "test@", "@example",
+                                             "sentry.io", "wixpress.com",
+                                             "@2x.png", "@sha256")):
                 if len(e) <= 254 and e.count("@") == 1:
                     emails.add(e)
 
@@ -4114,27 +2109,11 @@ def kill_chain(
                     org = ""
                     if first_path == "orgs" and len(path_parts) >= 2:
                         org = path_parts[1].lower()
-                    elif first_path not in {
-                        "features",
-                        "pricing",
-                        "topics",
-                        "trending",
-                        "collections",
-                        "events",
-                        "sponsors",
-                        "readme",
-                        "orgs",
-                        "settings",
-                        "explore",
-                        "marketplace",
-                        "notifications",
-                        "issues",
-                        "pulls",
-                        "join",
-                        "login",
-                        "logout",
-                        "search",
-                    }:
+                    elif first_path not in {"features", "pricing", "topics", "trending",
+                                            "collections", "events", "sponsors", "readme",
+                                            "orgs", "settings", "explore", "marketplace",
+                                            "notifications", "issues", "pulls", "join",
+                                            "login", "logout", "search"}:
                         org = first_path
                     if org:
                         github_orgs.add(org)
@@ -4609,7 +2588,9 @@ def kill_chain(
         else:
             ip = str(resolved_ip or "").strip() or "0.0.0.0"
             synthetic_ip = (
-                _is_placeholder_host_ip(ip) if synthetic_ip is None else bool(synthetic_ip)
+                _is_placeholder_host_ip(ip)
+                if synthetic_ip is None
+                else bool(synthetic_ip)
             )
         try:
             con.execute(
@@ -4632,9 +2613,7 @@ def kill_chain(
         normalized_host = str(hostname or "").strip().lower().strip(".")
         if not normalized_host:
             return None
-        if not any(
-            normalized_host == root or normalized_host.endswith("." + root) for root in root_domains
-        ):
+        if not any(normalized_host == root or normalized_host.endswith("." + root) for root in root_domains):
             return None
         return normalized_host
 
@@ -4682,7 +2661,8 @@ def kill_chain(
         con = _sq.connect(db_path)
         try:
             existing_host_rows = con.execute(
-                "SELECT hostname FROM hosts WHERE engagement_id=? AND hostname IS NOT NULL",
+                "SELECT hostname FROM hosts WHERE engagement_id=? "
+                "AND hostname IS NOT NULL",
                 (engagement_id,),
             ).fetchall()
             existing = _collect_normalized_text_row_value_set(
@@ -4766,7 +2746,9 @@ def kill_chain(
                 ),
                 max_workers=1,
                 progress_label=(
-                    f"{resolution_progress_label} apply" if resolution_progress_label else None
+                    f"{resolution_progress_label} apply"
+                    if resolution_progress_label
+                    else None
                 ),
                 progress_callback=progress_callback,
             )
@@ -5169,22 +3151,22 @@ def kill_chain(
         are found, the corresponding scanner runs.
         """
         refs: dict[str, list[str]] = {
-            "supabase": [],
-            "firebase": [],
-            "aws_s3": [],
-            "do_spaces": [],
-            "gcs": [],
-            "azure_blob": [],
-            "amplify": [],
-            "gcp_appspot": [],
-            "gcp_cloudfunctions": [],
-            "cloudflare_pages": [],
-            "cloudflare_worker": [],
-            "cloudflare_r2": [],
-            "github_pages": [],
-            "gitlab_pages": [],
-            "vercel": [],
-            "netlify": [],
+        "supabase": [],
+        "firebase": [],
+        "aws_s3": [],
+        "do_spaces": [],
+        "gcs": [],
+        "azure_blob": [],
+        "amplify": [],
+        "gcp_appspot": [],
+        "gcp_cloudfunctions": [],
+        "cloudflare_pages": [],
+        "cloudflare_worker": [],
+        "cloudflare_r2": [],
+        "github_pages": [],
+        "gitlab_pages": [],
+        "vercel": [],
+        "netlify": [],
         }
 
         def _add(bucket: str, val: str) -> None:
@@ -5252,7 +3234,9 @@ def kill_chain(
             _add("azure_blob", f"{m.group(1).lower()}/$web")
         for m in _re.finditer(r"https?://([a-zA-Z0-9\-]+)\.amplifyapp\.com", html):
             _add("amplify", m.group(1))
-        for m in _re.finditer(r"https?://([a-zA-Z0-9\-]+)(?:\.[a-z0-9\-]+)?\.appspot\.com", html):
+        for m in _re.finditer(
+            r"https?://([a-zA-Z0-9\-]+)(?:\.[a-z0-9\-]+)?\.appspot\.com", html
+        ):
             _add("gcp_appspot", m.group(1))
         for m in _re.finditer(
             r"https?://[a-z0-9\-]+-[a-zA-Z0-9\-]+\.cloudfunctions\.net(?:/[^\s\"'<>]*)?",
@@ -5273,9 +3257,7 @@ def kill_chain(
             _re.IGNORECASE,
         ):
             _add("cloudflare_r2", m.group(1).lower())
-        for m in _re.finditer(
-            r"https?://([a-z0-9][a-z0-9\-]*\.github\.io)(?:/|$)", html, _re.IGNORECASE
-        ):
+        for m in _re.finditer(r"https?://([a-z0-9][a-z0-9\-]*\.github\.io)(?:/|$)", html, _re.IGNORECASE):
             _add("github_pages", m.group(1).lower())
         for m in _re.finditer(
             r"https?://([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)*\.gitlab\.io)(?:/|$)",
@@ -5285,7 +3267,9 @@ def kill_chain(
             _add("gitlab_pages", m.group(1).lower())
         for m in _re.finditer(r"https?://([a-zA-Z0-9\-]+)\.vercel\.app", html):
             _add("vercel", m.group(1))
-        for m in _re.finditer(r"https?://([a-zA-Z0-9\-]+)\.netlify\.(?:app|com)", html):
+        for m in _re.finditer(
+            r"https?://([a-zA-Z0-9\-]+)\.netlify\.(?:app|com)", html
+        ):
             _add("netlify", m.group(1))
         return refs
 
@@ -5300,21 +3284,17 @@ def kill_chain(
         """
         con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
         try:
-
             def _c(sql: str) -> int:
                 try:
                     return con.execute(sql, (engagement_id,)).fetchone()[0]
                 except _sq.OperationalError:
                     return 0
-
             return (
                 _c("SELECT COUNT(*) FROM hosts WHERE engagement_id=?"),
                 _c("SELECT COUNT(*) FROM emails WHERE engagement_id=?"),
                 _c("SELECT COUNT(*) FROM subdomains WHERE engagement_id=?"),
-                _c(
-                    "SELECT COUNT(*) FROM services s "
-                    "JOIN hosts h ON s.host_id=h.id WHERE h.engagement_id=?"
-                ),
+                _c("SELECT COUNT(*) FROM services s "
+                   "JOIN hosts h ON s.host_id=h.id WHERE h.engagement_id=?"),
                 _c("SELECT COUNT(*) FROM key_scanner_findings WHERE engagement_id=?"),
                 _c("SELECT COUNT(*) FROM crawl_results WHERE engagement_id=?"),
                 _c("SELECT COUNT(*) FROM github_findings WHERE engagement_id=?"),
@@ -5332,102 +3312,19 @@ def kill_chain(
         }
 
     def _progress_counts(snapshot: tuple[int, ...] | None = None) -> dict[str, int]:
-        base_counts = _snapshot_counts(snapshot or _snapshot())
-        con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
-        try:
-
-            def _c(sql: str) -> int:
-                try:
-                    return int(con.execute(sql, (engagement_id,)).fetchone()[0] or 0)
-                except _sq.OperationalError:
-                    return 0
-
-            base_counts.update(
-                {
-                    "cloud_assets": _c("SELECT COUNT(*) FROM cloud_assets WHERE engagement_id=?"),
-                    "cloud_validations": _c(
-                        "SELECT COUNT(*) FROM cloud_validation_results WHERE engagement_id=?"
-                    ),
-                    "vulnerability_findings": _c(
-                        "SELECT COUNT(*) FROM vulnerability_findings WHERE engagement_id=?"
-                    ),
-                    "artifact_queue": _c(
-                        "SELECT COUNT(*) FROM artifact_queue WHERE engagement_id=?"
-                    ),
-                }
-            )
-        finally:
-            con.close()
-        return base_counts
+        return engagement_progress_counts(
+            db_path,
+            engagement_id,
+            _snapshot_counts(snapshot or _snapshot()),
+        )
 
     def _progress_queue_metrics() -> dict[str, dict[str, int]]:
-        con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
-        try:
-            metrics: dict[str, dict[str, int]] = {}
-
-            def _group_counts(sql: str) -> dict[str, int]:
-                try:
-                    rows = con.execute(sql, (engagement_id,)).fetchall()
-                except _sq.OperationalError:
-                    return {}
-                return {
-                    str(row[0] or ""): int(row[1] or 0) for row in rows if str(row[0] or "").strip()
-                }
-
-            artifact_queue = _group_counts(
-                """
-                SELECT status, COUNT(*)
-                FROM artifact_queue
-                WHERE engagement_id=?
-                GROUP BY status
-                """
-            )
-            if artifact_queue:
-                metrics["artifact_queue"] = artifact_queue
-
-            cloud_validation = _group_counts(
-                """
-                SELECT validation_status, COUNT(*)
-                FROM cloud_validation_results
-                WHERE engagement_id=?
-                GROUP BY validation_status
-                """
-            )
-            if cloud_validation:
-                metrics["cloud_validation"] = cloud_validation
-
-            current_queue_metrics = run_progress_state.get("queue_metrics")
-            if isinstance(current_queue_metrics, dict):
-                for transient_group in (
-                    "fanout_batch",
-                    "artifact_processor",
-                    "artifact_processor_cumulative",
-                    "validation_batch",
-                    "finalization_batch",
-                ):
-                    values = current_queue_metrics.get(transient_group)
-                    if isinstance(values, dict):
-                        metrics[transient_group] = {
-                            str(label): int(count or 0)
-                            for label, count in values.items()
-                            if str(label).strip()
-                        }
-
-            return metrics
-        finally:
-            con.close()
-
-    def _terminal_artifact_queue_summary(metadata: dict[str, object]) -> str:
-        queue_metrics = metadata.get("queue_metrics")
-        if not isinstance(queue_metrics, dict):
-            queue_metrics = {}
-        artifact_queue = queue_metrics.get("artifact_queue")
-        if not isinstance(artifact_queue, dict):
-            artifact_queue = {}
-        statuses = ("queued", "downloaded", "parsed", "failed", "skipped")
-        parts = [f"{status}={int(artifact_queue.get(status) or 0)}" for status in statuses]
-        parts.append(f"pending_work_total={int(metadata.get('pending_work_total') or 0)}")
-        return " ".join(parts)
+        current_queue_metrics = run_progress_state.get("queue_metrics")
+        return engagement_progress_queue_metrics(
+            db_path,
+            engagement_id,
+            current_queue_metrics if isinstance(current_queue_metrics, dict) else None,
+        )
 
     def _set_progress_counts(
         snapshot: tuple[int, ...] | None = None,
@@ -5550,7 +3447,8 @@ def kill_chain(
         con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
         try:
             rows = con.execute(
-                "SELECT DISTINCT ip FROM hosts WHERE engagement_id=? AND ip IS NOT NULL",
+                "SELECT DISTINCT ip FROM hosts WHERE engagement_id=? "
+                "AND ip IS NOT NULL",
                 (engagement_id,),
             ).fetchall()
         finally:
@@ -5596,7 +3494,6 @@ def kill_chain(
 
     def _queue_discovered_artifacts() -> int:
         """Queue downloaded-file URLs for later static artifact analysis."""
-
         def _artifact_type_for_url(
             raw_url: str,
             seed_type: str | None = None,
@@ -5614,7 +3511,6 @@ def kill_chain(
         con = _sq.connect(db_path)
         try:
             queued = 0
-            candidates: list[tuple[str, str, str | None, dict[str, Any]]] = []
             source_rows: list[tuple[str, tuple[Any, ...]]] = []
             try:
                 rows = con.execute(
@@ -5625,7 +3521,10 @@ def kill_chain(
                     """,
                     (engagement_id,),
                 ).fetchall()
-                source_rows.extend(("crawl_results", cast(tuple[Any, ...], row)) for row in rows)
+                source_rows.extend(
+                    ("crawl_results", cast(tuple[Any, ...], row))
+                    for row in rows
+                )
             except _sq.OperationalError:
                 pass
             try:
@@ -5639,168 +3538,50 @@ def kill_chain(
                     (engagement_id,),
                 ).fetchall()
                 source_rows.extend(
-                    ("engagement_seed", cast(tuple[Any, ...], row)) for row in seed_rows
+                    ("engagement_seed", cast(tuple[Any, ...], row))
+                    for row in seed_rows
                 )
             except _sq.OperationalError:
                 pass
 
-            source_progress_label = f"{last_iteration}.K2 artifact source prep"
-            if source_rows and len(source_rows) > 1 and parallel_workers > 1:
-                _log(
-                    source_progress_label,
-                    f"[dim]parallel parse x{min(parallel_workers, len(source_rows))}[/dim]",
-                )
-            prepared_source_candidates = _run_inprocess_batch(
-                source_rows,
-                _prepare_artifact_source_candidate_item,
-                max_workers=parallel_workers,
-                progress_label=source_progress_label,
-                progress_callback=_record_batch_progress,
-            )
-            source_reduction_progress_label = _derive_reduction_progress_label(
-                source_progress_label
-            )
-            if (
-                source_reduction_progress_label
-                and len(prepared_source_candidates) > 1
-                and parallel_workers > 1
-            ):
-                _log(
-                    source_reduction_progress_label,
-                    (
-                        f"[dim]parallel parse x"
-                        f"{min(parallel_workers, len(prepared_source_candidates))}[/dim]"
-                    ),
-                )
-            reduced_source_candidates = _run_inprocess_batch(
-                prepared_source_candidates,
-                _prepare_artifact_source_reduction_item,
-                max_workers=parallel_workers,
-                progress_label=source_reduction_progress_label,
-                progress_callback=_record_batch_progress,
-            )
-            _run_ordered_inprocess_apply_batch(
-                reduced_source_candidates,
-                lambda item: _apply_artifact_source_candidate_item(
-                    item,
-                    candidates_out=candidates,
-                ),
-                progress_label=_derive_apply_progress_label(source_progress_label),
-                progress_callback=_record_batch_progress,
-                order_note="artifact source order preserved",
-            )
-
-            if candidates and len(candidates) > 1 and parallel_workers > 1:
-                _log(
-                    f"{last_iteration}.K2 artifact classify",
-                    f"[dim]parallel parse x{min(parallel_workers, len(candidates))}[/dim]",
-                )
-            classified_candidates = _run_inprocess_batch(
-                candidates,
-                lambda item: (
-                    item[0],
-                    item[1],
-                    item[2],
-                    item[3],
-                    _artifact_type_for_url(item[0], item[2], item[3]),
-                ),
-                max_workers=parallel_workers,
-                progress_label=f"{last_iteration}.K2 artifact classify",
-                progress_callback=_record_batch_progress,
-            )
-            reduction_progress_label = _derive_reduction_progress_label(
-                f"{last_iteration}.K2 artifact classify"
-            )
-            if reduction_progress_label and len(classified_candidates) > 1 and parallel_workers > 1:
-                _log(
-                    reduction_progress_label,
-                    f"[dim]parallel parse x{min(parallel_workers, len(classified_candidates))}[/dim]",
-                )
-            reduced_classified_candidates = _run_inprocess_batch(
-                classified_candidates,
-                _prepare_artifact_classification_reduction_item,
-                max_workers=parallel_workers,
-                progress_label=reduction_progress_label,
-                progress_callback=_record_batch_progress,
-            )
-            queue_candidates: list[dict[str, object]] = []
-            seen_urls: set[str] = set()
-            queue_candidate_apply_label = _derive_apply_progress_label(reduction_progress_label)
-            _run_ordered_inprocess_apply_batch(
-                reduced_classified_candidates,
-                lambda reduced_candidate: _apply_artifact_queue_candidate_item(
-                    reduced_candidate,
-                    queue_candidates_out=queue_candidates,
-                    seen_urls_out=seen_urls,
-                ),
-                progress_label=queue_candidate_apply_label,
-                progress_callback=_record_batch_progress,
-                order_note="artifact candidate order preserved",
-            )
-
             def _apply_queue_candidate(queue_candidate: dict[str, object]) -> int:
-                raw_url = str(queue_candidate["raw_url"] or "").strip()
-                discovered_from = str(queue_candidate["discovered_from"] or "").strip()
-                artifact_type = str(queue_candidate["artifact_type"] or "").strip()
-                metadata = cast(dict[str, Any], queue_candidate.get("metadata") or {})
-                try:
-                    metadata_json = json.dumps(metadata, sort_keys=True) if metadata else "{}"
-                except (TypeError, ValueError):
-                    metadata_json = "{}"
-                try:
-                    before_changes = con.total_changes
-                    con.execute(
-                        """
-                        INSERT INTO artifact_queue
-                            (engagement_id, source_url, artifact_type, discovered_from, status, metadata_json)
-                        VALUES (?, ?, ?, ?, 'queued', ?)
-                        ON CONFLICT(engagement_id, source_url) DO NOTHING
-                        """,
-                        (engagement_id, raw_url, artifact_type, discovered_from, metadata_json),
+                def _upsert_crawl_artifact_seed(
+                    seed_value: str,
+                    seed_type: str,
+                    metadata: dict[str, Any],
+                ) -> None:
+                    _upsert_engagement_seed(
+                        con,
+                        seed_value,
+                        seed_type,
+                        source="artifact",
+                        status="pending",
+                        depth=1,
+                        confidence=0.8,
+                        metadata=metadata,
                     )
-                    if con.total_changes > before_changes:
-                        if discovered_from == "crawl_results":
-                            queued_seed_type = (
-                                "apk_url" if _is_mobile_bundle_url(raw_url) else "url"
-                            )
-                            _upsert_engagement_seed(
-                                con,
-                                raw_url,
-                                queued_seed_type,
-                                source="artifact",
-                                status="pending",
-                                depth=1,
-                                confidence=0.8,
-                                metadata=metadata,
-                            )
-                        return 1
-                except _sq.OperationalError:
-                    return -1
-                return 0
 
-            applied_queue_entries = _run_ordered_inprocess_apply_batch(
-                queue_candidates,
-                _apply_queue_candidate,
-                progress_label=f"{last_iteration}.K2 artifact queue apply",
+                return queue_artifact_candidate(
+                    con,
+                    engagement_id,
+                    queue_candidate,
+                    crawl_seed_upsert=_upsert_crawl_artifact_seed,
+                    mobile_bundle_url_checker=_is_mobile_bundle_url,
+                )
+
+            queued = queue_discovered_artifact_candidates(
+                source_rows,
+                last_iteration=last_iteration,
+                parallel_workers=parallel_workers,
+                classify_artifact_type=_artifact_type_for_url,
+                apply_queue_candidate=_apply_queue_candidate,
+                run_inprocess_batch=_run_inprocess_batch,
+                run_ordered_inprocess_apply_batch=_run_ordered_inprocess_apply_batch,
                 progress_callback=_record_batch_progress,
-                order_note="artifact queue write order preserved",
+                log=_log,
+                derive_reduction_progress_label=_derive_reduction_progress_label,
+                derive_apply_progress_label=_derive_apply_progress_label,
             )
-            queue_total_out = [queued]
-            queue_total_halted = [False]
-            _run_inprocess_batch(
-                applied_queue_entries,
-                lambda item: _apply_artifact_queue_total_item(
-                    item,
-                    queued_total_out=queue_total_out,
-                    halted_out=queue_total_halted,
-                ),
-                max_workers=1,
-                progress_label=f"{last_iteration}.K2 artifact queue total apply",
-                progress_callback=_record_batch_progress,
-            )
-            if queue_total_halted[0]:
-                return queue_total_out[0]
-            queued = queue_total_out[0]
             con.commit()
             return queued
         finally:
@@ -5828,7 +3609,8 @@ def kill_chain(
         con = _sq.connect(db_path)
         try:
             existing_host_rows = con.execute(
-                "SELECT hostname FROM hosts WHERE engagement_id=? AND hostname IS NOT NULL",
+                "SELECT hostname FROM hosts WHERE engagement_id=? "
+                "AND hostname IS NOT NULL",
                 (engagement_id,),
             ).fetchall()
             existing = _collect_normalized_text_row_value_set(
@@ -5845,7 +3627,6 @@ def kill_chain(
                 ),
                 progress_callback=_record_batch_progress,
             )
-
             def _apply_ptr_lookup_result(item: tuple[str, str]) -> int:
                 ip, hostname = item
                 if not hostname or hostname in existing:
@@ -5875,7 +3656,9 @@ def kill_chain(
             applied_ptr_entries = _run_ordered_inprocess_apply_batch(
                 lookup_results,
                 _apply_ptr_lookup_result,
-                progress_label=_derive_apply_progress_label(f"{last_iteration}.C PTR reverse-DNS"),
+                progress_label=_derive_apply_progress_label(
+                    f"{last_iteration}.C PTR reverse-DNS"
+                ),
                 progress_callback=_record_batch_progress,
                 order_note="PTR persistence order preserved",
             )
@@ -5905,7 +3688,46 @@ def kill_chain(
         _classify_remote_artifact_candidate,
         _classify_remote_artifact_url,
     )
-    from forge.deterministic_findings import DeterministicFindingEngine  # noqa: PLC0415
+    from forge.orchestration.artifacts import (  # noqa: PLC0415
+        apply_artifact_queue_total_item as _artifact_queue_total_item,
+        apply_artifact_source_candidate_item as _artifact_source_candidate_apply_item,
+        artifact_processing_summary_log_message,
+        artifact_source_metadata as _artifact_source_metadata_for_queue,
+        discovered_artifact_queue_log_message,
+        local_artifact_intake_log_message,
+        prepare_artifact_classification_reduction_item as _artifact_classification_reduction_item,
+        prepare_artifact_source_candidate_item as _artifact_source_candidate_item,
+        prepare_artifact_source_reduction_item as _artifact_source_reduction_item,
+        queue_discovered_artifact_candidates,
+        queue_artifact_candidate,
+        remote_artifact_url_scope_decision,
+        sweep_completed_artifact_metadata,
+    )
+    from forge.orchestration.run_tracking import (  # noqa: PLC0415
+        abandoned_seed_run_recovery_log_message,
+        apply_seed_run_finalization_entry,
+        current_run_progress_payload,
+        engagement_progress_counts,
+        engagement_progress_queue_metrics,
+        finalize_seed_run_batch,
+        kill_chain_engagement_run_metadata,
+        persisted_fanout_resume_reuse_log_message,
+        record_run_progress_queue_group,
+        clear_run_control_marker_paths,
+        read_run_control_marker_request,
+        restore_prior_artifact_queue_metrics,
+        resume_completed_skip_log_entry,
+        run_control_interrupt_transition,
+        run_control_request_from_run_metadata,
+        seed_run_finalization_entry,
+        update_artifact_processor_cumulative_metrics,
+        update_kill_chain_run_progress_state,
+    )
+    from forge.deterministic_findings import (  # noqa: PLC0415
+        DeterministicFindingEngine,
+        finding_synthesis_audit_result,
+        finding_synthesis_log_message,
+    )
     from forge.phase4.cloud_validate import (  # noqa: PLC0415
         run_cloud_asset_validate_batch,
         sweep_pending_cloud_asset_validations,
@@ -5919,28 +3741,17 @@ def kill_chain(
     pause_marker_path = control_dir / f"engagement_{engagement_id}_pause.json"
 
     def _clear_run_control_markers() -> None:
-        for marker_path in (stop_marker_path, pause_marker_path):
-            try:
-                marker_path.unlink(missing_ok=True)
-            except Exception:  # noqa: BLE001
-                continue
+        clear_run_control_marker_paths((stop_marker_path, pause_marker_path))
 
     def _read_run_control_request(
         marker_path: _Path,
         *,
         fallback_reason: str,
     ) -> dict[str, object] | None:
-        if not marker_path.is_file():
-            return None
-        try:
-            import json as _json_stop  # noqa: PLC0415
-
-            payload = _json_stop.loads(marker_path.read_text(encoding="utf-8"))
-            if isinstance(payload, dict):
-                return payload
-        except Exception:  # noqa: BLE001
-            return {"reason": fallback_reason, "requested_by": "unknown"}
-        return {"reason": fallback_reason, "requested_by": "unknown"}
+        return read_run_control_marker_request(
+            marker_path,
+            fallback_reason=fallback_reason,
+        )
 
     def _read_stop_request() -> dict[str, object] | None:
         return _read_run_control_request(
@@ -5955,31 +3766,12 @@ def kill_chain(
         )
 
     def _run_control_requested_via_metadata(flag_name: str) -> dict[str, object] | None:
-        con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
-        try:
-            row = con.execute(
-                """
-                SELECT metadata_json
-                FROM engagement_runs
-                WHERE engagement_id=? AND id=?
-                """,
-                (engagement_id, engagement_run_handle.run_id),
-            ).fetchone()
-        except _sq.OperationalError:
-            row = None
-        finally:
-            con.close()
-        if row is None or not row[0]:
-            return None
-        try:
-            import json as _json_stop  # noqa: PLC0415
-
-            payload = _json_stop.loads(str(row[0]))
-        except Exception:  # noqa: BLE001
-            return None
-        if isinstance(payload, dict) and payload.get(flag_name):
-            return payload
-        return None
+        return run_control_request_from_run_metadata(
+            db_path,
+            engagement_id=engagement_id,
+            run_id=engagement_run_handle.run_id,
+            flag_name=flag_name,
+        )
 
     def _restore_resume_queue_metrics() -> None:
         if not resume_enabled or engagement_run_handle is None:
@@ -6007,29 +3799,7 @@ def kill_chain(
             payload = json.loads(str(row[0]))
         except Exception:  # noqa: BLE001
             return
-        if not isinstance(payload, dict):
-            return
-        prior_queue_metrics = payload.get("queue_metrics")
-        if not isinstance(prior_queue_metrics, dict):
-            return
-        prior_artifact_processor = prior_queue_metrics.get("artifact_processor")
-        prior_artifact_cumulative = prior_queue_metrics.get("artifact_processor_cumulative")
-        if not isinstance(prior_artifact_processor, dict) and not isinstance(
-            prior_artifact_cumulative, dict
-        ):
-            return
-        queue_metrics = run_progress_state.get("queue_metrics")
-        if not isinstance(queue_metrics, dict):
-            queue_metrics = {}
-        if isinstance(prior_artifact_processor, dict):
-            queue_metrics["artifact_processor"] = {
-                str(key): int(value or 0) for key, value in prior_artifact_processor.items()
-            }
-        if isinstance(prior_artifact_cumulative, dict):
-            queue_metrics["artifact_processor_cumulative"] = {
-                str(key): int(value or 0) for key, value in prior_artifact_cumulative.items()
-            }
-        run_progress_state["queue_metrics"] = queue_metrics
+        restore_prior_artifact_queue_metrics(run_progress_state, payload)
 
     synthesis_engine = EngagementSynthesisEngine(
         db_path,
@@ -6052,37 +3822,26 @@ def kill_chain(
             "deterministic_findings",
             "deterministic_finding_synthesis",
             target=domain,
-            result=(
-                f"pass={pass_label} "
-                f"inserted={summary.inserted} "
-                f"updated={summary.updated} "
-                f"removed={summary.removed} "
-                f"active={summary.active_findings} "
-                f"severity_summary={json.dumps(summary.severity_summary, sort_keys=True)}"
-            ),
+            result=finding_synthesis_audit_result(summary, pass_label=pass_label),
         )
-        if summary.inserted or summary.updated or summary.removed:
-            _log(
-                pass_label,
-                (
-                    f"inserted={summary.inserted} "
-                    f"updated={summary.updated} "
-                    f"removed={summary.removed} "
-                    f"active={summary.active_findings}"
-                ),
-            )
+        finding_log_message = finding_synthesis_log_message(summary)
+        if finding_log_message is not None:
+            _log(pass_label, finding_log_message)
         return summary
 
     engagement_run_tracker = EngagementRunTracker(db_path, engagement_id)
     seed_run_tracker = SeedRunTracker(db_path, engagement_id)
     recovered_seed_run_count = (
-        seed_run_tracker.recover_abandoned_running_runs() if resume_enabled else 0
+        seed_run_tracker.recover_abandoned_running_runs()
+        if resume_enabled
+        else 0
     )
     if recovered_seed_run_count:
-        _log(
-            "resume",
-            f"marked {recovered_seed_run_count} abandoned seed run(s) failed before retry",
+        recovery_log_message = abandoned_seed_run_recovery_log_message(
+            recovered_seed_run_count
         )
+        if recovery_log_message is not None:
+            _log("resume", recovery_log_message)
     _clear_run_control_markers()
     run_progress_state["phase"] = "starting"
     engagement_run_handle = engagement_run_tracker.start_run(
@@ -6099,8 +3858,6 @@ def kill_chain(
     )
     _restore_resume_queue_metrics()
     _publish_run_progress("kill-chain", "run initialized", force=True)
-
-    root_scope_denied_cache: set[str] = set()
 
     def _root_domain_scope_decision(value: str) -> dict[str, object]:
         raw_root = str(value or "").strip().lower().strip(".")
@@ -6137,25 +3894,6 @@ def kill_chain(
             "scope_manifest_source": str(scope_manifest_metadata.get("source") or ""),
         }
 
-    def _record_root_domain_scope_denied(root_domain: str, reason: str) -> None:
-        normalized_root = _normalize_root_domain(str(root_domain or "").strip().lower().strip("."))
-        if not normalized_root or normalized_root in root_scope_denied_cache:
-            return
-        root_scope_denied_cache.add(normalized_root)
-        _cli_audit(
-            db_path,
-            engagement_id,
-            "scope_gate",
-            "kill_chain",
-            "root_domain_scope_denied",
-            target=normalized_root,
-            result=(
-                f"root_domain={normalized_root} "
-                f"reason={reason} "
-                f"scope_manifest={str(scope_manifest_metadata.get('source') or '') if isinstance(scope_manifest_metadata, dict) else ''}"
-            )[:500],
-        )
-
     def _refresh_root_domains(new_domains: list[str]) -> None:
         for root in new_domains:
             decision = _root_domain_scope_decision(str(root or ""))
@@ -6171,33 +3909,14 @@ def kill_chain(
                 )
 
     def _remote_artifact_url_scope_decision(value: str) -> dict[str, object]:
-        raw_value = str(value or "").strip()
-        if not raw_value:
-            return {"allowed": False, "reason": "empty"}
-        parsed = urlparse(raw_value)
-        hostname = str(parsed.hostname or "").strip().lower().strip(".")
-        if parsed.scheme not in {"http", "https"} or not hostname:
-            return {"allowed": False, "reason": "invalid_url"}
-        if not (isinstance(scope_manifest_metadata, dict) and scope_manifest_metadata):
-            if not dry_run_all:
-                return {
-                    "allowed": False,
-                    "reason": "scope_manifest_required",
-                    "hostname": hostname,
-                }
-            return {"allowed": True, "reason": "no_scope_manifest", "hostname": hostname}
-        recursive_scope = _validate_scope_manifest_seed_values(
-            scope_manifest_metadata,
-            [{"value": raw_value, "seed_type": "url"}],
+        return remote_artifact_url_scope_decision(
+            value,
+            scope_manifest_metadata=(
+                scope_manifest_metadata if isinstance(scope_manifest_metadata, dict) else None
+            ),
+            dry_run_all=dry_run_all,
+            validate_scope_manifest_seed_values=_validate_scope_manifest_seed_values,
         )
-        if recursive_scope.get("denied"):
-            return {
-                "allowed": False,
-                "reason": "scope_manifest_denied",
-                "hostname": hostname,
-                "scope_manifest_source": str(scope_manifest_metadata.get("source") or ""),
-            }
-        return {"allowed": True, "reason": "allowed", "hostname": hostname}
 
     def _remote_artifact_url_is_in_scope(value: str) -> bool:
         return bool(_remote_artifact_url_scope_decision(value).get("allowed"))
@@ -6226,8 +3945,9 @@ def kill_chain(
     )
 
     local_artifacts = artifact_processor.ingest_local_artifacts()
-    if local_artifacts:
-        _log("artifact intake", f"[green]{local_artifacts} local artifact(s) queued[/green]")
+    local_artifact_log_message = local_artifact_intake_log_message(local_artifacts)
+    if local_artifact_log_message is not None:
+        _log("artifact intake", local_artifact_log_message)
         _record_artifact_cumulative_metrics(queued_local=local_artifacts)
     artifact_summary = artifact_processor.process(
         progress_label="artifact processing",
@@ -6240,59 +3960,28 @@ def kill_chain(
     # run the 9 passive parsers on any local files it produced. Non-blocking:
     # a parse failure never aborts the engagement.
     try:
-        from forge.phase4.artifact_parsers import parse_artifact as _ap_parse  # noqa: PLC0415
         from forge.db.direct_connect import direct_connect as _ap_dc  # noqa: PLC0415
+        from forge.phase4.artifact_parsers import parse_artifact as _ap_parse  # noqa: PLC0415
 
-        _ap_con = _ap_dc(db_path)
-        try:
-            _ap_rows = _ap_con.execute(
-                "SELECT id, local_path FROM artifact_queue "
-                "WHERE engagement_id=? AND status='completed' AND local_path IS NOT NULL",
-                (engagement_id,),
-            ).fetchall()
-            _ap_parsed = 0
-            for _ap_row in _ap_rows:
-                _ap_path = Path(str(_ap_row[1]))
-                if not _ap_path.is_file():
-                    continue
-                _ap_meta = _ap_parse(_ap_path)
-                if _ap_meta:
-                    _ap_con.execute(
-                        "UPDATE artifact_queue SET metadata_json=? WHERE id=?",
-                        (json.dumps(_ap_meta.as_dict(), sort_keys=True)[:4000], _ap_row[0]),
-                    )
-                    _ap_parsed += 1
-            if _ap_parsed:
-                _ap_con.commit()
-                _log(
-                    "artifact parse", f"[green]{_ap_parsed} artifact(s) metadata extracted[/green]"
-                )
-        finally:
-            _ap_con.close()
+        sweep_completed_artifact_metadata(
+            db_path,
+            engagement_id,
+            connect=_ap_dc,
+            parse_artifact=_ap_parse,
+            log=_log,
+            debug=logger.debug,
+        )
     except Exception as _ap_exc:  # noqa: BLE001
         logger.debug("artifact parser sweep skipped: %s", _ap_exc)
 
-    if artifact_summary.processed or artifact_summary.skipped:
-        _log(
-            "artifact processing",
-            (
-                f"processed={artifact_summary.processed} "
-                f"firebase={artifact_summary.firebase_projects} "
-                f"supabase={artifact_summary.supabase_configs} "
-                f"skipped={artifact_summary.skipped}"
-            ),
-        )
+    artifact_processing_log_message = artifact_processing_summary_log_message(artifact_summary)
+    if artifact_processing_log_message is not None:
+        _log("artifact processing", artifact_processing_log_message)
     synthesis_summary = synthesis_engine.run()
     _refresh_root_domains(synthesis_summary.root_domains)
-    if synthesis_summary.seeds_inserted or synthesis_summary.relations_inserted:
-        _log(
-            "seed synthesis",
-            (
-                f"seeds+={synthesis_summary.seeds_inserted} "
-                f"relations+={synthesis_summary.relations_inserted} "
-                f"corroborated={synthesis_summary.corroborated_count}"
-            ),
-        )
+    synthesis_log_message = synthesis_summary_log_message(synthesis_summary)
+    if synthesis_log_message is not None:
+        _log("seed synthesis", synthesis_log_message)
     _run_finding_synthesis("finding synthesis")
 
     def _cloud_asset_scope_entries(service: str, ref: str) -> list[dict[str, str]]:
@@ -6347,9 +4036,7 @@ def kill_chain(
                 _append(f"https://{compact_ref}", "url")
         elif service_alias == "cloudflare_pages":
             _append(
-                f"https://{compact_ref}.pages.dev"
-                if "." not in compact_ref
-                else f"https://{compact_ref}",
+                f"https://{compact_ref}.pages.dev" if "." not in compact_ref else f"https://{compact_ref}",
                 "url",
             )
         elif service_alias == "cloudflare_worker":
@@ -6360,16 +4047,12 @@ def kill_chain(
                 _append(f"https://{compact_ref}", "url")
         elif service_alias == "github_pages":
             _append(
-                f"https://{compact_ref}.github.io"
-                if "." not in compact_ref
-                else f"https://{compact_ref}",
+                f"https://{compact_ref}.github.io" if "." not in compact_ref else f"https://{compact_ref}",
                 "url",
             )
         elif service_alias == "gitlab_pages":
             _append(
-                f"https://{compact_ref}.gitlab.io"
-                if "." not in compact_ref
-                else f"https://{compact_ref}",
+                f"https://{compact_ref}.gitlab.io" if "." not in compact_ref else f"https://{compact_ref}",
                 "url",
             )
         elif service_alias == "supabase":
@@ -6387,16 +4070,12 @@ def kill_chain(
             _append(f"https://{compact_ref}.digitaloceanspaces.com", "url")
         elif service_alias == "vercel":
             _append(
-                f"https://{compact_ref}.vercel.app"
-                if "." not in compact_ref
-                else f"https://{compact_ref}",
+                f"https://{compact_ref}.vercel.app" if "." not in compact_ref else f"https://{compact_ref}",
                 "url",
             )
         elif service_alias == "netlify":
             _append(
-                f"https://{compact_ref}.netlify.app"
-                if "." not in compact_ref
-                else f"https://{compact_ref}",
+                f"https://{compact_ref}.netlify.app" if "." not in compact_ref else f"https://{compact_ref}",
                 "url",
             )
         return entries
@@ -6563,10 +4242,7 @@ def kill_chain(
             "local_artifact",
             "local_filesystem",
         }
-        if source_backend in local_artifact_backends and parsed_source.scheme not in {
-            "http",
-            "https",
-        }:
+        if source_backend in local_artifact_backends and parsed_source.scheme not in {"http", "https"}:
             return {
                 "allowed": True,
                 "reason": "operator_local_artifact",
@@ -6660,15 +4336,14 @@ def kill_chain(
             total_failed += int(summary.get("failed") or 0)
             for key, value in (summary.get("status_counts") or {}).items():
                 normalized_key = str(key)
-                status_counts[normalized_key] = status_counts.get(normalized_key, 0) + int(
-                    value or 0
-                )
+                status_counts[normalized_key] = status_counts.get(normalized_key, 0) + int(value or 0)
             if attempted < pending_validation_batch_limit:
                 break
         if total_attempted == 0:
             return
         status_text = " ".join(
-            f"{str(key).lower()}={value}" for key, value in sorted(status_counts.items())
+            f"{str(key).lower()}={value}"
+            for key, value in sorted(status_counts.items())
         )
         _log(
             pass_label,
@@ -6712,15 +4387,14 @@ def kill_chain(
             total_failed += int(summary.get("failed") or 0)
             for key, value in (summary.get("status_counts") or {}).items():
                 normalized_key = str(key)
-                status_counts[normalized_key] = status_counts.get(normalized_key, 0) + int(
-                    value or 0
-                )
+                status_counts[normalized_key] = status_counts.get(normalized_key, 0) + int(value or 0)
             if attempted < pending_validation_batch_limit:
                 break
         if total_attempted == 0:
             return
         status_text = " ".join(
-            f"{str(key).lower()}={value}" for key, value in sorted(status_counts.items())
+            f"{str(key).lower()}={value}"
+            for key, value in sorted(status_counts.items())
         )
         _log(
             pass_label,
@@ -6751,6 +4425,7 @@ def kill_chain(
                 data_dir=Path(cfg.data_dir),
                 reports_dir=Path("reports"),
                 output_path=dash_path,
+                include_legacy=True,
             )
             console.print(f"[dim]Dashboard:[/dim] {refreshed} [dim](refreshed)[/dim]")
             return refreshed
@@ -6769,69 +4444,36 @@ def kill_chain(
 
     def _maybe_interrupt_run(phase: str) -> bool:
         stop_request = _read_stop_request() or _run_control_requested_via_metadata("stop_requested")
-        if stop_request is not None:
-            requested_by = str(stop_request.get("requested_by") or "unknown")
-            reason = str(stop_request.get("reason") or "operator stop requested")
-            _cli_audit(
-                db_path,
-                engagement_id,
-                "orchestrator",
-                "kill_chain",
-                "kill_chain_cancelled",
-                target=domain or seed,
-                result=f"phase={phase} requested_by={requested_by} reason={reason[:180]}",
-            )
-            engagement_run_tracker.finish_run(
-                engagement_run_handle,
-                status="cancelled",
-                current_iteration=last_iteration,
-                metadata={
-                    **_engagement_run_metadata(phase="cancelled"),
-                    "lifecycle_state": "cancelled",
-                    "cancel_requested_by": requested_by,
-                    "cancel_reason": reason,
-                },
-            )
-            _clear_run_control_markers()
-            _refresh_dashboard_review_surface("cancelled")
-            console.print(
-                f"\n[yellow]Kill-chain cancelled[/yellow] during {phase} "
-                f"(requested by {requested_by})."
-            )
-            return True
-
-        pause_request = _read_pause_request() or _run_control_requested_via_metadata(
-            "pause_requested"
+        pause_request = _read_pause_request() or _run_control_requested_via_metadata("pause_requested")
+        transition = run_control_interrupt_transition(
+            phase,
+            stop_request=stop_request,
+            pause_request=pause_request,
         )
-        if pause_request is None:
+        if transition is None:
             return False
-        requested_by = str(pause_request.get("requested_by") or "unknown")
-        reason = str(pause_request.get("reason") or "operator pause requested")
         _cli_audit(
-            db_path,
-            engagement_id,
-            "orchestrator",
-            "kill_chain",
-            "kill_chain_paused",
-            target=domain or seed,
-            result=f"phase={phase} requested_by={requested_by} reason={reason[:180]}",
+            db_path, engagement_id, "orchestrator", "kill_chain",
+            transition.audit_action, target=domain or seed,
+            result=(
+                f"phase={phase} requested_by={transition.requested_by} "
+                f"reason={transition.reason[:180]}"
+            ),
         )
         engagement_run_tracker.finish_run(
             engagement_run_handle,
-            status="cancelled",
+            status=transition.status,
             current_iteration=last_iteration,
             metadata={
-                **_engagement_run_metadata(phase="paused"),
-                "lifecycle_state": "paused",
-                "pause_requested_by": requested_by,
-                "pause_reason": reason,
-                "resume_recommended": True,
+                **_engagement_run_metadata(phase=transition.lifecycle_phase),
+                **transition.metadata,
             },
         )
         _clear_run_control_markers()
-        _refresh_dashboard_review_surface("paused")
+        _refresh_dashboard_review_surface(transition.dashboard_reason)
         console.print(
-            f"\n[yellow]Kill-chain paused[/yellow] during {phase} (requested by {requested_by})."
+            f"\n[yellow]Kill-chain {transition.console_label}[/yellow] during {phase} "
+            f"(requested by {transition.requested_by})."
         )
         return True
 
@@ -6846,43 +4488,26 @@ def kill_chain(
 
     _log("spider", f"starting fan-out loop (max_iterations={max_iterations})")
     all_cloud_refs: dict[str, list[str]] = {
-        "supabase": [],
-        "firebase": [],
-        "aws_s3": [],
-        "do_spaces": [],
-        "gcs": [],
-        "azure_blob": [],
-        "amplify": [],
-        "gcp_appspot": [],
-        "gcp_cloudfunctions": [],
-        "cloudflare_pages": [],
-        "cloudflare_worker": [],
-        "cloudflare_r2": [],
-        "github_pages": [],
-        "gitlab_pages": [],
-        "vercel": [],
-        "netlify": [],
+        "supabase": [], "firebase": [], "aws_s3": [], "do_spaces": [], "gcs": [], "azure_blob": [], "amplify": [],
+        "gcp_appspot": [], "gcp_cloudfunctions": [],
+        "cloudflare_pages": [], "cloudflare_worker": [], "cloudflare_r2": [],
+        "github_pages": [], "gitlab_pages": [],
+        "vercel": [], "netlify": [],
     }
     host_surface_batch_limit = 20
     all_github_orgs: set[str] = set()  # populated in fan-out D, used in fan-out F
-    processed_emails: set[str] = set()  # emails already sent through xposed/holehe/social/sherlock
-    processed_github_orgs: set[str] = set()  # GH orgs already keyscanned
+    processed_emails: set[str] = set()          # emails already sent through xposed/holehe/social/sherlock
+    processed_github_orgs: set[str] = set()      # GH orgs already keyscanned
     processed_keyscan_targets: set[str] = set()  # domains/orgs already keyscanned
-    processed_cloud_refs: set[str] = set()  # cloud service:ref pairs already scanned
-    processed_host_surfaces: set[str] = set()  # hostnames already D/D2 surface-fetched
-    attempted_host_surfaces: set[str] = (
-        set()
-    )  # hostnames attempted; prevents first-batch starvation
-    processed_url_seeds: set[str] = set()  # in-scope URL seeds already surface-fetched
-    processed_social_handles: set[str] = set()  # social_profiles handles already Sherlocked
-    processed_phone_seeds: set[str] = set()  # phone seeds already routed through phone enrichment
-    processed_username_seeds: set[str] = (
-        set()
-    )  # username seeds already routed through username enumeration
-    processed_name_seeds: set[str] = set()  # name seeds already routed through name search
-    processed_company_seeds: set[str] = (
-        set()
-    )  # company seeds already routed through public entity search
+    processed_cloud_refs: set[str] = set()       # cloud service:ref pairs already scanned
+    processed_host_surfaces: set[str] = set()    # hostnames already D/D2 surface-fetched
+    attempted_host_surfaces: set[str] = set()    # hostnames attempted; prevents first-batch starvation
+    processed_url_seeds: set[str] = set()        # in-scope URL seeds already surface-fetched
+    processed_social_handles: set[str] = set()   # social_profiles handles already Sherlocked
+    processed_phone_seeds: set[str] = set()      # phone seeds already routed through phone enrichment
+    processed_username_seeds: set[str] = set()   # username seeds already routed through username enumeration
+    processed_name_seeds: set[str] = set()       # name seeds already routed through name search
+    processed_company_seeds: set[str] = set()    # company seeds already routed through public entity search
 
     def _resume_normalize(value: str) -> str:
         return value.strip().lower()
@@ -6974,7 +4599,9 @@ def kill_chain(
         )
         if statuses is not None:
             status_values = sorted(
-                str(status or "").strip() for status in statuses if str(status or "").strip()
+                str(status or "").strip()
+                for status in statuses
+                if str(status or "").strip()
             )
             if not status_values:
                 return set()
@@ -6992,7 +4619,11 @@ def kill_chain(
                 return set()
         finally:
             con.close()
-        return {_resume_normalize(str(row[0] or "")) for row in rows if str(row[0] or "").strip()}
+        return {
+            _resume_normalize(str(row[0] or ""))
+            for row in rows
+            if str(row[0] or "").strip()
+        }
 
     def _load_completed_seed_values(
         loop_names: list[str],
@@ -7012,17 +4643,14 @@ def kill_chain(
     completed_d4_domains = _load_completed_seed_values(["fanout_d4_urlscan"], seed_type="domain")
     completed_dns_domains = _load_completed_seed_values(["fanout_g_dns"], seed_type="domain")
     completed_rdap_domains = _load_completed_seed_values(["fanout_h_rdap"], seed_type="domain")
-    completed_wayback_domains = _load_completed_seed_values(
-        ["fanout_i_wayback"], seed_type="domain"
-    )
+    completed_wayback_domains = _load_completed_seed_values(["fanout_i_wayback"], seed_type="domain")
     completed_url_seeds = _load_completed_seed_values(["fanout_d5_url_seed_html"], seed_type="url")
     processed_emails = _load_completed_seed_values(["fanout_e_chain"], seed_type="email")
-    processed_social_handles = _load_completed_seed_values(
-        ["fanout_e5_chain"], seed_type="username"
-    )
+    processed_social_handles = _load_completed_seed_values(["fanout_e5_chain"], seed_type="username")
     processed_keyscan_targets = _load_completed_seed_values(["fanout_f_keyscan"])
     processed_github_orgs = {
-        target for target in processed_keyscan_targets if "::github_org::" in target
+        target for target in processed_keyscan_targets
+        if "::github_org::" in target
     }
     retryable_github_org_targets = {
         target
@@ -7035,23 +4663,23 @@ def kill_chain(
     processed_cloud_refs = _load_completed_seed_values(["fanout_j_cloud_scan"], seed_type="other")
     completed_host_surfaces = _load_completed_seed_values(["fanout_d_host_surface"])
     processed_host_surfaces = {
-        _normalize_host_surface_value(item) for item in completed_host_surfaces
+        _normalize_host_surface_value(item)
+        for item in completed_host_surfaces
     }
     attempted_host_surfaces = {
         _normalize_host_surface_value(item)
         for item in _load_seed_run_values(["fanout_d_host_surface"])
     }
-    processed_url_seeds = {_normalize_url_seed_value(item) for item in completed_url_seeds}
-    completed_username_seeds = _load_completed_seed_values(
-        ["fanout_k_seed_username"], seed_type="username"
-    )
+    processed_url_seeds = {
+        _normalize_url_seed_value(item)
+        for item in completed_url_seeds
+    }
+    completed_username_seeds = _load_completed_seed_values(["fanout_k_seed_username"], seed_type="username")
     completed_phone_seeds = _load_completed_seed_values(["fanout_l_seed_phone"], seed_type="phone")
     completed_ipv4_seeds = _load_completed_seed_values(["fanout_o_seed_ip"], seed_type="ipv4")
     completed_ipv6_seeds = _load_completed_seed_values(["fanout_o_seed_ip"], seed_type="ipv6")
     completed_name_seeds = _load_completed_seed_values(["fanout_m_seed_name"], seed_type="name")
-    completed_company_seeds = _load_completed_seed_values(
-        ["fanout_n_seed_company"], seed_type="company"
-    )
+    completed_company_seeds = _load_completed_seed_values(["fanout_n_seed_company"], seed_type="company")
     processed_phone_seeds = set(completed_phone_seeds)
     processed_ip_seeds = set(completed_ipv4_seeds | completed_ipv6_seeds)
     processed_username_seeds = {
@@ -7081,10 +4709,11 @@ def kill_chain(
             + len(completed_name_seeds)
             + len(completed_company_seeds)
         )
-        if resume_reused:
-            _log(
-                "resume", f"reusing persisted fan-out state for {resume_reused} seed/loop target(s)"
-            )
+        resume_reuse_log_message = persisted_fanout_resume_reuse_log_message(
+            resume_reused
+        )
+        if resume_reuse_log_message is not None:
+            _log("resume", resume_reuse_log_message)
 
     _set_progress_counts()
     run_progress_state["phase"] = "preflight"
@@ -7271,7 +4900,10 @@ def kill_chain(
         finally:
             con.close()
         seed_email_rows = _filter_depth_limited_seed_rows(
-            [(str(row[0] or "").strip(), int(row[1] or 0)) for row in seed_rows]
+            [
+                (str(row[0] or "").strip(), int(row[1] or 0))
+                for row in seed_rows
+            ]
         )
         raw_email_values = _collect_text_row_values(
             [*email_rows, *[(email_value,) for email_value, _depth in seed_email_rows]],
@@ -7499,9 +5131,7 @@ def kill_chain(
             "returncodes": email_returncodes,
             "chain_status": chain_status,
             "output_count": max(1, len(email_returncodes)),
-            "error": None
-            if chain_status != "failed"
-            else "one or more email fan-out modules failed",
+            "error": None if chain_status != "failed" else "one or more email fan-out modules failed",
             "inferred_usernames": list(inferred_usernames),
             "seed_run_entry": _prepare_one_shot_seed_run_entry(
                 seed_value=email,
@@ -7514,7 +5144,9 @@ def kill_chain(
                 status=chain_status,
                 output_count=max(1, len(email_returncodes)),
                 error=(
-                    None if chain_status != "failed" else "one or more email fan-out modules failed"
+                    None
+                    if chain_status != "failed"
+                    else "one or more email fan-out modules failed"
                 ),
                 finish_metadata={
                     "iteration": iteration,
@@ -7531,7 +5163,9 @@ def kill_chain(
     ) -> str | None:
         email = str(item.get("email") or "")
         chain_status = str(item.get("chain_status") or "failed")
-        _apply_one_shot_seed_run_entry(cast(dict[str, object] | None, item.get("seed_run_entry")))
+        _apply_one_shot_seed_run_entry(
+            cast(dict[str, object] | None, item.get("seed_run_entry"))
+        )
         if not email or chain_status not in {"completed", "skipped"}:
             return None
         processed_emails_out.add(email)
@@ -7692,9 +5326,7 @@ def kill_chain(
             return None
         metadata_counts = cast(dict[str, int], prepared_url_surface_entry["metadata_counts"])
         has_payload = bool(prepared_url_surface_entry.get("has_payload"))
-        output_count = int(prepared_url_surface_entry["output_count_base"]) + int(
-            url_item_cloud_refs
-        )
+        output_count = int(prepared_url_surface_entry["output_count_base"]) + int(url_item_cloud_refs)
         status = "completed" if has_payload else "failed"
         error = None if has_payload else "empty_url_fetch"
         finalization_entry = _prepare_module_seed_run_finalization_entry(
@@ -7810,7 +5442,10 @@ def kill_chain(
     ) -> list[tuple[int, str]]:
         domain_index, result = item
         wb_urls = list((result or {}).get("urls") or [])
-        return [(int(domain_index), str(url_value or "")) for url_value in wb_urls]
+        return [
+            (int(domain_index), str(url_value or ""))
+            for url_value in wb_urls
+        ]
 
     def _apply_wayback_host_parse_input_group(
         item: list[tuple[int, str]] | None,
@@ -7900,8 +5535,8 @@ def kill_chain(
         return f"{str(query_domain or '').strip()}::github_org::{str(github_org or '').strip()}"
 
     def _keyscan_org_target_parts(target_key: str) -> tuple[str, str] | None:
-        query_domain, separator, github_org = (
-            str(target_key or "").strip().partition("::github_org::")
+        query_domain, separator, github_org = str(target_key or "").strip().partition(
+            "::github_org::"
         )
         if not separator:
             return None
@@ -7918,17 +5553,11 @@ def kill_chain(
         skip_logs: list[tuple[str, str]] = []
         if bool(item.get("skip_b")):
             skip_logs.append(
-                (
-                    f"{iteration}.B harvest ({root_domain})",
-                    "[dim]resume skip — already completed for this engagement[/dim]",
-                )
+                resume_completed_skip_log_entry(f"{iteration}.B harvest", root_domain)
             )
         if iteration == 1 and bool(item.get("skip_b2")):
             skip_logs.append(
-                (
-                    f"{iteration}.B2 crosslinked ({root_domain})",
-                    "[dim]resume skip — already completed for this engagement[/dim]",
-                )
+                resume_completed_skip_log_entry(f"{iteration}.B2 crosslinked", root_domain)
             )
         return {
             "skip_logs": skip_logs,
@@ -8260,13 +5889,11 @@ def kill_chain(
         queued_total_out: list[int],
         halted_out: list[bool],
     ) -> int:
-        normalized_value = int(item or 0)
-        if normalized_value < 0:
-            halted_out[0] = True
-            return normalized_value
-        if not halted_out[0]:
-            queued_total_out[0] += normalized_value
-        return normalized_value
+        return _artifact_queue_total_item(
+            item,
+            queued_total_out=queued_total_out,
+            halted_out=halted_out,
+        )
 
     def _apply_resolved_hostname_map_item(
         item: dict[str, object] | None,
@@ -8315,7 +5942,11 @@ def kill_chain(
         items: Sequence[Any],
         returncodes: Sequence[int],
     ) -> list[Any]:
-        return [item for item, returncode in zip(items, returncodes) if int(returncode) == 0]
+        return [
+            item
+            for item, returncode in zip(items, returncodes)
+            if int(returncode) == 0
+        ]
 
     def _successful_dispatch_seed_values(
         specs: Sequence[ModuleDispatchSpec],
@@ -8492,7 +6123,9 @@ def kill_chain(
             str(target.get("ref") or ""),
             str(decision.get("reason") or "scope_manifest_denied"),
         )
-        skipped_key = _apply_one_shot_seed_run_entry(_prepare_denied_cloud_seed_skip_entry(item))
+        skipped_key = _apply_one_shot_seed_run_entry(
+            _prepare_denied_cloud_seed_skip_entry(item)
+        )
         processed_key = str(skipped_key or key or "").strip()
         if processed_key:
             processed_refs_out.add(processed_key)
@@ -8868,7 +6501,11 @@ def kill_chain(
         *,
         already: set[str],
     ) -> set[str]:
-        return {handle for handle in handle_set if handle and handle not in already}
+        return {
+            handle
+            for handle in handle_set
+            if handle and handle not in already
+        }
 
     def _prepare_social_profile_handle_item(
         handle: str,
@@ -9221,63 +6858,7 @@ def kill_chain(
         }
 
     def _artifact_source_metadata(raw_metadata_json: str) -> dict[str, Any]:
-        try:
-            parsed = json.loads(str(raw_metadata_json or "{}"))
-        except (TypeError, ValueError):
-            return {}
-        if not isinstance(parsed, dict):
-            return {}
-        allowed_keys = {
-            "archive_sources",
-            "content_disposition",
-            "content_type",
-            "download_filename",
-            "provider_sources",
-            "root_domain",
-            "discovered_from",
-            "source",
-            "source_backend",
-            "source_provider",
-            "source_url",
-            "source_seed_url",
-            "fixture_provider",
-            "hostname",
-            "scan_domain",
-            "scan_id",
-            "scheme",
-            "port",
-        }
-        metadata: dict[str, Any] = {}
-        for key in allowed_keys:
-            value = parsed.get(key)
-            if value in (None, "", [], {}):
-                continue
-            if isinstance(value, list):
-                metadata[key] = [
-                    str(item or "").strip() for item in value[:8] if str(item or "").strip()
-                ]
-            elif isinstance(value, (str, int, float, bool)):
-                metadata[key] = value
-            else:
-                metadata[key] = str(value)
-        metadata_aliases = {
-            "content_disposition": ("content-disposition", "Content-Disposition"),
-            "content_type": ("content-type", "Content-Type", "mime_type", "mimeType"),
-            "download_filename": ("filename", "downloaded_filename"),
-        }
-        for normalized_key, alias_keys in metadata_aliases.items():
-            if normalized_key in metadata:
-                continue
-            for alias_key in alias_keys:
-                value = parsed.get(alias_key)
-                if value in (None, "", [], {}):
-                    continue
-                if isinstance(value, (str, int, float, bool)):
-                    metadata[normalized_key] = value
-                else:
-                    metadata[normalized_key] = str(value)
-                break
-        return metadata
+        return _artifact_source_metadata_for_queue(raw_metadata_json)
 
     def _url_seed_source_metadata(raw_metadata_json: str, source_url: str) -> dict[str, Any]:
         metadata = _artifact_source_metadata(raw_metadata_json)
@@ -9420,86 +7001,27 @@ def kill_chain(
     def _prepare_artifact_classification_reduction_item(
         item: tuple[str, str, str | None, dict[str, Any], str | None],
     ) -> dict[str, object] | None:
-        raw_url, discovered_from, seed_type, source_metadata, artifact_type = item
-        normalized_url = str(raw_url or "").strip()
-        normalized_discovered_from = str(discovered_from or "").strip()
-        normalized_seed_type = str(seed_type or "").strip().lower() or None
-        normalized_artifact_type = str(artifact_type or "").strip()
-        if not normalized_url or not normalized_discovered_from or not normalized_artifact_type:
-            return None
-        return {
-            "raw_url": normalized_url,
-            "discovered_from": normalized_discovered_from,
-            "seed_type": normalized_seed_type,
-            "artifact_type": normalized_artifact_type,
-            "metadata": source_metadata if isinstance(source_metadata, dict) else {},
-        }
+        return _artifact_classification_reduction_item(item)
 
     def _prepare_artifact_source_candidate_item(
         item: tuple[str, tuple[Any, ...]],
     ) -> tuple[str, str, str | None, dict[str, Any]] | None:
-        source_name, row = item
-        if source_name == "crawl_results":
-            raw_url = str(row[0] or "").strip()
-            if raw_url:
-                raw_metadata = str(row[1] or "{}") if len(row) > 1 else "{}"
-                return raw_url, "crawl_results", None, _artifact_source_metadata(raw_metadata)
-            return None
-        if source_name == "engagement_seed":
-            raw_url = str(row[0] or "").strip()
-            seed_type = str(row[1] or "").strip().lower() or None
-            raw_metadata = str(row[2] or "{}") if len(row) > 2 else "{}"
-            if raw_url:
-                return (
-                    raw_url,
-                    "engagement_seed",
-                    seed_type,
-                    _artifact_source_metadata(raw_metadata),
-                )
-        return None
+        return _artifact_source_candidate_item(item)
 
     def _prepare_artifact_source_reduction_item(
         item: tuple[str, str, str | None, dict[str, Any]] | None,
     ) -> tuple[str, str, str | None, dict[str, Any]] | None:
-        if item is None:
-            return None
-        raw_url, discovered_from, seed_type, source_metadata = item
-        normalized_url = str(raw_url or "").strip()
-        normalized_discovered_from = str(discovered_from or "").strip()
-        normalized_seed_type = str(seed_type or "").strip().lower() or None
-        if not normalized_url or not normalized_discovered_from:
-            return None
-        return (
-            normalized_url,
-            normalized_discovered_from,
-            normalized_seed_type,
-            source_metadata if isinstance(source_metadata, dict) else {},
-        )
+        return _artifact_source_reduction_item(item)
 
     def _apply_artifact_source_candidate_item(
         item: tuple[str, str, str | None, dict[str, Any]] | None,
         *,
         candidates_out: list[tuple[str, str, str | None, dict[str, Any]]],
     ) -> str | None:
-        if item is None:
-            return None
-        candidates_out.append(item)
-        return str(item[0] or "")
-
-    def _apply_artifact_queue_candidate_item(
-        item: dict[str, object] | None,
-        *,
-        queue_candidates_out: list[dict[str, object]],
-        seen_urls_out: set[str],
-    ) -> str | None:
-        if item is None:
-            return None
-        raw_url = str(item.get("raw_url") or "").strip()
-        if not raw_url or raw_url in seen_urls_out:
-            return None
-        seen_urls_out.add(raw_url)
-        queue_candidates_out.append(item)
-        return raw_url
+        return _artifact_source_candidate_apply_item(
+            item,
+            candidates_out=candidates_out,
+        )
 
     def _partition_root_domains(
         root_domain_values: list[str],
@@ -9693,7 +7215,9 @@ def kill_chain(
             }
         domain_added = 0
         for normalized_target in cast(list[str], item["cname_targets"]):
-            resolved_target = resolved_cname_map.get(str(normalized_target or "").strip().lower())
+            resolved_target = resolved_cname_map.get(
+                str(normalized_target or "").strip().lower()
+            )
             if _persist_discovered_subdomain_seed(
                 con,
                 normalized_target,
@@ -9768,8 +7292,7 @@ def kill_chain(
             ),
             base_metadata_value={},
             status="completed",
-            output_count=int(item.get("output_count_base") or 0)
-            + int(item.get("domain_added") or 0),
+            output_count=int(item.get("output_count_base") or 0) + int(item.get("domain_added") or 0),
             extra_metadata={
                 "iteration": iteration,
                 "signals": [
@@ -9838,7 +7361,9 @@ def kill_chain(
         status = _normalize_fanout_status(result.get("status"))
         raw_provider_statuses = result.get("provider_statuses") or {}
         provider_statuses = (
-            dict(raw_provider_statuses) if isinstance(raw_provider_statuses, dict) else {}
+            dict(raw_provider_statuses)
+            if isinstance(raw_provider_statuses, dict)
+            else {}
         )
         urls = list(result.get("urls", []) or [])
         raw_url_metadata = result.get("url_metadata") or {}
@@ -9914,12 +7439,7 @@ def kill_chain(
         item: tuple[str, str],
     ) -> dict[str, str]:
         stage_label, root_domain = item
-        return _prepare_log_entry(
-            (
-                f"{str(stage_label or '').strip()} ({str(root_domain or '').strip()})",
-                "[dim]resume skip — already completed for this engagement[/dim]",
-            )
-        )
+        return _prepare_log_entry(resume_completed_skip_log_entry(stage_label, root_domain))
 
     def _prepare_domain_dry_run_skip_entry(
         item: tuple[str, str],
@@ -9954,7 +7474,10 @@ def kill_chain(
             progress_label=f"{progress_label_prefix} root-domain prep",
             progress_callback=_record_batch_progress,
         )
-        resume_skip_inputs = [(stage_label, root_domain) for root_domain in skipped_domains]
+        resume_skip_inputs = [
+            (stage_label, root_domain)
+            for root_domain in skipped_domains
+        ]
         if len(resume_skip_inputs) > 1 and parallel_workers > 1:
             _log(
                 f"{progress_label_prefix} skip-log prep",
@@ -9979,7 +7502,10 @@ def kill_chain(
             progress_label=f"{progress_label_prefix} skip-log merge",
             progress_callback=_record_batch_progress,
         )
-        dry_run_entries = [(root_domain, loop_name) for root_domain in pending_domains]
+        dry_run_entries = [
+            (root_domain, loop_name)
+            for root_domain in pending_domains
+        ]
         if len(dry_run_entries) > 1 and parallel_workers > 1:
             _log(
                 f"{progress_label_prefix} dry-run finalize prep",
@@ -10490,7 +8016,9 @@ def kill_chain(
     ) -> str | None:
         handle = str(item.get("handle") or "")
         chain_status = str(item.get("chain_status") or "")
-        _apply_one_shot_seed_run_entry(cast(dict[str, object] | None, item.get("seed_run_entry")))
+        _apply_one_shot_seed_run_entry(
+            cast(dict[str, object] | None, item.get("seed_run_entry"))
+        )
         if not handle or chain_status not in {"completed", "skipped"}:
             return None
         processed_social_handles_out.add(handle)
@@ -10539,7 +8067,10 @@ def kill_chain(
                 return []
         finally:
             con.close()
-        raw_prioritized_rows = [(str(row[1] or "").strip(), int(row[3] or 0)) for row in rows]
+        raw_prioritized_rows = [
+            (str(row[1] or "").strip(), int(row[3] or 0))
+            for row in rows
+        ]
         if progress_label and len(raw_prioritized_rows) > 1 and max_workers > 1:
             _log(
                 progress_label,
@@ -10782,12 +8313,20 @@ def kill_chain(
             }
         )
         pending_hosts = [
-            hostname for hostname in candidates if hostname not in processed_host_surfaces
+            hostname
+            for hostname in candidates
+            if hostname not in processed_host_surfaces
         ]
         never_attempted = [
-            hostname for hostname in pending_hosts if hostname not in attempted_host_surfaces
+            hostname
+            for hostname in pending_hosts
+            if hostname not in attempted_host_surfaces
         ]
-        retryable = [hostname for hostname in pending_hosts if hostname in attempted_host_surfaces]
+        retryable = [
+            hostname
+            for hostname in pending_hosts
+            if hostname in attempted_host_surfaces
+        ]
         return [*retryable, *never_attempted]
 
     def _pending_host_surface_count() -> int:
@@ -10812,7 +8351,8 @@ def kill_chain(
         if not query_domains:
             return []
         query_domains_by_key = {
-            _resume_normalize(query_domain): query_domain for query_domain in query_domains
+            _resume_normalize(query_domain): query_domain
+            for query_domain in query_domains
         }
         specs: list[dict[str, str]] = []
         for target_key in sorted(retryable_github_org_targets):
@@ -11007,7 +8547,8 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
             )
             skipped_a_log_inputs = [
-                (f"{iteration}.A subdomain enum", root_domain) for root_domain in skipped_a_domains
+                (f"{iteration}.A subdomain enum", root_domain)
+                for root_domain in skipped_a_domains
             ]
             if len(skipped_a_log_inputs) > 1 and parallel_workers > 1:
                 _log(
@@ -11096,7 +8637,8 @@ def kill_chain(
         if active_recon:
             _run_module(
                 _append_scope_manifest_arg(
-                    ["recon", "ports", "--engagement", engagement, "--basic", "--timeout", "1.5"],
+                    ["recon", "ports", "--engagement", engagement, "--basic",
+                     "--timeout", "1.5"],
                     scope_manifest,
                 ),
                 f"{iteration}.A2 port scan (ACTIVE)",
@@ -11351,7 +8893,9 @@ def kill_chain(
                 progress_label_prefix=f"{iteration}.D host surface",
             )
             fetch_spec_inputs = [
-                (host, scheme) for host in hostnames for scheme in ("https", "http")
+                (host, scheme)
+                for host in hostnames
+                for scheme in ("https", "http")
             ]
             if len(fetch_spec_inputs) > 1 and parallel_workers > 1:
                 _log(
@@ -11416,7 +8960,6 @@ def kill_chain(
                 from forge.phase2.xray_runner import (  # noqa: PLC0415
                     run_xray_passive as _run_xray_passive,
                 )
-
                 for _xr_index, _xr_payload in enumerate(html_results):
                     if _xr_index >= len(fetch_specs) or not _xr_payload:
                         continue
@@ -11466,15 +9009,15 @@ def kill_chain(
                             if len(html_parse_items) == 1
                             else 1,
                         ),
-                        "cloud_refs": _extract_cloud_refs(item[1])
-                        if not skip_cloud and item[1]
-                        else {},
+                        "cloud_refs": _extract_cloud_refs(item[1]) if not skip_cloud and item[1] else {},
                     },
                     max_workers=parallel_workers,
                     progress_label=f"{iteration}.D1 HTML parse",
                     progress_callback=_record_batch_progress,
                 )
-                main_surface_parse_results.extend(cast(list[dict[str, Any]], html_surface_results))
+                main_surface_parse_results.extend(
+                    cast(list[dict[str, Any]], html_surface_results)
+                )
             if passive_text_specs:
                 if len(passive_text_specs) > 1 and parallel_workers > 1:
                     _log(
@@ -11519,9 +9062,7 @@ def kill_chain(
                                 if len(passive_text_parse_items) == 1
                                 else 1,
                             ),
-                            "cloud_refs": _extract_cloud_refs(item[1])
-                            if not skip_cloud and item[1]
-                            else {},
+                            "cloud_refs": _extract_cloud_refs(item[1]) if not skip_cloud and item[1] else {},
                         },
                         max_workers=parallel_workers,
                         progress_label=f"{iteration}.D2 passive text parse",
@@ -11585,7 +9126,7 @@ def kill_chain(
                     _log(
                         f"{iteration}.D cloud-ref merge",
                         "[dim]sequential dispatch x1[/dim]  [dim]cloud-ref order preserved[/dim]",
-                    )
+                )
                 applied_cloud_ref_counts = _run_inprocess_batch(
                     prepared_cloud_ref_groups,
                     lambda item: _apply_cloud_ref_group(
@@ -11670,7 +9211,9 @@ def kill_chain(
             host_surface_finalize_inputs = [
                 (
                     hostname,
-                    host_surface_handles[index] if index < len(host_surface_handles) else None,
+                    host_surface_handles[index]
+                    if index < len(host_surface_handles)
+                    else None,
                     int(host_surface_payload_counts.get(hostname, 0)),
                 )
                 for index, hostname in enumerate(hostnames)
@@ -11713,16 +9256,18 @@ def kill_chain(
                 progress_label=f"{iteration}.D host surface processed-set update",
                 progress_callback=_record_batch_progress,
             )
-            cloud_summary = f"cloud={new_refs_this_iter}" if not skip_cloud else "cloud=skipped"
-            _log(
-                f"{iteration}.D cloud+HTML mining",
-                f"scanned {len(hostnames)} hostname(s) "
-                f"[{'httpx-only' if no_playwright else 'playwright+httpx'}] "
-                f"| {cloud_summary} "
-                f"emails+={new_emails_html} phones+={new_phones_html} ips+={new_ips_html} hosts+={new_hosts_html} "
-                f"profile_urls+={new_profile_urls} html_urls+={new_urls_html} urls+={new_urls_passive} "
-                f"gh_orgs={len(mined['github_orgs'])}",
+            cloud_summary = (
+                f"cloud={new_refs_this_iter}"
+                if not skip_cloud
+                else "cloud=skipped"
             )
+            _log(f"{iteration}.D cloud+HTML mining",
+                 f"scanned {len(hostnames)} hostname(s) "
+                 f"[{'httpx-only' if no_playwright else 'playwright+httpx'}] "
+                 f"| {cloud_summary} "
+                 f"emails+={new_emails_html} phones+={new_phones_html} ips+={new_ips_html} hosts+={new_hosts_html} "
+                 f"profile_urls+={new_profile_urls} html_urls+={new_urls_html} urls+={new_urls_passive} "
+                 f"gh_orgs={len(mined['github_orgs'])}")
 
             # ─── Fan-out D3: Shodan enrichment per host discovered ───
             # Runs once per root unless a prior attempt failed. Domain mode
@@ -11745,28 +9290,21 @@ def kill_chain(
                         f"[dim]parallel parse x{min(parallel_workers, len(pending_d3_domains))}[/dim]",
                     )
                 d3_specs = _run_inprocess_batch(
-                    pending_d3_domains,
-                    lambda root_domain: ModuleDispatchSpec(
-                        cmd_argv=_append_scope_manifest_arg(
-                            [
-                                "osint",
-                                "shodan",
-                                "--engagement",
-                                engagement,
-                                "--target",
-                                root_domain,
-                            ],
-                            scope_manifest,
+                        pending_d3_domains,
+                        lambda root_domain: ModuleDispatchSpec(
+                            cmd_argv=_append_scope_manifest_arg(
+                                ["osint", "shodan", "--engagement", engagement, "--target", root_domain],
+                                scope_manifest,
+                            ),
+                            label=f"{iteration}.D3 shodan ({root_domain})",
+                            loop_name="fanout_d3_shodan",
+                            seed_contexts=[_seed_context(root_domain, "domain")],
+                            metadata={"iteration": iteration},
                         ),
-                        label=f"{iteration}.D3 shodan ({root_domain})",
-                        loop_name="fanout_d3_shodan",
-                        seed_contexts=[_seed_context(root_domain, "domain")],
-                        metadata={"iteration": iteration},
-                    ),
-                    max_workers=parallel_workers,
-                    progress_label=f"{iteration}.D3 spec prep",
-                    progress_callback=_record_batch_progress,
-                )
+                        max_workers=parallel_workers,
+                        progress_label=f"{iteration}.D3 spec prep",
+                        progress_callback=_record_batch_progress,
+                    )
                 d_schedule_merge_inputs.append(
                     {
                         "skip_logs": [
@@ -11798,28 +9336,21 @@ def kill_chain(
                         f"[dim]parallel parse x{min(parallel_workers, len(pending_d4_domains))}[/dim]",
                     )
                 d4_specs = _run_inprocess_batch(
-                    pending_d4_domains,
-                    lambda root_domain: ModuleDispatchSpec(
-                        cmd_argv=_append_scope_manifest_arg(
-                            [
-                                "osint",
-                                "urlscan",
-                                "--engagement",
-                                engagement,
-                                "--hostname",
-                                root_domain,
-                            ],
-                            scope_manifest,
+                        pending_d4_domains,
+                        lambda root_domain: ModuleDispatchSpec(
+                            cmd_argv=_append_scope_manifest_arg(
+                                ["osint", "urlscan", "--engagement", engagement, "--hostname", root_domain],
+                                scope_manifest,
+                            ),
+                            label=f"{iteration}.D4 urlscan ({root_domain})",
+                            loop_name="fanout_d4_urlscan",
+                            seed_contexts=[_seed_context(root_domain, "domain")],
+                            metadata={"iteration": iteration},
                         ),
-                        label=f"{iteration}.D4 urlscan ({root_domain})",
-                        loop_name="fanout_d4_urlscan",
-                        seed_contexts=[_seed_context(root_domain, "domain")],
-                        metadata={"iteration": iteration},
-                    ),
-                    max_workers=parallel_workers,
-                    progress_label=f"{iteration}.D4 spec prep",
-                    progress_callback=_record_batch_progress,
-                )
+                        max_workers=parallel_workers,
+                        progress_label=f"{iteration}.D4 spec prep",
+                        progress_callback=_record_batch_progress,
+                    )
                 d_schedule_merge_inputs.append(
                     {
                         "skip_logs": [
@@ -11924,11 +9455,7 @@ def kill_chain(
             progress_label=f"{iteration}.D5 URL depth-limit",
             progress_callback=_record_batch_progress,
         )
-        if (
-            prioritized_url_seed_rows
-            and len(prioritized_url_seed_rows) > 1
-            and parallel_workers > 1
-        ):
+        if prioritized_url_seed_rows and len(prioritized_url_seed_rows) > 1 and parallel_workers > 1:
             _log(
                 f"{iteration}.D5 URL seed scope prep",
                 f"[dim]parallel parse x{min(parallel_workers, len(prioritized_url_seed_rows))}[/dim]",
@@ -12071,9 +9598,9 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
                 order_note="prioritized URL batch order preserved",
             )
-            url_seed_batch = (
-                shallow_url_batch + deeper_url_batch[: max(0, 20 - len(shallow_url_batch))]
-            )
+            url_seed_batch = shallow_url_batch + deeper_url_batch[
+                : max(0, 20 - len(shallow_url_batch))
+            ]
             completed_url_seed_values: list[str] = []
             if dry_run_all:
                 _emit_prepared_notice_log(
@@ -12144,9 +9671,7 @@ def kill_chain(
                     lambda item: HtmlFetchSpec(
                         url=item[0],
                         use_playwright=_url_seed_should_use_playwright(item[0]),
-                        playwright_timeout=15.0
-                        if _url_seed_should_use_playwright(item[0])
-                        else 0.0,
+                        playwright_timeout=15.0 if _url_seed_should_use_playwright(item[0]) else 0.0,
                         fallback_timeout=8.0,
                     ),
                     max_workers=parallel_workers,
@@ -12166,7 +9691,9 @@ def kill_chain(
                     progress_label=f"{iteration}.D5 URL surface fetch",
                     progress_callback=_record_batch_progress,
                 )
-                url_surface_parse_urls = [url_seed for url_seed, _url_depth in url_seed_batch]
+                url_surface_parse_urls = [
+                    url_seed for url_seed, _url_depth in url_seed_batch
+                ]
                 url_surface_parse_items: list[tuple[str, Any]] = []
                 _run_ordered_inprocess_apply_batch(
                     list(enumerate(url_surface_results)),
@@ -12194,9 +9721,7 @@ def kill_chain(
                             if len(url_surface_parse_items) == 1
                             else 1,
                         ),
-                        "cloud_refs": _extract_cloud_refs(item[1])
-                        if not skip_cloud and item[1]
-                        else {},
+                        "cloud_refs": _extract_cloud_refs(item[1]) if not skip_cloud and item[1] else {},
                     },
                     max_workers=parallel_workers,
                     progress_label=f"{iteration}.D5 URL surface parse",
@@ -12400,7 +9925,9 @@ def kill_chain(
                     if url_seed
                 ]
                 cloud_summary = (
-                    f"cloud={url_cloud_refs_added}" if not skip_cloud else "cloud=skipped"
+                    f"cloud={url_cloud_refs_added}"
+                    if not skip_cloud
+                    else "cloud=skipped"
                 )
                 _log(
                     f"{iteration}.D5 URL surface mining",
@@ -12499,10 +10026,8 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
                 order_note="email batch order preserved",
             )
-            _log(
-                f"{iteration}.E email fan-out",
-                f"[green]{len(iter_emails)} new email(s) -> xposed/emailrep/holehe/social/sherlock/gravatar[/green]",
-            )
+            _log(f"{iteration}.E email fan-out",
+                 f"[green]{len(iter_emails)} new email(s) -> xposed/emailrep/holehe/social/sherlock/gravatar[/green]")
             e_specs: list[ModuleDispatchSpec] = []
             e_spec_emails: list[str] = []
             identity_lookup_specs: list[ModuleDispatchSpec] = []
@@ -12681,8 +10206,13 @@ def kill_chain(
             )
             successful_email_localpart_handles = set(inferred_handles) if dry_run_all else set()
             for spec, email, returncode in zip(e_specs, e_spec_emails, e_returncodes):
-                if spec.loop_name == "fanout_e_sherlock_localpart" and int(returncode) == 0:
-                    successful_email_localpart_handles.update(inferred_by_email.get(email, []))
+                if (
+                    spec.loop_name == "fanout_e_sherlock_localpart"
+                    and int(returncode) == 0
+                ):
+                    successful_email_localpart_handles.update(
+                        inferred_by_email.get(email, [])
+                    )
             if identity_lookup_specs:
                 if len(identity_lookup_specs) > 1:
                     if identity_lookup_workers <= 1:
@@ -12872,10 +10402,8 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
                 order_note="social-handle batch order preserved",
             )
-            _log(
-                f"{iteration}.E5 social-handle fan-out",
-                f"[green]{len(social_handles)} new handle(s) -> Sherlock[/green]",
-            )
+            _log(f"{iteration}.E5 social-handle fan-out",
+                 f"[green]{len(social_handles)} new handle(s) -> Sherlock[/green]")
             if len(social_handle_batch) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.E5 sherlock spec prep",
@@ -12897,9 +10425,7 @@ def kill_chain(
                     label=f"{iteration}.E5 sherlock (@{handle})",
                     loop_name="fanout_e5_sherlock_social_handles",
                     seed_contexts=[
-                        _seed_context(
-                            handle, "username", source="social_profile", depth=2, confidence=0.8
-                        )
+                        _seed_context(handle, "username", source="social_profile", depth=2, confidence=0.8)
                     ],
                     metadata={"iteration": iteration},
                 ),
@@ -12931,20 +10457,11 @@ def kill_chain(
             instagram_specs = _run_inprocess_batch(
                 instagram_handles,
                 lambda handle: ModuleDispatchSpec(
-                    cmd_argv=[
-                        "osint",
-                        "instagram",
-                        "--engagement",
-                        engagement,
-                        "--username",
-                        handle,
-                    ],
+                    cmd_argv=["osint", "instagram", "--engagement", engagement, "--username", handle],
                     label=f"{iteration}.E5.5 instagram (@{handle})",
                     loop_name="fanout_e55_instagram",
                     seed_contexts=[
-                        _seed_context(
-                            handle, "username", source="social_profile", depth=2, confidence=0.8
-                        )
+                        _seed_context(handle, "username", source="social_profile", depth=2, confidence=0.8)
                     ],
                     metadata={"iteration": iteration},
                 ),
@@ -13153,11 +10670,7 @@ def kill_chain(
             target_reduction_progress_label = _derive_reduction_progress_label(
                 f"{iteration}.F keyscan target prep"
             )
-            if (
-                target_reduction_progress_label
-                and len(prepared_keyscan_targets) > 1
-                and parallel_workers > 1
-            ):
+            if target_reduction_progress_label and len(prepared_keyscan_targets) > 1 and parallel_workers > 1:
                 _log(
                     target_reduction_progress_label,
                     f"[dim]parallel parse x{min(parallel_workers, len(prepared_keyscan_targets))}[/dim]",
@@ -13510,10 +11023,9 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
                 order_note="prioritized username batch order preserved",
             )
-            username_batch = (
-                shallow_username_batch
-                + deeper_username_batch[: max(0, 10 - len(shallow_username_batch))]
-            )
+            username_batch = shallow_username_batch + deeper_username_batch[
+                : max(0, 10 - len(shallow_username_batch))
+            ]
             if len(username_batch) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.K username spec prep",
@@ -13818,7 +11330,9 @@ def kill_chain(
             lambda item: {
                 "normalized_ip": str(item[1] or "").strip(),
                 "pending_entry": (
-                    (str(item[0]), str(item[2])) if str(item[1] or "").strip() else None
+                    (str(item[0]), str(item[2]))
+                    if str(item[1] or "").strip()
+                    else None
                 ),
             },
             max_workers=parallel_workers,
@@ -14306,7 +11820,8 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
             )
             dns_dry_run_entries = [
-                (root_domain, "fanout_g_dns") for root_domain in pending_dns_domains
+                (root_domain, "fanout_g_dns")
+                for root_domain in pending_dns_domains
             ]
             if len(dns_dry_run_entries) > 1 and parallel_workers > 1:
                 _log(
@@ -14480,7 +11995,8 @@ def kill_chain(
                 con = _sq.connect(db_path)
                 try:
                     existing_host_rows = con.execute(
-                        "SELECT hostname FROM hosts WHERE engagement_id=? AND hostname IS NOT NULL",
+                        "SELECT hostname FROM hosts WHERE engagement_id=? "
+                        "AND hostname IS NOT NULL",
                         (engagement_id,),
                     ).fetchall()
                     existing = _collect_normalized_text_row_value_set(
@@ -14680,12 +12196,8 @@ def kill_chain(
             )
             if aggregate_saas_signals:
                 _cli_audit(
-                    db_path,
-                    engagement_id,
-                    "orchestrator",
-                    "kill_chain",
-                    "dns_saas_signals",
-                    target=",".join(root_domains),
+                    db_path, engagement_id, "orchestrator", "kill_chain",
+                    "dns_saas_signals", target=",".join(root_domains),
                     result=f"signals={','.join(aggregate_saas_signals)}",
                 )
 
@@ -14719,7 +12231,8 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
             )
             rdap_resume_skip_log_inputs = [
-                (f"{iteration}.H whois/RDAP", root_domain) for root_domain in skipped_rdap_domains
+                (f"{iteration}.H whois/RDAP", root_domain)
+                for root_domain in skipped_rdap_domains
             ]
             if len(rdap_resume_skip_log_inputs) > 1 and parallel_workers > 1:
                 _log(
@@ -14746,7 +12259,8 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
             )
             rdap_dry_run_entries = [
-                (root_domain, "fanout_h_rdap") for root_domain in pending_rdap_domains
+                (root_domain, "fanout_h_rdap")
+                for root_domain in pending_rdap_domains
             ]
             if len(rdap_dry_run_entries) > 1 and parallel_workers > 1:
                 _log(
@@ -14790,7 +12304,8 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
             )
             rdap_resume_skip_log_inputs = [
-                (f"{iteration}.H whois/RDAP", root_domain) for root_domain in skipped_rdap_domains
+                (f"{iteration}.H whois/RDAP", root_domain)
+                for root_domain in skipped_rdap_domains
             ]
             if len(rdap_resume_skip_log_inputs) > 1 and parallel_workers > 1:
                 _log(
@@ -15012,7 +12527,8 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
             )
             wayback_dry_run_entries = [
-                (root_domain, "fanout_i_wayback") for root_domain in pending_wayback_domains
+                (root_domain, "fanout_i_wayback")
+                for root_domain in pending_wayback_domains
             ]
             if len(wayback_dry_run_entries) > 1 and parallel_workers > 1:
                 _log(
@@ -15115,7 +12631,7 @@ def kill_chain(
                             f"[dim]provider-bounded dispatch x"
                             f"{min(passive_archive_workers, len(pending_wayback_domains))}[/dim]"
                         ),
-                    )
+                )
                 wayback_results = _run_callable_batch(
                     pending_wayback_domains,
                     lambda root_domain: _archive_lookup_root_domain(
@@ -15144,7 +12660,9 @@ def kill_chain(
                     progress_callback=_record_batch_progress,
                 )
                 wayback_host_parse_items: list[tuple[int, str]] = []
-                wayback_host_candidate_groups: list[list[Any]] = [[] for _ in wayback_results]
+                wayback_host_candidate_groups: list[list[Any]] = [
+                    [] for _ in wayback_results
+                ]
                 if len(prepared_wayback_host_parse_groups) > 1:
                     _log(
                         f"{iteration}.I Wayback host input merge",
@@ -15308,22 +12826,22 @@ def kill_chain(
         # processed_cloud_refs.
         if not skip_cloud:
             cloud_commands_map = {
-                "supabase": ("cloud", "supabase"),
-                "firebase": ("cloud", "firebase"),
-                "aws_s3": None,
-                "do_spaces": None,
-                "gcs": None,
-                "azure_blob": None,
-                "amplify": None,
-                "gcp_appspot": None,
-                "gcp_cloudfunctions": None,
-                "cloudflare_pages": None,
-                "cloudflare_worker": None,
-                "cloudflare_r2": None,
-                "github_pages": None,
-                "gitlab_pages": None,
-                "vercel": None,
-                "netlify": None,
+                "supabase":            ("cloud", "supabase"),
+                "firebase":            ("cloud", "firebase"),
+                "aws_s3":              None,
+                "do_spaces":           None,
+                "gcs":                 None,
+                "azure_blob":          None,
+                "amplify":             None,
+                "gcp_appspot":         None,
+                "gcp_cloudfunctions":  None,
+                "cloudflare_pages":    None,
+                "cloudflare_worker":   None,
+                "cloudflare_r2":       None,
+                "github_pages":        None,
+                "gitlab_pages":        None,
+                "vercel":              None,
+                "netlify":             None,
             }
             cloud_target_source_groups = [
                 {service: refs}
@@ -15331,11 +12849,7 @@ def kill_chain(
                 if service in cloud_commands_map
             ]
             source_progress_label = f"{iteration}.J cloud target source prep"
-            if (
-                cloud_target_source_groups
-                and len(cloud_target_source_groups) > 1
-                and parallel_workers > 1
-            ):
+            if cloud_target_source_groups and len(cloud_target_source_groups) > 1 and parallel_workers > 1:
                 _log(
                     source_progress_label,
                     f"[dim]parallel parse x{min(parallel_workers, len(cloud_target_source_groups))}[/dim]",
@@ -15455,7 +12969,8 @@ def kill_chain(
                 )
                 pending_cloud_targets = scoped_pending_cloud_targets
             if not pending_cloud_targets:
-                _log(f"{iteration}.J cloud scans", "[dim]no new cloud refs to scan[/dim]")
+                _log(f"{iteration}.J cloud scans",
+                     "[dim]no new cloud refs to scan[/dim]")
             else:
                 try:
                     with direct_connect(db_path) as con:
@@ -15492,10 +13007,7 @@ def kill_chain(
                                     source="cross_reference",
                                     depth=2,
                                     confidence=0.8,
-                                    metadata={
-                                        "service": str(item["service"]),
-                                        "ref": str(item["ref"]),
-                                    },
+                                    metadata={"service": str(item["service"]), "ref": str(item["ref"])},
                                 )
                             ],
                             metadata={"iteration": iteration, "service": str(item["service"])},
@@ -15630,7 +13142,7 @@ def kill_chain(
                         _log(
                             f"{iteration}.J cloud validation result log",
                             "[dim]sequential dispatch x1[/dim]  [dim]validation log order preserved[/dim]",
-                        )
+                    )
                     _run_inprocess_batch(
                         prepared_validation_logs,
                         _apply_prepared_log_entry,
@@ -15680,38 +13192,30 @@ def kill_chain(
                 )
 
         queued_artifacts = _queue_discovered_artifacts()
-        if queued_artifacts:
-            _log(
-                f"{iteration}.K2 artifact queue",
-                f"[green]{queued_artifacts} artifact URL(s) queued for static analysis[/green]",
-            )
+        queued_artifact_log_message = discovered_artifact_queue_log_message(
+            queued_artifacts
+        )
+        if queued_artifact_log_message is not None:
+            _log(f"{iteration}.K2 artifact queue", queued_artifact_log_message)
         artifact_summary = artifact_processor.process(
             progress_label=f"{iteration}.K3 artifact processing",
             progress_callback=_record_artifact_progress,
         )
         _record_artifact_cumulative_metrics(artifact_summary=artifact_summary)
-        if artifact_summary.processed or artifact_summary.skipped:
-            _log(
-                f"{iteration}.K3 artifact processing",
-                (
-                    f"processed={artifact_summary.processed} "
-                    f"firebase={artifact_summary.firebase_projects} "
-                    f"supabase={artifact_summary.supabase_configs} "
-                    f"skipped={artifact_summary.skipped}"
-                ),
-            )
+        artifact_processing_log_message = artifact_processing_summary_log_message(
+            artifact_summary
+        )
+        if artifact_processing_log_message is not None:
+            _log(f"{iteration}.K3 artifact processing", artifact_processing_log_message)
         _run_pending_cloud_asset_validation(f"{iteration}.K3.5 cloud asset validation")
         synthesis_summary = synthesis_engine.run()
         _refresh_root_domains(synthesis_summary.root_domains)
-        if synthesis_summary.seeds_inserted or synthesis_summary.relations_inserted:
-            _log(
-                f"{iteration}.K4 synthesis",
-                (
-                    f"seeds+={synthesis_summary.seeds_inserted} "
-                    f"relations+={synthesis_summary.relations_inserted} "
-                    f"roots={len(synthesis_summary.root_domains)}"
-                ),
-            )
+        synthesis_log_message = synthesis_summary_log_message(
+            synthesis_summary,
+            include_roots=True,
+        )
+        if synthesis_log_message is not None:
+            _log(f"{iteration}.K4 synthesis", synthesis_log_message)
         _run_finding_synthesis(f"{iteration}.K5 findings")
         _run_pending_cloud_key_validation(f"{iteration}.K6 cloud key validation")
         if _maybe_interrupt_run(f"iteration_{iteration}_postfanout"):
@@ -15719,7 +13223,8 @@ def kill_chain(
 
         after = _snapshot()
         iteration_delta = {
-            label: int(after[index] - before[index]) for index, label in enumerate(_SNAPSHOT_LABELS)
+            label: int(after[index] - before[index])
+            for index, label in enumerate(_SNAPSHOT_LABELS)
         }
         counts_stable = after == before
         pending_work_counts = _pending_work_counts() if counts_stable else {}
@@ -15742,778 +13247,139 @@ def kill_chain(
             _log(f"iteration {iteration}", "[dim]no new items — spider stable, exiting loop[/dim]")
             break
         else:
-            _log(
-                f"iteration {iteration}",
-                f"delta hosts=+{after[0] - before[0]} "
-                f"emails=+{after[1] - before[1]} "
-                f"subs=+{after[2] - before[2]} "
-                f"svcs=+{after[3] - before[3]} "
-                f"keys=+{after[4] - before[4]} "
-                f"crawl=+{after[5] - before[5]} "
-                f"gh=+{after[6] - before[6]} "
-                f"social=+{after[7] - before[7]}",
-            )
+            _log(f"iteration {iteration}",
+                 f"delta hosts=+{after[0]-before[0]} "
+                 f"emails=+{after[1]-before[1]} "
+                 f"subs=+{after[2]-before[2]} "
+                 f"svcs=+{after[3]-before[3]} "
+                 f"keys=+{after[4]-before[4]} "
+                 f"crawl=+{after[5]-before[5]} "
+                 f"gh=+{after[6]-before[6]} "
+                 f"social=+{after[7]-before[7]}")
 
     # ═══════════════════════════════════════════════════════════════════
     # FINAL PHASE - synthesis only (per-iteration OSINT already fired above)
     # ═══════════════════════════════════════════════════════════════════
 
     # Phase 6 report path is part of the fixed finalization pipeline shape.
-    from datetime import datetime as _dt, timezone as _tz  # noqa: PLC0415
+    from forge.orchestration.report_finalization import (  # noqa: PLC0415
+        finalize_kill_chain_closeout,
+        kill_chain_completion_report_kwargs_from_closeout,
+        kill_chain_finalization_report_path_now,
+        prepare_kill_chain_finalization,
+        run_kill_chain_finalization_execution,
+    )
 
-    _report_ts = _dt.now(tz=_tz.utc).strftime("%Y%m%dT%H%M%S")
-    _report_path = f"reports/engagement_{engagement}_kill_chain_{_report_ts}.md"
-    report_args = [
-        "report",
-        "generate",
-        "--engagement",
-        engagement,
-        "--yes",
-        "--output",
-        _report_path,
-    ]
-    if report_provider:
-        report_args += ["--provider", report_provider]
-    if report_max_loops is not None:
-        report_args += ["--max-loops", str(int(report_max_loops))]
-
-    hibp_finalization_args = ["osint", "hibp", "--engagement", engagement]
-    if dry_run_all:
-        hibp_finalization_args.append("--dry-run")
-    pre_validation_finalization_specs: list[tuple[list[str], str]] = [
-        (hibp_finalization_args, "final HIBP domain"),
-    ]
-    if credential_validate:
-        for svc in ("ssh", "smb", "rdp", "ftp", "http"):
-            pre_validation_finalization_specs.append(
-                (
-                    [
-                        "osint",
-                        "validate",
-                        "--engagement",
-                        engagement,
-                        "--service",
-                        svc,
-                        "--host",
-                        domain,
-                    ],
-                    f"cred validate ({svc})",
-                )
-            )
+    _report_path = kill_chain_finalization_report_path_now(
+        engagement=engagement,
+    )
 
     # ─── Attack-mode Phase 3 & Phase 5 auto-fire ────────────────────────
     # When attack_mode is on with valid ROE + scope-manifest, run Phase 3
     # payload generation and Phase 5 post-exploitation payload builds as
     # part of the deterministic finalization pipeline. Data-driven entries
-    # (vuln/auth/post-lateral) are appended by
-    # `_build_offensive_data_driven_specs` after credential validation so
-    # they see the fresh services + validated credentials rows. Every child
-    # command still runs scope_gate.assert_in_scope and _direct_cli_require_roe
-    # inside its own body; the outer ROE/scope-manifest was validated above.
-    offensive_finalization_specs: list[tuple[list[str], str]] = []
-    if attack_mode and not dry_run_all:
-        # Phase 3 — obfuscated payload generation (writes files under
-        # cfg.templates_dir(engagement)/phase3_*). No network I/O; no target.
-        offensive_finalization_specs.append(
-            (
-                _append_scope_manifest_arg(
-                    [
-                        "evasion",
-                        "generate",
-                        "--engagement",
-                        engagement,
-                        "--technique",
-                        os.environ.get("FORGE_KILLCHAIN_PHASE3_TECHNIQUE", "std"),
-                        "--os",
-                        os.environ.get("FORGE_KILLCHAIN_PHASE3_OS", "windows"),
-                    ],
-                    scope_manifest,
-                ),
-                "phase3 evasion generate",
-            )
-        )
-        # Phase 5 — reverse-shell payload build (writes payload file only).
-        # Defaults are safe placeholder LHOST/LPORT; operator can override
-        # via FORGE_LHOST / FORGE_LPORT if a real listener exists.
-        post_shell_args = [
-            "post",
-            "shell",
-            "--engagement",
-            engagement,
-            "--lhost",
-            os.environ.get("FORGE_LHOST", "127.0.0.1"),
-            "--lport",
-            os.environ.get("FORGE_LPORT", "443"),
-            "--roe-id",
-            roe_id,
-        ]
-        offensive_finalization_specs.append(
-            (
-                _append_scope_manifest_arg(post_shell_args, scope_manifest),
-                "phase5 post-shell payload",
-            )
-        )
-
-    def _build_offensive_data_driven_specs() -> list[tuple[list[str], str]]:
-        """Return Phase 4/5 specs that only run when the DB has inferable targets.
-
-        Called after cred-validate finalizers so `services` and `credentials`
-        rows reflect the freshest state. Each entry still runs its own
-        scope/ROE gates inside the child command.
-        """
-        specs: list[tuple[list[str], str]] = []
-        if not attack_mode or dry_run_all:
-            return specs
-        try:
-            _dd_con = direct_connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
-        except Exception:  # noqa: BLE001
-            return specs
-        try:
-            try:
-                web_row = _dd_con.execute(
-                    """
-                    SELECT h.ip, h.hostname, s.port
-                    FROM services s
-                    JOIN hosts h ON s.host_id = h.id
-                    WHERE h.engagement_id=?
-                      AND (
-                          s.service_name IN ('http', 'https')
-                          OR s.port IN (80, 443, 8080, 8443)
-                      )
-                    ORDER BY s.port DESC
-                    LIMIT 1
-                    """,
-                    (engagement_id,),
-                ).fetchone()
-            except sqlite3.OperationalError:
-                web_row = None
-            web_target: Optional[str] = None
-            if web_row:
-                host_value = str(web_row[1] or web_row[0] or "").strip()
-                port_value = int(web_row[2] or 0)
-                if host_value:
-                    scheme = "https" if port_value in (443, 8443) else "http"
-                    if port_value in (0, 80, 443):
-                        web_target = f"{scheme}://{host_value}/"
-                    else:
-                        web_target = f"{scheme}://{host_value}:{port_value}/"
-            if web_target:
-                specs.append(
-                    (
-                        _append_scope_manifest_arg(
-                            [
-                                "vuln",
-                                "idor",
-                                "--engagement",
-                                engagement,
-                                "--target",
-                                web_target,
-                                "--depth",
-                                "2",
-                                "--roe-id",
-                                roe_id,
-                            ],
-                            scope_manifest,
-                        ),
-                        f"phase4 vuln idor ({web_target})",
-                    )
-                )
-                specs.append(
-                    (
-                        _append_scope_manifest_arg(
-                            [
-                                "auth",
-                                "brute",
-                                "--engagement",
-                                engagement,
-                                "--target",
-                                web_target,
-                                "--max-attempts",
-                                "10",
-                                "--roe-id",
-                                roe_id,
-                            ],
-                            scope_manifest,
-                        ),
-                        f"phase4 auth brute ({web_target})",
-                    )
-                )
-                specs.append(
-                    (
-                        _append_scope_manifest_arg(
-                            [
-                                "auth",
-                                "bypass",
-                                "--engagement",
-                                engagement,
-                                "--target",
-                                web_target,
-                                "--roe-id",
-                                roe_id,
-                            ],
-                            scope_manifest,
-                        ),
-                        f"phase4 auth bypass ({web_target})",
-                    )
-                )
-            try:
-                lateral_row = _dd_con.execute(
-                    """
-                    SELECT h.ip, h.hostname
-                    FROM credentials c
-                    JOIN hosts h ON h.ip = c.validated_host
-                    WHERE c.engagement_id=? AND c.validated=1 AND c.validated_host != ''
-                    ORDER BY c.validated_at DESC
-                    LIMIT 1
-                    """,
-                    (engagement_id,),
-                ).fetchone()
-            except sqlite3.OperationalError:
-                lateral_row = None
-            if lateral_row:
-                lateral_target = str(lateral_row[1] or lateral_row[0] or "").strip()
-                if lateral_target:
-                    specs.append(
-                        (
-                            _append_scope_manifest_arg(
-                                [
-                                    "post",
-                                    "lateral",
-                                    "--engagement",
-                                    engagement,
-                                    "--target",
-                                    lateral_target,
-                                    "--technique",
-                                    "smb_exec",
-                                    "--roe-id",
-                                    roe_id,
-                                ],
-                                scope_manifest,
-                            ),
-                            f"phase5 post lateral ({lateral_target})",
-                        )
-                    )
-        finally:
-            _dd_con.close()
-        return specs
-
-    network_capable_post_validation_specs: list[tuple[list[str], str]] = [
-        (["vuln", "passive", "--engagement", engagement], "vuln passive fingerprint"),
-        (["exploit", "correlate", "--engagement", engagement], "exploit correlate"),
-    ]
-    # Phase 3 payload generation and Phase 5 post-shell run after HIBP/cred
-    # validation but before graph/report so their outputs (payload files, DB
-    # rows) appear in the final deterministic report artifact.
-    network_capable_post_validation_specs.extend(offensive_finalization_specs)
-    # Data-driven Phase 4/5 specs are appended at execution-time so they see
-    # the freshest services + validated_credentials rows after cred-validate.
-    data_driven_offensive_specs = _build_offensive_data_driven_specs()
-    if data_driven_offensive_specs:
-        network_capable_post_validation_specs.extend(data_driven_offensive_specs)
-    sequential_post_validation_specs: list[tuple[list[str], str]] = [
-        (
-            [
-                "graph",
-                "build",
-                "--engagement",
-                engagement,
-                "--format",
-                "all",
-                "--output-dir",
-                "reports",
-                "--snapshot",
-            ],
-            "attack-path graph family",
-        ),
-        (list(report_args), "report generate"),
-    ]
-    if dry_run_all:
-        skipped = ", ".join(label for _, label in network_capable_post_validation_specs)
-        _log(
-            "finalization dry-run",
-            f"[dim]skipped network-capable finalizers: {skipped}[/dim]",
-        )
-        _cli_audit(
-            db_path,
-            engagement_id,
-            "orchestrator",
-            "kill_chain",
-            "dry_run_finalization_skipped",
-            target=domain,
-            result=f"labels={skipped}",
-        )
-        parallel_post_validation_specs: list[tuple[list[str], str]] = []
-    else:
-        parallel_post_validation_specs = list(network_capable_post_validation_specs)
-    post_validation_finalization_specs = [
-        *parallel_post_validation_specs,
-        *sequential_post_validation_specs,
-    ]
-    finalization_specs = [
-        *pre_validation_finalization_specs,
-        *post_validation_finalization_specs,
-    ]
-
-    finalization_started_at = time.perf_counter()
-    finalization_completed = 0
-    finalization_failed = 0
-
-    def _run_finalization_module(cmd_argv: list[str], label: str) -> int:
-        nonlocal finalization_completed, finalization_failed
-        total_items = len(finalization_specs)
-        _record_finalization_progress(
-            label,
-            _batch_progress_snapshot(
-                total=total_items,
-                workers=1,
-                completed=finalization_completed,
-                failed=finalization_failed,
-                started_at=finalization_started_at,
-            ),
-        )
-        result = int(_run_module(cmd_argv, label))
-        finalization_completed += 1
-        if result != 0:
-            finalization_failed += 1
-        _record_finalization_progress(
-            label,
-            _batch_progress_snapshot(
-                total=total_items,
-                workers=1,
-                completed=finalization_completed,
-                failed=finalization_failed,
-                started_at=finalization_started_at,
-            ),
-        )
-        return result
-
-    def _record_finalization_batch_progress(
-        label: str,
-        metrics: dict[str, object],
-        *,
-        completed_offset: int,
-        failed_offset: int,
-    ) -> None:
-        _record_finalization_progress(
-            label,
-            _batch_progress_snapshot(
-                total=len(finalization_specs),
-                workers=max(1, int(metrics.get("workers") or 1)),
-                completed=completed_offset + int(metrics.get("completed") or 0),
-                failed=failed_offset + int(metrics.get("failed") or 0),
-                started_at=finalization_started_at,
-            ),
-        )
+    # (vuln/auth/post-lateral) are discovered from current DB state. Every
+    # child command still runs scope_gate.assert_in_scope and
+    # _direct_cli_require_roe inside its own body; the outer ROE/scope-manifest
+    # was validated above.
+    finalization_preparation = prepare_kill_chain_finalization(
+        db_path=db_path,
+        engagement_id=engagement_id,
+        engagement=engagement,
+        domain=domain,
+        planned_report_path=_report_path,
+        dry_run_all=dry_run_all,
+        credential_validate=credential_validate,
+        attack_mode=attack_mode,
+        report_provider=report_provider,
+        report_max_loops=report_max_loops,
+        roe_id=roe_id,
+        scope_manifest=scope_manifest,
+        append_scope_manifest_arg=_append_scope_manifest_arg,
+        env=os.environ,
+        log_callback=_log,
+        audit_callback=_cli_audit,
+    )
+    finalization_plan = finalization_preparation.finalization_plan
 
     # For prereq detection reporting: total emails processed across all iterations
     emails = sorted(processed_emails)
     if _maybe_interrupt_run("pre_finalization"):
         return
 
-    # Credential validation (opt-in via --credential-validate)
-    if credential_validate:
-        _log("cred validate", "[yellow]--credential-validate set - attempting live logins[/yellow]")
-        credential_validation_inputs = list(pre_validation_finalization_specs[1:])
-        if len(credential_validation_inputs) > 1 and parallel_workers > 1:
-            _log(
-                "cred validate spec prep",
-                f"[dim]parallel parse x{min(parallel_workers, len(credential_validation_inputs))}[/dim]",
-            )
-        credential_validation_specs = _run_inprocess_batch(
-            credential_validation_inputs,
-            lambda item: ModuleDispatchSpec(cmd_argv=list(item[0]), label=item[1]),
-            max_workers=parallel_workers,
-            progress_label="cred validate spec prep",
-            progress_callback=_record_batch_progress,
-        )
-        if len(credential_validation_specs) > 1 and parallel_workers > 1:
-            _log(
-                "cred validate",
-                f"[dim]parallel dispatch x{min(parallel_workers, len(credential_validation_specs))}[/dim]",
-            )
-        completed_offset = finalization_completed
-        failed_offset = finalization_failed
-        credential_results = _run_module_batch(
-            credential_validation_specs,
-            _run_module,
-            max_workers=parallel_workers,
-            progress_label="cred validate batch",
-            progress_callback=lambda label, metrics: _record_finalization_batch_progress(
-                label,
-                metrics,
-                completed_offset=completed_offset,
-                failed_offset=failed_offset,
-            ),
-        )
-        finalization_completed += len(credential_results)
-        finalization_failed += sum(1 for result in credential_results if int(result) != 0)
-    else:
-        _log("cred validate", "[dim]skipped (pass --credential-validate to enable)[/dim]")
-
-    # Cloud scan summary (actual scans ran per-iteration in fan-out J)
-    if not skip_cloud:
-        _run_pending_cloud_key_validation("final cloud key validation")
-        _run_finding_synthesis("final finding synthesis")
-        _cli_audit(
-            db_path,
-            engagement_id,
-            "orchestrator",
-            "kill_chain",
-            "cloud_scan_summary",
-            target=domain,
-            result=(
-                f"supabase={len(all_cloud_refs['supabase'])} "
-                f"firebase={len(all_cloud_refs['firebase'])} "
-                f"aws_s3={len(all_cloud_refs['aws_s3'])} "
-                f"gcs={len(all_cloud_refs['gcs'])} "
-                f"azure_blob={len(all_cloud_refs['azure_blob'])} "
-                f"amplify={len(all_cloud_refs['amplify'])} "
-                f"gcp_appspot={len(all_cloud_refs['gcp_appspot'])} "
-                f"gcp_cf={len(all_cloud_refs['gcp_cloudfunctions'])} "
-                f"cf_pages={len(all_cloud_refs['cloudflare_pages'])} "
-                f"cf_workers={len(all_cloud_refs['cloudflare_worker'])} "
-                f"cf_r2={len(all_cloud_refs['cloudflare_r2'])} "
-                f"github_pages={len(all_cloud_refs['github_pages'])} "
-                f"gitlab_pages={len(all_cloud_refs['gitlab_pages'])} "
-                f"vercel={len(all_cloud_refs['vercel'])} "
-                f"netlify={len(all_cloud_refs['netlify'])} "
-                f"scans_run={len(processed_cloud_refs)}"
-            ),
-        )
-
-    # HIBP domain intel, passive vuln fingerprinting, and exploit
-    # correlation are independent of each other, so batch them before the
-    # dependency-bound graph/report tail.
-    pregraph_finalization_inputs = [
-        pre_validation_finalization_specs[0],
-        *parallel_post_validation_specs,
-    ]
-    if len(pregraph_finalization_inputs) > 1 and parallel_workers > 1:
-        _log(
-            "finalization pregraph spec prep",
-            f"[dim]parallel parse x{min(parallel_workers, len(pregraph_finalization_inputs))}[/dim]",
-        )
-    pregraph_finalization_specs = _run_inprocess_batch(
-        pregraph_finalization_inputs,
-        lambda item: ModuleDispatchSpec(cmd_argv=list(item[0]), label=item[1]),
-        max_workers=parallel_workers,
-        progress_label="finalization pregraph spec prep",
-        progress_callback=_record_batch_progress,
+    finalization_result = run_kill_chain_finalization_execution(
+        finalization_plan=finalization_plan,
+        credential_validate=credential_validate,
+        skip_cloud=skip_cloud,
+        cloud_refs=all_cloud_refs,
+        processed_refs=processed_cloud_refs,
+        run_pending_cloud_key_validation=_run_pending_cloud_key_validation,
+        run_finding_synthesis=_run_finding_synthesis,
+        audit_callback=_cli_audit,
+        db_path=db_path,
+        engagement_id=engagement_id,
+        target=domain,
+        parallel_workers=parallel_workers,
+        log_callback=_log,
+        run_inprocess_batch=_run_inprocess_batch,
+        run_module_batch=_run_module_batch,
+        run_module=_run_module,
+        dispatch_spec_type=ModuleDispatchSpec,
+        record_batch_progress=_record_batch_progress,
+        record_finalization_progress=_record_finalization_progress,
+        batch_progress_snapshot=_batch_progress_snapshot,
+        perf_counter=time.perf_counter,
     )
-    if len(pregraph_finalization_specs) > 1 and parallel_workers > 1:
-        _log(
-            "finalization pregraph",
-            f"[dim]parallel dispatch x{min(parallel_workers, len(pregraph_finalization_specs))}[/dim]",
-        )
-    completed_offset = finalization_completed
-    failed_offset = finalization_failed
-    pregraph_results = _run_module_batch(
-        pregraph_finalization_specs,
-        _run_module,
-        max_workers=parallel_workers,
-        progress_label="finalization pregraph batch",
-        progress_callback=lambda label, metrics: _record_finalization_batch_progress(
-            label,
-            metrics,
-            completed_offset=completed_offset,
-            failed_offset=failed_offset,
-        ),
-    )
-    finalization_completed += len(pregraph_results)
-    finalization_failed += sum(1 for result in pregraph_results if int(result) != 0)
-
-    # The consolidated graph/export build must finish before report generation.
-    if len(sequential_post_validation_specs) > 1:
-        _log(
-            "finalization postgraph",
-            "[dim]sequential dispatch x1[/dim]  [dim]graph/report order preserved[/dim]",
-        )
-    sequential_results = _run_inprocess_batch(
-        sequential_post_validation_specs,
-        lambda item: _run_finalization_module(list(item[0]), str(item[1])),
-        max_workers=1,
-        progress_label="finalization postgraph",
-    )
-
-    report_returncode: int | None = None
-    for (_cmd_argv, label), result in zip(sequential_post_validation_specs, sequential_results):
-        if label == "report generate":
-            report_returncode = int(result)
-            break
-
-    def _is_nonempty_report_artifact(path: Path) -> bool:
-        try:
-            return path.is_file() and path.stat().st_size > 0
-        except OSError:
-            return False
-
-    def _preferred_report_artifact() -> Path | None:
-        planned = Path(_report_path)
-        candidates = (
-            planned,
-            planned.with_suffix(".json"),
-            planned.with_suffix(".csv"),
-            planned.with_suffix(".pdf"),
-        )
-        for candidate in candidates:
-            if _is_nonempty_report_artifact(candidate):
-                return candidate
-        return None
-
-    def _ensure_report_artifact() -> tuple[Path | None, dict[str, object]]:
-        artifact = _preferred_report_artifact()
-        if artifact is not None and (report_returncode in (None, 0)):
-            return artifact, {
-                "report_artifact_verified": True,
-                "report_finalization_status": "completed",
-                "report_generate_returncode": report_returncode,
-            }
-
-        if report_returncode not in (None, 0):
-            reason = f"report generate exited {report_returncode}"
-        else:
-            reason = "report generate completed without a report artifact"
-        _log(
-            "report fallback", f"[yellow]{reason}; forcing deterministic template fallback[/yellow]"
-        )
-        _cli_audit(
-            db_path,
-            engagement_id,
-            "orchestrator",
-            "kill_chain",
-            "report_template_fallback_start",
-            target=_report_path,
-            result=reason,
-        )
-        try:
-            from forge.phase6.report_synthesizer import synthesise  # noqa: PLC0415
-
-            fallback_path = synthesise(
-                engagement_id=engagement,
-                output_path=_report_path,
-                assume_yes=True,
-                provider="template",
-                max_correction_loops=0,
-            )
-        except Exception as exc:  # noqa: BLE001
-            fallback_error = f"{type(exc).__name__}: {str(exc)[:180]}"
-            _cli_audit(
-                db_path,
-                engagement_id,
-                "orchestrator",
-                "kill_chain",
-                "report_template_fallback_failed",
-                target=_report_path,
-                result=fallback_error,
-            )
-            return None, {
-                "report_artifact_verified": False,
-                "report_finalization_status": "failed",
-                "report_generate_returncode": report_returncode,
-                "report_fallback_provider": "template",
-                "report_fallback_reason": reason,
-                "report_fallback_error": fallback_error,
-            }
-
-        artifact = _preferred_report_artifact()
-        fallback_artifact = Path(fallback_path)
-        if artifact is None and _is_nonempty_report_artifact(fallback_artifact):
-            artifact = fallback_artifact
-        if artifact is None:
-            error = "template fallback returned without a report artifact"
-            _cli_audit(
-                db_path,
-                engagement_id,
-                "orchestrator",
-                "kill_chain",
-                "report_template_fallback_failed",
-                target=_report_path,
-                result=error,
-            )
-            return None, {
-                "report_artifact_verified": False,
-                "report_finalization_status": "failed",
-                "report_generate_returncode": report_returncode,
-                "report_fallback_provider": "template",
-                "report_fallback_reason": reason,
-                "report_fallback_error": error,
-            }
-
-        status = "template_fallback" if artifact.suffix.lower() == ".md" else "raw_export_fallback"
-        _cli_audit(
-            db_path,
-            engagement_id,
-            "orchestrator",
-            "kill_chain",
-            "report_template_fallback_complete",
-            target=str(artifact),
-            result=f"status={status} reason={reason}",
-        )
-        return artifact, {
-            "report_artifact_verified": True,
-            "report_finalization_status": status,
-            "report_generate_returncode": report_returncode,
-            "report_fallback_provider": "template",
-            "report_fallback_reason": reason,
-            "report_fallback_path": str(artifact),
-        }
-
-    report_artifact_path, report_finalization_metadata = _ensure_report_artifact()
+    report_returncode = finalization_result.report_returncode
+    finalization_failed = finalization_result.state.failed
 
     total = _time.time() - step_start
-    _cli_audit(
-        db_path,
-        engagement_id,
-        "orchestrator",
-        "kill_chain",
-        "kill_chain_complete",
+    closeout_result = finalize_kill_chain_closeout(
+        planned_report_path=_report_path,
+        report_returncode=report_returncode,
+        engagement=engagement,
+        db_path=db_path,
+        engagement_id=engagement_id,
         target=domain,
-        result=f"elapsed_s={total:.1f} emails_chained={len(emails) if emails else 0}",
+        elapsed_seconds=total,
+        emails_chained=emails,
+        run_progress_state=run_progress_state,
+        print_callback=console.print,
+        log_callback=_log,
+        audit_callback=_cli_audit,
+        logger=logging.getLogger(__name__),
     )
-    final_pending_total = int(run_progress_state.get("pending_work_total") or 0)
+    final_pending_total = closeout_result.final_pending_total
 
-    # ─── Provider-key-validator sweep (task 1 wiring) ──────────────────
-    # Auto-validate any discovered credentials via the 9 strict validators.
-    # Non-destructive read-only probes; scope-gated by the discovery phase.
-    try:
-        from forge.phase4.provider_key_validators import try_validate as _pkv_try_validate  # noqa: PLC0415
-        from forge.db.direct_connect import direct_connect as _pkv_dc  # noqa: PLC0415
+    from forge.orchestration.run_tracking import (  # noqa: PLC0415
+        EngagementRunCompletionGuard,
+        engagement_run_completion_callback,
+    )
 
-        _pkv_con = _pkv_dc(db_path)
-        try:
-            _pkv_rows = _pkv_con.execute(
-                "SELECT id, raw_key FROM key_scanner_findings "
-                "WHERE engagement_id=? AND (validation_state IS NULL OR validation_state='')",
-                (engagement_id,),
-            ).fetchall()
-            _pkv_validated = 0
-            for _pkv_row in _pkv_rows:
-                _pkv_result = _pkv_try_validate(str(_pkv_row[1] or ""))
-                if _pkv_result:
-                    _pkv_con.execute(
-                        "UPDATE key_scanner_findings SET validation_state=?, validation_detail=? WHERE id=?",
-                        (
-                            _pkv_result.provider if _pkv_result.verified else "UNVERIFIED",
-                            _pkv_result.reason[:500],
-                            _pkv_row[0],
-                        ),
-                    )
-                    _pkv_validated += 1
-            if _pkv_validated:
-                _pkv_con.commit()
-                _log(
-                    "key validation",
-                    f"[green]{_pkv_validated} credentials auto-validated via provider probes[/green]",
-                )
-        finally:
-            _pkv_con.close()
-    except Exception as _pkv_exc:  # noqa: BLE001
-        logging.getLogger(__name__).debug("provider-key-validator sweep skipped: %s", _pkv_exc)
-
-    # ─── Aggregate stats (task 3 wiring) ──────────────────────────────
-    # Compute + persist stats JSON sidecar alongside the report.
-    try:
-        from forge.phase6.aggregate_stats import (
-            compute_stats as _as_compute,
-            write_json_sidecar as _as_write,
-        )  # noqa: PLC0415
-        from forge.db.direct_connect import direct_connect as _as_dc  # noqa: PLC0415
-
-        _as_con = _as_dc(db_path)
-        try:
-            _as_stats = _as_compute(_as_con, engagement_id, reports_dir=Path("reports"))
-            _as_write(_as_stats, Path("reports"))
-        finally:
-            _as_con.close()
-    except Exception as _as_exc:  # noqa: BLE001
-        logging.getLogger(__name__).debug("aggregate stats computation skipped: %s", _as_exc)
-
-    if report_artifact_path is None:
-        console.print(
-            f"\n[bold red]Kill-chain finalization failed[/bold red] in {total:.1f}s "
-            "[dim](no report artifact persisted)[/dim]"
-        )
-    elif final_pending_total > 0:
-        console.print(
-            f"\n[bold yellow]Kill-chain stopped with pending recursive work[/bold yellow] "
-            f"in {total:.1f}s [dim](pending={final_pending_total})[/dim]"
-        )
-    else:
-        console.print(f"\n[bold green]Kill-chain complete[/bold green] in {total:.1f}s")
-    console.print(f"[dim]Report:[/dim] {report_artifact_path or _report_path}")
-    console.print(f"[dim]Evidence:[/dim] .forge_data/engagements/{engagement}.db")
-    _mtgx = f"reports/{engagement}_attack_graph.mtgx"
-    _mg = f"reports/{engagement}_attack_graph.graphml"
-    _mn = f"reports/{engagement}_attack_graph_nodes.csv"
-    _me = f"reports/{engagement}_attack_graph_edges.csv"
-    from pathlib import Path as _P3  # noqa: PLC0415
-
-    if _P3(_mg).is_file() or _P3(_mtgx).is_file():
-        if _P3(_mtgx).is_file():
-            console.print(f"[dim]Maltego workspace:[/dim] {_mtgx}")
-        if _P3(_mg).is_file():
-            console.print(f"[dim]Maltego graphml:[/dim] {_mg}")
-        console.print(f"[dim]Maltego CSVs:[/dim] {_mn}  |  {_me}")
-        console.print(
-            "[dim]  -> open the .mtgx in Maltego Graph (Desktop), or import the "
-            ".graphml in Community Edition if you need the lightweight path.[/dim]"
-        )
-
-    engagement_run_completed = False
-
-    def _complete_engagement_run(prereq_metadata: dict[str, object] | None = None) -> None:
-        nonlocal engagement_run_completed
-        if engagement_run_completed:
-            return
-        pending_counts = _refresh_pending_work_state()
-        _set_progress_counts()
-        report_ready = report_artifact_path is not None
-        pending_total = sum(int(count or 0) for count in pending_counts.values())
-        run_succeeded = report_ready and pending_total == 0
-        run_status = "completed" if run_succeeded else "failed"
-        run_phase = "completed" if run_succeeded else "failed"
-        final_metadata: dict[str, object] = {
-            **_engagement_run_metadata(phase=run_phase),
-            "elapsed_seconds": round(total, 3),
-            "planned_report_path": _report_path,
-            "report_path": str(report_artifact_path or _report_path),
-            "report_provider": report_provider or "default",
-            "report_max_loops": report_max_loops,
-            "finalization_failed": finalization_failed,
-            **report_finalization_metadata,
-        }
-        if prereq_metadata:
-            final_metadata.update(prereq_metadata)
-        _cli_audit(
-            db_path,
-            engagement_id,
-            "orchestrator",
-            "kill_chain",
-            "artifact_queue_terminal_metrics",
-            target=domain,
-            result=_terminal_artifact_queue_summary(final_metadata),
-        )
-        engagement_run_tracker.finish_run(
-            engagement_run_handle,
-            status=run_status,
-            current_iteration=last_iteration,
-            error=(
-                None
-                if run_succeeded
-                else (
-                    f"max iterations exhausted with pending recursive work: {pending_total}"
-                    if report_ready
-                    else "final report generation failed and no fallback artifact exists"
-                )
-            ),
-            metadata=final_metadata,
-        )
-        _clear_run_control_markers()
-        engagement_run_completed = True
-
-        # Refresh review surfaces only after all optional follow-on work has
-        # landed in the DB and the run manifest has been written.
-        _refresh_dashboard_review_surface(run_status)
+    _complete_engagement_run = engagement_run_completion_callback(
+        guard=EngagementRunCompletionGuard(),
+        refresh_pending_work_state=_refresh_pending_work_state,
+        set_progress_counts=_set_progress_counts,
+        build_base_metadata=lambda: _engagement_run_metadata(phase="completed"),
+        audit=_cli_audit,
+        db_path=db_path,
+        engagement_id=engagement_id,
+        target=domain,
+        tracker=engagement_run_tracker,
+        handle=engagement_run_handle,
+        last_iteration=last_iteration,
+        clear_run_control_markers=_clear_run_control_markers,
+        refresh_dashboard_review_surface=_refresh_dashboard_review_surface,
+        elapsed_seconds=total,
+        planned_report_path=_report_path,
+        **kill_chain_completion_report_kwargs_from_closeout(
+            closeout=closeout_result,
+            planned_report_path=_report_path,
+            report_provider=report_provider,
+            report_max_loops=report_max_loops,
+            finalization_failed=finalization_failed,
+        ),
+    )
 
     # ═══════════════════════════════════════════════════════════════════
     # PREREQUISITE DETECTION - tell the operator which extra tools would
@@ -16522,222 +13388,38 @@ def kill_chain(
     # (runnable via --auto-run-detected or Y/N prompt) or a manual_hint
     # (requires --target-url / --service and can only be shown as text).
     # ═══════════════════════════════════════════════════════════════════
-    import sys as _sys2  # noqa: PLC0415
     from forge.kill_chain_prereqs import (  # noqa: PLC0415
-        detect_kill_chain_prerequisites,
-        handle_kill_chain_prerequisite_flow,
+        run_kill_chain_prerequisites_with_cli_hooks,
     )
 
-    detected = detect_kill_chain_prerequisites(
+    run_kill_chain_prerequisites_with_cli_hooks(
+        audit_callback=_cli_audit,
         db_path=db_path,
         engagement_id=engagement_id,
         engagement=engagement,
         domain=domain,
-        include_offensive_prereqs=include_offensive_prereqs,
-    )
-
-    _cli_audit(
-        db_path,
-        engagement_id,
-        "orchestrator",
-        "kill_chain",
-        "prereq_detection",
-        target=domain,
-        result=(
-            f"detected={len(detected)} auto_run={auto_run_detected} "
-            f"offensive_prereqs={include_offensive_prereqs}"
-        ),
-    )
-
-    def _audit_prereq_auto_run(result: str) -> None:
-        _cli_audit(
-            db_path,
-            engagement_id,
-            "orchestrator",
-            "kill_chain",
-            "prereq_auto_run",
-            target=domain,
-            result=result,
-        )
-
-    def _audit_prereq_prompted(result: str) -> None:
-        _cli_audit(
-            db_path,
-            engagement_id,
-            "orchestrator",
-            "kill_chain",
-            "prereq_prompted",
-            target=domain,
-            result=result,
-        )
-
-    handle_kill_chain_prerequisite_flow(
-        detected,
         auto_run_detected=auto_run_detected,
+        include_offensive_prereqs=include_offensive_prereqs,
         parallel_workers=parallel_workers,
         console_print=console.print,
         log=_log,
         complete_run=_complete_engagement_run,
-        audit_auto_run=_audit_prereq_auto_run,
-        audit_prompted=_audit_prereq_prompted,
         run_inprocess_batch=_run_inprocess_batch,
         run_module_batch=_run_module_batch,
         run_module=_run_module,
-        make_dispatch_spec=lambda argv, label: ModuleDispatchSpec(cmd_argv=argv, label=label),
-        harden_child_argv=lambda argv: _detected_prereq_child_argv(
-            argv,
-            roe_id=roe_id,
-            scope_manifest=scope_manifest,
-        ),
+        dispatch_spec_type=ModuleDispatchSpec,
+        harden_child_argv=_detected_prereq_child_argv,
         progress_callback=_record_batch_progress,
-        is_tty=_sys2.stdin.isatty() and _sys2.stdout.isatty(),
+        stdin=sys.stdin,
+        stdout=sys.stdout,
         input_func=input,
+        roe_id=roe_id,
+        scope_manifest=scope_manifest,
     )
     return
 
 
-@app.command("dashboard")
-def dashboard(
-    output: Optional[str] = typer.Option(
-        None,
-        "--output",
-        "-o",
-        help="Output HTML path. Defaults to reports/dashboard.html.",
-    ),
-    open_browser: bool = typer.Option(
-        False,
-        "--open",
-        help="Open the generated dashboard in your default browser.",
-    ),
-) -> None:
-    """Build a static HTML dashboard of every engagement + report.
-
-    Generates a searchable overview page plus companion per-engagement
-    detail pages containing evidence tables, report previews, audit
-    history, and attack-graph artifact links. No web server required -
-    just open the dashboard HTML file.
-    """
-    from forge.config import ForgeConfig  # noqa: PLC0415
-    from forge.reporting.dashboard import generate_dashboard  # noqa: PLC0415
-    from pathlib import Path as _P  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    data_dir = _P(cfg.data_dir)
-    reports_dir = _P("reports")
-    out_path = _P(output) if output else reports_dir / "dashboard.html"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    result = generate_dashboard(
-        data_dir=data_dir,
-        reports_dir=reports_dir,
-        output_path=out_path,
-    )
-    size = result.stat().st_size
-    console.print(f"[bold green]Dashboard:[/bold green] {result}")
-    console.print(f"  {size:,} bytes")
-    console.print(f"  [dim]open in browser: start {result}[/dim]")
-    if open_browser:
-        import webbrowser
-
-        webbrowser.open(result.resolve().as_uri())
-
-
-@app.command("doctor")
-def doctor() -> None:
-    """Proactive environment and dependency health check."""
-    import platform
-    import shutil
-    import sys
-    import sqlite3
-    from rich.table import Table
-    from forge.config import ForgeConfig
-
-    console.print("\n[bold cyan]FORGE Doctor[/bold cyan] - Environment Health Check\n")
-
-    cfg = ForgeConfig.load()
-    table = Table(show_header=True, header_style="bold magenta")
-    table.add_column("Component", width=20)
-    table.add_column("Status", width=15)
-    table.add_column("Details")
-
-    table.add_row("OS Platform", "[green]OK[/green]", f"{platform.system()} {platform.release()}")
-    table.add_row("Python Version", "[green]OK[/green]", sys.version.split()[0])
-
-    db_path = cfg.kb_path
-    if db_path.exists():
-        try:
-            with direct_connect(str(db_path)) as conn:
-                count = conn.execute("SELECT count(*) FROM cve").fetchone()[0]
-                if count > 0:
-                    table.add_row("Knowledge Base", "[green]OK[/green]", f"{count} CVEs loaded")
-                else:
-                    table.add_row("Knowledge Base", "[yellow]EMPTY[/yellow]", "Run `forge kb sync`")
-        except Exception as e:
-            table.add_row("Knowledge Base", "[red]ERROR[/red]", str(e))
-    else:
-        table.add_row("Knowledge Base", "[yellow]MISSING[/yellow]", "Run `forge kb sync`")
-
-    for bin_name in ["nmap", "masscan", "sherlock", "kiro-cli", "claude", "sqlmap"]:
-        path = shutil.which(bin_name)
-        if path:
-            table.add_row(f"Binary: {bin_name}", "[green]OK[/green]", str(path))
-        else:
-            table.add_row(f"Binary: {bin_name}", "[yellow]MISSING[/yellow]", "Not found in PATH")
-
-    if cfg.shodan_key:
-        table.add_row("Shodan API", "[green]OK[/green]", "Configured")
-    else:
-        table.add_row("Shodan API", "[yellow]MISSING[/yellow]", "FORGE_SHODAN_API_KEY not set")
-
-    import os
-
-    if os.environ.get("FORGE_GITHUB_TOKEN"):
-        table.add_row("GitHub Token", "[green]OK[/green]", "Configured")
-    else:
-        table.add_row("GitHub Token", "[yellow]MISSING[/yellow]", "FORGE_GITHUB_TOKEN not set")
-
-    console.print(table)
-    console.print()
-
-
-@app.command("scaffold")
-def scaffold(
-    output_dir: str = typer.Option(".", "--output", "-o"),
-) -> None:
-    """Generate the full obfuscated directory scaffold for a new FORGE deployment."""
-    from forge.opsec.scaffold import generate_scaffold  # noqa: PLC0415
-
-    generate_scaffold(output_dir=output_dir)
-
-
-@app.command("menu")
-def menu(
-    advanced: bool = typer.Option(
-        False,
-        "--advanced",
-        help=(
-            "Launch the legacy questionary-based menu (forge.menu_shell). "
-            "The default menu is the cleaner rich TUI in forge.tui.main_menu."
-        ),
-    ),
-) -> None:
-    """Launch the interactive engagement menu (TUI)."""
-    if not sys.stdin.isatty():
-        console.print(
-            "[bold yellow]forge menu requires an interactive terminal.[/bold yellow]\n"
-            "Non-TTY invocations (subprocess, pipe, CI, redirected stdin) would\n"
-            "crash prompt_toolkit's Win32Output with NoConsoleScreenBufferError.\n"
-            "Run this command directly from your terminal instead."
-        )
-        raise typer.Exit(code=2)
-    if advanced:
-        from forge.menu_shell import run_menu as run_advanced_menu  # noqa: PLC0415
-
-        run_advanced_menu()
-        return
-    from forge.tui.main_menu import run_menu  # noqa: PLC0415
-
-    run_menu()
+register_kill_chain_command(app, kill_chain)
 
 
 # ---------------------------------------------------------------------------
@@ -16745,24 +13427,18 @@ def menu(
 # ---------------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------------------
-# Command registration imports (must be after app objects are defined)
-# ---------------------------------------------------------------------------
-import forge.cli_osint  # noqa: F401,E402 — registers @osint_app.command decorators
-import forge.cli_cloud  # noqa: F401,E402 — registers @cloud_app.command decorators
-import forge.cli_graph  # noqa: F401,E402 — registers @graph_app.command decorators
-import forge.cli_post  # noqa: F401,E402 — registers @post_app.command decorators
-import forge.cli_report  # noqa: F401,E402 — registers @report_app.command decorators
 
-from forge.cli_cloud import (  # noqa: F401,E402
+# ---------------------------------------------------------------------------
+# Legacy decorator command imports (must run after app objects are defined)
+# ---------------------------------------------------------------------------
+from forge.cli_legacy_decorators import (  # noqa: F401,E402
+    _assert_offensive_cli,
     cloud_aws,
     cloud_azure,
     cloud_firebase,
     cloud_firebase_extract,
     cloud_supabase,
-)
-from forge.cli_graph import graph_build  # noqa: F401,E402
-from forge.cli_osint import (  # noqa: F401,E402
+    graph_build,
     osint_accounts,
     osint_breach,
     osint_dehashed,
@@ -16782,15 +13458,11 @@ from forge.cli_osint import (  # noqa: F401,E402
     osint_usernames,
     osint_validate,
     osint_xposed,
-)
-from forge.cli_post import (  # noqa: F401,E402
-    _assert_offensive_cli,
     post_beacon,
     post_lateral,
     post_shell,
+    report_generate,
 )
-from forge.cli_report import report_generate  # noqa: F401,E402
-
 
 def main() -> None:
     app()

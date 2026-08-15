@@ -14,22 +14,43 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-pytest.importorskip("jose")
+pytest.importorskip("jwt")
 
+from forge.active_validation.runner import (
+    active_validation_control_coverage,
+    create_active_validation_job,
+    run_active_validation_job,
+)
 from forge.cli import graph_build
+from forge.connectors.registry import connector_statuses, connector_summary
 from forge.deterministic_findings import DeterministicFindingEngine
 from forge.engagement_orchestrator import (
     ArtifactQueueProcessor,
     EngagementRunTracker,
     EngagementSynthesisEngine,
 )
+from forge.monitoring.continuous import (
+    create_monitoring_snapshot,
+    monitoring_overview,
+    upsert_monitoring_policy,
+)
 from forge.phase6.report_synthesizer import ReportSynthesizer
 from forge.reporting.dashboard import generate_dashboard
+from forge.graph.assets import upsert_asset_entity, upsert_ownership_claim
+from forge.remediation.workflow import (
+    request_active_validation_retest,
+    upsert_monitoring_alert_remediation,
+)
+from forge.secrets.lifecycle import secret_lifecycle_for_finding, sync_secret_lifecycle
+from forge.standards.vulnerabilities import enrich_vulnerability_findings, vulnerability_stix_bundle
 from forge.webui.app import create_app
 from forge.webui.auth import mint_token
 
 
 ROE_ID = "ROE-CANONICAL-2026-07"
+CANONICAL_CLOUD_REF_INPUT = "cloud_ref:aws_s3:Canonical-Public-Data"
+CANONICAL_CLOUD_REF_SEED = "aws_s3:canonical-public-data"
+CANONICAL_CLOUD_REF_IDENTIFIER = "canonical-public-data"
 
 
 def _headers() -> dict[str, str]:
@@ -57,6 +78,7 @@ def _scope_manifest(tmp_path: Path) -> Path:
                     "ops@canonical.example",
                     "+15551230000",
                     "canonical.example",
+                    CANONICAL_CLOUD_REF_SEED,
                 ],
             },
             sort_keys=True,
@@ -79,6 +101,7 @@ def _create_engagement(client: TestClient) -> dict[str, Any]:
                 {"seed_value": "ops@canonical.example", "source": "operator"},
                 {"seed_value": "+15551230000", "source": "operator"},
                 "https://downloads.canonical.example/app.apk",
+                CANONICAL_CLOUD_REF_INPUT,
             ],
         },
         headers=_headers(),
@@ -92,6 +115,7 @@ def _create_engagement(client: TestClient) -> dict[str, Any]:
         "ops@canonical.example",
         "+15551230000",
         "https://downloads.canonical.example/app.apk",
+        CANONICAL_CLOUD_REF_SEED,
     }.issubset(set(payload["seeds"]))
     return payload
 
@@ -133,22 +157,23 @@ def _assert_live_launch(
     assert payload["dry_run"] is False
     assert payload["roe_id"] == ROE_ID
     assert payload["scope_manifest"] == scope_manifest.as_posix()
-    assert payload["seed_count"] == 4
+    assert payload["seed_count"] == 5
     assert payload["primary_seed"] == "canonical.example"
     assert set(payload["related_seeds"]) == {
         "ops@canonical.example",
         "+15551230000",
         "https://downloads.canonical.example/app.apk",
+        CANONICAL_CLOUD_REF_SEED,
     }
 
     command = launched["command"]
     assert command[1:5] == ["-m", "forge.cli", "--no-tor", "kill-chain"]
     assert "--dry-run" not in command
-    assert ["--roe-id", ROE_ID] == command[
-        command.index("--roe-id") : command.index("--roe-id") + 2
-    ]
+    assert ["--roe-id", ROE_ID] == command[command.index("--roe-id") : command.index("--roe-id") + 2]
     assert command[command.index("--scope-manifest") + 1] == scope_manifest.as_posix()
-    assert command.count("--related-seed") == 3
+    assert command.count("--related-seed") == 4
+    cloud_ref_index = command.index(CANONICAL_CLOUD_REF_SEED)
+    assert command[cloud_ref_index - 1] == "--related-seed"
 
 
 def _artifact_bundle(tmp_path: Path) -> Path:
@@ -288,6 +313,7 @@ def _insert_seed_run_rows(con: sqlite3.Connection, engagement_id: int) -> None:
         "ops@canonical.example": "fanout_e_identity_chain",
         "+15551230000": "fanout_b_phone_chain",
         "https://downloads.canonical.example/app.apk": "fanout_k_artifact_static",
+        CANONICAL_CLOUD_REF_SEED: "fanout_j_cloud_validation",
     }
     for seed_id, seed_value in rows:
         loop_name = loop_by_seed.get(str(seed_value), "recursive_deepening")
@@ -352,6 +378,25 @@ def _insert_validations(con: sqlite3.Connection, engagement_id: int) -> None:
     )
 
 
+def _insert_cve_standards_seed(con: sqlite3.Connection, engagement_id: int) -> None:
+    con.execute(
+        """
+        INSERT INTO vulnerability_findings
+            (engagement_id, vuln_type, target_url, severity, title,
+             description, evidence, epss_score, epss_percentile, cisa_kev,
+             cisa_kev_due_date, cwe_ids, attack_techniques)
+        VALUES
+            (?, 'cve_exposure', 'https://portal.canonical.example/login',
+             'CRITICAL', 'Canonical Log4Shell exposure',
+             'Apache Log4j exposure with CWE-502 serialization risk.',
+             'Observed CVE-2021-44228 exploitation path T1190 in scoped fixture.',
+             0.94, 0.99, 1, '2022-05-03', '["CWE-502"]', '["T1190"]')
+        """
+        ,
+        (engagement_id,),
+    )
+
+
 def _populate_pipeline_state(db_path: Path, engagement_id: int, tmp_path: Path) -> None:
     artifact_processor = ArtifactQueueProcessor(db_path, engagement_id, max_workers=2)
     assert artifact_processor.ingest_local_artifacts([_artifact_bundle(tmp_path)]) == 1
@@ -372,6 +417,41 @@ def _populate_pipeline_state(db_path: Path, engagement_id: int, tmp_path: Path) 
     with sqlite3.connect(db_path) as con:
         _insert_seed_run_rows(con, engagement_id)
         _insert_validations(con, engagement_id)
+        _insert_cve_standards_seed(con, engagement_id)
+        con.execute(
+            """
+            INSERT OR IGNORE INTO cloud_assets
+                (engagement_id, asset_type, identifier, provider_identifier,
+                 source, metadata_json)
+            VALUES (?, 'aws_s3', ?, ?, 'kill_chain_cloud_ref', ?)
+            """,
+            (
+                engagement_id,
+                CANONICAL_CLOUD_REF_IDENTIFIER,
+                CANONICAL_CLOUD_REF_IDENTIFIER,
+                json.dumps(
+                    {
+                        "source": "operator_seed",
+                        "seed_type": "cloud_ref",
+                        "seed_value": CANONICAL_CLOUD_REF_SEED,
+                    },
+                    sort_keys=True,
+                ),
+            ),
+        )
+        con.execute(
+            """
+            INSERT OR IGNORE INTO validation_claims
+                (engagement_id, claim_type, key_id, owner, expires_at)
+            SELECT engagement_id, 'key', id, 'appsec@canonical.example',
+                   '2026-09-01T00:00:00Z'
+            FROM key_scanner_findings
+            WHERE engagement_id=? AND service IN ('firebase', 'supabase')
+            ORDER BY id
+            LIMIT 1
+            """,
+            (engagement_id,),
+        )
         con.execute(
             """
             INSERT INTO audit_log
@@ -388,6 +468,239 @@ def _populate_pipeline_state(db_path: Path, engagement_id: int, tmp_path: Path) 
     finding_summary = DeterministicFindingEngine(db_path, engagement_id).run()
     assert finding_summary.active_findings >= 2
     assert finding_summary.severity_summary.get("HIGH", 0) >= 2
+
+
+def _exercise_enterprise_ctem_primitives(
+    db_path: Path,
+    engagement_id: int,
+    scope_manifest: Path,
+) -> None:
+    statuses = connector_statuses(
+        env={
+            "FORGE_GITHUB_TOKEN": "ghp_never_render_canonical",
+            "FORGE_SHODAN_API_KEY": "shodan-never-render",
+        },
+        which=lambda name: f"C:/tools/{name}.exe" if name in {"subfinder", "gitleaks"} else None,
+        include_paid=True,
+    )
+    status_by_id = {item["id"]: item for item in statuses}
+    summary = connector_summary(statuses)
+    connector_blob = json.dumps({"statuses": statuses, "summary": summary}, sort_keys=True)
+    assert status_by_id["artifact_passive_parsers"]["readiness"] == "available"
+    assert status_by_id["projectdiscovery_subfinder"]["readiness"] == "available"
+    assert status_by_id["projectdiscovery_subfinder"]["cost_profile"] == "free_local"
+    assert status_by_id["projectdiscovery_httpx"]["safety"] == "read_only_scope_gated"
+    assert "scope_manifest" in status_by_id["projectdiscovery_httpx"]["required_gates"]
+    assert status_by_id["shodan_host_lookup"]["cost_profile"] == "free_tier_key"
+    assert summary["free_first_count"] > summary["optional_paid_count"]
+    assert "ghp_never_render_canonical" not in connector_blob
+    assert "shodan-never-render" not in connector_blob
+
+    kb = sqlite3.connect(":memory:")
+    kb.row_factory = sqlite3.Row
+    with sqlite3.connect(db_path) as con:
+        con.row_factory = sqlite3.Row
+        policy = upsert_monitoring_policy(
+            con,
+            engagement_id=engagement_id,
+            name="Canonical CTEM hourly",
+            schedule_interval_minutes=60,
+            metadata={"source": "canonical_e2e"},
+        )
+        baseline = create_monitoring_snapshot(
+            con,
+            engagement_id=engagement_id,
+            policy_id=int(policy["id"]),
+            snapshot_kind="manual",
+        )
+        job = create_active_validation_job(
+            con,
+            engagement_id=engagement_id,
+            target_ref="lab://canonical/security-control",
+            target_kind="fixture",
+            method="control_simulation",
+            mode="lab",
+            approved=True,
+            requested_by="canonical-operator",
+            approved_by="canonical-operator",
+            approval_note="canonical e2e lab proof",
+            roe_id=ROE_ID,
+            scope_manifest_ref=scope_manifest.as_posix(),
+            metadata={
+                "control_name": "CTEM validation gate",
+                "expected_control_result": "detected",
+                "observed_control_result": "detected",
+                "attack_mapping": "T1190",
+                "detection_source": "canonical-lab-fixture",
+                "detection_signal": "validated scoped exposure was blocked",
+            },
+        )
+        run = run_active_validation_job(
+            con,
+            engagement_id=engagement_id,
+            job_id=int(job["id"]),
+            operator="canonical-operator",
+        )
+        assert run["status"] == "completed"
+        assert run["result"] == "control_passed"
+        assert run["evidence"]["network_execution"] is False
+        assert run["evidence"]["destructive_actions"] is False
+        assert run["evidence"]["proof_summary"]["evidence"] != "-"
+
+        ctem_snapshot = create_monitoring_snapshot(
+            con,
+            engagement_id=engagement_id,
+            policy_id=int(policy["id"]),
+            snapshot_kind="scheduled",
+            refresh={"status": "completed", "source": "canonical_e2e"},
+        )
+        ctem_alert = next(
+            alert
+            for alert in ctem_snapshot["alerts"]
+            if alert["alert_type"] == "finding_added"
+            and (
+                str(alert.get("entity_key") or "").strip()
+                or str((alert.get("metadata") or {}).get("entity_key") or "").strip()
+            )
+        )
+        ctem_alert_entity_key = str(
+            ctem_alert.get("entity_key")
+            or (ctem_alert.get("metadata") or {}).get("entity_key")
+            or ""
+        ).strip()
+        assert ctem_alert_entity_key
+        ctem_alert_entity_id = upsert_asset_entity(
+            con,
+            engagement_id=engagement_id,
+            entity_key=ctem_alert_entity_key,
+            entity_type="finding",
+            label="Canonical CTEM monitoring alert",
+            source_table="monitoring_alerts",
+            source_id=int(ctem_alert["id"]),
+            confidence=0.91,
+            metadata={"source": "canonical_ctem_loop"},
+        )
+        upsert_ownership_claim(
+            con,
+            engagement_id=engagement_id,
+            entity_id=ctem_alert_entity_id,
+            owner_ref="ctem-owner@canonical.example",
+            owner_kind="user",
+            owner_display="Canonical CTEM Owner",
+            claim_type="manual",
+            confidence=0.97,
+            source="canonical_e2e",
+            evidence={"reason": "monitoring alert owner routing"},
+        )
+        ctem_remediation = upsert_monitoring_alert_remediation(
+            con,
+            engagement_id=engagement_id,
+            alert_id=int(ctem_alert["id"]),
+            operator="canonical-operator",
+            sla_days=7,
+            now="2026-08-14T00:00:00Z",
+        )
+        assert ctem_remediation["owner"] == "ctem-owner@canonical.example"
+        assert ctem_remediation["status"] == "assigned"
+
+        ctem_retest = request_active_validation_retest(
+            con,
+            engagement_id=engagement_id,
+            remediation_item_id=int(ctem_remediation["id"]),
+            operator="canonical-operator",
+            target_ref="fixture://canonical/ctem-remediated",
+            target_kind="fixture",
+            method="fix_verification",
+            mode="lab",
+            approved=True,
+            requested_by="canonical-operator",
+            approved_by="canonical-operator",
+            approval_note="canonical e2e remediation retest",
+            roe_id=ROE_ID,
+            scope_manifest_ref=scope_manifest.as_posix(),
+            expected_result="simulated_pass",
+            metadata={"loop": "monitoring_to_remediation_to_retest"},
+            now="2026-08-14T00:05:00Z",
+        )
+        ctem_retest_run = run_active_validation_job(
+            con,
+            engagement_id=engagement_id,
+            job_id=int(ctem_retest["active_validation_job"]["id"]),
+            operator="canonical-operator",
+        )
+        assert ctem_retest_run["status"] == "completed"
+        assert ctem_retest_run["result"] == "simulated_pass"
+        assert ctem_retest_run["remediation_retest"]["linked"] is True
+        assert ctem_retest_run["remediation_retest"]["retest_status"] == "passed"
+        assert ctem_retest_run["remediation_retest"]["status"] == "resolved"
+
+        overview = monitoring_overview(con, engagement_id)
+        coverage = active_validation_control_coverage(con, engagement_id=engagement_id)
+        secret_sync = sync_secret_lifecycle(con, engagement_id)
+        secret_row = con.execute(
+            """
+            SELECT id
+            FROM key_scanner_findings
+            WHERE engagement_id=? AND service IN ('firebase', 'supabase')
+            ORDER BY id
+            LIMIT 1
+            """,
+            (engagement_id,),
+        ).fetchone()
+        assert secret_row is not None
+        secret_lifecycle = secret_lifecycle_for_finding(con, engagement_id, int(secret_row["id"]))
+
+        kb.executescript(
+            """
+            CREATE TABLE nvd_cves (
+                cve_id TEXT PRIMARY KEY,
+                description TEXT,
+                severity TEXT,
+                cvss_score REAL,
+                cvss_vector TEXT,
+                cpe_matches TEXT,
+                published_at TEXT,
+                modified_at TEXT
+            );
+            INSERT INTO nvd_cves
+                (cve_id, description, severity, cvss_score, cvss_vector, cpe_matches)
+            VALUES
+                ('CVE-2021-44228', 'Log4Shell RCE', 'CRITICAL', 10.0,
+                 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H',
+                 '["cpe:2.3:a:apache:log4j:2.14.1:*:*:*:*:*:*:*"]');
+            """
+        )
+        enriched = enrich_vulnerability_findings(con, engagement_id, knowledge_con=kb)
+        stix_rows = con.execute(
+            """
+            SELECT *
+            FROM vulnerability_findings
+            WHERE engagement_id=? AND cve_id='CVE-2021-44228'
+            """,
+            (engagement_id,),
+        ).fetchall()
+        stix_bundle = vulnerability_stix_bundle(stix_rows, title="Canonical CTEM standards export")
+    kb.close()
+
+    assert baseline["trend_point"]["asset_count"] >= 1
+    assert ctem_snapshot["snapshot"]["summary"]["refresh"]["status"] == "completed"
+    assert ctem_snapshot["trend_point"]["finding_count"] >= 1
+    assert any(alert["alert_type"] == "finding_added" for alert in ctem_snapshot["alerts"])
+    assert overview["latest_snapshot"]["id"] == ctem_snapshot["snapshot"]["id"]
+    assert coverage["summary"]["mapped_job_count"] >= 1
+    assert coverage["summary"]["run_count"] >= 1
+    assert coverage["summary"]["states"]["passed"] >= 1
+    assert secret_sync["synced"] >= 1
+    assert secret_sync["remediation_created"] >= 1
+    assert secret_lifecycle["owner"] == "appsec@canonical.example"
+    assert "ghp_never_render_canonical" not in json.dumps(secret_lifecycle, sort_keys=True)
+    assert enriched >= 1
+    assert stix_bundle["type"] == "bundle"
+    assert any(
+        ref.get("source_name") == "mitre-attack" and ref.get("external_id") == "T1190"
+        for obj in stix_bundle["objects"]
+        for ref in obj.get("external_references", [])
+    )
 
 
 def _generate_graph_and_raw_report(
@@ -437,7 +750,7 @@ def _finish_run_with_manifest(
     handle = tracker.start_run(
         seed_value="canonical.example",
         seed_type="domain",
-        seed_count=4,
+        seed_count=5,
         max_iterations=3,
         current_iteration=3,
         resume_enabled=False,
@@ -552,17 +865,34 @@ def _assert_detail_surfaces(detail: dict[str, Any], report_path: Path) -> str:
         "ops@canonical.example",
         "+15551230000",
         "portal.canonical.example",
+        CANONICAL_CLOUD_REF_SEED,
     }.issubset(seed_values)
     assert sections["seed_relations"]
     relation_json = json.dumps(sections["seed_relations"])
     assert "artifact-owner@canonical.example" in relation_json
     assert "canonicalops" in relation_json
-    assert {row["Loop"] for row in sections["seed_runs"]} >= {
+    assert {
+        row["Loop"]
+        for row in sections["seed_runs"]
+    } >= {
         "fanout_a_web_mining",
         "fanout_e_identity_chain",
+        "fanout_j_cloud_validation",
         "fanout_k_artifact_static",
     }
     assert any(row["Service"] == "github" for row in sections["account_existence"])
+
+    cloud_asset_rows = sections["cloud_assets"]
+    assert any(
+        row["Type"] == "aws_s3"
+        and row["Asset"] == CANONICAL_CLOUD_REF_IDENTIFIER
+        and row["Source"] == "kill_chain_cloud_ref"
+        and row["Validation"] == "UNVALIDATED"
+        and row["Reportable"] == "no"
+        and '"seed_type": "cloud_ref"' in row["Provenance"]
+        and '"source": "operator_seed"' in row["Provenance"]
+        for row in cloud_asset_rows
+    )
 
     validation_rows = sections["cloud_validation_results"]
     assert any(
@@ -599,6 +929,66 @@ def _assert_detail_surfaces(detail: dict[str, Any], report_path: Path) -> str:
         for node in graph_nodes
     )
     assert any(path["name"].endswith(".mtgx") for path in detail["artifacts"])
+
+    assert any(
+        row["Name"] == "Canonical CTEM hourly"
+        for row in sections["monitoring_policies"]
+    )
+    assert any(
+        row["Kind"] == "scheduled" and int(row["Findings"]) >= 1
+        for row in sections["monitoring_snapshots"]
+    )
+    assert any(
+        row["Status"] == "open" and row["Type"] == "finding_added"
+        for row in sections["monitoring_alerts"]
+    )
+    assert any(
+        row["Status"] == "resolved"
+        and row["Retest"] == "passed"
+        and row["Owner"] == "ctem-owner@canonical.example"
+        and row["Finding"].startswith("monitoring_alerts:")
+        for row in sections["remediation_items"]
+    )
+    assert any(
+        row["Method"] == "control_simulation"
+        and row["Mode"] == "lab"
+        and row["Approved"] == "yes"
+        and row["Scope"] == "yes"
+        for row in sections["active_validation_jobs"]
+    )
+    assert any(
+        row["Method"] == "fix_verification"
+        and row["Mode"] == "lab"
+        and row["Approved"] == "yes"
+        and row["Scope"] == "yes"
+        for row in sections["active_validation_jobs"]
+    )
+    assert any(
+        row["Method"] == "control_simulation"
+        and row["Result"] == "control_passed"
+        and "net=no" in row["Safety"]
+        and "destructive=no" in row["Safety"]
+        for row in sections["active_validation_runs"]
+    )
+    assert any(
+        row["Method"] == "fix_verification"
+        and row["Result"] == "simulated_pass"
+        and "net=no" in row["Safety"]
+        and "destructive=no" in row["Safety"]
+        for row in sections["active_validation_runs"]
+    )
+    assert any(
+        row["Type"] == "Method"
+        and row["Coverage"] == "Control Simulation"
+        and "passed=1" in row["States"]
+        for row in sections["active_validation_coverage"]
+    )
+    assert any(
+        row["Owner"] == "appsec@canonical.example"
+        and row["Lifecycle"] == "owner_routed"
+        and "Revoke" in row["Guidance"]
+        for row in sections["secret_lifecycle_items"]
+    )
     return str(summary["findings_checksum"])
 
 
@@ -658,9 +1048,7 @@ def _assert_report_inclusion_audit(db_path: Path, engagement_id: int, report_pat
 
 
 def _assert_cleanup_helper_is_scoped(tmp_path: Path) -> None:
-    runner_path = (
-        Path(__file__).resolve().parents[2] / "scripts" / "run_phase1_orchestrator_partitions.py"
-    )
+    runner_path = Path(__file__).resolve().parents[2] / "scripts" / "run_phase1_orchestrator_partitions.py"
     spec = spec_from_file_location("phase1_partition_runner", runner_path)
     assert spec is not None and spec.loader is not None
     runner = module_from_spec(spec)
@@ -713,9 +1101,7 @@ def _assert_no_id_reuse_after_deleted_db(
 
     assert [path.name for path in db_root.glob("*.db") if path.stem.isdigit()] == []
     with sqlite3.connect(db_root / "master.db") as con:
-        max_id = int(
-            con.execute("SELECT COALESCE(MAX(id), 0) FROM engagement_id_sequence").fetchone()[0]
-        )
+        max_id = int(con.execute("SELECT COALESCE(MAX(id), 0) FROM engagement_id_sequence").fetchone()[0])
     assert max_id == second_id
 
 
@@ -747,6 +1133,7 @@ def test_canonical_release_e2e_proves_all_surfaces_and_cleanup(
             monkeypatch=monkeypatch,
         )
         _populate_pipeline_state(db_path, engagement_id, tmp_path)
+        _exercise_enterprise_ctem_primitives(db_path, engagement_id, scope_manifest)
         report_path, _graph_path = _generate_graph_and_raw_report(
             db_path,
             engagement_id,
@@ -767,9 +1154,13 @@ def test_canonical_release_e2e_proves_all_surfaces_and_cleanup(
             item["identifier"] == "canonical-firebase-prod"
             for item in assets_response.json()["cloud_assets"]
         )
-        vuln_response = client.get(
-            f"/api/engagements/{engagement_id}/vuln-summary", headers=_headers()
+        assert any(
+            item["asset_type"] == "aws_s3"
+            and item["identifier"] == CANONICAL_CLOUD_REF_IDENTIFIER
+            and item["source"] == "kill_chain_cloud_ref"
+            for item in assets_response.json()["cloud_assets"]
         )
+        vuln_response = client.get(f"/api/engagements/{engagement_id}/vuln-summary", headers=_headers())
         assert vuln_response.status_code == 200, vuln_response.text
         assert vuln_response.json()["vulnerability_findings"]["HIGH"] >= 2
 

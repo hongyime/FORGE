@@ -42,13 +42,21 @@ _YEARLY_YEARS: tuple[int, ...] = tuple(
     range(_FULL_SYNC_START_YEAR, datetime.now(timezone.utc).year + 1)
 )
 
-# CVSSv3 severity thresholds.
+# CVSS severity thresholds.
 _SEVERITY_MAP: list[tuple[float, str]] = [
     (9.0, "CRITICAL"),
     (7.0, "HIGH"),
     (4.0, "MEDIUM"),
     (0.1, "LOW"),
 ]
+_CVSS_SCORE_COLUMNS: dict[str, str] = {
+    "cvss_v4": "REAL",
+    "cvss_v4_vector": "TEXT",
+    "cvss_v3": "REAL",
+    "cvss_v3_vector": "TEXT",
+    "cvss_v2": "REAL",
+    "cvss_v2_vector": "TEXT",
+}
 
 
 def fetch_nvd(conn: sqlite3.Connection, cfg: ForgeConfig, force: bool = False) -> int:
@@ -231,8 +239,10 @@ def _normalise(cve_obj: dict[str, Any]) -> tuple[dict | None, dict | None]:
         )
 
         cpe_matches = _collect_cpe_matches(cve_obj.get("configurations") or [])
-        cvss_v3, cvss_v2 = _extract_cvss_scores(cve_obj.get("metrics") or {})
-        severity = _score_to_severity(cvss_v3 or cvss_v2)
+        cvss = _extract_cvss_scores(cve_obj.get("metrics") or {})
+        severity = _score_to_severity(
+            cvss.get("cvss_v4") or cvss.get("cvss_v3") or cvss.get("cvss_v2")
+        )
 
         cve_row = {
             "cve_id": cve_id,
@@ -243,12 +253,8 @@ def _normalise(cve_obj: dict[str, Any]) -> tuple[dict | None, dict | None]:
             "cpe_matches": json.dumps(cpe_matches[:50]),
         }
         cvss_row = None
-        if cvss_v3 is not None or cvss_v2 is not None:
-            cvss_row = {
-                "cve_id": cve_id,
-                "cvss_v3": cvss_v3,
-                "cvss_v2": cvss_v2,
-            }
+        if any(value not in (None, "") for value in cvss.values()):
+            cvss_row = {"cve_id": cve_id, **cvss}
         return cve_row, cvss_row
     except Exception as exc:
         _LOG.debug("NVD normalise error: %s", exc)
@@ -274,20 +280,23 @@ def _normalise_legacy_v11(item: dict[str, Any]) -> tuple[dict | None, dict | Non
                 cpe_matches.append(uri)
 
     impact = item.get("impact") or {}
-    cvss_v3 = None
-    cvss_v2 = None
+    cvss: dict[str, Any] = {key: None if column_type == "REAL" else "" for key, column_type in _CVSS_SCORE_COLUMNS.items()}
     v3 = impact.get("baseMetricV3") or {}
     if v3:
-        score = (v3.get("cvssV3") or {}).get("baseScore")
+        cvss_data = v3.get("cvssV3") or {}
+        score = cvss_data.get("baseScore")
         if isinstance(score, (float, int)):
-            cvss_v3 = float(score)
+            cvss["cvss_v3"] = float(score)
+        cvss["cvss_v3_vector"] = str(cvss_data.get("vectorString") or "").strip()
     v2 = impact.get("baseMetricV2") or {}
     if v2:
-        score2 = (v2.get("cvssV2") or {}).get("baseScore")
+        cvss_data_v2 = v2.get("cvssV2") or {}
+        score2 = cvss_data_v2.get("baseScore")
         if isinstance(score2, (float, int)):
-            cvss_v2 = float(score2)
+            cvss["cvss_v2"] = float(score2)
+        cvss["cvss_v2_vector"] = str(cvss_data_v2.get("vectorString") or "").strip()
 
-    severity = _score_to_severity(cvss_v3 or cvss_v2)
+    severity = _score_to_severity(cvss.get("cvss_v3") or cvss.get("cvss_v2"))
     cve_row = {
         "cve_id": cve_id,
         "description": description[:2048],
@@ -297,8 +306,8 @@ def _normalise_legacy_v11(item: dict[str, Any]) -> tuple[dict | None, dict | Non
         "cpe_matches": json.dumps(cpe_matches[:50]),
     }
     cvss_row = None
-    if cvss_v3 is not None or cvss_v2 is not None:
-        cvss_row = {"cve_id": cve_id, "cvss_v3": cvss_v3, "cvss_v2": cvss_v2}
+    if any(value not in (None, "") for value in cvss.values()):
+        cvss_row = {"cve_id": cve_id, **cvss}
     return cve_row, cvss_row
 
 
@@ -322,27 +331,51 @@ def _collect_cpe_matches(configurations: list[dict[str, Any]]) -> list[str]:
     return out
 
 
-def _extract_cvss_scores(metrics: dict[str, Any]) -> tuple[float | None, float | None]:
-    cvss_v3: float | None = None
-    cvss_v2: float | None = None
+def _extract_cvss_scores(metrics: dict[str, Any]) -> dict[str, Any]:
+    scores: dict[str, Any] = {
+        "cvss_v4": None,
+        "cvss_v4_vector": "",
+        "cvss_v3": None,
+        "cvss_v3_vector": "",
+        "cvss_v2": None,
+        "cvss_v2_vector": "",
+    }
 
-    for key in ("cvssMetricV31", "cvssMetricV30"):
+    v4_score, v4_vector = _first_cvss_metric(metrics, "cvssMetricV40")
+    scores["cvss_v4"] = v4_score
+    scores["cvss_v4_vector"] = v4_vector
+
+    v3_score, v3_vector = _first_cvss_metric(metrics, "cvssMetricV31", "cvssMetricV30")
+    scores["cvss_v3"] = v3_score
+    scores["cvss_v3_vector"] = v3_vector
+
+    v2_score, v2_vector = _first_cvss_metric(metrics, "cvssMetricV2")
+    scores["cvss_v2"] = v2_score
+    scores["cvss_v2_vector"] = v2_vector
+
+    return scores
+
+
+def _first_cvss_metric(
+    metrics: dict[str, Any],
+    *keys: str,
+) -> tuple[float | None, str]:
+    for key in keys:
         entries = metrics.get(key) or []
-        if entries:
-            cvss_data = entries[0].get("cvssData") or {}
-            score = cvss_data.get("baseScore")
-            if isinstance(score, (float, int)):
-                cvss_v3 = float(score)
-                break
-
-    entries_v2 = metrics.get("cvssMetricV2") or []
-    if entries_v2:
-        cvss_data_v2 = entries_v2[0].get("cvssData") or {}
-        score_v2 = cvss_data_v2.get("baseScore")
-        if isinstance(score_v2, (float, int)):
-            cvss_v2 = float(score_v2)
-
-    return cvss_v3, cvss_v2
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            cvss_data = entry.get("cvssData") or {}
+            if not isinstance(cvss_data, dict):
+                continue
+            score_raw = cvss_data.get("baseScore")
+            score = float(score_raw) if isinstance(score_raw, (float, int)) else None
+            vector = str(cvss_data.get("vectorString") or "").strip()
+            if score is not None or vector:
+                return score, vector
+    return None, ""
 
 
 def _iso8601z(ts: datetime) -> str:
@@ -366,6 +399,7 @@ def _bulk_upsert(
     """INSERT OR REPLACE CVE rows; returns count of rows written."""
     if not cve_rows:
         return 0
+    _ensure_cvss_score_columns(conn)
 
     conn.executemany(
         """
@@ -377,18 +411,36 @@ def _bulk_upsert(
         cve_rows,
     )
 
-    valid_cvss = [row for row in cvss_rows if row]
+    cvss_defaults = {
+        column: None if column_type == "REAL" else ""
+        for column, column_type in _CVSS_SCORE_COLUMNS.items()
+    }
+    valid_cvss = [{**cvss_defaults, **row} for row in cvss_rows if row]
     if valid_cvss:
         conn.executemany(
             """
-            INSERT OR REPLACE INTO cvss_scores (cve_id, cvss_v3, cvss_v2)
-            VALUES (:cve_id, :cvss_v3, :cvss_v2)
+            INSERT OR REPLACE INTO cvss_scores
+                (cve_id, cvss_v4, cvss_v4_vector, cvss_v3, cvss_v3_vector,
+                 cvss_v2, cvss_v2_vector)
+            VALUES
+                (:cve_id, :cvss_v4, :cvss_v4_vector, :cvss_v3, :cvss_v3_vector,
+                 :cvss_v2, :cvss_v2_vector)
             """,
             valid_cvss,
         )
 
     conn.commit()
     return len(cve_rows)
+
+
+def _ensure_cvss_score_columns(conn: sqlite3.Connection) -> None:
+    columns = {
+        str(row[1])
+        for row in conn.execute("PRAGMA table_info(cvss_scores)").fetchall()
+    }
+    for column, column_type in _CVSS_SCORE_COLUMNS.items():
+        if column not in columns:
+            conn.execute(f"ALTER TABLE cvss_scores ADD COLUMN {column} {column_type}")
 
 
 def _http_get(url: str, cfg: ForgeConfig) -> bytes:

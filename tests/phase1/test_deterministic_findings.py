@@ -5,7 +5,12 @@ from pathlib import Path
 
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
-from forge.deterministic_findings import DeterministicFindingEngine
+from forge.deterministic_findings import (
+    DeterministicFindingEngine,
+    FindingSynthesisSummary,
+    finding_synthesis_audit_result,
+    finding_synthesis_log_message,
+)
 
 
 def _bootstrap_db(db_path: Path) -> None:
@@ -22,6 +27,30 @@ def _bootstrap_db(db_path: Path) -> None:
         con.commit()
     finally:
         con.close()
+
+
+def test_finding_synthesis_summary_messages_match_cli_shapes() -> None:
+    summary = FindingSynthesisSummary(
+        inserted=2,
+        updated=1,
+        removed=3,
+        active_findings=4,
+        severity_summary={"HIGH": 2, "LOW": 1},
+    )
+
+    assert finding_synthesis_audit_result(summary, pass_label="finding synthesis") == (
+        'pass=finding synthesis inserted=2 updated=1 removed=3 active=4 '
+        'severity_summary={"HIGH": 2, "LOW": 1}'
+    )
+    assert finding_synthesis_log_message(summary) == (
+        "inserted=2 updated=1 removed=3 active=4"
+    )
+    assert (
+        finding_synthesis_log_message(
+            FindingSynthesisSummary(active_findings=4, severity_summary={"HIGH": 4})
+        )
+        is None
+    )
 
 
 def test_deterministic_findings_synthesizes_cloud_and_key_evidence(tmp_path: Path) -> None:

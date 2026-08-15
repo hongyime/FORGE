@@ -1,0 +1,28 @@
+{
+	auto_https disable_redirects
+}
+
+{$FORGE_PUBLIC_HOST} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age={$FORGE_SECURITY_HSTS_SECONDS}; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
+		-X-Powered-By
+		Server ""
+	}
+
+	handle_path /api/* {
+		reverse_proxy 127.0.0.1:{$FORGE_API_PORT}
+	}
+
+	handle /health {
+		reverse_proxy 127.0.0.1:{$FORGE_WEB_PORT}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:{$FORGE_WEB_PORT}
+	}
+}

@@ -28,6 +28,7 @@ from __future__ import annotations
 import ipaddress
 import logging
 import re
+import ipaddress
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING

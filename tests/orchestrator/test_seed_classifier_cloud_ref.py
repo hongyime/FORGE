@@ -13,8 +13,10 @@ import sqlite3
 import pytest
 
 from forge.engagement_orchestrator import (
+    _canonical_cloud_ref_value,
     _classify_seed_value,
     _hostname_is_cloud_ref,
+    _parse_literal_cloud_ref,
     _CLOUD_REF_HOSTNAME_SUFFIXES,
 )
 
@@ -95,6 +97,9 @@ class TestClassifySeedValue:
     def test_https_supabase_url_is_cloud_ref(self) -> None:
         assert _classify_seed_value("https://xyz.supabase.co/rest/v1/foo") == "cloud_ref"
 
+    def test_https_supabase_url_with_default_port_is_cloud_ref(self) -> None:
+        assert _classify_seed_value("https://xyz.supabase.co:443/rest/v1/foo") == "cloud_ref"
+
     def test_bare_firebase_hostname_is_cloud_ref(self) -> None:
         assert _classify_seed_value("myapp.firebaseio.com") == "cloud_ref"
 
@@ -103,6 +108,25 @@ class TestClassifySeedValue:
 
     def test_azure_blob_hostname_is_cloud_ref(self) -> None:
         assert _classify_seed_value("acct.blob.core.windows.net") == "cloud_ref"
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("cloud_ref:aws_s3:Acme-Public", "aws_s3:acme-public"),
+            ("s3://Acme-Public/config.json", "aws_s3:acme-public"),
+            ("gs://Acme-Data/path/to/blob", "gcs:acme-data"),
+            ("azure://AcctName/container", "azure_blob:acctname/container"),
+            ("arn:aws:s3:::Acme-Archive/private/file.txt", "aws_s3:acme-archive"),
+            ("netlify:Echo-Site", "netlify:echo-site"),
+        ],
+    )
+    def test_literal_cloud_ref_inputs_are_cloud_refs(self, value: str, expected: str) -> None:
+        assert _classify_seed_value(value) == "cloud_ref"
+        assert _canonical_cloud_ref_value(value) == expected
+
+    def test_literal_cloud_ref_parser_rejects_unknown_or_spaced_refs(self) -> None:
+        assert _parse_literal_cloud_ref("notcloud:bucket") is None
+        assert _parse_literal_cloud_ref("cloud_ref:aws_s3:bad bucket") is None
 
     def test_generic_domain_still_returns_domain(self) -> None:
         assert _classify_seed_value("example.com") == "domain"
@@ -194,6 +218,7 @@ class TestSchemaAcceptsCloudRef:
                 CREATE TABLE engagements (
                     id INTEGER PRIMARY KEY,
                     name TEXT,
+                    operator TEXT NOT NULL DEFAULT 'legacy-operator',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 CREATE TABLE engagement_seeds (

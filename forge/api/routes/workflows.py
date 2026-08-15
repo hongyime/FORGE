@@ -21,19 +21,28 @@ from __future__ import annotations
 from typing import cast
 
 import logging
+import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from forge.api.deps import get_state_store, get_workflow_engine
+from forge.api.deps import get_control_db, get_state_store, get_workflow_engine, require_permission
+from forge.api.tenancy import (
+    authorize_workflow_row,
+    scoped_workflow_params,
+    workflow_not_found,
+)
 from forge.core.errors import WorkflowFailedError
-from forge.workflow import MVP_WORKFLOW, StateStore, WorkflowDefinition, WorkflowEngine
+from forge.webui.auth import Principal
+from forge.workflow import MVP_WORKFLOW, StateStore, WorkflowDefinition, WorkflowEngine, WorkflowStateRow
 
 __all__ = ["router"]
 
 _LOG = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
+_require_workflows_read = require_permission("workflows:read")
+_require_workflows_write = require_permission("workflows:write")
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +85,9 @@ _BUILTIN_DEFINITIONS: dict[str, WorkflowDefinition] = {
 }
 
 
-def _resolve_definition(name: str, engine: WorkflowEngine) -> WorkflowDefinition:
+def _resolve_definition(
+    name: str, engine: WorkflowEngine
+) -> WorkflowDefinition:
     """Return the requested definition or raise 404."""
     if name in _BUILTIN_DEFINITIONS:
         return _BUILTIN_DEFINITIONS[name]
@@ -88,6 +99,18 @@ def _resolve_definition(name: str, engine: WorkflowEngine) -> WorkflowDefinition
         status_code=status.HTTP_404_NOT_FOUND,
         detail=f"unknown_definition:{name}",
     )
+
+
+async def _load_authorized_workflow_or_404(
+    workflow_id: str,
+    principal: Principal,
+    state_store: StateStore,
+    control_con: sqlite3.Connection,
+) -> WorkflowStateRow:
+    row = await state_store.load_workflow(workflow_id)
+    if row is None or not authorize_workflow_row(row, principal, con=control_con):
+        raise workflow_not_found(workflow_id)
+    return row
 
 
 # ---------------------------------------------------------------------------
@@ -103,11 +126,16 @@ def _resolve_definition(name: str, engine: WorkflowEngine) -> WorkflowDefinition
 )
 async def start_workflow(
     request: StartWorkflowRequest,
+    principal: Principal = Depends(_require_workflows_write),
     engine: WorkflowEngine = Depends(get_workflow_engine),
+    control_con: sqlite3.Connection = Depends(get_control_db),
 ) -> StartWorkflowResponse:
     """Create a workflow instance and publish its first stage message."""
     definition = _resolve_definition(request.definition_name, engine)
-    workflow_id = await engine.start_workflow(definition=definition, params=request.params)
+    params = scoped_workflow_params(request.params, principal, con=control_con)
+    workflow_id = await engine.start_workflow(
+        definition=definition, params=params
+    )
     return StartWorkflowResponse(workflow_id=workflow_id)
 
 
@@ -117,21 +145,19 @@ async def start_workflow(
 )
 async def get_workflow_status(
     workflow_id: str,
+    principal: Principal = Depends(_require_workflows_read),
     engine: WorkflowEngine = Depends(get_workflow_engine),
+    state_store: StateStore = Depends(get_state_store),
+    control_con: sqlite3.Connection = Depends(get_control_db),
 ) -> dict[str, object]:
     """Return current stage, elapsed time, and completion percentage."""
+    await _load_authorized_workflow_or_404(workflow_id, principal, state_store, control_con)
     try:
         result = await engine.get_status(workflow_id)
     except KeyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"workflow_not_found:{workflow_id}",
-        ) from exc
+        raise workflow_not_found(workflow_id) from exc
     if result is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"workflow_not_found:{workflow_id}",
-        )
+        raise workflow_not_found(workflow_id)
     return result
 
 
@@ -142,16 +168,17 @@ async def get_workflow_status(
 async def advance_workflow(
     workflow_id: str,
     request: StageResultRequest,
+    principal: Principal = Depends(_require_workflows_write),
     engine: WorkflowEngine = Depends(get_workflow_engine),
+    state_store: StateStore = Depends(get_state_store),
+    control_con: sqlite3.Connection = Depends(get_control_db),
 ) -> dict[str, object]:
     """Mark the current stage completed and progress to the next stage."""
+    await _load_authorized_workflow_or_404(workflow_id, principal, state_store, control_con)
     try:
         await engine.advance_stage(workflow_id, request.stage_result)
     except KeyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"workflow_not_found:{workflow_id}",
-        ) from exc
+        raise workflow_not_found(workflow_id) from exc
     return {"workflow_id": workflow_id, "advanced": True}
 
 
@@ -162,9 +189,13 @@ async def advance_workflow(
 async def fail_workflow_stage(
     workflow_id: str,
     request: StageFailRequest,
+    principal: Principal = Depends(_require_workflows_write),
     engine: WorkflowEngine = Depends(get_workflow_engine),
+    state_store: StateStore = Depends(get_state_store),
+    control_con: sqlite3.Connection = Depends(get_control_db),
 ) -> dict[str, object]:
     """Increment the current stage's retry count or fail the workflow."""
+    await _load_authorized_workflow_or_404(workflow_id, principal, state_store, control_con)
     try:
         await engine.fail_stage(workflow_id, request.error)
     except WorkflowFailedError as exc:
@@ -177,12 +208,8 @@ async def fail_workflow_stage(
             "reason": str(exc),
         }
     except KeyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"workflow_not_found:{workflow_id}",
-        ) from exc
+        raise workflow_not_found(workflow_id) from exc
     return {"workflow_id": workflow_id, "failed": False, "retried": True}
-
 
 @router.get(
     "/{workflow_id}/history",
@@ -192,7 +219,9 @@ async def get_workflow_history(
     workflow_id: str,
     limit: int | None = Query(default=None, ge=1),
     since: float | None = None,
+    principal: Principal = Depends(_require_workflows_read),
     state_store: StateStore = Depends(get_state_store),
+    control_con: sqlite3.Connection = Depends(get_control_db),
 ) -> dict[str, object]:
     """Return the immutable history of every state transition for a workflow.
 
@@ -210,6 +239,7 @@ async def get_workflow_history(
         empty for unknown workflow IDs (NOT a 404) so polling clients don't
         need to distinguish "no rows yet" from "missing".
     """
+    await _load_authorized_workflow_or_404(workflow_id, principal, state_store, control_con)
     rows = await state_store.load_history(workflow_id, limit=limit, since=since)
     return {
         "workflow_id": workflow_id,
@@ -237,13 +267,16 @@ async def get_workflow_history(
 )
 async def get_workflow_replay(
     workflow_id: str,
+    principal: Principal = Depends(_require_workflows_read),
     state_store: StateStore = Depends(get_state_store),
+    control_con: sqlite3.Connection = Depends(get_control_db),
 ) -> dict[str, object]:
     """Render a human-readable timeline of a workflow's state transitions.
 
     Like ``/history`` but each entry includes ``elapsed_seconds_since_start``
     so the timeline reads naturally in incident reports.
     """
+    await _load_authorized_workflow_or_404(workflow_id, principal, state_store, control_con)
     timeline = await state_store.replay_workflow(workflow_id)
     return {
         "workflow_id": workflow_id,

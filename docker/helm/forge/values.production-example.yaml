@@ -1,0 +1,66 @@
+image:
+  repository: registry.example.com/forge/forge-toolkit
+  tag: "7.2.0"
+  pullPolicy: IfNotPresent
+
+publicBaseUrl: https://forge.example.com
+tlsTerminatedBy: ingress-nginx
+securityHstsSeconds: 31536000
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+  hosts:
+    - host: forge.example.com
+      apiPath: /api
+      webPath: /
+  tls:
+    - secretName: forge-example-tls
+      hosts:
+        - forge.example.com
+
+storage:
+  data:
+    size: 100Gi
+    storageClassName: encrypted-retain
+  remoteAudit:
+    size: 50Gi
+    storageClassName: encrypted-retain
+
+postgres:
+  host: forge-postgres.example.internal
+  port: 5432
+  database: forge
+  user: forge
+
+redis:
+  url: redis://forge-redis.example.internal:6379/0
+
+secrets:
+  existingSecretName: ""
+  webSecretKey: replace-with-32-plus-char-random-secret
+  webBootstrapToken: replace-with-32-plus-char-bootstrap-token
+  engagementKey: replace-with-32-plus-char-engagement-key
+  postgresPassword: replace-with-managed-postgres-password
+  auditBundleRemoteScope: customer-or-workspace-scope
+
+externalSecrets:
+  enabled: false
+  refreshInterval: 1h
+  secretStoreRef:
+    name: forge-secret-store
+    kind: ClusterSecretStore
+  remoteRefs:
+    webSecretKey:
+      key: prod/forge/web-secret-key
+    webBootstrapToken:
+      key: prod/forge/web-bootstrap-token
+    engagementKey:
+      key: prod/forge/engagement-key
+    postgresPassword:
+      key: prod/forge/postgres-password
+    auditBundleRemoteScope:
+      key: prod/forge/audit-bundle-remote-scope

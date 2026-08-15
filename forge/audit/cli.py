@@ -140,9 +140,27 @@ def _manifest_export(
         "--signer-id",
         help="Non-secret signer label stored in signature.json.",
     ),
+    remote_store: bool = typer.Option(
+        False,
+        "--remote-store",
+        help="Append the exported bundle to configured remote storage.",
+    ),
+    remote_uri_env: str = typer.Option(
+        "FORGE_AUDIT_BUNDLE_REMOTE_URI",
+        "--remote-uri-env",
+        help="Environment variable containing the mounted/file remote storage URI.",
+    ),
+    remote_scope_env: str = typer.Option(
+        "FORGE_AUDIT_BUNDLE_REMOTE_SCOPE",
+        "--remote-scope-env",
+        help="Environment variable containing the customer/workspace storage scope label.",
+    ),
 ) -> None:
     """Export a portable per-run manifest bundle for external archival."""
     from forge.audit.manifest_bundle import export_run_audit_manifest_bundle  # noqa: PLC0415
+    from forge.audit.remote_storage import (  # noqa: PLC0415
+        store_audit_manifest_bundle_remote_from_env,
+    )
 
     db_path, engagement_id, selected_run_id = _manifest_target(engagement, run_id)
     signing_key = _signing_key(sign=sign, env_name=signing_key_env)
@@ -164,6 +182,20 @@ def _manifest_export(
     finally:
         con.close()
 
+    remote_receipt = None
+    if remote_store:
+        try:
+            remote_receipt = store_audit_manifest_bundle_remote_from_env(
+                bundle,
+                engagement_id=engagement_id,
+                run_id=selected_run_id,
+                uri_env=remote_uri_env,
+                scope_env=remote_scope_env,
+            )
+        except ValueError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(1) from exc
+
     payload = {
         "engagement_id": engagement_id,
         "run_id": selected_run_id,
@@ -173,14 +205,22 @@ def _manifest_export(
         "verification_ok": bundle.verification_ok,
         "signature_present": bundle.signature_present,
         "files": list(bundle.files),
+        "remote_store": remote_receipt.as_payload() if remote_receipt else None,
     }
     if json_output:
         typer.echo(json.dumps(payload, sort_keys=True))
     else:
+        remote_label = ""
+        if remote_receipt:
+            remote_label = (
+                " remote=already-present"
+                if remote_receipt.already_present
+                else " remote=stored"
+            )
         typer.echo(
             f"EXPORTED engagement={engagement_id} run={selected_run_id} "
             f"path={bundle.path} verification={'yes' if bundle.verification_ok else 'no'} "
-            f"signed={'yes' if bundle.signature_present else 'no'}"
+            f"signed={'yes' if bundle.signature_present else 'no'}{remote_label}"
         )
     raise typer.Exit(0 if bundle.verification_ok else 2)
 

@@ -5,7 +5,6 @@ import html
 import ipaddress
 import json
 import logging
-import mailbox
 import plistlib
 import re
 import shlex
@@ -17,21 +16,15 @@ import tarfile
 import tempfile
 import textwrap
 import time
-import weakref
 import zipfile
-import gzip
-import bz2
-import lzma
-import os
-import zlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from email import policy as email_policy
 from email.parser import BytesParser
 from io import BytesIO
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Sequence, TypeVar
+from typing import Any, Callable, Sequence
 from urllib.parse import parse_qsl, quote, urlencode, unquote, unquote_to_bytes, urljoin, urlparse
 from xml.etree import ElementTree
 from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
@@ -42,30 +35,527 @@ except Exception:  # noqa: BLE001
     yaml = None
 
 try:
-    import zstandard
-except Exception:  # noqa: BLE001
-    zstandard = None
-
-try:
-    import brotli
-except Exception:  # noqa: BLE001
-    try:
-        import brotlicffi as brotli  # type: ignore[no-redef]
-    except Exception:  # noqa: BLE001
-        brotli = None  # type: ignore[assignment]
-
-try:
-    import lz4.frame as lz4_frame
-except Exception:  # noqa: BLE001
-    lz4_frame = None  # type: ignore[assignment]
-
-try:
     import py7zr
 except Exception:  # noqa: BLE001
     py7zr = None
 
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
+from forge.orchestration.artifacts import (
+    ArtifactDownloadRequest,
+    ArtifactDownloadResult,
+    ArtifactProcessingSummary,
+    ArtifactQueueRowsProcessCallbacks,
+    ArtifactTextDiscoveredUrlQueueEntry,
+    ArtifactTextDiscoveryBatch,
+    ArtifactTextScanStageResult,
+    ArtifactWorkItem,
+    EmbeddedArchiveExtractionJob,
+    ParsedArtifact,
+    artifact_child_seed_depth as _orchestration_artifact_child_seed_depth,
+    audit_artifact_lineage as _orchestration_audit_artifact_lineage,
+    process_artifact_queue_for_engagement,
+    artifact_local_path_metadata_update,
+    artifact_payload_summary as _orchestration_artifact_payload_summary,
+    artifact_progress_snapshot,
+    artifact_seed_metadata_from_evidence,
+    artifact_source_seed_id as _orchestration_artifact_source_seed_id,
+    artifact_source_seed_provenance,
+    artifact_source_seed_provenance_from_db as _orchestration_artifact_source_seed_provenance_from_db,
+    build_artifact_structured_discovery_payload_fragment as _orchestration_build_artifact_structured_discovery_payload_fragment,
+    artifact_status_metadata_update,
+    artifact_text_cloud_asset_persistence_entry,
+    artifact_text_discovery_merge_family_entry,
+    artifact_text_email_persistence_entry,
+    artifact_text_host_persistence_entry,
+    artifact_text_identity_seed_persistence_entry,
+    artifact_text_ip_persistence_entry,
+    artifact_text_key_finding_persistence_entry,
+    artifact_text_phone_persistence_entry,
+    artifact_text_url_persistence_entry,
+    artifact_text_discovered_url_queue_entry,
+    artifact_url_seed_family_merge_entry,
+    ar_archive_member_jobs as _orchestration_ar_archive_member_jobs,
+    asar_archive_member_jobs as _orchestration_asar_archive_member_jobs,
+    asar_header_and_content_base as _orchestration_asar_header_and_content_base,
+    asar_non_negative_int as _orchestration_asar_non_negative_int,
+    archive_stream_kind as _orchestration_archive_stream_kind,
+    binary_string_ascii_candidate as _orchestration_binary_string_ascii_candidate,
+    binary_string_ascii_candidates as _orchestration_binary_string_ascii_candidates,
+    binary_string_candidate_family as _orchestration_binary_string_candidate_family,
+    binary_string_family_entries as _orchestration_binary_string_family_entries,
+    binary_string_payload as _orchestration_binary_string_payload,
+    binary_string_utf16_candidate as _orchestration_binary_string_utf16_candidate,
+    binary_string_utf16_candidates as _orchestration_binary_string_utf16_candidates,
+    binary_string_value_entry as _orchestration_binary_string_value_entry,
+    cpio_newc_member_jobs as _orchestration_cpio_newc_member_jobs,
+    crx_zip_payload_bytes as _orchestration_crx_zip_payload_bytes,
+    decode_email_part_entry as _orchestration_decode_email_part_entry,
+    decode_email_part_text as _orchestration_decode_email_part_text,
+    decompress_archive_stream_bytes as _orchestration_decompress_archive_stream_bytes,
+    decode_text_artifact_bytes as _orchestration_decode_text_artifact_bytes,
+    decode_text_artifact_entry as _orchestration_decode_text_artifact_entry,
+    dedupe_firebase_projects,
+    dedupe_supabase_configs,
+    default_local_artifact_roots as _orchestration_default_local_artifact_roots,
+    download_remote_artifact_request as _orchestration_download_remote_artifact_request,
+    download_remote_artifact_for_queue_record,
+    email_message_metadata_line as _orchestration_email_message_metadata_line,
+    email_message_metadata_lines as _orchestration_email_message_metadata_lines,
+    extract_email_message_payloads as _orchestration_extract_email_message_payloads,
+    extract_email_message_payload_family as _orchestration_extract_email_message_payload_family,
+    extract_email_message_part_payloads as _orchestration_extract_email_message_part_payloads,
+    extract_email_message_summary_payloads as _orchestration_extract_email_message_summary_payloads,
+    extract_email_part_job as _orchestration_extract_email_part_job,
+    extract_email_part_job_payload_entry as _orchestration_extract_email_part_job_payload_entry,
+    nested_email_message_job as _orchestration_nested_email_message_job,
+    embedded_archive_match_entry as _orchestration_embedded_archive_match_entry,
+    embedded_archive_offsets as _orchestration_embedded_archive_offsets,
+    embedded_archive_job_entry as _orchestration_embedded_archive_job_entry,
+    embedded_archive_signature_matches as _orchestration_embedded_archive_signature_matches,
+    embedded_image_bytes as _orchestration_embedded_image_bytes,
+    embedded_image_entries as _orchestration_embedded_image_entries,
+    embedded_image_payload_batch as _orchestration_embedded_image_payload_batch,
+    embedded_image_signature_matches as _orchestration_embedded_image_signature_matches,
+    ensure_local_artifact_source_seed as _orchestration_ensure_local_artifact_source_seed,
+    extract_archive_7z_payloads as _orchestration_extract_archive_7z_payloads,
+    extract_archive_ar_payloads as _orchestration_extract_archive_ar_payloads,
+    extract_archive_asar_payloads as _orchestration_extract_archive_asar_payloads,
+    extract_archive_bytes_payloads as _orchestration_extract_archive_bytes_payloads,
+    extract_archive_cpio_payloads as _orchestration_extract_archive_cpio_payloads,
+    extract_archive_crx_payloads as _orchestration_extract_archive_crx_payloads,
+    extract_archive_decompressed_payloads as _orchestration_extract_archive_decompressed_payloads,
+    extract_archive_payload_family as _orchestration_extract_archive_payload_family,
+    extract_archive_tar_payloads as _orchestration_extract_archive_tar_payloads,
+    extract_archive_zip_payloads as _orchestration_extract_archive_zip_payloads,
+    extract_embedded_archive_payloads as _orchestration_extract_embedded_archive_payloads,
+    extract_embedded_image_payloads as _orchestration_extract_embedded_image_payloads,
+    extract_image_payload_family as _orchestration_extract_image_payload_family,
+    extract_image_member_payload_family as _orchestration_extract_image_member_payload_family,
+    extract_image_member_payloads as _orchestration_extract_image_member_payloads,
+    extract_image_payloads as _orchestration_extract_image_payloads,
+    image_metadata_payload as _orchestration_image_metadata_payload,
+    barcode_image_path_payload as _orchestration_barcode_image_path_payload,
+    barcode_image_bytes_payload as _orchestration_barcode_image_bytes_payload,
+    ocr_image_path as _orchestration_ocr_image_path,
+    ocr_image_bytes as _orchestration_ocr_image_bytes,
+    pdf_ocr_page_job as _orchestration_pdf_ocr_page_job,
+    retained_pdf_ocr_image_path as _orchestration_retained_pdf_ocr_image_path,
+    render_pdf_pages_for_ocr as _orchestration_render_pdf_pages_for_ocr,
+    extract_legacy_binary_embedded_archive_payloads as _orchestration_extract_legacy_binary_embedded_archive_payloads,
+    extract_legacy_binary_ole_payloads as _orchestration_extract_legacy_binary_ole_payloads,
+    extract_legacy_binary_payloads as _orchestration_extract_legacy_binary_payloads,
+    extract_legacy_binary_payload_family as _orchestration_extract_legacy_binary_payload_family,
+    extract_legacy_binary_string_payloads as _orchestration_extract_legacy_binary_string_payloads,
+    extract_member_payload_family as _orchestration_extract_member_payload_family,
+    extract_mbox_bytes_payloads as _orchestration_extract_mbox_bytes_payloads,
+    extract_mbox_message_payloads as _orchestration_extract_mbox_message_payloads,
+    extract_mbox_payload_family as _orchestration_extract_mbox_payload_family,
+    extract_mbox_summary_payloads as _orchestration_extract_mbox_summary_payloads,
+    extract_ole_metadata_payloads as _orchestration_extract_ole_metadata_payloads,
+    extract_ole_payload_family as _orchestration_extract_ole_payload_family,
+    extract_ole_payloads_from_stream_entries as _orchestration_extract_ole_payloads_from_stream_entries,
+    extract_ole_stream_embedded_archive_payloads as _orchestration_extract_ole_stream_embedded_archive_payloads,
+    extract_ole_stream_job_payloads as _orchestration_extract_ole_stream_job_payloads,
+    extract_ole_stream_nested_archive_payloads as _orchestration_extract_ole_stream_nested_archive_payloads,
+    extract_ole_stream_payload_family as _orchestration_extract_ole_stream_payload_family,
+    extract_ole_stream_payloads as _orchestration_extract_ole_stream_payloads,
+    extract_ole_stream_string_payloads as _orchestration_extract_ole_stream_string_payloads,
+    extract_saz_session_pairing_payloads as _orchestration_extract_saz_session_pairing_payloads,
+    extract_mobile_bundle_family_results as _orchestration_extract_mobile_bundle_family_results,
+    extract_text_member_payloads_from_jobs as _orchestration_extract_text_member_payloads_from_jobs,
+    ingest_local_artifacts_for_engagement,
+    interesting_binary_string as _orchestration_interesting_binary_string,
+    mbox_message_job as _orchestration_mbox_message_job,
+    mbox_raw_message_jobs as _orchestration_mbox_raw_message_jobs,
+    ole_raw_stream_entries as _orchestration_ole_raw_stream_entries,
+    ole_stream_entry as _orchestration_ole_stream_entry,
+    ole_stream_job as _orchestration_ole_stream_job,
+    parquet_cell_text as _orchestration_parquet_cell_text,
+    parquet_interesting_value as _orchestration_parquet_interesting_value,
+    parquet_summary_lines as _orchestration_parquet_summary_lines,
+    parquet_table_lines as _orchestration_parquet_table_lines,
+    extract_parquet_bytes_payloads as _orchestration_extract_parquet_bytes_payloads,
+    extract_parquet_path_payloads as _orchestration_extract_parquet_path_payloads,
+    insert_artifact_seed_relation as _orchestration_insert_artifact_seed_relation,
+    insert_artifact_email as _orchestration_insert_artifact_email,
+    insert_artifact_seed as _orchestration_insert_artifact_seed,
+    link_artifact_source_seed as _orchestration_link_artifact_source_seed,
+    local_artifact_source_seed_metadata,
+    looks_like_archive_bytes as _orchestration_looks_like_archive_bytes,
+    lookup_artifact_seed_id as _orchestration_lookup_artifact_seed_id,
+    merge_artifact_metadata_into_seed as _orchestration_merge_artifact_metadata_into_seed,
+    merge_artifact_relation_evidence,
+    merge_artifact_provenance_into_seed as _orchestration_merge_artifact_provenance_into_seed,
+    merge_artifact_seed_metadata,
+    merge_artifact_text_discovery_batch,
+    member_payloads as _orchestration_member_payloads,
+    mobile_member_artifact_type as _orchestration_mobile_member_artifact_type,
+    normalize_xml_tag as _orchestration_normalize_xml_tag,
+    ole_metadata_line as _orchestration_ole_metadata_line,
+    ole_metadata_lines as _orchestration_ole_metadata_lines,
+    ordered_line_batch_entries as _orchestration_ordered_line_batch_entries,
+    ordered_line_entry as _orchestration_ordered_line_entry,
+    pdf_metadata_lines as _orchestration_pdf_metadata_lines,
+    pdf_metadata_lines_for_key as _orchestration_pdf_metadata_lines_for_key,
+    extract_pdf_payload_fragment as _orchestration_extract_pdf_payload_fragment,
+    extract_pdf_payloads as _orchestration_extract_pdf_payloads,
+    extract_pdf_bytes_ocr_payloads as _orchestration_extract_pdf_bytes_ocr_payloads,
+    extract_pdf_ocr_payloads_from_path as _orchestration_extract_pdf_ocr_payloads_from_path,
+    extract_pdf_text_payloads_from_bytes as _orchestration_extract_pdf_text_payloads_from_bytes,
+    extract_pdf_text_payloads_from_path as _orchestration_extract_pdf_text_payloads_from_path,
+    extract_rtf_bytes_payloads as _orchestration_extract_rtf_bytes_payloads,
+    extract_rtf_embedded_archive_payloads as _orchestration_extract_rtf_embedded_archive_payloads,
+    extract_rtf_payload_family as _orchestration_extract_rtf_payload_family,
+    extract_rtf_text_payloads as _orchestration_extract_rtf_text_payloads,
+    rtf_to_text as _orchestration_rtf_to_text,
+    extract_sqlite_connection_object_payloads_from_jobs as _orchestration_extract_sqlite_connection_object_payloads_from_jobs,
+    extract_sqlite_connection_payload_family as _orchestration_extract_sqlite_connection_payload_family,
+    extract_sqlite_connection_payloads_from_jobs as _orchestration_extract_sqlite_connection_payloads_from_jobs,
+    extract_sqlite_object_payload_family as _orchestration_extract_sqlite_object_payload_family,
+    extract_sqlite_object_payloads_from_connection as _orchestration_extract_sqlite_object_payloads_from_connection,
+    extract_sqlite_object_row_payloads as _orchestration_extract_sqlite_object_row_payloads,
+    extract_sqlite_row_cell_line as _orchestration_extract_sqlite_row_cell_line,
+    extract_sqlite_row_payload as _orchestration_extract_sqlite_row_payload,
+    pdf_xmp_payload as _orchestration_pdf_xmp_payload,
+    queue_artifact_text_discovered_url as _orchestration_queue_artifact_text_discovered_url,
+    relationship_payload as _orchestration_relationship_payload,
+    relationship_line as _orchestration_relationship_line,
+    resolve_local_artifact_path as _orchestration_resolve_local_artifact_path,
+    rebase_mobile_member_discoveries as _orchestration_rebase_mobile_member_discoveries,
+    safe_archive_member_name as _orchestration_safe_archive_member_name,
+    run_ordered_static_batch as _orchestration_run_ordered_static_batch,
+    static_batch_worker_count as _orchestration_static_batch_worker_count,
+    saz_raw_session_member_entry as _orchestration_saz_raw_session_member_entry,
+    saz_request_origin_url as _orchestration_saz_request_origin_url,
+    saz_response_relative_locations as _orchestration_saz_response_relative_locations,
+    saz_session_pairing_payload as _orchestration_saz_session_pairing_payload,
+    set_artifact_local_path as _orchestration_set_artifact_local_path,
+    store_artifact_url_seed as _orchestration_store_artifact_url_seed,
+    store_artifact_key_finding as _orchestration_store_artifact_key_finding,
+    text_7z_member_entry as _orchestration_text_7z_member_entry,
+    text_member_job as _orchestration_text_member_job,
+    text_tar_member_entry as _orchestration_text_tar_member_entry,
+    text_zip_member_entry as _orchestration_text_zip_member_entry,
+    xml_property_payload as _orchestration_xml_property_payload,
+    xml_property_line as _orchestration_xml_property_line,
+    xml_text_payload as _orchestration_xml_text_payload,
+    xml_text_value as _orchestration_xml_text_value,
+    update_artifact_status as _orchestration_update_artifact_status,
+)
+from forge.orchestration.artifact_processor_runtime import (
+    ArtifactProcessorRuntimeServices,
+    artifact_processor_callbacks_for_processor,
+    artifact_processor_dispatch_entry,
+    artifact_processor_local_artifact_metadata,
+    artifact_processor_local_artifact_metadata_matches,
+    artifact_processor_local_artifact_record,
+    artifact_processor_progress_stage_label,
+    artifact_cloud_asset_metadata_for_processor,
+    artifact_relation_context_for_processor,
+    persist_generic_text_discovery_batch_for_processor,
+    store_generic_text_discoveries_for_processor,
+    artifact_url_seed_persistence_entry_for_processor,
+    artifact_url_seed_family_entry_for_processor,
+    artifact_url_related_seed_entries_for_processor,
+    artifact_url_social_pivot_entries_for_processor,
+    artifact_url_cloud_asset_entries_for_processor,
+    artifact_url_cloud_asset_family_entries_for_processor,
+    store_social_profile_url_pivots_for_processor,
+    store_cloud_assets_from_url_entries_for_processor,
+    artifact_social_profile_url_pivot_entry_for_processor,
+    artifact_cloud_asset_url_entry_for_processor,
+    store_artifact_cloud_asset_reference_for_processor,
+    firebase_match_entry_for_processor,
+    extract_firebase_from_text_for_processor,
+    terraform_state_payload_family_for_processor,
+    terraform_state_text_payloads_for_processor,
+    terraform_state_structured_payloads_for_processor,
+    terraform_state_structured_payload_text_for_processor,
+    terraform_block_assignments_for_processor,
+    terraform_assignment_line_entry_for_processor,
+    iter_terraform_text_blocks_for_processor,
+    terraform_structured_candidate_entry_for_processor,
+    terraform_text_structured_payload_text_for_processor,
+    terraform_text_block_candidate_for_processor,
+    digitalocean_spaces_url_from_endpoint_for_processor,
+    azure_blob_url_from_parts_for_processor,
+    azure_blob_parts_from_composite_name_for_processor,
+    iac_resource_azure_blob_candidate_for_processor,
+    iac_resource_firebase_candidate_for_processor,
+    iac_resource_supabase_candidate_for_processor,
+    iac_resource_s3_candidate_for_processor,
+    iac_resource_gcs_candidate_for_processor,
+    iac_resource_digitalocean_spaces_candidate_for_processor,
+    iac_resource_structured_candidates_for_processor,
+    terraform_backend_config_candidates_for_processor,
+    iter_terragrunt_remote_state_blocks_for_processor,
+    terragrunt_remote_state_backend_candidates_for_processor,
+    parse_key_value_scalar_for_processor,
+    key_value_section_path_for_processor,
+    key_value_line_entry_for_processor,
+    parse_key_value_entries_for_processor,
+    key_value_structured_inputs_for_processor,
+    key_value_structured_payload_lines_for_processor,
+    key_value_structured_payload_text_for_processor,
+    strip_jsonc_comments_for_processor,
+    json_document_from_line_for_processor,
+    json_documents_from_text_for_processor,
+    json_structured_payload_text_for_processor,
+    json_document_looks_like_docker_auth_config_for_processor,
+    firebaserc_project_ref_url_for_processor,
+    firebaserc_structured_payload_text_for_processor,
+    observability_structured_document_candidates_for_processor,
+    observability_child_candidate_values_for_processor,
+    observability_endpoint_jobs_for_processor,
+    observability_scheme_candidate_for_processor,
+    observability_target_url_candidate_for_processor,
+    observability_structured_payload_text_for_processor,
+    edge_proxy_structured_payload_text_for_processor,
+    edge_proxy_endpoint_url_candidate_for_processor,
+    edge_proxy_line_url_candidates_for_processor,
+    orchestration_annotation_endpointish_key_for_processor,
+    orchestration_endpoint_values_for_processor,
+    orchestration_text_values_for_processor,
+    kopia_structured_payload_text_for_processor,
+    duplicacy_structured_payload_text_for_processor,
+    duplicacy_preference_entry_has_hint_for_processor,
+    duplicacy_preference_entry_candidates_for_processor,
+    duplicacy_storage_url_candidates_for_processor,
+    duplicacy_s3_storage_candidates_for_processor,
+    duplicacy_bucket_from_storage_url_for_processor,
+    borg_repository_candidates_for_processor,
+    borg_repository_candidates_from_env_map_for_processor,
+    borg_structured_payload_text_for_processor,
+    borg_s3_repository_candidates_for_processor,
+    borg_bucket_from_repository_url_for_processor,
+    borg_network_repository_candidate_for_processor,
+    restic_bucket_from_pathish_for_processor,
+    restic_repository_candidates_for_processor,
+    restic_repository_candidates_from_env_map_for_processor,
+    restic_s3_repository_candidates_for_processor,
+    yaml_env_candidate_family_for_processor,
+    yaml_env_value_candidate_entry_for_processor,
+    yaml_managed_hosting_env_entry_for_processor,
+    docker_auth_config_auth_entry_candidates_for_processor,
+    docker_auth_config_cred_helper_candidates_for_processor,
+    docker_auth_config_legacy_entry_candidates_for_processor,
+    docker_auth_config_candidates_for_processor,
+    docker_auth_entry_principals_for_processor,
+    docker_auth_principal_candidate_for_processor,
+    docker_auth_principal_from_auth_field_for_processor,
+    docker_auth_structured_candidates_from_env_map_for_processor,
+    docker_auth_structured_env_entry_candidates_for_processor,
+    docker_registry_url_candidate_for_processor,
+    env_value_may_hold_docker_auth_for_processor,
+    duplicati_target_url_candidates_from_env_map_for_processor,
+    duplicati_target_url_candidates_for_processor,
+    duplicati_s3_target_candidates_for_processor,
+    duplicati_bucket_from_target_url_for_processor,
+    duplicati_structured_payload_text_for_processor,
+    duplicati_env_map_from_entries_for_processor,
+    looks_like_duplicati_payload_hint_for_processor,
+    duplicati_nested_option_entries_for_processor,
+    ci_text_structured_payload_text_for_processor,
+    appveyor_ci_document_candidate_for_processor,
+    yaml_mapping_looks_like_appveyor_ci_for_processor,
+    gitpod_structured_payload_text_for_processor,
+    gitpod_document_structured_candidates_for_processor,
+    gitpod_repository_url_candidates_for_processor,
+    yaml_gitpod_config_structured_candidates_for_processor,
+    yaml_mapping_looks_like_gitpod_config_for_processor,
+    iter_bicep_text_blocks_for_processor,
+    bicep_block_assignments_for_processor,
+    bicep_assignment_line_entry_for_processor,
+    bicep_text_structured_payload_text_for_processor,
+    bicep_text_block_candidate_for_processor,
+    goreleaser_blob_bucket_value_for_processor,
+    goreleaser_image_template_values_for_processor,
+    goreleaser_scalar_values_for_processor,
+    yaml_goreleaser_candidate_values_for_node_for_processor,
+    yaml_gitops_repository_child_values_for_processor,
+    yaml_gitops_repository_candidates_for_processor,
+    yaml_gitops_repository_candidates_from_mapping_for_processor,
+    yaml_gitops_repository_values_for_node_for_processor,
+    yaml_flux_source_ref_candidates_for_processor,
+    yaml_flux_bucket_structured_candidates_for_processor,
+    yaml_manifest_looks_like_crossplane_for_processor,
+    crossplane_provider_family_for_processor,
+    yaml_crossplane_external_name_for_processor,
+    yaml_crossplane_cloud_candidates_for_processor,
+    yaml_crossplane_structured_candidates_for_processor,
+    yaml_kubernetes_object_identifier_for_processor,
+    yaml_external_secret_store_refs_for_processor,
+    yaml_external_secret_remote_ref_entry_keys_for_processor,
+    yaml_external_secret_remote_ref_keys_for_processor,
+    yaml_external_secret_provider_candidates_for_processor,
+    yaml_external_secret_ref_segment_for_processor,
+    yaml_sops_section_entries_for_processor,
+    yaml_sops_metadata_entry_candidate_for_processor,
+    yaml_sops_metadata_structured_candidates_for_processor,
+    yaml_vault_address_candidate_for_processor,
+    cloudflare_valid_ref_for_processor,
+    cloudflare_uri_candidate_for_processor,
+    cloudflare_uri_candidate_entry_for_processor,
+    cloudflare_uri_candidate_entries_for_processor,
+    yaml_candidate_batch_entries_for_processor,
+    yaml_candidate_family_entries_for_processor,
+    yaml_candidate_merge_entry_for_processor,
+    yaml_cloudflare_structured_candidates_for_processor,
+    yaml_goreleaser_child_candidate_values_for_processor,
+    yaml_goreleaser_child_candidate_values_for_node_for_processor,
+    yaml_goreleaser_config_structured_candidates_for_processor,
+    yaml_mapping_looks_like_goreleaser_config_for_processor,
+    strip_git_repository_suffix_for_processor,
+    artifact_processor_remote_download_reconciliation_entry,
+    artifact_processor_runtime_services,
+    artifact_discovery_payloads_for_processor,
+    artifact_text_discovery_family_entry_for_processor,
+    artifact_text_direct_url_candidate_for_processor,
+    artifact_text_contact_identity_candidates_for_processor,
+    artifact_text_app_manifest_family_candidates_for_processor,
+    artifact_text_orchestration_manifest_family_candidates_for_processor,
+    artifact_text_cloudflare_asset_family_candidates_for_processor,
+    artifact_text_aws_cloud_asset_family_candidates_for_processor,
+    artifact_text_azure_cloud_asset_family_candidates_for_processor,
+    artifact_text_gcp_cloud_asset_family_candidates_for_processor,
+    artifact_text_key_pattern_findings_for_processor,
+    artifact_text_url_family_candidates_for_processor,
+    calendar_contact_identity_line_entry_for_processor,
+    calendar_contact_title_line_value_for_processor,
+    calendar_contact_identity_value_for_processor,
+    clean_calendar_contact_identity_value_for_processor,
+    collect_generic_text_discoveries_for_processor,
+    collect_generic_text_discovery_batches_for_processor,
+    collect_generic_text_discovery_family_for_processor,
+    collect_generic_text_discovery_job_result_for_processor,
+    data_uri_image_payload_entry_for_processor,
+    data_uri_image_structured_payload_text_for_processor,
+    data_uri_payload_entry_for_processor,
+    data_uri_structured_payload_text_for_processor,
+    decode_data_uri_bytes_for_processor,
+    download_remote_artifacts_for_processor,
+    emit_artifact_processor_stage_progress,
+    expand_structured_discovery_jobs_for_processor,
+    extract_cloud_config_family_for_processor,
+    extract_cloud_configs_from_payload_for_processor,
+    extract_cloud_configs_from_payloads_for_processor,
+    extract_mobile_bundle_family_for_processor,
+    extract_mobile_bundle_text_payloads_for_processor,
+    extract_mobile_configs_from_member_bytes_for_processor,
+    extract_nested_mobile_bundle_configs_for_processor,
+    extract_nested_mobile_configs_from_7z_for_processor,
+    extract_nested_mobile_configs_from_member_jobs_for_processor,
+    extract_nested_mobile_configs_from_tar_for_processor,
+    extract_nested_mobile_configs_from_zip_for_processor,
+    extract_text_artifact_stage_for_processor,
+    firebase_project_persistence_entry_for_processor,
+    generic_text_discovery_job_for_processor,
+    iac_text_structured_payload_family_for_processor,
+    iac_text_structured_payload_text_for_processor,
+    ingest_local_artifacts_for_processor,
+    parse_artifact_work_item_for_processor,
+    parse_local_artifacts_for_processor,
+    nested_mobile_7z_member_entry_for_processor,
+    nested_mobile_member_job_for_processor,
+    nested_mobile_member_result_entry_for_processor,
+    nested_mobile_tar_member_entry_for_processor,
+    nested_mobile_zip_member_entry_for_processor,
+    payload_cloud_config_job_for_processor,
+    payload_cloud_config_result_entry_for_processor,
+    persist_parsed_artifact_for_processor,
+    process_artifact_queue_for_processor,
+    merge_artifact_relation_context_for_processor,
+    rebased_mobile_member_config_entry_for_processor,
+    rebased_mobile_member_payload_entry_for_processor,
+    rebased_mobile_member_project_entry_for_processor,
+    run_ordered_local_batch_for_processor,
+    scan_mobile_bundle_artifact_for_processor,
+    scan_text_artifact_for_processor,
+    safe_artifact_relation_context_for_processor,
+    store_firebase_projects_for_processor,
+    store_supabase_configs_for_processor,
+    structured_discovery_jobs_for_payload_for_processor,
+    structured_discovery_payload_entry_for_processor,
+    structured_discovery_payload_job_for_processor,
+    structured_discovery_result_entry_for_processor,
+    supabase_config_persistence_entry_for_processor,
+)
+from forge.orchestration.run_tracking import (
+    EngagementRunHandle,
+    EngagementRunTracker,
+    SeedRunHandle,
+    SeedRunTracker,
+)
+from forge.orchestration.synthesis import (
+    SeedCandidate,
+    SynthesisSummary,
+    artifact_seed_candidates_from_row,
+    coerce_social_profile_urlish_candidate,
+    email_domain_is_promotable,
+    email_seed_candidates_from_row,
+    ensure_email_seed_row,
+    host_seed_candidates_from_row,
+    insert_seed_relation,
+    lookup_seed_depth,
+    merge_seed_metadata,
+    normalize_social_profile_anchor,
+    preferred_seed_source,
+    scope_seed_candidate,
+    seed_lookup_keys,
+    social_profile_anchor_confidence,
+    social_profile_anchor_seed_candidate,
+    social_profile_account_handle_candidates,
+    social_profile_candidate_batch_entries,
+    social_profile_candidate_dedupe_family_entries,
+    social_profile_candidate_family_entries,
+    social_profile_direct_platform,
+    social_profile_domain_alias_text,
+    social_profile_domain_host_candidates,
+    social_profile_domain_host_key_candidates,
+    social_profile_domain_host_string_candidates,
+    social_profile_domain_host_value_candidates,
+    social_profile_domain_hosts,
+    social_profile_identity_url_hint_values,
+    social_profile_payload_candidate_items,
+    social_profile_payload_candidate_items_at_depth,
+    social_profile_payload_child_candidate_items,
+    social_profile_payload_child_context,
+    social_profile_payload_dedupe_key,
+    social_profile_payload_entries,
+    social_profile_payload_entry,
+    social_profile_payload_has_profile_hint,
+    social_profile_payload_with_inherited_context,
+    social_profile_handle_pivot_entry,
+    social_profile_handles,
+    social_profile_host_pivot_entry,
+    social_profile_link_handle_candidates,
+    social_profile_platform_hint,
+    social_profile_platform_hint_candidate,
+    social_profile_platform_label_candidate,
+    social_profile_pivot_family,
+    social_profile_pivots,
+    social_profile_pivot_batch_entries,
+    social_profile_pivot_family_entries,
+    social_profile_profile_candidates_from_pivots,
+    social_profile_related_host_batch_entries,
+    social_profile_related_host_family_entries,
+    social_profile_related_host_group_entries,
+    social_profile_related_hosts,
+    social_profile_scalar_url_hint_value_for_item_key,
+    social_profile_scalar_url_hint_values,
+    social_profile_seed_pivot_entry,
+    social_profile_text_handle_candidates,
+    social_profile_url_hint_value_for_item_key,
+    social_profile_url_hint_values,
+    social_profile_url_pivot_entry,
+    social_profile_value_batch_entries,
+    social_profile_value_entry,
+    social_profile_value_family_entries,
+    social_profile_value_group_entries,
+    should_promote_bluesky_domain_handle,
+    upsert_seed_candidate,
+)
 from forge.phase4.mobile_config_parse import FirebaseExtractor, FirebaseProject, SupabaseConfig
 from forge.utils.artifact_connection_client import (
     connection_client_config_artifact_label,
@@ -167,10 +657,7 @@ from forge.utils.artifact_orm_config import (
     orm_config_artifact_label,
     orm_config_host_candidates,
 )
-from forge.utils.artifact_package_url import (
-    package_url_package_path,
-    package_url_registry_candidate,
-)
+from forge.utils.artifact_package_url import package_url_package_path, package_url_registry_candidate
 from forge.utils.artifact_package_manager_config import (
     package_manager_config_artifact_label,
     package_manager_config_remote_filename,
@@ -247,9 +734,6 @@ from forge.utils.intel.http_pacing import (
 
 _LOG = logging.getLogger(__name__)
 
-_ArtifactBatchItem = TypeVar("_ArtifactBatchItem")
-_ArtifactBatchResult = TypeVar("_ArtifactBatchResult")
-
 _COMMON_SECOND_LEVEL_PUBLIC_SUFFIXES = {
     "ac",
     "co",
@@ -290,11 +774,7 @@ def _safe_social_profile_json_loads(value: str) -> Any:
 
 def _normalize_root_domain(host: str) -> str:
     labels = [part for part in host.lower().strip(".").split(".") if part]
-    if (
-        len(labels) >= 3
-        and len(labels[-1]) == 2
-        and labels[-2] in _COMMON_SECOND_LEVEL_PUBLIC_SUFFIXES
-    ):
+    if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in _COMMON_SECOND_LEVEL_PUBLIC_SUFFIXES:
         return ".".join(labels[-3:])
     if len(labels) >= 2:
         return ".".join(labels[-2:])
@@ -388,6 +868,105 @@ _CLOUD_REF_HOSTNAME_REGEXES: tuple[re.Pattern[str], ...] = (
     re.compile(r"^storage\.cloud\.google\.com$"),
 )
 
+_CLOUD_REF_LITERAL_SERVICE_ALIASES: dict[str, str] = {
+    "amplify": "amplify",
+    "appspot": "gcp_appspot",
+    "aws_s3": "aws_s3",
+    "azure": "azure_blob",
+    "azure_blob": "azure_blob",
+    "azblob": "azure_blob",
+    "cf_pages": "cloudflare_pages",
+    "cf_r2": "cloudflare_r2",
+    "cf_workers": "cloudflare_worker",
+    "cloudflare_pages": "cloudflare_pages",
+    "cloudflare_r2": "cloudflare_r2",
+    "cloudflare_worker": "cloudflare_worker",
+    "do_spaces": "do_spaces",
+    "digitalocean_spaces": "do_spaces",
+    "firebase": "firebase",
+    "gcp_appspot": "gcp_appspot",
+    "gcp_cloudfunctions": "gcp_cloudfunctions",
+    "gcs": "gcs",
+    "github_pages": "github_pages",
+    "gitlab_pages": "gitlab_pages",
+    "google_cloud_storage": "gcs",
+    "gs": "gcs",
+    "netlify": "netlify",
+    "r2": "cloudflare_r2",
+    "s3": "aws_s3",
+    "supabase": "supabase",
+    "vercel": "vercel",
+}
+
+
+def _normalize_cloud_ref_literal_service(value: str) -> str:
+    token = re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower()).strip("_")
+    return _CLOUD_REF_LITERAL_SERVICE_ALIASES.get(token, "")
+
+
+def _normalize_cloud_ref_literal_identifier(value: str) -> str:
+    identifier = str(value or "").strip().strip("'\"").strip()
+    if not identifier or any(char.isspace() for char in identifier):
+        return ""
+    return identifier.strip("/").lower()
+
+
+def _parse_literal_cloud_ref(value: str) -> tuple[str, str] | None:
+    """Parse operator-entered cloud refs such as ``aws_s3:bucket`` or ``s3://bucket``."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    lowered = text.lower()
+    if lowered.startswith("arn:aws:s3:::"):
+        bucket = text.split(":::", 1)[1].split("/", 1)[0]
+        identifier = _normalize_cloud_ref_literal_identifier(bucket)
+        return ("aws_s3", identifier) if identifier else None
+    if lowered.startswith("aws:s3:"):
+        identifier = _normalize_cloud_ref_literal_identifier(text.split(":", 2)[2].lstrip(":"))
+        return ("aws_s3", identifier) if identifier else None
+    if lowered.startswith("cloud_ref:"):
+        body = text.split(":", 1)[1].strip()
+        nested = _parse_literal_cloud_ref(body)
+        if nested is not None:
+            return nested
+        if ":" not in body:
+            return None
+        service, identifier_text = body.split(":", 1)
+        service_name = _normalize_cloud_ref_literal_service(service)
+        identifier = _normalize_cloud_ref_literal_identifier(identifier_text)
+        return (service_name, identifier) if service_name and identifier else None
+
+    parsed = urlparse(text)
+    service_name = _normalize_cloud_ref_literal_service(parsed.scheme)
+    if service_name:
+        if parsed.netloc:
+            path = str(parsed.path or "").strip("/")
+            if service_name in {"aws_s3", "gcs"}:
+                identifier_text = parsed.netloc
+            elif path:
+                identifier_text = f"{parsed.netloc}/{path}"
+            else:
+                identifier_text = parsed.netloc
+        else:
+            identifier_text = parsed.path
+        identifier = _normalize_cloud_ref_literal_identifier(identifier_text)
+        return (service_name, identifier) if identifier else None
+
+    if ":" in text:
+        service, identifier_text = text.split(":", 1)
+        service_name = _normalize_cloud_ref_literal_service(service)
+        identifier = _normalize_cloud_ref_literal_identifier(identifier_text)
+        return (service_name, identifier) if service_name and identifier else None
+    return None
+
+
+def _canonical_cloud_ref_value(value: str) -> str | None:
+    parsed = _parse_literal_cloud_ref(value)
+    if parsed is None:
+        return None
+    service, identifier = parsed
+    return f"{service}:{identifier}"
+
 
 def _hostname_is_cloud_ref(hostname: str) -> bool:
     """Return True when *hostname* looks like a cloud provider reference.
@@ -396,7 +975,14 @@ def _hostname_is_cloud_ref(hostname: str) -> bool:
     stripped so ``*.myapp.supabase.co`` and ``myapp.supabase.co`` both
     match.
     """
-    host = hostname.strip().lower().lstrip("*").lstrip(".")
+    host = hostname.strip().lower()
+    if "@" in host:
+        host = host.rsplit("@", 1)[-1]
+    if host.startswith("[") and "]" in host:
+        host = host[1:host.index("]")]
+    elif host.count(":") == 1:
+        host = host.rsplit(":", 1)[0]
+    host = host.lstrip("*").lstrip(".")
     if not host:
         return False
     for suffix in _CLOUD_REF_HOSTNAME_SUFFIXES:
@@ -423,6 +1009,8 @@ def _classify_seed_value(value: str) -> str:
         return "ipv6" if parsed_ip.version == 6 else "ipv4"
     except ValueError:
         pass
+    if _canonical_cloud_ref_value(text):
+        return "cloud_ref"
     parsed = urlparse(text)
     if parsed.scheme in {"http", "https"} and parsed.netloc:
         if _is_mobile_bundle_url(text):
@@ -484,13 +1072,7 @@ def _is_stack_exchange_network_host(hostname: str) -> bool:
     host = hostname.strip().lower().lstrip(".")
     if host.startswith("www."):
         host = host[4:]
-    return host in {
-        "askubuntu.com",
-        "mathoverflow.net",
-        "serverfault.com",
-        "stackapps.com",
-        "superuser.com",
-    }
+    return host in {"askubuntu.com", "mathoverflow.net", "serverfault.com", "stackapps.com", "superuser.com"}
 
 
 def _is_mastodon_instance_host(hostname: str) -> bool:
@@ -506,9 +1088,7 @@ def _is_managed_cloud_provider_host(hostname: str) -> bool:
     host = hostname.strip().lower().lstrip(".")
     if host.startswith("www."):
         host = host[4:]
-    return any(
-        host == domain or host.endswith(f".{domain}") for domain in _MANAGED_CLOUD_PROVIDER_DOMAINS
-    )
+    return any(host == domain or host.endswith(f".{domain}") for domain in _MANAGED_CLOUD_PROVIDER_DOMAINS)
 
 
 def _redact_secret(value: str) -> str:
@@ -551,7 +1131,11 @@ def _redact_azure_storage_connection_string(value: str) -> str:
     account_name = str(parts.get("accountname") or "").strip()
     if not account_name:
         return _redact_secret(value)
-    return f"DefaultEndpointsProtocol={protocol};AccountName={account_name};AccountKey=<redacted>"
+    return (
+        f"DefaultEndpointsProtocol={protocol};"
+        f"AccountName={account_name};"
+        "AccountKey=<redacted>"
+    )
 
 
 def _normalize_phone_seed_value(value: Any) -> str:
@@ -673,7 +1257,9 @@ def _artifact_network_host_seed_entries_for_host(hostname: str) -> list[tuple[st
 def _artifact_network_host_seed_entries(value: str) -> list[tuple[str, str]]:
     oracle_jdbc_match = _ARTIFACT_ORACLE_JDBC_DSN_RE.search(str(value or ""))
     if oracle_jdbc_match:
-        return _artifact_network_host_seed_entries_for_host(oracle_jdbc_match.group("host"))
+        return _artifact_network_host_seed_entries_for_host(
+            oracle_jdbc_match.group("host")
+        )
     candidate = _normalize_artifact_network_dsn_token(value)
     parsed = urlparse(candidate)
     if parsed.scheme.lower() not in _ARTIFACT_NETWORK_DSN_SCHEMES or not parsed.hostname:
@@ -843,7 +1429,9 @@ def _dns_zone_line_host_tokens(raw_line: str, *, origin: str) -> list[str]:
     if not line or line.startswith("$"):
         return []
     tokens = [
-        token.strip().strip("\"'()") for token in line.split() if token.strip().strip("\"'()")
+        token.strip().strip("\"'()")
+        for token in line.split()
+        if token.strip().strip("\"'()")
     ]
     if len(tokens) < 2:
         return []
@@ -990,9 +1578,7 @@ def _extract_artifact_hosts_file_host_seeds(text: str) -> list[tuple[str, str]]:
 
 
 def _looks_like_lease_mac_token(value: str) -> bool:
-    return (
-        re.fullmatch(r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", str(value or "").strip()) is not None
-    )
+    return re.fullmatch(r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", str(value or "").strip()) is not None
 
 
 def _normalize_dhcp_lease_host_token(value: str) -> str:
@@ -1112,23 +1698,9 @@ def _looks_like_ansible_text_config_artifact_name(value: str) -> bool:
         return True
     if name == "inventory" and parent_segments & {"ansible", "inventories", "inventory"}:
         return True
-    if name.startswith("inventory.") and suffix in {
-        ".ini",
-        ".cfg",
-        ".conf",
-        ".json",
-        ".yml",
-        ".yaml",
-    }:
+    if name.startswith("inventory.") and suffix in {".ini", ".cfg", ".conf", ".json", ".yml", ".yaml"}:
         return True
-    if parent_segments & {"group_vars", "host_vars"} and suffix in {
-        "",
-        ".json",
-        ".yml",
-        ".yaml",
-        ".ini",
-        ".cfg",
-    }:
+    if parent_segments & {"group_vars", "host_vars"} and suffix in {"", ".json", ".yml", ".yaml", ".ini", ".cfg"}:
         return True
     return False
 
@@ -1222,7 +1794,8 @@ def _looks_like_os_package_repo_text_config_artifact_name(value: str) -> bool:
     if suffix == ".list" and parent_segments & {"sources.list.d", "apt", "apt.conf.d"}:
         return True
     if suffix == ".repo" and (
-        parent_segments & {"yum.repos.d", "repos.d", "dnf", "yum", "zypp"} or name.endswith(".repo")
+        parent_segments & {"yum.repos.d", "repos.d", "dnf", "yum", "zypp"}
+        or name.endswith(".repo")
     ):
         return True
     if name == "repositories" and parent_segments & {"apk", "apk-tools", "alpine"}:
@@ -1373,10 +1946,8 @@ def _borg_text_config_artifact_kind(value: str) -> str:
         return "key_type"
     if name == "borg.repository.config" or re.fullmatch(r"\d+-borg\.repository\.config", name):
         return "repository_config"
-    if (
-        name in {"location", "key-type"}
-        and "security" in parent_segments
-        and ({"borg", ".borg"} & parent_segments)
+    if name in {"location", "key-type"} and "security" in parent_segments and (
+        {"borg", ".borg"} & parent_segments
     ):
         return "location" if name == "location" else "key_type"
     if name == "config" and ({"borg", ".borg"} & parent_segments):
@@ -1399,9 +1970,7 @@ def _looks_like_duplicacy_preferences_text_config_artifact_name(value: str) -> b
     parent_segments = set(segments[:-1])
     if name == "duplicacy.preferences":
         return True
-    if name in {"preferences", "preferences.json"} and (
-        {".duplicacy", "duplicacy"} & parent_segments
-    ):
+    if name in {"preferences", "preferences.json"} and ({".duplicacy", "duplicacy"} & parent_segments):
         return True
     return False
 
@@ -1555,9 +2124,7 @@ def _extract_artifact_database_client_host_seeds(text: str) -> list[tuple[str, s
 
 def _looks_like_gitreview_text_config_name(value: str) -> bool:
     lowered = Path(str(value or "").strip().replace("\\", "/")).name.lower()
-    return (
-        lowered == ".gitreview" or _cache_prefixed_special_text_config_name(lowered) == ".gitreview"
-    )
+    return lowered == ".gitreview" or _cache_prefixed_special_text_config_name(lowered) == ".gitreview"
 
 
 def _extract_artifact_gitreview_host_seeds(text: str) -> list[tuple[str, str]]:
@@ -1749,7 +2316,11 @@ def _normalize_artifact_route_token(value: str) -> str:
     candidate = str(value or "").strip()
     if not candidate:
         return ""
-    candidate = candidate.replace("\\/", "/").replace("\\u002f", "/").replace("\\u002F", "/")
+    candidate = (
+        candidate.replace("\\/", "/")
+        .replace("\\u002f", "/")
+        .replace("\\u002F", "/")
+    )
     candidate = unquote(candidate.strip().strip("[](){}<>,;\"'`"))
     while candidate:
         previous = candidate
@@ -2548,7 +3119,10 @@ def _helm_index_chart_url_metadata(
     source_file: str,
 ) -> dict[str, Any]:
     metadata = {"rule": "artifact_text_extract", "source_file": source_file}
-    if source_looks_like_helm_index(source_file) and url_looks_like_helm_chart_archive(url):
+    if (
+        source_looks_like_helm_index(source_file)
+        and url_looks_like_helm_chart_archive(url)
+    ):
         metadata["rule"] = "helm_index_chart_url"
         metadata["helm_index_url"] = source_file
     return metadata
@@ -2676,9 +3250,6 @@ _HTTP_TRANSCRIPT_URL_FIELD_RE = re.compile(
     \s*[:=]\s*
     (?P<value>[^\s#]+)
     """
-)
-_SAZ_RAW_SESSION_MEMBER_RE = re.compile(
-    r"""(?ix)(?:^|/)raw/(?P<session_id>\d{1,8})_(?P<side>[cs])\.txt$"""
 )
 _ARTIFACT_GITREVIEW_HOST_FIELD_RE = re.compile(
     r"""(?im)^\s*host\s*=\s*(?P<host>[A-Za-z0-9_.-]+)(?::\d+)?\s*(?:#.*)?$"""
@@ -3181,9 +3752,7 @@ def _aws_generic_arn_asset_type(service: str, resource: str) -> str:
     if normalized_service == "ecr":
         return "aws_ecr_repository" if normalized_resource.startswith("repository/") else ""
     if normalized_service == "cloudfront":
-        return (
-            "aws_cloudfront_distribution" if normalized_resource.startswith("distribution/") else ""
-        )
+        return "aws_cloudfront_distribution" if normalized_resource.startswith("distribution/") else ""
     if normalized_service == "execute-api":
         return "aws_apigateway"
     return ""
@@ -3211,8 +3780,6 @@ def _aws_generic_arn_cloud_asset_candidates(text: str) -> list[tuple[str, str, s
         seen.add(candidate)
         candidates.append(candidate)
     return candidates
-
-
 _CLOUDFLARE_STRUCTURED_ASSET_URI_RE = re.compile(
     r"cloudflare-(r2|d1|kv|worker|pages)://([a-z0-9][a-z0-9._\-]{1,127})(?:/|(?=\s|$))",
     re.IGNORECASE,
@@ -4754,17 +5321,7 @@ _OCR_TEXT_LIMIT = 16_384
 _PDF_RENDER_TIMEOUT_SECONDS = 30
 _PDF_OCR_MAX_PAGES = 3
 _ARCHIVE_STYLE_MOBILE_ARTIFACT_SUFFIXES = {".apkm", ".apks", ".xapk"}
-_NESTED_MOBILE_ARTIFACT_SUFFIXES = {
-    ".apk",
-    ".ipa",
-    ".aab",
-} | _ARCHIVE_STYLE_MOBILE_ARTIFACT_SUFFIXES
-_DEFAULT_LOCAL_ARTIFACT_ROOT_SEGMENTS: tuple[tuple[str, ...], ...] = (
-    ("data", "mobile"),
-    ("data", "artifacts"),
-    ("data", "evidence"),
-    ("data", "uploads"),
-)
+_NESTED_MOBILE_ARTIFACT_SUFFIXES = {".apk", ".ipa", ".aab"} | _ARCHIVE_STYLE_MOBILE_ARTIFACT_SUFFIXES
 _PLIST_SUFFIXES = {".plist", ".mobileconfig", ".entitlements", ".xcprivacy", ".webarchive"}
 _EMBEDDED_PLIST_SUFFIXES = {".mobileprovision", ".provisionprofile"}
 _PLIST_MAGIC = b"bplist00"
@@ -4811,15 +5368,6 @@ _MSG_PROPERTY_LABELS = {
 _MAX_SQLITE_TABLES = 16
 _MAX_SQLITE_ROWS_PER_TABLE = 20
 _MAX_SQLITE_TEXT_BYTES = 2_048
-_SEED_SOURCE_PRIORITY = {
-    "cross_reference": 1,
-    "discovered": 2,
-    "artifact": 3,
-    "scope": 4,
-    "operator": 5,
-}
-
-
 def _cache_prefixed_special_text_config_name(name: str) -> str:
     match = re.fullmatch(r"\d+-(.+)", str(name or "").strip().lower())
     if not match:
@@ -4901,9 +5449,7 @@ def _looks_like_browser_sqlite_artifact_name(value: str) -> bool:
 
 def _looks_like_browser_text_config_artifact_name(value: str) -> bool:
     lowered = Path(str(value or "").strip().replace("\\", "/")).name.lower()
-    return lowered in _BROWSER_TEXT_CONFIG_ARTIFACT_NAMES or bool(
-        _browser_state_artifact_label(value)
-    )
+    return lowered in _BROWSER_TEXT_CONFIG_ARTIFACT_NAMES or bool(_browser_state_artifact_label(value))
 
 
 def _browser_state_artifact_label(value: str) -> str:
@@ -4935,12 +5481,7 @@ def _browser_state_artifact_label(value: str) -> str:
         return "playwright-storage-state"
     if name in {"cypress.env.json", "cypress.env", "cypress-env.json"}:
         return "cypress-env"
-    if name in {
-        "localstorage.json",
-        "sessionstorage.json",
-        "local-storage.json",
-        "session-storage.json",
-    } and (
+    if name in {"localstorage.json", "sessionstorage.json", "local-storage.json", "session-storage.json"} and (
         "playwright" in normalized
         or "cypress" in normalized
         or ".auth" in parent_segments
@@ -5114,9 +5655,7 @@ def _edge_proxy_config_artifact_label(value: str) -> str:
         name.endswith(".conf") or name in {"proxy_params"}
     ):
         return "apache-config"
-    if name in {"haproxy.cfg", "haproxy.conf"} or (
-        "haproxy" in segments and name.endswith((".cfg", ".conf"))
-    ):
+    if name in {"haproxy.cfg", "haproxy.conf"} or ("haproxy" in segments and name.endswith((".cfg", ".conf"))):
         return "haproxy-config"
     if name in {"traefik.yml", "traefik.yaml", "traefik.toml", "traefik.json"} or (
         "traefik" in segments and name.endswith((".yml", ".yaml", ".toml", ".json"))
@@ -5276,9 +5815,7 @@ _EDGE_PROXY_STRUCTURED_LABELS = {
     "nginx-config",
     "traefik-config",
 }
-_EDGE_PROXY_HOST_RULE_RE = re.compile(
-    r"\bHost(?:SNI)?\s*\((?P<values>[^)]{1,2048})\)", re.IGNORECASE
-)
+_EDGE_PROXY_HOST_RULE_RE = re.compile(r"\bHost(?:SNI)?\s*\((?P<values>[^)]{1,2048})\)", re.IGNORECASE)
 _EDGE_PROXY_HOST_RULE_VALUE_RE = re.compile(
     r"""[`'"](?P<quoted>[^`'"]{1,512})[`'"]|(?P<bare>[A-Za-z0-9*_.-]+(?::\d{1,5})?)""",
     re.IGNORECASE,
@@ -5384,10 +5921,7 @@ def _workflow_manifest_artifact_label(value: str) -> str:
     if not normalized:
         return ""
     name = Path(normalized).name
-    if normalized.endswith(f".github/workflows/{name}") and Path(name).suffix.lower() in {
-        ".yml",
-        ".yaml",
-    }:
+    if normalized.endswith(f".github/workflows/{name}") and Path(name).suffix.lower() in {".yml", ".yaml"}:
         return "github-actions-workflow"
     return {
         "bitbucket-pipelines.yml": "bitbucket-pipelines",
@@ -5470,19 +6004,9 @@ def _drone_ci_config_artifact_label(value: str) -> str:
 def _woodpecker_ci_config_artifact_label(value: str) -> str:
     parts = _ci_artifact_hint_parts(value)
     name = parts[-1] if parts else ""
-    if name in {
-        "woodpecker",
-        ".woodpecker.yml",
-        ".woodpecker.yaml",
-        "woodpecker.yml",
-        "woodpecker.yaml",
-    }:
+    if name in {"woodpecker", ".woodpecker.yml", ".woodpecker.yaml", "woodpecker.yml", "woodpecker.yaml"}:
         return "woodpecker"
-    if (
-        len(parts) >= 2
-        and parts[-2] in {".woodpecker", "woodpecker"}
-        and name.endswith((".yml", ".yaml"))
-    ):
+    if len(parts) >= 2 and parts[-2] in {".woodpecker", "woodpecker"} and name.endswith((".yml", ".yaml")):
         return "woodpecker"
     return ""
 
@@ -5490,13 +6014,7 @@ def _woodpecker_ci_config_artifact_label(value: str) -> str:
 def _buildkite_ci_config_artifact_label(value: str) -> str:
     parts = _ci_artifact_hint_parts(value)
     name = parts[-1] if parts else ""
-    if name in {
-        "buildkite",
-        "buildkite.yml",
-        "buildkite.yaml",
-        ".buildkite.yml",
-        ".buildkite.yaml",
-    }:
+    if name in {"buildkite", "buildkite.yml", "buildkite.yaml", ".buildkite.yml", ".buildkite.yaml"}:
         return "buildkite"
     if len(parts) >= 2 and parts[-2:] in {
         (".buildkite", "pipeline.yml"),
@@ -5544,12 +6062,7 @@ def _gitlab_ci_artifact_label(value: str) -> str:
     if not normalized:
         return ""
     name = Path(normalized).name
-    if name == "gitlab-ci" or name in {
-        "gitlab-ci.yml",
-        "gitlab-ci.yaml",
-        ".gitlab-ci.yml",
-        ".gitlab-ci.yaml",
-    }:
+    if name == "gitlab-ci" or name in {"gitlab-ci.yml", "gitlab-ci.yaml", ".gitlab-ci.yml", ".gitlab-ci.yaml"}:
         return "gitlab-ci"
     return ""
 
@@ -5611,56 +6124,24 @@ def _security_scanner_config_artifact_label(value: str) -> str:
 
     if name in {"codeql.yml", "codeql.yaml", "codeql-config.yml", "codeql-config.yaml"}:
         return "codeql-config"
-    if parent == "codeql" and name in {
-        "config.yml",
-        "config.yaml",
-        "codeql-config.yml",
-        "codeql-config.yaml",
-    }:
+    if parent == "codeql" and name in {"config.yml", "config.yaml", "codeql-config.yml", "codeql-config.yaml"}:
         return "codeql-config"
     if grandparent == ".github" and parent == "codeql" and name.endswith((".yml", ".yaml")):
         return "codeql-config"
 
-    if name == "sonar-project.properties" or re.fullmatch(
-        r"sonar-project\.(?:ya?ml|json|toml)", name
-    ):
+    if name == "sonar-project.properties" or re.fullmatch(r"sonar-project\.(?:ya?ml|json|toml)", name):
         return "sonar-project"
     if name in {"sonar.properties", ".sonarcloud.properties"}:
         return "sonar-project"
 
-    if name in {
-        ".pre-commit-config.yaml",
-        ".pre-commit-config.yml",
-        "pre-commit-config.yaml",
-        "pre-commit-config.yml",
-    }:
+    if name in {".pre-commit-config.yaml", ".pre-commit-config.yml", "pre-commit-config.yaml", "pre-commit-config.yml"}:
         return "pre-commit-config"
-    if name in {
-        ".pre-commit-hooks.yaml",
-        ".pre-commit-hooks.yml",
-        "pre-commit-hooks.yaml",
-        "pre-commit-hooks.yml",
-    }:
+    if name in {".pre-commit-hooks.yaml", ".pre-commit-hooks.yml", "pre-commit-hooks.yaml", "pre-commit-hooks.yml"}:
         return "pre-commit-hooks"
 
-    if name in {
-        "trivy.yaml",
-        "trivy.yml",
-        "trivy.toml",
-        "trivy.json",
-        ".trivy.yaml",
-        ".trivy.yml",
-        ".trivy.toml",
-    }:
+    if name in {"trivy.yaml", "trivy.yml", "trivy.toml", "trivy.json", ".trivy.yaml", ".trivy.yml", ".trivy.toml"}:
         return "trivy-config"
-    if name in {
-        "gitleaks.toml",
-        ".gitleaks.toml",
-        "gitleaks.yaml",
-        "gitleaks.yml",
-        ".gitleaks.yaml",
-        ".gitleaks.yml",
-    }:
+    if name in {"gitleaks.toml", ".gitleaks.toml", "gitleaks.yaml", "gitleaks.yml", ".gitleaks.yaml", ".gitleaks.yml"}:
         return "gitleaks-config"
     if name in {"semgrep.yaml", "semgrep.yml", ".semgrep.yaml", ".semgrep.yml"}:
         return "semgrep-config"
@@ -5711,23 +6192,9 @@ def _security_scanner_config_artifact_label(value: str) -> str:
     }:
         return "osv-scanner-config"
 
-    if name in {
-        "checkov.yaml",
-        "checkov.yml",
-        "checkov.json",
-        ".checkov.yaml",
-        ".checkov.yml",
-        ".checkov.json",
-    }:
+    if name in {"checkov.yaml", "checkov.yml", "checkov.json", ".checkov.yaml", ".checkov.yml", ".checkov.json"}:
         return "checkov-config"
-    if name in {
-        "tfsec.yaml",
-        "tfsec.yml",
-        "tfsec.json",
-        ".tfsec.yaml",
-        ".tfsec.yml",
-        ".tfsec.json",
-    }:
+    if name in {"tfsec.yaml", "tfsec.yml", "tfsec.json", ".tfsec.yaml", ".tfsec.yml", ".tfsec.json"}:
         return "tfsec-config"
     if name in {
         "terrascan.toml",
@@ -5741,23 +6208,9 @@ def _security_scanner_config_artifact_label(value: str) -> str:
         ".terrascanrc.yml",
     }:
         return "terrascan-config"
-    if name in {
-        "kics.config",
-        "kics.config.json",
-        "kics.yaml",
-        "kics.yml",
-        ".kics.yaml",
-        ".kics.yml",
-    }:
+    if name in {"kics.config", "kics.config.json", "kics.yaml", "kics.yml", ".kics.yaml", ".kics.yml"}:
         return "kics-config"
-    if name in {
-        "nuclei.yaml",
-        "nuclei.yml",
-        "nuclei-config.yaml",
-        "nuclei-config.yml",
-        ".nuclei.yaml",
-        ".nuclei.yml",
-    }:
+    if name in {"nuclei.yaml", "nuclei.yml", "nuclei-config.yaml", "nuclei-config.yml", ".nuclei.yaml", ".nuclei.yml"}:
         return "nuclei-config"
 
     return ""
@@ -5855,12 +6308,7 @@ def _developer_env_secret_config_artifact_label(value: str) -> str:
         return name_labels[name]
     if name == "config.toml" and {"mise", ".mise"} & set(parts[:-1]):
         return "mise-config"
-    if parent in {"doppler", ".doppler"} and name in {
-        "config.json",
-        "config.toml",
-        "config.yaml",
-        "config.yml",
-    }:
+    if parent in {"doppler", ".doppler"} and name in {"config.json", "config.toml", "config.yaml", "config.yml"}:
         return "doppler-config"
     if parent in {"infisical", ".infisical"} and name in {
         "config.json",
@@ -5939,9 +6387,7 @@ def _js_runtime_config_artifact_label(value: str) -> str:
         return "expo-eas-config"
     if name in {"app.config.json", "app.config.jsonc", "app.config.yaml", "app.config.yml"}:
         return "expo-app-config"
-    if name == "app.json" and any(
-        part in {"expo", "mobile", "react-native"} for part in parts[:-1]
-    ):
+    if name == "app.json" and any(part in {"expo", "mobile", "react-native"} for part in parts[:-1]):
         return "expo-app-config"
     if name in {"capacitor.config.json", "capacitor.config.yaml", "capacitor.config.yml"}:
         return "capacitor-config"
@@ -5959,9 +6405,7 @@ def _js_runtime_config_artifact_label(value: str) -> str:
         "testcafe.config.yml",
     }:
         return "testcafe-config"
-    if name == "config.xml" and any(
-        part in {"cordova", "phonegap", "ionic"} for part in parts[:-1]
-    ):
+    if name == "config.xml" and any(part in {"cordova", "phonegap", "ionic"} for part in parts[:-1]):
         return "cordova-config"
     if name == "firebase.json":
         return "firebase-hosting-config"
@@ -5988,9 +6432,7 @@ def _js_runtime_config_artifact_label(value: str) -> str:
         return "heroku-config"
     if name == "static.json":
         return "static-json-config"
-    if name == "heroku-app.json" or (
-        name == "app.json" and any(part in {"heroku", ".heroku"} for part in parts[:-1])
-    ):
+    if name == "heroku-app.json" or (name == "app.json" and any(part in {"heroku", ".heroku"} for part in parts[:-1])):
         return "heroku-app-json"
     return ""
 
@@ -6030,12 +6472,7 @@ def _api_spec_config_artifact_label(value: str) -> str:
         return "api-blueprint"
     if stem in {"arazzo", "arazzo-spec", "arazzo_spec"}:
         return "arazzo"
-    if stem in {
-        "openapi-overlay",
-        "openapi_overlay",
-        "openapi-overlay-spec",
-        "openapi_overlay_spec",
-    }:
+    if stem in {"openapi-overlay", "openapi_overlay", "openapi-overlay-spec", "openapi_overlay_spec"}:
         return "openapi-overlay"
     if stem == "overlay" and any(part in normalized for part in ("openapi", "oas")):
         return "openapi-overlay"
@@ -6103,12 +6540,9 @@ def _api_client_collection_artifact_label(value: str) -> str:
         "pactum.config.yml",
     }:
         return "pactum-config"
-    if name in {
-        "pyresttest.yaml",
-        "pyresttest.yml",
-        "resttest.yaml",
-        "resttest.yml",
-    } or name.endswith((".pyresttest.yaml", ".pyresttest.yml", ".resttest.yaml", ".resttest.yml")):
+    if name in {"pyresttest.yaml", "pyresttest.yml", "resttest.yaml", "resttest.yml"} or name.endswith(
+        (".pyresttest.yaml", ".pyresttest.yml", ".resttest.yaml", ".resttest.yml")
+    ):
         return "pyresttest"
     if name in {"postman_collection", "postman-collection"} or name.endswith(
         (".postman_collection", ".postman-collection")
@@ -6160,8 +6594,7 @@ def _api_client_collection_artifact_label(value: str) -> str:
     if "pactum" in stem and any(marker in stem for marker in ("config", "api", "test", "suite")):
         return "pactum-config"
     if "pyresttest" in stem or (
-        "resttest" in stem
-        and any(marker in stem for marker in ("api", "test", "suite", "requests"))
+        "resttest" in stem and any(marker in stem for marker in ("api", "test", "suite", "requests"))
     ):
         return "pyresttest"
     if ("soapui" in stem or "readyapi" in stem) and any(
@@ -6362,9 +6795,7 @@ def _iac_manifest_artifact_label(value: str) -> str:
         return "terragrunt"
     if _looks_like_terraform_backend_config_name(normalized):
         return "terraform-backend"
-    if name.endswith(
-        (".tfvars", ".tfvars.json", ".tfvars.jsonc", ".auto.tfvars", ".auto.tfvars.json")
-    ):
+    if name.endswith((".tfvars", ".tfvars.json", ".tfvars.jsonc", ".auto.tfvars", ".auto.tfvars.json")):
         return "terraform-variables"
     if name.endswith((".tf", ".tf.json")):
         return "terraform"
@@ -6569,9 +7000,9 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if _ai_agent_config_artifact_label(raw_lowered):
         return True
-    if _looks_like_container_image_json_path(
+    if _looks_like_container_image_json_path(raw_lowered) and not _looks_like_container_image_blob_path(
         raw_lowered
-    ) and not _looks_like_container_image_blob_path(raw_lowered):
+    ):
         return True
     if _looks_like_ansible_text_config_artifact_name(raw_lowered):
         return True
@@ -7673,9 +8104,7 @@ def _classify_remote_artifact_url(raw_url: str, seed_type: str | None = None) ->
         return "config"
     if _looks_like_borg_text_config_artifact_name(unquote(parsed_remote.path or "")):
         return "config"
-    if _looks_like_duplicacy_preferences_text_config_artifact_name(
-        unquote(parsed_remote.path or "")
-    ):
+    if _looks_like_duplicacy_preferences_text_config_artifact_name(unquote(parsed_remote.path or "")):
         return "config"
     if normalized_seed_type == "apk_url":
         for candidate in _remote_artifact_name_candidates(raw_url):
@@ -7723,21 +8152,7 @@ def _classify_remote_artifact_candidate(
 
 
 def default_local_artifact_roots(base_dir: Path | None = None) -> list[Path]:
-    root = Path(base_dir) if base_dir is not None else Path.cwd()
-    candidates: list[Path] = []
-    seen: set[str] = set()
-    for segments in _DEFAULT_LOCAL_ARTIFACT_ROOT_SEGMENTS:
-        candidate = root.joinpath(*segments)
-        key = (
-            candidate.resolve().as_posix().lower()
-            if candidate.exists()
-            else candidate.as_posix().lower()
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        candidates.append(candidate)
-    return candidates
+    return _orchestration_default_local_artifact_roots(base_dir)
 
 
 def _select_remote_artifact_filename(
@@ -7767,11 +8182,7 @@ def _select_remote_artifact_filename(
     opensearch_label = opensearch_description_artifact_label(unquote(parsed_source.path or ""))
     if opensearch_label:
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
-        if (
-            candidate
-            and opensearch_description_artifact_label(candidate)
-            and Path(candidate).suffix
-        ):
+        if candidate and opensearch_description_artifact_label(candidate) and Path(candidate).suffix:
             return candidate
         return "opensearch.xml"
     saml_label = saml_metadata_artifact_label(unquote(parsed_source.path or ""))
@@ -7803,10 +8214,7 @@ def _select_remote_artifact_filename(
     if _scheduler_config_artifact_label(unquote(parsed_source.path or "")):
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
         if candidate:
-            if (
-                Path(candidate).suffix.lower() == ".cron"
-                or candidate.lower() in _SCHEDULER_CONFIG_NAMES
-            ):
+            if Path(candidate).suffix.lower() == ".cron" or candidate.lower() in _SCHEDULER_CONFIG_NAMES:
                 return candidate
             return f"{candidate}.cron"
         return "crontab"
@@ -7822,9 +8230,7 @@ def _select_remote_artifact_filename(
             unquote(parsed_source.path or ""),
             _suffix_from_content_type(content_type),
         )
-    connection_client_label = connection_client_config_artifact_label(
-        unquote(parsed_source.path or "")
-    )
+    connection_client_label = connection_client_config_artifact_label(unquote(parsed_source.path or ""))
     if connection_client_label:
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
         if candidate and connection_client_config_artifact_label(candidate):
@@ -7906,9 +8312,7 @@ def _select_remote_artifact_filename(
         return f"tunnel-client.{tunnel_config_label}"
     if _looks_like_kubeconfig_text_config_artifact_name(unquote(parsed_source.path or "")):
         return "kubeconfig"
-    kubernetes_secret_label = _kubernetes_secret_manifest_artifact_label(
-        unquote(parsed_source.path or "")
-    )
+    kubernetes_secret_label = _kubernetes_secret_manifest_artifact_label(unquote(parsed_source.path or ""))
     if kubernetes_secret_label:
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
         if candidate and _kubernetes_secret_manifest_artifact_label(candidate):
@@ -7947,9 +8351,7 @@ def _select_remote_artifact_filename(
         if borg_kind == "key_type":
             return "borg.key-type"
         return "borg.location"
-    if _looks_like_duplicacy_preferences_text_config_artifact_name(
-        unquote(parsed_source.path or "")
-    ):
+    if _looks_like_duplicacy_preferences_text_config_artifact_name(unquote(parsed_source.path or "")):
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
         if candidate.lower() == "preferences":
             return "duplicacy.preferences"
@@ -7961,9 +8363,7 @@ def _select_remote_artifact_filename(
     ):
         if _classify_artifact_name(candidate) is not None:
             return candidate
-    suffix = _suffix_from_content_type(content_type) or _default_remote_artifact_suffix(
-        artifact_type
-    )
+    suffix = _suffix_from_content_type(content_type) or _default_remote_artifact_suffix(artifact_type)
     return f"artifact-{artifact_id}{suffix}"
 
 
@@ -9676,9 +10076,7 @@ _HEXPM_RESERVED_PROFILE_HANDLES = {
 }
 _ORCID_PROFILE_ID_RE = re.compile(r"\d{4}-\d{4}-\d{4}-\d{3}[\dXx]")
 _GOOGLE_SCHOLAR_USER_ID_RE = re.compile(r"[A-Za-z0-9_-]{6,32}")
-_NOSTR_BECH32_ID_RE = re.compile(
-    r"(?:npub|nprofile)1[023456789acdefghjklmnpqrstuvwxyz]{20,120}", re.IGNORECASE
-)
+_NOSTR_BECH32_ID_RE = re.compile(r"(?:npub|nprofile)1[023456789acdefghjklmnpqrstuvwxyz]{20,120}", re.IGNORECASE)
 _GOOGLE_SCHOLAR_RESERVED_PROFILE_HANDLES = {
     "about",
     "authors",
@@ -10832,90 +11230,6 @@ def _table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:
 
 
 @dataclass
-class SeedCandidate:
-    seed_value: str
-    seed_type: str
-    source: str
-    depth: int
-    confidence: float
-    parent_value: str | None = None
-    parent_type: str | None = None
-    relation_type: str = "derived_from"
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class SeedRunHandle:
-    run_id: int
-    seed_id: int
-
-
-@dataclass
-class EngagementRunHandle:
-    run_id: int
-    _finalizer: Any | None = field(default=None, repr=False, compare=False)
-
-
-@dataclass
-class SynthesisSummary:
-    seeds_inserted: int = 0
-    relations_inserted: int = 0
-    promoted_count: int = 0
-    corroborated_count: int = 0
-    root_domains: list[str] = field(default_factory=list)
-    promoted_seeds: list[str] = field(default_factory=list)
-
-
-@dataclass
-class ArtifactProcessingSummary:
-    queued_local: int = 0
-    processed: int = 0
-    failed: int = 0
-    skipped: int = 0
-    firebase_projects: int = 0
-    supabase_configs: int = 0
-    discovered_seeds: int = 0
-
-
-@dataclass
-class ArtifactWorkItem:
-    artifact_id: int
-    source_url: str
-    artifact_type: str
-    path: Path
-
-
-@dataclass
-class ArtifactDownloadRequest:
-    artifact_id: int
-    source_url: str
-    artifact_type: str
-
-
-@dataclass
-class ArtifactDownloadResult:
-    artifact_id: int
-    source_url: str
-    artifact_type: str
-    path: Path | None = None
-    metadata_extra: dict[str, Any] = field(default_factory=dict)
-    error: str | None = None
-
-
-@dataclass
-class ParsedArtifact:
-    artifact_id: int
-    source_url: str
-    artifact_type: str
-    path: Path
-    payloads: list[tuple[str, str, str]] = field(default_factory=list)
-    firebase_projects: list[FirebaseProject] = field(default_factory=list)
-    supabase_configs: list[SupabaseConfig] = field(default_factory=list)
-    parse_metadata: dict[str, Any] = field(default_factory=dict)
-    error: str | None = None
-
-
-@dataclass
 class EmailPartExtractionJob:
     source_file: str
     member_name: str
@@ -10992,37 +11306,6 @@ class WARCRecordExtractionJob:
     record: bytes
 
 
-@dataclass
-class EmbeddedArchiveExtractionJob:
-    source_file: str
-    member_name: str
-    archive_kind: str
-    offset: int
-    blob: bytes
-    depth: int
-
-
-@dataclass
-class ArtifactTextDiscoveryBatch:
-    source_file: str
-    emails: list[str] = field(default_factory=list)
-    phones: list[str] = field(default_factory=list)
-    ip_seeds: list[tuple[str, str]] = field(default_factory=list)
-    host_seeds: list[tuple[str, str]] = field(default_factory=list)
-    urls: list[str] = field(default_factory=list)
-    identity_seeds: list[tuple[str, str, str, str]] = field(default_factory=list)
-    key_findings: list[dict[str, object]] = field(default_factory=list)
-    cloud_assets: list[tuple[str, str, str]] = field(default_factory=list)
-
-
-@dataclass
-class ArtifactTextScanStageResult:
-    payloads: list[tuple[str, str, str]] = field(default_factory=list)
-    firebase_projects: list[FirebaseProject] = field(default_factory=list)
-    supabase_configs: list[SupabaseConfig] = field(default_factory=list)
-    nested_mobile_member_count: int = 0
-
-
 def _artifact_progress_snapshot(
     *,
     total: int,
@@ -11031,472 +11314,13 @@ def _artifact_progress_snapshot(
     failed: int,
     started_at: float,
 ) -> dict[str, object]:
-    total_items = max(0, int(total or 0))
-    active_workers = max(1, int(workers or 1)) if total_items else 0
-    finished = max(0, min(total_items, int(completed or 0)))
-    failed_items = max(0, min(finished, int(failed or 0)))
-    remaining = max(0, total_items - finished)
-    running = 0 if remaining <= 0 else min(active_workers, remaining)
-    pending = max(0, remaining - running)
-    payload: dict[str, object] = {
-        "total": total_items,
-        "workers": active_workers,
-        "running": running,
-        "pending": pending,
-        "queue_depth": pending,
-        "completed": finished,
-        "failed": failed_items,
-        "eta_seconds": None,
-    }
-    if total_items and remaining <= 0:
-        payload["eta_seconds"] = 0.0
-    elif total_items and finished > 0:
-        elapsed = max(0.0, time.perf_counter() - started_at)
-        if elapsed > 0:
-            payload["eta_seconds"] = round((elapsed / finished) * remaining, 1)
-    return payload
-
-
-class SeedRunTracker:
-    def __init__(self, db_path: Path, engagement_id: int) -> None:
-        self._db_path = db_path
-        self._engagement_id = engagement_id
-
-    @staticmethod
-    def _now() -> str:
-        return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
-
-    @staticmethod
-    def _metadata_json(metadata: dict[str, Any] | None) -> str:
-        return json.dumps(metadata or {}, sort_keys=True)
-
-    def recover_abandoned_running_runs(
-        self,
-        *,
-        error: str = "abandoned before explicit completion",
-    ) -> int:
-        completed_at = self._now()
-        con = direct_connect(self._db_path)
-        try:
-            apply_schema(con)
-            run_migrations(con)
-            cur = con.execute(
-                """
-                UPDATE seed_runs
-                SET status='failed',
-                    error=CASE
-                        WHEN error IS NULL OR error='' THEN ?
-                        ELSE error
-                    END,
-                    completed_at=COALESCE(completed_at, ?)
-                WHERE engagement_id=? AND status='running'
-                """,
-                (
-                    error[:512],
-                    completed_at,
-                    self._engagement_id,
-                ),
-            )
-            con.commit()
-            return max(0, int(cur.rowcount or 0))
-        finally:
-            con.close()
-
-    def start_run(
-        self,
-        seed_value: str,
-        seed_type: str,
-        loop_name: str,
-        *,
-        source: str = "orchestrator",
-        depth: int = 0,
-        confidence: float = 1.0,
-        input_count: int = 1,
-        metadata: dict[str, Any] | None = None,
-    ) -> SeedRunHandle:
-        seed_text = seed_value.strip()
-        if not seed_text:
-            raise ValueError("seed_value must not be empty")
-        started_at = self._now()
-        con = direct_connect(self._db_path)
-        try:
-            apply_schema(con)
-            run_migrations(con)
-            con.row_factory = sqlite3.Row
-            seed_id = self._ensure_seed_id(
-                con,
-                seed_text,
-                seed_type,
-                source=source,
-                depth=depth,
-                confidence=confidence,
-                metadata=metadata,
-            )
-            con.execute(
-                """
-                UPDATE engagement_seeds
-                SET status=CASE
-                        WHEN status='completed' THEN status
-                        WHEN status='failed' THEN status
-                        ELSE 'running'
-                    END,
-                    updated_at=?
-                WHERE id=?
-                """,
-                (started_at, seed_id),
-            )
-            con.execute(
-                """
-                INSERT INTO seed_runs
-                    (engagement_id, seed_id, loop_name, status, input_count, output_count, metadata_json, started_at)
-                VALUES (?, ?, ?, 'running', ?, 0, ?, ?)
-                """,
-                (
-                    self._engagement_id,
-                    seed_id,
-                    loop_name,
-                    max(0, int(input_count)),
-                    self._metadata_json(metadata),
-                    started_at,
-                ),
-            )
-            run_id = int(con.execute("SELECT last_insert_rowid()").fetchone()[0])
-            con.commit()
-        finally:
-            con.close()
-        return SeedRunHandle(run_id=run_id, seed_id=seed_id)
-
-    def finish_run(
-        self,
-        handle: SeedRunHandle,
-        *,
-        status: str,
-        output_count: int = 0,
-        error: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> None:
-        completed_at = self._now()
-        con = direct_connect(self._db_path)
-        try:
-            apply_schema(con)
-            run_migrations(con)
-            con.execute(
-                """
-                UPDATE seed_runs
-                SET status=?,
-                    output_count=?,
-                    error=?,
-                    metadata_json=?,
-                    completed_at=?
-                WHERE id=? AND engagement_id=?
-                """,
-                (
-                    status,
-                    max(0, int(output_count)),
-                    (error or "")[:512] or None,
-                    self._metadata_json(metadata),
-                    completed_at,
-                    handle.run_id,
-                    self._engagement_id,
-                ),
-            )
-            if status == "completed":
-                con.execute(
-                    """
-                    UPDATE engagement_seeds
-                    SET status='completed', updated_at=?
-                    WHERE id=?
-                    """,
-                    (completed_at, handle.seed_id),
-                )
-            elif status == "failed":
-                con.execute(
-                    """
-                    UPDATE engagement_seeds
-                    SET status=CASE
-                            WHEN status='completed' THEN status
-                            ELSE 'failed'
-                        END,
-                        updated_at=?
-                    WHERE id=?
-                    """,
-                    (completed_at, handle.seed_id),
-                )
-            elif status == "skipped":
-                con.execute(
-                    """
-                    UPDATE engagement_seeds
-                    SET status=CASE
-                            WHEN status IN ('pending', 'ignored', 'running') THEN 'ignored'
-                            ELSE status
-                        END,
-                        updated_at=?
-                    WHERE id=?
-                    """,
-                    (completed_at, handle.seed_id),
-                )
-            con.commit()
-        finally:
-            con.close()
-
-    def _ensure_seed_id(
-        self,
-        con: sqlite3.Connection,
-        seed_value: str,
-        seed_type: str,
-        *,
-        source: str,
-        depth: int,
-        confidence: float,
-        metadata: dict[str, Any] | None = None,
-    ) -> int:
-        row = con.execute(
-            """
-            SELECT id
-            FROM engagement_seeds
-            WHERE engagement_id=? AND seed_type=? AND seed_value=?
-            """,
-            (self._engagement_id, seed_type, seed_value),
-        ).fetchone()
-        if row is not None:
-            return int(row[0])
-        con.execute(
-            """
-            INSERT INTO engagement_seeds
-                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json, discovered_at, updated_at)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
-            """,
-            (
-                self._engagement_id,
-                seed_value,
-                seed_type,
-                source,
-                max(0, int(depth)),
-                float(confidence),
-                self._metadata_json(metadata),
-                self._now(),
-                self._now(),
-            ),
-        )
-        return int(con.execute("SELECT last_insert_rowid()").fetchone()[0])
-
-
-class EngagementRunTracker:
-    def __init__(self, db_path: Path, engagement_id: int) -> None:
-        self._db_path = db_path
-        self._engagement_id = engagement_id
-
-    @staticmethod
-    def _now() -> str:
-        return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
-
-    @staticmethod
-    def _metadata_json(metadata: dict[str, Any] | None) -> str:
-        return json.dumps(metadata or {}, sort_keys=True)
-
-    @staticmethod
-    def _abandon_run(db_path: Path, engagement_id: int, run_id: int) -> None:
-        completed_at = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
-        con = direct_connect(db_path)
-        try:
-            apply_schema(con)
-            run_migrations(con)
-            con.execute(
-                """
-                UPDATE engagement_runs
-                SET status='failed',
-                    error=CASE
-                        WHEN error IS NULL OR error='' THEN 'abandoned before explicit completion'
-                        ELSE error
-                    END,
-                    completed_at=COALESCE(completed_at, ?),
-                    updated_at=?
-                WHERE id=? AND engagement_id=? AND status='running'
-                """,
-                (
-                    completed_at,
-                    completed_at,
-                    run_id,
-                    engagement_id,
-                ),
-            )
-            con.commit()
-        finally:
-            con.close()
-
-    def start_run(
-        self,
-        *,
-        run_kind: str = "kill_chain",
-        seed_value: str | None = None,
-        seed_type: str | None = None,
-        seed_count: int = 0,
-        max_iterations: int = 0,
-        current_iteration: int = 0,
-        resume_enabled: bool = False,
-        dry_run: bool = False,
-        attack_mode: bool = False,
-        metadata: dict[str, Any] | None = None,
-    ) -> EngagementRunHandle:
-        started_at = self._now()
-        con = direct_connect(self._db_path)
-        try:
-            apply_schema(con)
-            run_migrations(con)
-            con.execute(
-                """
-                INSERT INTO engagement_runs
-                    (
-                        engagement_id,
-                        run_kind,
-                        status,
-                        seed_value,
-                        seed_type,
-                        seed_count,
-                        max_iterations,
-                        current_iteration,
-                        resume_enabled,
-                        dry_run,
-                        attack_mode,
-                        metadata_json,
-                        started_at,
-                        updated_at
-                    )
-                VALUES (?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    self._engagement_id,
-                    run_kind,
-                    seed_value.strip() if seed_value else None,
-                    seed_type.strip() if seed_type else None,
-                    max(0, int(seed_count)),
-                    max(0, int(max_iterations)),
-                    max(0, int(current_iteration)),
-                    1 if resume_enabled else 0,
-                    1 if dry_run else 0,
-                    1 if attack_mode else 0,
-                    self._metadata_json(metadata),
-                    started_at,
-                    started_at,
-                ),
-            )
-            run_id = int(con.execute("SELECT last_insert_rowid()").fetchone()[0])
-            con.commit()
-        finally:
-            con.close()
-        handle = EngagementRunHandle(run_id=run_id)
-        handle._finalizer = weakref.finalize(
-            handle,
-            self._abandon_run,
-            self._db_path,
-            self._engagement_id,
-            run_id,
-        )
-        return handle
-
-    def update_run(
-        self,
-        handle: EngagementRunHandle,
-        *,
-        current_iteration: int | None = None,
-        status: str | None = None,
-        error: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> None:
-        updated_at = self._now()
-        con = direct_connect(self._db_path, timeout=0.2)
-        try:
-            con.execute("PRAGMA busy_timeout=200")
-            apply_schema(con)
-            run_migrations(con)
-            con.execute(
-                """
-                UPDATE engagement_runs
-                SET current_iteration=COALESCE(?, current_iteration),
-                    status=COALESCE(?, status),
-                    error=COALESCE(?, error),
-                    metadata_json=COALESCE(?, metadata_json),
-                    updated_at=?
-                WHERE id=? AND engagement_id=?
-                """,
-                (
-                    max(0, int(current_iteration)) if current_iteration is not None else None,
-                    status,
-                    (error or "")[:512] or None,
-                    self._metadata_json(metadata) if metadata is not None else None,
-                    updated_at,
-                    handle.run_id,
-                    self._engagement_id,
-                ),
-            )
-            con.commit()
-        except sqlite3.OperationalError as exc:
-            if "database is locked" in str(exc).lower():
-                return
-            raise
-        finally:
-            con.close()
-
-    def finish_run(
-        self,
-        handle: EngagementRunHandle,
-        *,
-        status: str,
-        current_iteration: int | None = None,
-        error: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> None:
-        finalizer = getattr(handle, "_finalizer", None)
-        completed_at = self._now()
-        con = direct_connect(self._db_path)
-        try:
-            apply_schema(con)
-            run_migrations(con)
-            con.execute(
-                """
-                UPDATE engagement_runs
-                SET status=?,
-                    current_iteration=COALESCE(?, current_iteration),
-                    error=?,
-                    metadata_json=?,
-                    completed_at=?,
-                    updated_at=?
-                WHERE id=? AND engagement_id=?
-                """,
-                (
-                    status,
-                    max(0, int(current_iteration)) if current_iteration is not None else None,
-                    (error or "")[:512] or None,
-                    self._metadata_json(metadata),
-                    completed_at,
-                    completed_at,
-                    handle.run_id,
-                    self._engagement_id,
-                ),
-            )
-            con.commit()
-            if finalizer is not None:
-                finalizer.detach()
-                handle._finalizer = None
-            try:
-                from forge.audit.manifest import write_run_audit_manifest  # noqa: PLC0415
-
-                write_run_audit_manifest(
-                    con,
-                    db_path=Path(self._db_path),
-                    engagement_id=self._engagement_id,
-                    run_id=handle.run_id,
-                )
-                con.commit()
-            except Exception:  # noqa: BLE001
-                con.rollback()
-                _LOG.exception(
-                    "Failed to write run audit manifest for engagement_id=%s run_id=%s",
-                    self._engagement_id,
-                    handle.run_id,
-                )
-        finally:
-            con.close()
+    return artifact_progress_snapshot(
+        total=total,
+        workers=workers,
+        completed=completed,
+        failed=failed,
+        started_at=started_at,
+    )
 
 
 class EngagementSynthesisEngine:
@@ -12504,7 +12328,10 @@ class EngagementSynthesisEngine:
         bounded_workers = min(cls._MAX_LOCAL_BATCH_WORKERS, len(items))
         ordered_results: list[Any | None] = [None] * len(items)
         with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
-            future_map = {executor.submit(worker, item): index for index, item in enumerate(items)}
+            future_map = {
+                executor.submit(worker, item): index
+                for index, item in enumerate(items)
+            }
             for future in as_completed(future_map):
                 index = future_map[future]
                 try:
@@ -12579,18 +12406,7 @@ class EngagementSynthesisEngine:
 
     @staticmethod
     def _scope_seed_candidate(value: Any) -> SeedCandidate | None:
-        text = str(value or "").strip()
-        if not text:
-            return None
-        cleaned = text[2:] if text.startswith("*.") else text
-        seed_type = _classify_seed_value(text)
-        return SeedCandidate(
-            seed_value=cleaned,
-            seed_type=seed_type,
-            source="scope",
-            depth=0,
-            confidence=1.0,
-        )
+        return scope_seed_candidate(value, classify_seed_value=_classify_seed_value)
 
     def _derive_candidates(self, con: sqlite3.Connection) -> list[SeedCandidate]:
         seed_depths = self._load_seed_depths(con)
@@ -12658,9 +12474,7 @@ class EngagementSynthesisEngine:
                 default_factory=list,
             )
 
-        social_profile_anchor_candidates = self._derive_social_profile_anchor_candidates(
-            con, seed_depths
-        )
+        social_profile_anchor_candidates = self._derive_social_profile_anchor_candidates(con, seed_depths)
         social_profile_candidates = self._derive_social_profile_candidates(con, seed_depths)
         username_profile_candidates = self._derive_username_profile_candidates(con, seed_depths)
         candidate_families = [
@@ -12706,49 +12520,13 @@ class EngagementSynthesisEngine:
         seed_depths: dict[tuple[str, str], int],
         eligible_domain_roots: set[str] | None = None,
     ) -> list[SeedCandidate]:
-        email = str(row["email"] or "").lower().strip()
-        if "@" not in email:
-            return []
-        local, domain = email.split("@", 1)
-        email_depth = seed_depths.get(("email", email), 0)
-        candidates = [
-            SeedCandidate(
-                seed_value=email,
-                seed_type="email",
-                source="discovered",
-                depth=max(1, email_depth or 1),
-                confidence=0.82,
-            )
-        ]
-        username = local.strip(".-_")
-        if len(username) >= 3:
-            candidates.append(
-                SeedCandidate(
-                    seed_value=username,
-                    seed_type="username",
-                    source="cross_reference",
-                    depth=min(self._depth_limit, max(1, email_depth) + 1),
-                    confidence=0.72,
-                    parent_value=email,
-                    parent_type="email",
-                    metadata={"rule": "email_local_part"},
-                )
-            )
-        if self._email_domain_is_promotable(domain, eligible_domain_roots or set()):
-            candidates.append(
-                SeedCandidate(
-                    seed_value=domain,
-                    seed_type="domain",
-                    source="cross_reference",
-                    depth=min(self._depth_limit, max(1, email_depth) + 1),
-                    confidence=0.68,
-                    parent_value=email,
-                    parent_type="email",
-                    relation_type="related_asset",
-                    metadata={"rule": "email_domain"},
-                )
-            )
-        return candidates
+        return email_seed_candidates_from_row(
+            row,
+            seed_depths,
+            eligible_domain_roots,
+            depth_limit=self._depth_limit,
+            normalize_root_domain=_normalize_root_domain,
+        )
 
     def _email_domain_promotion_roots(self, con: sqlite3.Connection) -> set[str]:
         roots = self._scope_domain_roots(con)
@@ -12905,174 +12683,41 @@ class EngagementSynthesisEngine:
 
     @staticmethod
     def _email_domain_is_promotable(domain: str, eligible_domain_roots: set[str]) -> bool:
-        normalized = str(domain or "").strip().lower().strip(".")
-        if not normalized:
-            return False
-        root = _normalize_root_domain(normalized)
-        for eligible in eligible_domain_roots:
-            allowed = str(eligible or "").strip().lower().strip(".")
-            if allowed.startswith("*."):
-                allowed = allowed[2:]
-            if not allowed:
-                continue
-            if normalized == allowed or root == allowed or normalized.endswith(f".{allowed}"):
-                return True
-        return False
+        return email_domain_is_promotable(
+            domain,
+            eligible_domain_roots,
+            normalize_root_domain=_normalize_root_domain,
+        )
 
     def _host_seed_candidates_from_row(
         self,
         row: Any,
         seed_depths: dict[tuple[str, str], int],
     ) -> list[SeedCandidate]:
-        host_ip = str(row["ip"] or "").strip().lower()
-        hostname = str(row["hostname"] or "").lower().strip()
-        candidates: list[SeedCandidate] = []
-        if host_ip and not _is_placeholder_host_ip(host_ip):
-            ip_seed_type = _classify_seed_value(host_ip)
-            if ip_seed_type in {"ipv4", "ipv6"}:
-                host_parent_type = (
-                    _classify_seed_value(hostname) if hostname and hostname != host_ip else ""
-                )
-                ip_depth = seed_depths.get(
-                    (ip_seed_type, host_ip),
-                    seed_depths.get((host_parent_type, hostname), 0) if host_parent_type else 0,
-                )
-                candidates.append(
-                    SeedCandidate(
-                        seed_value=host_ip,
-                        seed_type=ip_seed_type,
-                        source="discovered",
-                        depth=max(1, ip_depth or 1),
-                        confidence=0.76,
-                        parent_value=hostname if host_parent_type else None,
-                        parent_type=host_parent_type or None,
-                        relation_type="related_asset",
-                        metadata={"rule": "host_ip"},
-                    )
-                )
-        if not hostname or hostname == host_ip:
-            return candidates
-        if "." not in hostname:
-            return candidates
-        root_domain = _normalize_root_domain(hostname)
-        host_depth = seed_depths.get(
-            ("subdomain", hostname), seed_depths.get(("domain", root_domain), 0)
+        return host_seed_candidates_from_row(
+            row,
+            seed_depths,
+            classify_seed_value=_classify_seed_value,
+            normalize_root_domain=_normalize_root_domain,
+            is_placeholder_host_ip=_is_placeholder_host_ip,
+            depth_limit=self._depth_limit,
         )
-        candidates.append(
-            SeedCandidate(
-                seed_value=hostname,
-                seed_type="subdomain",
-                source="discovered",
-                depth=max(1, host_depth or 1),
-                confidence=0.78,
-            )
-        )
-        candidates.append(
-            SeedCandidate(
-                seed_value=root_domain,
-                seed_type="domain",
-                source="cross_reference",
-                depth=min(self._depth_limit, max(1, host_depth) + 1),
-                confidence=0.66,
-                parent_value=hostname,
-                parent_type="subdomain",
-                relation_type="related_asset",
-                metadata={"rule": "hostname_root_domain"},
-            )
-        )
-        return candidates
 
     def _artifact_seed_candidates_from_row(
         self,
         row: Any,
         seed_depths: dict[tuple[str, str], int],
     ) -> list[SeedCandidate]:
-        source_url = str(row["source_url"] or "").strip()
-        local_path = str(row["local_path"] or "").strip()
-        artifact_type = str(row["artifact_type"] or "").strip().lower()
-        parsed = urlparse(source_url) if source_url else urlparse("")
-        candidates: list[SeedCandidate] = []
-        if source_url and parsed.scheme in {"http", "https"}:
-            parent_type = (
-                "apk_url"
-                if (
-                    _is_mobile_bundle_url(source_url)
-                    or _is_mobile_bundle_path(local_path)
-                    or artifact_type in {"apk", "ipa"}
-                )
-                else "url"
-            )
-            artifact_depth = seed_depths.get((parent_type, source_url), 0)
-            candidates.append(
-                SeedCandidate(
-                    seed_value=source_url,
-                    seed_type=parent_type,
-                    source="artifact",
-                    depth=max(1, artifact_depth or 1),
-                    confidence=0.7,
-                )
-            )
-            if parsed.hostname:
-                hostname = str(parsed.hostname or "").strip().lower().strip(".")
-                if (
-                    hostname
-                    and not _is_social_platform_host(hostname)
-                    and not _is_managed_cloud_provider_host(hostname)
-                ):
-                    root_domain = _normalize_root_domain(hostname)
-                    host_depth = min(self._depth_limit, max(1, artifact_depth) + 1)
-                    if hostname != root_domain:
-                        candidates.append(
-                            SeedCandidate(
-                                seed_value=hostname,
-                                seed_type="subdomain",
-                                source="artifact",
-                                depth=host_depth,
-                                confidence=0.66,
-                                parent_value=source_url,
-                                parent_type=parent_type,
-                                relation_type="related_asset",
-                                metadata={"rule": "artifact_host"},
-                            )
-                        )
-                        candidates.append(
-                            SeedCandidate(
-                                seed_value=root_domain,
-                                seed_type="domain",
-                                source="artifact",
-                                depth=min(self._depth_limit, host_depth + 1),
-                                confidence=0.6,
-                                parent_value=hostname,
-                                parent_type="subdomain",
-                                relation_type="related_asset",
-                                metadata={"rule": "artifact_host_root_domain"},
-                            )
-                        )
-                    else:
-                        candidates.append(
-                            SeedCandidate(
-                                seed_value=root_domain,
-                                seed_type="domain",
-                                source="artifact",
-                                depth=host_depth,
-                                confidence=0.6,
-                                parent_value=source_url,
-                                parent_type=parent_type,
-                                relation_type="related_asset",
-                                metadata={"rule": "artifact_host"},
-                            )
-                        )
-        if _is_mobile_bundle_path(local_path) and parsed.scheme not in {"http", "https"}:
-            candidates.append(
-                SeedCandidate(
-                    seed_value=local_path,
-                    seed_type="apk_url",
-                    source="artifact",
-                    depth=max(1, seed_depths.get(("apk_url", local_path), 1)),
-                    confidence=0.74,
-                )
-            )
-        return candidates
+        return artifact_seed_candidates_from_row(
+            row,
+            seed_depths,
+            normalize_root_domain=_normalize_root_domain,
+            is_mobile_bundle_url=_is_mobile_bundle_url,
+            is_mobile_bundle_path=_is_mobile_bundle_path,
+            is_social_platform_host=_is_social_platform_host,
+            is_managed_cloud_provider_host=_is_managed_cloud_provider_host,
+            depth_limit=self._depth_limit,
+        )
 
     def _derive_social_profile_anchor_candidates(
         self,
@@ -13113,59 +12758,16 @@ class EngagementSynthesisEngine:
         row: Any,
         seed_depths: dict[tuple[str, str], int],
     ) -> SeedCandidate | None:
-        anchor_raw = str(row["email"] or "").strip()
-        anchor_value, anchor_type = self._normalize_social_profile_anchor(anchor_raw)
-        if not anchor_value or not anchor_type:
-            return None
-        if anchor_type not in {
-            "apk_url",
-            "company",
-            "domain",
-            "email",
-            "ipv4",
-            "ipv6",
-            "name",
-            "phone",
-            "subdomain",
-            "url",
-            "username",
-        }:
-            return None
-        if (
-            anchor_type == "username"
-            and not anchor_value.startswith("@")
-            and ("username", anchor_value) not in seed_depths
-            and ("username", f"@{anchor_value}") in seed_depths
-        ):
-            return None
-        source_label = str(row["source"] or "social_profile").strip().lower() or "social_profile"
-        existing_depth = self._lookup_seed_depth(seed_depths, anchor_type, anchor_value)
-        return SeedCandidate(
-            seed_value=anchor_value,
-            seed_type=anchor_type,
-            source="discovered",
-            depth=max(1, existing_depth or 1),
-            confidence=self._social_profile_anchor_confidence(anchor_type, source_label),
-            metadata={
-                "rule": "social_profile_anchor",
-                "source": source_label,
-            },
+        return social_profile_anchor_seed_candidate(
+            row,
+            seed_depths,
+            normalize_phone_seed_value=_normalize_phone_seed_value,
+            classify_seed_value=_classify_seed_value,
         )
 
     @staticmethod
     def _social_profile_anchor_confidence(anchor_type: str, source_label: str) -> float:
-        source_text = str(source_label or "").strip().lower()
-        if anchor_type == "email":
-            return 0.82
-        if anchor_type in {"domain", "subdomain", "url", "apk_url", "cloud_ref"}:
-            return 0.74
-        if anchor_type == "phone":
-            return 0.73 if "phone" in source_text else 0.7
-        if anchor_type in {"name", "company"}:
-            return 0.72
-        if anchor_type == "username":
-            return 0.7
-        return 0.68
+        return social_profile_anchor_confidence(anchor_type, source_label)
 
     def _derive_social_profile_candidates(
         self,
@@ -13276,11 +12878,7 @@ class EngagementSynthesisEngine:
                 raw_profile_url,
                 platform=platform,
             )
-        if (
-            profile_url
-            and self._profile_url_has_known_social_host(profile_url)
-            and not profile_handle
-        ):
+        if profile_url and self._profile_url_has_known_social_host(profile_url) and not profile_handle:
             return []
         if (
             raw_profile_url
@@ -13340,16 +12938,7 @@ class EngagementSynthesisEngine:
     def _profile_uri_has_known_social_app_scheme(profile_url: str) -> bool:
         parsed = urlparse(str(profile_url or "").strip())
         scheme = str(parsed.scheme or "").strip().lower()
-        return scheme in {
-            "instagram",
-            "linkedin",
-            "matrix",
-            "nostr",
-            "telegram",
-            "tg",
-            "twitter",
-            "x",
-        }
+        return scheme in {"instagram", "linkedin", "matrix", "nostr", "telegram", "tg", "twitter", "x"}
 
     @staticmethod
     def _legacy_social_profile_candidate_row(row: Any) -> dict[str, str] | None:
@@ -13407,37 +12996,19 @@ class EngagementSynthesisEngine:
     def _social_profile_candidate_batch_entries(
         batch_entry: tuple[int, Sequence[SeedCandidate]],
     ) -> list[SeedCandidate]:
-        _batch_index, batch = batch_entry
-        return [candidate for candidate in batch if isinstance(candidate, SeedCandidate)]
+        return social_profile_candidate_batch_entries(batch_entry)
 
     @staticmethod
     def _social_profile_candidate_family_entries(
         family_entry: tuple[int, Sequence[SeedCandidate]],
     ) -> list[SeedCandidate]:
-        _family_index, family = family_entry
-        return [candidate for candidate in family if isinstance(candidate, SeedCandidate)]
+        return social_profile_candidate_family_entries(family_entry)
 
     @staticmethod
     def _social_profile_candidate_dedupe_family_entries(
         family_entry: tuple[int, Sequence[SeedCandidate]],
-    ) -> list[tuple[tuple[str, str, str, str], SeedCandidate]]:
-        _family_index, family = family_entry
-        prepared_entries: list[tuple[tuple[str, str, str, str], SeedCandidate]] = []
-        for candidate in family:
-            if not isinstance(candidate, SeedCandidate):
-                continue
-            prepared_entries.append(
-                (
-                    (
-                        candidate.seed_type,
-                        candidate.seed_value,
-                        candidate.parent_type,
-                        candidate.parent_value,
-                    ),
-                    candidate,
-                )
-            )
-        return prepared_entries
+    ) -> list[tuple[tuple[str, str, str | None, str | None], SeedCandidate]]:
+        return social_profile_candidate_dedupe_family_entries(family_entry)
 
     def _social_profile_row_candidates(
         self,
@@ -13487,42 +13058,23 @@ class EngagementSynthesisEngine:
         anchor_type: str,
         base_depth: int,
     ) -> list[SeedCandidate]:
-        source_label = (
-            str(profile.get("source") or row["source"] or "social_profile").strip().lower()
+        source_label = str(
+            profile.get("source") or row["source"] or "social_profile"
+        ).strip().lower()
+        platform = str(
+            profile.get("platform") or self._social_profile_platform_hint(profile)
+        ).strip().lower()
+        return social_profile_profile_candidates_from_pivots(
+            self._extract_social_profile_pivots(
+                profile,
+                source_label=source_label,
+                platform=platform,
+            ),
+            anchor_value=anchor_value,
+            anchor_type=anchor_type,
+            base_depth=base_depth,
+            depth_limit=self._depth_limit,
         )
-        platform = (
-            str(profile.get("platform") or self._social_profile_platform_hint(profile))
-            .strip()
-            .lower()
-        )
-        candidates: list[SeedCandidate] = []
-        for (
-            seed_value,
-            seed_type,
-            relation_type,
-            confidence,
-            metadata,
-        ) in self._extract_social_profile_pivots(
-            profile,
-            source_label=source_label,
-            platform=platform,
-        ):
-            if not seed_value or seed_value == anchor_value:
-                continue
-            candidates.append(
-                SeedCandidate(
-                    seed_value=seed_value,
-                    seed_type=seed_type,
-                    source="cross_reference",
-                    depth=min(self._depth_limit, max(1, base_depth) + 1),
-                    confidence=confidence,
-                    parent_value=anchor_value,
-                    parent_type=anchor_type,
-                    relation_type=relation_type,
-                    metadata=metadata,
-                )
-            )
-        return candidates
 
     @classmethod
     def _social_profile_payload_entries(
@@ -13531,33 +13083,21 @@ class EngagementSynthesisEngine:
         *,
         row_source: str,
     ) -> list[dict[str, Any]]:
-        payload_items = cls._social_profile_payload_candidate_items(profile_data)
-        if not payload_items:
-            return []
-        entry_batches = cls._run_ordered_local_batch(
-            payload_items,
-            lambda item: cls._social_profile_payload_entry(item, row_source=row_source),
-            default_factory=lambda: None,
+        return social_profile_payload_entries(
+            profile_data,
+            row_source=row_source,
+            max_entries=cls._MAX_SOCIAL_PROFILE_PAYLOAD_ENTRIES,
+            candidate_items=cls._social_profile_payload_candidate_items,
+            payload_entry=cls._social_profile_payload_entry,
+            payload_dedupe_key=cls._social_profile_payload_dedupe_key,
+            run_ordered_batch=cls._run_ordered_local_batch,
         )
-        entries: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for entry in entry_batches:
-            if not isinstance(entry, dict):
-                continue
-            dedupe_key = cls._social_profile_payload_dedupe_key(entry)
-            if dedupe_key in seen:
-                continue
-            seen.add(dedupe_key)
-            entries.append(entry)
-        return entries[: cls._MAX_SOCIAL_PROFILE_PAYLOAD_ENTRIES]
 
     @classmethod
     def _social_profile_payload_candidate_items(cls, profile_data: Any) -> list[dict[str, Any]]:
-        return cls._social_profile_payload_candidate_items_at_depth(
+        return social_profile_payload_candidate_items(
             profile_data,
-            depth=0,
-            seen=set(),
-            inherited_context={},
+            candidate_items_at_depth=cls._social_profile_payload_candidate_items_at_depth,
         )
 
     @classmethod
@@ -13569,77 +13109,27 @@ class EngagementSynthesisEngine:
         seen: set[int],
         inherited_context: dict[str, Any],
     ) -> list[dict[str, Any]]:
-        if depth > 4 or len(seen) > cls._MAX_SOCIAL_PROFILE_PAYLOAD_ENTRIES * 4:
-            return []
-        if isinstance(item, list):
-            candidates: list[dict[str, Any]] = []
-            child_jobs = [
-                (child, depth + 1, set(seen), inherited_context)
-                for child in item[: cls._MAX_SOCIAL_PROFILE_PAYLOAD_ENTRIES]
-            ]
-            child_batches = cls._run_ordered_local_batch(
-                child_jobs,
-                cls._social_profile_payload_child_candidate_items,
-                default_factory=list,
-            )
-            for child_candidates in child_batches:
-                candidates.extend(child_candidates)
-                if len(candidates) >= cls._MAX_SOCIAL_PROFILE_PAYLOAD_ENTRIES:
-                    break
-            return candidates[: cls._MAX_SOCIAL_PROFILE_PAYLOAD_ENTRIES]
-        if not isinstance(item, dict):
-            return []
-        object_id = id(item)
-        if object_id in seen:
-            return []
-        seen.add(object_id)
-
-        profile_item = cls._social_profile_payload_with_inherited_context(
+        return social_profile_payload_candidate_items_at_depth(
             item,
-            inherited_context,
+            depth=depth,
+            seen=seen,
+            inherited_context=inherited_context,
+            max_entries=cls._MAX_SOCIAL_PROFILE_PAYLOAD_ENTRIES,
+            container_keys=cls._SOCIAL_PROFILE_PAYLOAD_CONTAINER_KEYS,
+            profile_hint_keys=cls._SOCIAL_PROFILE_PAYLOAD_PROFILE_HINT_KEYS,
+            direct_platform=cls._social_profile_direct_platform,
+            child_candidate_items=cls._social_profile_payload_child_candidate_items,
+            run_ordered_batch=cls._run_ordered_local_batch,
         )
-        child_context = cls._social_profile_payload_child_context(
-            profile_item,
-            inherited_context,
-        )
-
-        candidates: list[dict[str, Any]] = []
-        if cls._social_profile_payload_has_profile_hint(profile_item):
-            candidates.append(profile_item)
-        else:
-            container_keys = {
-                key for key in cls._SOCIAL_PROFILE_PAYLOAD_CONTAINER_KEYS if key in profile_item
-            }
-            if not container_keys:
-                candidates.append(profile_item)
-
-        child_jobs = [
-            (value, depth + 1, set(seen), child_context)
-            for key in cls._SOCIAL_PROFILE_PAYLOAD_CONTAINER_KEYS
-            if isinstance((value := profile_item.get(key)), (dict, list))
-        ]
-        child_batches = cls._run_ordered_local_batch(
-            child_jobs,
-            cls._social_profile_payload_child_candidate_items,
-            default_factory=list,
-        )
-        for child_candidates in child_batches:
-            candidates.extend(child_candidates)
-            if len(candidates) >= cls._MAX_SOCIAL_PROFILE_PAYLOAD_ENTRIES:
-                break
-        return candidates[: cls._MAX_SOCIAL_PROFILE_PAYLOAD_ENTRIES]
 
     @classmethod
     def _social_profile_payload_child_candidate_items(
         cls,
         job: tuple[Any, int, set[int], dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        child, depth, seen, inherited_context = job
-        return cls._social_profile_payload_candidate_items_at_depth(
-            child,
-            depth=depth,
-            seen=set(seen),
-            inherited_context=dict(inherited_context),
+        return social_profile_payload_child_candidate_items(
+            job,
+            candidate_items_at_depth=cls._social_profile_payload_candidate_items_at_depth,
         )
 
     @classmethod
@@ -13648,19 +13138,11 @@ class EngagementSynthesisEngine:
         item: dict[str, Any],
         inherited_context: dict[str, Any],
     ) -> dict[str, Any]:
-        profile_item = dict(item)
-        if profile_item.get("source") in (None, "") and inherited_context.get("source") not in (
-            None,
-            "",
-        ):
-            profile_item["source"] = inherited_context["source"]
-        if profile_item.get("platform") in (None, ""):
-            platform = inherited_context.get("platform") or cls._social_profile_direct_platform(
-                profile_item
-            )
-            if platform not in (None, ""):
-                profile_item["platform"] = platform
-        return profile_item
+        return social_profile_payload_with_inherited_context(
+            item,
+            inherited_context,
+            direct_platform=cls._social_profile_direct_platform,
+        )
 
     @classmethod
     def _social_profile_payload_child_context(
@@ -13668,29 +13150,22 @@ class EngagementSynthesisEngine:
         item: dict[str, Any],
         inherited_context: dict[str, Any],
     ) -> dict[str, Any]:
-        context = dict(inherited_context)
-        source = item.get("source")
-        if source not in (None, ""):
-            context["source"] = source
-        platform = item.get("platform") or cls._social_profile_direct_platform(item)
-        if platform not in (None, ""):
-            context["platform"] = platform
-        return context
+        return social_profile_payload_child_context(
+            item,
+            inherited_context,
+            direct_platform=cls._social_profile_direct_platform,
+        )
 
     @classmethod
     def _social_profile_payload_has_profile_hint(cls, item: dict[str, Any]) -> bool:
-        for key in cls._SOCIAL_PROFILE_PAYLOAD_PROFILE_HINT_KEYS:
-            value = item.get(key)
-            if value not in (None, "", [], {}):
-                return True
-        return False
+        return social_profile_payload_has_profile_hint(
+            item,
+            profile_hint_keys=cls._SOCIAL_PROFILE_PAYLOAD_PROFILE_HINT_KEYS,
+        )
 
     @staticmethod
     def _social_profile_payload_dedupe_key(entry: dict[str, Any]) -> str:
-        try:
-            return json.dumps(entry, sort_keys=True, default=str)
-        except TypeError:
-            return repr(sorted((str(key), str(value)) for key, value in entry.items()))
+        return social_profile_payload_dedupe_key(entry)
 
     @staticmethod
     def _social_profile_payload_entry(
@@ -13698,57 +13173,19 @@ class EngagementSynthesisEngine:
         *,
         row_source: str,
     ) -> dict[str, Any] | None:
-        if not isinstance(item, dict):
-            return None
-        entry = dict(item)
-        if row_source and "source" not in entry:
-            entry["source"] = row_source
-        return entry
+        return social_profile_payload_entry(item, row_source=row_source)
 
     @staticmethod
     def _normalize_social_profile_anchor(value: str) -> tuple[str, str]:
-        text = value.strip()
-        lowered = text.lower()
-        if lowered.startswith("domain:"):
-            normalized = text.split(":", 1)[1].strip().lower().strip(".")
-            return normalized, "domain"
-        if lowered.startswith("subdomain:"):
-            normalized = text.split(":", 1)[1].strip().lower().strip(".")
-            return normalized, "subdomain"
-        if lowered.startswith("phone:"):
-            normalized = _normalize_phone_seed_value(text.split(":", 1)[1])
-            return normalized, "phone"
-        if lowered.startswith("name:"):
-            normalized = text.split(":", 1)[1].strip()
-            return normalized, "name"
-        if lowered.startswith("company:"):
-            normalized = text.split(":", 1)[1].strip()
-            return normalized, "company"
-        if lowered.startswith("instagram:"):
-            normalized = text.split(":", 1)[1].strip().lstrip("@")
-            return normalized, "username"
-        if lowered.startswith("username:"):
-            normalized = text.split(":", 1)[1].strip().lstrip("@")
-            return normalized, "username"
-        if lowered.startswith("email:"):
-            normalized = text.split(":", 1)[1].strip().lower()
-            return normalized, "email"
-        normalized = text.lstrip("@")
-        return normalized, _classify_seed_value(normalized)
+        return normalize_social_profile_anchor(
+            value,
+            normalize_phone_seed_value=_normalize_phone_seed_value,
+            classify_seed_value=_classify_seed_value,
+        )
 
     @staticmethod
     def _seed_lookup_keys(seed_type: str, seed_value: str) -> list[tuple[str, str]]:
-        normalized_type = str(seed_type or "").strip()
-        normalized_value = str(seed_value or "").strip()
-        if not normalized_type or not normalized_value:
-            return []
-        keys = [(normalized_type, normalized_value)]
-        if normalized_type == "username":
-            bare_value = normalized_value.lstrip("@")
-            if bare_value:
-                keys.append((normalized_type, bare_value))
-                keys.append((normalized_type, f"@{bare_value}"))
-        return list(dict.fromkeys(keys))
+        return seed_lookup_keys(seed_type, seed_value)
 
     @classmethod
     def _lookup_seed_id(
@@ -13769,10 +13206,7 @@ class EngagementSynthesisEngine:
         seed_type: str,
         seed_value: str,
     ) -> int:
-        for key in cls._seed_lookup_keys(seed_type, seed_value):
-            if key in seed_depths:
-                return int(seed_depths[key])
-        return 0
+        return lookup_seed_depth(seed_depths, seed_type, seed_value)
 
     def _extract_social_profile_pivots(
         self,
@@ -13791,8 +13225,13 @@ class EngagementSynthesisEngine:
             source_label=source_label,
             platform=platform,
         )
-        pivot_batches = self._run_ordered_local_batch(
-            (
+        return social_profile_pivots(
+            profile,
+            source_label=source_label,
+            platform=platform,
+            base_confidence=base_confidence,
+            company_profile=company_profile,
+            pivot_families=(
                 "handles",
                 "company",
                 "name",
@@ -13804,117 +13243,52 @@ class EngagementSynthesisEngine:
                 "hosts",
                 "domain",
             ),
-            lambda family: self._social_profile_pivot_family(
-                family,
-                profile=profile,
-                source_label=source_label,
-                platform=platform,
-                base_confidence=base_confidence,
-                company_profile=company_profile,
-            ),
-            default_factory=list,
+            pivot_family=self._social_profile_pivot_family,
+            pivot_batch_entries=self._social_profile_pivot_batch_entries,
+            pivot_family_entries=self._social_profile_pivot_family_entries,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        prepared_pivot_batches = self._run_ordered_local_batch(
-            list(enumerate(pivot_batches)),
-            self._social_profile_pivot_batch_entries,
-            default_factory=list,
-        )
-        prepared_pivot_families = self._run_ordered_local_batch(
-            list(enumerate(prepared_pivot_batches)),
-            self._social_profile_pivot_family_entries,
-            default_factory=list,
-        )
-        pivots: list[tuple[str, str, str, float, dict[str, Any]]] = []
-        for pivot_family in prepared_pivot_families:
-            pivots.extend(pivot_family)
-        return pivots
 
     @staticmethod
     def _social_profile_pivot_batch_entries(
         batch_entry: tuple[int, Sequence[tuple[str, str, str, float, dict[str, Any]]]],
     ) -> list[tuple[str, str, str, float, dict[str, Any]]]:
-        _batch_index, batch = batch_entry
-        return [
-            pivot
-            for pivot in batch
-            if isinstance(pivot, tuple) and len(pivot) == 5 and isinstance(pivot[4], dict)
-        ]
+        return social_profile_pivot_batch_entries(batch_entry)
 
     @staticmethod
     def _social_profile_pivot_family_entries(
         family_entry: tuple[int, Sequence[tuple[str, str, str, float, dict[str, Any]]]],
     ) -> list[tuple[str, str, str, float, dict[str, Any]]]:
-        _family_index, family = family_entry
-        return [
-            pivot
-            for pivot in family
-            if isinstance(pivot, tuple) and len(pivot) == 5 and isinstance(pivot[4], dict)
-        ]
+        return social_profile_pivot_family_entries(family_entry)
 
     @staticmethod
     def _social_profile_url_pivot_entry(
         entry: tuple[str, str, float, str],
     ) -> tuple[str, str, str, float, dict[str, Any]] | None:
-        url, platform, base_confidence, source_label = entry
-        url_type = _classify_seed_value(url)
-        if url_type not in {"url", "apk_url"}:
-            return None
-        return (
-            url,
-            url_type,
-            "related_asset",
-            max(0.68, base_confidence - 0.02),
-            {"rule": "social_profile_url", "platform": platform, "source": source_label},
+        return social_profile_url_pivot_entry(
+            entry,
+            classify_seed_value=_classify_seed_value,
         )
 
     @staticmethod
     def _social_profile_host_pivot_entry(
         entry: tuple[str, str, str, float, str],
     ) -> tuple[str, str, str, float, dict[str, Any]] | None:
-        host_value, host_type, platform, base_confidence, source_label = entry
-        if not host_value or not host_type:
-            return None
-        return (
-            host_value,
-            host_type,
-            "related_asset",
-            max(0.7, base_confidence - 0.01),
-            {"rule": "social_profile_host", "platform": platform, "source": source_label},
-        )
+        return social_profile_host_pivot_entry(entry)
 
     @staticmethod
     def _social_profile_seed_pivot_entry(
         entry: tuple[str, str, str, float, str, str, str],
     ) -> tuple[str, str, str, float, dict[str, Any]] | None:
-        seed_value, seed_type, relation_type, confidence, rule, platform, source_label = entry
-        if not seed_value or not seed_type:
-            return None
-        return (
-            seed_value,
-            seed_type,
-            relation_type,
-            confidence,
-            {"rule": rule, "platform": platform, "source": source_label},
-        )
+        return social_profile_seed_pivot_entry(entry)
 
     @staticmethod
     def _social_profile_handle_pivot_entry(
         entry: tuple[str, str, float, str],
     ) -> tuple[str, str, str, float, dict[str, Any]] | None:
-        handle, platform, base_confidence, source_label = entry
-        if len(handle) < 3:
-            return None
-        if not EngagementSynthesisEngine._social_profile_handle_allowed_for_platform(
-            platform,
-            handle,
-        ):
-            return None
-        return (
-            handle,
-            "username",
-            "same_entity",
-            min(0.9, base_confidence + 0.02),
-            {"rule": "social_profile_handle", "platform": platform, "source": source_label},
+        return social_profile_handle_pivot_entry(
+            entry,
+            handle_allowed_for_platform=EngagementSynthesisEngine._social_profile_handle_allowed_for_platform,
         )
 
     def _social_profile_pivot_family(
@@ -13927,207 +13301,33 @@ class EngagementSynthesisEngine:
         base_confidence: float,
         company_profile: bool,
     ) -> list[tuple[str, str, str, float, dict[str, Any]]]:
-        pivots: list[tuple[str, str, str, float, dict[str, Any]]] = []
-        if family == "handles":
-            if company_profile:
-                return []
-            pivot_entries = self._run_ordered_local_batch(
-                [
-                    (handle, platform, base_confidence, source_label)
-                    for handle in self._social_profile_handles(profile, platform=platform)
-                ],
-                self._social_profile_handle_pivot_entry,
-                default_factory=lambda: None,
-            )
-            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
-        if family == "company":
-            company_name = self._social_profile_company_name(
-                profile,
-                source_label=source_label,
-                platform=platform,
-            )
-            if company_name:
-                return [
-                    (
-                        company_name,
-                        "company",
-                        "same_entity",
-                        base_confidence,
-                        {
-                            "rule": "social_profile_company",
-                            "platform": platform,
-                            "source": source_label,
-                        },
-                    )
-                ]
-            return []
-        if family == "name":
-            full_name = self._social_profile_name(profile)
-            if full_name:
-                return [
-                    (
-                        full_name,
-                        "name",
-                        "same_entity",
-                        base_confidence,
-                        {
-                            "rule": "social_profile_name",
-                            "platform": platform,
-                            "source": source_label,
-                        },
-                    )
-                ]
-            return []
-        if family == "emails":
-            pivot_entries = self._run_ordered_local_batch(
-                [
-                    (
-                        email,
-                        "email",
-                        "same_entity",
-                        min(0.9, base_confidence + 0.03),
-                        "social_profile_email",
-                        platform,
-                        source_label,
-                    )
-                    for email in self._social_profile_emails(profile)
-                ],
-                self._social_profile_seed_pivot_entry,
-                default_factory=lambda: None,
-            )
-            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
-        if family == "phones":
-            pivot_entries = self._run_ordered_local_batch(
-                [
-                    (
-                        phone,
-                        "phone",
-                        "same_entity",
-                        min(0.9, base_confidence + 0.02),
-                        "social_profile_phone",
-                        platform,
-                        source_label,
-                    )
-                    for phone in self._social_profile_phones(profile)
-                ],
-                self._social_profile_seed_pivot_entry,
-                default_factory=lambda: None,
-            )
-            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
-        if family == "urls":
-            pivot_entries = self._run_ordered_local_batch(
-                [
-                    (url, platform, base_confidence, source_label)
-                    for url in self._social_profile_urls(profile)
-                ],
-                self._social_profile_url_pivot_entry,
-                default_factory=lambda: None,
-            )
-            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
-        if family == "hosts":
-            platform_profile_hosts = self._social_profile_platform_profile_hosts(
-                profile, platform=platform
-            )
-            host_entries = [
-                (host_value, host_type, platform, base_confidence, source_label)
-                for host_value, host_type in self._social_profile_related_hosts(profile)
-                if host_value not in platform_profile_hosts
-            ]
-            pivot_entries = self._run_ordered_local_batch(
-                host_entries,
-                self._social_profile_host_pivot_entry,
-                default_factory=lambda: None,
-            )
-            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
-        if family == "matrix_hosts":
-            if str(platform or "").strip().lower() != "matrix":
-                return []
-            pivot_entries = self._run_ordered_local_batch(
-                [
-                    (
-                        host_value,
-                        host_type,
-                        "related_asset",
-                        max(0.7, base_confidence - 0.01),
-                        "social_profile_matrix_homeserver",
-                        platform,
-                        source_label,
-                    )
-                    for host_value, host_type in self._social_profile_matrix_homeserver_hosts(
-                        profile
-                    )
-                ],
-                self._social_profile_seed_pivot_entry,
-                default_factory=lambda: None,
-            )
-            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
-        if family == "federated_hosts":
-            if not self._social_profile_platform_is_federated(platform):
-                return []
-            pivot_entries = self._run_ordered_local_batch(
-                [
-                    (
-                        host_value,
-                        host_type,
-                        "related_asset",
-                        max(0.7, base_confidence - 0.01),
-                        "social_profile_federated_instance",
-                        platform,
-                        source_label,
-                    )
-                    for host_value, host_type in self._social_profile_federated_instance_hosts(
-                        profile,
-                        platform=platform,
-                    )
-                ],
-                self._social_profile_seed_pivot_entry,
-                default_factory=lambda: None,
-            )
-            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
-        if family == "domain":
-            pivot_entries = self._run_ordered_local_batch(
-                [
-                    (
-                        domain_value,
-                        domain_type,
-                        "related_asset",
-                        max(0.7, base_confidence - 0.01),
-                        "social_profile_domain",
-                        platform,
-                        source_label,
-                    )
-                    for domain_value, domain_type in self._social_profile_domain_hosts(profile)
-                ],
-                self._social_profile_seed_pivot_entry,
-                default_factory=lambda: None,
-            )
-            pivots.extend(pivot for pivot in pivot_entries if isinstance(pivot, tuple))
-            if platform == "bluesky":
-                for handle in self._social_profile_handles(profile, platform=platform):
-                    domain_handle = handle.lower()
-                    if _classify_seed_value(domain_handle) != "domain":
-                        continue
-                    if not self._should_promote_bluesky_domain_handle(
-                        profile,
-                        domain_handle,
-                        source_label=source_label,
-                    ):
-                        continue
-                    pivots.append(
-                        (
-                            domain_handle,
-                            "domain",
-                            "related_asset",
-                            max(0.7, base_confidence - 0.01),
-                            {
-                                "rule": "social_profile_domain_handle",
-                                "platform": platform,
-                                "source": source_label,
-                            },
-                        )
-                    )
-            return pivots
-        return []
+        return social_profile_pivot_family(
+            family,
+            profile=profile,
+            source_label=source_label,
+            platform=platform,
+            base_confidence=base_confidence,
+            company_profile=company_profile,
+            handles=self._social_profile_handles,
+            company_name=self._social_profile_company_name,
+            name=self._social_profile_name,
+            emails=self._social_profile_emails,
+            phones=self._social_profile_phones,
+            urls=self._social_profile_urls,
+            platform_profile_hosts=self._social_profile_platform_profile_hosts,
+            related_hosts=self._social_profile_related_hosts,
+            matrix_homeserver_hosts=self._social_profile_matrix_homeserver_hosts,
+            platform_is_federated=self._social_profile_platform_is_federated,
+            federated_instance_hosts=self._social_profile_federated_instance_hosts,
+            domain_hosts=self._social_profile_domain_hosts,
+            should_promote_bluesky_domain_handle=self._should_promote_bluesky_domain_handle,
+            classify_seed_value=_classify_seed_value,
+            handle_pivot_entry=self._social_profile_handle_pivot_entry,
+            url_pivot_entry=self._social_profile_url_pivot_entry,
+            host_pivot_entry=self._social_profile_host_pivot_entry,
+            seed_pivot_entry=self._social_profile_seed_pivot_entry,
+            run_ordered_batch=self._run_ordered_local_batch,
+        )
 
     @staticmethod
     def _should_promote_bluesky_domain_handle(
@@ -14136,27 +13336,11 @@ class EngagementSynthesisEngine:
         *,
         source_label: str,
     ) -> bool:
-        handle = str(domain_handle or "").strip().lower()
-        if not handle:
-            return False
-        explicit_domain = str(profile.get("domain") or "").strip().lower()
-        if explicit_domain == handle:
-            return True
-        for flag_key in (
-            "custom_domain",
-            "dns_verified",
-            "domain_verified",
-            "handle_verified",
-            "is_custom_domain",
-            "is_domain_handle",
-            "verified_domain",
-        ):
-            if bool(profile.get(flag_key)):
-                return True
-        weak_source = str(source_label or "").strip().lower()
-        if any(token in weak_source for token in ("name_search", "phone_dork", "phone_lookup")):
-            return False
-        return True
+        return should_promote_bluesky_domain_handle(
+            profile,
+            domain_handle,
+            source_label=source_label,
+        )
 
     @staticmethod
     def _linkedin_app_profile_path_parts(parsed: Any) -> list[str]:
@@ -14201,7 +13385,8 @@ class EngagementSynthesisEngine:
         if platform_text in {"google_scholar", "googlescholar", "scholar"}:
             return bool(
                 handle_text not in _GOOGLE_SCHOLAR_RESERVED_PROFILE_HANDLES
-                and EngagementSynthesisEngine._normalize_google_scholar_user_id_candidate(handle)
+                and
+                EngagementSynthesisEngine._normalize_google_scholar_user_id_candidate(handle)
             )
         if platform_text in {"nostr", "nostr_protocol"}:
             return bool(
@@ -14252,9 +13437,7 @@ class EngagementSynthesisEngine:
             return handle_text not in _KEYBASE_RESERVED_PROFILE_PATHS
         if platform_text == "orcid":
             return bool(_ORCID_PROFILE_ID_RE.fullmatch(handle_text))
-        reserved_direct_handles = _DIRECT_HANDLE_RESERVED_PROFILE_PATHS_BY_PLATFORM.get(
-            platform_text
-        )
+        reserved_direct_handles = _DIRECT_HANDLE_RESERVED_PROFILE_PATHS_BY_PLATFORM.get(platform_text)
         if reserved_direct_handles:
             return handle_text not in reserved_direct_handles
         return True
@@ -14289,399 +13472,96 @@ class EngagementSynthesisEngine:
 
     @classmethod
     def _social_profile_platform_hint(cls, profile: dict[str, Any]) -> str:
-        direct_platform = cls._social_profile_direct_platform(profile)
-        if direct_platform:
-            return direct_platform
-        platform_candidates = cls._run_ordered_local_batch(
-            cls._social_profile_url_hint_values(profile),
-            cls._social_profile_platform_hint_candidate,
-            default_factory=str,
+        return social_profile_platform_hint(
+            profile,
+            direct_platform=cls._social_profile_direct_platform,
+            url_hint_values=cls._social_profile_url_hint_values,
+            platform_hint_candidate=cls._social_profile_platform_hint_candidate,
+            run_ordered_batch=cls._run_ordered_local_batch,
         )
-        for platform_candidate in platform_candidates:
-            if platform_candidate:
-                return platform_candidate
-        return ""
 
     @classmethod
     def _social_profile_direct_platform(cls, profile: dict[str, Any]) -> str:
-        platform_candidates = cls._run_ordered_local_batch(
-            [profile.get(key) for key in cls._SOCIAL_PROFILE_PLATFORM_ALIAS_KEYS],
-            cls._social_profile_platform_label_candidate,
-            default_factory=str,
+        return social_profile_direct_platform(
+            profile,
+            platform_alias_keys=cls._SOCIAL_PROFILE_PLATFORM_ALIAS_KEYS,
+            platform_label_candidate=cls._social_profile_platform_label_candidate,
+            run_ordered_batch=cls._run_ordered_local_batch,
         )
-        for platform_candidate in platform_candidates:
-            if platform_candidate:
-                return platform_candidate
-        return ""
 
     @classmethod
     def _social_profile_platform_label_candidate(cls, value: Any) -> str:
-        text = str(value or "").strip()
-        if not text:
-            return ""
-        url_hint = cls._social_profile_platform_hint_candidate(text)
-        if url_hint:
-            return url_hint
-        host_text = text.lower().removeprefix("www.").strip("/")
-        if _is_social_platform_host(host_text):
-            host_hint = cls._social_profile_platform_hint_candidate(f"https://{host_text}/")
-            if host_hint:
-                return host_hint
-        normalized = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
-        if not normalized or len(normalized) > 64:
-            return ""
-        normalized = cls._SOCIAL_PROFILE_PLATFORM_LABEL_ALIASES.get(normalized, normalized)
-        return normalized
+        return social_profile_platform_label_candidate(
+            value,
+            platform_hint_candidate=cls._social_profile_platform_hint_candidate,
+            is_social_platform_host=_is_social_platform_host,
+            platform_label_aliases=cls._SOCIAL_PROFILE_PLATFORM_LABEL_ALIASES,
+        )
 
     @classmethod
     def _social_profile_url_hint_values(cls, profile: dict[str, Any]) -> list[Any]:
-        values = cls._run_ordered_local_batch(
-            [(profile, key) for key in cls._SOCIAL_PROFILE_URL_HINT_KEYS],
-            cls._social_profile_url_hint_value_for_item_key,
-            default_factory=lambda: None,
+        return social_profile_url_hint_values(
+            profile,
+            url_hint_keys=cls._SOCIAL_PROFILE_URL_HINT_KEYS,
+            value_for_item_key=cls._social_profile_url_hint_value_for_item_key,
+            run_ordered_batch=cls._run_ordered_local_batch,
         )
-        return [value for value in values if value not in (None, "", [], {})]
 
     @classmethod
     def _social_profile_scalar_url_hint_values(cls, profile: dict[str, Any]) -> list[Any]:
-        values = cls._run_ordered_local_batch(
-            [(profile, key) for key in cls._SOCIAL_PROFILE_URL_HINT_KEYS],
-            cls._social_profile_scalar_url_hint_value_for_item_key,
-            default_factory=lambda: None,
+        return social_profile_scalar_url_hint_values(
+            profile,
+            url_hint_keys=cls._SOCIAL_PROFILE_URL_HINT_KEYS,
+            scalar_value_for_item_key=cls._social_profile_scalar_url_hint_value_for_item_key,
+            run_ordered_batch=cls._run_ordered_local_batch,
         )
-        return [value for value in values if value not in (None, "")]
 
     @classmethod
     def _social_profile_identity_url_hint_values(cls, profile: dict[str, Any]) -> list[Any]:
-        values = cls._run_ordered_local_batch(
-            [(profile, key) for key in cls._SOCIAL_PROFILE_IDENTITY_URL_HINT_KEYS],
-            cls._social_profile_url_hint_value_for_item_key,
-            default_factory=lambda: None,
+        return social_profile_identity_url_hint_values(
+            profile,
+            identity_url_hint_keys=cls._SOCIAL_PROFILE_IDENTITY_URL_HINT_KEYS,
+            value_for_item_key=cls._social_profile_url_hint_value_for_item_key,
+            run_ordered_batch=cls._run_ordered_local_batch,
         )
-        return [value for value in values if value not in (None, "", [], {})]
 
     @staticmethod
     def _social_profile_url_hint_value_for_item_key(
         item_key: tuple[dict[str, Any], str],
     ) -> Any:
-        item, key = item_key
-        if not isinstance(item, dict):
-            return None
-        return item.get(key)
+        return social_profile_url_hint_value_for_item_key(item_key)
 
     @staticmethod
     def _social_profile_scalar_url_hint_value_for_item_key(
         item_key: tuple[dict[str, Any], str],
     ) -> Any:
-        item, key = item_key
-        if not isinstance(item, dict):
-            return None
-        value = item.get(key)
-        if value in (None, "") or isinstance(value, (dict, list, tuple, set)):
-            return None
-        return value
+        return social_profile_scalar_url_hint_value_for_item_key(item_key)
 
     @staticmethod
     def _coerce_social_profile_urlish_candidate(value: Any) -> str:
-        text = str(value or "").strip()
-        if not text:
-            return ""
-        parsed = urlparse(text)
-        if parsed.scheme:
-            return text
-        if text.startswith("//"):
-            candidate = f"https:{text}"
-            hostname = str(urlparse(candidate).hostname or "").strip().lower()
-            if hostname and (
-                _is_social_platform_host(hostname)
-                or _classify_seed_value(hostname) in {"domain", "subdomain"}
-            ):
-                return candidate
-            return text
-        host_part = re.split(r"[/?#]", text, maxsplit=1)[0].strip().lower().strip(".")
-        if host_part and _is_social_platform_host(host_part):
-            return f"https://{text}"
-        if host_part and _classify_seed_value(host_part) in {"domain", "subdomain"}:
-            return f"https://{text}"
-        return text
+        return coerce_social_profile_urlish_candidate(
+            value,
+            is_social_platform_host=_is_social_platform_host,
+            classify_seed_value=_classify_seed_value,
+        )
 
     @staticmethod
     def _social_profile_platform_hint_candidate(candidate: Any) -> str:
-        candidate_text = EngagementSynthesisEngine._coerce_social_profile_urlish_candidate(
-            candidate
+        return social_profile_platform_hint_candidate(
+            candidate,
+            coerce_urlish_candidate=EngagementSynthesisEngine._coerce_social_profile_urlish_candidate,
+            linkedin_app_profile_path_parts=EngagementSynthesisEngine._linkedin_app_profile_path_parts,
+            nostr_identity_handle_candidate=EngagementSynthesisEngine._nostr_identity_handle_candidate,
+            is_stack_exchange_network_host=_is_stack_exchange_network_host,
+            is_mastodon_instance_host=_is_mastodon_instance_host,
         )
-        parsed = urlparse(candidate_text)
-        linkedin_app_parts = EngagementSynthesisEngine._linkedin_app_profile_path_parts(parsed)
-        if linkedin_app_parts:
-            if linkedin_app_parts[0].lower() in {"company", "school", "showcase"}:
-                return "linkedin_company"
-            return "linkedin"
-        if EngagementSynthesisEngine._nostr_identity_handle_candidate(candidate_text):
-            return "nostr"
-        if str(parsed.scheme or "").strip().lower() == "acct":
-            return "activitypub"
-        if str(parsed.scheme or "").strip().lower() == "matrix":
-            return "matrix"
-        if str(parsed.scheme or "").strip().lower() == "nostr":
-            return "nostr"
-        hostname = str(parsed.hostname or "").strip().lower()
-        if not hostname:
-            return ""
-        if hostname.startswith("www."):
-            hostname = hostname[4:]
-        if hostname in {
-            "nostr.com",
-            "nostrudel.ninja",
-            "njump.me",
-            "primal.net",
-            "iris.to",
-            "snort.social",
-            "yakihonne.com",
-        }:
-            return "nostr"
-        if hostname.endswith("academia.edu"):
-            return "academia"
-        if hostname.endswith("adplist.org"):
-            return "adplist"
-        if hostname.endswith("linkedin.com"):
-            path_parts = [part for part in parsed.path.strip("/").split("/") if part]
-            if path_parts and path_parts[0].lower() in {"company", "school", "showcase"}:
-                return "linkedin_company"
-            return "linkedin"
-        if hostname.endswith("facebook.com"):
-            return "facebook"
-        if hostname.endswith("bitbucket.org"):
-            return "bitbucket"
-        if hostname.endswith("bugcrowd.com"):
-            return "bugcrowd"
-        if hostname.endswith("codeberg.org"):
-            return "codeberg"
-        if hostname.endswith("codepen.io"):
-            return "codepen"
-        if hostname.endswith("contra.com"):
-            return "contra"
-        if hostname in {"discord.com", "discord.gg", "discordapp.com"}:
-            return "discord"
-        if hostname == "hub.docker.com":
-            return "dockerhub"
-        if hostname == "gist.github.com":
-            return "github_gist"
-        if hostname.endswith("github.com"):
-            return "github"
-        if hostname.endswith("gitbook.com") or hostname.endswith("gitbook.io"):
-            return "gitbook"
-        if hostname.endswith("gitlab.com"):
-            return "gitlab"
-        if hostname.endswith("gravatar.com"):
-            return "gravatar"
-        if hostname == "news.ycombinator.com":
-            return "hackernews"
-        if hostname == "scholar.google.com":
-            return "google_scholar"
-        if hostname.endswith("hackerone.com"):
-            return "hackerone"
-        if hostname.endswith("hashnode.com"):
-            return "hashnode"
-        if hostname.endswith("instagram.com"):
-            return "instagram"
-        if hostname.endswith("indiehackers.com"):
-            return "indiehackers"
-        if hostname.endswith("intigriti.com"):
-            return "intigriti"
-        if hostname.endswith("kaggle.com"):
-            return "kaggle"
-        if hostname.endswith("flickr.com"):
-            return "flickr"
-        if hostname.endswith("last.fm"):
-            return "lastfm"
-        if hostname == "bandcamp.com" or hostname.endswith(".bandcamp.com"):
-            return "bandcamp"
-        if hostname == "artstation.com" or hostname.endswith(".artstation.com"):
-            return "artstation"
-        if hostname.endswith("letterboxd.com"):
-            return "letterboxd"
-        if hostname.endswith("500px.com"):
-            return "500px"
-        if hostname.endswith("x.com") or hostname.endswith("twitter.com"):
-            return "twitter"
-        if hostname.endswith("threads.net") or hostname.endswith("threads.com"):
-            return "threads"
-        if hostname.endswith("youtube.com") or hostname.endswith("youtu.be"):
-            return "youtube"
-        if hostname.endswith("linktr.ee"):
-            return "linktree"
-        if hostname.endswith("allmylinks.com"):
-            return "allmylinks"
-        if hostname == "orcid.org":
-            return "orcid"
-        if hostname == "researchgate.net":
-            return "researchgate"
-        if hostname == "credly.com":
-            return "credly"
-        if hostname == "behance.net":
-            return "behance"
-        if hostname == "dribbble.com":
-            return "dribbble"
-        if hostname.endswith("pinterest.com"):
-            return "pinterest"
-        if hostname == "calendly.com":
-            return "calendly"
-        if hostname == "cal.com":
-            return "calcom"
-        if hostname.endswith("polywork.com"):
-            return "polywork"
-        if hostname == "producthunt.com":
-            return "producthunt"
-        if hostname == "wellfound.com":
-            return "wellfound"
-        if hostname in {"angel.co", "angellist.com"}:
-            return "angellist"
-        if hostname.endswith("beacons.ai"):
-            return "beacons"
-        if hostname.endswith("bento.me"):
-            return "bento"
-        if hostname.endswith("hoo.be"):
-            return "hoobe"
-        if hostname.endswith("bio.link"):
-            return "biolink"
-        if hostname.endswith("bio.site"):
-            return "biosite"
-        if hostname.endswith("lnk.bio"):
-            return "lnkbio"
-        if hostname.endswith("solo.to"):
-            return "soloto"
-        if hostname.endswith("campsite.bio"):
-            return "campsite"
-        if hostname.endswith("taplink.cc") or hostname.endswith("taplink.ws"):
-            return "taplink"
-        if hostname.endswith("msha.ke"):
-            return "milkshake"
-        if hostname.endswith("carrd.co"):
-            return "carrd"
-        if hostname == "sr.ht" or hostname.endswith(".sr.ht"):
-            return "sourcehut"
-        if hostname.endswith("sourceforge.net"):
-            return "sourceforge"
-        if hostname.endswith("snapchat.com"):
-            return "snapchat"
-        if hostname.endswith("bsky.app") or hostname.endswith("bsky.social"):
-            return "bluesky"
-        if hostname.endswith("dev.to"):
-            return "devto"
-        if hostname == "deviantart.com" or hostname.endswith(".deviantart.com"):
-            return "deviantart"
-        if hostname.endswith("npmjs.com"):
-            return "npm"
-        if hostname.endswith("pypi.org"):
-            return "pypi"
-        if hostname.endswith("rubygems.org"):
-            return "rubygems"
-        if hostname.endswith("crates.io"):
-            return "crates"
-        if hostname.endswith("packagist.org"):
-            return "packagist"
-        if hostname.endswith("nuget.org"):
-            return "nuget"
-        if hostname.endswith("openbugbounty.org"):
-            return "openbugbounty"
-        if hostname.endswith("hex.pm"):
-            return "hexpm"
-        if hostname.endswith("huggingface.co"):
-            return "huggingface"
-        if hostname.endswith("tiktok.com"):
-            return "tiktok"
-        if hostname.endswith("tryhackme.com"):
-            return "tryhackme"
-        if hostname.endswith("yeswehack.com"):
-            return "yeswehack"
-        if hostname.endswith("twitch.tv"):
-            return "twitch"
-        if hostname.endswith("unsplash.com"):
-            return "unsplash"
-        if hostname == "vimeo.com":
-            return "vimeo"
-        if hostname.endswith("substack.com"):
-            return "substack"
-        if hostname.endswith("medium.com"):
-            return "medium"
-        if hostname == "matrix.to":
-            return "matrix"
-        if hostname.endswith("muckrack.com"):
-            return "muckrack"
-        if hostname.endswith("mixcloud.com"):
-            return "mixcloud"
-        if hostname.endswith("quora.com"):
-            return "quora"
-        if hostname.endswith("reddit.com"):
-            return "reddit"
-        if hostname.endswith("readme.io"):
-            return "readmeio"
-        if hostname.endswith("replit.com"):
-            return "replit"
-        if hostname.endswith("codesandbox.io"):
-            return "codesandbox"
-        if hostname.endswith("devpost.com"):
-            return "devpost"
-        if hostname.endswith("read.cv"):
-            return "readcv"
-        if hostname.endswith("speakerdeck.com"):
-            return "speakerdeck"
-        if hostname.endswith("slideshare.net"):
-            return "slideshare"
-        if hostname.endswith("soundcloud.com"):
-            return "soundcloud"
-        if hostname in {"open.spotify.com", "spotify.com"}:
-            return "spotify"
-        if hostname.endswith("strava.com"):
-            return "strava"
-        if hostname == "semanticscholar.org":
-            return "semantic_scholar"
-        if hostname == "zenodo.org":
-            return "zenodo"
-        if hostname.endswith("figma.com"):
-            return "figma"
-        if hostname.endswith("figshare.com"):
-            return "figshare"
-        if hostname.endswith("steamcommunity.com"):
-            return "steam"
-        if hostname.endswith("stackexchange.com"):
-            return "stackexchange"
-        if hostname.endswith("stackoverflow.com"):
-            return "stackoverflow"
-        if _is_stack_exchange_network_host(hostname):
-            return "stackexchange"
-        if hostname.endswith("about.me"):
-            return "aboutme"
-        if hostname.endswith("500px.com"):
-            return "500px"
-        if hostname.endswith("keybase.io"):
-            return "keybase"
-        if hostname.endswith("launchpad.net"):
-            return "launchpad"
-        if hostname.endswith("opencollective.com"):
-            return "opencollective"
-        if hostname.endswith("liberapay.com"):
-            return "liberapay"
-        if hostname.endswith("patreon.com"):
-            return "patreon"
-        if hostname.endswith("ko-fi.com"):
-            return "kofi"
-        if hostname.endswith("buymeacoffee.com"):
-            return "buymeacoffee"
-        if hostname.endswith("t.me") or hostname.endswith("telegram.me"):
-            return "telegram"
-        if _is_mastodon_instance_host(hostname):
-            return "mastodon"
-        return ""
 
     @staticmethod
     def _normalize_social_profile_handle_candidate(value: Any) -> str:
         candidate = str(value or "").strip().strip("/")
         if not candidate:
             return ""
-        nostr_candidate = EngagementSynthesisEngine._normalize_nostr_public_identity_candidate(
-            candidate
-        )
+        nostr_candidate = EngagementSynthesisEngine._normalize_nostr_public_identity_candidate(candidate)
         if nostr_candidate:
             return nostr_candidate
         candidate = candidate.lstrip("@")
@@ -14702,9 +13582,7 @@ class EngagementSynthesisEngine:
             candidate = str(parsed.path or parsed.netloc or "").strip("/")
         elif candidate.lower().startswith("nostr:"):
             candidate = candidate.split(":", 1)[1].strip("/")
-        candidate = (
-            unquote(candidate).strip().strip("@").split("?", 1)[0].split("#", 1)[0].strip("/")
-        )
+        candidate = unquote(candidate).strip().strip("@").split("?", 1)[0].split("#", 1)[0].strip("/")
         if not candidate:
             return ""
         lowered = candidate.lower()
@@ -14715,9 +13593,7 @@ class EngagementSynthesisEngine:
     @staticmethod
     def _nostr_identity_handle_candidate(value: Any) -> str:
         candidate = EngagementSynthesisEngine._coerce_social_profile_urlish_candidate(value)
-        direct_identity = EngagementSynthesisEngine._normalize_nostr_public_identity_candidate(
-            candidate
-        )
+        direct_identity = EngagementSynthesisEngine._normalize_nostr_public_identity_candidate(candidate)
         if direct_identity:
             return direct_identity
         parsed = urlparse(candidate)
@@ -14741,9 +13617,7 @@ class EngagementSynthesisEngine:
             return ""
         candidate_parts: list[str] = []
         candidate_parts.extend(part for part in parsed.path.strip("/").split("/") if part)
-        candidate_parts.extend(
-            part for part in unquote(str(parsed.fragment or "")).strip("/").split("/") if part
-        )
+        candidate_parts.extend(part for part in unquote(str(parsed.fragment or "")).strip("/").split("/") if part)
         query_map = {
             str(key).strip().lower(): str(item_value).strip()
             for key, item_value in parse_qsl(parsed.query, keep_blank_values=False)
@@ -14793,9 +13667,7 @@ class EngagementSynthesisEngine:
         )
         if not match:
             return "", ""
-        handle = EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-            match.group("local")
-        )
+        handle = EngagementSynthesisEngine._normalize_social_profile_handle_candidate(match.group("local"))
         server = match.group("server").lower().strip(".")
         if not handle or _classify_seed_value(server) != "domain":
             return "", ""
@@ -14856,9 +13728,7 @@ class EngagementSynthesisEngine:
         )
         if not match:
             return "", ""
-        handle = EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-            match.group("local")
-        )
+        handle = EngagementSynthesisEngine._normalize_social_profile_handle_candidate(match.group("local"))
         server = match.group("server").lower().strip(".")
         if not handle or _classify_seed_value(server) != "domain":
             return "", ""
@@ -14881,9 +13751,7 @@ class EngagementSynthesisEngine:
         return host in _MASTODON_INSTANCE_DOMAINS
 
     @classmethod
-    def _federated_account_host_entries(
-        cls, value: Any, *, platform: str = ""
-    ) -> list[tuple[str, str]]:
+    def _federated_account_host_entries(cls, value: Any, *, platform: str = "") -> list[tuple[str, str]]:
         handle, server = cls._federated_account_parts(value)
         if not handle or not server:
             return []
@@ -14978,9 +13846,7 @@ class EngagementSynthesisEngine:
 
     @staticmethod
     def _extract_social_profile_handle_from_url(candidate: str) -> str:
-        candidate_text = EngagementSynthesisEngine._coerce_social_profile_urlish_candidate(
-            candidate
-        )
+        candidate_text = EngagementSynthesisEngine._coerce_social_profile_urlish_candidate(candidate)
         nostr_handle = EngagementSynthesisEngine._nostr_identity_handle_candidate(candidate_text)
         if nostr_handle:
             return nostr_handle
@@ -15019,9 +13885,7 @@ class EngagementSynthesisEngine:
             }
             if bandcamp_slug.lower() in reserved_bandcamp_subdomains:
                 return ""
-            return EngagementSynthesisEngine._normalize_bandcamp_profile_handle_candidate(
-                bandcamp_slug
-            )
+            return EngagementSynthesisEngine._normalize_bandcamp_profile_handle_candidate(bandcamp_slug)
         if normalized_hostname == "bandcamp.com":
             if not path_parts:
                 return ""
@@ -15047,9 +13911,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_bandcamp_paths:
                 return ""
-            return EngagementSynthesisEngine._normalize_bandcamp_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_bandcamp_profile_handle_candidate(path_parts[0])
         if normalized_hostname.endswith(".carrd.co"):
             carrd_slug = normalized_hostname[: -len(".carrd.co")].strip(".")
             reserved_carrd_subdomains = {
@@ -15065,33 +13927,23 @@ class EngagementSynthesisEngine:
                 "www",
             }
             if carrd_slug and carrd_slug.lower() not in reserved_carrd_subdomains:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    carrd_slug
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(carrd_slug)
         if normalized_hostname.endswith(".artstation.com"):
             artstation_slug = normalized_hostname[: -len(".artstation.com")].strip(".")
             if artstation_slug and artstation_slug.lower() not in _ARTSTATION_RESERVED_SUBDOMAINS:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    artstation_slug
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(artstation_slug)
         if normalized_hostname.endswith(".deviantart.com"):
             deviantart_slug = normalized_hostname[: -len(".deviantart.com")].strip(".")
             if deviantart_slug and deviantart_slug.lower() not in _DEVIANTART_RESERVED_SUBDOMAINS:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    deviantart_slug
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(deviantart_slug)
         if normalized_hostname.endswith(".medium.com"):
             medium_slug = normalized_hostname[: -len(".medium.com")].strip(".")
             if medium_slug and medium_slug.lower() not in _MEDIUM_RESERVED_SUBDOMAINS:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    medium_slug
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(medium_slug)
         if normalized_hostname.endswith(".substack.com"):
             substack_slug = normalized_hostname[: -len(".substack.com")].strip(".")
             if substack_slug and substack_slug.lower() not in _SUBSTACK_RESERVED_SUBDOMAINS:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    substack_slug
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(substack_slug)
         if (
             normalized_hostname.endswith("gitbook.com")
             or normalized_hostname.endswith("gitbook.io")
@@ -15101,9 +13953,7 @@ class EngagementSynthesisEngine:
         if normalized_hostname.endswith(".taplink.ws"):
             taplink_slug = normalized_hostname[: -len(".taplink.ws")].strip(".")
             if taplink_slug and taplink_slug.lower() not in _TAPLINK_RESERVED_PROFILE_PATHS:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    taplink_slug
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(taplink_slug)
         if not path_parts:
             return ""
         if normalized_hostname == "scholar.google.com":
@@ -15119,32 +13969,24 @@ class EngagementSynthesisEngine:
         if normalized_hostname.endswith("academia.edu"):
             if path_parts[0].lower() in _ACADEMIA_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if normalized_hostname == "semanticscholar.org":
             if len(path_parts) >= 2 and path_parts[0].lower() == "author":
                 if path_parts[1].lower() in _SEMANTIC_SCHOLAR_RESERVED_PROFILE_HANDLES:
                     return ""
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if normalized_hostname == "zenodo.org":
             if len(path_parts) >= 2 and path_parts[0].lower() == "users":
                 if path_parts[1].lower() in _ZENODO_RESERVED_PROFILE_HANDLES:
                     return ""
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if normalized_hostname.endswith("figshare.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "authors":
                 if path_parts[1].lower() in _FIGSHARE_RESERVED_PROFILE_HANDLES:
                     return ""
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if normalized_hostname.endswith("figma.com"):
             first_path = path_parts[0].strip() if path_parts else ""
@@ -15156,16 +13998,12 @@ class EngagementSynthesisEngine:
             return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(handle)
         if hostname.endswith("linkedin.com"):
             if len(path_parts) >= 2 and path_parts[0] in {"in", "pub"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("facebook.com"):
             first_path = path_parts[0].lower()
             if first_path == "people" and len(path_parts) >= 2:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             reserved_facebook = {
                 "business",
                 "events",
@@ -15190,9 +14028,7 @@ class EngagementSynthesisEngine:
             }
             if first_path in reserved_facebook:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("flickr.com"):
             if len(path_parts) < 2 or path_parts[0].lower() != "photos":
                 return ""
@@ -15211,9 +14047,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[1].lower() in reserved_flickr_photos:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[1]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
         if normalized_hostname == "vimeo.com":
             reserved_vimeo = {
                 "about",
@@ -15240,9 +14074,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_vimeo:
                 return ""
-            return EngagementSynthesisEngine._normalize_vimeo_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_vimeo_profile_handle_candidate(path_parts[0])
         if normalized_hostname.endswith(".vimeo.com"):
             return ""
         if hostname.endswith("kaggle.com"):
@@ -15263,15 +14095,11 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_kaggle:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("bitbucket.org"):
             if path_parts[0].lower() in _BITBUCKET_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("bugcrowd.com"):
             reserved_bugcrowd = {
                 "about",
@@ -15289,21 +14117,15 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_bugcrowd:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("codeberg.org"):
             if path_parts[0].lower() in _CODEBERG_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("codepen.io"):
             if path_parts[0].lower() in _CODEPEN_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname == "hub.docker.com":
             reserved_dockerhub = {
                 "_",
@@ -15324,13 +14146,9 @@ class EngagementSynthesisEngine:
             if first_path in reserved_dockerhub:
                 return ""
             if len(path_parts) >= 2 and first_path == "u":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             if len(path_parts) >= 2 and first_path == "r" and path_parts[1].lower() != "library":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if normalized_hostname == "gist.github.com":
             first_path = path_parts[0].lower()
@@ -15338,9 +14156,7 @@ class EngagementSynthesisEngine:
                 return ""
             if len(path_parts) == 1 and re.fullmatch(r"[a-f0-9]{10,64}", first_path):
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("github.com"):
             if path_parts[0].lower() == "sponsors" and len(path_parts) >= 2:
                 reserved_sponsor_targets = {
@@ -15353,14 +14169,10 @@ class EngagementSynthesisEngine:
                 }
                 if path_parts[1].lower() in reserved_sponsor_targets:
                     return ""
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             if path_parts[0].lower() in _GITHUB_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("gravatar.com"):
             reserved_gravatar = {
                 "avatar",
@@ -15376,9 +14188,7 @@ class EngagementSynthesisEngine:
             if slug_lower.endswith(".json"):
                 slug_lower = slug_lower[:-5]
                 slug = slug[:-5]
-            if re.fullmatch(r"[a-f0-9]{32}", slug_lower) or re.fullmatch(
-                r"[a-f0-9]{64}", slug_lower
-            ):
+            if re.fullmatch(r"[a-f0-9]{32}", slug_lower) or re.fullmatch(r"[a-f0-9]{64}", slug_lower):
                 return ""
             return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(slug)
         if hostname.endswith("hackerone.com"):
@@ -15398,53 +14208,33 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_hackerone:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("hashnode.com"):
             first_path = path_parts[0].lower()
             if first_path in _HASHNODE_RESERVED_PROFILE_PATHS:
                 return ""
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[0].lstrip("@")
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0].lstrip("@"))
             if len(path_parts) >= 2 and first_path in {"@", "users", "user"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("instagram.com"):
             first_path = path_parts[0].lower()
             if first_path == "stories" and len(path_parts) >= 2:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             if first_path in _INSTAGRAM_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("intigriti.com"):
             first_path = path_parts[0].lower()
-            if (
-                len(path_parts) >= 3
-                and first_path == "researcher"
-                and path_parts[1].lower() == "profile"
-            ):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[2]
-                )
+            if len(path_parts) >= 3 and first_path == "researcher" and path_parts[1].lower() == "profile":
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[2])
             if len(path_parts) >= 2 and first_path == "profile":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("500px.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "p":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("x.com") or hostname.endswith("twitter.com"):
             first_path = path_parts[0].lower()
@@ -15462,78 +14252,52 @@ class EngagementSynthesisEngine:
                 return ""
             if first_path in _TWITTER_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("bsky.app"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "profile":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("bsky.social"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "profile":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             if path_parts and path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[0]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
             return ""
         if hostname.endswith("dev.to"):
             if path_parts[0].lower() in _DEVTO_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("npmjs.com"):
             if path_parts[0].startswith("~"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[0][1:]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0][1:])
             return ""
         if hostname.endswith("pypi.org"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "user":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("rubygems.org"):
             if len(path_parts) >= 2 and path_parts[0].lower() in {"profiles", "profile"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("crates.io"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "users":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("packagist.org"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "users":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("nuget.org"):
             if len(path_parts) >= 2 and path_parts[0].lower() in {"profiles", "profile"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("openbugbounty.org"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "researchers":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("hex.pm"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "users":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("huggingface.co"):
             reserved_huggingface = {
@@ -15556,25 +14320,17 @@ class EngagementSynthesisEngine:
                 "tasks",
             }
             if len(path_parts) == 1 and path_parts[0].lower() not in reserved_huggingface:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[0]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
             return ""
         if hostname.endswith("threads.net") or hostname.endswith("threads.com"):
             if path_parts and path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[0]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
             return ""
         if hostname.endswith("youtube.com"):
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[0]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
             if len(path_parts) >= 2 and path_parts[0] in {"channel", "c", "user"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("youtu.be"):
             return ""
@@ -15595,24 +14351,18 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_linktree:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if normalized_hostname == "orcid.org":
             if re.fullmatch(r"\d{4}-\d{4}-\d{4}-\d{3}[\dXx]", path_parts[0]):
                 return path_parts[0].upper()
             return ""
         if normalized_hostname == "researchgate.net":
             if len(path_parts) >= 2 and path_parts[0].lower() == "profile":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if normalized_hostname == "credly.com":
             if len(path_parts) >= 2 and path_parts[0].lower() in {"users", "u"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if normalized_hostname == "behance.net":
             reserved_behance = {
@@ -15636,9 +14386,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_behance:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if normalized_hostname == "dribbble.com":
             reserved_dribbble = {
                 "about",
@@ -15658,17 +14406,13 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_dribbble:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if normalized_hostname == "muckrack.com":
             if len(path_parts) != 1:
                 return ""
             if path_parts[0].lower() in _MUCKRACK_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if normalized_hostname == "calendly.com":
             reserved_calendly = {
                 "about",
@@ -15686,9 +14430,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_calendly:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if normalized_hostname == "cal.com":
             reserved_cal = {
                 "about",
@@ -15708,9 +14450,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_cal:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if normalized_hostname == "adplist.org":
             if len(path_parts) < 2 or path_parts[0].lower() not in {"mentor", "mentors"}:
                 return ""
@@ -15735,25 +14475,17 @@ class EngagementSynthesisEngine:
             return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(handle)
         if normalized_hostname == "producthunt.com":
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[0]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
             if len(path_parts) >= 2 and path_parts[0].lower() in {"u", "user", "users"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if normalized_hostname == "wellfound.com":
             if len(path_parts) >= 2 and path_parts[0].lower() in {"u", "users"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if normalized_hostname in {"angel.co", "angellist.com"}:
             if len(path_parts) >= 2 and path_parts[0].lower() in {"u", "users"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         exact_profile_hosts = {
             "adplist.org",
@@ -15793,100 +14525,62 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_beacons:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("bento.me"):
             if path_parts[0].lower() in _BENTO_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("hoo.be"):
             if path_parts[0].lower() in _HOO_BE_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("bio.link"):
             if path_parts[0].lower() in {"about", "blog", "discover", "login", "pricing", "signup"}:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("bio.site"):
             if path_parts[0].lower() in _BIO_SITE_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("allmylinks.com"):
             if path_parts[0].lower() in _ALLMYLINKS_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("lnk.bio"):
             if path_parts[0].lower() in {"about", "login", "pricing", "signup"}:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("solo.to"):
             if path_parts[0].lower() in {"about", "discover", "login", "pricing", "signup"}:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("campsite.bio"):
             if path_parts[0].lower() in _CAMPSITE_BIO_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("taplink.cc"):
             if path_parts[0].lower() in _TAPLINK_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("taplink.ws"):
             if normalized_hostname == "taplink.ws":
                 return ""
             taplink_slug = normalized_hostname[: -len(".taplink.ws")].strip(".")
             if taplink_slug.lower() in _TAPLINK_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                taplink_slug
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(taplink_slug)
         if hostname.endswith("msha.ke"):
             if path_parts[0].lower() in _MILKSHAKE_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if normalized_hostname == "carrd.co":
-            if path_parts[0].lower() in {
-                "about",
-                "build",
-                "dashboard",
-                "docs",
-                "login",
-                "pricing",
-                "signup",
-                "sites",
-                "templates",
-            }:
+            if path_parts[0].lower() in {"about", "build", "dashboard", "docs", "login", "pricing", "signup", "sites", "templates"}:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname == "sr.ht" or hostname.endswith(".sr.ht"):
             first_path = path_parts[0]
             if first_path.startswith("~"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    first_path[1:]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(first_path[1:])
             reserved_sourcehut = {
                 "about",
                 "account",
@@ -15907,18 +14601,12 @@ class EngagementSynthesisEngine:
         if hostname.endswith("sourceforge.net"):
             if len(path_parts) < 2 or path_parts[0].lower() != "u":
                 return ""
-            if len(path_parts) >= 3 and path_parts[2].lower() not in {
-                "profile",
-                "activity",
-                "wiki",
-            }:
+            if len(path_parts) >= 3 and path_parts[2].lower() not in {"profile", "activity", "wiki"}:
                 return ""
             sourceforge_handle = path_parts[1].lstrip("@")
             if sourceforge_handle.lower() in _SOURCEFORGE_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                sourceforge_handle
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(sourceforge_handle)
         if normalized_hostname == "news.ycombinator.com":
             if path_parts != ["user"]:
                 return ""
@@ -15941,14 +14629,10 @@ class EngagementSynthesisEngine:
                 }
                 if path_parts[1].lower() in reserved_gitlab_user_slugs:
                     return ""
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             if path_parts[0].lower() in _GITLAB_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("snapchat.com"):
             if not path_parts:
                 return ""
@@ -15964,29 +14648,21 @@ class EngagementSynthesisEngine:
         if hostname == "t.me" or hostname.endswith(".t.me") or hostname.endswith("telegram.me"):
             if path_parts[0].lower() in _TELEGRAM_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("keybase.io"):
             if path_parts[0].lower() in _KEYBASE_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("launchpad.net"):
             if not path_parts[0].startswith("~"):
                 return ""
             launchpad_handle = path_parts[0].lstrip("~@")
             if launchpad_handle.lower() in _LAUNCHPAD_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                launchpad_handle
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(launchpad_handle)
         if hostname.endswith("last.fm"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "user":
-                return EngagementSynthesisEngine._normalize_lastfm_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_lastfm_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("opencollective.com"):
             reserved_opencollective = {
@@ -16006,9 +14682,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_opencollective:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("liberapay.com"):
             reserved_liberapay = {
                 "about",
@@ -16024,14 +14698,10 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_liberapay:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("patreon.com"):
             if path_parts[0].lower() == "c" and len(path_parts) >= 2:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             reserved_patreon = {
                 "about",
                 "api",
@@ -16052,9 +14722,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_patreon:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("ko-fi.com"):
             reserved_kofi = {
                 "about",
@@ -16072,9 +14740,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_kofi:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("buymeacoffee.com"):
             reserved_buymeacoffee = {
                 "about",
@@ -16090,14 +14756,10 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_buymeacoffee:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("reddit.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() in {"u", "user"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("replit.com"):
             reserved_replit = {
@@ -16125,9 +14787,7 @@ class EngagementSynthesisEngine:
             if first_path in reserved_replit:
                 return ""
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[0]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
             return ""
         if hostname.endswith("codesandbox.io"):
             reserved_codesandbox = {
@@ -16148,9 +14808,7 @@ class EngagementSynthesisEngine:
             }
             first_path = path_parts[0].lower()
             if len(path_parts) >= 2 and first_path in {"u", "users"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             if first_path in reserved_codesandbox:
                 return ""
             return ""
@@ -16171,9 +14829,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_devpost:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if normalized_hostname in {"discord.com", "discord.gg", "discordapp.com"}:
             return ""
         if hostname.endswith("read.cv"):
@@ -16193,9 +14849,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_readcv:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("speakerdeck.com"):
             reserved_speakerdeck = {
                 "about",
@@ -16216,9 +14870,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_speakerdeck:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("slideshare.net"):
             reserved_slideshare = {
                 "about",
@@ -16236,9 +14888,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_slideshare:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("soundcloud.com"):
             reserved_soundcloud = {
                 "about",
@@ -16266,26 +14916,18 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_soundcloud:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname in {"open.spotify.com", "spotify.com"}:
             if len(path_parts) >= 2 and path_parts[0].lower() == "user":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("strava.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() in {"athletes", "pros"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("unsplash.com"):
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[0]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
             return ""
         if hostname.endswith("mixcloud.com"):
             if not path_parts:
@@ -16317,9 +14959,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_mixcloud:
                 return ""
-            return EngagementSynthesisEngine._normalize_mixcloud_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_mixcloud_profile_handle_candidate(path_parts[0])
         if hostname.endswith("letterboxd.com"):
             if not path_parts:
                 return ""
@@ -16365,9 +15005,7 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_letterboxd:
                 return ""
-            return EngagementSynthesisEngine._normalize_letterboxd_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_letterboxd_profile_handle_candidate(path_parts[0])
         if hostname.endswith("pinterest.com"):
             reserved_pinterest = {
                 "about",
@@ -16390,20 +15028,14 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_pinterest:
                 return ""
-            return EngagementSynthesisEngine._normalize_pinterest_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_pinterest_profile_handle_candidate(path_parts[0])
         if hostname.endswith("quora.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "profile":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("steamcommunity.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "id":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if (
             hostname.endswith("stackoverflow.com")
@@ -16424,9 +15056,7 @@ class EngagementSynthesisEngine:
             }
             first_path = path_parts[0].lower()
             if len(path_parts) >= 3 and first_path == "users":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[2]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[2])
             if first_path in reserved_stack_paths:
                 return ""
             return ""
@@ -16445,48 +15075,34 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_aboutme:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("500px.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "p":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("artstation.com"):
             if not path_parts:
                 return ""
             if path_parts[0].lower() in _ARTSTATION_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("deviantart.com"):
             if not path_parts:
                 return ""
             if path_parts[0].lower() in _DEVIANTART_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("tiktok.com"):
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[0]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
             return ""
         if hostname.endswith("tryhackme.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "p":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("yeswehack.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "hunters":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[1]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
             return ""
         if hostname.endswith("twitch.tv"):
             reserved_twitch = {
@@ -16514,22 +15130,16 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_twitch:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         if hostname.endswith("substack.com"):
             normalized_host = hostname[4:] if hostname.startswith("www.") else hostname
             if normalized_host != "substack.com":
                 sub_host = normalized_host[: -len(".substack.com")].strip(".")
                 if sub_host and sub_host.lower() not in _SUBSTACK_RESERVED_SUBDOMAINS:
-                    return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                        sub_host
-                    )
+                    return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(sub_host)
                 return ""
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[0]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
             if path_parts[0].lower() in _SUBSTACK_RESERVED_PROFILE_PATHS:
                 return ""
             return ""
@@ -16538,19 +15148,13 @@ class EngagementSynthesisEngine:
             if normalized_host != "medium.com":
                 sub_host = normalized_host[: -len(".medium.com")].strip(".")
                 if sub_host and sub_host.lower() not in _MEDIUM_RESERVED_SUBDOMAINS:
-                    return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                        sub_host
-                    )
+                    return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(sub_host)
                 return ""
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                    path_parts[0]
-                )
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
             if path_parts[0].lower() in _MEDIUM_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[0]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
         reserved = {
             "accounts",
             "company",
@@ -16577,9 +15181,7 @@ class EngagementSynthesisEngine:
         if first_path.startswith("@"):
             return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(first_path)
         if len(path_parts) >= 2 and first_path.lower() in {"users", "web"}:
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
-                path_parts[1]
-            )
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
         return ""
 
     @staticmethod
@@ -16663,151 +15265,34 @@ class EngagementSynthesisEngine:
         *,
         platform: str = "",
     ) -> list[str]:
-        values: list[str] = []
-        query_id_platform = str(platform or "").strip().lower() in {
-            "google_scholar",
-            "googlescholar",
-            "scholar",
-        }
-        direct_source_values = (
-            [
-                profile.get(key)
-                for key in (
-                    "scholar_id",
-                    "scholarId",
-                    "google_scholar_id",
-                    "googleScholarId",
-                    "user_id",
-                    "userId",
-                    "id",
-                )
-            ]
-            if query_id_platform
-            else [profile.get(key) for key in cls._SOCIAL_PROFILE_HANDLE_FIELD_KEYS]
-        )
-        direct_handle_candidates = cls._run_ordered_local_batch(
-            direct_source_values,
-            (
-                cls._normalize_google_scholar_user_id_candidate
-                if query_id_platform
-                else cls._social_profile_handle_candidate
-            ),
-            default_factory=str,
-        )
-        direct_handle_entries = cls._run_ordered_local_batch(
-            list(enumerate(direct_handle_candidates)),
-            cls._social_profile_value_entry,
-            default_factory=lambda: None,
-        )
-
-        direct_url_candidates = cls._run_ordered_local_batch(
-            cls._social_profile_url_hint_values(profile),
-            lambda value: cls._social_profile_handle_url_candidate(value, platform=platform),
-            default_factory=str,
-        )
-        direct_url_entries = cls._run_ordered_local_batch(
-            list(enumerate(direct_url_candidates)),
-            cls._social_profile_value_entry,
-            default_factory=lambda: None,
-        )
-
-        matrix_direct_entries: list[str | None] = []
-        if str(platform or "").strip().lower() == "matrix":
-            matrix_direct_candidates = cls._run_ordered_local_batch(
-                cls._social_profile_matrix_identity_values(profile),
-                cls._matrix_user_handle_candidate,
-                default_factory=str,
-            )
-            matrix_direct_entries = cls._run_ordered_local_batch(
-                list(enumerate(matrix_direct_candidates)),
-                cls._social_profile_value_entry,
-                default_factory=lambda: None,
-            )
-
-        federated_direct_entries: list[str | None] = []
-        if cls._social_profile_platform_is_federated(platform):
-            federated_direct_candidates = cls._run_ordered_local_batch(
-                cls._social_profile_federated_identity_values(profile),
-                cls._federated_account_handle_candidate,
-                default_factory=str,
-            )
-            federated_direct_entries = cls._run_ordered_local_batch(
-                list(enumerate(federated_direct_candidates)),
-                cls._social_profile_value_entry,
-                default_factory=lambda: None,
-            )
-
-        account_entry_jobs: list[Any] = []
-        for key in cls._SOCIAL_PROFILE_ACCOUNT_LIST_KEYS:
-            account_entry_jobs.extend(cls._social_profile_collection_entries(profile.get(key)))
-        account_entry_jobs.extend(cls._social_profile_nested_profile_dicts(profile))
-        account_entry_batches = cls._run_ordered_local_batch(
-            account_entry_jobs,
-            cls._social_profile_account_handle_candidates,
-            default_factory=list,
-        )
-        prepared_account_entry_batches = cls._run_ordered_local_batch(
-            list(enumerate(account_entry_batches)),
-            cls._social_profile_value_batch_entries,
-            default_factory=list,
-        )
-        prepared_account_entry_families = cls._run_ordered_local_batch(
-            list(enumerate(prepared_account_entry_batches)),
-            cls._social_profile_value_family_entries,
-            default_factory=list,
-        )
-
-        link_entry_jobs = cls._social_profile_collection_entries_for_keys(
+        return social_profile_handles(
             profile,
-            cls._SOCIAL_PROFILE_HANDLE_LINK_LIST_KEYS,
+            platform=platform,
+            handle_field_keys=cls._SOCIAL_PROFILE_HANDLE_FIELD_KEYS,
+            account_list_keys=cls._SOCIAL_PROFILE_ACCOUNT_LIST_KEYS,
+            handle_link_list_keys=cls._SOCIAL_PROFILE_HANDLE_LINK_LIST_KEYS,
+            url_hint_values=cls._social_profile_url_hint_values,
+            matrix_identity_values=cls._social_profile_matrix_identity_values,
+            federated_identity_values=cls._social_profile_federated_identity_values,
+            collection_entries=cls._social_profile_collection_entries,
+            collection_entries_for_keys=cls._social_profile_collection_entries_for_keys,
+            nested_profile_dicts=cls._social_profile_nested_profile_dicts,
+            text_values=cls._social_profile_text_values,
+            handle_candidate=cls._social_profile_handle_candidate,
+            query_id_handle_candidate=cls._normalize_google_scholar_user_id_candidate,
+            handle_url_candidate=cls._social_profile_handle_url_candidate,
+            matrix_user_handle_candidate=cls._matrix_user_handle_candidate,
+            platform_is_federated=cls._social_profile_platform_is_federated,
+            federated_account_handle_candidate=cls._federated_account_handle_candidate,
+            account_handle_candidates=cls._social_profile_account_handle_candidates,
+            link_handle_candidates=cls._social_profile_link_handle_candidates,
+            text_handle_candidates=cls._social_profile_text_handle_candidates,
+            value_entry=cls._social_profile_value_entry,
+            value_batch_entries=cls._social_profile_value_batch_entries,
+            value_family_entries=cls._social_profile_value_family_entries,
+            value_group_entries=cls._social_profile_value_group_entries,
+            run_ordered_batch=cls._run_ordered_local_batch,
         )
-        link_entry_batches = cls._run_ordered_local_batch(
-            link_entry_jobs,
-            cls._social_profile_link_handle_candidates,
-            default_factory=list,
-        )
-        prepared_link_entry_batches = cls._run_ordered_local_batch(
-            list(enumerate(link_entry_batches)),
-            cls._social_profile_value_batch_entries,
-            default_factory=list,
-        )
-        prepared_link_entry_families = cls._run_ordered_local_batch(
-            list(enumerate(prepared_link_entry_batches)),
-            cls._social_profile_value_family_entries,
-            default_factory=list,
-        )
-        text_link_batches = cls._run_ordered_local_batch(
-            cls._social_profile_text_values(profile),
-            cls._social_profile_text_handle_candidates,
-            default_factory=list,
-        )
-        prepared_text_link_batches = cls._run_ordered_local_batch(
-            list(enumerate(text_link_batches)),
-            cls._social_profile_value_batch_entries,
-            default_factory=list,
-        )
-        prepared_text_link_families = cls._run_ordered_local_batch(
-            list(enumerate(prepared_text_link_batches)),
-            cls._social_profile_value_family_entries,
-            default_factory=list,
-        )
-        value_groups = [
-            direct_handle_entries,
-            direct_url_entries,
-            matrix_direct_entries,
-            federated_direct_entries,
-            *prepared_account_entry_families,
-            *prepared_link_entry_families,
-            *prepared_text_link_families,
-        ]
-        prepared_value_groups = cls._run_ordered_local_batch(
-            list(enumerate(value_groups)),
-            cls._social_profile_value_group_entries,
-            default_factory=list,
-        )
-        for group in prepared_value_groups:
-            values.extend(group)
-        return list(dict.fromkeys(values))
 
     @classmethod
     def _social_profile_matrix_identity_values(cls, profile: dict[str, Any]) -> list[Any]:
@@ -16878,9 +15363,7 @@ class EngagementSynthesisEngine:
         return values
 
     @classmethod
-    def _social_profile_matrix_homeserver_hosts(
-        cls, profile: dict[str, Any]
-    ) -> list[tuple[str, str]]:
+    def _social_profile_matrix_homeserver_hosts(cls, profile: dict[str, Any]) -> list[tuple[str, str]]:
         host_batches = cls._run_ordered_local_batch(
             cls._social_profile_matrix_identity_values(profile),
             cls._matrix_homeserver_host_entries,
@@ -16920,31 +15403,25 @@ class EngagementSynthesisEngine:
 
     @staticmethod
     def _social_profile_value_entry(value_entry: tuple[int, str]) -> str | None:
-        _value_index, value = value_entry
-        if not value:
-            return None
-        return value
+        return social_profile_value_entry(value_entry)
 
     @staticmethod
     def _social_profile_value_batch_entries(
         batch_entry: tuple[int, Sequence[str]],
     ) -> list[str]:
-        _batch_index, batch = batch_entry
-        return [value for value in batch if value]
+        return social_profile_value_batch_entries(batch_entry)
 
     @staticmethod
     def _social_profile_value_family_entries(
         family_entry: tuple[int, Sequence[str]],
     ) -> list[str]:
-        _family_index, family = family_entry
-        return [value for value in family if value]
+        return social_profile_value_family_entries(family_entry)
 
     @staticmethod
     def _social_profile_value_group_entries(
         group_entry: tuple[int, Sequence[Any]],
     ) -> list[str]:
-        _group_index, group = group_entry
-        return [value for value in group if isinstance(value, str) and value]
+        return social_profile_value_group_entries(group_entry)
 
     @staticmethod
     def _social_profile_handle_candidate(value: Any) -> str:
@@ -17003,47 +15480,18 @@ class EngagementSynthesisEngine:
 
     @classmethod
     def _social_profile_account_handle_candidates(cls, item: Any) -> list[str]:
-        values: list[str] = []
-        if isinstance(item, dict):
-            direct_handle_candidates = cls._run_ordered_local_batch(
-                [
-                    (item, inner_key)
-                    for inner_key in (*cls._SOCIAL_PROFILE_HANDLE_FIELD_KEYS, "value")
-                ],
-                cls._social_profile_account_handle_candidate_for_item_key,
-                default_factory=str,
-            )
-            direct_handle_entries = cls._run_ordered_local_batch(
-                list(enumerate(direct_handle_candidates)),
-                cls._social_profile_value_entry,
-                default_factory=lambda: None,
-            )
-            values.extend(value for value in direct_handle_entries if value)
-            direct_link_candidates = cls._run_ordered_local_batch(
-                [(item, inner_key) for inner_key in cls._SOCIAL_PROFILE_LINK_ENTRY_KEYS],
-                cls._social_profile_link_handle_candidate_for_item_key,
-                default_factory=str,
-            )
-            direct_link_entries = cls._run_ordered_local_batch(
-                list(enumerate(direct_link_candidates)),
-                cls._social_profile_value_entry,
-                default_factory=lambda: None,
-            )
-            values.extend(value for value in direct_link_entries if value)
-            embedded_batches = cls._run_ordered_local_batch(
-                cls._social_profile_embedded_container_items(item),
-                cls._social_profile_account_handle_candidates,
-                default_factory=list,
-            )
-            for batch in embedded_batches:
-                values.extend(batch)
-            return values
-        cleaned = cls._social_profile_handle_candidate(item)
-        if not cleaned:
-            cleaned = cls._social_profile_handle_url_candidate(item)
-        if cleaned:
-            values.append(cleaned)
-        return values
+        return social_profile_account_handle_candidates(
+            item,
+            handle_field_keys=cls._SOCIAL_PROFILE_HANDLE_FIELD_KEYS,
+            link_entry_keys=cls._SOCIAL_PROFILE_LINK_ENTRY_KEYS,
+            embedded_container_items=cls._social_profile_embedded_container_items,
+            account_handle_candidate_for_item_key=cls._social_profile_account_handle_candidate_for_item_key,
+            link_handle_candidate_for_item_key=cls._social_profile_link_handle_candidate_for_item_key,
+            handle_candidate=cls._social_profile_handle_candidate,
+            handle_url_candidate=cls._social_profile_handle_url_candidate,
+            value_entry=cls._social_profile_value_entry,
+            run_ordered_batch=cls._run_ordered_local_batch,
+        )
 
     @classmethod
     def _social_profile_account_handle_candidate_for_item_key(
@@ -17055,40 +15503,24 @@ class EngagementSynthesisEngine:
 
     @classmethod
     def _social_profile_link_handle_candidates(cls, item: Any) -> list[str]:
-        if isinstance(item, dict):
-            candidates = cls._run_ordered_local_batch(
-                [(item, inner_key) for inner_key in cls._SOCIAL_PROFILE_LINK_ENTRY_KEYS],
-                cls._social_profile_link_handle_candidate_for_item_key,
-                default_factory=str,
-            )
-            entries = cls._run_ordered_local_batch(
-                list(enumerate(candidates)),
-                cls._social_profile_value_entry,
-                default_factory=lambda: None,
-            )
-            return [value for value in entries if value]
-        else:
-            cleaned = cls._social_profile_handle_url_candidate(item)
-        if cleaned:
-            return [cleaned]
-        return []
+        return social_profile_link_handle_candidates(
+            item,
+            link_entry_keys=cls._SOCIAL_PROFILE_LINK_ENTRY_KEYS,
+            link_handle_candidate_for_item_key=cls._social_profile_link_handle_candidate_for_item_key,
+            handle_url_candidate=cls._social_profile_handle_url_candidate,
+            value_entry=cls._social_profile_value_entry,
+            run_ordered_batch=cls._run_ordered_local_batch,
+        )
 
     @classmethod
     def _social_profile_text_handle_candidates(cls, text: Any) -> list[str]:
-        values: list[str] = []
-        url_candidates = cls._social_profile_text_url_candidates(text)
-        handle_candidates = cls._run_ordered_local_batch(
-            url_candidates,
-            cls._social_profile_handle_url_candidate,
-            default_factory=str,
+        return social_profile_text_handle_candidates(
+            text,
+            text_url_candidates=cls._social_profile_text_url_candidates,
+            handle_url_candidate=cls._social_profile_handle_url_candidate,
+            value_entry=cls._social_profile_value_entry,
+            run_ordered_batch=cls._run_ordered_local_batch,
         )
-        entries = cls._run_ordered_local_batch(
-            list(enumerate(handle_candidates)),
-            cls._social_profile_value_entry,
-            default_factory=lambda: None,
-        )
-        values.extend(value for value in entries if value)
-        return list(dict.fromkeys(values))
 
     @classmethod
     def _social_profile_link_handle_candidate_for_item_key(
@@ -17155,11 +15587,7 @@ class EngagementSynthesisEngine:
             if "." not in slug:
                 return _clean_slug(slug, _GITBOOK_RESERVED_SUBDOMAINS)
             return ""
-        if (
-            hostname == "app.gitbook.com"
-            and len(path_parts) >= 2
-            and path_parts[0].lower() in {"o", "org", "orgs"}
-        ):
+        if hostname == "app.gitbook.com" and len(path_parts) >= 2 and path_parts[0].lower() in {"o", "org", "orgs"}:
             return _clean_slug(path_parts[1], _GITBOOK_RESERVED_SUBDOMAINS)
         if hostname == "gitbook.com" and path_parts:
             first_path = path_parts[0].lower()
@@ -17266,7 +15694,9 @@ class EngagementSynthesisEngine:
         if not slug:
             return ""
         tokens = [
-            token for token in re.split(r"[-_]+", slug) if token and re.search(r"[A-Za-z]", token)
+            token
+            for token in re.split(r"[-_]+", slug)
+            if token and re.search(r"[A-Za-z]", token)
         ]
         if not tokens:
             return ""
@@ -17315,7 +15745,10 @@ class EngagementSynthesisEngine:
             if company_name:
                 return company_name
         work_history_company_candidates = cls._run_ordered_local_batch(
-            [(profile, key) for key in cls._SOCIAL_PROFILE_WORK_HISTORY_CONTAINER_KEYS],
+            [
+                (profile, key)
+                for key in cls._SOCIAL_PROFILE_WORK_HISTORY_CONTAINER_KEYS
+            ],
             cls._social_profile_work_history_company_name_key_value,
             default_factory=str,
         )
@@ -17389,7 +15822,10 @@ class EngagementSynthesisEngine:
         if not isinstance(entry, dict):
             return ""
         candidate_batches = cls._run_ordered_local_batch(
-            [(entry, key) for key in cls._SOCIAL_PROFILE_WORK_HISTORY_ORGANIZATION_FIELD_KEYS],
+            [
+                (entry, key)
+                for key in cls._SOCIAL_PROFILE_WORK_HISTORY_ORGANIZATION_FIELD_KEYS
+            ],
             cls._social_profile_named_entity_dict_key_value,
             default_factory=str,
         )
@@ -17415,7 +15851,10 @@ class EngagementSynthesisEngine:
         if isinstance(value, dict):
             entries: list[Any] = [value]
             nested_batches = cls._run_ordered_local_batch(
-                [(value, key) for key in cls._SOCIAL_PROFILE_WORK_HISTORY_ORGANIZATION_FIELD_KEYS],
+                [
+                    (value, key)
+                    for key in cls._SOCIAL_PROFILE_WORK_HISTORY_ORGANIZATION_FIELD_KEYS
+                ],
                 cls._social_profile_work_history_nested_entry_items,
                 default_factory=list,
             )
@@ -17449,7 +15888,10 @@ class EngagementSynthesisEngine:
     ) -> list[Any]:
         entries: list[Any] = []
         entry_batches = cls._run_ordered_local_batch(
-            [(profile, key) for key in cls._SOCIAL_PROFILE_WORK_HISTORY_CONTAINER_KEYS],
+            [
+                (profile, key)
+                for key in cls._SOCIAL_PROFILE_WORK_HISTORY_CONTAINER_KEYS
+            ],
             cls._social_profile_work_history_profile_key_entries,
             default_factory=list,
         )
@@ -17514,15 +15956,8 @@ class EngagementSynthesisEngine:
         if not candidate:
             return ""
         if _classify_seed_value(candidate) in {
-            "email",
-            "phone",
-            "url",
-            "apk_url",
-            "domain",
-            "subdomain",
-            "ipv4",
-            "ipv6",
-            "cloud_ref",
+            "email", "phone", "url", "apk_url", "domain", "subdomain",
+            "ipv4", "ipv6", "cloud_ref",
         }:
             return ""
         return candidate
@@ -17545,11 +15980,7 @@ class EngagementSynthesisEngine:
     def _social_profile_company_url_slug_candidate(cls, candidate: Any) -> str:
         parsed = urlparse(cls._coerce_social_profile_urlish_candidate(candidate))
         linkedin_app_parts = cls._linkedin_app_profile_path_parts(parsed)
-        if linkedin_app_parts and linkedin_app_parts[0].lower() in {
-            "company",
-            "school",
-            "showcase",
-        }:
+        if linkedin_app_parts and linkedin_app_parts[0].lower() in {"company", "school", "showcase"}:
             return cls._humanize_social_profile_slug(linkedin_app_parts[1])
         docs_workspace_slug = cls._docs_workspace_company_slug_candidate(candidate)
         if docs_workspace_slug:
@@ -17697,19 +16128,11 @@ class EngagementSynthesisEngine:
         if hostname.startswith("www."):
             hostname = hostname[4:]
         path_parts = [part for part in parsed.path.strip("/").split("/") if part]
-        if (
-            hostname.endswith("linkedin.com")
-            and len(path_parts) >= 2
-            and path_parts[0].lower() in {"in", "pub"}
-        ):
+        if hostname.endswith("linkedin.com") and len(path_parts) >= 2 and path_parts[0].lower() in {"in", "pub"}:
             humanized_slug = cls._humanize_social_profile_slug(path_parts[1])
             if humanized_slug and _classify_seed_value(humanized_slug) == "name":
                 return humanized_slug
-        if (
-            hostname.endswith("facebook.com")
-            and len(path_parts) >= 2
-            and path_parts[0].lower() == "people"
-        ):
+        if hostname.endswith("facebook.com") and len(path_parts) >= 2 and path_parts[0].lower() == "people":
             humanized_slug = cls._humanize_social_profile_slug(path_parts[1])
             if humanized_slug and _classify_seed_value(humanized_slug) == "name":
                 return humanized_slug
@@ -18315,7 +16738,9 @@ class EngagementSynthesisEngine:
             contact_target = parsed.path or parsed.netloc or ""
             if parsed.params:
                 contact_target = f"{contact_target};{parsed.params}"
-            values = EngagementSynthesisEngine._normalize_contact_phone_candidates(contact_target)
+            values = EngagementSynthesisEngine._normalize_contact_phone_candidates(
+                contact_target
+            )
             query_map = {
                 str(key).strip().lower(): str(value).strip()
                 for key, value in parse_qsl(parsed.query, keep_blank_values=False)
@@ -18682,210 +17107,108 @@ class EngagementSynthesisEngine:
 
     @classmethod
     def _social_profile_related_hosts(cls, profile: dict[str, Any]) -> list[tuple[str, str]]:
-        values: list[tuple[str, str]] = []
-        url_batches = cls._run_ordered_local_batch(
-            cls._social_profile_urls(profile),
-            cls._social_profile_related_host_candidates,
-            default_factory=list,
+        return social_profile_related_hosts(
+            profile,
+            urls=cls._social_profile_urls,
+            related_host_candidates=cls._social_profile_related_host_candidates,
+            related_host_batch_entries=cls._social_profile_related_host_batch_entries,
+            related_host_family_entries=cls._social_profile_related_host_family_entries,
+            related_host_group_entries=cls._social_profile_related_host_group_entries,
+            run_ordered_batch=cls._run_ordered_local_batch,
         )
-        prepared_url_batches = cls._run_ordered_local_batch(
-            list(enumerate(url_batches)),
-            cls._social_profile_related_host_batch_entries,
-            default_factory=list,
-        )
-        prepared_url_families = cls._run_ordered_local_batch(
-            list(enumerate(prepared_url_batches)),
-            cls._social_profile_related_host_family_entries,
-            default_factory=list,
-        )
-        prepared_value_groups = cls._run_ordered_local_batch(
-            list(enumerate(prepared_url_families)),
-            cls._social_profile_related_host_group_entries,
-            default_factory=list,
-        )
-        for group in prepared_value_groups:
-            values.extend(group)
-        return list(dict.fromkeys(values))
 
     @classmethod
     def _social_profile_domain_hosts(cls, profile: dict[str, Any]) -> list[tuple[str, str]]:
-        direct_batches = cls._run_ordered_local_batch(
-            [(profile, key) for key in cls._SOCIAL_PROFILE_DOMAIN_FIELD_KEYS],
-            cls._social_profile_domain_host_key_candidates,
-            default_factory=list,
+        return social_profile_domain_hosts(
+            profile,
+            domain_field_keys=cls._SOCIAL_PROFILE_DOMAIN_FIELD_KEYS,
+            work_history_profile_entries=cls._social_profile_work_history_profile_entries,
+            nested_profile_dicts=cls._social_profile_nested_profile_dicts,
+            domain_host_key_candidates=cls._social_profile_domain_host_key_candidates,
+            domain_host_candidates=cls._social_profile_domain_host_candidates,
+            related_host_group_entries=cls._social_profile_related_host_group_entries,
+            run_ordered_batch=cls._run_ordered_local_batch,
         )
-        entry_jobs = cls._social_profile_work_history_profile_entries(profile)
-        entry_jobs.extend(cls._social_profile_nested_profile_dicts(profile))
-        entry_batches = cls._run_ordered_local_batch(
-            entry_jobs,
-            cls._social_profile_domain_host_candidates,
-            default_factory=list,
-        )
-        value_groups = [*direct_batches, *entry_batches]
-        prepared_value_groups = cls._run_ordered_local_batch(
-            list(enumerate(value_groups)),
-            cls._social_profile_related_host_group_entries,
-            default_factory=list,
-        )
-        values: list[tuple[str, str]] = []
-        for group in prepared_value_groups:
-            values.extend(group)
-        return list(dict.fromkeys(values))
 
     @classmethod
     def _social_profile_domain_host_key_candidates(
         cls,
         item_key: tuple[dict[str, Any], str],
     ) -> list[tuple[str, str]]:
-        item, key = item_key
-        if not isinstance(item, dict):
-            return []
-        return cls._social_profile_domain_host_value_candidates(item.get(key))
+        return social_profile_domain_host_key_candidates(
+            item_key,
+            domain_host_value_candidates=cls._social_profile_domain_host_value_candidates,
+        )
 
     @classmethod
     def _social_profile_domain_host_candidates(cls, item: Any) -> list[tuple[str, str]]:
-        if not isinstance(item, dict):
-            return cls._social_profile_domain_host_value_candidates(item)
-        batches = cls._run_ordered_local_batch(
-            [(item, key) for key in cls._SOCIAL_PROFILE_DOMAIN_FIELD_KEYS],
-            cls._social_profile_domain_host_key_candidates,
-            default_factory=list,
+        return social_profile_domain_host_candidates(
+            item,
+            domain_field_keys=cls._SOCIAL_PROFILE_DOMAIN_FIELD_KEYS,
+            domain_host_key_candidates=cls._social_profile_domain_host_key_candidates,
+            domain_host_value_candidates=cls._social_profile_domain_host_value_candidates,
+            run_ordered_batch=cls._run_ordered_local_batch,
         )
-        values: list[tuple[str, str]] = []
-        for batch in batches:
-            values.extend(batch)
-        return list(dict.fromkeys(values))
 
     @classmethod
     def _social_profile_domain_host_value_candidates(cls, value: Any) -> list[tuple[str, str]]:
-        if isinstance(value, dict):
-            batches = cls._run_ordered_local_batch(
-                [
-                    (value, key)
-                    for key in (
-                        "value",
-                        "url",
-                        "link",
-                        "href",
-                        *cls._SOCIAL_PROFILE_DOMAIN_FIELD_KEYS,
-                    )
-                ],
-                cls._social_profile_domain_host_key_candidates,
-                default_factory=list,
-            )
-            values: list[tuple[str, str]] = []
-            for batch in batches:
-                values.extend(batch)
-            return list(dict.fromkeys(values))
-        if isinstance(value, (list, tuple, set)):
-            batches = cls._run_ordered_local_batch(
-                list(value)[: cls._MAX_SOCIAL_PROFILE_PAYLOAD_ENTRIES],
-                cls._social_profile_domain_host_value_candidates,
-                default_factory=list,
-            )
-            values: list[tuple[str, str]] = []
-            for batch in batches:
-                values.extend(batch)
-            return list(dict.fromkeys(values))
-        return cls._social_profile_domain_host_string_candidates(value)
+        return social_profile_domain_host_value_candidates(
+            value,
+            domain_field_keys=cls._SOCIAL_PROFILE_DOMAIN_FIELD_KEYS,
+            max_entries=cls._MAX_SOCIAL_PROFILE_PAYLOAD_ENTRIES,
+            domain_alias_text=cls._social_profile_domain_alias_text,
+            coerce_urlish_candidate=cls._coerce_social_profile_urlish_candidate,
+            classify_seed_value=_classify_seed_value,
+            normalize_root_domain=_normalize_root_domain,
+            is_social_platform_host=_is_social_platform_host,
+            is_managed_cloud_provider_host=_is_managed_cloud_provider_host,
+            run_ordered_batch=cls._run_ordered_local_batch,
+        )
 
     @staticmethod
     def _social_profile_domain_alias_text(value: Any) -> str:
-        text = str(value or "").strip()
-        if not text:
-            return ""
-        prefix, separator, suffix = text.partition(":")
-        if separator and prefix.lower() in {
-            "applinks",
-            "webcredentials",
-            "activitycontinuation",
-            "appclips",
-        }:
-            return suffix.strip()
-        return text
+        return social_profile_domain_alias_text(value)
 
     @classmethod
     def _social_profile_domain_host_string_candidates(cls, value: Any) -> list[tuple[str, str]]:
-        text = cls._social_profile_domain_alias_text(value)
-        if not text:
-            return []
-        candidate = cls._coerce_social_profile_urlish_candidate(text)
-        parsed = urlparse(candidate)
-        hostname = str(parsed.hostname or "").strip().lower().strip(".")
-        if hostname.startswith("*."):
-            hostname = hostname[2:]
-        if (
-            not hostname
-            or _is_social_platform_host(hostname)
-            or _is_managed_cloud_provider_host(hostname)
-        ):
-            return []
-        if _classify_seed_value(hostname) != "domain":
-            return []
-        root_domain = _normalize_root_domain(hostname)
-        if (
-            not root_domain
-            or _is_social_platform_host(root_domain)
-            or _is_managed_cloud_provider_host(root_domain)
-        ):
-            return []
-        values: list[tuple[str, str]] = []
-        if hostname != root_domain:
-            values.append((hostname, "subdomain"))
-        values.append((root_domain, "domain"))
-        return values
+        return social_profile_domain_host_string_candidates(
+            value,
+            domain_alias_text=cls._social_profile_domain_alias_text,
+            coerce_urlish_candidate=cls._coerce_social_profile_urlish_candidate,
+            classify_seed_value=_classify_seed_value,
+            normalize_root_domain=_normalize_root_domain,
+            is_social_platform_host=_is_social_platform_host,
+            is_managed_cloud_provider_host=_is_managed_cloud_provider_host,
+        )
 
     @staticmethod
     def _social_profile_related_host_batch_entries(
         batch_entry: tuple[int, Sequence[tuple[str, str]]],
     ) -> list[tuple[str, str]]:
-        _batch_index, batch = batch_entry
-        return [
-            host_entry
-            for host_entry in batch
-            if isinstance(host_entry, tuple) and len(host_entry) == 2
-        ]
+        return social_profile_related_host_batch_entries(batch_entry)
 
     @staticmethod
     def _social_profile_related_host_family_entries(
         family_entry: tuple[int, Sequence[tuple[str, str]]],
     ) -> list[tuple[str, str]]:
-        _family_index, family = family_entry
-        return [
-            host_entry
-            for host_entry in family
-            if isinstance(host_entry, tuple) and len(host_entry) == 2
-        ]
+        return social_profile_related_host_family_entries(family_entry)
 
     @staticmethod
     def _social_profile_related_host_group_entries(
         group_entry: tuple[int, Sequence[tuple[str, str]]],
     ) -> list[tuple[str, str]]:
-        _group_index, group = group_entry
-        return [
-            host_entry
-            for host_entry in group
-            if isinstance(host_entry, tuple) and len(host_entry) == 2
-        ]
+        return social_profile_related_host_group_entries(group_entry)
 
     @staticmethod
     def _social_profile_related_host_candidates(candidate: str) -> list[tuple[str, str]]:
         parsed = urlparse(candidate)
         hostname = str(parsed.hostname or "").strip().lower().strip(".")
-        if (
-            not hostname
-            or _is_social_platform_host(hostname)
-            or _is_managed_cloud_provider_host(hostname)
-        ):
+        if not hostname or _is_social_platform_host(hostname) or _is_managed_cloud_provider_host(hostname):
             return []
         if _classify_seed_value(hostname) != "domain":
             return []
         root_domain = _normalize_root_domain(hostname)
-        if (
-            not root_domain
-            or _is_social_platform_host(root_domain)
-            or _is_managed_cloud_provider_host(root_domain)
-        ):
+        if not root_domain or _is_social_platform_host(root_domain) or _is_managed_cloud_provider_host(root_domain):
             return []
         values: list[tuple[str, str]] = []
         if hostname != root_domain:
@@ -18943,16 +17266,11 @@ class EngagementSynthesisEngine:
 
     @staticmethod
     def _preferred_seed_source(existing: str, candidate: str) -> str:
-        existing_priority = _SEED_SOURCE_PRIORITY.get(existing, 0)
-        candidate_priority = _SEED_SOURCE_PRIORITY.get(candidate, 0)
-        return existing if existing_priority >= candidate_priority else candidate
+        return preferred_seed_source(existing, candidate)
 
     @staticmethod
     def _merge_seed_metadata(existing: Any, candidate: dict[str, Any]) -> dict[str, Any]:
-        merged = existing if isinstance(existing, dict) else {}
-        if candidate:
-            merged = {**merged, **candidate}
-        return merged
+        return merge_seed_metadata(existing, candidate)
 
     @staticmethod
     def _seed_confidence_band(
@@ -19029,12 +17347,8 @@ class EngagementSynthesisEngine:
                         "target_seed_type": str(target_type),
                         "left_value": str(left["target_value"]),
                         "right_value": str(right["target_value"]),
-                        "left_evidence": left["evidence"]
-                        if isinstance(left["evidence"], dict)
-                        else {},
-                        "right_evidence": right["evidence"]
-                        if isinstance(right["evidence"], dict)
-                        else {},
+                        "left_evidence": left["evidence"] if isinstance(left["evidence"], dict) else {},
+                        "right_evidence": right["evidence"] if isinstance(right["evidence"], dict) else {},
                     }
                     if self._insert_relation(
                         con,
@@ -19129,12 +17443,7 @@ class EngagementSynthesisEngine:
         conflict_penalty = min(0.18, conflict_count * 0.08)
         computed = max(
             stored_confidence,
-            base_confidence
-            + support_bonus
-            + type_bonus
-            + evidence_bonus
-            - depth_penalty
-            - conflict_penalty,
+            base_confidence + support_bonus + type_bonus + evidence_bonus - depth_penalty - conflict_penalty,
         )
         return round(max(0.35, min(1.0, computed)), 2)
 
@@ -19178,9 +17487,7 @@ class EngagementSynthesisEngine:
         for entry in relation_entry_batches:
             if not isinstance(entry, tuple):
                 continue
-            source_seed_id, target_seed_id, relation_type, relation_confidence, source_seed_type = (
-                entry
-            )
+            source_seed_id, target_seed_id, relation_type, relation_confidence, source_seed_type = entry
             source_metric = metrics.get(source_seed_id)
             target_metric = metrics.get(target_seed_id)
             if source_metric is not None:
@@ -19212,9 +17519,7 @@ class EngagementSynthesisEngine:
         for update_entry in seed_update_batches:
             if not isinstance(update_entry, tuple):
                 continue
-            seed_id, effective_source, computed_confidence, merged_metadata_json, corroborated = (
-                update_entry
-            )
+            seed_id, effective_source, computed_confidence, merged_metadata_json, corroborated = update_entry
             if corroborated:
                 corroborated_count += 1
             con.execute(
@@ -19305,9 +17610,7 @@ class EngagementSynthesisEngine:
             int(metric["supporting_relations"]),
             len(metric["corroborator_types"]),
         )
-        corroborated = (
-            int(metric["supporting_relations"]) > 1 or len(metric["corroborator_types"]) > 1
-        )
+        corroborated = int(metric["supporting_relations"]) > 1 or len(metric["corroborator_types"]) > 1
         merged_metadata = {
             **metadata_dict,
             "synthesis": {
@@ -19340,92 +17643,12 @@ class EngagementSynthesisEngine:
         )
 
     def _upsert_seed(self, con: sqlite3.Connection, candidate: SeedCandidate) -> int:
-        if candidate.seed_type == "email":
-            self._ensure_email_row(
-                con,
-                candidate.seed_value,
-                source=candidate.source,
-            )
-        parent_id = None
-        if candidate.parent_value and candidate.parent_type:
-            parent_row = con.execute(
-                """
-                SELECT id
-                FROM engagement_seeds
-                WHERE engagement_id=? AND seed_type=? AND seed_value=?
-                """,
-                (self._engagement_id, candidate.parent_type, candidate.parent_value),
-            ).fetchone()
-            if parent_row is not None:
-                parent_id = int(parent_row[0])
-        existing_row = con.execute(
-            """
-            SELECT id, source, status, depth, confidence, parent_seed_id, metadata_json
-            FROM engagement_seeds
-            WHERE engagement_id=? AND seed_type=? AND seed_value=?
-            """,
-            (self._engagement_id, candidate.seed_type, candidate.seed_value),
-        ).fetchone()
-        if existing_row is None:
-            con.execute(
-                """
-                INSERT INTO engagement_seeds
-                    (engagement_id, seed_value, seed_type, source, status, depth, confidence, parent_seed_id, metadata_json)
-                VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
-                """,
-                (
-                    self._engagement_id,
-                    candidate.seed_value,
-                    candidate.seed_type,
-                    candidate.source,
-                    candidate.depth,
-                    candidate.confidence,
-                    parent_id,
-                    json.dumps(candidate.metadata or {}, sort_keys=True),
-                ),
-            )
-            row = con.execute("SELECT last_insert_rowid()").fetchone()
-            assert row is not None
-            return int(row[0])
-
-        existing_id = int(existing_row["id"])
-        existing_source = str(existing_row["source"] or "")
-        existing_status = str(existing_row["status"] or "pending")
-        existing_depth = int(existing_row["depth"] or 0)
-        existing_confidence = float(existing_row["confidence"] or 0.0)
-        existing_parent = (
-            int(existing_row["parent_seed_id"])
-            if existing_row["parent_seed_id"] is not None
-            else None
+        return upsert_seed_candidate(
+            con,
+            engagement_id=self._engagement_id,
+            candidate=candidate,
+            depth_limit=self._depth_limit,
         )
-        existing_metadata = _safe_json_loads(str(existing_row["metadata_json"] or "{}"))
-        merged_metadata = self._merge_seed_metadata(existing_metadata, candidate.metadata)
-        con.execute(
-            """
-            UPDATE engagement_seeds
-            SET source=?,
-                status=?,
-                depth=?,
-                confidence=?,
-                parent_seed_id=?,
-                metadata_json=?,
-                updated_at=CURRENT_TIMESTAMP
-            WHERE id=? AND engagement_id=?
-            """,
-            (
-                self._preferred_seed_source(existing_source, candidate.source),
-                "pending"
-                if min(existing_depth, candidate.depth) <= self._depth_limit
-                else existing_status,
-                min(existing_depth, candidate.depth),
-                max(existing_confidence, candidate.confidence),
-                existing_parent if existing_parent is not None else parent_id,
-                json.dumps(merged_metadata, sort_keys=True),
-                existing_id,
-                self._engagement_id,
-            ),
-        )
-        return existing_id
 
     def _insert_relation(
         self,
@@ -19436,23 +17659,15 @@ class EngagementSynthesisEngine:
         confidence: float,
         metadata: dict[str, Any],
     ) -> bool:
-        before = con.total_changes
-        con.execute(
-            """
-            INSERT OR IGNORE INTO seed_relations
-                (engagement_id, source_seed_id, target_seed_id, relation_type, confidence, evidence_json)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                self._engagement_id,
-                source_seed_id,
-                target_seed_id,
-                relation_type,
-                confidence,
-                json.dumps(metadata or {}),
-            ),
+        return insert_seed_relation(
+            con,
+            engagement_id=self._engagement_id,
+            source_seed_id=source_seed_id,
+            target_seed_id=target_seed_id,
+            relation_type=relation_type,
+            confidence=confidence,
+            metadata=metadata,
         )
-        return con.total_changes > before
 
     def _ensure_email_row(
         self,
@@ -19461,24 +17676,12 @@ class EngagementSynthesisEngine:
         *,
         source: str,
     ) -> None:
-        normalized = str(email or "").strip().lower()
-        if "@" not in normalized:
-            return
-        try:
-            con.execute(
-                """
-                INSERT OR IGNORE INTO emails (engagement_id, email, domain, source)
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    self._engagement_id,
-                    normalized,
-                    normalized.split("@", 1)[1],
-                    source,
-                ),
-            )
-        except sqlite3.OperationalError:
-            return
+        ensure_email_seed_row(
+            con,
+            engagement_id=self._engagement_id,
+            email=email,
+            source=source,
+        )
 
     def _collect_root_domains(self, con: sqlite3.Connection) -> list[str]:
         email_domain_roots = self._email_domain_promotion_roots(con)
@@ -19640,145 +17843,36 @@ class ArtifactQueueProcessor:
         target: str,
         result: str,
     ) -> None:
-        try:
-            con.execute(
-                """
-                INSERT INTO audit_log
-                    (engagement_id, phase, module, action, target, result, operator)
-                VALUES (?, 'artifact_analysis', 'artifact_queue', ?, ?, ?, 'forge')
-                """,
-                (
-                    self._engagement_id,
-                    str(action or "")[:96],
-                    str(target or "")[:512],
-                    str(result or "")[:1024],
-                ),
-            )
-        except sqlite3.Error:
-            return
+        _orchestration_audit_artifact_lineage(
+            con,
+            self._engagement_id,
+            action=action,
+            target=target,
+            result=result,
+        )
+
+    def _runtime_services(self) -> ArtifactProcessorRuntimeServices:
+        return artifact_processor_runtime_services(self)
 
     def ingest_local_artifacts(self, search_roots: list[Path] | None = None) -> int:
-        roots = search_roots or default_local_artifact_roots()
-        con = direct_connect(self._db_path)
-        try:
-            apply_schema(con)
-            run_migrations(con)
-            queued = 0
-            candidate_paths: list[Path] = []
-            for root in roots:
-                if not root.exists():
-                    continue
-                for path in root.rglob("*"):
-                    if not path.is_file():
-                        continue
-                    candidate_paths.append(path)
-            local_artifact_batches = self._run_ordered_local_batch(
-                candidate_paths,
-                self._local_artifact_record,
-                default_factory=lambda: None,
-            )
-            for artifact_record in local_artifact_batches:
-                if not isinstance(artifact_record, tuple):
-                    continue
-                normalized_path, artifact_type, current_metadata = artifact_record
-                row = con.execute(
-                    """
-                    SELECT id, status, metadata_json, local_path, artifact_type
-                    FROM artifact_queue
-                    WHERE engagement_id=? AND source_url=?
-                    """,
-                    (self._engagement_id, normalized_path),
-                ).fetchone()
-                if row is None:
-                    con.execute(
-                        """
-                        INSERT INTO artifact_queue
-                            (engagement_id, source_url, local_path, artifact_type, discovered_from, status, metadata_json)
-                        VALUES (?, ?, ?, ?, 'local_filesystem', 'downloaded', ?)
-                        """,
-                        (
-                            self._engagement_id,
-                            normalized_path,
-                            normalized_path,
-                            artifact_type,
-                            json.dumps(current_metadata, sort_keys=True),
-                        ),
-                    )
-                    queued += 1
-                    continue
-
-                existing_status = str(row[1] or "").strip().lower()
-                existing_metadata = _safe_json_loads(str(row[2] or "{}"))
-                existing_local_path = str(row[3] or "").strip()
-                existing_artifact_type = str(row[4] or "").strip()
-                if (
-                    existing_status == "parsed"
-                    and self._local_artifact_metadata_matches(existing_metadata, current_metadata)
-                    and existing_local_path == normalized_path
-                    and existing_artifact_type == artifact_type
-                ):
-                    continue
-
-                merged_metadata = (
-                    dict(existing_metadata) if isinstance(existing_metadata, dict) else {}
-                )
-                merged_metadata.update(current_metadata)
-                con.execute(
-                    """
-                    UPDATE artifact_queue
-                    SET local_path=?,
-                        artifact_type=?,
-                        status='downloaded',
-                        metadata_json=?,
-                        updated_at=CURRENT_TIMESTAMP
-                    WHERE id=?
-                    """,
-                    (
-                        normalized_path,
-                        artifact_type,
-                        json.dumps(merged_metadata, sort_keys=True),
-                        int(row[0]),
-                    ),
-                )
-                queued += 1
-            con.commit()
-            return queued
-        finally:
-            con.close()
+        return ingest_local_artifacts_for_processor(self, search_roots=search_roots)
 
     def _local_artifact_record(
         self,
         path: Path,
     ) -> tuple[str, str, dict[str, Any]] | None:
-        artifact_type = self._classify_artifact(path)
-        if artifact_type is None:
-            return None
-        normalized_path = path.resolve().as_posix()
-        current_metadata = self._local_artifact_metadata(path)
-        return normalized_path, artifact_type, current_metadata
+        return artifact_processor_local_artifact_record(self, path)
 
     @staticmethod
     def _local_artifact_metadata(path: Path) -> dict[str, Any]:
-        stat = path.stat()
-        return {
-            "local_file_size": int(stat.st_size),
-            "local_file_mtime_ns": int(
-                getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000))
-            ),
-        }
+        return artifact_processor_local_artifact_metadata(path)
 
     @staticmethod
     def _local_artifact_metadata_matches(
         existing_metadata: Any,
         current_metadata: dict[str, Any],
     ) -> bool:
-        if not isinstance(existing_metadata, dict):
-            return False
-        return int(existing_metadata.get("local_file_size") or -1) == int(
-            current_metadata.get("local_file_size") or -2
-        ) and int(existing_metadata.get("local_file_mtime_ns") or -1) == int(
-            current_metadata.get("local_file_mtime_ns") or -2
-        )
+        return artifact_processor_local_artifact_metadata_matches(existing_metadata, current_metadata)
 
     def process(
         self,
@@ -19786,278 +17880,47 @@ class ArtifactQueueProcessor:
         progress_label: str | None = None,
         progress_callback: Callable[[str, dict[str, object]], None] | None = None,
     ) -> ArtifactProcessingSummary:
-        summary = ArtifactProcessingSummary()
-        con = direct_connect(self._db_path)
-        try:
-            apply_schema(con)
-            run_migrations(con)
-            con.row_factory = sqlite3.Row
-            rows = con.execute(
-                """
-                SELECT id, source_url, local_path, artifact_type, status
-                FROM artifact_queue
-                WHERE engagement_id=?
-                  AND (
-                    status IN ('queued','downloaded')
-                    OR (
-                        status='failed'
-                        AND COALESCE(max_attempts, 3) > 0
-                        AND COALESCE(attempt_count, 0) < COALESCE(max_attempts, 3)
-                    )
-                  )
-                ORDER BY queued_at ASC, id ASC
-                """,
-                (self._engagement_id,),
-            ).fetchall()
-            self._mark_artifact_attempts(con, [int(row["id"]) for row in rows])
-            con.commit()
-            ready_slots: list[ArtifactWorkItem | None] = [None] * len(rows)
-            remote_requests: list[tuple[int, ArtifactDownloadRequest]] = []
-            skipped_rows: list[tuple[int, str]] = []
-            dispatch_batches = self._run_ordered_local_batch(
-                list(enumerate(rows)),
-                self._artifact_queue_dispatch_entry,
-                default_factory=lambda: None,
-            )
-            for dispatch_entry in dispatch_batches:
-                if not isinstance(dispatch_entry, tuple):
-                    continue
-                index, ready_item, remote_request, skipped_row = dispatch_entry
-                if ready_item is not None:
-                    ready_slots[index] = ready_item
-                if remote_request is not None:
-                    remote_requests.append((index, remote_request))
-                if skipped_row is not None:
-                    skipped_rows.append(skipped_row)
+        return process_artifact_queue_for_processor(
+            self,
+            progress_label=progress_label,
+            progress_callback=progress_callback,
+        )
 
-            if remote_requests:
-                download_results = self._download_remote_artifacts(
-                    [request for _, request in remote_requests],
-                    progress_label=progress_label,
-                    progress_callback=progress_callback,
-                )
-                reconciliation_batches = self._run_ordered_local_batch(
-                    [
-                        (index, request, result)
-                        for (index, request), result in zip(remote_requests, download_results)
-                    ],
-                    self._remote_download_reconciliation_entry,
-                    default_factory=lambda: None,
-                )
-                for reconciliation_entry in reconciliation_batches:
-                    if not isinstance(reconciliation_entry, tuple):
-                        continue
-                    (
-                        index,
-                        failed_row,
-                        skipped_row,
-                        local_path_update,
-                        ready_item,
-                    ) = reconciliation_entry
-                    if failed_row is not None:
-                        artifact_id, error = failed_row
-                        self._update_artifact_status(
-                            con,
-                            artifact_id,
-                            "failed",
-                            error,
-                        )
-                        summary.failed += 1
-                        continue
-                    if skipped_row is not None:
-                        skipped_rows.append(skipped_row)
-                        continue
-                    if local_path_update is not None:
-                        artifact_id, local_path, artifact_type, metadata_extra = local_path_update
-                        self._set_artifact_local_path(
-                            con,
-                            artifact_id,
-                            local_path,
-                            artifact_type=artifact_type,
-                            metadata_extra=metadata_extra,
-                        )
-                    if ready_item is not None:
-                        ready_slots[index] = ready_item
-
-            for artifact_id, reason in skipped_rows:
-                self._update_artifact_status(
-                    con,
-                    artifact_id,
-                    "skipped",
-                    reason,
-                    metadata={"skip_status": "skipped", "skip_reason": reason},
-                )
-                summary.skipped += 1
-
-            con.commit()
-            ready_items = [item for item in ready_slots if item is not None]
-            for parsed in self._parse_local_artifacts(
-                ready_items,
-                progress_label=progress_label,
-                progress_callback=progress_callback,
-            ):
-                if parsed.error:
-                    self._update_artifact_status(
-                        con,
-                        parsed.artifact_id,
-                        "failed",
-                        parsed.error,
-                    )
-                    summary.failed += 1
-                    continue
-                firebase_count, supabase_count, seed_count, parse_metadata = (
-                    self._persist_parsed_artifact(
-                        con,
-                        parsed,
-                    )
-                )
-                self._update_artifact_status(
-                    con,
-                    parsed.artifact_id,
-                    "parsed",
-                    f"firebase={firebase_count} supabase={supabase_count} seeds={seed_count}",
-                    metadata=parse_metadata,
-                )
-                summary.processed += 1
-                summary.firebase_projects += firebase_count
-                summary.supabase_configs += supabase_count
-                summary.discovered_seeds += seed_count
-            con.commit()
-        finally:
-            con.close()
-        return summary
-
-    @staticmethod
-    def _mark_artifact_attempts(
+    def _artifact_queue_rows_process_callbacks(
+        self,
         con: sqlite3.Connection,
-        artifact_ids: list[int],
-    ) -> None:
-        if not artifact_ids:
-            return
-        con.executemany(
-            """
-            UPDATE artifact_queue
-            SET attempt_count=COALESCE(attempt_count, 0) + 1,
-                updated_at=CURRENT_TIMESTAMP
-            WHERE id=?
-            """,
-            [(artifact_id,) for artifact_id in artifact_ids],
+        *,
+        progress_label: str | None,
+        progress_callback: Callable[[str, dict[str, object]], None] | None,
+    ) -> ArtifactQueueRowsProcessCallbacks:
+        return artifact_processor_callbacks_for_processor(
+            self,
+            con,
+            progress_label=progress_label,
+            progress_callback=progress_callback,
         )
 
     def _artifact_queue_dispatch_entry(
         self,
         item: tuple[int, Any],
-    ) -> (
-        tuple[int, ArtifactWorkItem | None, ArtifactDownloadRequest | None, tuple[int, str] | None]
-        | None
-    ):
-        index, row = item
-        artifact_id = int(row["id"])
-        artifact_type = str(row["artifact_type"] or "")
-        source_url = str(row["source_url"] or "")
-        local_path = str(row["local_path"] or "")
-        path = self._resolve_local_path(local_path, source_url)
-        if path is not None:
-            artifact_type = self._classify_artifact(path) or artifact_type
-            return (
-                index,
-                ArtifactWorkItem(
-                    artifact_id=artifact_id,
-                    source_url=source_url,
-                    artifact_type=artifact_type,
-                    path=path,
-                ),
-                None,
-                None,
-            )
-        parsed_source = urlparse(source_url)
-        if source_url and parsed_source.scheme in {"http", "https"}:
-            return (
-                index,
-                None,
-                ArtifactDownloadRequest(
-                    artifact_id=artifact_id,
-                    source_url=source_url,
-                    artifact_type=artifact_type,
-                ),
-                None,
-            )
-        return (
-            index,
-            None,
-            None,
-            (artifact_id, "remote acquisition pending"),
-        )
+    ) -> tuple[int, ArtifactWorkItem | None, ArtifactDownloadRequest | None, tuple[int, str] | None] | None:
+        return artifact_processor_dispatch_entry(self, item)
 
     def _remote_download_reconciliation_entry(
         self,
         item: tuple[int, ArtifactDownloadRequest, ArtifactDownloadResult],
-    ) -> (
-        tuple[
-            int,
-            tuple[int, str] | None,
-            tuple[int, str] | None,
-            tuple[int, Path, str, dict[str, Any]] | None,
-            ArtifactWorkItem | None,
-        ]
-        | None
-    ):
-        index, request, result = item
-        if result.error:
-            if str(result.metadata_extra.get("skip_status") or "") == "skipped":
-                return (
-                    index,
-                    None,
-                    (
-                        request.artifact_id,
-                        str(result.metadata_extra.get("skip_reason") or result.error),
-                    ),
-                    None,
-                    None,
-                )
-            return (
-                index,
-                (request.artifact_id, result.error),
-                None,
-                None,
-                None,
-            )
-        if result.path is None:
-            return (
-                index,
-                None,
-                (request.artifact_id, "remote acquisition pending"),
-                None,
-                None,
-            )
-        inferred_type = self._classify_artifact(result.path) or result.artifact_type
-        return (
-            index,
-            None,
-            None,
-            (
-                request.artifact_id,
-                result.path,
-                inferred_type,
-                dict(result.metadata_extra or {}),
-            ),
-            ArtifactWorkItem(
-                artifact_id=request.artifact_id,
-                source_url=request.source_url,
-                artifact_type=inferred_type,
-                path=result.path,
-            ),
-        )
+    ) -> tuple[
+        int,
+        tuple[int, str] | None,
+        tuple[int, str] | None,
+        tuple[int, Path, str, dict[str, Any]] | None,
+        ArtifactWorkItem | None,
+    ] | None:
+        return artifact_processor_remote_download_reconciliation_entry(self, item)
 
     @staticmethod
     def _progress_stage_label(progress_label: str | None, stage: str) -> str:
-        base_label = str(progress_label or "").strip()
-        stage_label = str(stage or "").strip()
-        if not base_label:
-            return ""
-        if not stage_label:
-            return base_label
-        return f"{base_label} / {stage_label}"
+        return artifact_processor_progress_stage_label(progress_label, stage)
 
     def _emit_stage_progress(
         self,
@@ -20071,20 +17934,15 @@ class ArtifactQueueProcessor:
         progress_label: str | None = None,
         progress_callback: Callable[[str, dict[str, object]], None] | None = None,
     ) -> None:
-        if progress_callback is None:
-            return
-        label = self._progress_stage_label(progress_label, stage)
-        if not label:
-            return
-        progress_callback(
-            label,
-            _artifact_progress_snapshot(
-                total=total,
-                workers=workers,
-                completed=completed,
-                failed=failed,
-                started_at=started_at,
-            ),
+        emit_artifact_processor_stage_progress(
+            stage,
+            total=total,
+            workers=workers,
+            completed=completed,
+            failed=failed,
+            started_at=started_at,
+            progress_label=progress_label,
+            progress_callback=progress_callback,
         )
 
     def _parse_local_artifacts(
@@ -20094,74 +17952,12 @@ class ArtifactQueueProcessor:
         progress_label: str | None = None,
         progress_callback: Callable[[str, dict[str, object]], None] | None = None,
     ) -> list[ParsedArtifact]:
-        if not work_items:
-            return []
-        bounded_workers = min(self._max_workers, len(work_items))
-        started_at = time.perf_counter()
-        failed = 0
-        self._emit_stage_progress(
-            "parse",
-            total=len(work_items),
-            workers=bounded_workers,
-            completed=0,
-            failed=0,
-            started_at=started_at,
+        return parse_local_artifacts_for_processor(
+            self,
+            work_items,
             progress_label=progress_label,
             progress_callback=progress_callback,
         )
-        if len(work_items) == 1 or self._max_workers <= 1:
-            parsed_results: list[ParsedArtifact] = []
-            for index, work_item in enumerate(work_items, start=1):
-                result = self._parse_local_artifact(work_item)
-                parsed_results.append(result)
-                if result.error:
-                    failed += 1
-                self._emit_stage_progress(
-                    "parse",
-                    total=len(work_items),
-                    workers=bounded_workers,
-                    completed=index,
-                    failed=failed,
-                    started_at=started_at,
-                    progress_label=progress_label,
-                    progress_callback=progress_callback,
-                )
-            return parsed_results
-        parsed_results: list[ParsedArtifact | None] = [None] * len(work_items)
-        completed = 0
-        with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
-            future_map = {
-                executor.submit(self._parse_local_artifact, work_item): index
-                for index, work_item in enumerate(work_items)
-            }
-            for future in as_completed(future_map):
-                index = future_map[future]
-                try:
-                    parsed_results[index] = future.result()
-                except Exception as exc:  # noqa: BLE001
-                    work_item = work_items[index]
-                    parsed_results[index] = ParsedArtifact(
-                        artifact_id=work_item.artifact_id,
-                        source_url=work_item.source_url,
-                        artifact_type=work_item.artifact_type,
-                        path=work_item.path,
-                        error=str(exc),
-                    )
-                completed += 1
-                result = parsed_results[index]
-                if result is not None and result.error:
-                    failed += 1
-                self._emit_stage_progress(
-                    "parse",
-                    total=len(work_items),
-                    workers=bounded_workers,
-                    completed=completed,
-                    failed=failed,
-                    started_at=started_at,
-                    progress_label=progress_label,
-                    progress_callback=progress_callback,
-                )
-        return [result for result in parsed_results if result is not None]
 
     def _download_remote_artifacts(
         self,
@@ -20170,177 +17966,18 @@ class ArtifactQueueProcessor:
         progress_label: str | None = None,
         progress_callback: Callable[[str, dict[str, object]], None] | None = None,
     ) -> list[ArtifactDownloadResult]:
-        if not requests:
-            return []
-        download_results: list[ArtifactDownloadResult | None] = [None] * len(requests)
-        allowed_requests: list[tuple[int, ArtifactDownloadRequest]] = []
-        for index, request in enumerate(requests):
-            checker = self._remote_url_scope_checker
-            allowed = True
-            denial_reason = "scope_denied"
-            if checker is not None:
-                try:
-                    allowed = bool(checker(request.source_url))
-                    if not allowed:
-                        denial_reason = "scope_manifest_denied_remote_artifact"
-                except Exception as exc:  # noqa: BLE001
-                    allowed = False
-                    denial_reason = f"scope_checker_error:{type(exc).__name__}"
-            if allowed:
-                allowed_requests.append((index, request))
-                continue
-            callback = self._remote_scope_denied_callback
-            if callback is not None:
-                try:
-                    callback(request, denial_reason)
-                except Exception:  # noqa: BLE001
-                    pass
-            download_results[index] = ArtifactDownloadResult(
-                artifact_id=request.artifact_id,
-                source_url=request.source_url,
-                artifact_type=request.artifact_type,
-                metadata_extra={"skip_status": "skipped", "skip_reason": denial_reason},
-                error=denial_reason,
-            )
-        if not allowed_requests:
-            return [result for result in download_results if result is not None]
-        bounded_workers = min(self._max_workers, len(allowed_requests))
-        started_at = time.perf_counter()
-        failed = 0
-        self._emit_stage_progress(
-            "remote download",
-            total=len(allowed_requests),
-            workers=bounded_workers,
-            completed=0,
-            failed=0,
-            started_at=started_at,
+        return download_remote_artifacts_for_processor(
+            self,
+            requests,
             progress_label=progress_label,
             progress_callback=progress_callback,
         )
-        if len(allowed_requests) == 1 or self._max_workers <= 1:
-            for completed_index, (result_index, request) in enumerate(allowed_requests, start=1):
-                result = self._download_remote_artifact_request(request)
-                download_results[result_index] = result
-                if result.error:
-                    failed += 1
-                self._emit_stage_progress(
-                    "remote download",
-                    total=len(allowed_requests),
-                    workers=bounded_workers,
-                    completed=completed_index,
-                    failed=failed,
-                    started_at=started_at,
-                    progress_label=progress_label,
-                    progress_callback=progress_callback,
-                )
-            return [result for result in download_results if result is not None]
-        completed = 0
-        with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
-            future_map = {
-                executor.submit(self._download_remote_artifact_request, request): (
-                    result_index,
-                    request,
-                )
-                for result_index, request in allowed_requests
-            }
-            for future in as_completed(future_map):
-                index, request = future_map[future]
-                try:
-                    download_results[index] = future.result()
-                except Exception as exc:  # noqa: BLE001
-                    download_results[index] = ArtifactDownloadResult(
-                        artifact_id=request.artifact_id,
-                        source_url=request.source_url,
-                        artifact_type=request.artifact_type,
-                        error=f"remote acquisition failed: {type(exc).__name__}: {str(exc)[:180]}",
-                    )
-                completed += 1
-                result = download_results[index]
-                if result is not None and result.error:
-                    failed += 1
-                self._emit_stage_progress(
-                    "remote download",
-                    total=len(allowed_requests),
-                    workers=bounded_workers,
-                    completed=completed,
-                    failed=failed,
-                    started_at=started_at,
-                    progress_label=progress_label,
-                    progress_callback=progress_callback,
-                )
-        return [result for result in download_results if result is not None]
 
     def _parse_local_artifact(self, work_item: ArtifactWorkItem) -> ParsedArtifact:
-        path = work_item.path
-        artifact_type = work_item.artifact_type
-        firebase_projects = []
-        supabase_configs: list[SupabaseConfig] = []
-        payloads: list[tuple[str, str, str]] = []
-        if artifact_type == "apk":
-            payloads, firebase_projects, supabase_configs, parse_metadata = (
-                self._scan_mobile_bundle_artifact(
-                    path,
-                    artifact_type,
-                )
-            )
-            return ParsedArtifact(
-                artifact_id=work_item.artifact_id,
-                source_url=work_item.source_url,
-                artifact_type=artifact_type,
-                path=path,
-                payloads=payloads,
-                firebase_projects=firebase_projects,
-                supabase_configs=supabase_configs,
-                parse_metadata=parse_metadata,
-            )
-        elif artifact_type == "ipa":
-            payloads, firebase_projects, supabase_configs, parse_metadata = (
-                self._scan_mobile_bundle_artifact(
-                    path,
-                    artifact_type,
-                )
-            )
-            return ParsedArtifact(
-                artifact_id=work_item.artifact_id,
-                source_url=work_item.source_url,
-                artifact_type=artifact_type,
-                path=path,
-                payloads=payloads,
-                firebase_projects=firebase_projects,
-                supabase_configs=supabase_configs,
-                parse_metadata=parse_metadata,
-            )
-        elif artifact_type in {"config", "document", "archive"}:
-            payloads, firebase_projects, supabase_configs, parse_metadata = (
-                self._scan_text_artifact(
-                    path,
-                    artifact_type,
-                )
-            )
-            return ParsedArtifact(
-                artifact_id=work_item.artifact_id,
-                source_url=work_item.source_url,
-                artifact_type=artifact_type,
-                path=path,
-                payloads=payloads,
-                firebase_projects=firebase_projects,
-                supabase_configs=supabase_configs,
-                parse_metadata=parse_metadata,
-            )
-        return ParsedArtifact(
-            artifact_id=work_item.artifact_id,
-            source_url=work_item.source_url,
-            artifact_type=artifact_type,
-            path=path,
-            firebase_projects=firebase_projects,
-            supabase_configs=supabase_configs,
-            parse_metadata={
-                "format": _artifact_format_label(path),
-                "parser": artifact_type,
-                "payload_count": 0,
-                "metadata_payload_count": 0,
-                "relationship_payload_count": 0,
-            },
+        return parse_artifact_work_item_for_processor(
+            self,
+            work_item,
+            artifact_format_label=_artifact_format_label,
         )
 
     def _scan_mobile_bundle_artifact(
@@ -20353,29 +17990,10 @@ class ArtifactQueueProcessor:
         list[SupabaseConfig],
         dict[str, Any],
     ]:
-        family_results = self._run_ordered_local_batch(
-            ("payloads", "firebase", "supabase"),
-            lambda family: self._extract_mobile_bundle_family(
-                family,
-                path=path,
-                artifact_type=artifact_type,
-            ),
-            default_factory=list,
-        )
-        payloads = family_results[0] if family_results else []
-        firebase_projects = family_results[1] if len(family_results) > 1 else []
-        supabase_configs = family_results[2] if len(family_results) > 2 else []
-        payload_firebase_projects, payload_supabase_configs = (
-            self._extract_cloud_configs_from_payloads(payloads)
-        )
-        firebase_projects.extend(payload_firebase_projects)
-        supabase_configs.extend(payload_supabase_configs)
-        summary = self._artifact_payload_summary(path, artifact_type, payloads)
-        return (
-            payloads,
-            self._dedupe_firebase_projects(firebase_projects),
-            self._dedupe_supabase_configs(supabase_configs),
-            summary,
+        return scan_mobile_bundle_artifact_for_processor(
+            self,
+            path,
+            artifact_type,
         )
 
     def _extract_mobile_bundle_family(
@@ -20385,35 +18003,15 @@ class ArtifactQueueProcessor:
         path: Path,
         artifact_type: str,
     ) -> list[tuple[str, str, str]] | list[FirebaseProject] | list[SupabaseConfig]:
-        if family == "payloads":
-            return self._extract_mobile_bundle_text_payloads(path)
-        if artifact_type == "apk":
-            if family == "firebase":
-                return self._extractor.extract_apk(path)
-            if family == "supabase":
-                return self._extractor.extract_supabase_apk(path)
-            return []
-        if family == "firebase":
-            return self._extractor.extract_ipa(path)
-        if family == "supabase":
-            return self._extractor.extract_supabase_ipa(path)
-        return []
+        return extract_mobile_bundle_family_for_processor(
+            self,
+            family,
+            path=path,
+            artifact_type=artifact_type,
+        )
 
     def _extract_mobile_bundle_text_payloads(self, path: Path) -> list[tuple[str, str, str]]:
-        if not path.exists():
-            return []
-        try:
-            if zipfile.is_zipfile(path):
-                with zipfile.ZipFile(path) as zf:
-                    return self._extract_text_payloads_from_zip(zf, str(path), depth=1)
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            with tarfile.open(path, mode="r:*") as tf:
-                return self._extract_text_payloads_from_tar(tf, str(path), depth=1)
-        except Exception:  # noqa: BLE001
-            pass
-        return []
+        return extract_mobile_bundle_text_payloads_for_processor(self, path)
 
     def _scan_text_artifact(
         self,
@@ -20425,32 +18023,10 @@ class ArtifactQueueProcessor:
         list[SupabaseConfig],
         dict[str, Any],
     ]:
-        stage_results = self._run_ordered_local_batch(
-            ("payloads", "nested_mobile"),
-            lambda family: self._extract_text_artifact_stage(
-                family,
-                path=path,
-                artifact_type=artifact_type,
-            ),
-            default_factory=ArtifactTextScanStageResult,
-        )
-        payload_stage = stage_results[0] if stage_results else ArtifactTextScanStageResult()
-        nested_mobile_stage = (
-            stage_results[1] if len(stage_results) > 1 else ArtifactTextScanStageResult()
-        )
-        payloads = list(payload_stage.payloads)
-        firebase_projects, supabase_configs = self._extract_cloud_configs_from_payloads(payloads)
-        payloads.extend(nested_mobile_stage.payloads)
-        firebase_projects.extend(nested_mobile_stage.firebase_projects)
-        supabase_configs.extend(nested_mobile_stage.supabase_configs)
-        summary = self._artifact_payload_summary(path, artifact_type, payloads)
-        if nested_mobile_stage.nested_mobile_member_count:
-            summary["nested_mobile_member_count"] = nested_mobile_stage.nested_mobile_member_count
-        return (
-            payloads,
-            self._dedupe_firebase_projects(firebase_projects),
-            self._dedupe_supabase_configs(supabase_configs),
-            summary,
+        return scan_text_artifact_for_processor(
+            self,
+            path,
+            artifact_type,
         )
 
     def _extract_text_artifact_stage(
@@ -20460,110 +18036,44 @@ class ArtifactQueueProcessor:
         path: Path,
         artifact_type: str,
     ) -> ArtifactTextScanStageResult:
-        if family == "payloads":
-            return ArtifactTextScanStageResult(
-                payloads=self._extract_text_payloads(path, artifact_type),
-            )
-        if family == "nested_mobile":
-            payloads, firebase_projects, supabase_configs, nested_mobile_member_count = (
-                self._extract_nested_mobile_bundle_configs(path, artifact_type)
-            )
-            return ArtifactTextScanStageResult(
-                payloads=payloads,
-                firebase_projects=firebase_projects,
-                supabase_configs=supabase_configs,
-                nested_mobile_member_count=nested_mobile_member_count,
-            )
-        return ArtifactTextScanStageResult()
+        return extract_text_artifact_stage_for_processor(
+            self,
+            family,
+            path=path,
+            artifact_type=artifact_type,
+        )
 
     def _run_ordered_local_batch(
         self,
-        items: Sequence[_ArtifactBatchItem],
-        worker: Callable[[_ArtifactBatchItem], _ArtifactBatchResult],
+        items: Sequence[Any],
+        worker: Callable[[Any], Any],
         *,
-        default_factory: Callable[[], _ArtifactBatchResult],
-    ) -> list[_ArtifactBatchResult]:
-        batch_items = list(items)
-        if not batch_items:
-            return []
-        if len(batch_items) == 1 or self._max_workers <= 1:
-            results: list[_ArtifactBatchResult] = []
-            for item in batch_items:
-                try:
-                    results.append(worker(item))
-                except Exception:  # noqa: BLE001
-                    results.append(default_factory())
-            return results
-        bounded_workers = min(self._max_workers, len(batch_items))
-        ordered_results: list[_ArtifactBatchResult | None] = [None] * len(batch_items)
-        with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
-            future_map = {
-                executor.submit(worker, item): index for index, item in enumerate(batch_items)
-            }
-            for future in as_completed(future_map):
-                index = future_map[future]
-                try:
-                    ordered_results[index] = future.result()
-                except Exception:  # noqa: BLE001
-                    ordered_results[index] = default_factory()
-        return [result if result is not None else default_factory() for result in ordered_results]
+        default_factory: Callable[[], Any],
+    ) -> list[Any]:
+        return run_ordered_local_batch_for_processor(
+            self,
+            items,
+            worker,
+            default_factory=default_factory,
+        )
 
     def _extract_cloud_configs_from_payloads(
         self,
         payloads: list[tuple[str, str, str]],
     ) -> tuple[list[FirebaseProject], list[SupabaseConfig]]:
-        payload_job_batches = self._run_ordered_local_batch(
-            payloads,
-            self._payload_cloud_config_job,
-            default_factory=lambda: None,
-        )
-        payload_jobs = [
-            payload_job for payload_job in payload_job_batches if isinstance(payload_job, tuple)
-        ]
-        if not payload_jobs:
-            return [], []
-        ordered_results = self._run_ordered_local_batch(
-            payload_jobs,
-            lambda payload_job: self._extract_cloud_configs_from_payload(
-                payload_job[0],
-                payload_job[1],
-                payload_job[2],
-            ),
-            default_factory=lambda: ([], []),
-        )
-        result_batches = self._run_ordered_local_batch(
-            list(enumerate(ordered_results)),
-            self._payload_cloud_config_result_entry,
-            default_factory=lambda: None,
-        )
-        firebase_projects: list[FirebaseProject] = []
-        supabase_configs: list[SupabaseConfig] = []
-        for result in result_batches:
-            if not isinstance(result, tuple):
-                continue
-            payload_projects, payload_configs = result
-            firebase_projects.extend(payload_projects)
-            supabase_configs.extend(payload_configs)
-        return firebase_projects, supabase_configs
+        return extract_cloud_configs_from_payloads_for_processor(self, payloads)
 
     @staticmethod
     def _payload_cloud_config_job(
         payload: tuple[str, str, str],
     ) -> tuple[str, str, str] | None:
-        source_file, extract_path, text = payload
-        if not str(text or "").strip():
-            return None
-        return str(source_file), str(extract_path), text
+        return payload_cloud_config_job_for_processor(payload)
 
     @staticmethod
     def _payload_cloud_config_result_entry(
         result_batch: tuple[int, tuple[list[FirebaseProject], list[SupabaseConfig]] | None],
     ) -> tuple[list[FirebaseProject], list[SupabaseConfig]] | None:
-        _result_index, result = result_batch
-        if result is None:
-            return None
-        payload_projects, payload_configs = result
-        return list(payload_projects), list(payload_configs)
+        return payload_cloud_config_result_entry_for_processor(result_batch)
 
     def _extract_cloud_configs_from_payload(
         self,
@@ -20571,19 +18081,11 @@ class ArtifactQueueProcessor:
         extract_path: str,
         text: str,
     ) -> tuple[list[FirebaseProject], list[SupabaseConfig]]:
-        family_results = self._run_ordered_local_batch(
-            ("firebase", "supabase"),
-            lambda family: self._extract_cloud_config_family(
-                family,
-                source_file=source_file,
-                extract_path=extract_path,
-                text=text,
-            ),
-            default_factory=list,
-        )
-        return (
-            list(family_results[0]) if family_results else [],
-            list(family_results[1]) if len(family_results) > 1 else [],
+        return extract_cloud_configs_from_payload_for_processor(
+            self,
+            source_file,
+            extract_path,
+            text,
         )
 
     def _extract_cloud_config_family(
@@ -20594,240 +18096,102 @@ class ArtifactQueueProcessor:
         extract_path: str,
         text: str,
     ) -> list[FirebaseProject] | list[SupabaseConfig]:
-        if family == "firebase":
-            return self._extract_firebase_from_text(text, source_file, extract_path)
-        if family == "supabase":
-            return self._extractor._extract_supabase_from_text(  # noqa: SLF001
-                text,
-                source_file,
-                extract_path,
-            )
-        return []
+        return extract_cloud_config_family_for_processor(
+            self,
+            family,
+            source_file=source_file,
+            extract_path=extract_path,
+            text=text,
+        )
 
     def _extract_nested_mobile_bundle_configs(
         self,
         path: Path,
         artifact_type: str,
     ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig], int]:
-        if artifact_type != "archive" or not path.exists():
-            return [], [], [], 0
-        try:
-            if zipfile.is_zipfile(path):
-                with zipfile.ZipFile(path) as zf:
-                    return self._extract_nested_mobile_configs_from_zip(zf, path)
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            if py7zr is not None:
-                data = path.read_bytes()
-                if data[:6] == b"7z\xbc\xaf'\x1c":
-                    return self._extract_nested_mobile_configs_from_7z(data, path)
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            with tarfile.open(path, mode="r:*") as tf:
-                return self._extract_nested_mobile_configs_from_tar(tf, path)
-        except Exception:  # noqa: BLE001
-            pass
-        return [], [], [], 0
+        return extract_nested_mobile_bundle_configs_for_processor(
+            self,
+            path,
+            artifact_type,
+            py7zr_available=py7zr is not None,
+        )
 
     @staticmethod
     def _nested_mobile_zip_member_entry(member: zipfile.ZipInfo) -> dict[str, str] | None:
-        if member.is_dir():
-            return None
-        member_name = str(member.filename or "")
-        suffix = Path(member_name.lower()).suffix
-        if (
-            suffix not in _NESTED_MOBILE_ARTIFACT_SUFFIXES
-            or member.file_size > _REMOTE_ARTIFACT_MAX_BYTES
-        ):
-            return None
-        return {"name": member_name}
+        return nested_mobile_zip_member_entry_for_processor(
+            member,
+            nested_mobile_artifact_suffixes=_NESTED_MOBILE_ARTIFACT_SUFFIXES,
+            remote_artifact_max_bytes=_REMOTE_ARTIFACT_MAX_BYTES,
+        )
 
     @staticmethod
     def _nested_mobile_tar_member_entry(member: tarfile.TarInfo) -> dict[str, str] | None:
-        if not member.isfile():
-            return None
-        member_name = str(member.name or "")
-        suffix = Path(member_name.lower()).suffix
-        if (
-            suffix not in _NESTED_MOBILE_ARTIFACT_SUFFIXES
-            or member.size > _REMOTE_ARTIFACT_MAX_BYTES
-        ):
-            return None
-        return {"name": member_name}
+        return nested_mobile_tar_member_entry_for_processor(
+            member,
+            nested_mobile_artifact_suffixes=_NESTED_MOBILE_ARTIFACT_SUFFIXES,
+            remote_artifact_max_bytes=_REMOTE_ARTIFACT_MAX_BYTES,
+        )
 
     @staticmethod
     def _nested_mobile_7z_member_entry(member: Any) -> dict[str, str] | None:
-        raw_member_name = str(getattr(member, "filename", "") or "")
-        member_name = ArtifactQueueProcessor._safe_archive_member_name(raw_member_name)
-        if not member_name:
-            return None
-        if bool(getattr(member, "is_directory", False)) or bool(
-            getattr(member, "is_symlink", False)
-        ):
-            return None
-        if not bool(getattr(member, "is_file", True)):
-            return None
-        suffix = Path(member_name.lower()).suffix
-        if suffix not in _NESTED_MOBILE_ARTIFACT_SUFFIXES:
-            return None
-        try:
-            member_size = int(getattr(member, "uncompressed", 0) or 0)
-        except (TypeError, ValueError):
-            member_size = 0
-        if member_size > _REMOTE_ARTIFACT_MAX_BYTES:
-            return None
-        return {"name": member_name, "target": raw_member_name}
+        return nested_mobile_7z_member_entry_for_processor(
+            member,
+            safe_archive_member_name=ArtifactQueueProcessor._safe_archive_member_name,
+            nested_mobile_artifact_suffixes=_NESTED_MOBILE_ARTIFACT_SUFFIXES,
+            remote_artifact_max_bytes=_REMOTE_ARTIFACT_MAX_BYTES,
+        )
 
     def _extract_nested_mobile_configs_from_zip(
         self,
         zf: zipfile.ZipFile,
         source_path: Path,
     ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig], int]:
-        raw_member_jobs: list[tuple[str, bytes]] = []
-        members = zf.infolist()
-        member_entries = self._run_ordered_local_batch(
-            members,
-            self._nested_mobile_zip_member_entry,
-            default_factory=lambda: None,
+        return extract_nested_mobile_configs_from_zip_for_processor(
+            self,
+            zf,
+            source_path,
         )
-        for member, member_entry in zip(members, member_entries):
-            if not isinstance(member_entry, dict):
-                continue
-            raw_member_jobs.append((str(member_entry["name"]), zf.read(member)))
-        member_jobs = self._run_ordered_local_batch(
-            raw_member_jobs,
-            self._nested_mobile_member_job,
-            default_factory=lambda: None,
-        )
-        member_jobs = [member_job for member_job in member_jobs if isinstance(member_job, tuple)]
-        return self._extract_nested_mobile_configs_from_member_jobs(member_jobs, source_path)
 
     def _extract_nested_mobile_configs_from_tar(
         self,
         tf: tarfile.TarFile,
         source_path: Path,
     ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig], int]:
-        raw_member_jobs: list[tuple[str, bytes]] = []
-        members = tf.getmembers()
-        member_entries = self._run_ordered_local_batch(
-            members,
-            self._nested_mobile_tar_member_entry,
-            default_factory=lambda: None,
+        return extract_nested_mobile_configs_from_tar_for_processor(
+            self,
+            tf,
+            source_path,
         )
-        for member, member_entry in zip(members, member_entries):
-            if not isinstance(member_entry, dict):
-                continue
-            extracted = tf.extractfile(member)
-            if extracted is None:
-                continue
-            raw_member_jobs.append((str(member_entry["name"]), extracted.read()))
-        member_jobs = self._run_ordered_local_batch(
-            raw_member_jobs,
-            self._nested_mobile_member_job,
-            default_factory=lambda: None,
-        )
-        member_jobs = [member_job for member_job in member_jobs if isinstance(member_job, tuple)]
-        return self._extract_nested_mobile_configs_from_member_jobs(member_jobs, source_path)
 
     def _extract_nested_mobile_configs_from_7z(
         self,
         data: bytes,
         source_path: Path,
     ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig], int]:
-        if py7zr is None or data[:6] != b"7z\xbc\xaf'\x1c":
-            return [], [], [], 0
-        try:
-            with py7zr.SevenZipFile(BytesIO(data), mode="r") as archive:
-                if archive.needs_password():
-                    return [], [], [], 0
-                members = archive.list()
-                member_entries = self._run_ordered_local_batch(
-                    members,
-                    self._nested_mobile_7z_member_entry,
-                    default_factory=lambda: None,
-                )
-                selected_entries = [entry for entry in member_entries if isinstance(entry, dict)]
-                if not selected_entries:
-                    return [], [], [], 0
-                raw_member_jobs: list[tuple[str, bytes]] = []
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    archive.extract(
-                        path=temp_dir,
-                        targets=[str(entry["target"]) for entry in selected_entries],
-                    )
-                    root = Path(temp_dir).resolve()
-                    for entry in selected_entries:
-                        member_name = str(entry["name"])
-                        member_path = (root / Path(*member_name.split("/"))).resolve()
-                        try:
-                            member_path.relative_to(root)
-                        except ValueError:
-                            continue
-                        if not member_path.is_file():
-                            continue
-                        try:
-                            with member_path.open("rb") as handle:
-                                member_bytes = handle.read(_REMOTE_ARTIFACT_MAX_BYTES + 1)
-                        except OSError:
-                            continue
-                        if len(member_bytes) > _REMOTE_ARTIFACT_MAX_BYTES:
-                            continue
-                        raw_member_jobs.append((member_name, member_bytes))
-        except Exception:  # noqa: BLE001
-            return [], [], [], 0
-
-        member_jobs = self._run_ordered_local_batch(
-            raw_member_jobs,
-            self._nested_mobile_member_job,
-            default_factory=lambda: None,
+        return extract_nested_mobile_configs_from_7z_for_processor(
+            self,
+            data,
+            source_path,
+            seven_zip_file_factory=py7zr.SevenZipFile if py7zr is not None else None,
+            remote_artifact_max_bytes=_REMOTE_ARTIFACT_MAX_BYTES,
         )
-        member_jobs = [member_job for member_job in member_jobs if isinstance(member_job, tuple)]
-        return self._extract_nested_mobile_configs_from_member_jobs(member_jobs, source_path)
 
     @staticmethod
     def _nested_mobile_member_job(
         member_job: tuple[str, bytes],
     ) -> tuple[str, bytes] | None:
-        member_name, member_bytes = member_job
-        normalized_name = str(member_name or "").strip()
-        if not normalized_name or not member_bytes:
-            return None
-        return normalized_name, bytes(member_bytes)
+        return nested_mobile_member_job_for_processor(member_job)
 
     def _extract_nested_mobile_configs_from_member_jobs(
         self,
         member_jobs: list[tuple[str, bytes]],
         source_path: Path,
     ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig], int]:
-        if not member_jobs:
-            return [], [], [], 0
-        ordered_results = self._run_ordered_local_batch(
+        return extract_nested_mobile_configs_from_member_jobs_for_processor(
+            self,
             member_jobs,
-            lambda member_job: self._extract_mobile_configs_from_member_bytes(
-                member_job[1],
-                source_path,
-                member_job[0],
-            ),
-            default_factory=lambda: ([], [], []),
+            source_path,
         )
-        result_batches = self._run_ordered_local_batch(
-            list(enumerate(ordered_results)),
-            self._nested_mobile_member_result_entry,
-            default_factory=lambda: None,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        firebase_projects: list[FirebaseProject] = []
-        supabase_configs: list[SupabaseConfig] = []
-        for result in result_batches:
-            if not isinstance(result, tuple):
-                continue
-            member_payloads, member_projects, member_configs = result
-            payloads.extend(member_payloads)
-            firebase_projects.extend(member_projects)
-            supabase_configs.extend(member_configs)
-        return payloads, firebase_projects, supabase_configs, len(member_jobs)
 
     @staticmethod
     def _nested_mobile_member_result_entry(
@@ -20836,11 +18200,7 @@ class ArtifactQueueProcessor:
             tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig]] | None,
         ],
     ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig]] | None:
-        _result_index, result = result_entry
-        if result is None:
-            return None
-        member_payloads, member_projects, member_configs = result
-        return list(member_payloads), list(member_projects), list(member_configs)
+        return nested_mobile_member_result_entry_for_processor(result_entry)
 
     def _extract_mobile_configs_from_member_bytes(
         self,
@@ -20848,74 +18208,17 @@ class ArtifactQueueProcessor:
         source_path: Path,
         member_name: str,
     ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig]]:
-        suffix = Path(member_name.lower()).suffix
-        if suffix not in _NESTED_MOBILE_ARTIFACT_SUFFIXES or not data:
-            return [], [], []
-        try:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir) / Path(member_name).name
-                temp_path.write_bytes(data[:_REMOTE_ARTIFACT_MAX_BYTES])
-                if suffix in _ARCHIVE_STYLE_MOBILE_ARTIFACT_SUFFIXES:
-                    payloads, firebase_projects, supabase_configs, _parse_metadata = (
-                        self._scan_text_artifact(
-                            temp_path,
-                            "archive",
-                        )
-                    )
-                else:
-                    member_artifact_type = "apk" if suffix in {".apk", ".aab"} else "ipa"
-                    family_results = self._run_ordered_local_batch(
-                        ("payloads", "firebase", "supabase"),
-                        lambda family: self._extract_mobile_bundle_family(
-                            family,
-                            path=temp_path,
-                            artifact_type=member_artifact_type,
-                        ),
-                        default_factory=list,
-                    )
-                    payloads = family_results[0] if family_results else []
-                    firebase_projects = family_results[1] if len(family_results) > 1 else []
-                    supabase_configs = family_results[2] if len(family_results) > 2 else []
-        except Exception:  # noqa: BLE001
-            return [], [], []
-
-        rebased_payload_batches = self._run_ordered_local_batch(
-            payloads,
-            lambda payload: self._rebased_mobile_member_payload_entry(
-                payload,
-                source_path=source_path,
-                member_name=member_name,
-            ),
-            default_factory=lambda: None,
+        return extract_mobile_configs_from_member_bytes_for_processor(
+            self,
+            data,
+            source_path,
+            member_name,
+            nested_mobile_artifact_suffixes=_NESTED_MOBILE_ARTIFACT_SUFFIXES,
+            archive_style_mobile_artifact_suffixes=_ARCHIVE_STYLE_MOBILE_ARTIFACT_SUFFIXES,
+            remote_artifact_max_bytes=_REMOTE_ARTIFACT_MAX_BYTES,
+            firebase_project_type=FirebaseProject,
+            supabase_config_type=SupabaseConfig,
         )
-        rebased_payloads = [
-            payload for payload in rebased_payload_batches if isinstance(payload, tuple)
-        ]
-        rebased_project_batches = self._run_ordered_local_batch(
-            firebase_projects,
-            lambda project: self._rebased_mobile_member_project_entry(
-                project,
-                source_path=source_path,
-                member_name=member_name,
-            ),
-            default_factory=lambda: None,
-        )
-        rebased_projects = [
-            project for project in rebased_project_batches if isinstance(project, FirebaseProject)
-        ]
-        rebased_config_batches = self._run_ordered_local_batch(
-            supabase_configs,
-            lambda config: self._rebased_mobile_member_config_entry(
-                config,
-                source_path=source_path,
-                member_name=member_name,
-            ),
-            default_factory=lambda: None,
-        )
-        rebased_configs = [
-            config for config in rebased_config_batches if isinstance(config, SupabaseConfig)
-        ]
-        return rebased_payloads, rebased_projects, rebased_configs
 
     @staticmethod
     def _rebased_mobile_member_payload_entry(
@@ -20924,11 +18227,10 @@ class ArtifactQueueProcessor:
         source_path: Path,
         member_name: str,
     ) -> tuple[str, str, str] | None:
-        _source_file, extract_path, text = payload
-        return (
-            str(source_path),
-            f"{member_name}!{extract_path}",
-            text,
+        return rebased_mobile_member_payload_entry_for_processor(
+            payload,
+            source_path=source_path,
+            member_name=member_name,
         )
 
     @staticmethod
@@ -20938,14 +18240,11 @@ class ArtifactQueueProcessor:
         source_path: Path,
         member_name: str,
     ) -> FirebaseProject:
-        return FirebaseProject(
-            project_id=project.project_id,
-            api_key_enc=project.api_key_enc,
-            rtdb_url=project.rtdb_url,
-            bundle_id=project.bundle_id,
-            source_file=str(source_path),
-            extract_path=f"{member_name}!{project.extract_path}",
-            storage_bucket=project.storage_bucket,
+        return rebased_mobile_member_project_entry_for_processor(
+            project,
+            source_path=source_path,
+            member_name=member_name,
+            firebase_project_type=FirebaseProject,
         )
 
     @staticmethod
@@ -20955,12 +18254,11 @@ class ArtifactQueueProcessor:
         source_path: Path,
         member_name: str,
     ) -> SupabaseConfig:
-        return SupabaseConfig(
-            project_ref=config.project_ref,
-            project_url=config.project_url,
-            anon_key=config.anon_key,
-            source_file=str(source_path),
-            extract_path=f"{member_name}!{config.extract_path}",
+        return rebased_mobile_member_config_entry_for_processor(
+            config,
+            source_path=source_path,
+            member_name=member_name,
+            supabase_config_type=SupabaseConfig,
         )
 
     @staticmethod
@@ -20968,54 +18266,14 @@ class ArtifactQueueProcessor:
         parsed: ParsedArtifact,
         artifact_metadata: Any,
     ) -> dict[str, Any]:
-        raw_metadata = artifact_metadata if isinstance(artifact_metadata, dict) else {}
-        context: dict[str, Any] = {}
-        scalar_keys = (
-            "parser",
-            "format",
-            "payload_count",
-            "metadata_payload_count",
-            "relationship_payload_count",
-            "ocr_payload_count",
-            "barcode_payload_count",
-        )
-        for key in scalar_keys:
-            value = parsed.parse_metadata.get(key)
-            if value in (None, "", [], {}):
-                continue
-            if isinstance(value, (str, int, float, bool)):
-                context[key] = value
-        artifact_type = str(parsed.artifact_type or "").strip()
-        if artifact_type:
-            context["artifact_type"] = artifact_type[:64]
-        for key in (
-            "content_type",
-            "download_filename",
-            "downloaded_from_remote",
-            "helm_index_url",
-            "source_rule",
-        ):
-            value = raw_metadata.get(key)
-            if value in (None, "", [], {}):
-                continue
-            if isinstance(value, bool):
-                context[key] = value
-                continue
-            if isinstance(value, (str, int, float)):
-                context[key] = str(value).strip()[:256]
-        return context
+        return safe_artifact_relation_context_for_processor(parsed, artifact_metadata)
 
     @staticmethod
     def _merge_artifact_relation_context(
         relation_metadata: dict[str, Any] | None,
         artifact_context: dict[str, Any] | None,
     ) -> dict[str, Any]:
-        merged = dict(artifact_context or {})
-        for key, value in dict(relation_metadata or {}).items():
-            if value in (None, "", [], {}):
-                continue
-            merged[str(key)] = value
-        return merged
+        return merge_artifact_relation_context_for_processor(relation_metadata, artifact_context)
 
     def _artifact_cloud_asset_metadata(
         self,
@@ -21025,221 +18283,55 @@ class ArtifactQueueProcessor:
         relation_metadata: dict[str, Any] | None,
         artifact_context: dict[str, Any] | None,
     ) -> dict[str, Any]:
-        allowed_keys = {
-            "archive_sources",
-            "artifact_type",
-            "content_type",
-            "discovered_from",
-            "download_filename",
-            "downloaded_from_remote",
-            "extract_path",
-            "extract_rule",
-            "format",
-            "helm_index_url",
-            "hostname",
-            "barcode_payload_count",
-            "metadata_payload_count",
-            "ocr_payload_count",
-            "parser",
-            "payload_count",
-            "provider_sources",
-            "relationship_payload_count",
-            "root_domain",
-            "rule",
-            "source",
-            "source_backend",
-            "source_file",
-            "source_provider",
-            "source_seed_url",
-            "source_rule",
-            "source_url",
-        }
-        context = self._merge_artifact_relation_context(relation_metadata, artifact_context)
-        metadata: dict[str, Any] = {
-            "artifact_provenance": True,
-            "rule": "artifact_cloud_asset_provenance",
-        }
-        if source_seed_id is not None:
-            metadata["artifact_source_seed_id"] = source_seed_id
-            for key, value in self._artifact_source_seed_provenance(con, source_seed_id).items():
-                metadata.setdefault(key, value)
-        for key, value in context.items():
-            normalized_key = "extract_rule" if key == "rule" else str(key)
-            if normalized_key not in allowed_keys or value in (None, "", [], {}):
-                continue
-            if normalized_key in {
-                "barcode_payload_count",
-                "metadata_payload_count",
-                "ocr_payload_count",
-                "relationship_payload_count",
-            }:
-                try:
-                    if int(value) <= 0:
-                        continue
-                except (TypeError, ValueError):
-                    continue
-            if normalized_key in {"archive_sources", "provider_sources"}:
-                if isinstance(value, list):
-                    metadata[normalized_key] = [
-                        str(item).strip() for item in value if str(item).strip()
-                    ][:8]
-                continue
-            if isinstance(value, (str, int, float, bool)):
-                metadata[normalized_key] = value
-        return metadata
+        return artifact_cloud_asset_metadata_for_processor(
+            self,
+            con,
+            source_seed_id=source_seed_id,
+            relation_metadata=relation_metadata,
+            artifact_context=artifact_context,
+        )
 
     def _artifact_relation_context(
         self,
         con: sqlite3.Connection,
         parsed: ParsedArtifact,
     ) -> dict[str, Any]:
-        row = con.execute(
-            """
-            SELECT metadata_json
-            FROM artifact_queue
-            WHERE id=? AND engagement_id=?
-            """,
-            (parsed.artifact_id, self._engagement_id),
-        ).fetchone()
-        artifact_metadata = _safe_json_loads(str(row[0] or "{}")) if row is not None else {}
-        return self._safe_artifact_relation_context(parsed, artifact_metadata)
+        return artifact_relation_context_for_processor(self, con, parsed)
 
     def _persist_parsed_artifact(
         self,
         con: sqlite3.Connection,
         parsed: ParsedArtifact,
     ) -> tuple[int, int, int, dict[str, Any]]:
-        discovered_seeds = 0
-        artifact_context = self._artifact_relation_context(con, parsed)
-        source_seed_id = self._artifact_source_seed_id(con, parsed.source_url)
-        if source_seed_id is None:
-            source_seed_id = self._ensure_local_artifact_source_seed(
-                con,
-                parsed,
-                artifact_context=artifact_context,
-            )
-        discovery_payloads = self._artifact_discovery_payloads(parsed)
-        discovery_jobs = self._expand_structured_discovery_jobs(discovery_payloads)
-        for batch in self._collect_generic_text_discovery_batches(discovery_jobs):
-            discovered_seeds += self._persist_generic_text_discovery_batch(
-                con,
-                batch,
-                source_seed_id=source_seed_id,
-                artifact_context=artifact_context,
-            )
-        firebase_count, firebase_seeds = self._store_firebase_projects(
-            con,
-            self._dedupe_firebase_projects(parsed.firebase_projects),
-            source_seed_id=source_seed_id,
-            source_url=parsed.source_url,
-            artifact_context=artifact_context,
-        )
-        supabase_count, supabase_seeds = self._store_supabase_configs(
-            con,
-            self._dedupe_supabase_configs(parsed.supabase_configs),
-            source_seed_id=source_seed_id,
-            source_url=parsed.source_url,
-            artifact_context=artifact_context,
-        )
-        return (
-            firebase_count,
-            supabase_count,
-            discovered_seeds + firebase_count + firebase_seeds + supabase_seeds,
-            parsed.parse_metadata,
-        )
+        return persist_parsed_artifact_for_processor(self, con, parsed)
 
     @staticmethod
     def _artifact_discovery_payloads(parsed: ParsedArtifact) -> list[tuple[str, str, str]]:
-        parsed_source_url = str(parsed.source_url or "").strip()
-        source_url_parts = urlparse(parsed_source_url)
-        if source_url_parts.scheme not in {"http", "https"} or not source_url_parts.netloc:
-            return list(parsed.payloads)
-        return [
-            (parsed_source_url, extract_path, text)
-            for _source_file, extract_path, text in parsed.payloads
-        ]
+        return artifact_discovery_payloads_for_processor(parsed)
 
     def _expand_structured_discovery_jobs(
         self,
         payloads: list[tuple[str, str, str]],
     ) -> list[tuple[str, str, str]]:
-        payload_job_batches = self._run_ordered_local_batch(
-            payloads,
-            self._structured_discovery_payload_job,
-            default_factory=lambda: None,
-        )
-        payload_jobs = [
-            payload_job for payload_job in payload_job_batches if isinstance(payload_job, tuple)
-        ]
-        if not payload_jobs:
-            return []
-        ordered_results = self._run_ordered_local_batch(
-            payload_jobs,
-            self._structured_discovery_jobs_for_payload,
-            default_factory=list,
-        )
-        result_batches = self._run_ordered_local_batch(
-            list(enumerate(ordered_results)),
-            self._structured_discovery_result_entry,
-            default_factory=lambda: None,
-        )
-        discovery_jobs: list[tuple[str, str, str]] = []
-        for result in result_batches:
-            if not isinstance(result, list):
-                continue
-            discovery_jobs.extend(result)
-        return discovery_jobs
+        return expand_structured_discovery_jobs_for_processor(self, payloads)
 
     @staticmethod
     def _structured_discovery_payload_job(
         payload: tuple[str, str, str],
     ) -> tuple[str, str, str] | None:
-        source_file, extract_path, text = payload
-        if not str(text or "").strip():
-            return None
-        return str(source_file), str(extract_path), text
+        return structured_discovery_payload_job_for_processor(payload)
 
     @staticmethod
     def _structured_discovery_result_entry(
-        result_entry: tuple[int, list[tuple[str, str]] | None],
-    ) -> list[tuple[str, str]] | None:
-        _result_index, result = result_entry
-        if result is None:
-            return None
-        return list(result)
+        result_entry: tuple[int, list[tuple[str, str, str]] | None],
+    ) -> list[tuple[str, str, str]] | None:
+        return structured_discovery_result_entry_for_processor(result_entry)
 
     def _structured_discovery_jobs_for_payload(
         self,
         payload: tuple[str, str, str],
     ) -> list[tuple[str, str, str]]:
-        source_file, extract_path, text = payload
-        if not text.strip():
-            return []
-        source_hint = f"{source_file}/{extract_path}" if source_file else extract_path
-        structured_payloads = self._run_ordered_local_batch(
-            self._STRUCTURED_DISCOVERY_FAMILIES,
-            lambda family: self._build_structured_discovery_payload_fragment(
-                family,
-                text=text,
-                extract_path=extract_path,
-                source_file=source_file,
-            ),
-            default_factory=str,
-        )
-        discovery_job_batches = self._run_ordered_local_batch(
-            list(enumerate(structured_payloads)),
-            lambda payload_batch: self._structured_discovery_payload_entry(
-                payload_batch,
-                source_file=source_file,
-                source_hint=source_hint,
-            ),
-            default_factory=lambda: None,
-        )
-        return [
-            discovery_job
-            for discovery_job in discovery_job_batches
-            if isinstance(discovery_job, tuple)
-        ]
+        return structured_discovery_jobs_for_payload_for_processor(self, payload)
 
     @staticmethod
     def _structured_discovery_payload_entry(
@@ -21248,11 +18340,11 @@ class ArtifactQueueProcessor:
         source_file: str,
         source_hint: str,
     ) -> tuple[str, str, str] | None:
-        _payload_index, structured_payload = payload_batch
-        payload_text = str(structured_payload or "").strip()
-        if not payload_text:
-            return None
-        return source_file, source_hint, payload_text
+        return structured_discovery_payload_entry_for_processor(
+            payload_batch,
+            source_file=source_file,
+            source_hint=source_hint,
+        )
 
     def _build_structured_discovery_payload_fragment(
         self,
@@ -21262,354 +18354,104 @@ class ArtifactQueueProcessor:
         extract_path: str,
         source_file: str = "",
     ) -> str:
-        source_hint = f"{source_file}/{extract_path}" if source_file else extract_path
-        if tunnel_config_artifact_label(source_hint):
-            text = tunnel_config_public_payload_text(text)
-        if (
-            storage_client_config_artifact_label(source_hint)
-            and family != "storage_client_config_text"
-        ):
-            text = storage_client_config_public_payload_text(text)
-        if family == "iac":
-            return self._iac_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "kopia":
-            return self._kopia_structured_payload_text(
-                text,
-                source_hint=extract_path,
-            )
-        if family == "duplicacy":
-            return self._duplicacy_structured_payload_text(
-                text,
-                source_hint=extract_path,
-            )
-        if family == "duplicati":
-            return self._duplicati_structured_payload_text(
-                text,
-                source_hint=extract_path,
-            )
-        if family == "borg":
-            return self._borg_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "json":
-            return self._json_structured_payload_text(
-                text,
-                source_hint=extract_path,
-            )
-        if family == "sanity_config_text":
-            return "\n".join(
-                sanity_config_urls(
-                    text,
-                    source_hint=source_hint,
-                )
-            )
-        if family == "firebaserc":
-            return self._firebaserc_structured_payload_text(
-                text,
-                source_hint=extract_path,
-            )
-        if family == "observability":
-            return self._observability_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "edge_proxy_text":
-            return self._edge_proxy_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "orchestration_text":
-            return self._orchestration_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "api_spec_text":
-            return self._api_spec_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "api_client_text":
-            return self._api_client_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "http_request_text":
-            return self._http_request_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "http_transcript_text":
-            return self._http_transcript_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "connection_client_text":
-            return self._connection_client_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "database_client_text":
-            return self._database_client_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "storage_client_config_text":
-            return self._storage_client_config_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "supabase_cli_config_text":
-            return "\n".join(
-                supabase_cli_config_urls(
-                    text,
-                    source_hint=source_hint,
-                )
-            )
-        if family == "amplify_client_config_text":
-            return self._amplify_client_config_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "hashicorp_config_text":
-            return "\n".join(
-                hashicorp_config_candidates(
-                    text,
-                    source_hint=source_hint,
-                )
-            )
-        if family == "framework_config_text":
-            return self._framework_config_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "orm_config_text":
-            return self._orm_config_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "tunnel_config_text":
-            return self._tunnel_config_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "browser_state_text":
-            return self._browser_state_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "charles_session_json":
-            return self._charles_session_json_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "burp_site_map_xml":
-            return self._burp_site_map_xml_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "recon_tool_output_text":
-            return self._recon_tool_output_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "graphql_config_text":
-            return self._graphql_config_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "interface_definition_text":
-            return self._interface_definition_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "android_manifest_text":
-            return "\n".join(android_manifest_urls(text))
-        if family == "key_value":
-            return self._key_value_structured_payload_text(
-                text,
-                source_hint=extract_path,
-            )
-        if family == "ci_text":
-            return self._ci_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "yaml":
-            return self._yaml_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "data_uri_image":
-            return self._data_uri_image_structured_payload_text(text)
-        if family == "data_uri":
-            return self._data_uri_structured_payload_text(text)
-        if family == "renovate_text":
-            return self._renovate_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "security_scanner_config_text":
-            return self._security_scanner_config_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "maven_xml":
-            return self._maven_xml_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "gradle_text":
-            return self._gradle_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "js_runtime_text":
-            return self._js_runtime_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-                base_url=source_file,
-            )
-        if family == "static_hosting_control_text":
-            return self._static_hosting_control_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-                base_url=source_file,
-            )
-        if family == "electron_update_metadata":
-            return "\n".join(
-                electron_update_metadata_candidates(
-                    text,
-                    source_hint=source_hint,
-                    base_url=source_file,
-                )
-            )
-        if family == "starlark_container_images":
-            urls: list[str] = []
-            for value in starlark_container_image_values(text, source_hint=source_hint):
-                candidate = _artifact_container_image_url_candidate(
-                    value,
-                    require_explicit_registry=True,
-                )
-                if candidate and candidate not in urls:
-                    urls.append(candidate)
-            return "\n".join(urls)
-        if family == "gitpod_text":
-            return self._gitpod_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "raw":
-            return text
-        return ""
+        return _orchestration_build_artifact_structured_discovery_payload_fragment(
+            family,
+            text=text,
+            extract_path=extract_path,
+            source_file=source_file,
+            tunnel_config_artifact_label=tunnel_config_artifact_label,
+            tunnel_config_public_payload_text=tunnel_config_public_payload_text,
+            storage_client_config_artifact_label=storage_client_config_artifact_label,
+            storage_client_config_public_payload_text=storage_client_config_public_payload_text,
+            iac_text_structured_payload_text=self._iac_text_structured_payload_text,
+            kopia_structured_payload_text=self._kopia_structured_payload_text,
+            duplicacy_structured_payload_text=self._duplicacy_structured_payload_text,
+            duplicati_structured_payload_text=self._duplicati_structured_payload_text,
+            borg_structured_payload_text=self._borg_structured_payload_text,
+            json_structured_payload_text=self._json_structured_payload_text,
+            sanity_config_urls=sanity_config_urls,
+            firebaserc_structured_payload_text=self._firebaserc_structured_payload_text,
+            observability_structured_payload_text=self._observability_structured_payload_text,
+            edge_proxy_structured_payload_text=self._edge_proxy_structured_payload_text,
+            orchestration_structured_payload_text=self._orchestration_structured_payload_text,
+            api_spec_text_structured_payload_text=self._api_spec_text_structured_payload_text,
+            api_client_text_structured_payload_text=self._api_client_text_structured_payload_text,
+            http_request_text_structured_payload_text=self._http_request_text_structured_payload_text,
+            http_transcript_text_structured_payload_text=self._http_transcript_text_structured_payload_text,
+            connection_client_structured_payload_text=self._connection_client_structured_payload_text,
+            database_client_structured_payload_text=self._database_client_structured_payload_text,
+            storage_client_config_structured_payload_text=self._storage_client_config_structured_payload_text,
+            supabase_cli_config_urls=supabase_cli_config_urls,
+            amplify_client_config_structured_payload_text=self._amplify_client_config_structured_payload_text,
+            hashicorp_config_candidates=hashicorp_config_candidates,
+            framework_config_structured_payload_text=self._framework_config_structured_payload_text,
+            orm_config_structured_payload_text=self._orm_config_structured_payload_text,
+            tunnel_config_structured_payload_text=self._tunnel_config_structured_payload_text,
+            browser_state_structured_payload_text=self._browser_state_structured_payload_text,
+            charles_session_json_structured_payload_text=self._charles_session_json_structured_payload_text,
+            burp_site_map_xml_structured_payload_text=self._burp_site_map_xml_structured_payload_text,
+            recon_tool_output_structured_payload_text=self._recon_tool_output_structured_payload_text,
+            graphql_config_text_structured_payload_text=self._graphql_config_text_structured_payload_text,
+            interface_definition_text_structured_payload_text=self._interface_definition_text_structured_payload_text,
+            android_manifest_urls=android_manifest_urls,
+            key_value_structured_payload_text=self._key_value_structured_payload_text,
+            ci_text_structured_payload_text=self._ci_text_structured_payload_text,
+            yaml_structured_payload_text=self._yaml_structured_payload_text,
+            data_uri_image_structured_payload_text=self._data_uri_image_structured_payload_text,
+            data_uri_structured_payload_text=self._data_uri_structured_payload_text,
+            renovate_text_structured_payload_text=self._renovate_text_structured_payload_text,
+            security_scanner_config_structured_payload_text=self._security_scanner_config_structured_payload_text,
+            maven_xml_structured_payload_text=self._maven_xml_structured_payload_text,
+            gradle_text_structured_payload_text=self._gradle_text_structured_payload_text,
+            js_runtime_text_structured_payload_text=self._js_runtime_text_structured_payload_text,
+            static_hosting_control_text_structured_payload_text=self._static_hosting_control_text_structured_payload_text,
+            electron_update_metadata_candidates=electron_update_metadata_candidates,
+            starlark_container_image_values=starlark_container_image_values,
+            artifact_container_image_url_candidate=_artifact_container_image_url_candidate,
+            gitpod_structured_payload_text=self._gitpod_structured_payload_text,
+        )
 
     @staticmethod
     def _decode_data_uri_bytes(meta: str, raw_data: str) -> bytes:
-        metadata = str(meta or "").strip().lower()
-        payload = str(raw_data or "").strip()
-        if not payload:
-            return b""
-        try:
-            if ";base64" in metadata:
-                compact = re.sub(r"\s+", "", payload)
-                return base64.b64decode(compact, validate=False)
-            return unquote_to_bytes(payload)
-        except Exception:  # noqa: BLE001
-            return b""
+        return decode_data_uri_bytes_for_processor(meta, raw_data)
 
     @staticmethod
     def _data_uri_payload_entry(match_entry: tuple[str, str]) -> str:
-        meta, raw_data = match_entry
-        decoded_bytes = ArtifactQueueProcessor._decode_data_uri_bytes(meta, raw_data)
-        if not decoded_bytes:
-            return ""
-        decoded = ArtifactQueueProcessor._decode_text_artifact_bytes(
-            decoded_bytes[:_MAX_ARTIFACT_MEMBER_BYTES],
+        return data_uri_payload_entry_for_processor(
+            ArtifactQueueProcessor,
+            match_entry,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
         )
-        decoded = decoded.strip()
-        if not decoded:
-            return ""
-        if not ("://" in decoded or "@" in decoded or "=" in decoded or ":" in decoded):
-            return ""
-        return decoded
 
     def _data_uri_structured_payload_text(self, text: str) -> str:
-        entries = [
-            (match.group("meta"), match.group("data"))
-            for match in _ARTIFACT_DATA_URI_RE.finditer(str(text or ""))
-        ][:32]
-        if not entries:
-            return ""
-        decoded_payloads = self._run_ordered_local_batch(
-            entries,
-            self._data_uri_payload_entry,
-            default_factory=str,
+        return data_uri_structured_payload_text_for_processor(
+            self,
+            text,
+            data_uri_pattern=_ARTIFACT_DATA_URI_RE,
         )
-        lines: list[str] = []
-        seen: set[str] = set()
-        for payload in decoded_payloads:
-            for raw_line in str(payload or "").splitlines():
-                candidate = raw_line.strip()
-                lowered = candidate.lower()
-                if not candidate or lowered in seen:
-                    continue
-                seen.add(lowered)
-                lines.append(candidate)
-        return "\n".join(lines)
 
     def _data_uri_image_payload_entry(self, match_entry: tuple[int, str, str]) -> str:
-        index, meta, raw_data = match_entry
-        metadata = str(meta or "").strip().lower()
-        mime_type = metadata.split(";", 1)[0].strip()
-        suffix = _suffix_from_content_type(mime_type)
-        if not mime_type.startswith("image/") or suffix not in _OCR_IMAGE_SUFFIXES:
-            return ""
-        decoded_bytes = self._decode_data_uri_bytes(meta, raw_data)
-        if not decoded_bytes:
-            return ""
-        bounded = decoded_bytes[:_MAX_OCR_IMAGE_BYTES]
-        payloads: list[str] = []
-        ocr_text = self._ocr_image_bytes(bounded, suffix)
-        if ocr_text.strip():
-            payloads.append(f"data_uri_image_{index}#ocr\n{ocr_text.strip()}")
-        barcode_payload = self._barcode_image_bytes_payload(bounded)
-        if barcode_payload.strip():
-            payloads.append(f"data_uri_image_{index}#barcode\n{barcode_payload.strip()}")
-        metadata_payload = self._image_metadata_payload(bounded)
-        if metadata_payload.strip():
-            payloads.append(f"data_uri_image_{index}#image-metadata\n{metadata_payload.strip()}")
-        return "\n".join(payloads)
+        return data_uri_image_payload_entry_for_processor(
+            self,
+            match_entry,
+            ocr_image_suffixes=_OCR_IMAGE_SUFFIXES,
+            max_ocr_image_bytes=_MAX_OCR_IMAGE_BYTES,
+            suffix_from_content_type=_suffix_from_content_type,
+        )
 
     def _data_uri_image_structured_payload_text(self, text: str) -> str:
-        entries = [
-            (index, match.group("meta"), match.group("data"))
-            for index, match in enumerate(_ARTIFACT_DATA_URI_RE.finditer(str(text or "")))
-        ][:16]
-        if not entries:
-            return ""
-        payloads = self._run_ordered_local_batch(
-            entries,
-            self._data_uri_image_payload_entry,
-            default_factory=str,
+        return data_uri_image_structured_payload_text_for_processor(
+            self,
+            text,
+            data_uri_pattern=_ARTIFACT_DATA_URI_RE,
         )
-        lines: list[str] = []
-        seen: set[str] = set()
-        for payload in payloads:
-            for raw_line in str(payload or "").splitlines():
-                candidate = raw_line.strip()
-                lowered = candidate.lower()
-                if not candidate or lowered in seen:
-                    continue
-                seen.add(lowered)
-                lines.append(candidate)
-        return "\n".join(lines)
 
     def _iac_text_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        payload_fragments = self._run_ordered_local_batch(
-            (
+        return iac_text_structured_payload_text_for_processor(
+            self,
+            text,
+            source_hint=source_hint,
+            iac_structured_payload_families=(
                 "terraform",
                 "bicep",
                 "cloudformation",
@@ -21619,24 +18461,7 @@ class ArtifactQueueProcessor:
                 "sst_config",
                 "aws_cdk",
             ),
-            lambda family: self._iac_text_structured_payload_family(
-                family,
-                text=text,
-                source_hint=source_hint,
-            ),
-            default_factory=str,
         )
-        lines: list[str] = []
-        seen: set[str] = set()
-        for payload_fragment in payload_fragments:
-            for raw_line in str(payload_fragment or "").splitlines():
-                candidate = raw_line.strip()
-                lowered = candidate.lower()
-                if not candidate or lowered in seen:
-                    continue
-                seen.add(lowered)
-                lines.append(candidate)
-        return "\n".join(lines)
 
     def _iac_text_structured_payload_family(
         self,
@@ -21645,56 +18470,18 @@ class ArtifactQueueProcessor:
         text: str,
         source_hint: str,
     ) -> str:
-        if family == "terraform":
-            return self._terraform_text_structured_payload_text(
-                text,
-                source_hint=source_hint,
-            )
-        if family == "bicep":
-            return self._bicep_text_structured_payload_text(text)
-        if family == "cloudformation":
-            return "\n".join(
-                cloudformation_template_candidates(
-                    text,
-                    source_hint=source_hint,
-                )
-            )
-        if family == "serverless":
-            return "\n".join(
-                serverless_framework_candidates(
-                    text,
-                    source_hint=source_hint,
-                )
-            )
-        if family == "sam_config":
-            return "\n".join(
-                sam_config_candidates(
-                    text,
-                    source_hint=source_hint,
-                )
-            )
-        if family == "pulumi_config":
-            return "\n".join(
-                pulumi_config_candidates(
-                    text,
-                    source_hint=source_hint,
-                )
-            )
-        if family == "sst_config":
-            return "\n".join(
-                sst_config_candidates(
-                    text,
-                    source_hint=source_hint,
-                )
-            )
-        if family == "aws_cdk":
-            return "\n".join(
-                aws_cdk_candidates(
-                    text,
-                    source_hint=source_hint,
-                )
-            )
-        return ""
+        return iac_text_structured_payload_family_for_processor(
+            self,
+            family,
+            text=text,
+            source_hint=source_hint,
+            cloudformation_template_candidates=cloudformation_template_candidates,
+            serverless_framework_candidates=serverless_framework_candidates,
+            sam_config_candidates=sam_config_candidates,
+            pulumi_config_candidates=pulumi_config_candidates,
+            sst_config_candidates=sst_config_candidates,
+            aws_cdk_candidates=aws_cdk_candidates,
+        )
 
     def _store_firebase_projects(
         self,
@@ -21705,102 +18492,14 @@ class ArtifactQueueProcessor:
         source_url: str = "",
         artifact_context: dict[str, Any] | None = None,
     ) -> tuple[int, int]:
-        firebase_count = 0
-        discovered_seeds = 0
-        child_depth = self._artifact_child_seed_depth(con, source_seed_id)
-        project_batches = self._run_ordered_local_batch(
+        return store_firebase_projects_for_processor(
+            self,
+            con,
             firebase_projects,
-            lambda project: self._firebase_project_persistence_entry(
-                project,
-                source_url=source_url,
-            ),
-            default_factory=lambda: None,
+            source_seed_id=source_seed_id,
+            source_url=source_url,
+            artifact_context=artifact_context,
         )
-        for project_entry in project_batches:
-            if not isinstance(project_entry, dict):
-                continue
-            firebase_count += 1
-            self._store_cloud_asset_reference(
-                con,
-                asset_type="firebase",
-                identifier=str(project_entry["project_id"]),
-                source="firebase_extract",
-                metadata=self._artifact_cloud_asset_metadata(
-                    con,
-                    source_seed_id=source_seed_id,
-                    relation_metadata=dict(project_entry["project_relation_metadata"]),
-                    artifact_context=artifact_context,
-                ),
-            )
-            self._insert_seed(
-                con,
-                str(project_entry["project_id"]),
-                "other",
-                source="artifact",
-                confidence=0.8,
-                depth=child_depth,
-            )
-            self._link_artifact_source_seed(
-                con,
-                source_seed_id,
-                str(project_entry["project_id"]),
-                "other",
-                confidence=0.8,
-                metadata=self._merge_artifact_relation_context(
-                    dict(project_entry["project_relation_metadata"]),
-                    artifact_context,
-                ),
-            )
-            if project_entry["storage_bucket"]:
-                self._store_cloud_asset_reference(
-                    con,
-                    asset_type="gcs",
-                    identifier=str(project_entry["storage_bucket"]),
-                    source="firebase_extract_storage_bucket",
-                    metadata=self._artifact_cloud_asset_metadata(
-                        con,
-                        source_seed_id=source_seed_id,
-                        relation_metadata=dict(project_entry["storage_relation_metadata"]),
-                        artifact_context=artifact_context,
-                    ),
-                )
-                if self._store_artifact_url_seed(
-                    con,
-                    str(project_entry["storage_bucket_url"]),
-                    source="artifact",
-                    confidence=0.7,
-                    source_seed_id=source_seed_id,
-                    depth=child_depth,
-                    relation_metadata=self._merge_artifact_relation_context(
-                        dict(project_entry["storage_relation_metadata"]),
-                        artifact_context,
-                    ),
-                ):
-                    discovered_seeds += 1
-            if project_entry["rtdb_url"]:
-                self._store_artifact_url_seed(
-                    con,
-                    str(project_entry["rtdb_url"]),
-                    source="artifact",
-                    confidence=0.72,
-                    source_seed_id=source_seed_id,
-                    depth=child_depth,
-                    relation_metadata=self._merge_artifact_relation_context(
-                        dict(project_entry["project_relation_metadata"]),
-                        artifact_context,
-                    ),
-                )
-            if project_entry["api_key_enc"]:
-                self._store_key_finding(
-                    con,
-                    service="firebase",
-                    domain=str(project_entry["project_id"]),
-                    source_url=str(project_entry["source_file"]),
-                    pattern_name="firebase_mobile_config",
-                    key_redacted="<age-encrypted>",
-                    key_enc=str(project_entry["api_key_enc"]),
-                )
-        return firebase_count, discovered_seeds
 
     def _store_supabase_configs(
         self,
@@ -21811,76 +18510,14 @@ class ArtifactQueueProcessor:
         source_url: str = "",
         artifact_context: dict[str, Any] | None = None,
     ) -> tuple[int, int]:
-        supabase_count = 0
-        discovered_seeds = 0
-        child_depth = self._artifact_child_seed_depth(con, source_seed_id)
-        config_batches = self._run_ordered_local_batch(
+        return store_supabase_configs_for_processor(
+            self,
+            con,
             supabase_configs,
-            lambda config: self._supabase_config_persistence_entry(
-                config,
-                source_url=source_url,
-            ),
-            default_factory=lambda: None,
+            source_seed_id=source_seed_id,
+            source_url=source_url,
+            artifact_context=artifact_context,
         )
-        for config_entry in config_batches:
-            if not isinstance(config_entry, dict):
-                continue
-            supabase_count += 1
-            self._store_cloud_asset_reference(
-                con,
-                asset_type="supabase",
-                identifier=str(config_entry["project_ref"]),
-                source="mobile_config_parse",
-                metadata=self._artifact_cloud_asset_metadata(
-                    con,
-                    source_seed_id=source_seed_id,
-                    relation_metadata=dict(config_entry["relation_metadata"]),
-                    artifact_context=artifact_context,
-                ),
-            )
-            if self._store_artifact_url_seed(
-                con,
-                str(config_entry["project_url"]),
-                source="artifact",
-                confidence=0.8,
-                source_seed_id=source_seed_id,
-                depth=child_depth,
-                relation_metadata=self._merge_artifact_relation_context(
-                    dict(config_entry["relation_metadata"]),
-                    artifact_context,
-                ),
-            ):
-                discovered_seeds += 1
-            if self._insert_seed(
-                con,
-                str(config_entry["project_ref"]),
-                "other",
-                source="artifact",
-                confidence=0.72,
-                depth=child_depth,
-            ):
-                discovered_seeds += 1
-            self._link_artifact_source_seed(
-                con,
-                source_seed_id,
-                str(config_entry["project_ref"]),
-                "other",
-                confidence=0.72,
-                metadata=self._merge_artifact_relation_context(
-                    dict(config_entry["relation_metadata"]),
-                    artifact_context,
-                ),
-            )
-            self._store_key_finding(
-                con,
-                service="supabase",
-                domain=str(config_entry["project_ref"]),
-                source_url=str(config_entry["source_file"]),
-                pattern_name="supabase_mobile_config",
-                key_redacted=str(config_entry["key_redacted"]),
-                key_enc=config_entry["key_enc"],
-            )
-        return supabase_count, discovered_seeds
 
     def _firebase_project_persistence_entry(
         self,
@@ -21888,32 +18525,7 @@ class ArtifactQueueProcessor:
         *,
         source_url: str,
     ) -> dict[str, Any] | None:
-        relation_metadata = {
-            "rule": "artifact_mobile_config",
-            "source_url": source_url,
-            "source_file": project.source_file,
-            "extract_path": project.extract_path,
-        }
-        return {
-            "project_id": project.project_id,
-            "source_file": project.source_file,
-            "extract_path": project.extract_path,
-            "storage_bucket": project.storage_bucket,
-            "storage_bucket_url": (
-                f"https://storage.googleapis.com/{project.storage_bucket}"
-                if project.storage_bucket
-                else ""
-            ),
-            "storage_relation_metadata": {
-                "rule": "artifact_mobile_config_storage_bucket",
-                "source_url": source_url,
-                "source_file": project.source_file,
-                "extract_path": project.extract_path,
-            },
-            "rtdb_url": project.rtdb_url,
-            "api_key_enc": project.api_key_enc,
-            "project_relation_metadata": relation_metadata,
-        }
+        return firebase_project_persistence_entry_for_processor(project, source_url=source_url)
 
     def _supabase_config_persistence_entry(
         self,
@@ -21921,62 +18533,30 @@ class ArtifactQueueProcessor:
         *,
         source_url: str,
     ) -> dict[str, Any] | None:
-        relation_metadata = {
-            "rule": "artifact_mobile_config",
-            "source_url": source_url,
-            "source_file": config.source_file,
-            "extract_path": config.extract_path,
-        }
-        return {
-            "project_ref": config.project_ref,
-            "project_url": config.project_url,
-            "source_file": config.source_file,
-            "relation_metadata": relation_metadata,
-            "key_redacted": _redact_secret(config.anon_key),
-            "key_enc": _encrypt_secret_material(config.anon_key),
-        }
+        return supabase_config_persistence_entry_for_processor(
+            config,
+            source_url=source_url,
+            redact_secret=_redact_secret,
+            encrypt_secret_material=_encrypt_secret_material,
+        )
 
     def _collect_generic_text_discovery_batches(
         self,
         discovery_jobs: list[tuple[str, str, str]],
     ) -> list[ArtifactTextDiscoveryBatch]:
-        job_batches = self._run_ordered_local_batch(
-            discovery_jobs,
-            self._generic_text_discovery_job,
-            default_factory=lambda: None,
-        )
-        jobs = [job for job in job_batches if isinstance(job, tuple)]
-        if not jobs:
-            return []
-        ordered_batches = self._run_ordered_local_batch(
-            jobs,
-            self._collect_generic_text_discovery_job_result,
-            default_factory=lambda: ArtifactTextDiscoveryBatch(source_file=""),
-        )
-        return [batch for batch in ordered_batches if batch is not None]
+        return collect_generic_text_discovery_batches_for_processor(self, discovery_jobs)
 
     @staticmethod
     def _generic_text_discovery_job(
         discovery_job: tuple[str, str, str],
     ) -> tuple[str, str, str] | None:
-        source_file, source_hint, text = discovery_job
-        if not str(text or "").strip():
-            return None
-        return str(source_file), str(source_hint or source_file), text
+        return generic_text_discovery_job_for_processor(discovery_job)
 
     def _collect_generic_text_discovery_job_result(
         self,
         discovery_job: tuple[str, str, str],
     ) -> ArtifactTextDiscoveryBatch:
-        source_file, source_hint, text = discovery_job
-        try:
-            return self._collect_generic_text_discoveries(
-                text,
-                source_file=source_file,
-                source_hint=source_hint,
-            )
-        except Exception:  # noqa: BLE001
-            return ArtifactTextDiscoveryBatch(source_file=source_file)
+        return collect_generic_text_discovery_job_result_for_processor(self, discovery_job)
 
     def _collect_generic_text_discoveries(
         self,
@@ -21985,73 +18565,24 @@ class ArtifactQueueProcessor:
         source_file: str,
         source_hint: str = "",
     ) -> ArtifactTextDiscoveryBatch:
-        family_batches = self._run_ordered_local_batch(
-            (
-                "emails",
-                "phones",
-                "ips",
-                "network_hosts",
-                "urls",
-                "contact_identities",
-                "keys",
-                "cloud_assets",
-            ),
-            lambda family: self._collect_generic_text_discovery_family(
-                family,
-                text=text,
-                source_file=source_file,
-                source_hint=source_hint or source_file,
-            ),
-            default_factory=lambda: ArtifactTextDiscoveryBatch(source_file=source_file),
+        return collect_generic_text_discoveries_for_processor(
+            self,
+            text,
+            source_file=source_file,
+            source_hint=source_hint,
         )
-        prepared_family_batches = self._run_ordered_local_batch(
-            list(enumerate(family_batches)),
-            self._artifact_text_discovery_family_entry,
-            default_factory=lambda: ArtifactTextDiscoveryBatch(source_file=source_file),
-        )
-        prepared_merge_batches = self._run_ordered_local_batch(
-            list(enumerate(prepared_family_batches)),
-            self._artifact_text_discovery_merge_entry,
-            default_factory=lambda: ArtifactTextDiscoveryBatch(source_file=source_file),
-        )
-        batch = ArtifactTextDiscoveryBatch(source_file=source_file)
-        for family_batch in prepared_merge_batches:
-            self._merge_artifact_text_discovery_batch(batch, family_batch)
-        return batch
 
     @staticmethod
     def _artifact_text_discovery_family_entry(
         family_batch_entry: tuple[int, ArtifactTextDiscoveryBatch],
     ) -> ArtifactTextDiscoveryBatch:
-        _family_index, family_batch = family_batch_entry
-        return ArtifactTextDiscoveryBatch(
-            source_file=family_batch.source_file,
-            emails=list(family_batch.emails),
-            phones=list(family_batch.phones),
-            ip_seeds=list(family_batch.ip_seeds),
-            host_seeds=list(family_batch.host_seeds),
-            urls=list(family_batch.urls),
-            identity_seeds=list(family_batch.identity_seeds),
-            key_findings=[dict(finding) for finding in family_batch.key_findings],
-            cloud_assets=list(family_batch.cloud_assets),
-        )
+        return artifact_text_discovery_family_entry_for_processor(family_batch_entry)
 
     @staticmethod
     def _artifact_text_discovery_merge_entry(
         family_batch_entry: tuple[int, ArtifactTextDiscoveryBatch],
     ) -> ArtifactTextDiscoveryBatch:
-        _family_index, family_batch = family_batch_entry
-        return ArtifactTextDiscoveryBatch(
-            source_file=family_batch.source_file,
-            emails=list(family_batch.emails),
-            phones=list(family_batch.phones),
-            ip_seeds=list(family_batch.ip_seeds),
-            host_seeds=list(family_batch.host_seeds),
-            urls=list(family_batch.urls),
-            identity_seeds=list(family_batch.identity_seeds),
-            key_findings=[dict(finding) for finding in family_batch.key_findings],
-            cloud_assets=list(family_batch.cloud_assets),
-        )
+        return artifact_text_discovery_family_entry_for_processor(family_batch_entry)
 
     def _collect_generic_text_discovery_family(
         self,
@@ -22063,229 +18594,34 @@ class ArtifactQueueProcessor:
     ) -> ArtifactTextDiscoveryBatch:
         from forge.utils.intel.secret_finder import _parse_azure_storage_connection_string  # noqa: PLC0415
 
-        source_label = source_hint or source_file
-        batch = ArtifactTextDiscoveryBatch(source_file=source_file)
-        if family == "emails":
-            email_scan_text = _strip_artifact_url_userinfo_in_text(text)
-            email_entries = self._run_ordered_local_batch(
-                [
-                    email_match.group(0)
-                    for email_match in _ARTIFACT_EMAIL_RE.finditer(email_scan_text)
-                ],
-                _artifact_email_seed_entry,
-                default_factory=str,
-            )
-            for email in email_entries:
-                if email and email not in batch.emails:
-                    batch.emails.append(email)
-            return batch
-        if family == "phones":
-            phone_entries = self._run_ordered_local_batch(
-                [phone_match.group(1) for phone_match in _ARTIFACT_PHONE_RE.finditer(text)],
-                _artifact_phone_seed_entry,
-                default_factory=str,
-            )
-            for phone in phone_entries:
-                if phone and phone not in batch.phones:
-                    batch.phones.append(phone)
-            return batch
-        if family == "ips":
-            seen_ip_seeds: set[tuple[str, str]] = set()
-            for ip_value, ip_seed_type in _extract_artifact_ip_seeds(text):
-                seed = (ip_value, ip_seed_type)
-                if seed in seen_ip_seeds:
-                    continue
-                seen_ip_seeds.add(seed)
-                batch.ip_seeds.append(seed)
-            return batch
-        if family == "network_hosts":
-            seen_host_seeds: set[tuple[str, str]] = set()
-            host_candidates = _extract_artifact_network_endpoint_seeds(
-                text,
-                source_file=source_file,
-            )
-            if _looks_like_gitreview_text_config_name(source_label):
-                host_candidates.extend(_extract_artifact_gitreview_host_seeds(text))
-            if _artifact_format_label(source_label) == "mta-sts.txt":
-                for mx_host in mta_sts_mx_hosts(text):
-                    host_candidates.extend(_artifact_network_host_seed_entries_for_host(mx_host))
-            if _artifact_format_label(source_label) == "matrix-server":
-                for matrix_host in matrix_server_delegated_hosts(text):
-                    host_candidates.extend(
-                        _artifact_network_host_seed_entries_for_host(matrix_host)
-                    )
-            if _artifact_format_label(source_label) in {"did.json", "did-configuration.json"}:
-                for did_host in did_web_hosts(text):
-                    host_candidates.extend(_artifact_network_host_seed_entries_for_host(did_host))
-            if _artifact_format_label(source_label) == "atproto-did":
-                for did_host in did_web_hosts_from_lines(text):
-                    host_candidates.extend(_artifact_network_host_seed_entries_for_host(did_host))
-            if _artifact_format_label(source_label) == "nostr.json":
-                for relay_host in nostr_relay_hosts(text):
-                    host_candidates.extend(_artifact_network_host_seed_entries_for_host(relay_host))
-            if _artifact_format_label(source_label) in {"terraform", "terraform.json"}:
-                for dns_host in terraform_dns_record_hosts(text):
-                    host_candidates.extend(_artifact_network_host_seed_entries_for_host(dns_host))
-            for host_value, host_seed_type in host_candidates:
-                seed = (host_value, host_seed_type)
-                if seed in seen_host_seeds:
-                    continue
-                seen_host_seeds.add(seed)
-                batch.host_seeds.append(seed)
-            return batch
-        if family == "urls":
-            url_family_batches = self._run_ordered_local_batch(
-                (
-                    "direct",
-                    "relative_routes",
-                    "public_metadata_links",
-                    "host_meta_metadata",
-                    "well_known_link_metadata",
-                    "api_catalog_metadata",
-                    "passkey_metadata",
-                    "agent_card_metadata",
-                    "open_resource_discovery",
-                    "mercure_metadata",
-                    "jmap_metadata",
-                    "webweaver_metadata",
-                    "oauth_metadata",
-                    "jwks_metadata",
-                    "feed_metadata",
-                    "json_feed_metadata",
-                    "opensearch_description",
-                    "saml_metadata",
-                    "web_manifest_metadata",
-                    "helm_index",
-                    "redocly_config",
-                    "package_registry",
-                    "container_images",
-                ),
-                lambda url_family: self._artifact_text_url_family_candidates(
-                    url_family,
-                    text=text,
-                    source_file=source_file,
-                ),
-                default_factory=list,
-            )
-            seen_urls: set[str] = set()
-            for url_family_batch in url_family_batches:
-                for url in url_family_batch:
-                    if url in seen_urls:
-                        continue
-                    seen_urls.add(url)
-                    batch.urls.append(url)
-            return batch
-        if family == "contact_identities":
-            batch.identity_seeds.extend(
-                self._artifact_text_contact_identity_candidates(
-                    text,
-                    source_file=source_file,
-                )
-            )
-            return batch
-        if family == "keys":
-            seen_key_patterns: set[str] = set()
-            eligible_patterns = [
-                pattern
-                for pattern in self._artifact_key_patterns
-                if not pattern.context_required and pattern.confidence in {"high", "medium"}
-            ]
-            pattern_finding_batches = self._run_ordered_local_batch(
-                eligible_patterns,
-                lambda pattern: self._artifact_text_key_pattern_findings(
-                    pattern,
-                    self._artifact_key_patterns,
-                    text,
-                    source_file=source_file,
-                ),
-                default_factory=list,
-            )
-            for pattern_findings in pattern_finding_batches:
-                for finding in pattern_findings:
-                    pat = finding["pattern"]
-                    if pat.name in seen_key_patterns:
-                        continue
-                    seen_key_patterns.add(pat.name)
-                    artifact_key_value = str(finding["key_value"] or "").strip().strip("\"'")
-                    if not artifact_key_value:
-                        continue
-                    domain = ""
-                    redacted = _redact_secret(artifact_key_value)
-                    if pat.name == "azure_storage_key":
-                        account_name = str(
-                            _parse_azure_storage_connection_string(artifact_key_value).get(
-                                "accountname"
-                            )
-                            or ""
-                        ).strip()
-                        if account_name:
-                            domain = account_name.lower()
-                        redacted = _redact_azure_storage_connection_string(artifact_key_value)
-                    source_path = (
-                        str(finding.get("source_url") or source_file).strip() or source_file
-                    )
-                    repo_name = (
-                        str(finding.get("repo_name") or Path(source_path).name).strip()
-                        or Path(source_file).name
-                    )
-                    key_enc, validation_detail = _encrypt_secret_material_for_finding(
-                        artifact_key_value
-                    )
-                    batch.key_findings.append(
-                        {
-                            "service": pat.service,
-                            "domain": domain,
-                            "source_url": source_path,
-                            "pattern_name": pat.name,
-                            "key_redacted": redacted,
-                            "key_enc": key_enc,
-                            "source_backend": str(
-                                finding.get("backend") or "artifact_text_extract"
-                            ),
-                            "repo_name": repo_name,
-                            "validation_detail": validation_detail,
-                        }
-                    )
-            return batch
-        if family == "cloud_assets":
-            cloud_asset_family_batches = self._run_ordered_local_batch(
-                (
-                    "aws_s3",
-                    "aws_kms",
-                    "aws_arns",
-                    "gcs",
-                    "gcp_kms",
-                    "azure_blob",
-                    "azure_key_vault",
-                    "azure_ad_app",
-                    "ads_txt_publisher_accounts",
-                    "app_ads_txt_publisher_accounts",
-                    "sellers_json_seller_accounts",
-                    "ai_plugin_manifests",
-                    "android_assetlinks",
-                    "android_manifest",
-                    "apple_app_site_association",
-                    "web_manifest_related_applications",
-                    "kubernetes_secret_manifests",
-                    "gitops_manifests",
-                    "workflow_manifests",
-                    "cloudflare",
-                ),
-                lambda cloud_family: self._artifact_text_cloud_asset_family_candidates(
-                    cloud_family,
-                    text=text,
-                    source_file=source_file,
-                ),
-                default_factory=list,
-            )
-            seen_cloud_assets: set[tuple[str, str, str]] = set()
-            for cloud_asset_family_batch in cloud_asset_family_batches:
-                for asset in cloud_asset_family_batch:
-                    if asset not in seen_cloud_assets:
-                        seen_cloud_assets.add(asset)
-                        batch.cloud_assets.append(asset)
-            return batch
-        return batch
+        return collect_generic_text_discovery_family_for_processor(
+            self,
+            family,
+            text=text,
+            source_file=source_file,
+            source_hint=source_hint,
+            email_pattern=_ARTIFACT_EMAIL_RE,
+            phone_pattern=_ARTIFACT_PHONE_RE,
+            strip_artifact_url_userinfo_in_text=_strip_artifact_url_userinfo_in_text,
+            artifact_email_seed_entry=_artifact_email_seed_entry,
+            artifact_phone_seed_entry=_artifact_phone_seed_entry,
+            extract_artifact_ip_seeds=_extract_artifact_ip_seeds,
+            extract_artifact_network_endpoint_seeds=_extract_artifact_network_endpoint_seeds,
+            looks_like_gitreview_text_config_name=_looks_like_gitreview_text_config_name,
+            extract_artifact_gitreview_host_seeds=_extract_artifact_gitreview_host_seeds,
+            artifact_format_label=_artifact_format_label,
+            mta_sts_mx_hosts=mta_sts_mx_hosts,
+            matrix_server_delegated_hosts=matrix_server_delegated_hosts,
+            did_web_hosts=did_web_hosts,
+            did_web_hosts_from_lines=did_web_hosts_from_lines,
+            nostr_relay_hosts=nostr_relay_hosts,
+            terraform_dns_record_hosts=terraform_dns_record_hosts,
+            artifact_network_host_seed_entries_for_host=_artifact_network_host_seed_entries_for_host,
+            redact_secret=_redact_secret,
+            parse_azure_storage_connection_string=_parse_azure_storage_connection_string,
+            redact_azure_storage_connection_string=_redact_azure_storage_connection_string,
+            encrypt_secret_material_for_finding=_encrypt_secret_material_for_finding,
+        )
 
     def _artifact_text_key_pattern_findings(
         self,
@@ -22297,38 +18633,13 @@ class ArtifactQueueProcessor:
     ) -> list[dict[str, object]]:
         from forge.utils.intel.secret_finder import _contextual_findings_for_content  # noqa: PLC0415
 
-        match = pattern.regex.search(text)
-        if not match:
-            return []
-        try:
-            key_value = match.group(pattern.group) if pattern.group else match.group(0)
-        except IndexError:
-            return []
-        if not key_value:
-            return []
-        base_finding = {
-            "pattern": pattern,
-            "key_value": str(key_value),
-            "source_url": source_file,
-            "repo_name": Path(source_file).name,
-            "file_path": source_file,
-            "backend": "artifact_text_extract",
-        }
-        findings: list[dict[str, object]] = [base_finding]
-        findings.extend(
-            _contextual_findings_for_content(
-                pattern,
-                patterns,
-                text,
-                {
-                    "source_url": source_file,
-                    "repo_name": Path(source_file).name,
-                    "file_path": source_file,
-                    "backend": "artifact_text_extract",
-                },
-            )
+        return artifact_text_key_pattern_findings_for_processor(
+            pattern,
+            patterns,
+            text,
+            source_file=source_file,
+            contextual_findings_for_content=_contextual_findings_for_content,
         )
-        return findings
 
     def _artifact_text_url_family_candidates(
         self,
@@ -22337,138 +18648,44 @@ class ArtifactQueueProcessor:
         text: str,
         source_file: str,
     ) -> list[str]:
-        if family == "direct":
-            urls: list[str] = []
-            seen_urls: set[str] = set()
-            strip_fragment = _artifact_format_label(source_file) in {"manifest.json", "webmanifest"}
-            helm_index_source = source_looks_like_helm_index(source_file)
-            url_entries = self._run_ordered_local_batch(
-                [url_match.group(0) for url_match in _ARTIFACT_URL_RE.finditer(text)],
-                self._artifact_text_direct_url_candidate,
-                default_factory=str,
-            )
-            for url in url_entries:
-                parsed = urlparse(url)
-                if parsed.scheme not in {"http", "https"} or not parsed.netloc or url in seen_urls:
-                    continue
-                if strip_fragment and parsed.fragment:
-                    url = parsed._replace(fragment="").geturl()
-                    parsed = urlparse(url)
-                    if url in seen_urls:
-                        continue
-                if helm_index_source and url_looks_like_helm_chart_archive(url):
-                    continue
-                seen_urls.add(url)
-                urls.append(url)
-            return urls
-        if family == "relative_routes":
-            return _extract_artifact_relative_route_urls(text, base_url=source_file)
-        if family == "public_metadata_links":
-            return public_metadata_document_urls(
-                text,
-                source_label=_artifact_format_label(source_file),
-                base_url=source_file,
-            )
-        if family == "host_meta_metadata":
-            if _artifact_format_label(source_file) != "host-meta":
-                return []
-            return host_meta_href_urls(text, base_url=source_file)
-        if family == "well_known_link_metadata":
-            if _artifact_format_label(source_file) not in {
-                "host-meta.json",
-                "nodeinfo",
-                "webfinger",
-            }:
-                return []
-            return well_known_link_urls(text, base_url=source_file)
-        if family == "api_catalog_metadata":
-            if _artifact_format_label(source_file) != "api-catalog":
-                return []
-            return api_catalog_urls(text, base_url=source_file)
-        if family == "passkey_metadata":
-            if _artifact_format_label(source_file) != "passkey-endpoints":
-                return []
-            return passkey_endpoint_urls(text, base_url=source_file)
-        if family == "agent_card_metadata":
-            if _artifact_format_label(source_file) != "agent-card.json":
-                return []
-            return agent_card_urls(text, base_url=source_file)
-        if family == "open_resource_discovery":
-            if _artifact_format_label(source_file) != "open-resource-discovery":
-                return []
-            return open_resource_discovery_urls(text, base_url=source_file)
-        if family == "mercure_metadata":
-            if _artifact_format_label(source_file) != "mercure":
-                return []
-            return mercure_urls(text, base_url=source_file)
-        if family == "jmap_metadata":
-            if _artifact_format_label(source_file) != "jmap":
-                return []
-            return jmap_urls(text, base_url=source_file)
-        if family == "webweaver_metadata":
-            if _artifact_format_label(source_file) != "webweaver.json":
-                return []
-            return webweaver_urls(text, base_url=source_file)
-        if family == "oauth_metadata":
-            return oauth_metadata_urls(
-                text,
-                source_label=_artifact_format_label(source_file),
-                base_url=source_file,
-            )
-        if family == "jwks_metadata":
-            return jwks_urls(
-                text,
-                source_label=_artifact_format_label(source_file),
-                base_url=source_file,
-            )
-        if family == "feed_metadata":
-            return feed_urls(
-                text,
-                source_label=_artifact_format_label(source_file),
-                base_url=source_file,
-            )
-        if family == "json_feed_metadata":
-            return json_feed_urls(
-                text,
-                source_label=_artifact_format_label(source_file),
-                base_url=source_file,
-            )
-        if family == "opensearch_description":
-            return opensearch_description_urls(
-                text,
-                source_label=_artifact_format_label(source_file),
-                base_url=source_file,
-            )
-        if family == "saml_metadata":
-            return saml_metadata_urls(
-                text,
-                source_label=_artifact_format_label(source_file),
-                base_url=source_file,
-            )
-        if family == "web_manifest_metadata":
-            return web_manifest_urls(
-                text,
-                source_label=_artifact_format_label(source_file),
-                base_url=source_file,
-            )
-        if family == "helm_index":
-            return helm_index_chart_package_urls(
-                text,
-                source_hint=source_file,
-                base_url=source_file,
-            )
-        if family == "redocly_config":
-            if _artifact_format_label(source_file) != "redocly-config":
-                return []
-            return redocly_config_urls(text, base_url=source_file)
-        if family == "package_registry":
-            return _extract_artifact_package_registry_urls(text)
-        if family == "container_images":
-            return _extract_artifact_container_image_urls(text, source_hint=source_file)
-        return []
+        return artifact_text_url_family_candidates_for_processor(
+            self,
+            family,
+            text=text,
+            source_file=source_file,
+            artifact_url_pattern=_ARTIFACT_URL_RE,
+            artifact_format_label=_artifact_format_label,
+            source_looks_like_helm_index=source_looks_like_helm_index,
+            url_looks_like_helm_chart_archive=url_looks_like_helm_chart_archive,
+            extract_artifact_relative_route_urls=_extract_artifact_relative_route_urls,
+            public_metadata_document_urls=public_metadata_document_urls,
+            host_meta_href_urls=host_meta_href_urls,
+            well_known_link_urls=well_known_link_urls,
+            api_catalog_urls=api_catalog_urls,
+            passkey_endpoint_urls=passkey_endpoint_urls,
+            agent_card_urls=agent_card_urls,
+            open_resource_discovery_urls=open_resource_discovery_urls,
+            mercure_urls=mercure_urls,
+            jmap_urls=jmap_urls,
+            webweaver_urls=webweaver_urls,
+            oauth_metadata_urls=oauth_metadata_urls,
+            jwks_urls=jwks_urls,
+            feed_urls=feed_urls,
+            json_feed_urls=json_feed_urls,
+            opensearch_description_urls=opensearch_description_urls,
+            saml_metadata_urls=saml_metadata_urls,
+            web_manifest_urls=web_manifest_urls,
+            helm_index_chart_package_urls=helm_index_chart_package_urls,
+            redocly_config_urls=redocly_config_urls,
+            extract_artifact_package_registry_urls=_extract_artifact_package_registry_urls,
+            extract_artifact_container_image_urls=_extract_artifact_container_image_urls,
+        )
 
     def _artifact_text_direct_url_candidate(self, raw_url: str) -> str:
-        return _normalize_artifact_text_url(str(raw_url or ""))
+        return artifact_text_direct_url_candidate_for_processor(
+            raw_url,
+            normalize_artifact_text_url=_normalize_artifact_text_url,
+        )
 
     @staticmethod
     def _artifact_text_contact_identity_candidates(
@@ -22476,129 +18693,40 @@ class ArtifactQueueProcessor:
         *,
         source_file: str = "",
     ) -> list[tuple[str, str, str, str]]:
-        source_label = _artifact_format_label(source_file)
-        marker_text = str(text or "")
-        lowered_marker_text = marker_text.lower()
-        if source_label not in {"calendar", "vcard", "vcf"} and not re.search(
-            r"(?im)^\s*begin\s*[:=]\s*v(?:card|calendar)\b",
-            lowered_marker_text,
-        ):
-            return []
-        title = ""
-        title_values = [
-            ArtifactQueueProcessor._calendar_contact_title_line_value(line)
-            for line in marker_text.splitlines()
-        ]
-        for value in title_values:
-            if value:
-                title = value
-                break
-        candidates: list[tuple[str, str, str, str]] = []
-        seen: set[tuple[str, str, str, str]] = set()
-        for raw_line in marker_text.splitlines():
-            entry = ArtifactQueueProcessor._calendar_contact_identity_line_entry(raw_line)
-            if entry is None:
-                continue
-            enriched_entry = (entry[0], entry[1], entry[2], title)
-            if enriched_entry in seen:
-                continue
-            seen.add(enriched_entry)
-            candidates.append(enriched_entry)
-            if len(candidates) >= 40:
-                break
-        return candidates
+        return artifact_text_contact_identity_candidates_for_processor(
+            text,
+            source_file=source_file,
+            artifact_format_label=_artifact_format_label,
+            calendar_contact_title_line_value=ArtifactQueueProcessor._calendar_contact_title_line_value,
+            calendar_contact_identity_line_entry=ArtifactQueueProcessor._calendar_contact_identity_line_entry,
+        )
 
     @staticmethod
     def _calendar_contact_identity_line_entry(raw_line: str) -> tuple[str, str, str] | None:
-        line = str(raw_line or "").strip()
-        if not line:
-            return None
-        separator = ""
-        if ":" in line:
-            raw_key = line.split(":", 1)[0].split(";", 1)[0].strip().lower()
-            if raw_key in {"fn", "n", "org", "title"}:
-                separator = ":"
-        if not separator and "=" in line:
-            separator = "="
-        if not separator:
-            return None
-        key_part, raw_value = line.split(separator, 1)
-        key = key_part.split(";", 1)[0].strip().lower()
-        if key not in {"fn", "n", "org"}:
-            return None
-        value = ArtifactQueueProcessor._calendar_contact_identity_value(key, raw_value)
-        if not value:
-            return None
-        if key in {"fn", "n"}:
-            if not _looks_like_person_name(value):
-                return None
-            return (value, "name", key)
-        if key == "org":
-            return (value, "company", key)
-        return None
+        return calendar_contact_identity_line_entry_for_processor(
+            raw_line,
+            calendar_contact_identity_value=ArtifactQueueProcessor._calendar_contact_identity_value,
+            looks_like_person_name=_looks_like_person_name,
+        )
 
     @staticmethod
     def _calendar_contact_title_line_value(raw_line: str) -> str:
-        line = str(raw_line or "").strip()
-        if not line:
-            return ""
-        separator = ""
-        if ":" in line:
-            raw_key = line.split(":", 1)[0].split(";", 1)[0].strip().lower()
-            if raw_key == "title":
-                separator = ":"
-        if not separator and "=" in line and line.split("=", 1)[0].strip().lower() == "title":
-            separator = "="
-        if not separator:
-            return ""
-        _key_part, raw_value = line.split(separator, 1)
-        return ArtifactQueueProcessor._calendar_contact_identity_value("title", raw_value)
+        return calendar_contact_title_line_value_for_processor(
+            raw_line,
+            calendar_contact_identity_value=ArtifactQueueProcessor._calendar_contact_identity_value,
+        )
 
     @staticmethod
     def _calendar_contact_identity_value(key: str, raw_value: str) -> str:
-        value = str(raw_value or "").strip()
-        if key == "n":
-            parts = [
-                ArtifactQueueProcessor._clean_calendar_contact_identity_value(part)
-                for part in value.split(";")
-            ]
-            family = parts[0] if len(parts) > 0 else ""
-            given = parts[1] if len(parts) > 1 else ""
-            additional = parts[2] if len(parts) > 2 else ""
-            prefix = parts[3] if len(parts) > 3 else ""
-            suffix = parts[4] if len(parts) > 4 else ""
-            value = " ".join(part for part in (prefix, given, additional, family, suffix) if part)
-        elif key == "org":
-            value = next(
-                (
-                    ArtifactQueueProcessor._clean_calendar_contact_identity_value(part)
-                    for part in value.split(";")
-                    if ArtifactQueueProcessor._clean_calendar_contact_identity_value(part)
-                ),
-                "",
-            )
-        else:
-            value = ArtifactQueueProcessor._clean_calendar_contact_identity_value(value)
-        return ArtifactQueueProcessor._clean_calendar_contact_identity_value(value)
+        return calendar_contact_identity_value_for_processor(
+            key,
+            raw_value,
+            clean_calendar_contact_identity_value=ArtifactQueueProcessor._clean_calendar_contact_identity_value,
+        )
 
     @staticmethod
     def _clean_calendar_contact_identity_value(value: str) -> str:
-        text = str(value or "").strip()
-        text = (
-            text.replace("\\n", " ")
-            .replace("\\N", " ")
-            .replace("\\,", ",")
-            .replace("\\;", ";")
-            .replace("\\\\", "\\")
-        )
-        text = re.sub(r"\s+", " ", text).strip(" \t\r\n,;")
-        if len(text) < 2 or len(text) > 96:
-            return ""
-        if "@" in text or "://" in text or any(char in text for char in "<>{}[]"):
-            return ""
-        if not any(char.isalpha() for char in text):
-            return ""
-        return text
+        return clean_calendar_contact_identity_value_for_processor(value)
 
     def _artifact_text_cloud_asset_family_candidates(
         self,
@@ -22607,280 +18735,67 @@ class ArtifactQueueProcessor:
         text: str,
         source_file: str = "",
     ) -> list[tuple[str, str, str]]:
-        if family == "aws_s3":
-            candidates: list[tuple[str, str, str]] = []
-            seen: set[tuple[str, str, str]] = set()
-            for match in _AWS_S3_URI_RE.finditer(text):
-                candidate = ("aws_s3", match.group(1).lower(), "artifact_s3_uri")
-                if candidate in seen:
-                    continue
-                seen.add(candidate)
-                candidates.append(candidate)
-            for match in _AWS_S3_ARN_RE.finditer(text):
-                candidate = ("aws_s3", match.group("bucket").lower(), "artifact_s3_arn")
-                if candidate in seen:
-                    continue
-                seen.add(candidate)
-                candidates.append(candidate)
-            return candidates
-        if family == "aws_kms":
-            candidates = []
-            seen = set()
-            for match in _AWS_KMS_ARN_RE.finditer(text):
-                candidate = ("aws_kms", match.group(0).lower(), "artifact_aws_kms_arn")
-                if candidate in seen:
-                    continue
-                seen.add(candidate)
-                candidates.append(candidate)
-            return candidates
-        if family == "aws_arns":
-            return _aws_generic_arn_cloud_asset_candidates(text)
-        if family == "gcs":
-            candidates: list[tuple[str, str, str]] = []
-            seen: set[tuple[str, str, str]] = set()
-            for match in _GCS_URI_RE.finditer(text):
-                candidate = ("gcs", match.group(1).lower(), "artifact_gcs_uri")
-                if candidate in seen:
-                    continue
-                seen.add(candidate)
-                candidates.append(candidate)
-            for match in _GCS_RESOURCE_BUCKET_RE.finditer(text):
-                candidate = ("gcs", match.group("bucket").lower(), "artifact_gcs_resource")
-                if candidate in seen:
-                    continue
-                seen.add(candidate)
-                candidates.append(candidate)
-            return candidates
-        if family == "gcp_kms":
-            candidates = []
-            seen = set()
-            for match in _GCP_KMS_RESOURCE_RE.finditer(text):
-                candidate = ("gcp_kms", match.group(0), "artifact_gcp_kms_resource")
-                if candidate in seen:
-                    continue
-                seen.add(candidate)
-                candidates.append(candidate)
-            return candidates
-        if family == "azure_blob":
-            return [
-                (
-                    "azure_blob",
-                    f"{match.group('account').lower()}/{match.group('container').lower()}",
-                    "artifact_azure_resource",
-                )
-                for match in _AZURE_BLOB_RESOURCE_ID_RE.finditer(text)
-            ]
-        if family == "azure_key_vault":
-            candidates = []
-            seen = set()
-            for match in _AZURE_KEY_VAULT_URL_RE.finditer(text):
-                vault = str(match.group("vault") or "").lower()
-                family_name = str(match.group("family") or "").lower()
-                key_name = unquote(str(match.group("name") or "")).strip().lower()
-                identifier = vault
-                if family_name and key_name:
-                    identifier = f"{vault}/{family_name}/{key_name}"
-                candidate = ("azure_key_vault", identifier, "artifact_azure_key_vault_url")
-                if candidate in seen:
-                    continue
-                seen.add(candidate)
-                candidates.append(candidate)
-            return candidates
-        if family == "azure_ad_app":
-            candidates = []
-            seen = set()
-            for match in _MICROSOFT_IDENTITY_ASSOCIATION_APP_ID_RE.finditer(text):
-                app_id = str(match.group("app_id") or "").lower()
-                candidate = ("azure_ad_app", app_id, "artifact_microsoft_identity_association")
-                if candidate in seen:
-                    continue
-                seen.add(candidate)
-                candidates.append(candidate)
-            return candidates
-        if family == "ads_txt_publisher_accounts":
-            if _artifact_format_label(source_file) != "ads.txt":
-                return []
-            return ads_txt_publisher_account_assets(text)
-        if family == "app_ads_txt_publisher_accounts":
-            if _artifact_format_label(source_file) != "app-ads.txt":
-                return []
-            return ads_txt_publisher_account_assets(text, app_ads=True)
-        if family == "sellers_json_seller_accounts":
-            if _artifact_format_label(source_file) != "sellers.json":
-                return []
-            return sellers_json_seller_account_assets(text)
-        if family == "ai_plugin_manifests":
-            if _artifact_format_label(source_file) != "ai-plugin.json":
-                return []
-            return ai_plugin_manifest_assets(text)
-        if family == "android_assetlinks":
-            if _artifact_format_label(source_file) != "assetlinks.json":
-                return []
-            return [
-                (
-                    "mobile_android_package",
-                    package_name,
-                    "artifact_assetlinks_android_package",
-                )
-                for package_name in assetlinks_android_packages(text)
-            ]
-        if family == "android_manifest":
-            if (
-                _artifact_format_label(source_file) != "android-manifest"
-                and "<manifest" not in text[:2048].lower()
-            ):
-                return []
-            return [
-                (
-                    "mobile_android_package",
-                    package_name,
-                    "artifact_android_manifest_package",
-                )
-                for package_name in android_manifest_package_names(text)
-            ]
-        if family == "apple_app_site_association":
-            if _artifact_format_label(source_file) != "apple-app-site-association":
-                return []
-            return [
-                ("mobile_ios_app", app_id, "artifact_apple_app_site_association")
-                for app_id in aasa_ios_app_ids(text)
-            ]
-        if family == "web_manifest_related_applications":
-            if _artifact_format_label(source_file) not in {"manifest.json", "webmanifest"}:
-                return []
-            return web_manifest_related_application_assets(text)
-        if family == "kubernetes_secret_manifests":
-            candidates = []
-            seen = set()
-            asset_type_map = {
-                "external-secret": "external_secret",
-                "secret-store": "external_secret_store",
-                "cluster-secret-store": "cluster_secret_store",
-                "sealed-secret": "sealed_secret",
-                "secret-provider-class": "secret_provider_class",
-                "aws-cognito-user-pool": "aws_cognito_user_pool",
-                "aws-cognito-identity-pool": "aws_cognito_identity_pool",
-                "aws-cognito-app-client": "aws_cognito_app_client",
-                "aws-appsync-api": "aws_appsync_api",
-                "aws-pinpoint-app": "aws_pinpoint_app",
-                "aws-ecs-task-definition": "aws_ecs_task_definition",
-                "aws-lambda-function": "aws_lambda_function",
-                "aws-lambda-layer": "aws_lambda_layer",
-                "aws-iam-role": "aws_iam_role",
-                "aws-kms-key": "aws_kms_key",
-                "aws-efs-access-point": "aws_efs_access_point",
-                "aws-sqs-queue": "aws_sqs_queue",
-                "aws-sns-topic": "aws_sns_topic",
-                "aws-secretsmanager": "aws_secretsmanager",
-                "aws-parameterstore": "aws_parameterstore",
-                "gcp-secretmanager": "gcp_secretmanager",
-                "hashicorp-vault": "hashicorp_vault",
-            }
-            amplify_uri_families = {
-                "aws-cognito-user-pool",
-                "aws-cognito-identity-pool",
-                "aws-cognito-app-client",
-                "aws-appsync-api",
-                "aws-pinpoint-app",
-            }
-            for match in _KUBERNETES_SECRET_MANIFEST_ASSET_URI_RE.finditer(text):
-                family_name = str(match.group("family") or "").lower()
-                asset_type = asset_type_map.get(family_name)
-                raw_identifier = unquote(str(match.group("identifier") or "")).strip().strip("/")
-                identifier = (
-                    raw_identifier
-                    if family_name in amplify_uri_families
-                    else raw_identifier.lower()
-                )
-                if not asset_type or not identifier:
-                    continue
-                source = (
-                    "artifact_amplify_client_config"
-                    if family_name in amplify_uri_families
-                    else "artifact_kubernetes_secret_manifest"
-                )
-                candidate = (asset_type, identifier, source)
-                if candidate in seen:
-                    continue
-                seen.add(candidate)
-                candidates.append(candidate)
-            return candidates
-        if family == "gitops_manifests":
-            candidates = []
-            seen = set()
-            asset_type_map = {
-                "argo-application": "argo_application",
-                "argo-applicationset": "argo_applicationset",
-                "flux-gitrepository": "flux_gitrepository",
-                "flux-helmrepository": "flux_helmrepository",
-                "flux-ocirepository": "flux_ocirepository",
-                "flux-kustomization": "flux_kustomization",
-                "flux-bucket": "flux_bucket",
-                "crossplane-providerconfig": "crossplane_providerconfig",
-                "crossplane-resource": "crossplane_resource",
-                "crossplane-composition": "crossplane_composition",
-                "crossplane-xrd": "crossplane_xrd",
-            }
-            for match in _GITOPS_MANIFEST_ASSET_URI_RE.finditer(text):
-                family_name = str(match.group("family") or "").lower()
-                asset_type = asset_type_map.get(family_name)
-                identifier = (
-                    unquote(str(match.group("identifier") or "")).strip().lower().strip("/")
-                )
-                if not asset_type or not identifier:
-                    continue
-                candidate = (asset_type, identifier, "artifact_gitops_manifest")
-                if candidate in seen:
-                    continue
-                seen.add(candidate)
-                candidates.append(candidate)
-            return candidates
-        if family == "workflow_manifests":
-            candidates = []
-            seen = set()
-            asset_type_map = {
-                "appveyor-pipeline": "appveyor_pipeline",
-                "azure-pipeline": "azure_pipeline",
-                "bitbucket-pipeline": "bitbucket_pipeline",
-                "buildkite-pipeline": "buildkite_pipeline",
-                "circleci-pipeline": "circleci_pipeline",
-                "drone-pipeline": "drone_pipeline",
-                "gitlab-pipeline": "gitlab_pipeline",
-                "github-workflow": "github_workflow",
-                "github-action": "github_action",
-                "tekton-pipeline": "tekton_pipeline",
-                "tekton-task": "tekton_task",
-                "tekton-pipelinerun": "tekton_pipelinerun",
-                "tekton-taskrun": "tekton_taskrun",
-                "woodpecker-pipeline": "woodpecker_pipeline",
-                "argo-workflow": "argo_workflow",
-                "argo-workflowtemplate": "argo_workflowtemplate",
-                "argo-cronworkflow": "argo_cronworkflow",
-                "argo-clusterworkflowtemplate": "argo_clusterworkflowtemplate",
-            }
-            for match in _WORKFLOW_MANIFEST_ASSET_URI_RE.finditer(text):
-                family_name = str(match.group("family") or "").lower()
-                asset_type = asset_type_map.get(family_name)
-                identifier = (
-                    unquote(str(match.group("identifier") or "")).strip().lower().strip("/")
-                )
-                if not asset_type or not identifier:
-                    continue
-                candidate = (asset_type, identifier, "artifact_workflow_manifest")
-                if candidate in seen:
-                    continue
-                seen.add(candidate)
-                candidates.append(candidate)
-            return candidates
-        if family == "cloudflare":
-            return [
-                (
-                    f"cloudflare_{match.group(1).lower()}",
-                    match.group(2).lower(),
-                    "artifact_cloudflare_config",
-                )
-                for match in _CLOUDFLARE_STRUCTURED_ASSET_URI_RE.finditer(text)
-            ]
+        aws_candidates = artifact_text_aws_cloud_asset_family_candidates_for_processor(
+            family,
+            text=text,
+            aws_s3_uri_pattern=_AWS_S3_URI_RE,
+            aws_s3_arn_pattern=_AWS_S3_ARN_RE,
+            aws_kms_arn_pattern=_AWS_KMS_ARN_RE,
+            aws_generic_arn_cloud_asset_candidates=_aws_generic_arn_cloud_asset_candidates,
+        )
+        if aws_candidates is not None:
+            return aws_candidates
+        gcp_candidates = artifact_text_gcp_cloud_asset_family_candidates_for_processor(
+            family,
+            text=text,
+            gcs_uri_pattern=_GCS_URI_RE,
+            gcs_resource_bucket_pattern=_GCS_RESOURCE_BUCKET_RE,
+            gcp_kms_resource_pattern=_GCP_KMS_RESOURCE_RE,
+        )
+        if gcp_candidates is not None:
+            return gcp_candidates
+        azure_candidates = artifact_text_azure_cloud_asset_family_candidates_for_processor(
+            family,
+            text=text,
+            azure_blob_resource_id_pattern=_AZURE_BLOB_RESOURCE_ID_RE,
+            azure_key_vault_url_pattern=_AZURE_KEY_VAULT_URL_RE,
+            microsoft_identity_association_app_id_pattern=_MICROSOFT_IDENTITY_ASSOCIATION_APP_ID_RE,
+        )
+        if azure_candidates is not None:
+            return azure_candidates
+        app_manifest_candidates = artifact_text_app_manifest_family_candidates_for_processor(
+            family,
+            text=text,
+            source_file=source_file,
+            artifact_format_label=_artifact_format_label,
+            ads_txt_publisher_account_assets=ads_txt_publisher_account_assets,
+            sellers_json_seller_account_assets=sellers_json_seller_account_assets,
+            ai_plugin_manifest_assets=ai_plugin_manifest_assets,
+            assetlinks_android_packages=assetlinks_android_packages,
+            android_manifest_package_names=android_manifest_package_names,
+            aasa_ios_app_ids=aasa_ios_app_ids,
+            web_manifest_related_application_assets=web_manifest_related_application_assets,
+        )
+        if app_manifest_candidates is not None:
+            return app_manifest_candidates
+        orchestration_manifest_candidates = (
+            artifact_text_orchestration_manifest_family_candidates_for_processor(
+                family,
+                text=text,
+                kubernetes_secret_manifest_asset_uri_pattern=_KUBERNETES_SECRET_MANIFEST_ASSET_URI_RE,
+                gitops_manifest_asset_uri_pattern=_GITOPS_MANIFEST_ASSET_URI_RE,
+                workflow_manifest_asset_uri_pattern=_WORKFLOW_MANIFEST_ASSET_URI_RE,
+            )
+        )
+        if orchestration_manifest_candidates is not None:
+            return orchestration_manifest_candidates
+        cloudflare_candidates = artifact_text_cloudflare_asset_family_candidates_for_processor(
+            family,
+            text=text,
+            cloudflare_structured_asset_uri_pattern=_CLOUDFLARE_STRUCTURED_ASSET_URI_RE,
+        )
+        if cloudflare_candidates is not None:
+            return cloudflare_candidates
         return []
 
     def _merge_artifact_text_discovery_batch(
@@ -22888,98 +18803,12 @@ class ArtifactQueueProcessor:
         target: ArtifactTextDiscoveryBatch,
         source: ArtifactTextDiscoveryBatch,
     ) -> None:
-        merge_entries = self._run_ordered_local_batch(
-            (
-                "emails",
-                "phones",
-                "ip_seeds",
-                "host_seeds",
-                "urls",
-                "identity_seeds",
-                "key_findings",
-                "cloud_assets",
-            ),
-            lambda family: self._artifact_text_discovery_merge_family_entry(
-                family,
-                source=source,
-            ),
-            default_factory=dict,
+        merge_artifact_text_discovery_batch(
+            target,
+            source,
+            run_ordered_batch=self._run_ordered_local_batch,
+            artifact_text_discovery_merge_family_entry=self._artifact_text_discovery_merge_family_entry,
         )
-        for merge_entry in merge_entries:
-            if not isinstance(merge_entry, dict):
-                continue
-            family = str(merge_entry.get("family") or "").strip()
-            values = list(merge_entry.get("values") or [])
-            if family == "emails":
-                for email in values:
-                    if email not in target.emails:
-                        target.emails.append(email)
-                continue
-            if family == "phones":
-                for phone in values:
-                    if phone not in target.phones:
-                        target.phones.append(phone)
-                continue
-            if family == "ip_seeds":
-                seen_ip_seeds = set(target.ip_seeds)
-                for ip_seed in values:
-                    if not isinstance(ip_seed, tuple) or len(ip_seed) != 2:
-                        continue
-                    if ip_seed in seen_ip_seeds:
-                        continue
-                    seen_ip_seeds.add(ip_seed)
-                    target.ip_seeds.append(ip_seed)
-                continue
-            if family == "host_seeds":
-                seen_host_seeds = set(target.host_seeds)
-                for host_seed in values:
-                    if not isinstance(host_seed, tuple) or len(host_seed) != 2:
-                        continue
-                    if host_seed in seen_host_seeds:
-                        continue
-                    seen_host_seeds.add(host_seed)
-                    target.host_seeds.append(host_seed)
-                continue
-            if family == "urls":
-                for url in values:
-                    if url not in target.urls:
-                        target.urls.append(url)
-                continue
-            if family == "identity_seeds":
-                seen_identity_seeds = set(target.identity_seeds)
-                for identity_seed in values:
-                    if not isinstance(identity_seed, tuple) or len(identity_seed) != 4:
-                        continue
-                    if identity_seed in seen_identity_seeds:
-                        continue
-                    seen_identity_seeds.add(identity_seed)
-                    target.identity_seeds.append(identity_seed)
-                continue
-            if family == "key_findings":
-                seen_key_patterns = {
-                    str(finding.get("pattern_name") or "").strip()
-                    for finding in target.key_findings
-                    if str(finding.get("pattern_name") or "").strip()
-                }
-                for finding in values:
-                    if not isinstance(finding, dict):
-                        continue
-                    pattern_name = str(finding.get("pattern_name") or "").strip()
-                    if pattern_name and pattern_name in seen_key_patterns:
-                        continue
-                    if pattern_name:
-                        seen_key_patterns.add(pattern_name)
-                    target.key_findings.append(dict(finding))
-                continue
-            if family == "cloud_assets":
-                seen_cloud_assets = set(target.cloud_assets)
-                for cloud_asset in values:
-                    if not isinstance(cloud_asset, tuple) or len(cloud_asset) != 3:
-                        continue
-                    if cloud_asset in seen_cloud_assets:
-                        continue
-                    seen_cloud_assets.add(cloud_asset)
-                    target.cloud_assets.append(cloud_asset)
 
     @staticmethod
     def _artifact_text_discovery_merge_family_entry(
@@ -22987,90 +18816,7 @@ class ArtifactQueueProcessor:
         *,
         source: ArtifactTextDiscoveryBatch,
     ) -> dict[str, Any]:
-        if family == "emails":
-            return {
-                "family": family,
-                "values": [str(email).strip() for email in source.emails if str(email).strip()],
-            }
-        if family == "phones":
-            return {
-                "family": family,
-                "values": [str(phone).strip() for phone in source.phones if str(phone).strip()],
-            }
-        if family == "ip_seeds":
-            values: list[tuple[str, str]] = []
-            for ip_seed in source.ip_seeds:
-                if not isinstance(ip_seed, tuple) or len(ip_seed) != 2:
-                    continue
-                ip_value, ip_seed_type = ip_seed
-                ip_value_text = str(ip_value).strip()
-                ip_seed_type_text = str(ip_seed_type).strip()
-                if ip_value_text and ip_seed_type_text:
-                    values.append((ip_value_text, ip_seed_type_text))
-            return {
-                "family": family,
-                "values": values,
-            }
-        if family == "host_seeds":
-            values: list[tuple[str, str]] = []
-            for host_seed in source.host_seeds:
-                if not isinstance(host_seed, tuple) or len(host_seed) != 2:
-                    continue
-                host_value, host_seed_type = host_seed
-                host_value_text = str(host_value).strip()
-                host_seed_type_text = str(host_seed_type).strip()
-                if host_value_text and host_seed_type_text:
-                    values.append((host_value_text, host_seed_type_text))
-            return {
-                "family": family,
-                "values": values,
-            }
-        if family == "urls":
-            return {
-                "family": family,
-                "values": [str(url).strip() for url in source.urls if str(url).strip()],
-            }
-        if family == "identity_seeds":
-            values: list[tuple[str, str, str, str]] = []
-            for identity_seed in source.identity_seeds:
-                if not isinstance(identity_seed, tuple) or len(identity_seed) != 4:
-                    continue
-                seed_value, seed_type, contact_field, contact_title = identity_seed
-                seed_value_text = str(seed_value).strip()
-                seed_type_text = str(seed_type).strip()
-                contact_field_text = str(contact_field).strip()
-                contact_title_text = str(contact_title).strip()
-                if seed_value_text and seed_type_text and contact_field_text:
-                    values.append(
-                        (
-                            seed_value_text,
-                            seed_type_text,
-                            contact_field_text,
-                            contact_title_text,
-                        )
-                    )
-            return {
-                "family": family,
-                "values": values,
-            }
-        if family == "key_findings":
-            return {"family": family, "values": [dict(finding) for finding in source.key_findings]}
-        if family == "cloud_assets":
-            values: list[tuple[str, str, str]] = []
-            for cloud_asset in source.cloud_assets:
-                if not isinstance(cloud_asset, tuple) or len(cloud_asset) != 3:
-                    continue
-                asset_type, identifier, source_name = cloud_asset
-                asset_type_text = str(asset_type).strip()
-                identifier_text = str(identifier).strip()
-                source_name_text = str(source_name).strip()
-                if asset_type_text and identifier_text and source_name_text:
-                    values.append((asset_type_text, identifier_text, source_name_text))
-            return {
-                "family": family,
-                "values": values,
-            }
-        return {"family": family, "values": []}
+        return artifact_text_discovery_merge_family_entry(family, source=source)
 
     def _artifact_text_email_persistence_entry(
         self,
@@ -23078,10 +18824,7 @@ class ArtifactQueueProcessor:
         *,
         source_file: str,
     ) -> dict[str, Any] | None:
-        return {
-            "email": email,
-            "metadata": {"rule": "artifact_text_extract", "source_file": source_file},
-        }
+        return artifact_text_email_persistence_entry(email, source_file=source_file)
 
     def _artifact_text_phone_persistence_entry(
         self,
@@ -23089,10 +18832,7 @@ class ArtifactQueueProcessor:
         *,
         source_file: str,
     ) -> dict[str, Any] | None:
-        return {
-            "phone": phone,
-            "metadata": {"rule": "artifact_text_extract", "source_file": source_file},
-        }
+        return artifact_text_phone_persistence_entry(phone, source_file=source_file)
 
     def _artifact_text_ip_persistence_entry(
         self,
@@ -23100,12 +18840,7 @@ class ArtifactQueueProcessor:
         *,
         source_file: str,
     ) -> dict[str, Any] | None:
-        ip_value, ip_seed_type = ip_seed
-        return {
-            "ip_value": ip_value,
-            "ip_seed_type": ip_seed_type,
-            "metadata": {"rule": "artifact_text_extract", "source_file": source_file},
-        }
+        return artifact_text_ip_persistence_entry(ip_seed, source_file=source_file)
 
     def _artifact_text_host_persistence_entry(
         self,
@@ -23113,13 +18848,7 @@ class ArtifactQueueProcessor:
         *,
         source_file: str,
     ) -> dict[str, Any] | None:
-        host_value, host_seed_type = host_seed
-        return {
-            "host_value": host_value,
-            "host_seed_type": host_seed_type,
-            "confidence": 0.64 if host_seed_type == "subdomain" else 0.6,
-            "metadata": {"rule": "artifact_network_dsn_extract", "source_file": source_file},
-        }
+        return artifact_text_host_persistence_entry(host_seed, source_file=source_file)
 
     def _artifact_text_url_persistence_entry(
         self,
@@ -23127,13 +18856,11 @@ class ArtifactQueueProcessor:
         *,
         source_file: str,
     ) -> dict[str, Any] | None:
-        return {
-            "url": url,
-            "relation_metadata": _helm_index_chart_url_metadata(
-                url,
-                source_file=source_file,
-            ),
-        }
+        return artifact_text_url_persistence_entry(
+            url,
+            source_file=source_file,
+            helm_index_chart_url_metadata=_helm_index_chart_url_metadata,
+        )
 
     def _artifact_text_identity_seed_persistence_entry(
         self,
@@ -23141,41 +18868,13 @@ class ArtifactQueueProcessor:
         *,
         source_file: str,
     ) -> dict[str, Any] | None:
-        seed_value, seed_type, contact_field, contact_title = identity_seed
-        if seed_type not in {"name", "company"}:
-            return None
-        confidence = {"company": 0.72, "name": 0.7}.get(seed_type, 0.5)
-        metadata = {
-            "rule": "calendar_contact_explicit_field",
-            "source_file": source_file,
-            "contact_field": contact_field,
-            "normalized_value": seed_value,
-            "artifact_contact_identity": True,
-        }
-        if contact_title:
-            metadata["contact_title"] = contact_title
-        return {
-            "seed_value": seed_value,
-            "seed_type": seed_type,
-            "confidence": confidence,
-            "metadata": metadata,
-        }
+        return artifact_text_identity_seed_persistence_entry(identity_seed, source_file=source_file)
 
     def _artifact_text_key_finding_persistence_entry(
         self,
         finding: dict[str, object],
     ) -> dict[str, Any] | None:
-        return {
-            "service": str(finding["service"]),
-            "domain": str(finding["domain"]),
-            "source_url": str(finding["source_url"]),
-            "pattern_name": str(finding["pattern_name"]),
-            "key_redacted": str(finding["key_redacted"]),
-            "key_enc": None if finding.get("key_enc") is None else str(finding["key_enc"]),
-            "source_backend": str(finding["source_backend"]),
-            "repo_name": str(finding["repo_name"]),
-            "validation_detail": str(finding.get("validation_detail") or "artifact_queue_ingest"),
-        }
+        return artifact_text_key_finding_persistence_entry(finding)
 
     def _artifact_text_cloud_asset_persistence_entry(
         self,
@@ -23183,16 +18882,7 @@ class ArtifactQueueProcessor:
         *,
         source_file: str,
     ) -> dict[str, Any] | None:
-        asset_type, identifier, source = cloud_asset
-        return {
-            "asset_type": asset_type,
-            "identifier": identifier,
-            "source": source,
-            "relation_metadata": {
-                "rule": source,
-                "source_file": source_file,
-            },
-        }
+        return artifact_text_cloud_asset_persistence_entry(cloud_asset, source_file=source_file)
 
     def _persist_generic_text_discovery_batch(
         self,
@@ -23202,250 +18892,13 @@ class ArtifactQueueProcessor:
         source_seed_id: int | None = None,
         artifact_context: dict[str, Any] | None = None,
     ) -> int:
-        inserted = 0
-        source_file = batch.source_file
-        child_depth = self._artifact_child_seed_depth(con, source_seed_id)
-        email_entries = self._run_ordered_local_batch(
-            batch.emails,
-            lambda email: self._artifact_text_email_persistence_entry(
-                email,
-                source_file=source_file,
-            ),
-            default_factory=lambda: None,
+        return persist_generic_text_discovery_batch_for_processor(
+            self,
+            con,
+            batch,
+            source_seed_id=source_seed_id,
+            artifact_context=artifact_context,
         )
-        for email_entry in email_entries:
-            if not isinstance(email_entry, dict):
-                continue
-            if self._insert_email(
-                con,
-                str(email_entry["email"]),
-                source="artifact",
-                depth=child_depth,
-            ):
-                inserted += 1
-            self._link_artifact_source_seed(
-                con,
-                source_seed_id,
-                str(email_entry["email"]),
-                "email",
-                confidence=0.74,
-                metadata=self._merge_artifact_relation_context(
-                    dict(email_entry["metadata"]),
-                    artifact_context,
-                ),
-            )
-
-        phone_entries = self._run_ordered_local_batch(
-            batch.phones,
-            lambda phone: self._artifact_text_phone_persistence_entry(
-                phone,
-                source_file=source_file,
-            ),
-            default_factory=lambda: None,
-        )
-        for phone_entry in phone_entries:
-            if not isinstance(phone_entry, dict):
-                continue
-            if self._insert_seed(
-                con,
-                str(phone_entry["phone"]),
-                "phone",
-                source="artifact",
-                confidence=0.66,
-                depth=child_depth,
-            ):
-                inserted += 1
-            self._link_artifact_source_seed(
-                con,
-                source_seed_id,
-                str(phone_entry["phone"]),
-                "phone",
-                confidence=0.66,
-                metadata=self._merge_artifact_relation_context(
-                    dict(phone_entry["metadata"]),
-                    artifact_context,
-                ),
-            )
-
-        ip_entries = self._run_ordered_local_batch(
-            batch.ip_seeds,
-            lambda ip_seed: self._artifact_text_ip_persistence_entry(
-                ip_seed,
-                source_file=source_file,
-            ),
-            default_factory=lambda: None,
-        )
-        for ip_entry in ip_entries:
-            if not isinstance(ip_entry, dict):
-                continue
-            if self._insert_seed(
-                con,
-                str(ip_entry["ip_value"]),
-                str(ip_entry["ip_seed_type"]),
-                source="artifact",
-                confidence=0.64,
-                depth=child_depth,
-            ):
-                inserted += 1
-            self._link_artifact_source_seed(
-                con,
-                source_seed_id,
-                str(ip_entry["ip_value"]),
-                str(ip_entry["ip_seed_type"]),
-                confidence=0.64,
-                metadata=self._merge_artifact_relation_context(
-                    dict(ip_entry["metadata"]),
-                    artifact_context,
-                ),
-            )
-
-        host_entries = self._run_ordered_local_batch(
-            batch.host_seeds,
-            lambda host_seed: self._artifact_text_host_persistence_entry(
-                host_seed,
-                source_file=source_file,
-            ),
-            default_factory=lambda: None,
-        )
-        for host_entry in host_entries:
-            if not isinstance(host_entry, dict):
-                continue
-            confidence = float(host_entry["confidence"])
-            if self._insert_seed(
-                con,
-                str(host_entry["host_value"]),
-                str(host_entry["host_seed_type"]),
-                source="artifact",
-                confidence=confidence,
-                depth=child_depth,
-            ):
-                inserted += 1
-            self._link_artifact_source_seed(
-                con,
-                source_seed_id,
-                str(host_entry["host_value"]),
-                str(host_entry["host_seed_type"]),
-                confidence=confidence,
-                metadata=self._merge_artifact_relation_context(
-                    dict(host_entry["metadata"]),
-                    artifact_context,
-                ),
-            )
-
-        url_entries = self._run_ordered_local_batch(
-            batch.urls,
-            lambda url: self._artifact_text_url_persistence_entry(
-                url,
-                source_file=source_file,
-            ),
-            default_factory=lambda: None,
-        )
-        for url_entry in url_entries:
-            if not isinstance(url_entry, dict):
-                continue
-            inserted += self._store_artifact_url_seed(
-                con,
-                str(url_entry["url"]),
-                source="artifact",
-                confidence=0.68,
-                source_seed_id=source_seed_id,
-                depth=child_depth,
-                relation_metadata=self._merge_artifact_relation_context(
-                    dict(url_entry["relation_metadata"]),
-                    artifact_context,
-                ),
-            )
-
-        identity_entries = self._run_ordered_local_batch(
-            batch.identity_seeds,
-            lambda identity_seed: self._artifact_text_identity_seed_persistence_entry(
-                identity_seed,
-                source_file=source_file,
-            ),
-            default_factory=lambda: None,
-        )
-        for identity_entry in identity_entries:
-            if not isinstance(identity_entry, dict):
-                continue
-            seed_value = str(identity_entry["seed_value"])
-            seed_type = str(identity_entry["seed_type"])
-            confidence = float(identity_entry["confidence"])
-            metadata = self._merge_artifact_relation_context(
-                dict(identity_entry["metadata"]),
-                artifact_context,
-            )
-            if self._insert_seed(
-                con,
-                seed_value,
-                seed_type,
-                source="artifact",
-                confidence=confidence,
-                depth=child_depth,
-            ):
-                inserted += 1
-            self._merge_artifact_metadata_into_seed(
-                con,
-                seed_value,
-                seed_type,
-                metadata,
-            )
-            self._link_artifact_source_seed(
-                con,
-                source_seed_id,
-                seed_value,
-                seed_type,
-                confidence=confidence,
-                metadata=metadata,
-            )
-
-        key_entries = self._run_ordered_local_batch(
-            batch.key_findings,
-            self._artifact_text_key_finding_persistence_entry,
-            default_factory=lambda: None,
-        )
-        for key_entry in key_entries:
-            if not isinstance(key_entry, dict):
-                continue
-            self._store_key_finding(
-                con,
-                service=str(key_entry["service"]),
-                domain=str(key_entry["domain"]),
-                source_url=str(key_entry["source_url"]),
-                pattern_name=str(key_entry["pattern_name"]),
-                key_redacted=str(key_entry["key_redacted"]),
-                key_enc=(None if key_entry.get("key_enc") is None else str(key_entry["key_enc"])),
-                source_backend=str(key_entry["source_backend"]),
-                repo_name=str(key_entry["repo_name"]),
-                validation_detail=str(
-                    key_entry.get("validation_detail") or "artifact_queue_ingest"
-                ),
-            )
-
-        cloud_asset_entries = self._run_ordered_local_batch(
-            batch.cloud_assets,
-            lambda cloud_asset: self._artifact_text_cloud_asset_persistence_entry(
-                cloud_asset,
-                source_file=source_file,
-            ),
-            default_factory=lambda: None,
-        )
-        for cloud_asset_entry in cloud_asset_entries:
-            if not isinstance(cloud_asset_entry, dict):
-                continue
-            cloud_metadata = self._artifact_cloud_asset_metadata(
-                con,
-                source_seed_id=source_seed_id,
-                relation_metadata=dict(cloud_asset_entry["relation_metadata"]),
-                artifact_context=artifact_context,
-            )
-            self._store_cloud_asset_reference(
-                con,
-                asset_type=str(cloud_asset_entry["asset_type"]),
-                identifier=str(cloud_asset_entry["identifier"]),
-                source=str(cloud_asset_entry["source"]),
-                metadata=cloud_metadata,
-            )
-        return inserted
 
     def _store_generic_text_discoveries(
         self,
@@ -23455,13 +18908,11 @@ class ArtifactQueueProcessor:
         source_file: str,
         source_seed_id: int | None = None,
     ) -> int:
-        batch = self._collect_generic_text_discoveries(
+        return store_generic_text_discoveries_for_processor(
+            self,
+            con,
             text,
             source_file=source_file,
-        )
-        return self._persist_generic_text_discovery_batch(
-            con,
-            batch,
             source_seed_id=source_seed_id,
         )
 
@@ -23471,48 +18922,14 @@ class ArtifactQueueProcessor:
         *,
         relation_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
-        if _artifact_url_looks_templated(url) or _artifact_url_looks_standards_namespace(url):
-            return None
-        parsed = urlparse(url)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            return None
-        normalized_relation_metadata = dict(relation_metadata or {})
-        hostname = str(parsed.hostname or "").strip().lower().strip(".")
-        seed_type = "apk_url" if _is_mobile_bundle_url(url) else "url"
-        family_entries = self._run_ordered_local_batch(
-            ("social_pivots", "related_seeds", "cloud_assets"),
-            lambda family: self._artifact_url_seed_family_entry(
-                family,
-                url=url,
-                hostname=hostname,
-                relation_metadata=normalized_relation_metadata,
-            ),
-            default_factory=dict,
+        return artifact_url_seed_persistence_entry_for_processor(
+            self,
+            url,
+            relation_metadata=relation_metadata,
+            artifact_url_looks_templated=_artifact_url_looks_templated,
+            artifact_url_looks_standards_namespace=_artifact_url_looks_standards_namespace,
+            is_mobile_bundle_url=_is_mobile_bundle_url,
         )
-        prepared_family_entries = self._run_ordered_local_batch(
-            list(enumerate(family_entries)),
-            self._artifact_url_seed_family_merge_entry,
-            default_factory=lambda: None,
-        )
-        entry: dict[str, Any] = {
-            "url": url,
-            "seed_type": seed_type,
-            "relation_metadata": normalized_relation_metadata,
-            "social_pivot_entries": [],
-            "related_seed_entries": [],
-            "cloud_asset_entries": [],
-        }
-        for family_entry in prepared_family_entries:
-            if not isinstance(family_entry, dict):
-                continue
-            entry["social_pivot_entries"].extend(
-                list(family_entry.get("social_pivot_entries") or [])
-            )
-            entry["related_seed_entries"].extend(
-                list(family_entry.get("related_seed_entries") or [])
-            )
-            entry["cloud_asset_entries"].extend(list(family_entry.get("cloud_asset_entries") or []))
-        return entry
 
     def _artifact_url_seed_family_entry(
         self,
@@ -23522,56 +18939,30 @@ class ArtifactQueueProcessor:
         hostname: str,
         relation_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        if family == "social_pivots":
-            return {
-                "social_pivot_entries": self._artifact_url_social_pivot_entries(
-                    url,
-                    relation_metadata=relation_metadata,
-                )
-            }
-        if family == "related_seeds":
-            return {"related_seed_entries": self._artifact_url_related_seed_entries(hostname)}
-        if family == "cloud_assets":
-            return {
-                "cloud_asset_entries": self._artifact_url_cloud_asset_entries(
-                    url, source="artifact_url_extract"
-                )
-            }
-        return {}
+        return artifact_url_seed_family_entry_for_processor(
+            self,
+            family,
+            url=url,
+            hostname=hostname,
+            relation_metadata=relation_metadata,
+        )
 
     @staticmethod
     def _artifact_url_seed_family_merge_entry(
         family_entry: tuple[int, dict[str, Any]],
     ) -> dict[str, list[dict[str, Any]]] | None:
-        _family_index, entry = family_entry
-        if not isinstance(entry, dict):
-            return None
-        return {
-            "social_pivot_entries": list(entry.get("social_pivot_entries") or []),
-            "related_seed_entries": list(entry.get("related_seed_entries") or []),
-            "cloud_asset_entries": list(entry.get("cloud_asset_entries") or []),
-        }
+        return artifact_url_seed_family_merge_entry(family_entry)
 
     def _artifact_url_related_seed_entries(
         self,
         hostname: str,
     ) -> list[dict[str, Any]]:
-        normalized_hostname = str(hostname or "").strip().lower().strip(".")
-        if (
-            not normalized_hostname
-            or _is_social_platform_host(normalized_hostname)
-            or _is_managed_cloud_provider_host(normalized_hostname)
-        ):
-            return []
-        root_domain = _normalize_root_domain(normalized_hostname)
-        if not root_domain:
-            return []
-        if normalized_hostname == root_domain:
-            return [{"seed_value": root_domain, "seed_type": "domain", "confidence": 0.6}]
-        return [
-            {"seed_value": normalized_hostname, "seed_type": "subdomain", "confidence": 0.64},
-            {"seed_value": root_domain, "seed_type": "domain", "confidence": 0.6},
-        ]
+        return artifact_url_related_seed_entries_for_processor(
+            hostname,
+            is_social_platform_host=_is_social_platform_host,
+            is_managed_cloud_provider_host=_is_managed_cloud_provider_host,
+            normalize_root_domain=_normalize_root_domain,
+        )
 
     def _artifact_url_social_pivot_entries(
         self,
@@ -23579,72 +18970,15 @@ class ArtifactQueueProcessor:
         *,
         relation_metadata: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        profile_stub = {"profile_url": url}
-        platform = EngagementSynthesisEngine._social_profile_platform_hint(profile_stub)
-        social_relation_metadata = {"rule": "artifact_social_url_extract", "platform": platform}
-        if relation_metadata:
-            social_relation_metadata.update(
-                {key: value for key, value in relation_metadata.items() if key != "rule"}
-            )
-        entries: list[dict[str, Any]] = []
-
-        handle = EngagementSynthesisEngine._extract_social_profile_handle_from_url(url)
-        if handle:
-            entries.append(
-                {
-                    "seed_value": handle,
-                    "seed_type": "username",
-                    "seed_confidence": 0.78,
-                    "relation_type": "derived_from",
-                    "relation_confidence": 0.78,
-                    "relation_metadata": dict(social_relation_metadata),
-                }
-            )
-            domain_handle = handle.lower()
-            if platform == "bluesky" and _classify_seed_value(domain_handle) == "domain":
-                domain_metadata = dict(social_relation_metadata)
-                domain_metadata["rule"] = "social_profile_domain_handle"
-                entries.append(
-                    {
-                        "seed_value": domain_handle,
-                        "seed_type": "domain",
-                        "seed_confidence": 0.77,
-                        "relation_type": "derived_from",
-                        "relation_confidence": 0.77,
-                        "relation_metadata": domain_metadata,
-                    }
-                )
-
-        company_name = EngagementSynthesisEngine._social_profile_company_name(
-            profile_stub,
-            source_label="artifact_social_url",
-            platform=platform,
+        return artifact_url_social_pivot_entries_for_processor(
+            url,
+            relation_metadata=relation_metadata,
+            social_profile_platform_hint=EngagementSynthesisEngine._social_profile_platform_hint,
+            extract_social_profile_handle_from_url=EngagementSynthesisEngine._extract_social_profile_handle_from_url,
+            classify_seed_value=_classify_seed_value,
+            social_profile_company_name=EngagementSynthesisEngine._social_profile_company_name,
+            social_profile_name=EngagementSynthesisEngine._social_profile_name,
         )
-        if company_name:
-            entries.append(
-                {
-                    "seed_value": company_name,
-                    "seed_type": "company",
-                    "seed_confidence": 0.76,
-                    "relation_type": "derived_from",
-                    "relation_confidence": 0.76,
-                    "relation_metadata": dict(social_relation_metadata),
-                }
-            )
-
-        full_name = EngagementSynthesisEngine._social_profile_name(profile_stub)
-        if full_name:
-            entries.append(
-                {
-                    "seed_value": full_name,
-                    "seed_type": "name",
-                    "seed_confidence": 0.74,
-                    "relation_type": "derived_from",
-                    "relation_confidence": 0.74,
-                    "relation_metadata": dict(social_relation_metadata),
-                }
-            )
-        return entries
 
     def _artifact_url_cloud_asset_entries(
         self,
@@ -23652,32 +18986,11 @@ class ArtifactQueueProcessor:
         *,
         source: str,
     ) -> list[dict[str, Any]]:
-        parsed = urlparse(url)
-        hostname = str(parsed.hostname or "").strip().lower().strip(".")
-        entries: list[dict[str, Any]] = []
-        family_batches = self._run_ordered_local_batch(
-            (
-                "supabase",
-                "firebase",
-                "managed_hosting",
-                "aws_s3",
-                "do_spaces",
-                "gcs",
-                "azure_blob",
-                "azure_key_vault",
-                "cloudflare",
-            ),
-            lambda family: self._artifact_url_cloud_asset_family_entries(
-                family,
-                url=url,
-                hostname=hostname,
-                source=source,
-            ),
-            default_factory=list,
+        return artifact_url_cloud_asset_entries_for_processor(
+            self,
+            url,
+            source=source,
         )
-        for family_entries in family_batches:
-            entries.extend(family_entries)
-        return entries
 
     @staticmethod
     def _artifact_url_cloud_asset_family_entries(
@@ -23687,180 +19000,21 @@ class ArtifactQueueProcessor:
         hostname: str,
         source: str,
     ) -> list[dict[str, Any]]:
-        if family == "supabase":
-            if hostname.endswith(".supabase.co"):
-                project_ref = hostname.split(".supabase.co", 1)[0].strip(".")
-                if project_ref:
-                    return [{"asset_type": "supabase", "identifier": project_ref, "source": source}]
-            return []
-        if family == "firebase":
-            for firebase_suffix in (".firebaseio.com", ".firebaseapp.com", ".web.app"):
-                if hostname.endswith(firebase_suffix):
-                    project_ref = hostname.split(firebase_suffix, 1)[0].strip(".")
-                    if project_ref:
-                        return [
-                            {"asset_type": "firebase", "identifier": project_ref, "source": source}
-                        ]
-                    return []
-            return []
-        if family == "managed_hosting":
-            for asset_type, pattern in (
-                (
-                    "amplify",
-                    re.compile(
-                        r"^([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)*)\.amplifyapp\.com$",
-                        re.IGNORECASE,
-                    ),
-                ),
-                (
-                    "gcp_appspot",
-                    re.compile(r"^([a-z0-9\-]+)(?:\.[a-z0-9\-]+)?\.appspot\.com$", re.IGNORECASE),
-                ),
-                (
-                    "gcp_cloudfunctions",
-                    re.compile(r"^[a-z0-9\-]+-([a-z0-9\-]+)\.cloudfunctions\.net$", re.IGNORECASE),
-                ),
-                (
-                    "gcp_cloud_run",
-                    re.compile(
-                        r"^([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9\-]+)*\.run\.app)$", re.IGNORECASE
-                    ),
-                ),
-                ("netlify", re.compile(r"^([a-z0-9\-]+)\.netlify\.(?:app|com)$", re.IGNORECASE)),
-                ("github_pages", re.compile(r"^[a-z0-9][a-z0-9\-]*\.github\.io$", re.IGNORECASE)),
-                (
-                    "gitlab_pages",
-                    re.compile(
-                        r"^[a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)*\.gitlab\.io$",
-                        re.IGNORECASE,
-                    ),
-                ),
-                ("vercel", re.compile(r"^([a-z0-9\-]+)\.vercel\.app$", re.IGNORECASE)),
-                ("render", re.compile(r"^([a-z0-9][a-z0-9\-]*)\.onrender\.com$", re.IGNORECASE)),
-                ("fly", re.compile(r"^([a-z0-9][a-z0-9\-]*)\.fly\.dev$", re.IGNORECASE)),
-                (
-                    "railway",
-                    re.compile(r"^([a-z0-9][a-z0-9\-]*)\.up\.railway\.app$", re.IGNORECASE),
-                ),
-                (
-                    "azure_static_web_app",
-                    re.compile(
-                        r"^([a-z0-9][a-z0-9\-]*)(?:\.[0-9]+)?\.azurestaticapps\.net$", re.IGNORECASE
-                    ),
-                ),
-                ("heroku", re.compile(r"^([a-z0-9][a-z0-9\-]*)\.herokuapp\.com$", re.IGNORECASE)),
-            ):
-                match = pattern.fullmatch(hostname)
-                if not match:
-                    continue
-                project_ref = (
-                    hostname
-                    if asset_type in {"github_pages", "gitlab_pages"}
-                    else str(match.group(1) or "").strip(".")
-                )
-                if project_ref:
-                    if asset_type == "gcp_cloudfunctions":
-                        parsed_url = urlparse(url)
-                        path = str(parsed_url.path or "").rstrip("/")
-                        endpoint = f"{parsed_url.scheme or 'https'}://{hostname}{path}".strip()
-                        return [
-                            {"asset_type": asset_type, "identifier": endpoint, "source": source}
-                        ]
-                    if asset_type in {"azure_static_web_app", "gcp_cloud_run"}:
-                        return [
-                            {"asset_type": asset_type, "identifier": hostname, "source": source}
-                        ]
-                    if asset_type == "amplify" and "." in project_ref:
-                        return [
-                            {"asset_type": asset_type, "identifier": hostname, "source": source}
-                        ]
-                    return [{"asset_type": asset_type, "identifier": project_ref, "source": source}]
-                return []
-            return []
-        if family == "aws_s3":
-            for pattern in _AWS_S3_URL_PATTERNS:
-                match = pattern.search(url)
-                if not match:
-                    continue
-                return [
-                    {"asset_type": "aws_s3", "identifier": match.group(1).lower(), "source": source}
-                ]
-            return []
-        if family == "do_spaces":
-            for pattern in _DO_SPACES_URL_PATTERNS:
-                match = pattern.search(url)
-                if not match:
-                    continue
-                if pattern is _DO_SPACES_URL_PATTERNS[0]:
-                    bucket, region = match.group(1).lower(), match.group(2).lower()
-                else:
-                    region, bucket = match.group(1).lower(), match.group(2).lower()
-                return [
-                    {
-                        "asset_type": "do_spaces",
-                        "identifier": f"{region}/{bucket}",
-                        "source": source,
-                    }
-                ]
-            return []
-        if family == "gcs":
-            for pattern in _GCS_URL_PATTERNS:
-                match = pattern.search(url)
-                if not match:
-                    continue
-                return [
-                    {"asset_type": "gcs", "identifier": match.group(1).lower(), "source": source}
-                ]
-            return []
-        if family == "azure_blob":
-            static_site_match = _AZURE_STATIC_WEBSITE_HOST_RE.fullmatch(hostname)
-            if static_site_match:
-                return [
-                    {
-                        "asset_type": "azure_blob",
-                        "identifier": f"{static_site_match.group('account').lower()}/$web",
-                        "source": source,
-                    }
-                ]
-            for pattern in _AZURE_BLOB_URL_PATTERNS:
-                match = pattern.search(url)
-                if not match:
-                    continue
-                return [
-                    {
-                        "asset_type": "azure_blob",
-                        "identifier": f"{match.group(1).lower()}/{match.group(2).lower()}",
-                        "source": source,
-                    }
-                ]
-        if family == "azure_key_vault":
-            match = _AZURE_KEY_VAULT_URL_RE.search(url)
-            if not match:
-                return []
-            vault = str(match.group("vault") or "").lower()
-            family_name = str(match.group("family") or "").lower()
-            key_name = unquote(str(match.group("name") or "")).strip().lower()
-            identifier = vault
-            if family_name and key_name:
-                identifier = f"{vault}/{family_name}/{key_name}"
-            return [{"asset_type": "azure_key_vault", "identifier": identifier, "source": source}]
-        if family == "cloudflare":
-            if _CLOUDFLARE_WORKERS_HOST_RE.fullmatch(hostname):
-                return [
-                    {"asset_type": "cloudflare_worker", "identifier": hostname, "source": source}
-                ]
-            pages_match = _CLOUDFLARE_PAGES_HOST_RE.fullmatch(hostname)
-            if pages_match:
-                return [
-                    {
-                        "asset_type": "cloudflare_pages",
-                        "identifier": pages_match.group(1).lower(),
-                        "source": source,
-                    }
-                ]
-            if _CLOUDFLARE_R2_HOST_RE.fullmatch(hostname):
-                return [{"asset_type": "cloudflare_r2", "identifier": hostname, "source": source}]
-        return []
+        return artifact_url_cloud_asset_family_entries_for_processor(
+            family,
+            url=url,
+            hostname=hostname,
+            source=source,
+            aws_s3_url_patterns=_AWS_S3_URL_PATTERNS,
+            do_spaces_url_patterns=_DO_SPACES_URL_PATTERNS,
+            gcs_url_patterns=_GCS_URL_PATTERNS,
+            azure_blob_url_patterns=_AZURE_BLOB_URL_PATTERNS,
+            azure_static_website_host_re=_AZURE_STATIC_WEBSITE_HOST_RE,
+            azure_key_vault_url_re=_AZURE_KEY_VAULT_URL_RE,
+            cloudflare_workers_host_re=_CLOUDFLARE_WORKERS_HOST_RE,
+            cloudflare_pages_host_re=_CLOUDFLARE_PAGES_HOST_RE,
+            cloudflare_r2_host_re=_CLOUDFLARE_R2_HOST_RE,
+        )
 
     def _store_artifact_url_seed(
         self,
@@ -23873,73 +19027,21 @@ class ArtifactQueueProcessor:
         depth: int = 1,
         relation_metadata: dict[str, Any] | None = None,
     ) -> int:
-        entry = self._artifact_url_seed_persistence_entry(
-            url,
-            relation_metadata=relation_metadata,
-        )
-        if not isinstance(entry, dict):
-            return 0
-        inserted = 0
-        if self._insert_seed(
+        return _orchestration_store_artifact_url_seed(
             con,
-            str(entry["url"]),
-            str(entry["seed_type"]),
+            url,
             source=source,
             confidence=confidence,
-            depth=depth,
-        ):
-            inserted += 1
-        self._link_artifact_source_seed(
-            con,
-            source_seed_id,
-            str(entry["url"]),
-            str(entry["seed_type"]),
-            confidence=confidence,
-            metadata=dict(entry["relation_metadata"]),
-        )
-        self._store_social_profile_url_pivots(
-            con,
-            str(entry["url"]),
-            seed_type=str(entry["seed_type"]),
-            relation_metadata=dict(entry["relation_metadata"]),
-            pivot_entries=list(entry["social_pivot_entries"]),
-            depth=max(1, int(depth or 0) + 1),
-        )
-        for related_seed_entry in entry["related_seed_entries"]:
-            if not isinstance(related_seed_entry, dict):
-                continue
-            if self._insert_seed(
-                con,
-                str(related_seed_entry["seed_value"]),
-                str(related_seed_entry["seed_type"]),
-                source=source,
-                confidence=float(related_seed_entry["confidence"]),
-                depth=depth,
-            ):
-                inserted += 1
-            self._link_artifact_source_seed(
-                con,
-                source_seed_id,
-                str(related_seed_entry["seed_value"]),
-                str(related_seed_entry["seed_type"]),
-                confidence=float(related_seed_entry["confidence"]),
-                metadata=dict(entry["relation_metadata"]),
-            )
-        self._store_cloud_asset_from_url(
-            con,
-            str(entry["url"]),
-            source="artifact_url_extract",
-            cloud_asset_entries=list(entry["cloud_asset_entries"]),
             source_seed_id=source_seed_id,
-            relation_metadata=dict(entry["relation_metadata"]),
+            depth=depth,
+            relation_metadata=relation_metadata,
+            artifact_url_seed_persistence_entry=self._artifact_url_seed_persistence_entry,
+            insert_seed=self._insert_seed,
+            link_artifact_source_seed=self._link_artifact_source_seed,
+            store_social_profile_url_pivots=self._store_social_profile_url_pivots,
+            store_cloud_asset_from_url=self._store_cloud_asset_from_url,
+            queue_artifact_text_discovered_url=self._queue_artifact_text_discovered_url,
         )
-        self._queue_artifact_text_discovered_url(
-            con,
-            str(entry["url"]),
-            seed_type=str(entry["seed_type"]),
-            relation_metadata=dict(entry["relation_metadata"]),
-        )
-        return inserted
 
     def _queue_artifact_text_discovered_url(
         self,
@@ -23949,60 +19051,41 @@ class ArtifactQueueProcessor:
         seed_type: str,
         relation_metadata: dict[str, Any] | None = None,
     ) -> int:
-        artifact_type = _classify_remote_artifact_candidate(url, seed_type)
-        if artifact_type is None:
-            return 0
-        checker = self._remote_url_scope_checker
-        if checker is not None:
-            denial_reason = "scope_manifest_denied_remote_artifact"
-            try:
-                allowed = bool(checker(url))
-            except Exception as exc:  # noqa: BLE001
-                allowed = False
-                denial_reason = f"scope_checker_error:{type(exc).__name__}"
-            if not allowed:
-                self._audit_artifact_lineage(
-                    con,
-                    action="artifact_text_url_scope_denied",
-                    target=url,
-                    result=(
-                        "rule=artifact_text_discovered_artifact_queue "
-                        f"artifact_type={artifact_type} seed_type={seed_type} reason={denial_reason}"
-                    ),
-                )
-                return 0
-        metadata = dict(relation_metadata or {})
-        source_rule = str(metadata.get("rule") or "").strip()
-        metadata["rule"] = "artifact_text_discovered_artifact_queue"
-        if source_rule:
-            metadata["source_rule"] = source_rule
-        metadata["source_seed_type"] = seed_type
-        try:
-            metadata_json = json.dumps(metadata, sort_keys=True)
-        except (TypeError, ValueError):
-            metadata_json = "{}"
-        before_changes = con.total_changes
-        con.execute(
-            """
-            INSERT INTO artifact_queue
-                (engagement_id, source_url, artifact_type, discovered_from, status, metadata_json)
-            VALUES (?, ?, ?, 'artifact_text', 'queued', ?)
-            ON CONFLICT(engagement_id, source_url) DO NOTHING
-            """,
-            (self._engagement_id, url, artifact_type, metadata_json),
+        queue_entry = self._artifact_text_discovered_url_queue_entry(
+            url,
+            seed_type=seed_type,
+            relation_metadata=relation_metadata,
         )
-        inserted = con.total_changes > before_changes
-        if inserted:
+
+        def _audit_lineage(*, action: str, target: str, result: str) -> None:
             self._audit_artifact_lineage(
                 con,
-                action="artifact_text_url_queued",
-                target=url,
-                result=(
-                    "rule=artifact_text_discovered_artifact_queue "
-                    f"artifact_type={artifact_type} seed_type={seed_type}"
-                ),
+                action=action,
+                target=target,
+                result=result,
             )
-        return 1 if inserted else 0
+
+        return _orchestration_queue_artifact_text_discovered_url(
+            con,
+            self._engagement_id,
+            queue_entry,
+            audit_artifact_lineage=_audit_lineage,
+        )
+
+    def _artifact_text_discovered_url_queue_entry(
+        self,
+        url: str,
+        *,
+        seed_type: str,
+        relation_metadata: dict[str, Any] | None = None,
+    ) -> ArtifactTextDiscoveredUrlQueueEntry | None:
+        return artifact_text_discovered_url_queue_entry(
+            url,
+            seed_type=seed_type,
+            relation_metadata=relation_metadata,
+            classify_remote_artifact_candidate=_classify_remote_artifact_candidate,
+            remote_url_scope_checker=self._remote_url_scope_checker,
+        )
 
     def _merge_artifact_metadata_into_seed(
         self,
@@ -24011,35 +19094,12 @@ class ArtifactQueueProcessor:
         seed_type: str,
         metadata: dict[str, Any],
     ) -> None:
-        target_seed_id = self._lookup_seed_id(con, seed_value, seed_type)
-        if target_seed_id is None:
-            return
-        row = con.execute(
-            """
-            SELECT metadata_json
-            FROM engagement_seeds
-            WHERE id=? AND engagement_id=?
-            """,
-            (target_seed_id, self._engagement_id),
-        ).fetchone()
-        if row is None:
-            return
-        incoming = {"artifact_provenance": True}
-        incoming.update(dict(metadata or {}))
-        existing = _safe_json_loads(str(row[0] or "{}"))
-        merged = self._merge_artifact_seed_metadata(existing, incoming)
-        con.execute(
-            """
-            UPDATE engagement_seeds
-            SET metadata_json=?,
-                updated_at=CURRENT_TIMESTAMP
-            WHERE id=? AND engagement_id=?
-            """,
-            (
-                json.dumps(merged, sort_keys=True),
-                target_seed_id,
-                self._engagement_id,
-            ),
+        _orchestration_merge_artifact_metadata_into_seed(
+            con,
+            self._engagement_id,
+            seed_value,
+            seed_type,
+            metadata,
         )
 
     def _store_social_profile_url_pivots(
@@ -24052,46 +19112,16 @@ class ArtifactQueueProcessor:
         pivot_entries: list[dict[str, Any]] | None = None,
         depth: int = 1,
     ) -> None:
-        url_seed_id = self._lookup_seed_id(con, url, seed_type)
-        if url_seed_id is None:
-            return
-        prepared_pivot_entries = (
-            pivot_entries
-            if pivot_entries is not None
-            else self._artifact_url_social_pivot_entries(
-                url,
-                relation_metadata=relation_metadata,
-            )
+        store_social_profile_url_pivots_for_processor(
+            self,
+            con,
+            self._engagement_id,
+            url,
+            seed_type=seed_type,
+            relation_metadata=relation_metadata,
+            pivot_entries=pivot_entries,
+            depth=depth,
         )
-        normalized_pivot_entries = self._run_ordered_local_batch(
-            list(enumerate(prepared_pivot_entries)),
-            self._social_profile_url_pivot_entry,
-            default_factory=lambda: None,
-        )
-        for pivot_entry in normalized_pivot_entries:
-            if not isinstance(pivot_entry, dict):
-                continue
-            seed_value = str(pivot_entry["seed_value"])
-            seed_type_value = str(pivot_entry["seed_type"])
-            self._insert_seed(
-                con,
-                seed_value,
-                seed_type_value,
-                source="artifact",
-                confidence=float(pivot_entry["seed_confidence"]),
-                depth=depth,
-            )
-            target_seed_id = self._lookup_seed_id(con, seed_value, seed_type_value)
-            if target_seed_id is None or target_seed_id == url_seed_id:
-                continue
-            self._insert_relation(
-                con,
-                url_seed_id,
-                target_seed_id,
-                str(pivot_entry["relation_type"]),
-                float(pivot_entry["relation_confidence"]),
-                dict(pivot_entry["relation_metadata"]),
-            )
 
     def _store_cloud_asset_from_url(
         self,
@@ -24103,68 +19133,27 @@ class ArtifactQueueProcessor:
         source_seed_id: int | None = None,
         relation_metadata: dict[str, Any] | None = None,
     ) -> None:
-        prepared_cloud_asset_entries = (
-            cloud_asset_entries
-            if cloud_asset_entries is not None
-            else self._artifact_url_cloud_asset_entries(url, source=source)
+        store_cloud_assets_from_url_entries_for_processor(
+            self,
+            con,
+            url,
+            source=source,
+            source_seed_id=source_seed_id,
+            relation_metadata=relation_metadata,
+            cloud_asset_entries=cloud_asset_entries,
         )
-        normalized_cloud_asset_entries = self._run_ordered_local_batch(
-            list(enumerate(prepared_cloud_asset_entries)),
-            self._cloud_asset_url_entry,
-            default_factory=lambda: None,
-        )
-        for cloud_asset_entry in normalized_cloud_asset_entries:
-            if not isinstance(cloud_asset_entry, dict):
-                continue
-            self._store_cloud_asset_reference(
-                con,
-                asset_type=str(cloud_asset_entry["asset_type"]),
-                identifier=str(cloud_asset_entry["identifier"]),
-                source=str(cloud_asset_entry["source"]),
-                metadata=self._artifact_cloud_asset_metadata(
-                    con,
-                    source_seed_id=source_seed_id,
-                    relation_metadata=relation_metadata,
-                    artifact_context=None,
-                ),
-            )
 
     @staticmethod
     def _social_profile_url_pivot_entry(
         pivot_entry: tuple[int, dict[str, Any]],
     ) -> dict[str, Any] | None:
-        _pivot_index, entry = pivot_entry
-        if not isinstance(entry, dict):
-            return None
-        relation_metadata = entry.get("relation_metadata")
-        return {
-            "seed_value": str(entry.get("seed_value") or "").strip(),
-            "seed_type": str(entry.get("seed_type") or "").strip(),
-            "seed_confidence": float(entry.get("seed_confidence") or 0.0),
-            "relation_type": str(entry.get("relation_type") or "").strip(),
-            "relation_confidence": float(entry.get("relation_confidence") or 0.0),
-            "relation_metadata": dict(relation_metadata)
-            if isinstance(relation_metadata, dict)
-            else {},
-        }
+        return artifact_social_profile_url_pivot_entry_for_processor(pivot_entry)
 
     @staticmethod
     def _cloud_asset_url_entry(
         cloud_asset_entry: tuple[int, dict[str, Any]],
     ) -> dict[str, str] | None:
-        _asset_index, entry = cloud_asset_entry
-        if not isinstance(entry, dict):
-            return None
-        asset_type = str(entry.get("asset_type") or "").strip()
-        identifier = str(entry.get("identifier") or "").strip()
-        source = str(entry.get("source") or "").strip()
-        if not asset_type or not identifier or not source:
-            return None
-        return {
-            "asset_type": asset_type,
-            "identifier": identifier,
-            "source": source,
-        }
+        return artifact_cloud_asset_url_entry_for_processor(cloud_asset_entry)
 
     def _store_cloud_asset_reference(
         self,
@@ -24175,58 +19164,15 @@ class ArtifactQueueProcessor:
         source: str,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        normalized_type = str(asset_type or "").strip().lower()
-        original_identifier = str(identifier or "").strip()
-        normalized_identifier = original_identifier.lower()
-        if not normalized_type or not normalized_identifier:
-            return
-        existing = con.execute(
-            """
-            SELECT metadata_json
-            FROM cloud_assets
-            WHERE engagement_id=? AND asset_type=? AND identifier=?
-            """,
-            (self._engagement_id, normalized_type, normalized_identifier),
-        ).fetchone()
-        existing_metadata = (
-            _safe_json_loads(str(existing[0] or "{}")) if existing is not None else {}
+        store_artifact_cloud_asset_reference_for_processor(
+            self,
+            con,
+            self._engagement_id,
+            asset_type=asset_type,
+            identifier=identifier,
+            source=source,
+            metadata=metadata,
         )
-        merged_metadata = self._merge_artifact_seed_metadata(existing_metadata, metadata or {})
-        metadata_json = json.dumps(merged_metadata, sort_keys=True)
-        con.execute(
-            """
-            INSERT INTO cloud_assets
-                (engagement_id, asset_type, identifier, provider_identifier, source, metadata_json)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(engagement_id, asset_type, identifier) DO UPDATE SET
-                provider_identifier = CASE
-                    WHEN cloud_assets.provider_identifier IS NULL
-                      OR TRIM(cloud_assets.provider_identifier) = ''
-                      OR cloud_assets.provider_identifier = cloud_assets.identifier
-                    THEN excluded.provider_identifier
-                    ELSE cloud_assets.provider_identifier
-                END,
-                metadata_json = excluded.metadata_json
-            """,
-            (
-                self._engagement_id,
-                normalized_type,
-                normalized_identifier,
-                original_identifier,
-                source,
-                metadata_json,
-            ),
-        )
-        if existing is None:
-            self._audit_artifact_lineage(
-                con,
-                action="artifact_cloud_asset_inventoried",
-                target=normalized_identifier,
-                result=(
-                    f"asset_type={normalized_type} source={source} "
-                    "validation_status=UNVALIDATED reportable=no"
-                ),
-            )
 
     def _extract_firebase_from_text(
         self,
@@ -24234,61 +19180,25 @@ class ArtifactQueueProcessor:
         source_file: str,
         extract_path: str,
     ) -> list[FirebaseProject]:
-        projects: list[FirebaseProject] = []
-        project_ids: set[str] = set()
-        api_key_match = _FIREBASE_API_KEY_RE.search(text)
-        api_key_enc = _encrypt_secret_material(api_key_match.group(0)) if api_key_match else None
-        storage_bucket_match = _FIREBASE_STORAGE_BUCKET_RE.search(text)
-        storage_bucket = (
-            self._extractor._normalize_storage_bucket(storage_bucket_match.group(1))  # noqa: SLF001
-            if storage_bucket_match
-            else None
+        return extract_firebase_from_text_for_processor(
+            text,
+            source_file,
+            extract_path,
+            firebase_url_patterns=_FIREBASE_URL_PATTERNS,
+            firebase_api_key_re=_FIREBASE_API_KEY_RE,
+            firebase_storage_bucket_re=_FIREBASE_STORAGE_BUCKET_RE,
+            encrypt_secret_material=_encrypt_secret_material,
+            normalize_storage_bucket=self._extractor._normalize_storage_bucket,  # noqa: SLF001
+            run_ordered_batch=self._run_ordered_local_batch,
+            firebase_match_entry=self._firebase_match_entry,
+            firebase_project_factory=FirebaseProject,
         )
-        match_candidates: list[tuple[str, str]] = []
-        for pattern in _FIREBASE_URL_PATTERNS:
-            for match in pattern.finditer(text):
-                match_candidates.append((match.group(0), str(match.group(1) or "")))
-        match_entries = self._run_ordered_local_batch(
-            match_candidates,
-            self._firebase_match_entry,
-            default_factory=lambda: None,
-        )
-        rtdb_url = None
-        for match_entry in match_entries:
-            if not isinstance(match_entry, dict):
-                continue
-            project_id = str(match_entry["project_id"])
-            if not project_id or project_id in project_ids:
-                continue
-            project_ids.add(project_id)
-            if match_entry["rtdb_url"]:
-                rtdb_url = str(match_entry["rtdb_url"])
-            projects.append(
-                FirebaseProject(
-                    project_id=project_id,
-                    api_key_enc=api_key_enc,
-                    rtdb_url=rtdb_url,
-                    bundle_id=None,
-                    source_file=source_file,
-                    extract_path=extract_path,
-                    storage_bucket=storage_bucket,
-                )
-            )
-        return projects
 
     def _firebase_match_entry(
         self,
         candidate: tuple[str, str],
     ) -> dict[str, Any] | None:
-        raw_match, raw_project_id = candidate
-        project_id = str(raw_project_id or "").strip().lower()
-        if not project_id:
-            return None
-        raw_match_text = str(raw_match or "").strip()
-        return {
-            "project_id": project_id,
-            "rtdb_url": raw_match_text if ".firebaseio.com" in raw_match_text.lower() else None,
-        }
+        return firebase_match_entry_for_processor(candidate)
 
     def _extract_terraform_state_payloads(
         self,
@@ -24337,19 +19247,14 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        if family == "structured":
-            return self._extract_terraform_state_structured_payloads(
-                text,
-                source_file=source_file,
-                member_name=member_name,
-            )
-        if family == "text":
-            return self._extract_terraform_state_text_payloads(
-                text,
-                source_file=source_file,
-                member_name=member_name,
-            )
-        return []
+        return terraform_state_payload_family_for_processor(
+            family,
+            text=text,
+            source_file=source_file,
+            member_name=member_name,
+            extract_terraform_state_structured_payloads=self._extract_terraform_state_structured_payloads,
+            extract_terraform_state_text_payloads=self._extract_terraform_state_text_payloads,
+        )
 
     def _extract_terraform_state_structured_payloads(
         self,
@@ -24358,10 +19263,12 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        structured_payload = self._terraform_state_structured_payload_text(text)
-        if not structured_payload:
-            return []
-        return [(source_file, f"{member_name}#tfstate-structured", structured_payload)]
+        return terraform_state_structured_payloads_for_processor(
+            text,
+            source_file=source_file,
+            member_name=member_name,
+            terraform_state_structured_payload_text=self._terraform_state_structured_payload_text,
+        )
 
     def _extract_terraform_state_text_payloads(
         self,
@@ -24370,36 +19277,21 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        if not text.strip():
-            return []
-        return [(source_file, member_name, text)]
+        return terraform_state_text_payloads_for_processor(
+            text,
+            source_file=source_file,
+            member_name=member_name,
+        )
 
     def _terraform_state_structured_payload_text(self, text: str) -> str:
-        payload = _safe_json_loads(text)
-        if not isinstance(payload, dict):
-            return ""
-
-        candidate_lines = self._run_ordered_local_batch(
-            self._iter_terraform_state_resource_values(payload),
-            self._terraform_state_resource_candidate,
-            default_factory=str,
+        return terraform_state_structured_payload_text_for_processor(
+            text,
+            safe_json_loads=_safe_json_loads,
+            iter_terraform_state_resource_values=self._iter_terraform_state_resource_values,
+            terraform_state_resource_candidate=self._terraform_state_resource_candidate,
+            terraform_structured_candidate_entry=self._terraform_structured_candidate_entry,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        prepared_candidate_entries = self._run_ordered_local_batch(
-            list(enumerate(candidate_lines)),
-            self._terraform_structured_candidate_entry,
-            default_factory=lambda: None,
-        )
-        lines: list[str] = []
-        seen: set[str] = set()
-        for candidate_entry in prepared_candidate_entries:
-            if not isinstance(candidate_entry, tuple) or len(candidate_entry) != 2:
-                continue
-            candidate, lowered = candidate_entry
-            if lowered in seen:
-                continue
-            seen.add(lowered)
-            lines.append(candidate)
-        return "\n".join(lines)
 
     def _terraform_state_resource_candidate(
         self,
@@ -24419,16 +19311,13 @@ class ArtifactQueueProcessor:
             if re.fullmatch(r"[a-z0-9._\-]{3,222}", bucket):
                 return f"gs://{bucket}"
             return ""
-        if resource in {
-            "google_firebase_project",
-            "google_firebase_web_app",
-            "google_firebase_database_instance",
-        }:
-            project_ref = (
-                str(values.get("project") or values.get("project_id") or values.get("name") or "")
-                .strip()
-                .lower()
-            )
+        if resource in {"google_firebase_project", "google_firebase_web_app", "google_firebase_database_instance"}:
+            project_ref = str(
+                values.get("project")
+                or values.get("project_id")
+                or values.get("name")
+                or ""
+            ).strip().lower()
             if re.fullmatch(r"[a-z0-9\-]{4,64}", project_ref):
                 return f"https://{project_ref}.firebaseio.com"
             return ""
@@ -24437,77 +19326,38 @@ class ArtifactQueueProcessor:
             account_name = str(values.get("storage_account_name") or "").strip().lower()
             if not account_name:
                 account_name = self._azure_storage_account_name_from_resource_values(values)
-            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
-                r"[^/?#]+", container_name
+            if (
+                re.fullmatch(r"[a-z0-9\-]{3,24}", account_name)
+                and re.fullmatch(r"[^/?#]+", container_name)
             ):
                 return f"https://{account_name}.blob.core.windows.net/{container_name}"
         return ""
 
     def _terraform_block_assignments(self, block_text: str) -> dict[str, str]:
-        assignment_entries = self._run_ordered_local_batch(
-            list(enumerate(str(block_text or "").splitlines())),
-            self._terraform_assignment_line_entry,
-            default_factory=lambda: None,
+        return terraform_block_assignments_for_processor(
+            block_text,
+            terraform_assignment_line_entry=self._terraform_assignment_line_entry,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        assignments: dict[str, str] = {}
-        for assignment_entry in assignment_entries:
-            if not isinstance(assignment_entry, tuple) or len(assignment_entry) != 2:
-                continue
-            key, value = assignment_entry
-            assignments[key] = value
-        return assignments
 
     @staticmethod
     def _terraform_assignment_line_entry(
         line_entry: tuple[int, str],
     ) -> tuple[str, str] | None:
-        _line_index, raw_line = line_entry
-        stripped = str(raw_line or "").strip()
-        if not stripped or stripped.startswith(("#", "//", "/*", "*")):
-            return None
-        match = re.match(r'([A-Za-z0-9_]+)\s*=\s*"([^"\r\n]+)"', stripped)
-        if not match:
-            return None
-        key = str(match.group(1) or "").strip().lower()
-        value = str(match.group(2) or "").strip()
-        if not key or not value:
-            return None
-        return key, value
+        return terraform_assignment_line_entry_for_processor(line_entry)
 
     @staticmethod
     def _iter_terraform_text_blocks(text: str) -> list[tuple[str, str]]:
-        lines = str(text or "").splitlines()
-        blocks: list[tuple[str, str]] = []
-        index = 0
-        while index < len(lines):
-            line = lines[index]
-            match = _TERRAFORM_BLOCK_START_RE.match(line)
-            if not match:
-                index += 1
-                continue
-            resource_type = str(match.group(1) or "").strip().lower()
-            brace_depth = line.count("{") - line.count("}")
-            block_lines = [line]
-            index += 1
-            while index < len(lines):
-                current = lines[index]
-                block_lines.append(current)
-                brace_depth += current.count("{") - current.count("}")
-                index += 1
-                if brace_depth <= 0:
-                    break
-            blocks.append((resource_type, "\n".join(block_lines)))
-        return blocks
+        return iter_terraform_text_blocks_for_processor(
+            text,
+            terraform_block_start_pattern=_TERRAFORM_BLOCK_START_RE,
+        )
 
     @staticmethod
     def _terraform_structured_candidate_entry(
         candidate_entry: tuple[int, str],
     ) -> tuple[str, str] | None:
-        _candidate_index, candidate = candidate_entry
-        value = str(candidate or "").strip()
-        if not value:
-            return None
-        return value, value.lower()
+        return terraform_structured_candidate_entry_for_processor(candidate_entry)
 
     def _terraform_text_structured_payload_text(
         self,
@@ -24515,634 +19365,184 @@ class ArtifactQueueProcessor:
         *,
         source_hint: str = "",
     ) -> str:
-        candidate_lines = self._run_ordered_local_batch(
-            self._iter_terraform_text_blocks(text),
-            self._terraform_text_block_candidate,
-            default_factory=str,
+        return terraform_text_structured_payload_text_for_processor(
+            text,
+            source_hint=source_hint,
+            iter_terraform_text_blocks=self._iter_terraform_text_blocks,
+            terraform_text_block_candidate=self._terraform_text_block_candidate,
+            terraform_backend_config_candidates=self._terraform_backend_config_candidates,
+            terragrunt_remote_state_backend_candidates=self._terragrunt_remote_state_backend_candidates,
+            terraform_structured_candidate_entry=self._terraform_structured_candidate_entry,
+            looks_like_terraform_backend_config_name=_looks_like_terraform_backend_config_name,
+            looks_like_terragrunt_config_name=_looks_like_terragrunt_config_name,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        if _looks_like_terraform_backend_config_name(
-            source_hint
-        ) or _looks_like_terragrunt_config_name(source_hint):
-            candidate_lines.extend(self._terraform_backend_config_candidates(text))
-        if _looks_like_terragrunt_config_name(source_hint):
-            candidate_lines.extend(self._terragrunt_remote_state_backend_candidates(text))
-        prepared_candidate_entries = self._run_ordered_local_batch(
-            list(enumerate(candidate_lines)),
-            self._terraform_structured_candidate_entry,
-            default_factory=lambda: None,
-        )
-        lines: list[str] = []
-        seen: set[str] = set()
-        for candidate_entry in prepared_candidate_entries:
-            if not isinstance(candidate_entry, tuple) or len(candidate_entry) != 2:
-                continue
-            candidate, lowered = candidate_entry
-            if lowered in seen:
-                continue
-            seen.add(lowered)
-            lines.append(candidate)
-        return "\n".join(lines)
 
     def _terraform_text_block_candidate(
         self,
         block_job: tuple[str, str],
     ) -> str:
-        resource_type, block_text = block_job
-        assignments = self._terraform_block_assignments(block_text)
-        if not assignments:
-            return ""
-        if resource_type.startswith("aws_s3_bucket"):
-            bucket = str(assignments.get("bucket") or "").strip().lower()
-            if re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket):
-                return f"s3://{bucket}"
-            return ""
-        if resource_type == "digitalocean_spaces_bucket":
-            bucket = str(assignments.get("name") or assignments.get("bucket") or "").strip().lower()
-            region = str(assignments.get("region") or "").strip().lower()
-            if re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket) and re.fullmatch(
-                r"[a-z0-9\-]{2,32}", region
-            ):
-                return f"https://{bucket}.{region}.digitaloceanspaces.com"
-            return ""
-        if resource_type.startswith("google_storage_bucket"):
-            bucket = str(assignments.get("name") or assignments.get("bucket") or "").strip().lower()
-            if re.fullmatch(r"[a-z0-9._\-]{3,222}", bucket):
-                return f"gs://{bucket}"
-            return ""
-        if resource_type in {
-            "google_firebase_project",
-            "google_firebase_web_app",
-            "google_firebase_database_instance",
-        }:
-            project_ref = (
-                str(
-                    assignments.get("project")
-                    or assignments.get("project_id")
-                    or assignments.get("name")
-                    or ""
-                )
-                .strip()
-                .lower()
-            )
-            if re.fullmatch(r"[a-z0-9\-]{4,64}", project_ref):
-                return f"https://{project_ref}.firebaseio.com"
-            return ""
-        if resource_type == "azurerm_storage_container":
-            container_name = str(assignments.get("name") or "").strip().lower()
-            account_name = str(assignments.get("storage_account_name") or "").strip().lower()
-            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
-                r"[^/?#]+", container_name
-            ):
-                return f"https://{account_name}.blob.core.windows.net/{container_name}"
-        return ""
+        return terraform_text_block_candidate_for_processor(
+            block_job,
+            terraform_block_assignments=self._terraform_block_assignments,
+        )
 
     @staticmethod
     def _digitalocean_spaces_url_from_endpoint(bucket: str, endpoint: str) -> str:
-        bucket_name = str(bucket or "").strip().lower()
-        if not re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket_name):
-            return ""
-        raw_endpoint = str(endpoint or "").strip().strip("/")
-        if not raw_endpoint:
-            return ""
-        parsed = urlparse(raw_endpoint if "://" in raw_endpoint else f"https://{raw_endpoint}")
-        hostname = str(parsed.hostname or "").strip().lower().strip(".")
-        match = _DO_SPACES_ENDPOINT_HOST_RE.fullmatch(hostname)
-        if not match:
-            return ""
-        region = str(match.group("region") or "").strip().lower()
-        if not region:
-            return ""
-        return f"https://{bucket_name}.{region}.digitaloceanspaces.com"
+        return digitalocean_spaces_url_from_endpoint_for_processor(
+            bucket,
+            endpoint,
+            do_spaces_endpoint_host_pattern=_DO_SPACES_ENDPOINT_HOST_RE,
+        )
 
     def _terraform_backend_config_candidates(self, text: str) -> list[str]:
-        assignments = self._terraform_block_assignments(text)
-        if not assignments:
-            return []
-
-        candidates: list[str] = []
-        bucket = str(assignments.get("bucket") or "").strip().lower()
-        if bucket and re.fullmatch(r"[a-z0-9._\-]{3,222}", bucket):
-            assignment_keys = set(assignments)
-            do_spaces_url = self._digitalocean_spaces_url_from_endpoint(
-                bucket,
-                str(
-                    assignments.get("endpoint")
-                    or assignments.get("endpoint_url")
-                    or assignments.get("s3_endpoint")
-                    or ""
-                ),
-            )
-            if do_spaces_url:
-                candidates.append(do_spaces_url)
-            if (
-                assignment_keys
-                & {
-                    "dynamodb_table",
-                    "encrypt",
-                    "endpoint",
-                    "endpoint_url",
-                    "key",
-                    "profile",
-                    "region",
-                    "role_arn",
-                    "s3_endpoint",
-                    "skip_credentials_validation",
-                    "workspace_key_prefix",
-                }
-                and not do_spaces_url
-            ):
-                candidates.append(f"s3://{bucket}")
-            elif assignment_keys & {
-                "access_token",
-                "credentials",
-                "impersonate_service_account",
-                "prefix",
-            }:
-                candidates.append(f"gs://{bucket}")
-
-        container_name = (
-            str(assignments.get("container_name") or assignments.get("container") or "")
-            .strip()
-            .lower()
+        return terraform_backend_config_candidates_for_processor(
+            text,
+            terraform_block_assignments=self._terraform_block_assignments,
+            digitalocean_spaces_url_from_endpoint=self._digitalocean_spaces_url_from_endpoint,
+            azure_blob_url_from_parts=self._azure_blob_url_from_parts,
         )
-        account_name = (
-            str(assignments.get("storage_account_name") or assignments.get("account_name") or "")
-            .strip()
-            .lower()
-        )
-        azure_blob_url = self._azure_blob_url_from_parts(account_name, container_name)
-        if azure_blob_url:
-            candidates.append(azure_blob_url)
-
-        return candidates
 
     @staticmethod
     def _iter_terragrunt_remote_state_blocks(text: str) -> list[str]:
-        lines = str(text or "").splitlines()
-        blocks: list[str] = []
-        index = 0
-        while index < len(lines):
-            line = lines[index]
-            if not re.match(r"^\s*remote_state\s*\{", line, re.IGNORECASE):
-                index += 1
-                continue
-            brace_depth = line.count("{") - line.count("}")
-            block_lines = [line]
-            index += 1
-            while index < len(lines):
-                current = lines[index]
-                block_lines.append(current)
-                brace_depth += current.count("{") - current.count("}")
-                index += 1
-                if brace_depth <= 0:
-                    break
-            blocks.append("\n".join(block_lines))
-        return blocks
+        return iter_terragrunt_remote_state_blocks_for_processor(text)
 
     def _terragrunt_remote_state_backend_candidates(self, text: str) -> list[str]:
-        candidate_batches = self._run_ordered_local_batch(
-            self._iter_terragrunt_remote_state_blocks(text),
-            self._terraform_backend_config_candidates,
-            default_factory=list,
+        return terragrunt_remote_state_backend_candidates_for_processor(
+            text,
+            iter_terragrunt_remote_state_blocks=self._iter_terragrunt_remote_state_blocks,
+            terraform_backend_config_candidates=self._terraform_backend_config_candidates,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        candidates: list[str] = []
-        seen: set[str] = set()
-        for candidate_batch in candidate_batches:
-            for raw_candidate in candidate_batch:
-                candidate = str(raw_candidate or "").strip()
-                lowered = candidate.lower()
-                if not candidate or lowered in seen:
-                    continue
-                seen.add(lowered)
-                candidates.append(candidate)
-        return candidates
 
     @staticmethod
     def _iter_bicep_text_blocks(text: str) -> list[tuple[str, str]]:
-        lines = str(text or "").splitlines()
-        blocks: list[tuple[str, str]] = []
-        index = 0
-        while index < len(lines):
-            line = lines[index]
-            match = _BICEP_RESOURCE_START_RE.match(line)
-            if not match:
-                index += 1
-                continue
-            resource_type = str(match.group(1) or "").strip().lower()
-            brace_depth = line.count("{") - line.count("}")
-            block_lines = [line]
-            index += 1
-            while index < len(lines):
-                current = lines[index]
-                block_lines.append(current)
-                brace_depth += current.count("{") - current.count("}")
-                index += 1
-                if brace_depth <= 0:
-                    break
-            blocks.append((resource_type, "\n".join(block_lines)))
-        return blocks
+        return iter_bicep_text_blocks_for_processor(
+            text,
+            bicep_resource_start_pattern=_BICEP_RESOURCE_START_RE,
+        )
 
     def _bicep_block_assignments(self, block_text: str) -> dict[str, str]:
-        assignment_entries = self._run_ordered_local_batch(
-            list(enumerate(str(block_text or "").splitlines())),
-            self._bicep_assignment_line_entry,
-            default_factory=lambda: None,
+        return bicep_block_assignments_for_processor(
+            block_text,
+            bicep_assignment_line_entry=self._bicep_assignment_line_entry,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        assignments: dict[str, str] = {}
-        for assignment_entry in assignment_entries:
-            if not isinstance(assignment_entry, tuple) or len(assignment_entry) != 2:
-                continue
-            key, value = assignment_entry
-            assignments[key] = value
-        return assignments
 
     @staticmethod
     def _bicep_assignment_line_entry(
         line_entry: tuple[int, str],
     ) -> tuple[str, str] | None:
-        _line_index, raw_line = line_entry
-        stripped = str(raw_line or "").strip()
-        if not stripped or stripped.startswith(("//", "/*", "*")):
-            return None
-        match = re.match(r"([A-Za-z0-9_]+)\s*:\s*['\"]([^'\"\r\n]+)['\"]", stripped)
-        if not match:
-            return None
-        key = str(match.group(1) or "").strip().lower()
-        value = str(match.group(2) or "").strip()
-        if not key or not value:
-            return None
-        return key, value
+        return bicep_assignment_line_entry_for_processor(line_entry)
 
     def _bicep_text_structured_payload_text(self, text: str) -> str:
-        candidate_lines = self._run_ordered_local_batch(
-            self._iter_bicep_text_blocks(text),
-            self._bicep_text_block_candidate,
-            default_factory=str,
+        return bicep_text_structured_payload_text_for_processor(
+            text,
+            iter_bicep_text_blocks=self._iter_bicep_text_blocks,
+            bicep_text_block_candidate=self._bicep_text_block_candidate,
+            structured_candidate_entry=self._terraform_structured_candidate_entry,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        prepared_candidate_entries = self._run_ordered_local_batch(
-            list(enumerate(candidate_lines)),
-            self._terraform_structured_candidate_entry,
-            default_factory=lambda: None,
-        )
-        lines: list[str] = []
-        seen: set[str] = set()
-        for candidate_entry in prepared_candidate_entries:
-            if not isinstance(candidate_entry, tuple) or len(candidate_entry) != 2:
-                continue
-            candidate, lowered = candidate_entry
-            if lowered in seen:
-                continue
-            seen.add(lowered)
-            lines.append(candidate)
-        return "\n".join(lines)
 
     def _bicep_text_block_candidate(
         self,
         block_job: tuple[str, str],
     ) -> str:
-        resource_type, block_text = block_job
-        assignments = self._bicep_block_assignments(block_text)
-        if not assignments:
-            return ""
-        mapping: dict[str, Any] = {
-            "type": resource_type,
-            "properties": dict(assignments),
-        }
-        mapping.update(assignments)
-        candidates = self._iac_resource_structured_candidates(
-            mapping,
-            self._yaml_normalized_mapping(mapping),
+        return bicep_text_block_candidate_for_processor(
+            block_job,
+            bicep_block_assignments=self._bicep_block_assignments,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            iac_resource_structured_candidates=self._iac_resource_structured_candidates,
         )
-        return candidates[0] if candidates else ""
 
     @staticmethod
     def _azure_blob_url_from_parts(account_name: str, container_name: str) -> str:
-        account = str(account_name or "").strip().lower()
-        container = str(container_name or "").strip().lower()
-        if re.fullmatch(r"[a-z0-9\-]{3,24}", account) and re.fullmatch(r"[^/?#]+", container):
-            return f"https://{account}.blob.core.windows.net/{container}"
-        return ""
+        return azure_blob_url_from_parts_for_processor(account_name, container_name)
 
     @staticmethod
     def _azure_blob_parts_from_composite_name(value: str) -> tuple[str, str]:
-        parts = [part.strip().lower() for part in str(value or "").split("/") if part.strip()]
-        if len(parts) >= 3:
-            return parts[0], parts[-1]
-        return "", ""
+        return azure_blob_parts_from_composite_name_for_processor(value)
 
     def _iac_resource_structured_candidates(
         self,
         mapping: dict[str, Any],
         normalized: dict[str, Any],
     ) -> list[str]:
-        type_hint = (
-            str(
-                self._yaml_ref_value(
-                    normalized,
-                    "type",
-                    "resource_type",
-                    "resourceType",
-                    "kind",
-                )
-                or ""
-            )
-            .strip()
-            .lower()
+        return iac_resource_structured_candidates_for_processor(
+            mapping,
+            normalized,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_child_mapping=self._yaml_child_mapping,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+            yaml_valid_project_ref=self._yaml_valid_project_ref,
+            azure_blob_url_from_parts=self._azure_blob_url_from_parts,
+            azure_blob_parts_from_composite_name=self._azure_blob_parts_from_composite_name,
+            iac_resource_s3_candidate=iac_resource_s3_candidate_for_processor,
+            iac_resource_gcs_candidate=iac_resource_gcs_candidate_for_processor,
+            iac_resource_digitalocean_spaces_candidate=(
+                iac_resource_digitalocean_spaces_candidate_for_processor
+            ),
+            iac_resource_firebase_candidate=iac_resource_firebase_candidate_for_processor,
+            iac_resource_supabase_candidate=iac_resource_supabase_candidate_for_processor,
+            iac_resource_azure_blob_candidate=iac_resource_azure_blob_candidate_for_processor,
         )
-        if not type_hint:
-            return []
-        properties = self._yaml_child_mapping(mapping, "properties", "config", "inputs")
-        prop_norm = self._yaml_normalized_mapping(properties)
-        lookup = dict(normalized)
-        lookup.update(prop_norm)
-        candidates: list[str] = []
-
-        if "aws::s3::bucket" in type_hint or "aws:s3" in type_hint or "aws.s3" in type_hint:
-            bucket = self._yaml_valid_bucket_name(
-                self._yaml_ref_value(
-                    lookup, "bucketName", "bucket-name", "bucket_name", "bucket", "name"
-                )
-            )
-            if bucket and re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket):
-                candidates.append(f"s3://{bucket}")
-
-        if (
-            "gcp:storage" in type_hint
-            or "google.storage" in type_hint
-            or "google::cloud::storage" in type_hint
-            or "google_storage_bucket" in type_hint
-        ):
-            bucket = self._yaml_valid_bucket_name(
-                self._yaml_ref_value(
-                    lookup, "bucketName", "bucket-name", "bucket_name", "bucket", "name"
-                )
-            )
-            if bucket:
-                candidates.append(f"gs://{bucket}")
-
-        if "digitalocean" in type_hint and "space" in type_hint:
-            bucket = self._yaml_valid_bucket_name(
-                self._yaml_ref_value(
-                    lookup, "bucketName", "bucket-name", "bucket_name", "bucket", "name"
-                )
-            )
-            region = (
-                str(
-                    self._yaml_ref_value(
-                        lookup, "region", "spaceRegion", "space-region", "space_region"
-                    )
-                )
-                .strip()
-                .lower()
-            )
-            if bucket and re.fullmatch(r"[a-z0-9\-]{2,32}", region):
-                candidates.append(f"https://{bucket}.{region}.digitaloceanspaces.com")
-
-        if "firebase" in type_hint:
-            project_ref = self._yaml_valid_project_ref(
-                self._yaml_ref_value(
-                    lookup,
-                    "projectId",
-                    "project-id",
-                    "project_id",
-                    "project",
-                    "name",
-                )
-            )
-            if project_ref:
-                candidates.append(f"https://{project_ref}.firebaseio.com")
-
-        if "supabase" in type_hint:
-            project_ref = self._yaml_valid_project_ref(
-                self._yaml_ref_value(
-                    lookup,
-                    "projectRef",
-                    "project-ref",
-                    "project_ref",
-                    "ref",
-                    "name",
-                )
-            )
-            if project_ref:
-                candidates.append(f"https://{project_ref}.supabase.co")
-
-        if (
-            "microsoft.storage/storageaccounts/blobservices/containers" in type_hint
-            or "azure-native:storage:blobcontainer" in type_hint
-            or "azure:storage" in type_hint
-            or "azurerm_storage_container" in type_hint
-        ):
-            account_name = (
-                str(
-                    self._yaml_ref_value(
-                        lookup,
-                        "storageAccountName",
-                        "storage-account-name",
-                        "storage_account_name",
-                        "accountName",
-                        "account-name",
-                        "account_name",
-                        "account",
-                    )
-                )
-                .strip()
-                .lower()
-            )
-            container_name = (
-                str(
-                    self._yaml_ref_value(
-                        lookup,
-                        "containerName",
-                        "container-name",
-                        "container_name",
-                        "container",
-                        "name",
-                    )
-                )
-                .strip()
-                .lower()
-            )
-            candidate = self._azure_blob_url_from_parts(account_name, container_name)
-            if not candidate:
-                composite_account, composite_container = self._azure_blob_parts_from_composite_name(
-                    self._yaml_ref_value(lookup, "name")
-                )
-                candidate = self._azure_blob_url_from_parts(composite_account, composite_container)
-            if candidate:
-                candidates.append(candidate)
-
-        return candidates
 
     @staticmethod
     def _parse_key_value_scalar(raw_value: str) -> str:
-        value = str(raw_value or "").strip()
-        if not value:
-            return ""
-        if value.startswith(('"""', "'''")) and value.endswith(('"""', "'''")) and len(value) >= 6:
-            value = value[3:-3].strip()
-        elif len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-            value = value[1:-1].strip()
-        else:
-            value = re.split(r"\s(?:#|;|//).*$", value, maxsplit=1)[0].strip()
-        return value.rstrip(",").strip()
+        return parse_key_value_scalar_for_processor(raw_value)
 
     @staticmethod
     def _key_value_section_path(section_name: str) -> tuple[str, ...]:
-        cleaned = str(section_name or "").strip().strip("[]")
-        if not cleaned:
-            return ()
-        cleaned = cleaned.replace('"', "").replace("'", "")
-        parts = [
-            re.sub(r"[^a-z0-9_\-]+", "", part.strip().lower())
-            for part in re.split(r"[./]+", cleaned)
-        ]
-        return tuple(part for part in parts if part)
+        return key_value_section_path_for_processor(section_name)
 
     def _parse_key_value_entries(self, text: str) -> list[tuple[tuple[str, ...], str, str]]:
-        line_entries = self._run_ordered_local_batch(
-            list(enumerate(str(text or "").splitlines())),
-            self._key_value_line_entry,
-            default_factory=lambda: None,
+        return parse_key_value_entries_for_processor(
+            text,
+            key_value_line_entry=self._key_value_line_entry,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        entries: list[tuple[tuple[str, ...], str, str]] = []
-        section_path: tuple[str, ...] = ()
-        for line_entry in line_entries:
-            if not isinstance(line_entry, tuple) or not line_entry:
-                continue
-            entry_type = str(line_entry[0] or "")
-            if (
-                entry_type == "section"
-                and len(line_entry) == 2
-                and isinstance(line_entry[1], tuple)
-            ):
-                section_path = line_entry[1]
-                continue
-            if entry_type != "assignment" or len(line_entry) != 3:
-                continue
-            _entry_type, key_name, value = line_entry
-            entries.append((section_path, str(key_name), str(value)))
-        return entries
 
     @classmethod
     def _key_value_line_entry(
         cls,
         line_entry: tuple[int, str],
     ) -> tuple[str, tuple[str, ...]] | tuple[str, str, str] | None:
-        _line_index, raw_line = line_entry
-        stripped = str(raw_line or "").strip()
-        if not stripped or stripped.startswith(("#", ";", "//", "/*", "*")):
-            return None
-        section_match = re.match(r"^\[\[?([^\[\]]+)\]\]?$", stripped)
-        if section_match:
-            return "section", cls._key_value_section_path(str(section_match.group(1) or ""))
-        if stripped.startswith(("{", "}", "[", "]")):
-            return None
-        assignment_match = re.match(
-            r"^(?:export\s+)?([A-Za-z0-9_.\-]+)\s*(=|:)\s*(.+)$",
-            stripped,
+        return key_value_line_entry_for_processor(
+            line_entry,
+            key_value_section_path=cls._key_value_section_path,
+            parse_key_value_scalar=cls._parse_key_value_scalar,
         )
-        if not assignment_match:
-            return None
-        raw_key = str(assignment_match.group(1) or "").strip()
-        if not raw_key:
-            return None
-        value = cls._parse_key_value_scalar(str(assignment_match.group(3) or ""))
-        if not value:
-            return None
-        key_path = cls._key_value_section_path(raw_key)
-        if not key_path:
-            return None
-        return "assignment", ".".join(key_path), value
 
     def _key_value_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        if not _looks_text_config_name(source_hint):
-            return ""
-        entries = self._parse_key_value_entries(text)
-        if not entries:
-            return ""
-
-        env_map: dict[str, str] = {}
-        section_maps: dict[tuple[str, ...], dict[str, str]] = {}
-        direct_candidates: list[str] = []
-        seen_direct: set[str] = set()
-
-        def _set_env(name: str, value: str) -> None:
-            candidate_name = str(name or "").strip().upper()
-            candidate_value = str(value or "").strip()
-            if not candidate_name or not candidate_value:
-                return
-            env_map[candidate_name] = candidate_value
-            env_map.setdefault(candidate_name.replace("-", "_"), candidate_value)
-
-        def _append_direct(candidate: str) -> None:
-            value = str(candidate or "").strip()
-            lowered = value.lower()
-            if not value or lowered in seen_direct:
-                return
-            seen_direct.add(lowered)
-            direct_candidates.append(value)
-
-        for section_path, key_name, value in entries:
-            section_mapping = section_maps.setdefault(section_path, {})
-            normalized_key = str(key_name or "").strip().lower()
-            if normalized_key:
-                section_mapping.setdefault(normalized_key, value)
-                section_mapping.setdefault(self._yaml_key_fingerprint(normalized_key), value)
-            raw_env_name = re.sub(r"[^A-Za-z0-9]+", "_", normalized_key).strip("_").upper()
-            if raw_env_name:
-                _set_env(raw_env_name, value)
-            if section_path:
-                section_prefix = "_".join(part.upper() for part in section_path)
-                if section_prefix and raw_env_name:
-                    _set_env(f"{section_prefix}_{raw_env_name}", value)
-            if value.startswith(("http://", "https://", "s3://", "gs://")):
-                _append_direct(value)
-            elif re.fullmatch(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", value):
-                _append_direct(value.lower())
-
-        lines: list[str] = []
-        seen: set[str] = set()
-
-        structured_candidate_jobs = self._run_ordered_local_batch(
-            self._key_value_structured_candidate_jobs(env_map, section_maps),
-            self._key_value_structured_candidate_job,
-            default_factory=lambda: None,
+        return key_value_structured_payload_text_for_processor(
+            text,
+            source_hint=source_hint,
+            looks_text_config_name=_looks_text_config_name,
+            parse_key_value_entries=self._parse_key_value_entries,
+            key_value_structured_inputs=lambda entries: key_value_structured_inputs_for_processor(
+                entries,
+                yaml_key_fingerprint=self._yaml_key_fingerprint,
+            ),
+            key_value_structured_payload_lines=lambda env_map, section_maps, direct_candidates: (
+                key_value_structured_payload_lines_for_processor(
+                    env_map,
+                    section_maps,
+                    direct_candidates,
+                    key_value_structured_candidate_jobs=self._key_value_structured_candidate_jobs,
+                    key_value_structured_candidate_job=self._key_value_structured_candidate_job,
+                    key_value_structured_candidate_batch=self._key_value_structured_candidate_batch,
+                    key_value_structured_candidate_family_entries=(
+                        self._key_value_structured_candidate_family_entries
+                    ),
+                    key_value_structured_direct_candidate_entry=(
+                        self._key_value_structured_direct_candidate_entry
+                    ),
+                    key_value_structured_append_entry=self._key_value_structured_append_entry,
+                    run_ordered_batch=self._run_ordered_local_batch,
+                )
+            ),
         )
-        candidate_batches = self._run_ordered_local_batch(
-            [job for job in structured_candidate_jobs if isinstance(job, tuple)],
-            self._key_value_structured_candidate_batch,
-            default_factory=list,
-        )
-        prepared_candidate_families = self._run_ordered_local_batch(
-            list(enumerate(candidate_batches)),
-            self._key_value_structured_candidate_family_entries,
-            default_factory=list,
-        )
-        prepared_direct_candidates = self._run_ordered_local_batch(
-            list(enumerate(direct_candidates)),
-            self._key_value_structured_direct_candidate_entry,
-            default_factory=lambda: None,
-        )
-        append_candidates = [
-            candidate
-            for candidate_family in prepared_candidate_families
-            for candidate in candidate_family
-        ]
-        append_candidates.extend(prepared_direct_candidates)
-        prepared_append_entries = self._run_ordered_local_batch(
-            list(enumerate(append_candidates)),
-            self._key_value_structured_append_entry,
-            default_factory=lambda: None,
-        )
-        for append_entry in prepared_append_entries:
-            if not isinstance(append_entry, tuple) or len(append_entry) != 2:
-                continue
-            value, lowered = append_entry
-            if lowered in seen:
-                continue
-            seen.add(lowered)
-            lines.append(value)
-        return "\n".join(lines)
 
     @staticmethod
     def _key_value_structured_candidate_jobs(
@@ -25205,240 +19605,90 @@ class ArtifactQueueProcessor:
 
     @staticmethod
     def _strip_jsonc_comments(text: str) -> str:
-        result: list[str] = []
-        in_string = False
-        escaped = False
-        index = 0
-        while index < len(text):
-            char = text[index]
-            next_char = text[index + 1] if index + 1 < len(text) else ""
-            if in_string:
-                result.append(char)
-                if escaped:
-                    escaped = False
-                elif char == "\\":
-                    escaped = True
-                elif char == '"':
-                    in_string = False
-                index += 1
-                continue
-            if char == '"':
-                in_string = True
-                result.append(char)
-                index += 1
-                continue
-            if char == "/" and next_char == "/":
-                index += 2
-                while index < len(text) and text[index] not in "\r\n":
-                    index += 1
-                continue
-            if char == "/" and next_char == "*":
-                index += 2
-                while index + 1 < len(text) and not (text[index] == "*" and text[index + 1] == "/"):
-                    if text[index] in "\r\n":
-                        result.append(text[index])
-                    index += 1
-                index += 2 if index + 1 < len(text) else 0
-                continue
-            result.append(char)
-            index += 1
-        return "".join(result)
+        return strip_jsonc_comments_for_processor(text)
 
     def _json_documents_from_text(self, text: str, *, source_hint: str = "") -> list[Any]:
-        if not (
-            _looks_text_config_name(source_hint)
-            or _looks_like_container_image_blob_path(source_hint)
-        ):
-            return []
-        stripped = str(text or "").strip()
-        if not stripped:
-            return []
-
-        candidate_texts = [stripped]
-        if Path(str(source_hint or "").lower()).suffix == ".jsonc":
-            jsonc_stripped = self._strip_jsonc_comments(stripped).strip()
-            if jsonc_stripped and jsonc_stripped != stripped:
-                candidate_texts.append(jsonc_stripped)
-        for candidate_text in candidate_texts:
-            parsed = _safe_json_loads(candidate_text)
-            if isinstance(parsed, (dict, list)):
-                return [parsed]
-
-        parsed_lines = self._run_ordered_local_batch(
-            stripped.splitlines(),
-            self._json_document_from_line,
-            default_factory=lambda: None,
+        return json_documents_from_text_for_processor(
+            text,
+            source_hint=source_hint,
+            looks_text_config_name=_looks_text_config_name,
+            looks_like_container_image_blob_path=_looks_like_container_image_blob_path,
+            strip_jsonc_comments=self._strip_jsonc_comments,
+            safe_json_loads=_safe_json_loads,
+            json_document_from_line=self._json_document_from_line,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        return [
-            parsed_line for parsed_line in parsed_lines if isinstance(parsed_line, (dict, list))
-        ]
 
     @staticmethod
     def _json_document_from_line(raw_line: str) -> Any:
-        candidate = str(raw_line or "").strip()
-        if not candidate:
-            return None
-        parsed_line = _safe_json_loads(candidate)
-        if isinstance(parsed_line, (dict, list)):
-            return parsed_line
-        return None
+        return json_document_from_line_for_processor(
+            raw_line,
+            safe_json_loads=_safe_json_loads,
+        )
 
     def _json_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        documents = self._json_documents_from_text(text, source_hint=source_hint)
-        if not documents:
-            return ""
-
-        docker_auth_line_batches = self._run_ordered_local_batch(
-            documents,
-            lambda document: (
-                self._docker_auth_config_candidates(document)
-                if self._json_document_looks_like_docker_auth_config(document, source_hint)
-                else []
+        return json_structured_payload_text_for_processor(
+            text,
+            source_hint=source_hint,
+            json_documents_from_text=self._json_documents_from_text,
+            json_document_looks_like_docker_auth_config=(
+                self._json_document_looks_like_docker_auth_config
             ),
-            default_factory=list,
+            docker_auth_config_candidates=self._docker_auth_config_candidates,
+            ecs_task_definition_candidates=ecs_task_definition_candidates,
+            lambda_config_candidates=lambda_config_candidates,
+            amplify_client_config_candidates=amplify_client_config_candidates,
+            structured_document_lines=self._structured_document_lines,
+            ordered_line_batch_entries=self._ordered_line_batch_entries,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        ecs_task_line_batches = self._run_ordered_local_batch(
-            documents,
-            ecs_task_definition_candidates,
-            default_factory=list,
-        )
-        lambda_config_line_batches = self._run_ordered_local_batch(
-            documents,
-            lambda_config_candidates,
-            default_factory=list,
-        )
-        amplify_client_line_batches = self._run_ordered_local_batch(
-            documents,
-            lambda document: amplify_client_config_candidates(
-                document,
-                source_hint=source_hint,
-            ),
-            default_factory=list,
-        )
-        line_batches = self._run_ordered_local_batch(
-            documents,
-            self._structured_document_lines,
-            default_factory=list,
-        )
-        line_batches = [
-            *docker_auth_line_batches,
-            *ecs_task_line_batches,
-            *lambda_config_line_batches,
-            *amplify_client_line_batches,
-            *line_batches,
-        ]
-        prepared_line_batches = self._run_ordered_local_batch(
-            list(enumerate(line_batches)),
-            self._ordered_line_batch_entries,
-            default_factory=list,
-        )
-        lines: list[str] = []
-        seen: set[str] = set()
-        for line_batch in prepared_line_batches:
-            for candidate in line_batch:
-                lowered = candidate.lower()
-                if not candidate or lowered in seen:
-                    continue
-                seen.add(lowered)
-                lines.append(candidate)
-        return "\n".join(lines)
 
     def _json_document_looks_like_docker_auth_config(self, document: Any, source_hint: str) -> bool:
-        if not isinstance(document, dict):
-            return False
-        source_name = Path(str(source_hint or "").replace("\\", "/")).name.lower()
-        if source_name in {".dockercfg", ".dockerconfigjson"}:
-            return True
-        normalized = self._yaml_normalized_mapping(document)
-        return any(key in normalized for key in ("auths", "credhelpers", "credsstore", "credstore"))
+        return json_document_looks_like_docker_auth_config_for_processor(
+            document,
+            source_hint,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+        )
 
     def _firebaserc_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        source_name = Path(str(source_hint or "").replace("\\", "/")).name.lower()
-        if source_name != ".firebaserc":
-            return ""
-        payload = _safe_json_loads(str(text or ""))
-        if not isinstance(payload, dict):
-            return ""
-
-        project_ref_values: list[Any] = []
-        projects = payload.get("projects")
-        if isinstance(projects, dict):
-            project_ref_values.extend(projects.values())
-
-        targets = payload.get("targets")
-        if isinstance(targets, dict):
-            project_ref_values.extend(targets)
-
-        project_url_candidates = self._run_ordered_local_batch(
-            project_ref_values,
-            self._firebaserc_project_ref_url,
-            default_factory=str,
+        return firebaserc_structured_payload_text_for_processor(
+            text,
+            source_hint=source_hint,
+            safe_json_loads=_safe_json_loads,
+            firebaserc_project_ref_url=self._firebaserc_project_ref_url,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-
-        candidates: list[str] = []
-        seen: set[str] = set()
-        for project_url in project_url_candidates:
-            if not project_url or project_url in seen:
-                continue
-            seen.add(project_url)
-            candidates.append(project_url)
-
-        return "\n".join(candidates)
 
     def _firebaserc_project_ref_url(self, value: Any) -> str:
-        project_ref = self._yaml_valid_project_ref(str(value or ""))
-        if not project_ref:
-            return ""
-        return f"https://{project_ref}.firebaseio.com"
+        return firebaserc_project_ref_url_for_processor(
+            value,
+            yaml_valid_project_ref=self._yaml_valid_project_ref,
+        )
 
     def _observability_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        label = _observability_text_config_artifact_label(source_hint)
-        if label not in _OBSERVABILITY_STRUCTURED_LABELS or yaml is None:
-            return ""
-        try:
-            documents = list(yaml.safe_load_all(text))
-        except Exception:  # noqa: BLE001
-            return ""
-
-        candidate_batches = self._run_ordered_local_batch(
-            documents,
-            lambda document: self._observability_structured_document_candidates(document, label),
-            default_factory=list,
+        return observability_structured_payload_text_for_processor(
+            text,
+            source_hint=source_hint,
+            observability_text_config_artifact_label=(
+                _observability_text_config_artifact_label
+            ),
+            observability_structured_labels=_OBSERVABILITY_STRUCTURED_LABELS,
+            yaml_safe_load_all=yaml.safe_load_all if yaml is not None else None,
+            observability_structured_document_candidates=(
+                self._observability_structured_document_candidates
+            ),
+            ordered_line_batch_entries=self._ordered_line_batch_entries,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        prepared_candidate_batches = self._run_ordered_local_batch(
-            list(enumerate(candidate_batches)),
-            self._ordered_line_batch_entries,
-            default_factory=list,
-        )
-
-        lines: list[str] = []
-        seen: set[str] = set()
-        for candidate_batch in prepared_candidate_batches:
-            for candidate in candidate_batch:
-                lowered = candidate.lower()
-                if not candidate or lowered in seen:
-                    continue
-                seen.add(lowered)
-                lines.append(candidate)
-        return "\n".join(lines)
 
     def _observability_structured_document_candidates(self, document: Any, label: str) -> list[str]:
-        del label
-        candidate_values = self._observability_structured_node_candidates(
+        return observability_structured_document_candidates_for_processor(
             document,
-            inherited_scheme="http",
-            use_workers=True,
+            label,
+            observability_structured_node_candidates=(
+                self._observability_structured_node_candidates
+            ),
         )
-        candidates: list[str] = []
-        seen: set[str] = set()
-        for value in candidate_values:
-            candidate = str(value or "").strip()
-            lowered = candidate.lower()
-            if not candidate or lowered in seen:
-                continue
-            seen.add(lowered)
-            candidates.append(candidate)
-        return candidates
 
     def _observability_structured_node_candidates(
         self,
@@ -25450,10 +19700,9 @@ class ArtifactQueueProcessor:
         candidates: list[str] = []
         if isinstance(value, dict):
             normalized = self._yaml_normalized_mapping(value)
-            scheme = (
-                self._observability_scheme_candidate(self._yaml_ref_value(normalized, "scheme"))
-                or inherited_scheme
-            )
+            scheme = self._observability_scheme_candidate(
+                self._yaml_ref_value(normalized, "scheme")
+            ) or inherited_scheme
             endpoint_jobs: list[tuple[Any, str]] = []
             for raw_key, raw_endpoint_values in value.items():
                 if (
@@ -25461,7 +19710,9 @@ class ArtifactQueueProcessor:
                     not in _OBSERVABILITY_ENDPOINT_FIELD_FINGERPRINTS
                 ):
                     continue
-                endpoint_jobs.extend(self._observability_endpoint_jobs(raw_endpoint_values, scheme))
+                endpoint_jobs.extend(
+                    self._observability_endpoint_jobs(raw_endpoint_values, scheme)
+                )
             if endpoint_jobs:
                 target_candidates = self._run_ordered_local_batch(
                     endpoint_jobs,
@@ -25470,7 +19721,8 @@ class ArtifactQueueProcessor:
                 )
                 candidates.extend(target_candidates)
             child_jobs = [
-                (child_index, child, scheme) for child_index, child in enumerate(value.values())
+                (child_index, child, scheme)
+                for child_index, child in enumerate(value.values())
             ]
             child_batches = (
                 self._run_ordered_local_batch(
@@ -25493,7 +19745,8 @@ class ArtifactQueueProcessor:
             return candidates
         if isinstance(value, list):
             item_jobs = [
-                (item_index, item, inherited_scheme) for item_index, item in enumerate(value[:4096])
+                (item_index, item, inherited_scheme)
+                for item_index, item in enumerate(value[:4096])
             ]
             item_batches = (
                 self._run_ordered_local_batch(
@@ -25519,172 +19772,64 @@ class ArtifactQueueProcessor:
         self,
         child_job: tuple[int, Any, str],
     ) -> list[str]:
-        _child_index, child, inherited_scheme = child_job
-        return self._observability_structured_node_candidates(
-            child,
-            inherited_scheme=inherited_scheme,
-            use_workers=False,
+        return observability_child_candidate_values_for_processor(
+            child_job,
+            observability_structured_node_candidates=(
+                self._observability_structured_node_candidates
+            ),
         )
 
     def _observability_endpoint_jobs(self, value: Any, scheme: str) -> list[tuple[Any, str]]:
-        jobs: list[tuple[Any, str]] = []
-
-        def _walk_endpoint(raw_value: Any) -> None:
-            if len(jobs) >= 4096:
-                return
-            if isinstance(raw_value, (str, int, float)):
-                jobs.append((raw_value, scheme))
-                return
-            if isinstance(raw_value, list):
-                for item in raw_value[:4096]:
-                    _walk_endpoint(item)
-
-        _walk_endpoint(value)
-        return jobs
+        return observability_endpoint_jobs_for_processor(value, scheme)
 
     @staticmethod
     def _observability_scheme_candidate(value: Any) -> str:
-        scheme = str(value or "").strip().lower()
-        return scheme if scheme in {"http", "https"} else ""
+        return observability_scheme_candidate_for_processor(value)
 
     @staticmethod
     def _observability_target_url_candidate(target_scheme: tuple[Any, str]) -> str:
-        raw_target, raw_scheme = target_scheme
-        target = str(raw_target or "").strip().strip("\"'")
-        if not target or any(marker in target for marker in ("${", "$(", "{{", "}}", "*")):
-            return ""
-        if "://" in target:
-            normalized = _normalize_artifact_text_url(target)
-            return normalized if _classify_seed_value(normalized) in {"url", "apk_url"} else ""
-
-        match = re.fullmatch(
-            r"(?P<host>[A-Za-z0-9][A-Za-z0-9.-]{1,253})(?::(?P<port>\d{1,5}))(?P<path>/[^\s?#]*)?",
-            target,
+        return observability_target_url_candidate_for_processor(
+            target_scheme,
+            normalize_artifact_text_url=_normalize_artifact_text_url,
+            classify_seed_value=_classify_seed_value,
+            observability_scheme_candidate=(
+                ArtifactQueueProcessor._observability_scheme_candidate
+            ),
         )
-        if not match:
-            return ""
-        host = str(match.group("host") or "").strip().lower().strip(".")
-        if not host or "." not in host or host in {"localhost", "example.com"}:
-            return ""
-        if _classify_seed_value(host) not in {"domain", "subdomain"}:
-            return ""
-        port = int(match.group("port") or 0)
-        if port < 1 or port > 65535:
-            return ""
-        scheme = ArtifactQueueProcessor._observability_scheme_candidate(raw_scheme) or "http"
-        path = str(match.group("path") or "").strip()
-        return f"{scheme}://{host}:{port}{path}"
 
     def _edge_proxy_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        if _edge_proxy_config_artifact_label(source_hint) not in _EDGE_PROXY_STRUCTURED_LABELS:
-            return ""
-        line_batches = self._run_ordered_local_batch(
-            str(text or "").splitlines()[:4096],
-            self._edge_proxy_line_url_candidates,
-            default_factory=list,
+        return edge_proxy_structured_payload_text_for_processor(
+            text,
+            source_hint=source_hint,
+            edge_proxy_config_artifact_label=_edge_proxy_config_artifact_label,
+            edge_proxy_structured_labels=_EDGE_PROXY_STRUCTURED_LABELS,
+            edge_proxy_line_url_candidates=self._edge_proxy_line_url_candidates,
+            ordered_line_batch_entries=self._ordered_line_batch_entries,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        prepared_line_batches = self._run_ordered_local_batch(
-            list(enumerate(line_batches)),
-            self._ordered_line_batch_entries,
-            default_factory=list,
-        )
-        lines: list[str] = []
-        seen: set[str] = set()
-        for line_batch in prepared_line_batches:
-            for candidate in line_batch:
-                normalized = str(candidate or "").strip()
-                lowered = normalized.lower()
-                if not normalized or lowered in seen:
-                    continue
-                seen.add(lowered)
-                lines.append(normalized)
-        return "\n".join(lines)
 
     @staticmethod
     def _edge_proxy_line_url_candidates(raw_line: str) -> list[str]:
-        line = str(raw_line or "").strip()
-        if not line or line.startswith(("#", "//", ";")):
-            return []
-
-        raw_candidates: list[str] = []
-        host_rule_found = False
-        for host_rule in _EDGE_PROXY_HOST_RULE_RE.finditer(line):
-            host_rule_found = True
-            values = str(host_rule.group("values") or "")
-            for value_match in _EDGE_PROXY_HOST_RULE_VALUE_RE.finditer(values):
-                value = value_match.group("quoted") or value_match.group("bare") or ""
-                if value:
-                    raw_candidates.append(value)
-
-        keyed_match = _EDGE_PROXY_KEYED_VALUE_RE.match(line)
-        if any(marker in line for marker in ("${", "$(", "{{", "}}", "<", ">")):
-            pass
-        elif keyed_match:
-            raw_candidates.extend(
-                match.group(0)
-                for match in _EDGE_PROXY_ENDPOINT_TOKEN_RE.finditer(
-                    str(keyed_match.group("value") or "")
-                )
-            )
-        else:
-            scan_line = line
-            yaml_value_match = re.match(
-                r"""^(?:-\s*)?["']?[A-Za-z0-9_.\-/]+["']?\s*:\s*(?P<value>.+?)\s*$""",
-                line,
-            )
-            if yaml_value_match:
-                scan_line = str(yaml_value_match.group("value") or "").strip()
-            if not host_rule_found and (
-                "://" in scan_line
-                or scan_line.endswith("{")
-                or re.search(
-                    r"\b(?:hdr\(host\)|host\(|hostsni\(|acl|backend|route|upstream|virtualhost)\b",
-                    scan_line,
-                    re.IGNORECASE,
-                )
-            ):
-                raw_candidates.extend(
-                    match.group(0) for match in _EDGE_PROXY_ENDPOINT_TOKEN_RE.finditer(scan_line)
-                )
-
-        normalized_candidates = [
-            ArtifactQueueProcessor._edge_proxy_endpoint_url_candidate(candidate)
-            for candidate in raw_candidates
-        ]
-        lines: list[str] = []
-        seen: set[str] = set()
-        for candidate in normalized_candidates:
-            lowered = candidate.lower()
-            if not candidate or lowered in seen:
-                continue
-            seen.add(lowered)
-            lines.append(candidate)
-        return lines
+        return edge_proxy_line_url_candidates_for_processor(
+            raw_line,
+            edge_proxy_host_rule_pattern=_EDGE_PROXY_HOST_RULE_RE,
+            edge_proxy_host_rule_value_pattern=_EDGE_PROXY_HOST_RULE_VALUE_RE,
+            edge_proxy_keyed_value_pattern=_EDGE_PROXY_KEYED_VALUE_RE,
+            edge_proxy_endpoint_token_pattern=_EDGE_PROXY_ENDPOINT_TOKEN_RE,
+            edge_proxy_endpoint_url_candidate=(
+                ArtifactQueueProcessor._edge_proxy_endpoint_url_candidate
+            ),
+        )
 
     @staticmethod
     def _edge_proxy_endpoint_url_candidate(raw_value: str, default_scheme: str = "http") -> str:
-        value = str(raw_value or "").strip().replace("\\/", "/")
-        value = value.strip().strip("\"'`[]{}(),;")
-        if not value:
-            return ""
-        lowered = value.lower()
-        if any(marker in value for marker in ("${", "$(", "{{", "}}", "<", ">", "*", "$")):
-            return ""
-        if lowered.startswith(("unix:", "file:", "mailto:", "tel:", "s3://", "gs://")):
-            return ""
-        if value.startswith(("/", ".", "-")):
-            return ""
-        if lowered.startswith(("grpc://", "h2c://")):
-            value = f"http://{value.split('://', 1)[1]}"
-        elif lowered.startswith("grpcs://"):
-            value = f"https://{value.split('://', 1)[1]}"
-        elif value.startswith("//"):
-            scheme = default_scheme if default_scheme in {"http", "https"} else "http"
-            value = f"{scheme}:{value}"
-        elif "://" not in value:
-            scheme = default_scheme if default_scheme in {"http", "https"} else "http"
-            value = f"{scheme}://{value}"
-        return ArtifactQueueProcessor._api_spec_url_candidate_entry(value)
+        return edge_proxy_endpoint_url_candidate_for_processor(
+            raw_value,
+            default_scheme,
+            api_spec_url_candidate_entry=(
+                ArtifactQueueProcessor._api_spec_url_candidate_entry
+            ),
+        )
 
     def _orchestration_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
         source_label = _container_orchestration_config_artifact_label(source_hint)
@@ -25797,7 +19942,11 @@ class ArtifactQueueProcessor:
                     ) in child_jobs
                 ]
             )
-            return [candidate for child_values in child_batches for candidate in child_values]
+            return [
+                candidate
+                for child_values in child_batches
+                for candidate in child_values
+            ]
         if isinstance(value, list):
             item_jobs = [
                 (item_index, None, item, parent_key_fingerprint, source_label)
@@ -25820,7 +19969,11 @@ class ArtifactQueueProcessor:
                     for _item_index, _raw_key, item, parent_key_fingerprint, source_label in item_jobs
                 ]
             )
-            return [candidate for item_values in item_batches for candidate in item_values]
+            return [
+                candidate
+                for item_values in item_batches
+                for candidate in item_values
+            ]
         if isinstance(value, str) and ("Host(" in value or "HostSNI(" in value):
             return self._orchestration_routing_rule_candidates(value, use_workers=False)
         return []
@@ -25853,28 +20006,15 @@ class ArtifactQueueProcessor:
     ) -> list[str]:
         key_fingerprint = self._yaml_key_fingerprint(str(raw_key or ""))
         candidates: list[str] = []
-        if (
-            key_fingerprint in _ORCHESTRATION_ENDPOINT_FIELD_FINGERPRINTS
-            or (
-                parent_key_fingerprint in {"annotation", "annotations"}
-                and self._orchestration_annotation_endpointish_key(key_fingerprint)
-            )
-            or (
-                source_label in {"helm-chart", "helm-lock"}
-                and key_fingerprint in {"repository", "repositories"}
-            )
+        if key_fingerprint in _ORCHESTRATION_ENDPOINT_FIELD_FINGERPRINTS or (
+            parent_key_fingerprint in {"annotation", "annotations"}
+            and self._orchestration_annotation_endpointish_key(key_fingerprint)
+        ) or (
+            source_label in {"helm-chart", "helm-lock"}
+            and key_fingerprint in {"repository", "repositories"}
         ):
             candidates.extend(self._orchestration_endpoint_url_candidates(child, use_workers=False))
-        if key_fingerprint in {
-            "annotation",
-            "annotations",
-            "label",
-            "labels",
-            "match",
-            "matches",
-            "rule",
-            "rules",
-        }:
+        if key_fingerprint in {"annotation", "annotations", "label", "labels", "match", "matches", "rule", "rules"}:
             candidates.extend(self._orchestration_routing_rule_candidates(child, use_workers=False))
         candidates.extend(
             self._orchestration_node_url_candidates(
@@ -25888,17 +20028,7 @@ class ArtifactQueueProcessor:
 
     @staticmethod
     def _orchestration_annotation_endpointish_key(key_fingerprint: str) -> bool:
-        return any(
-            marker in key_fingerprint
-            for marker in (
-                "endpoint",
-                "hostname",
-                "serveralias",
-                "vhost",
-                "domain",
-                "externaldns",
-            )
-        ) or key_fingerprint.endswith(("host", "url", "address"))
+        return orchestration_annotation_endpointish_key_for_processor(key_fingerprint)
 
     def _orchestration_endpoint_url_candidates(self, value: Any, *, use_workers: bool) -> list[str]:
         raw_values = self._orchestration_endpoint_values(value)
@@ -25909,7 +20039,10 @@ class ArtifactQueueProcessor:
                 default_factory=str,
             )
             if use_workers
-            else [self._edge_proxy_endpoint_url_candidate(raw_value) for raw_value in raw_values]
+            else [
+                self._edge_proxy_endpoint_url_candidate(raw_value)
+                for raw_value in raw_values
+            ]
         )
         return [candidate for candidate in normalized_values if candidate]
 
@@ -25922,645 +20055,195 @@ class ArtifactQueueProcessor:
                 default_factory=list,
             )
             if use_workers
-            else [self._edge_proxy_line_url_candidates(text_value) for text_value in text_values]
+            else [
+                self._edge_proxy_line_url_candidates(text_value)
+                for text_value in text_values
+            ]
         )
-        return [candidate for candidate_batch in candidate_batches for candidate in candidate_batch]
+        return [
+            candidate
+            for candidate_batch in candidate_batches
+            for candidate in candidate_batch
+        ]
 
     def _orchestration_endpoint_values(self, value: Any) -> list[str]:
-        values: list[str] = []
-
-        def _walk(raw_value: Any) -> None:
-            if len(values) >= 4096:
-                return
-            if isinstance(raw_value, (str, int, float)):
-                values.append(str(raw_value).strip())
-                return
-            if isinstance(raw_value, list):
-                for item in raw_value[:4096]:
-                    _walk(item)
-
-        _walk(value)
-        return [value for value in values if value]
+        return orchestration_endpoint_values_for_processor(value)
 
     def _orchestration_text_values(self, value: Any) -> list[str]:
-        values: list[str] = []
-
-        def _walk(raw_value: Any) -> None:
-            if len(values) >= 4096:
-                return
-            if isinstance(raw_value, str):
-                values.append(raw_value)
-                return
-            if isinstance(raw_value, list):
-                for item in raw_value[:4096]:
-                    _walk(item)
-                return
-            if isinstance(raw_value, dict):
-                for item in list(raw_value.values())[:4096]:
-                    _walk(item)
-
-        _walk(value)
-        return [value for value in values if value]
+        return orchestration_text_values_for_processor(value)
 
     def _kopia_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        source_name = Path(str(source_hint or "").replace("\\", "/")).name.lower()
-        if not (
-            _looks_like_kopia_text_config_artifact_name(source_hint)
-            or source_name == "repository.config"
-        ):
-            return ""
-        document = _safe_json_loads(str(text or "").strip())
-        if not isinstance(document, dict):
-            return ""
-        storage = document.get("storage")
-        if not isinstance(storage, dict):
-            return ""
-        config = storage.get("config")
-        if not isinstance(config, dict):
-            config = {}
-        storage_type = str(storage.get("type") or config.get("type") or "").strip().lower()
-        merged = dict(storage)
-        merged.update(config)
-        normalized = self._yaml_normalized_mapping(merged)
-        candidates: list[str] = []
-
-        def _append(value: str) -> None:
-            candidate = str(value or "").strip()
-            if candidate:
-                candidates.append(candidate)
-
-        endpoint = _artifact_managed_cloud_url_candidate(
-            self._yaml_ref_value(normalized, "endpoint", "server", "url")
+        return kopia_structured_payload_text_for_processor(
+            text,
+            source_hint=source_hint,
+            looks_like_kopia_text_config_artifact_name=_looks_like_kopia_text_config_artifact_name,
+            safe_json_loads=_safe_json_loads,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+            artifact_managed_cloud_url_candidate=_artifact_managed_cloud_url_candidate,
         )
-        if endpoint:
-            _append(endpoint)
-        if "s3" in storage_type:
-            bucket = self._yaml_valid_bucket_name(
-                self._yaml_ref_value(normalized, "bucket", "bucketName", "bucket_name")
-            )
-            if bucket and re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket):
-                _append(f"s3://{bucket}")
-        if storage_type in {"gcs", "google", "googlecloudstorage", "google-cloud-storage"}:
-            bucket = self._yaml_valid_bucket_name(
-                self._yaml_ref_value(normalized, "bucket", "bucketName", "bucket_name")
-            )
-            if bucket:
-                _append(f"gs://{bucket}")
-        if "azure" in storage_type or "blob" in storage_type:
-            account_name = (
-                str(
-                    self._yaml_ref_value(
-                        normalized,
-                        "storage_account_name",
-                        "storageAccountName",
-                        "account_name",
-                        "accountName",
-                        "account",
-                    )
-                )
-                .strip()
-                .lower()
-            )
-            container_name = (
-                str(
-                    self._yaml_ref_value(
-                        normalized,
-                        "container",
-                        "container_name",
-                        "containerName",
-                        "bucket",
-                        "bucketName",
-                    )
-                )
-                .strip()
-                .lower()
-            )
-            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
-                r"[^/?#]+", container_name
-            ):
-                _append(f"https://{account_name}.blob.core.windows.net/{container_name}")
-
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for candidate in candidates:
-            lowered = candidate.lower()
-            if lowered in seen:
-                continue
-            seen.add(lowered)
-            deduped.append(candidate)
-        return "\n".join(deduped)
 
     def _duplicacy_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        source_name = Path(str(source_hint or "").replace("\\", "/")).name.lower()
-        if not (
-            _looks_like_duplicacy_preferences_text_config_artifact_name(source_hint)
-            or source_name == "preferences"
-        ):
-            return ""
-        document = _safe_json_loads(str(text or "").strip())
-        if isinstance(document, list):
-            entries = [entry for entry in document if isinstance(entry, dict)]
-        elif isinstance(document, dict):
-            entries = [document] if self._duplicacy_preference_entry_has_hint(document) else []
-        else:
-            entries = []
-        if not entries:
-            return ""
-        candidate_batches = self._run_ordered_local_batch(
-            entries,
-            self._duplicacy_preference_entry_candidates,
-            default_factory=list,
+        return duplicacy_structured_payload_text_for_processor(
+            text,
+            source_hint=source_hint,
+            looks_like_duplicacy_preferences_text_config_artifact_name=(
+                _looks_like_duplicacy_preferences_text_config_artifact_name
+            ),
+            safe_json_loads=_safe_json_loads,
+            duplicacy_preference_entry_has_hint=self._duplicacy_preference_entry_has_hint,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+            duplicacy_preference_entry_candidates=self._duplicacy_preference_entry_candidates,
         )
-        candidates: list[str] = []
-        seen: set[str] = set()
-        for candidate_batch in candidate_batches:
-            for candidate in candidate_batch:
-                lowered = candidate.lower()
-                if not candidate or lowered in seen:
-                    continue
-                seen.add(lowered)
-                candidates.append(candidate)
-        return "\n".join(candidates)
 
     @classmethod
     def _duplicacy_preference_entry_has_hint(cls, entry: dict[str, Any]) -> bool:
-        normalized = cls._yaml_normalized_mapping(entry)
-        return any(
-            key in normalized
-            for key in (
-                "storage",
-                "storage_url",
-                "storageurl",
-                "storage_url_string",
-                "storageurlstring",
-                "url",
-            )
+        return duplicacy_preference_entry_has_hint_for_processor(
+            entry,
+            yaml_normalized_mapping=cls._yaml_normalized_mapping,
         )
 
     def _duplicacy_preference_entry_candidates(self, entry: dict[str, Any]) -> list[str]:
-        normalized = self._yaml_normalized_mapping(entry)
-        storage_values: list[str] = []
-        for key in (
-            "storage",
-            "storage_url",
-            "storageUrl",
-            "storage-url",
-            "storage_url_string",
-            "url",
-        ):
-            value = entry.get(key)
-            if isinstance(value, str) and value.strip():
-                storage_values.append(value.strip())
-        storage = entry.get("storage")
-        if isinstance(storage, dict):
-            storage_normalized = self._yaml_normalized_mapping(storage)
-            storage_url = self._yaml_ref_value(
-                storage_normalized,
-                "url",
-                "uri",
-                "storage_url",
-                "storageUrl",
-                "bucket",
-                "container",
-            )
-            if storage_url:
-                storage_values.append(storage_url)
-            normalized.update(storage_normalized)
-        candidate_batches = self._run_ordered_local_batch(
-            storage_values,
-            lambda storage_value: self._duplicacy_storage_url_candidates(storage_value, normalized),
-            default_factory=list,
+        return duplicacy_preference_entry_candidates_for_processor(
+            entry,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_ref_value=self._yaml_ref_value,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+            duplicacy_storage_url_candidates=self._duplicacy_storage_url_candidates,
         )
-        candidates: list[str] = []
-        seen: set[str] = set()
-        for candidate_batch in candidate_batches:
-            for candidate in candidate_batch:
-                lowered = candidate.lower()
-                if not candidate or lowered in seen:
-                    continue
-                seen.add(lowered)
-                candidates.append(candidate)
-        return candidates
 
     def _duplicacy_storage_url_candidates(
         self,
         storage_url: str,
         context: dict[str, Any],
     ) -> list[str]:
-        value = str(storage_url or "").strip().strip("\"'")
-        if not value:
-            return []
-        parsed = urlparse(value)
-        scheme = parsed.scheme.lower()
-        if scheme in {"http", "https"}:
-            managed_url = _artifact_managed_cloud_url_candidate(value)
-            return [managed_url] if managed_url else []
-        if scheme == "s3":
-            return self._duplicacy_s3_storage_candidates(value)
-        if scheme in {"gcd", "gcs", "gs", "google", "googlecloudstorage"}:
-            bucket = self._duplicacy_bucket_from_storage_url(value)
-            return [f"gs://{bucket}"] if bucket else []
-        if scheme in {"azure", "az", "azureblob"}:
-            account_name = (
-                str(
-                    self._yaml_ref_value(
-                        context,
-                        "storage_account_name",
-                        "storageAccountName",
-                        "account_name",
-                        "accountName",
-                        "account",
-                        "azure_storage_account",
-                        "azureStorageAccount",
-                    )
-                )
-                .strip()
-                .lower()
-            )
-            container_name = self._duplicacy_bucket_from_storage_url(value)
-            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
-                r"[^/?#]+", container_name
-            ):
-                return [f"https://{account_name}.blob.core.windows.net/{container_name}"]
-        return []
+        return duplicacy_storage_url_candidates_for_processor(
+            storage_url,
+            context,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+            artifact_managed_cloud_url_candidate=_artifact_managed_cloud_url_candidate,
+            duplicacy_s3_storage_candidates=duplicacy_s3_storage_candidates_for_processor,
+            duplicacy_bucket_from_storage_url=duplicacy_bucket_from_storage_url_for_processor,
+        )
 
     def _duplicacy_s3_storage_candidates(self, storage_url: str) -> list[str]:
-        parsed = urlparse(str(storage_url or "").strip())
-        candidates: list[str] = []
-        netloc = parsed.netloc.strip()
-        path_segments = [segment for segment in parsed.path.split("/") if segment]
-        bucket_candidate = ""
-        if "@" in netloc:
-            bucket_candidate = netloc.rsplit("@", 1)[1]
-        elif netloc and "." in netloc and path_segments:
-            bucket_candidate = path_segments[0]
-            endpoint_url = _artifact_managed_cloud_url_candidate(
-                f"https://{netloc}/{bucket_candidate}"
-            )
-            if endpoint_url:
-                candidates.append(endpoint_url)
-        elif netloc:
-            bucket_candidate = netloc
-        elif path_segments:
-            bucket_candidate = path_segments[0]
-        bucket = self._yaml_valid_bucket_name(bucket_candidate)
-        if bucket and re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket):
-            candidates.append(f"s3://{bucket}")
-        return candidates
+        return duplicacy_s3_storage_candidates_for_processor(
+            storage_url,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+            artifact_managed_cloud_url_candidate=_artifact_managed_cloud_url_candidate,
+        )
 
     def _duplicacy_bucket_from_storage_url(self, storage_url: str) -> str:
-        parsed = urlparse(str(storage_url or "").strip())
-        if parsed.netloc:
-            bucket = parsed.netloc
-        elif parsed.path.startswith("/"):
-            path_segments = [segment for segment in parsed.path.split("/") if segment]
-            bucket = path_segments[0] if path_segments else ""
-        else:
-            bucket = parsed.path
-        bucket = str(bucket or "").split("/", 1)[0].split(":", 1)[0].strip()
-        return self._yaml_valid_bucket_name(bucket)
+        return duplicacy_bucket_from_storage_url_for_processor(
+            storage_url,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+        )
 
     def _borg_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        source_kind = _borg_text_config_artifact_kind(source_hint)
-        source_name = Path(str(source_hint or "").replace("\\", "/")).name.lower()
-        if not source_kind and source_name not in {"borg.location", "borg.repository.config"}:
-            return ""
-
-        entries = self._parse_key_value_entries(text)
-        env_map: dict[str, str] = {}
-        context: dict[str, Any] = {}
-        repository_values: list[str] = []
-
-        def _append_repository_value(value: str) -> None:
-            candidate = str(value or "").strip().strip("\"'")
-            if candidate and not re.search(r"\s", candidate):
-                repository_values.append(candidate)
-
-        if source_kind == "location" or source_name == "borg.location":
-            for raw_line in str(text or "").splitlines():
-                line = raw_line.split("#", 1)[0].strip()
-                if line and "=" not in line and ":" in line:
-                    _append_repository_value(line)
-
-        for _section_path, key_name, value in entries:
-            normalized_key = self._yaml_key_fingerprint(key_name)
-            if not normalized_key:
-                continue
-            context[normalized_key] = value
-            env_name = re.sub(r"[^A-Za-z0-9]+", "_", normalized_key).strip("_").upper()
-            if env_name:
-                env_map[env_name] = value
-            if normalized_key in {
-                "location",
-                "repository",
-                "repositorylocation",
-                "repo",
-                "remote",
-                "remoteurl",
-                "url",
-                "borgrepo",
-                "borgrepository",
-                "borgrepositorylocation",
-            } or (
-                "borg" in normalized_key
-                and ("repo" in normalized_key or "repository" in normalized_key)
-            ):
-                _append_repository_value(value)
-
-        candidate_batches = self._run_ordered_local_batch(
-            repository_values,
-            lambda repository: self._borg_repository_candidates(repository, context),
-            default_factory=list,
+        return borg_structured_payload_text_for_processor(
+            text,
+            source_hint=source_hint,
+            borg_text_config_artifact_kind=_borg_text_config_artifact_kind,
+            parse_key_value_entries=self._parse_key_value_entries,
+            yaml_key_fingerprint=self._yaml_key_fingerprint,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+            borg_repository_candidates=self._borg_repository_candidates,
+            borg_repository_candidates_from_env_map=self._borg_repository_candidates_from_env_map,
         )
-        candidates: list[str] = []
-        for candidate_batch in candidate_batches:
-            candidates.extend(candidate_batch)
-        candidates.extend(self._borg_repository_candidates_from_env_map(env_map))
-
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for candidate in candidates:
-            lowered = str(candidate or "").strip().lower()
-            if not candidate or lowered in seen:
-                continue
-            seen.add(lowered)
-            deduped.append(candidate)
-        return "\n".join(deduped)
 
     def _duplicati_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        entries = self._parse_key_value_entries(text)
-        if not entries:
-            return ""
-        env_map = self._duplicati_env_map_from_entries(entries)
-        if not self._looks_like_duplicati_payload_hint(source_hint, env_map):
-            return ""
-        candidates = self._duplicati_target_url_candidates_from_env_map(env_map)
-        if not candidates:
-            return ""
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for candidate in candidates:
-            lowered = candidate.lower()
-            if not candidate or lowered in seen:
-                continue
-            seen.add(lowered)
-            deduped.append(candidate)
-        return "\n".join(deduped)
+        return duplicati_structured_payload_text_for_processor(
+            text,
+            source_hint=source_hint,
+            parse_key_value_entries=self._parse_key_value_entries,
+            duplicati_env_map_from_entries=self._duplicati_env_map_from_entries,
+            looks_like_duplicati_payload_hint=self._looks_like_duplicati_payload_hint,
+            duplicati_target_url_candidates_from_env_map=self._duplicati_target_url_candidates_from_env_map,
+        )
 
     def _duplicati_env_map_from_entries(
         self,
         entries: Sequence[tuple[tuple[str, ...], str, str]],
     ) -> dict[str, str]:
-        env_map: dict[str, str] = {}
-
-        def _set_env(name: str, value: str) -> None:
-            candidate_name = re.sub(r"[^A-Za-z0-9]+", "_", str(name or "")).strip("_").upper()
-            candidate_value = str(value or "").strip()
-            if not candidate_name or not candidate_value:
-                return
-            env_map[candidate_name] = candidate_value
-            env_map.setdefault(candidate_name.replace("-", "_"), candidate_value)
-
-        for _section_path, key_name, value in entries:
-            _set_env(key_name, value)
-            key_fingerprint = self._yaml_key_fingerprint(key_name)
-            if key_fingerprint in {"settings", "options", "metadata", "parameters"}:
-                for nested_key, nested_value in self._duplicati_nested_option_entries(value):
-                    _set_env(nested_key, nested_value)
-        return env_map
+        return duplicati_env_map_from_entries_for_processor(
+            entries,
+            yaml_key_fingerprint=self._yaml_key_fingerprint,
+            duplicati_nested_option_entries=self._duplicati_nested_option_entries,
+        )
 
     @classmethod
     def _looks_like_duplicati_payload_hint(cls, source_hint: str, env_map: dict[str, str]) -> bool:
-        if not any(
-            key in env_map
-            for key in (
-                "TARGETURL",
-                "TARGET_URL",
-                "TARGETURI",
-                "TARGET_URI",
-                "REMOTEURL",
-                "REMOTE_URL",
-            )
-        ):
-            return False
-        lowered = str(source_hint or "").replace("\\", "/").lower()
-        return (
-            "duplicati" in lowered
-            or "#sqlite-row-backup-" in lowered
-            or "#sqlite-row-backups-" in lowered
-        )
+        return looks_like_duplicati_payload_hint_for_processor(source_hint, env_map)
 
     def _duplicati_nested_option_entries(self, value: str) -> list[tuple[str, str]]:
-        option_lines: list[str] = []
-        for raw_line in str(value or "").splitlines():
-            line = str(raw_line or "").strip()
-            if not line:
-                continue
-            line = re.sub(r"^-{1,2}", "", line)
-            if "=" in line:
-                option_lines.append(line)
-        if not option_lines:
-            return []
-        parsed_entries = self._parse_key_value_entries("\n".join(option_lines))
-        return [(key_name, parsed_value) for _section, key_name, parsed_value in parsed_entries]
+        return duplicati_nested_option_entries_for_processor(
+            value,
+            parse_key_value_entries=self._parse_key_value_entries,
+        )
 
     def _ci_text_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        source_label = _appveyor_ci_config_artifact_label(source_hint)
-        if source_label != "appveyor" or yaml is None:
-            return ""
-        try:
-            documents = list(yaml.safe_load_all(text))
-        except Exception:  # noqa: BLE001
-            return ""
-
-        lines: list[str] = []
-        seen: set[str] = set()
-
-        def _append(value: str) -> None:
-            candidate = str(value or "").strip()
-            lowered = candidate.lower()
-            if not candidate or lowered in seen:
-                return
-            seen.add(lowered)
-            lines.append(candidate)
-
-        candidate_entries = self._run_ordered_local_batch(
-            documents,
-            self._appveyor_ci_document_candidate,
-            default_factory=str,
+        return ci_text_structured_payload_text_for_processor(
+            text,
+            source_hint=source_hint,
+            appveyor_ci_config_artifact_label=_appveyor_ci_config_artifact_label,
+            yaml_module=yaml,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+            appveyor_ci_document_candidate=self._appveyor_ci_document_candidate,
         )
-        for candidate in candidate_entries:
-            _append(candidate)
-        return "\n".join(lines)
 
     def _appveyor_ci_document_candidate(self, document: Any) -> str:
-        if not isinstance(document, dict):
-            return ""
-        normalized = self._yaml_normalized_mapping(document)
-        if not self._yaml_mapping_looks_like_appveyor_ci(normalized):
-            return ""
-        pipeline_name = self._yaml_external_secret_ref_segment(
-            self._yaml_ref_value(normalized, "name")
+        return appveyor_ci_document_candidate_for_processor(
+            document,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_mapping_looks_like_appveyor_ci=self._yaml_mapping_looks_like_appveyor_ci,
+            yaml_external_secret_ref_segment=self._yaml_external_secret_ref_segment,
+            yaml_ref_value=self._yaml_ref_value,
         )
-        return f"appveyor-pipeline://{pipeline_name or 'pipeline'}"
 
     @staticmethod
     def _yaml_mapping_looks_like_appveyor_ci(normalized: dict[str, Any]) -> bool:
-        return any(
-            key in normalized
-            for key in (
-                "appveyorbuildversion",
-                "buildscript",
-                "testscript",
-                "deployscript",
-                "beforescript",
-                "afterbuild",
-                "aftertest",
-                "init",
-                "install",
-                "branches",
-                "artifacts",
-                "environment",
-            )
-        )
+        return yaml_mapping_looks_like_appveyor_ci_for_processor(normalized)
 
     def _gitpod_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        if _gitpod_config_artifact_label(source_hint) != "gitpod" or yaml is None:
-            return ""
-        try:
-            documents = list(yaml.safe_load_all(text))
-        except Exception:  # noqa: BLE001
-            return ""
-
-        candidate_batches = self._run_ordered_local_batch(
-            documents,
-            self._gitpod_document_structured_candidates,
-            default_factory=list,
+        return gitpod_structured_payload_text_for_processor(
+            text,
+            source_hint=source_hint,
+            gitpod_config_artifact_label=_gitpod_config_artifact_label,
+            yaml_module=yaml,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+            gitpod_document_structured_candidates=self._gitpod_document_structured_candidates,
         )
-        lines: list[str] = []
-        seen: set[str] = set()
-        for candidate_batch in candidate_batches:
-            for candidate in candidate_batch:
-                lowered = str(candidate or "").strip().lower()
-                if not candidate or lowered in seen:
-                    continue
-                seen.add(lowered)
-                lines.append(candidate)
-        return "\n".join(lines)
 
     def _gitpod_document_structured_candidates(self, document: Any) -> list[str]:
-        if not isinstance(document, dict):
-            return []
-        return self._yaml_gitpod_config_structured_candidates(document)
+        return gitpod_document_structured_candidates_for_processor(
+            document,
+            yaml_gitpod_config_structured_candidates=self._yaml_gitpod_config_structured_candidates,
+        )
 
     def _yaml_gitpod_config_structured_candidates(self, mapping: dict[str, Any]) -> list[str]:
-        normalized = self._yaml_normalized_mapping(mapping)
-        if not self._yaml_mapping_looks_like_gitpod_config(normalized):
-            return []
-
-        candidates: list[str] = []
-        seen: set[str] = set()
-
-        def _append(value: str) -> None:
-            candidate = str(value or "").strip().strip("\"'")
-            if not candidate:
-                return
-            lowered = candidate.lower()
-            if lowered in seen:
-                return
-            seen.add(lowered)
-            candidates.append(candidate)
-
-        image_values: list[str] = []
-        image_value = normalized.get("image")
-        if isinstance(image_value, str):
-            image_values.append(image_value)
-        for image_candidate in self._run_ordered_local_batch(
-            image_values,
-            lambda value: _artifact_container_image_url_candidate(
-                value,
-                require_explicit_registry=True,
-            ),
-            default_factory=str,
-        ):
-            _append(image_candidate)
-
-        repository_values: list[str] = []
-        for repository_entry in self._yaml_ref_collection(
+        return yaml_gitpod_config_structured_candidates_for_processor(
             mapping,
-            "additionalRepositories",
-            "additional_repositories",
-            "additionalrepositories",
-        ):
-            if isinstance(repository_entry, str):
-                repository_values.append(repository_entry)
-                continue
-            if not isinstance(repository_entry, dict):
-                continue
-            repository_normalized = self._yaml_normalized_mapping(repository_entry)
-            for key in (
-                "url",
-                "uri",
-                "repository",
-                "repo",
-                "repoURL",
-                "repoUrl",
-                "repo_url",
-                "remoteUrl",
-                "remote_url",
-                "cloneUrl",
-                "clone_url",
-            ):
-                repository_value = self._yaml_ref_value(repository_normalized, key)
-                if repository_value:
-                    repository_values.append(repository_value)
-
-        repository_batches = self._run_ordered_local_batch(
-            repository_values,
-            self._gitpod_repository_url_candidates,
-            default_factory=list,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_mapping_looks_like_gitpod_config=self._yaml_mapping_looks_like_gitpod_config,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+            artifact_container_image_url_candidate=_artifact_container_image_url_candidate,
+            yaml_ref_collection=self._yaml_ref_collection,
+            yaml_ref_value=self._yaml_ref_value,
+            gitpod_repository_url_candidates=self._gitpod_repository_url_candidates,
         )
-        for repository_batch in repository_batches:
-            for repository_candidate in repository_batch:
-                _append(repository_candidate)
-
-        return candidates
 
     @staticmethod
     def _yaml_mapping_looks_like_gitpod_config(normalized: dict[str, Any]) -> bool:
-        return any(
-            key in normalized
-            for key in (
-                "image",
-                "tasks",
-                "ports",
-                "vscode",
-                "github",
-                "jetbrains",
-                "additionalrepositories",
-            )
-        )
+        return yaml_mapping_looks_like_gitpod_config_for_processor(normalized)
 
     def _gitpod_repository_url_candidates(self, value: Any) -> list[str]:
-        raw_value = str(value or "").strip().strip("\"'")
-        if not raw_value:
-            return []
-        candidates = self._yaml_gitops_repository_candidates(raw_value)
-        if candidates:
-            return candidates
-
-        host_match = re.fullmatch(
-            r"(?P<host>(?:github\.com|gitlab\.com|bitbucket\.org))/(?P<path>[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)(?:\.git)?/?",
-            raw_value,
-            re.IGNORECASE,
+        return gitpod_repository_url_candidates_for_processor(
+            value,
+            yaml_gitops_repository_candidates=self._yaml_gitops_repository_candidates,
+            strip_git_repository_suffix=self._strip_git_repository_suffix,
         )
-        if not host_match:
-            return []
-        return [
-            self._strip_git_repository_suffix(
-                f"https://{host_match.group('host').lower()}/{host_match.group('path')}"
-            )
-        ]
 
     def _yaml_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
         if yaml is None:
@@ -26667,7 +20350,9 @@ class ArtifactQueueProcessor:
             [
                 (entry_index, entry)
                 for entry_index, entry in enumerate(
-                    entry for family in prepared_entry_families for entry in family
+                    entry
+                    for family in prepared_entry_families
+                    for entry in family
                 )
             ],
             self._yaml_env_map_write_entry,
@@ -26703,7 +20388,9 @@ class ArtifactQueueProcessor:
             [
                 (entry_index, entry)
                 for entry_index, entry in enumerate(
-                    entry for family in prepared_entry_families for entry in family
+                    entry
+                    for family in prepared_entry_families
+                    for entry in family
                 )
             ],
             self._yaml_env_map_write_entry,
@@ -26826,9 +20513,7 @@ class ArtifactQueueProcessor:
             return False
         if re.fullmatch(r"[A-Z][A-Z0-9_\-]{2,}", candidate):
             return True
-        return candidate.startswith(
-            ("NEXT_PUBLIC_", "VITE_", "REACT_APP_", "NUXT_PUBLIC_", "PUBLIC_")
-        )
+        return candidate.startswith(("NEXT_PUBLIC_", "VITE_", "REACT_APP_", "NUXT_PUBLIC_", "PUBLIC_"))
 
     @classmethod
     def _yaml_mapping_looks_like_env_map(cls, mapping: dict[str, Any]) -> bool:
@@ -27002,32 +20687,22 @@ class ArtifactQueueProcessor:
                 return []
             candidates: list[str] = []
             firebase_env = self._yaml_valid_project_ref(env_value)
-            if (
-                firebase_env
-                and "FIREBASE" in env_name
-                and any(marker in env_name for marker in ("PROJECT", "DATABASE", "RTDB"))
+            if firebase_env and "FIREBASE" in env_name and any(
+                marker in env_name for marker in ("PROJECT", "DATABASE", "RTDB")
             ):
                 candidates.append(f"https://{firebase_env}.firebaseio.com")
             supabase_env = self._yaml_valid_project_ref(env_value)
-            if (
-                supabase_env
-                and "SUPABASE" in env_name
-                and any(marker in env_name for marker in ("PROJECT", "REF"))
+            if supabase_env and "SUPABASE" in env_name and any(
+                marker in env_name for marker in ("PROJECT", "REF")
             ):
                 candidates.append(f"https://{supabase_env}.supabase.co")
             s3_env = self._yaml_valid_bucket_name(env_value)
             if s3_env and ("S3" in env_name or "AWS" in env_name) and "BUCKET" in env_name:
                 candidates.append(f"s3://{s3_env}")
             gcs_env = self._yaml_valid_bucket_name(env_value)
-            if (
-                gcs_env
-                and any(marker in env_name for marker in ("GCS", "GOOGLE_STORAGE", "GCLOUD"))
-                and "BUCKET" in env_name
-            ):
+            if gcs_env and any(marker in env_name for marker in ("GCS", "GOOGLE_STORAGE", "GCLOUD")) and "BUCKET" in env_name:
                 candidates.append(f"gs://{gcs_env}")
-            if "BORG" in env_name and (
-                "REPO" in env_name or "REPOSITORY" in env_name or "LOCATION" in env_name
-            ):
+            if "BORG" in env_name and ("REPO" in env_name or "REPOSITORY" in env_name or "LOCATION" in env_name):
                 candidates.extend(self._borg_repository_candidates(env_value, normalized))
             return candidates
         if family == "firebase_path":
@@ -27048,19 +20723,10 @@ class ArtifactQueueProcessor:
             )
             if not project_ref and any(
                 key in normalized
-                for key in (
-                    "name",
-                    "database",
-                    "database_id",
-                    "databaseid",
-                    "database-name",
-                    "databaseName",
-                )
+                for key in ("name", "database", "database_id", "databaseid", "database-name", "databaseName")
             ):
                 project_ref = self._yaml_valid_project_ref(
-                    self._yaml_ref_value(
-                        normalized, "name", "database", "database_id", "databaseId"
-                    )
+                    self._yaml_ref_value(normalized, "name", "database", "database_id", "databaseId")
                 )
             if project_ref:
                 return [f"https://{project_ref}.firebaseio.com"]
@@ -27141,64 +20807,53 @@ class ArtifactQueueProcessor:
                     "spaceName",
                 )
             )
-            region = (
-                str(
-                    self._yaml_ref_value(
-                        normalized,
-                        "region",
-                        "space_region",
-                        "spaceRegion",
-                        "bucket_region",
-                        "bucketRegion",
-                    )
+            region = str(
+                self._yaml_ref_value(
+                    normalized,
+                    "region",
+                    "space_region",
+                    "spaceRegion",
+                    "bucket_region",
+                    "bucketRegion",
                 )
-                .strip()
-                .lower()
-            )
+            ).strip().lower()
             if bucket and re.fullmatch(r"[a-z0-9\-]{2,32}", region):
                 return [f"https://{bucket}.{region}.digitaloceanspaces.com"]
             return []
         if family == "azure_path":
             if not self._yaml_has_hint(path_hint, "azure", "blob"):
                 return []
-            account_name = (
-                str(
-                    self._yaml_ref_value(
-                        normalized,
-                        "storage_account_name",
-                        "storageAccountName",
-                        "storage-account-name",
-                        "account_name",
-                        "accountName",
-                        "account-name",
-                        "storage_account",
-                        "storageAccount",
-                        "storage-account",
-                        "azure_storage_account",
-                        "azureStorageAccount",
-                    )
+            account_name = str(
+                self._yaml_ref_value(
+                    normalized,
+                    "storage_account_name",
+                    "storageAccountName",
+                    "storage-account-name",
+                    "account_name",
+                    "accountName",
+                    "account-name",
+                    "storage_account",
+                    "storageAccount",
+                    "storage-account",
+                    "azure_storage_account",
+                    "azureStorageAccount",
                 )
-                .strip()
-                .lower()
-            )
-            container_name = (
-                str(
-                    self._yaml_ref_value(
-                        normalized,
-                        "name",
-                        "container",
-                        "container_name",
-                        "containerName",
-                        "container-name",
-                        "blob_container",
-                        "blobContainer",
-                    )
+            ).strip().lower()
+            container_name = str(
+                self._yaml_ref_value(
+                    normalized,
+                    "name",
+                    "container",
+                    "container_name",
+                    "containerName",
+                    "container-name",
+                    "blob_container",
+                    "blobContainer",
                 )
-                .strip()
-                .lower()
-            )
-            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
-                r"[^/?#]+", container_name
+            ).strip().lower()
+            if (
+                re.fullmatch(r"[a-z0-9\-]{3,24}", account_name)
+                and re.fullmatch(r"[^/?#]+", container_name)
             ):
                 return [f"https://{account_name}.blob.core.windows.net/{container_name}"]
             return []
@@ -27282,15 +20937,11 @@ class ArtifactQueueProcessor:
         if family == "gitlab_ci":
             return self._yaml_gitlab_ci_structured_candidates(mapping, normalized, path)
         if family == "dependabot_config":
-            return self._yaml_dependabot_config_structured_candidates(
-                mapping, normalized, path_hint
-            )
+            return self._yaml_dependabot_config_structured_candidates(mapping, normalized, path_hint)
         if family == "renovate_config":
             return self._yaml_renovate_config_structured_candidates(mapping, normalized, path_hint)
         if family == "goreleaser_config":
-            return self._yaml_goreleaser_config_structured_candidates(
-                mapping, normalized, path_hint
-            )
+            return self._yaml_goreleaser_config_structured_candidates(mapping, normalized, path_hint)
         if family == "backstage_catalog":
             if not (
                 backstage_catalog_artifact_label(source_hint)
@@ -27374,9 +21025,7 @@ class ArtifactQueueProcessor:
             candidates.append(candidate)
 
         if self._yaml_mapping_looks_like_github_actions_workflow(mapping):
-            workflow_name = self._yaml_external_secret_ref_segment(
-                self._yaml_ref_value(normalized, "name")
-            )
+            workflow_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
             _append(f"github-workflow://{workflow_name or 'workflow'}")
             for action_candidate in self._yaml_github_actions_uses_candidates(mapping):
                 _append(action_candidate)
@@ -27422,10 +21071,7 @@ class ArtifactQueueProcessor:
         jobs = normalized.get("jobs")
         if not isinstance(jobs, dict):
             return False
-        return bool(
-            self._yaml_github_actions_uses_candidates(mapping)
-            or self._yaml_github_actions_has_runs_on(jobs)
-        )
+        return bool(self._yaml_github_actions_uses_candidates(mapping) or self._yaml_github_actions_has_runs_on(jobs))
 
     def _yaml_github_actions_has_runs_on(self, value: Any) -> bool:
         if isinstance(value, dict):
@@ -27463,7 +21109,11 @@ class ArtifactQueueProcessor:
             if use_workers
             else [worker(child_job) for child_job in child_jobs]
         )
-        return [candidate for child_values in child_batches for candidate in child_values]
+        return [
+            candidate
+            for child_values in child_batches
+            for candidate in child_values
+        ]
 
     def _yaml_github_actions_uses_candidates(
         self,
@@ -27537,7 +21187,8 @@ class ArtifactQueueProcessor:
             return []
         owner, repository = parts[0], parts[1]
         if not (
-            re.fullmatch(r"[A-Za-z0-9_.-]+", owner) and re.fullmatch(r"[A-Za-z0-9_.-]+", repository)
+            re.fullmatch(r"[A-Za-z0-9_.-]+", owner)
+            and re.fullmatch(r"[A-Za-z0-9_.-]+", repository)
         ):
             return []
         encoded_ref = quote(ref_value, safe="/._:@+=-")
@@ -27560,15 +21211,11 @@ class ArtifactQueueProcessor:
             return []
 
         secret_jobs: list[tuple[str, Any]] = []
-        parameter_store = self._yaml_child_mapping(
-            env_mapping, "parameter-store", "parameter_store", "parameterstore"
-        )
+        parameter_store = self._yaml_child_mapping(env_mapping, "parameter-store", "parameter_store", "parameterstore")
         for parameter_ref in parameter_store.values() if parameter_store else ():
             secret_jobs.append(("parameter_store", parameter_ref))
 
-        secrets_manager = self._yaml_child_mapping(
-            env_mapping, "secrets-manager", "secrets_manager", "secretsmanager"
-        )
+        secrets_manager = self._yaml_child_mapping(env_mapping, "secrets-manager", "secrets_manager", "secretsmanager")
         for secret_ref in secrets_manager.values() if secrets_manager else ():
             secret_jobs.append(("secrets_manager", secret_ref))
 
@@ -27611,21 +21258,15 @@ class ArtifactQueueProcessor:
     ) -> bool:
         if "version" not in normalized:
             return False
-        has_buildspec_shape = any(
-            isinstance(normalized.get(key), dict) for key in ("phases", "env", "artifacts", "cache")
-        )
+        has_buildspec_shape = any(isinstance(normalized.get(key), dict) for key in ("phases", "env", "artifacts", "cache"))
         if not has_buildspec_shape:
             return False
         env_mapping = self._yaml_child_mapping(mapping, "env")
         if not env_mapping:
             return bool(isinstance(normalized.get("phases"), dict))
         return bool(
-            self._yaml_child_mapping(
-                env_mapping, "parameter-store", "parameter_store", "parameterstore"
-            )
-            or self._yaml_child_mapping(
-                env_mapping, "secrets-manager", "secrets_manager", "secretsmanager"
-            )
+            self._yaml_child_mapping(env_mapping, "parameter-store", "parameter_store", "parameterstore")
+            or self._yaml_child_mapping(env_mapping, "secrets-manager", "secrets_manager", "secretsmanager")
             or isinstance(normalized.get("phases"), dict)
         )
 
@@ -27639,9 +21280,7 @@ class ArtifactQueueProcessor:
                 raw_value,
                 re.IGNORECASE,
             )
-            return self._yaml_external_secret_ref_segment(
-                arn_match.group(1) if arn_match else raw_value
-            )
+            return self._yaml_external_secret_ref_segment(arn_match.group(1) if arn_match else raw_value)
         return self._yaml_external_secret_ref_segment(raw_value.split(":", 1)[0])
 
     def _yaml_cloudbuild_config_structured_candidates(
@@ -27852,7 +21491,9 @@ class ArtifactQueueProcessor:
         child_path = (*path_parts, key_name)
         values: list[str] = []
         if key_name == "image" and (
-            "docker" in path_parts or "executors" in path_parts or "jobs" in path_parts
+            "docker" in path_parts
+            or "executors" in path_parts
+            or "jobs" in path_parts
         ):
             candidate = _artifact_container_image_url_candidate(
                 str(child or "").strip().strip("\"'"),
@@ -27891,9 +21532,7 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        pipeline_name = self._yaml_external_secret_ref_segment(
-            self._yaml_ref_value(normalized, "name")
-        )
+        pipeline_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
         _append(f"buildkite-pipeline://{pipeline_name or 'pipeline'}")
         for image_candidate in self._yaml_buildkite_plugin_image_candidates(mapping):
             _append(image_candidate)
@@ -27911,10 +21550,7 @@ class ArtifactQueueProcessor:
             if not isinstance(step_entry, dict):
                 continue
             step_normalized = self._yaml_normalized_mapping(step_entry)
-            if any(
-                key in step_normalized
-                for key in ("label", "command", "commands", "plugins", "block", "wait")
-            ):
+            if any(key in step_normalized for key in ("label", "command", "commands", "plugins", "block", "wait")):
                 return True
         return False
 
@@ -27965,11 +21601,7 @@ class ArtifactQueueProcessor:
         def _walk_plugins(value: Any) -> None:
             if isinstance(value, dict):
                 normalized = self._yaml_normalized_mapping(value)
-                _append(
-                    self._yaml_ref_value(
-                        normalized, "image", "container", "docker_image", "dockerImage"
-                    )
-                )
+                _append(self._yaml_ref_value(normalized, "image", "container", "docker_image", "dockerImage"))
                 for child in value.values():
                     if isinstance(child, (dict, list)):
                         _walk_plugins(child)
@@ -28002,9 +21634,7 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        pipeline_name = self._yaml_external_secret_ref_segment(
-            self._yaml_ref_value(normalized, "name")
-        )
+        pipeline_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
         _append(f"drone-pipeline://{pipeline_name or 'pipeline'}")
         for image_candidate in self._yaml_drone_step_image_candidates(mapping):
             _append(image_candidate)
@@ -28019,9 +21649,7 @@ class ArtifactQueueProcessor:
         if kind != "pipeline":
             return False
         pipeline_type = self._yaml_key_fingerprint(self._yaml_ref_value(normalized, "type"))
-        return pipeline_type in {"docker", "exec", "kubernetes", "ssh"} or isinstance(
-            normalized.get("steps"), list
-        )
+        return pipeline_type in {"docker", "exec", "kubernetes", "ssh"} or isinstance(normalized.get("steps"), list)
 
     def _yaml_drone_step_image_candidates(self, mapping: dict[str, Any]) -> list[str]:
         image_jobs: list[tuple[Any, str]] = []
@@ -28053,9 +21681,7 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        pipeline_name = self._yaml_external_secret_ref_segment(
-            self._yaml_ref_value(normalized, "name")
-        )
+        pipeline_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
         _append(f"woodpecker-pipeline://{pipeline_name or 'pipeline'}")
         for image_candidate in self._yaml_woodpecker_step_image_candidates(mapping):
             _append(image_candidate)
@@ -28103,9 +21729,7 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        pipeline_name = self._yaml_external_secret_ref_segment(
-            self._yaml_ref_value(normalized, "name")
-        )
+        pipeline_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
         if pipeline_name:
             _append(f"azure-pipeline://{pipeline_name}")
 
@@ -28157,19 +21781,13 @@ class ArtifactQueueProcessor:
         mapping: dict[str, Any],
         normalized: dict[str, Any],
     ) -> bool:
-        if any(
-            key in normalized
-            for key in ("trigger", "pr", "schedules", "stages", "jobs", "steps", "pool")
-        ):
+        if any(key in normalized for key in ("trigger", "pr", "schedules", "stages", "jobs", "steps", "pool")):
             return True
         resources = self._yaml_child_mapping(mapping, "resources")
         if not resources:
             return False
         resource_normalized = self._yaml_normalized_mapping(resources)
-        return any(
-            key in resource_normalized
-            for key in ("repositories", "containers", "pipelines", "builds")
-        )
+        return any(key in resource_normalized for key in ("repositories", "containers", "pipelines", "builds"))
 
     def _yaml_azure_pipelines_repository_candidates(self, mapping: dict[str, Any]) -> list[str]:
         resources = self._yaml_child_mapping(mapping, "resources")
@@ -28202,19 +21820,13 @@ class ArtifactQueueProcessor:
         if not isinstance(value, dict):
             return []
         normalized = self._yaml_normalized_mapping(value)
-        explicit_url = self._yaml_ref_value(
-            normalized, "url", "endpointUrl", "endpoint_url", "repositoryUrl"
-        )
+        explicit_url = self._yaml_ref_value(normalized, "url", "endpointUrl", "endpoint_url", "repositoryUrl")
         if explicit_url:
             return self._yaml_gitops_repository_candidates(explicit_url)
 
         repo_type = self._yaml_key_fingerprint(self._yaml_ref_value(normalized, "type"))
         repo_name = str(self._yaml_ref_value(normalized, "name")).strip().strip("\"'")
-        if (
-            not repo_name
-            or repo_name.lower() == "self"
-            or any(marker in repo_name for marker in ("${", "$(", "{{", "}}"))
-        ):
+        if not repo_name or repo_name.lower() == "self" or any(marker in repo_name for marker in ("${", "$(", "{{", "}}")):
             return []
 
         repo_path = repo_name.strip("/")
@@ -28252,9 +21864,7 @@ class ArtifactQueueProcessor:
         seen: set[str] = set()
 
         def _append(value: str) -> None:
-            candidate = _artifact_container_image_url_candidate(
-                value, require_explicit_registry=True
-            )
+            candidate = _artifact_container_image_url_candidate(value, require_explicit_registry=True)
             if not candidate or candidate.lower() in seen:
                 return
             seen.add(candidate.lower())
@@ -28343,9 +21953,7 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        pipeline_name = self._yaml_external_secret_ref_segment(
-            self._yaml_ref_value(normalized, "name")
-        )
+        pipeline_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
         _append(f"bitbucket-pipeline://{pipeline_name or 'pipeline'}")
 
         resource_batches = self._run_ordered_local_batch(
@@ -28372,8 +21980,7 @@ class ArtifactQueueProcessor:
         if any(key in normalized for key in ("definitions", "image", "clone", "options")):
             return True
         return any(
-            self._yaml_key_fingerprint(str(key or ""))
-            in {"default", "branches", "tags", "pullrequests", "custom"}
+            self._yaml_key_fingerprint(str(key or "")) in {"default", "branches", "tags", "pullrequests", "custom"}
             for key in pipelines
         )
 
@@ -28460,7 +22067,8 @@ class ArtifactQueueProcessor:
         key_name = self._yaml_key_fingerprint(str(raw_key or ""))
         child_path = (*path_parts, key_name)
         in_repository_context = any(
-            part in {"repository", "repositories", "repo"} for part in path_parts
+            part in {"repository", "repositories", "repo"}
+            for part in path_parts
         )
         values: list[str] = []
         if isinstance(child, str) and (key_name in repo_key_names or in_repository_context):
@@ -28595,26 +22203,16 @@ class ArtifactQueueProcessor:
         mapping: dict[str, Any],
         normalized: dict[str, Any],
     ) -> bool:
-        if any(
-            key in normalized
-            for key in ("include", "stages", "workflow", "before_script", "after_script")
-        ):
+        if any(key in normalized for key in ("include", "stages", "workflow", "before_script", "after_script")):
             return True
         for key, value in mapping.items():
             key_name = str(key or "").strip()
-            if (
-                not key_name
-                or key_name.startswith(".")
-                or key_name in {"default", "variables", "cache"}
-            ):
+            if not key_name or key_name.startswith(".") or key_name in {"default", "variables", "cache"}:
                 continue
             if not isinstance(value, dict):
                 continue
             job_normalized = self._yaml_normalized_mapping(value)
-            if any(
-                job_key in job_normalized
-                for job_key in ("script", "stage", "extends", "rules", "needs")
-            ):
+            if any(job_key in job_normalized for job_key in ("script", "stage", "extends", "rules", "needs")):
                 return True
         return False
 
@@ -28666,7 +22264,11 @@ class ArtifactQueueProcessor:
                     self._yaml_ref_value(normalized, "component")
                 )
             )
-            child_jobs = [child for child in value.values() if isinstance(child, (dict, list))]
+            child_jobs = [
+                child
+                for child in value.values()
+                if isinstance(child, (dict, list))
+            ]
             child_batches = (
                 self._run_ordered_local_batch(
                     child_jobs,
@@ -28684,7 +22286,11 @@ class ArtifactQueueProcessor:
             )
             return [
                 *direct_values,
-                *[candidate for child_values in child_batches for candidate in child_values],
+                *[
+                    candidate
+                    for child_values in child_batches
+                    for candidate in child_values
+                ],
             ]
         if isinstance(value, list):
             item_jobs = list(value)
@@ -28703,7 +22309,11 @@ class ArtifactQueueProcessor:
                     for item in item_jobs
                 ]
             )
-            return [candidate for item_values in item_batches for candidate in item_values]
+            return [
+                candidate
+                for item_values in item_batches
+                for candidate in item_values
+            ]
         return []
 
     def _yaml_gitlab_ci_include_child_candidate_values(
@@ -28755,9 +22365,7 @@ class ArtifactQueueProcessor:
             raw_value = str(value or "").strip().strip("\"'")
             if not raw_value:
                 return
-            candidate = _artifact_container_image_url_candidate(
-                raw_value, require_explicit_registry=True
-            )
+            candidate = _artifact_container_image_url_candidate(raw_value, require_explicit_registry=True)
             if not candidate or candidate.lower() in seen:
                 return
             seen.add(candidate.lower())
@@ -29209,9 +22817,11 @@ class ArtifactQueueProcessor:
                     for _child_index, raw_key, child, allowed_keys in child_jobs
                 ]
             )
-            return [candidate for child_values in child_batches for candidate in child_values][
-                :4096
-            ]
+            return [
+                candidate
+                for child_values in child_batches
+                for candidate in child_values
+            ][:4096]
         if isinstance(value, list):
             item_jobs = [
                 (item_index, None, item, allowed_keys)
@@ -29233,7 +22843,11 @@ class ArtifactQueueProcessor:
                     for _item_index, _raw_key, item, allowed_keys in item_jobs
                 ]
             )
-            return [candidate for item_values in item_batches for candidate in item_values][:4096]
+            return [
+                candidate
+                for item_values in item_batches
+                for candidate in item_values
+            ][:4096]
         return []
 
     def _security_scanner_structured_document_child_values(
@@ -29460,7 +23074,8 @@ class ArtifactQueueProcessor:
     ) -> list[str]:
         if isinstance(value, dict):
             child_jobs = [
-                (raw_key, child, allowed_keys) for raw_key, child in list(value.items())[:4096]
+                (raw_key, child, allowed_keys)
+                for raw_key, child in list(value.items())[:4096]
             ]
             child_batches = (
                 self._run_ordered_local_batch(
@@ -29470,15 +23085,22 @@ class ArtifactQueueProcessor:
                 )
                 if use_workers
                 else [
-                    self._recon_tool_output_structured_document_child_values(child_job)
+                    self._recon_tool_output_structured_document_child_values(
+                        child_job
+                    )
                     for child_job in child_jobs
                 ]
             )
-            return [candidate for child_values in child_batches for candidate in child_values][
-                :4096
-            ]
+            return [
+                candidate
+                for child_values in child_batches
+                for candidate in child_values
+            ][:4096]
         if isinstance(value, list):
-            item_jobs = [(None, item, allowed_keys) for item in value[:4096]]
+            item_jobs = [
+                (None, item, allowed_keys)
+                for item in value[:4096]
+            ]
             item_batches = (
                 self._run_ordered_local_batch(
                     item_jobs,
@@ -29487,11 +23109,17 @@ class ArtifactQueueProcessor:
                 )
                 if use_workers
                 else [
-                    self._recon_tool_output_structured_document_child_values(item_job)
+                    self._recon_tool_output_structured_document_child_values(
+                        item_job
+                    )
                     for item_job in item_jobs
                 ]
             )
-            return [candidate for item_values in item_batches for candidate in item_values][:4096]
+            return [
+                candidate
+                for item_values in item_batches
+                for candidate in item_values
+            ][:4096]
         return []
 
     def _recon_tool_output_structured_document_child_values(
@@ -29556,9 +23184,7 @@ class ArtifactQueueProcessor:
         if not raw_text or "<" not in raw_text or ">" not in raw_text:
             return ""
         source_label = _maven_xml_config_artifact_label(source_hint)
-        if not source_label and not re.search(
-            r"<\s*(?:project|settings)\b", raw_text, re.IGNORECASE
-        ):
+        if not source_label and not re.search(r"<\s*(?:project|settings)\b", raw_text, re.IGNORECASE):
             return ""
 
         try:
@@ -29614,9 +23240,7 @@ class ArtifactQueueProcessor:
                 }
             )
         if root_tag == "settings":
-            return bool(
-                tags & {"localrepository", "mirrors", "pluginGroups", "profiles", "servers"}
-            )
+            return bool(tags & {"localrepository", "mirrors", "pluginGroups", "profiles", "servers"})
         return False
 
     @classmethod
@@ -29769,7 +23393,11 @@ class ArtifactQueueProcessor:
             self._js_runtime_text_candidate_family_entries,
             default_factory=list,
         )
-        entries.extend(entry for family_entries in family_batches for entry in family_entries)
+        entries.extend(
+            entry
+            for family_entries in family_batches
+            for entry in family_entries
+        )
 
         in_bun_scope_block = False
         offset = 0
@@ -29822,13 +23450,17 @@ class ArtifactQueueProcessor:
             browser_batches = self._run_ordered_local_batch(
                 [
                     (index, pattern, raw_text)
-                    for index, pattern in enumerate(self._js_runtime_browser_endpoint_patterns())
+                    for index, pattern in enumerate(
+                        self._js_runtime_browser_endpoint_patterns()
+                    )
                 ],
                 self._js_runtime_browser_endpoint_pattern_entries,
                 default_factory=list,
             )
             entries.extend(
-                entry for pattern_entries in browser_batches for entry in pattern_entries
+                entry
+                for pattern_entries in browser_batches
+                for entry in pattern_entries
             )
 
         entries.sort(key=lambda item: item[0])
@@ -30065,26 +23697,19 @@ class ArtifactQueueProcessor:
         if not candidate:
             return ""
         lowered = candidate.lower()
-        if lowered in {
-            "-",
-            "/",
-            "/*",
-            "/:splat",
-            "/:path*",
-            "200",
-            "301",
-            "302",
-            "303",
-            "307",
-            "308",
-        }:
+        if lowered in {"-", "/", "/*", "/:splat", "/:path*", "200", "301", "302", "303", "307", "308"}:
             return ""
         return candidate
 
     @staticmethod
     def _static_hosting_control_cloudflare_route_candidate_values(value: object) -> list[str]:
         if isinstance(value, dict):
-            candidate = value.get("pattern") or value.get("path") or value.get("route") or ""
+            candidate = (
+                value.get("pattern")
+                or value.get("path")
+                or value.get("route")
+                or ""
+            )
         else:
             candidate = value
         normalized = ArtifactQueueProcessor._static_hosting_control_candidate_entry(candidate)
@@ -30280,7 +23905,10 @@ class ArtifactQueueProcessor:
                 candidates.extend(child_values)
             return candidates
         if isinstance(value, list):
-            item_jobs = [(item_index, item, path) for item_index, item in enumerate(value[:256])]
+            item_jobs = [
+                (item_index, item, path)
+                for item_index, item in enumerate(value[:256])
+            ]
             item_batches = (
                 self._run_ordered_local_batch(
                     item_jobs,
@@ -30390,7 +24018,9 @@ class ArtifactQueueProcessor:
         if not isinstance(value, dict):
             return []
         return [
-            str(key or "").strip() for key in value if isinstance(key, str) and "://" in str(key)
+            str(key or "").strip()
+            for key in value
+            if isinstance(key, str) and "://" in str(key)
         ][:64]
 
     @classmethod
@@ -30398,7 +24028,8 @@ class ArtifactQueueProcessor:
         if "url" in normalized:
             return True
         return bool(
-            ({"host", "hostname"} & set(normalized)) and ({"protocol", "scheme"} & set(normalized))
+            ({"host", "hostname"} & set(normalized))
+            and ({"protocol", "scheme"} & set(normalized))
         )
 
     def _api_spec_server_mapping_candidates(self, mapping: dict[str, Any]) -> list[str]:
@@ -30434,9 +24065,7 @@ class ArtifactQueueProcessor:
             schemes = ["https"]
         candidates: list[str] = []
         for scheme in schemes:
-            candidate = self._api_spec_host_protocol_candidate(
-                host, protocol=scheme, path=base_path
-            )
+            candidate = self._api_spec_host_protocol_candidate(host, protocol=scheme, path=base_path)
             if candidate:
                 candidates.append(candidate)
         return candidates
@@ -30600,9 +24229,7 @@ class ArtifactQueueProcessor:
         for values in self._api_client_text_candidate_family_batches(text_families, parse_text):
             raw_values.extend(values)
         if not raw_values:
-            fallback_batches = self._api_client_text_candidate_family_batches(
-                ("fallback",), parse_text
-            )
+            fallback_batches = self._api_client_text_candidate_family_batches(("fallback",), parse_text)
             raw_values = list(fallback_batches[0]) if fallback_batches else []
 
         candidate_entries = self._run_ordered_local_batch(
@@ -30646,13 +24273,7 @@ class ArtifactQueueProcessor:
             if variable_candidate:
                 candidates.append(variable_candidate)
             child_jobs = [
-                (
-                    child_index,
-                    key,
-                    child,
-                    path,
-                    self._api_client_url_object_looks_supported(normalized),
-                )
+                (child_index, key, child, path, self._api_client_url_object_looks_supported(normalized))
                 for child_index, (key, child) in enumerate(value.items())
             ]
             child_batches = (
@@ -30682,7 +24303,10 @@ class ArtifactQueueProcessor:
                 candidates.extend(child_values)
             return candidates
         if isinstance(value, list):
-            item_jobs = [(item_index, item, path) for item_index, item in enumerate(value[:512])]
+            item_jobs = [
+                (item_index, item, path)
+                for item_index, item in enumerate(value[:512])
+            ]
             item_batches = (
                 self._run_ordered_local_batch(
                     item_jobs,
@@ -30813,7 +24437,8 @@ class ArtifactQueueProcessor:
         normalized_bases = [
             normalized
             for normalized in (
-                self._api_client_url_candidate_entry(base_value) for base_value in base_values
+                self._api_client_url_candidate_entry(base_value)
+                for base_value in base_values
             )
             if normalized
         ]
@@ -30858,13 +24483,7 @@ class ArtifactQueueProcessor:
         values: list[str] = []
         if isinstance(value, dict):
             normalized = self._yaml_normalized_mapping(value)
-            command = (
-                str(normalized.get("command") or "")
-                .strip()
-                .lower()
-                .replace("_", "")
-                .replace("-", "")
-            )
+            command = str(normalized.get("command") or "").strip().lower().replace("_", "").replace("-", "")
             if command in {"open", "openwindow"}:
                 for key in ("target", "url"):
                     candidate = self._api_client_selenium_side_navigation_target(
@@ -30874,7 +24493,8 @@ class ArtifactQueueProcessor:
                     if candidate:
                         values.append(candidate)
             child_jobs = [
-                (child_index, child, base_url) for child_index, child in enumerate(value.values())
+                (child_index, child, base_url)
+                for child_index, child in enumerate(value.values())
             ]
             child_batches = (
                 self._run_ordered_local_batch(
@@ -30897,7 +24517,8 @@ class ArtifactQueueProcessor:
             return values
         if isinstance(value, list):
             item_jobs = [
-                (item_index, item, base_url) for item_index, item in enumerate(value[:512])
+                (item_index, item, base_url)
+                for item_index, item in enumerate(value[:512])
             ]
             item_batches = (
                 self._run_ordered_local_batch(
@@ -31006,10 +24627,7 @@ class ArtifactQueueProcessor:
         pattern: re.Pattern[str],
     ) -> list[str]:
         line_entries = self._run_ordered_local_batch(
-            [
-                (line_index, line, pattern)
-                for line_index, line in enumerate(parse_text.splitlines()[:4096])
-            ],
+            [(line_index, line, pattern) for line_index, line in enumerate(parse_text.splitlines()[:4096])],
             self._api_client_api_config_line_candidate_value,
             default_factory=str,
         )
@@ -31049,10 +24667,7 @@ class ArtifactQueueProcessor:
             ),
         )
         pattern_batches = self._run_ordered_local_batch(
-            [
-                (pattern_index, pattern, parse_text)
-                for pattern_index, pattern in enumerate(patterns)
-            ],
+            [(pattern_index, pattern, parse_text) for pattern_index, pattern in enumerate(patterns)],
             self._api_client_pactum_pattern_candidate_entries,
             default_factory=list,
         )
@@ -31119,7 +24734,11 @@ class ArtifactQueueProcessor:
             self._api_client_bruno_resolved_candidate_entry,
             default_factory=lambda: (-1, ""),
         )
-        return [value for _position, value in resolved_entries if value][:512]
+        return [
+            value
+            for _position, value in resolved_entries
+            if value
+        ][:512]
 
     @staticmethod
     def _api_client_bruno_clean_value(value: Any) -> str:
@@ -31213,9 +24832,7 @@ class ArtifactQueueProcessor:
         if not host:
             return ""
         protocol = self._yaml_ref_value(normalized, "protocol", "scheme")
-        path_value = self._api_client_url_path_value(
-            normalized.get("path") or normalized.get("pathname")
-        )
+        path_value = self._api_client_url_path_value(normalized.get("path") or normalized.get("pathname"))
         return self._api_spec_host_protocol_candidate(host, protocol=protocol, path=path_value)
 
     @staticmethod
@@ -31294,14 +24911,14 @@ class ArtifactQueueProcessor:
             default_factory=lambda: (-1, ""),
         )
         candidates.extend(
-            (position, value) for position, value in line_entries if position >= 0 and value
+            (position, value)
+            for position, value in line_entries
+            if position >= 0 and value
         )
         pattern_batches = self._run_ordered_local_batch(
             [
                 (pattern_index, pattern, parse_text)
-                for pattern_index, pattern in enumerate(
-                    (xml_attr_pattern, xml_endpoint_text_pattern)
-                )
+                for pattern_index, pattern in enumerate((xml_attr_pattern, xml_endpoint_text_pattern))
             ],
             self._api_client_text_fallback_pattern_candidate_entries,
             default_factory=list,
@@ -31390,10 +25007,7 @@ class ArtifactQueueProcessor:
 
     def _api_client_k6_text_candidate_values(self, text: str) -> list[str]:
         parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
-        if not any(
-            marker in parse_text
-            for marker in ("http.", "ws.connect", "WebSocket", "baseURL", "baseUrl")
-        ):
+        if not any(marker in parse_text for marker in ("http.", "ws.connect", "WebSocket", "baseURL", "baseUrl")):
             return []
         patterns = (
             re.compile(
@@ -31420,10 +25034,7 @@ class ArtifactQueueProcessor:
             ),
         )
         pattern_batches = self._run_ordered_local_batch(
-            [
-                (pattern_index, pattern, parse_text)
-                for pattern_index, pattern in enumerate(patterns)
-            ],
+            [(pattern_index, pattern, parse_text) for pattern_index, pattern in enumerate(patterns)],
             self._api_client_k6_pattern_candidate_entries,
             default_factory=list,
         )
@@ -31447,9 +25058,7 @@ class ArtifactQueueProcessor:
 
     def _api_client_locust_text_candidate_values(self, text: str) -> list[str]:
         parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
-        if not any(
-            marker in parse_text for marker in ("HttpUser", "self.client", "host", "FastHttpUser")
-        ):
+        if not any(marker in parse_text for marker in ("HttpUser", "self.client", "host", "FastHttpUser")):
             return []
         patterns = (
             re.compile(
@@ -31476,10 +25085,7 @@ class ArtifactQueueProcessor:
             ),
         )
         pattern_batches = self._run_ordered_local_batch(
-            [
-                (pattern_index, pattern, parse_text)
-                for pattern_index, pattern in enumerate(patterns)
-            ],
+            [(pattern_index, pattern, parse_text) for pattern_index, pattern in enumerate(patterns)],
             self._api_client_locust_pattern_candidate_entries,
             default_factory=list,
         )
@@ -31929,9 +25535,7 @@ class ArtifactQueueProcessor:
             return ""
         normalized = self._run_ordered_local_batch(
             tunnel_config_endpoint_candidates(text),
-            lambda endpoint: self._edge_proxy_endpoint_url_candidate(
-                endpoint, default_scheme="https"
-            ),
+            lambda endpoint: self._edge_proxy_endpoint_url_candidate(endpoint, default_scheme="https"),
             default_factory=str,
         )
         lines: list[str] = []
@@ -32032,9 +25636,7 @@ class ArtifactQueueProcessor:
         child, parent_path, child_path, normalized = child_job
         key = child_path[-1] if child_path else ""
         candidates: list[str] = []
-        if key == "value" and self._browser_state_path_allows_storage_value(
-            parent_path, normalized
-        ):
+        if key == "value" and self._browser_state_path_allows_storage_value(parent_path, normalized):
             storage_name = self._yaml_ref_value(normalized, "name", "key")
             candidates.extend(
                 self._browser_state_storage_value_candidates(
@@ -32053,15 +25655,11 @@ class ArtifactQueueProcessor:
                 or _classify_seed_value(child_text) == "email"
             ):
                 candidates.append(child_text)
-        candidates.extend(
-            self._browser_state_document_candidate_values_for_path((child, child_path))
-        )
+        candidates.extend(self._browser_state_document_candidate_values_for_path((child, child_path)))
         return self._browser_state_candidate_batch_values((candidates,))
 
     @staticmethod
-    def _browser_state_candidate_batch_values(
-        candidate_batches: Sequence[Sequence[str]],
-    ) -> list[str]:
+    def _browser_state_candidate_batch_values(candidate_batches: Sequence[Sequence[str]]) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
         for batch in candidate_batches:
@@ -32088,9 +25686,7 @@ class ArtifactQueueProcessor:
         )
 
     @staticmethod
-    def _browser_state_path_allows_storage_value(
-        path: tuple[str, ...], normalized: dict[str, Any]
-    ) -> bool:
+    def _browser_state_path_allows_storage_value(path: tuple[str, ...], normalized: dict[str, Any]) -> bool:
         if any(part in _BROWSER_STATE_STORAGE_PATH_KEYS for part in path):
             return True
         return bool("name" in normalized and "value" in normalized and "domain" not in normalized)
@@ -32249,11 +25845,7 @@ class ArtifactQueueProcessor:
                 candidate = self._charles_session_json_url_candidate_entry(direct)
                 parsed = urlparse(candidate)
                 if parsed.scheme in {"http", "https"} and parsed.netloc:
-                    return (
-                        parsed._replace(path="", params="", query="", fragment="")
-                        .geturl()
-                        .rstrip("/")
-                    )
+                    return parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
             nested_origin = self._charles_session_request_origin_url(request_normalized)
             if nested_origin:
                 return nested_origin
@@ -32263,16 +25855,12 @@ class ArtifactQueueProcessor:
             candidate = self._charles_session_json_url_candidate_entry(direct)
             parsed = urlparse(candidate)
             if parsed.scheme in {"http", "https"} and parsed.netloc:
-                return (
-                    parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
-                )
+                return parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
 
         host = self._yaml_ref_value(normalized, "host", "hostname", "domain")
         if not host:
             return ""
-        path = self._yaml_ref_value(
-            normalized, "path", "uri", "urlPath", "url_path", "requestPath", "request_path"
-        )
+        path = self._yaml_ref_value(normalized, "path", "uri", "urlPath", "url_path", "requestPath", "request_path")
         scheme = self._yaml_ref_value(normalized, "scheme", "protocol")
         port = self._yaml_ref_value(normalized, "port")
         secure = self._yaml_ref_value(normalized, "ssl", "secure", "tls")
@@ -32300,14 +25888,8 @@ class ArtifactQueueProcessor:
                 direct = self._yaml_ref_value(response_normalized, key)
                 if direct:
                     values.append(direct)
-            values.extend(
-                self._charles_session_header_values(
-                    response_normalized, {"location", "content-location"}
-                )
-            )
-        values.extend(
-            self._charles_session_header_values(normalized, {"location", "content-location"})
-        )
+            values.extend(self._charles_session_header_values(response_normalized, {"location", "content-location"}))
+        values.extend(self._charles_session_header_values(normalized, {"location", "content-location"}))
         return values[:64]
 
     def _charles_session_header_values(
@@ -32316,11 +25898,7 @@ class ArtifactQueueProcessor:
         names: set[str],
     ) -> list[str]:
         values: list[str] = []
-        header_value = (
-            normalized.get("headers")
-            or normalized.get("responseheaders")
-            or normalized.get("response_headers")
-        )
+        header_value = normalized.get("headers") or normalized.get("responseheaders") or normalized.get("response_headers")
         header_items: list[Any] = []
         if isinstance(header_value, list):
             header_items = header_value[:256]
@@ -32329,9 +25907,7 @@ class ArtifactQueueProcessor:
         for item in header_items:
             if isinstance(item, dict):
                 item_normalized = self._yaml_normalized_mapping(item)
-                name = (
-                    str(self._yaml_ref_value(item_normalized, "name", "key") or "").strip().lower()
-                )
+                name = str(self._yaml_ref_value(item_normalized, "name", "key") or "").strip().lower()
                 value = self._yaml_ref_value(item_normalized, "value")
                 if name in names and value:
                     values.append(value)
@@ -32403,9 +25979,7 @@ class ArtifactQueueProcessor:
         direct_url = self._burp_xml_child_text(item, "url")
         host = self._burp_xml_child_text(item, "host")
         path = self._burp_xml_child_text(item, "path")
-        protocol = self._burp_xml_child_text(item, "protocol") or self._burp_xml_child_text(
-            item, "scheme"
-        )
+        protocol = self._burp_xml_child_text(item, "protocol") or self._burp_xml_child_text(item, "scheme")
 
         lines: list[str] = []
         origin_url = ""
@@ -32415,11 +25989,7 @@ class ArtifactQueueProcessor:
                 lines.append(candidate)
                 parsed = urlparse(candidate)
                 if parsed.scheme in {"http", "https"} and parsed.netloc:
-                    origin_url = (
-                        parsed._replace(path="", params="", query="", fragment="")
-                        .geturl()
-                        .rstrip("/")
-                    )
+                    origin_url = parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
         if host and path:
             candidate = self._http_transcript_absolute_url(path, host=host, scheme=protocol)
             normalized = self._burp_site_map_url_candidate_entry(candidate)
@@ -32427,11 +25997,7 @@ class ArtifactQueueProcessor:
                 lines.append(normalized)
                 if not origin_url:
                     parsed = urlparse(normalized)
-                    origin_url = (
-                        parsed._replace(path="", params="", query="", fragment="")
-                        .geturl()
-                        .rstrip("/")
-                    )
+                    origin_url = parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
 
         request_text = self._burp_xml_named_payload_text(item, "request")
         response_text = self._burp_xml_named_payload_text(item, "response")
@@ -32445,16 +26011,10 @@ class ArtifactQueueProcessor:
                 if not origin_url:
                     parsed = urlparse(candidate)
                     if parsed.scheme in {"http", "https"} and parsed.netloc:
-                        origin_url = (
-                            parsed._replace(path="", params="", query="", fragment="")
-                            .geturl()
-                            .rstrip("/")
-                        )
+                        origin_url = parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
         if origin_url:
             for location in self._saz_response_relative_locations(response_text):
-                candidate = self._burp_site_map_url_candidate_entry(
-                    urljoin(f"{origin_url}/", location)
-                )
+                candidate = self._burp_site_map_url_candidate_entry(urljoin(f"{origin_url}/", location))
                 if candidate:
                     lines.append(candidate)
         return lines
@@ -32463,10 +26023,7 @@ class ArtifactQueueProcessor:
     def _burp_xml_child_text(cls, item: Any, child_name: str) -> str:
         child_name_normalized = str(child_name or "").strip().lower()
         for child in list(item)[:256]:
-            if (
-                cls._xml_local_name(str(getattr(child, "tag", "") or "")).lower()
-                != child_name_normalized
-            ):
+            if cls._xml_local_name(str(getattr(child, "tag", "") or "")).lower() != child_name_normalized:
                 continue
             return cls._xml_element_text(child)
         return ""
@@ -32475,17 +26032,12 @@ class ArtifactQueueProcessor:
     def _burp_xml_named_payload_text(cls, item: Any, child_name: str) -> str:
         child_name_normalized = str(child_name or "").strip().lower()
         for child in list(item)[:256]:
-            if (
-                cls._xml_local_name(str(getattr(child, "tag", "") or "")).lower()
-                != child_name_normalized
-            ):
+            if cls._xml_local_name(str(getattr(child, "tag", "") or "")).lower() != child_name_normalized:
                 continue
             text_value = cls._xml_element_text(child)
             if str(child.attrib.get("base64") or "").strip().lower() == "true":
                 try:
-                    decoded = base64.b64decode(
-                        text_value.encode("ascii", errors="ignore"), validate=False
-                    )
+                    decoded = base64.b64decode(text_value.encode("ascii", errors="ignore"), validate=False)
                 except Exception:  # noqa: BLE001
                     return ""
                 return cls._decode_text_artifact_bytes(decoded[:_MAX_ARTIFACT_MEMBER_BYTES])
@@ -32573,9 +26125,7 @@ class ArtifactQueueProcessor:
             payloads.append((source_file, f"{member_name}#burp-request-{index}.txt", request_text))
         response_text = self._burp_xml_named_payload_text(item, "response")
         if response_text.strip():
-            payloads.append(
-                (source_file, f"{member_name}#burp-response-{index}.txt", response_text)
-            )
+            payloads.append((source_file, f"{member_name}#burp-response-{index}.txt", response_text))
         return payloads
 
     def _graphql_config_text_structured_payload_text(
@@ -32657,7 +26207,10 @@ class ArtifactQueueProcessor:
                 candidates.extend(child_values)
             return candidates
         if isinstance(value, list):
-            item_jobs = [(item_index, item, path) for item_index, item in enumerate(value[:512])]
+            item_jobs = [
+                (item_index, item, path)
+                for item_index, item in enumerate(value[:512])
+            ]
             item_batches = (
                 self._run_ordered_local_batch(
                     item_jobs,
@@ -32855,9 +26408,7 @@ class ArtifactQueueProcessor:
             ("proto_option", proto_option_pattern, parse_text),
         ]
         if is_buf_config:
-            pattern_jobs.append(
-                ("buf_registry", self._buf_config_registry_ref_pattern(), parse_text)
-            )
+            pattern_jobs.append(("buf_registry", self._buf_config_registry_ref_pattern(), parse_text))
 
         candidates: list[tuple[int, str]] = []
         pattern_batches = self._run_ordered_local_batch(
@@ -32963,22 +26514,13 @@ class ArtifactQueueProcessor:
         normalized: dict[str, Any],
         path_hint: str,
     ) -> list[str]:
-        if not self._yaml_mapping_looks_like_goreleaser_config(mapping, normalized, path_hint):
-            return []
-
-        candidates: list[str] = []
-        seen: set[str] = set()
-        for value in self._yaml_goreleaser_candidate_values_for_node(
+        return yaml_goreleaser_config_structured_candidates_for_processor(
             mapping,
-            (),
-            use_workers=True,
-        ):
-            candidate = str(value or "").strip()
-            if not candidate or candidate.lower() in seen:
-                continue
-            seen.add(candidate.lower())
-            candidates.append(candidate)
-        return candidates
+            normalized,
+            path_hint,
+            yaml_mapping_looks_like_goreleaser_config=self._yaml_mapping_looks_like_goreleaser_config,
+            yaml_goreleaser_candidate_values_for_node=self._yaml_goreleaser_candidate_values_for_node,
+        )
 
     def _yaml_goreleaser_candidate_values_for_node(
         self,
@@ -32987,52 +26529,24 @@ class ArtifactQueueProcessor:
         *,
         use_workers: bool,
     ) -> list[str]:
-        candidates: list[str] = []
-        if isinstance(value, dict):
-            if "blobs" in path:
-                blob_candidate = self._yaml_goreleaser_blob_bucket_value(value)
-                if blob_candidate:
-                    candidates.append(blob_candidate)
-            child_jobs = [
-                (child_index, key, child, path)
-                for child_index, (key, child) in enumerate(value.items())
-            ]
-            child_batches = (
-                self._run_ordered_local_batch(
-                    child_jobs,
-                    self._yaml_goreleaser_child_candidate_values,
-                    default_factory=list,
-                )
-                if use_workers
-                else [
-                    self._yaml_goreleaser_child_candidate_values_for_node(
-                        key,
-                        child,
-                        path,
-                    )
-                    for _child_index, key, child, path in child_jobs
-                ]
-            )
-            for child_values in child_batches:
-                candidates.extend(child_values)
-            return candidates
-        if isinstance(value, list):
-            for item in value[:256]:
-                candidates.extend(
-                    self._yaml_goreleaser_candidate_values_for_node(
-                        item,
-                        path,
-                        use_workers=False,
-                    )
-                )
-        return candidates
+        return yaml_goreleaser_candidate_values_for_node_for_processor(
+            value,
+            path,
+            use_workers=use_workers,
+            yaml_goreleaser_blob_bucket_value=self._yaml_goreleaser_blob_bucket_value,
+            yaml_goreleaser_child_candidate_values=self._yaml_goreleaser_child_candidate_values,
+            yaml_goreleaser_child_candidate_values_for_node=self._yaml_goreleaser_child_candidate_values_for_node,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+        )
 
     def _yaml_goreleaser_child_candidate_values(
         self,
         child_job: tuple[int, Any, Any, tuple[str, ...]],
     ) -> list[str]:
-        _child_index, key, child, path = child_job
-        return self._yaml_goreleaser_child_candidate_values_for_node(key, child, path)
+        return yaml_goreleaser_child_candidate_values_for_processor(
+            child_job,
+            yaml_goreleaser_child_candidate_values_for_node=self._yaml_goreleaser_child_candidate_values_for_node,
+        )
 
     def _yaml_goreleaser_child_candidate_values_for_node(
         self,
@@ -33040,74 +26554,32 @@ class ArtifactQueueProcessor:
         child: Any,
         path: tuple[str, ...],
     ) -> list[str]:
-        key_fingerprint = self._yaml_key_fingerprint(str(key or ""))
-        child_path = (*path, key_fingerprint)
-        candidates: list[str] = []
-        if key_fingerprint in {
-            "image",
-            "images",
-            "imagetemplate",
-            "imagetemplates",
-            "nametemplate",
-            "nametemplates",
-        } and any(part in child_path for part in ("docker", "dockers", "dockermanifests")):
-            candidates.extend(self._yaml_goreleaser_image_template_values(child))
-        candidates.extend(
-            self._yaml_goreleaser_candidate_values_for_node(
-                child,
-                child_path,
-                use_workers=False,
-            )
+        return yaml_goreleaser_child_candidate_values_for_node_for_processor(
+            key,
+            child,
+            path,
+            yaml_key_fingerprint=self._yaml_key_fingerprint,
+            yaml_goreleaser_image_template_values=self._yaml_goreleaser_image_template_values,
+            yaml_goreleaser_candidate_values_for_node=self._yaml_goreleaser_candidate_values_for_node,
         )
-        return candidates
 
     def _yaml_goreleaser_image_template_values(self, value: Any) -> list[str]:
-        candidates: list[str] = []
-        for raw_value in self._yaml_goreleaser_scalar_values(value):
-            image_candidate = _artifact_templated_container_image_url_candidate(
-                raw_value,
-                require_explicit_registry=True,
-            )
-            if image_candidate:
-                candidates.append(image_candidate)
-        return candidates
+        return goreleaser_image_template_values_for_processor(
+            value,
+            templated_container_image_url_candidate=_artifact_templated_container_image_url_candidate,
+        )
 
     def _yaml_goreleaser_blob_bucket_value(self, blob_mapping: dict[str, Any]) -> str:
-        blob_normalized = self._yaml_normalized_mapping(blob_mapping)
-        provider = self._yaml_key_fingerprint(
-            self._yaml_ref_value(blob_normalized, "provider", "type")
+        return goreleaser_blob_bucket_value_for_processor(
+            blob_mapping,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_key_fingerprint=self._yaml_key_fingerprint,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
         )
-        bucket = self._yaml_valid_bucket_name(
-            self._yaml_ref_value(
-                blob_normalized,
-                "bucket",
-                "bucketName",
-                "bucket_name",
-                "name",
-            )
-        )
-        if not bucket:
-            return ""
-        if provider in {"s3", "aws", "awss3"} and re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket):
-            return f"s3://{bucket}"
-        if provider in {"gs", "gcs", "googlecloudstorage", "googlestorage"}:
-            return f"gs://{bucket}"
-        return ""
 
     def _yaml_goreleaser_scalar_values(self, value: Any) -> list[str]:
-        if isinstance(value, (str, int, float)):
-            return [str(value)]
-        if isinstance(value, list):
-            values: list[str] = []
-            for item in value[:64]:
-                values.extend(self._yaml_goreleaser_scalar_values(item))
-            return values
-        if isinstance(value, dict):
-            values = []
-            for item in list(value.values())[:64]:
-                values.extend(self._yaml_goreleaser_scalar_values(item))
-            return values
-        return []
+        return goreleaser_scalar_values_for_processor(value)
 
     def _yaml_mapping_looks_like_goreleaser_config(
         self,
@@ -33116,24 +26588,7 @@ class ArtifactQueueProcessor:
         path_hint: str,
     ) -> bool:
         del mapping
-        keys = set(normalized)
-        root_markers = {
-            "projectname",
-            "before",
-            "builds",
-            "archives",
-            "checksum",
-            "snapshot",
-            "changelog",
-            "release",
-            "brews",
-            "nfpms",
-        }
-        if (keys & {"dockers", "dockermanifests", "blobs"}) and (keys & root_markers):
-            return True
-        return "goreleaser" in path_hint and bool(
-            keys & (root_markers | {"dockers", "dockermanifests", "blobs"})
-        )
+        return yaml_mapping_looks_like_goreleaser_config_for_processor(normalized, path_hint)
 
     def _yaml_gitops_manifest_structured_candidates(
         self,
@@ -33217,25 +26672,12 @@ class ArtifactQueueProcessor:
         return []
 
     def _yaml_gitops_repository_candidates_from_mapping(self, mapping: dict[str, Any]) -> list[str]:
-        values = self._yaml_gitops_repository_values_for_node(
+        return yaml_gitops_repository_candidates_from_mapping_for_processor(
             mapping,
-            use_workers=True,
+            yaml_gitops_repository_values_for_node=self._yaml_gitops_repository_values_for_node,
+            yaml_gitops_repository_candidates=self._yaml_gitops_repository_candidates,
+            run_ordered_local_batch=self._run_ordered_local_batch,
         )
-        candidates: list[str] = []
-        seen: set[str] = set()
-        candidate_batches = self._run_ordered_local_batch(
-            values,
-            self._yaml_gitops_repository_candidates,
-            default_factory=list,
-        )
-        for candidate_batch in candidate_batches:
-            for candidate in candidate_batch:
-                lowered = candidate.lower()
-                if lowered in seen:
-                    continue
-                seen.add(lowered)
-                candidates.append(candidate)
-        return candidates
 
     def _yaml_gitops_repository_values_for_node(
         self,
@@ -33243,164 +26685,59 @@ class ArtifactQueueProcessor:
         *,
         use_workers: bool,
     ) -> list[str]:
-        values: list[str] = []
-        if isinstance(value, dict):
-            normalized = self._yaml_normalized_mapping(value)
-            for key in ("repoURL", "repoUrl", "repo_url", "url"):
-                ref_value = self._yaml_ref_value(normalized, key)
-                if ref_value:
-                    values.append(ref_value)
-            name_hint = self._yaml_key_fingerprint(self._yaml_ref_value(normalized, "name"))
-            value_ref = self._yaml_ref_value(normalized, "value")
-            if value_ref and any(
-                marker in name_hint for marker in ("repo", "repository", "sourceurl")
-            ):
-                values.append(value_ref)
-            child_jobs = list(enumerate(value.values()))
-            child_batches = (
-                self._run_ordered_local_batch(
-                    child_jobs,
-                    self._yaml_gitops_repository_child_values,
-                    default_factory=list,
-                )
-                if use_workers
-                else [
-                    self._yaml_gitops_repository_values_for_node(
-                        child,
-                        use_workers=False,
-                    )
-                    for _child_index, child in child_jobs
-                ]
-            )
-            for child_values in child_batches:
-                values.extend(child_values)
-            return values
-        if isinstance(value, list):
-            item_jobs = list(enumerate(value))
-            item_batches = (
-                self._run_ordered_local_batch(
-                    item_jobs,
-                    self._yaml_gitops_repository_child_values,
-                    default_factory=list,
-                )
-                if use_workers
-                else [
-                    self._yaml_gitops_repository_values_for_node(
-                        item,
-                        use_workers=False,
-                    )
-                    for _item_index, item in item_jobs
-                ]
-            )
-            for item_values in item_batches:
-                values.extend(item_values)
-        return values
+        return yaml_gitops_repository_values_for_node_for_processor(
+            value,
+            use_workers=use_workers,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_key_fingerprint=self._yaml_key_fingerprint,
+            yaml_gitops_repository_child_values=self._yaml_gitops_repository_child_values,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+        )
 
     def _yaml_gitops_repository_child_values(
         self,
         child_job: tuple[int, Any],
     ) -> list[str]:
-        _child_index, child = child_job
-        return self._yaml_gitops_repository_values_for_node(
-            child,
-            use_workers=False,
+        return yaml_gitops_repository_child_values_for_processor(
+            child_job,
+            yaml_gitops_repository_values_for_node=self._yaml_gitops_repository_values_for_node,
         )
 
     def _yaml_gitops_repository_candidates(self, value: Any) -> list[str]:
-        raw_value = str(value or "").strip().strip("\"'")
-        if not raw_value:
-            return []
-        candidates: list[str] = []
-
-        if raw_value.startswith(("http://", "https://")):
-            normalized = _normalize_artifact_text_url(raw_value)
-            if normalized:
-                candidates.append(self._strip_git_repository_suffix(normalized))
-        elif raw_value.startswith(("oci://", "docker://")):
-            candidate = _artifact_container_image_url_candidate(raw_value)
-            if candidate:
-                candidates.append(candidate)
-        elif raw_value.startswith("git@"):
-            match = re.fullmatch(r"git@([^:]+):(.+)", raw_value)
-            if match:
-                candidates.append(
-                    self._strip_git_repository_suffix(
-                        f"https://{match.group(1).lower()}/{match.group(2).strip('/')}"
-                    )
-                )
-        elif raw_value.startswith(("ssh://", "git://")):
-            parsed = urlparse(raw_value)
-            host = str(parsed.hostname or "").lower()
-            path = str(parsed.path or "").strip("/")
-            if host and path:
-                candidates.append(self._strip_git_repository_suffix(f"https://{host}/{path}"))
-
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for candidate in candidates:
-            if not candidate or candidate.lower() in seen:
-                continue
-            seen.add(candidate.lower())
-            deduped.append(candidate)
-        return deduped
+        return yaml_gitops_repository_candidates_for_processor(
+            value,
+            normalize_artifact_text_url=_normalize_artifact_text_url,
+            artifact_container_image_url_candidate=_artifact_container_image_url_candidate,
+            strip_git_repository_suffix=self._strip_git_repository_suffix,
+        )
 
     @staticmethod
     def _strip_git_repository_suffix(value: str) -> str:
-        candidate = str(value or "").strip().rstrip("/")
-        if candidate.lower().endswith(".git"):
-            return candidate[:-4]
-        return candidate
+        return strip_git_repository_suffix_for_processor(value)
 
     def _yaml_flux_source_ref_candidates(self, source_ref: dict[str, Any]) -> list[str]:
-        normalized = self._yaml_normalized_mapping(source_ref)
-        kind = self._yaml_key_fingerprint(self._yaml_ref_value(normalized, "kind"))
-        name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
-        namespace = self._yaml_external_secret_ref_segment(
-            self._yaml_ref_value(normalized, "namespace")
+        return yaml_flux_source_ref_candidates_for_processor(
+            source_ref,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_key_fingerprint=self._yaml_key_fingerprint,
+            yaml_external_secret_ref_segment=self._yaml_external_secret_ref_segment,
         )
-        if not kind or not name:
-            return []
-        identifier = f"{namespace}/{name}" if namespace else name
-        family_map = {
-            "gitrepository": "flux-gitrepository",
-            "helmrepository": "flux-helmrepository",
-            "ocirepository": "flux-ocirepository",
-            "bucket": "flux-bucket",
-        }
-        family = family_map.get(kind)
-        return [f"{family}://{identifier}"] if family else []
 
     def _yaml_flux_bucket_structured_candidates(self, spec: dict[str, Any]) -> list[str]:
-        if not spec:
-            return []
-        normalized = self._yaml_normalized_mapping(spec)
-        bucket = self._yaml_valid_bucket_name(
-            self._yaml_ref_value(normalized, "bucketName", "bucket_name", "bucket", "name")
+        return yaml_flux_bucket_structured_candidates_for_processor(
+            spec,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+            yaml_external_secret_ref_segment=self._yaml_external_secret_ref_segment,
+            do_spaces_endpoint_host_re=_DO_SPACES_ENDPOINT_HOST_RE,
         )
-        provider = self._yaml_ref_value(normalized, "provider").lower()
-        endpoint = self._yaml_ref_value(normalized, "endpoint").lower()
-        region = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "region"))
-        if not bucket:
-            return []
-        if "gcp" in provider or "google" in provider:
-            return [f"gs://{bucket}"]
-        if "azure" in provider:
-            account_name = self._yaml_ref_value(
-                normalized, "accountName", "account_name", "account"
-            )
-            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name):
-                return [f"https://{account_name.lower()}.blob.core.windows.net/{bucket}"]
-        do_match = _DO_SPACES_ENDPOINT_HOST_RE.fullmatch(endpoint)
-        if do_match:
-            do_region = (do_match.group("region") or region or "").lower()
-            if do_region:
-                return [f"https://{bucket}.{do_region}.digitaloceanspaces.com"]
-        return [f"s3://{bucket}"]
 
     @staticmethod
     def _yaml_manifest_looks_like_crossplane(api_version: str) -> bool:
-        group = str(api_version or "").split("/", 1)[0].lower()
-        return "crossplane.io" in group or group.endswith(".upbound.io")
+        return yaml_manifest_looks_like_crossplane_for_processor(api_version)
 
     def _yaml_crossplane_structured_candidates(
         self,
@@ -33410,61 +26747,30 @@ class ArtifactQueueProcessor:
         api_version: str,
         object_identifier: str,
     ) -> list[str]:
-        candidates: list[str] = []
-        family = self._crossplane_provider_family(api_version)
-        spec = self._yaml_child_mapping(mapping, "spec")
-
-        if kind == "providerconfig":
-            if object_identifier:
-                candidates.append(f"crossplane-providerconfig://{family}/{object_identifier}")
-            return candidates
-
-        if kind in {"composition", "compositeresourcedefinition"}:
-            if object_identifier:
-                uri_family = "crossplane-composition" if kind == "composition" else "crossplane-xrd"
-                candidates.append(f"{uri_family}://{object_identifier}")
-            return candidates
-
-        provider_ref = self._yaml_child_mapping(spec, "providerConfigRef", "provider_config_ref")
-        if provider_ref:
-            ref_name = self._yaml_external_secret_ref_segment(
-                self._yaml_ref_value(self._yaml_normalized_mapping(provider_ref), "name")
-            )
-            if ref_name:
-                candidates.append(f"crossplane-providerconfig://{family}/{ref_name}")
-
-        external_name = self._yaml_crossplane_external_name(mapping)
-        resource_name = external_name or object_identifier
-        if resource_name:
-            candidates.append(f"crossplane-resource://{family}/{kind}/{resource_name}")
-
-        for cloud_candidate in self._yaml_crossplane_cloud_candidates(
+        return yaml_crossplane_structured_candidates_for_processor(
+            mapping,
             kind=kind,
             api_version=api_version,
-            mapping=mapping,
-            spec=spec,
-            resource_name=resource_name,
-        ):
-            candidates.append(cloud_candidate)
-        return candidates
+            object_identifier=object_identifier,
+            crossplane_provider_family=self._crossplane_provider_family,
+            yaml_child_mapping=self._yaml_child_mapping,
+            yaml_external_secret_ref_segment=self._yaml_external_secret_ref_segment,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_crossplane_external_name=self._yaml_crossplane_external_name,
+            yaml_crossplane_cloud_candidates=self._yaml_crossplane_cloud_candidates,
+        )
 
     @staticmethod
     def _crossplane_provider_family(api_version: str) -> str:
-        group = str(api_version or "").split("/", 1)[0].lower()
-        for provider in ("aws", "gcp", "azure", "kubernetes", "digitalocean", "cloudflare"):
-            if provider in group:
-                return provider
-        return group.replace(".", "-") or "crossplane"
+        return crossplane_provider_family_for_processor(api_version)
 
     def _yaml_crossplane_external_name(self, mapping: dict[str, Any]) -> str:
-        metadata = self._yaml_child_mapping(mapping, "metadata")
-        annotations = self._yaml_child_mapping(metadata, "annotations")
-        if not annotations:
-            return ""
-        for key, value in annotations.items():
-            if str(key or "").strip().lower() == "crossplane.io/external-name":
-                return self._yaml_external_secret_ref_segment(value)
-        return ""
+        return yaml_crossplane_external_name_for_processor(
+            mapping,
+            yaml_child_mapping=self._yaml_child_mapping,
+            yaml_external_secret_ref_segment=self._yaml_external_secret_ref_segment,
+        )
 
     def _yaml_crossplane_cloud_candidates(
         self,
@@ -33475,45 +26781,17 @@ class ArtifactQueueProcessor:
         spec: dict[str, Any],
         resource_name: str,
     ) -> list[str]:
-        del mapping
-        group = str(api_version or "").split("/", 1)[0].lower()
-        for_provider = self._yaml_child_mapping(spec, "forProvider", "for_provider")
-        normalized = self._yaml_normalized_mapping(for_provider) if for_provider else {}
-        candidates: list[str] = []
-
-        if kind == "bucket" and ("s3.aws" in group or "aws" in group):
-            bucket = self._yaml_valid_bucket_name(
-                self._yaml_ref_value(normalized, "bucket", "bucketName", "bucket_name")
-                or resource_name
-            )
-            if bucket:
-                candidates.append(f"s3://{bucket}")
-        elif kind == "bucket" and ("storage.gcp" in group or "gcp" in group):
-            bucket = self._yaml_valid_bucket_name(
-                self._yaml_ref_value(normalized, "name", "bucket", "bucketName", "bucket_name")
-                or resource_name
-            )
-            if bucket:
-                candidates.append(f"gs://{bucket}")
-        elif kind in {"storageaccount", "container"} and "azure" in group:
-            account_name = self._yaml_ref_value(
-                normalized,
-                "storageAccountName",
-                "storage_account_name",
-                "accountName",
-                "account_name",
-            )
-            container_name = self._yaml_ref_value(
-                normalized,
-                "name",
-                "containerName",
-                "container_name",
-            )
-            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and container_name:
-                candidates.append(
-                    f"https://{account_name.lower()}.blob.core.windows.net/{container_name.lower()}"
-                )
-        return candidates
+        return yaml_crossplane_cloud_candidates_for_processor(
+            kind=kind,
+            api_version=api_version,
+            mapping=mapping,
+            spec=spec,
+            resource_name=resource_name,
+            yaml_child_mapping=self._yaml_child_mapping,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+        )
 
     def _yaml_kubernetes_secret_manifest_structured_candidates(
         self,
@@ -33569,9 +26847,7 @@ class ArtifactQueueProcessor:
 
         spec = self._yaml_child_mapping(mapping, "spec")
         spec_mappings = [spec] if spec else []
-        external_secret_spec = self._yaml_child_mapping(
-            spec, "externalSecretSpec", "external_secret_spec"
-        )
+        external_secret_spec = self._yaml_child_mapping(spec, "externalSecretSpec", "external_secret_spec")
         if external_secret_spec:
             spec_mappings.append(external_secret_spec)
 
@@ -33581,9 +26857,7 @@ class ArtifactQueueProcessor:
             for store_ref in self._yaml_external_secret_store_refs(spec_mapping, object_identifier):
                 _append(store_ref)
             provider = self._yaml_child_mapping(spec_mapping, "provider")
-            for provider_candidate in self._yaml_external_secret_provider_candidates(
-                provider, remote_keys
-            ):
+            for provider_candidate in self._yaml_external_secret_provider_candidates(provider, remote_keys):
                 _append(provider_candidate)
 
         for remote_key in remote_keys:
@@ -33594,215 +26868,67 @@ class ArtifactQueueProcessor:
         return candidates
 
     def _yaml_kubernetes_object_identifier(self, mapping: dict[str, Any]) -> str:
-        metadata = self._yaml_child_mapping(mapping, "metadata")
-        if not metadata:
-            return ""
-        normalized = self._yaml_normalized_mapping(metadata)
-        name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
-        if not name:
-            return ""
-        namespace = self._yaml_external_secret_ref_segment(
-            self._yaml_ref_value(normalized, "namespace")
+        return yaml_kubernetes_object_identifier_for_processor(
+            mapping,
+            yaml_child_mapping=self._yaml_child_mapping,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_external_secret_ref_segment=self._yaml_external_secret_ref_segment,
         )
-        return f"{namespace}/{name}" if namespace else name
 
     def _yaml_external_secret_store_refs(
         self,
         spec: dict[str, Any],
         object_identifier: str,
     ) -> list[str]:
-        del object_identifier
-        store_ref = self._yaml_child_mapping(spec, "secretStoreRef", "secret_store_ref")
-        if not store_ref:
-            return []
-        normalized = self._yaml_normalized_mapping(store_ref)
-        store_name = self._yaml_external_secret_ref_segment(
-            self._yaml_ref_value(normalized, "name")
+        return yaml_external_secret_store_refs_for_processor(
+            spec,
+            object_identifier,
+            yaml_child_mapping=self._yaml_child_mapping,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_external_secret_ref_segment=self._yaml_external_secret_ref_segment,
+            yaml_key_fingerprint=self._yaml_key_fingerprint,
         )
-        if not store_name:
-            return []
-        store_kind = self._yaml_key_fingerprint(self._yaml_ref_value(normalized, "kind"))
-        if store_kind == "clustersecretstore":
-            return [f"cluster-secret-store://{store_name}"]
-        return [f"secret-store://{store_name}"]
 
     def _yaml_external_secret_remote_ref_keys(self, spec: dict[str, Any]) -> list[str]:
-        remote_ref_jobs: list[tuple[str, dict[str, Any]]] = []
-        data_entries = spec.get("data")
-        if isinstance(data_entries, list):
-            remote_ref_jobs.extend(
-                ("data", entry) for entry in data_entries if isinstance(entry, dict)
-            )
-        data_from_entries = spec.get("dataFrom") or spec.get("datafrom")
-        if isinstance(data_from_entries, list):
-            remote_ref_jobs.extend(
-                ("data_from", entry) for entry in data_from_entries if isinstance(entry, dict)
-            )
-
-        remote_ref_batches = self._run_ordered_local_batch(
-            remote_ref_jobs,
-            self._yaml_external_secret_remote_ref_entry_keys,
-            default_factory=list,
+        return yaml_external_secret_remote_ref_keys_for_processor(
+            spec,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+            yaml_external_secret_remote_ref_entry_keys=self._yaml_external_secret_remote_ref_entry_keys,
         )
-        keys: list[str] = []
-        seen: set[str] = set()
-
-        def _append(value: Any) -> None:
-            key = str(value or "").strip().strip("\"'")
-            if not key or key.lower() in seen:
-                return
-            seen.add(key.lower())
-            keys.append(key)
-
-        for remote_ref_batch in remote_ref_batches:
-            for remote_key in remote_ref_batch:
-                _append(remote_key)
-        return keys
 
     def _yaml_external_secret_remote_ref_entry_keys(
         self,
         remote_ref_job: tuple[str, dict[str, Any]],
     ) -> list[str]:
-        family, entry = remote_ref_job
-        if family == "data":
-            remote_ref = self._yaml_child_mapping(entry, "remoteRef", "remote_ref")
-            if not remote_ref:
-                return []
-            normalized_remote = self._yaml_normalized_mapping(remote_ref)
-            remote_key = self._yaml_ref_value(
-                normalized_remote,
-                "key",
-                "remoteKey",
-                "remote_key",
-            )
-            return [remote_key] if remote_key else []
-        if family != "data_from":
-            return []
-        keys: list[str] = []
-        for child_name in ("extract", "find"):
-            child = self._yaml_child_mapping(entry, child_name)
-            if not child:
-                continue
-            normalized_child = self._yaml_normalized_mapping(child)
-            remote_key = self._yaml_ref_value(
-                normalized_child,
-                "key",
-                "path",
-                "name",
-                "remoteKey",
-                "remote_key",
-            )
-            if remote_key:
-                keys.append(remote_key)
-        return keys
+        return yaml_external_secret_remote_ref_entry_keys_for_processor(
+            remote_ref_job,
+            yaml_child_mapping=self._yaml_child_mapping,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_ref_value=self._yaml_ref_value,
+        )
 
     def _yaml_external_secret_provider_candidates(
         self,
         provider: dict[str, Any],
         remote_keys: Sequence[str],
     ) -> list[str]:
-        if not provider:
-            return []
-        candidates: list[str] = []
-
-        def _append(value: str) -> None:
-            candidate = str(value or "").strip()
-            if candidate:
-                candidates.append(candidate)
-
-        aws_provider = self._yaml_child_mapping(provider, "aws")
-        if aws_provider:
-            normalized_aws = self._yaml_normalized_mapping(aws_provider)
-            region = self._yaml_external_secret_ref_segment(
-                self._yaml_ref_value(normalized_aws, "region")
-            )
-            service = self._yaml_ref_value(normalized_aws, "service").lower()
-            family = "aws-parameterstore" if "parameter" in service else "aws-secretsmanager"
-            if region:
-                _append(f"{family}://{region}")
-                for remote_key in remote_keys:
-                    encoded_key = self._yaml_external_secret_ref_segment(remote_key)
-                    if encoded_key:
-                        _append(f"{family}://{region}/{encoded_key}")
-
-        gcp_provider = self._yaml_child_mapping(provider, "gcpsm", "gcp", "gcpSecretManager")
-        if gcp_provider:
-            normalized_gcp = self._yaml_normalized_mapping(gcp_provider)
-            project_id = self._yaml_valid_project_ref(
-                self._yaml_ref_value(
-                    normalized_gcp,
-                    "projectID",
-                    "projectId",
-                    "project_id",
-                    "project",
-                )
-            )
-            if project_id:
-                _append(f"gcp-secretmanager://{project_id}")
-                for remote_key in remote_keys:
-                    encoded_key = self._yaml_external_secret_ref_segment(remote_key)
-                    if encoded_key:
-                        _append(f"gcp-secretmanager://{project_id}/{encoded_key}")
-
-        azure_provider = self._yaml_child_mapping(provider, "azurekv", "azureKv", "azure-kv")
-        if azure_provider:
-            normalized_azure = self._yaml_normalized_mapping(azure_provider)
-            vault_url = _normalize_artifact_text_url(
-                self._yaml_ref_value(
-                    normalized_azure,
-                    "vaultUrl",
-                    "vault_url",
-                    "vault-url",
-                )
-            )
-            if vault_url:
-                _append(vault_url)
-
-        vault_provider = self._yaml_child_mapping(provider, "vault")
-        if vault_provider:
-            normalized_vault = self._yaml_normalized_mapping(vault_provider)
-            vault_url = self._yaml_vault_address_candidate(
-                self._yaml_ref_value(
-                    normalized_vault,
-                    "server",
-                    "url",
-                    "address",
-                    "uri",
-                )
-            )
-            if vault_url:
-                _append(vault_url)
-                parsed = urlparse(vault_url)
-                vault_path = self._yaml_external_secret_ref_segment(
-                    self._yaml_ref_value(normalized_vault, "path")
-                )
-                if parsed.hostname:
-                    identifier = parsed.hostname.lower()
-                    if vault_path:
-                        identifier = f"{identifier}/{vault_path}"
-                    _append(f"hashicorp-vault://{identifier}")
-
-        for child_name in ("webhook", "gitlab"):
-            child = self._yaml_child_mapping(provider, child_name)
-            if not child:
-                continue
-            normalized_child = self._yaml_normalized_mapping(child)
-            endpoint = _normalize_artifact_text_url(
-                self._yaml_ref_value(normalized_child, "url", "uri", "endpoint")
-            )
-            if endpoint:
-                _append(endpoint)
-
-        return candidates
+        return yaml_external_secret_provider_candidates_for_processor(
+            provider,
+            remote_keys,
+            yaml_child_mapping=self._yaml_child_mapping,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_external_secret_ref_segment=self._yaml_external_secret_ref_segment,
+            yaml_valid_project_ref=self._yaml_valid_project_ref,
+            yaml_vault_address_candidate=self._yaml_vault_address_candidate,
+            normalize_artifact_text_url=_normalize_artifact_text_url,
+        )
 
     @staticmethod
     def _yaml_external_secret_ref_segment(value: Any) -> str:
-        text = str(value or "").strip().strip("\"'").strip("/")
-        if not text or len(text) > 512 or re.search(r"\s", text):
-            return ""
-        if "{{" in text or "}}" in text:
-            return ""
-        return quote(text, safe="/._:@+=-")
+        return yaml_external_secret_ref_segment_for_processor(value)
 
     def _yaml_sops_metadata_structured_candidates(
         self,
@@ -33810,110 +26936,39 @@ class ArtifactQueueProcessor:
         normalized: dict[str, Any],
         path_hint: str,
     ) -> list[str]:
-        sops_mapping: dict[str, Any] | None = None
-        if self._yaml_has_hint(path_hint, "sops"):
-            sops_mapping = mapping
-        else:
-            candidate = normalized.get("sops")
-            if isinstance(candidate, dict):
-                sops_mapping = candidate
-        if not isinstance(sops_mapping, dict):
-            return []
-
-        sops_jobs: list[tuple[str, dict[str, Any]]] = []
-        for entry in self._yaml_sops_section_entries(sops_mapping, "kms"):
-            sops_jobs.append(("aws_kms", entry))
-        for entry in self._yaml_sops_section_entries(sops_mapping, "gcp_kms", "gcpKms", "gcp-kms"):
-            sops_jobs.append(("gcp_kms", entry))
-        for entry in self._yaml_sops_section_entries(
-            sops_mapping, "azure_kv", "azureKv", "azure-kv"
-        ):
-            sops_jobs.append(("azure_kv", entry))
-        for entry in self._yaml_sops_section_entries(
-            sops_mapping, "hc_vault", "hcVault", "hc-vault"
-        ):
-            sops_jobs.append(("hc_vault", entry))
-
-        candidate_entries = self._run_ordered_local_batch(
-            sops_jobs,
-            self._yaml_sops_metadata_entry_candidate,
-            default_factory=str,
+        return yaml_sops_metadata_structured_candidates_for_processor(
+            mapping,
+            normalized,
+            path_hint,
+            yaml_has_hint=self._yaml_has_hint,
+            yaml_sops_section_entries=self._yaml_sops_section_entries,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+            yaml_sops_metadata_entry_candidate=self._yaml_sops_metadata_entry_candidate,
         )
-        candidates: list[str] = []
-        seen: set[str] = set()
-
-        def _append(value: str) -> None:
-            candidate = str(value or "").strip().strip("\"'")
-            if not candidate:
-                return
-            lowered = candidate.lower()
-            if lowered in seen:
-                return
-            seen.add(lowered)
-            candidates.append(candidate)
-
-        for candidate in candidate_entries:
-            _append(candidate)
-        return candidates
 
     def _yaml_sops_metadata_entry_candidate(self, sops_job: tuple[str, dict[str, Any]]) -> str:
-        family, entry = sops_job
-        if family == "aws_kms":
-            arn = self._yaml_ref_value(entry, "arn")
-            return str(arn).strip() if _AWS_KMS_ARN_RE.fullmatch(str(arn or "").strip()) else ""
-        if family == "gcp_kms":
-            resource_id = str(
-                self._yaml_ref_value(entry, "resource_id", "resourceId", "resource-id") or ""
-            ).strip()
-            return resource_id if _GCP_KMS_RESOURCE_RE.fullmatch(resource_id) else ""
-        if family == "azure_kv":
-            vault_url = str(
-                self._yaml_ref_value(entry, "vault_url", "vaultUrl", "vault-url") or ""
-            ).strip()
-            return _normalize_artifact_text_url(vault_url) if vault_url else ""
-        if family == "hc_vault":
-            vault_address = str(
-                self._yaml_ref_value(
-                    entry,
-                    "vault_address",
-                    "vaultAddress",
-                    "vault-address",
-                    "address",
-                    "server",
-                    "url",
-                    "uri",
-                )
-                or ""
-            ).strip()
-            return self._yaml_vault_address_candidate(vault_address)
-        return ""
+        return yaml_sops_metadata_entry_candidate_for_processor(
+            sops_job,
+            yaml_ref_value=self._yaml_ref_value,
+            aws_kms_arn_pattern=_AWS_KMS_ARN_RE,
+            gcp_kms_resource_pattern=_GCP_KMS_RESOURCE_RE,
+            normalize_artifact_text_url=_normalize_artifact_text_url,
+            yaml_vault_address_candidate=self._yaml_vault_address_candidate,
+        )
 
-    def _yaml_sops_section_entries(
-        self, mapping: dict[str, Any], *keys: str
-    ) -> list[dict[str, Any]]:
-        normalized_keys = {self._yaml_key_fingerprint(key) for key in keys}
-        for key, value in mapping.items():
-            if self._yaml_key_fingerprint(str(key or "")) not in normalized_keys:
-                continue
-            if isinstance(value, dict):
-                return [value]
-            if isinstance(value, list):
-                return [item for item in value if isinstance(item, dict)]
-            return []
-        return []
+    def _yaml_sops_section_entries(self, mapping: dict[str, Any], *keys: str) -> list[dict[str, Any]]:
+        return yaml_sops_section_entries_for_processor(
+            mapping,
+            *keys,
+            yaml_key_fingerprint=self._yaml_key_fingerprint,
+        )
 
     @staticmethod
     def _yaml_vault_address_candidate(value: str) -> str:
-        candidate = str(value or "").strip().strip("\"'")
-        if not candidate:
-            return ""
-        normalized_url = _normalize_artifact_text_url(candidate)
-        parsed = urlparse(normalized_url)
-        if parsed.scheme in {"http", "https"} and parsed.netloc:
-            return normalized_url
-        if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{1,253}", candidate) and "." in candidate:
-            return f"https://{candidate.lower().strip('.')}"
-        return ""
+        return yaml_vault_address_candidate_for_processor(
+            value,
+            normalize_artifact_text_url=_normalize_artifact_text_url,
+        )
 
     def _yaml_structured_candidates_from_env_map(
         self,
@@ -33974,17 +27029,15 @@ class ArtifactQueueProcessor:
 
     @staticmethod
     def _cloudflare_valid_ref(value: str) -> str:
-        candidate = str(value or "").strip().strip("\"'").lower()
-        if re.fullmatch(r"[a-z0-9][a-z0-9._\-]{1,127}", candidate):
-            return candidate
-        return ""
+        return cloudflare_valid_ref_for_processor(value)
 
     @classmethod
     def _cloudflare_uri_candidate(cls, family: str, value: str) -> str:
-        ref = cls._cloudflare_valid_ref(value)
-        if not ref:
-            return ""
-        return f"cloudflare-{family}://{ref}"
+        return cloudflare_uri_candidate_for_processor(
+            family,
+            value,
+            cloudflare_valid_ref=cls._cloudflare_valid_ref,
+        )
 
     def _yaml_cloudflare_structured_candidates(
         self,
@@ -33993,532 +27046,122 @@ class ArtifactQueueProcessor:
         path_hint: str,
     ) -> list[str]:
         del mapping
-        candidate_refs: list[tuple[str, Any]] = []
-
-        def _append(family: str, value: str) -> None:
-            candidate_refs.append((family, value))
-
-        explicit_cloudflare_hint = self._yaml_has_hint(
+        return yaml_cloudflare_structured_candidates_for_processor(
+            normalized,
             path_hint,
-            "cloudflare",
-            "wrangler",
-            "r2",
-            "d1",
-            "kv",
-            "workers",
-            "worker",
-            "pages",
+            yaml_has_hint=self._yaml_has_hint,
+            yaml_ref_value=self._yaml_ref_value,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+            cloudflare_uri_candidate_entry=self._cloudflare_uri_candidate_entry,
         )
-        has_worker_markers = any(
-            key in normalized
-            for key in (
-                "main",
-                "compatibility_date",
-                "compatibilitydate",
-                "workers_dev",
-                "workersdev",
-                "account_id",
-                "accountid",
-            )
-        )
-        has_r2_key = any(
-            key in normalized
-            for key in (
-                "cloudflare_r2_bucket",
-                "cloudflarer2bucket",
-                "r2_bucket",
-                "r2bucket",
-                "r2_bucket_name",
-                "r2bucketname",
-            )
-        )
-        has_d1_key = any(
-            key in normalized
-            for key in (
-                "cloudflare_d1_database",
-                "cloudflared1database",
-                "cloudflare_d1_database_name",
-                "cloudflared1databasename",
-                "d1_database",
-                "d1database",
-                "d1_database_name",
-                "d1databasename",
-            )
-        )
-        has_kv_key = any(
-            key in normalized
-            for key in (
-                "cloudflare_kv_namespace",
-                "cloudflarekvnamespace",
-                "cloudflare_kv_namespace_id",
-                "cloudflarekvnamespaceid",
-                "kv_namespace",
-                "kvnamespace",
-                "kv_namespace_id",
-                "kvnamespaceid",
-                "kv_id",
-                "kvid",
-            )
-        )
-        has_worker_key = any(
-            key in normalized
-            for key in (
-                "cloudflare_worker",
-                "cloudflareworker",
-                "cloudflare_worker_name",
-                "cloudflareworkername",
-                "worker_name",
-                "workername",
-            )
-        )
-        has_pages_key = any(
-            key in normalized
-            for key in (
-                "cloudflare_pages_project",
-                "cloudflarepagesproject",
-                "cloudflare_pages_project_name",
-                "cloudflarepagesprojectname",
-                "pages_project",
-                "pagesproject",
-                "pages_project_name",
-                "pagesprojectname",
-                "project_name",
-                "projectname",
-            )
-        )
-
-        r2_bucket = self._yaml_ref_value(
-            normalized,
-            "cloudflare_r2_bucket",
-            "cloudflareR2Bucket",
-            "r2_bucket",
-            "r2Bucket",
-            "r2_bucket_name",
-            "r2BucketName",
-        )
-        if not r2_bucket and explicit_cloudflare_hint:
-            r2_bucket = self._yaml_ref_value(
-                normalized,
-                "bucket_name",
-                "bucketName",
-                "bucket-name",
-                "bucket",
-                "name",
-            )
-        if r2_bucket and (explicit_cloudflare_hint or has_r2_key):
-            _append("r2", r2_bucket)
-
-        d1_database = self._yaml_ref_value(
-            normalized,
-            "cloudflare_d1_database",
-            "cloudflareD1Database",
-            "cloudflare_d1_database_name",
-            "cloudflareD1DatabaseName",
-            "d1_database",
-            "d1Database",
-            "d1_database_name",
-            "d1DatabaseName",
-        )
-        if not d1_database and explicit_cloudflare_hint:
-            d1_database = self._yaml_ref_value(
-                normalized,
-                "database_name",
-                "databaseName",
-                "database-name",
-                "database_id",
-                "databaseId",
-                "database-id",
-                "name",
-            )
-        if d1_database and (explicit_cloudflare_hint or has_d1_key):
-            _append("d1", d1_database)
-
-        kv_namespace = self._yaml_ref_value(
-            normalized,
-            "cloudflare_kv_namespace",
-            "cloudflareKVNamespace",
-            "cloudflare_kv_namespace_id",
-            "cloudflareKVNamespaceId",
-            "kv_namespace",
-            "kvNamespace",
-            "kv_namespace_id",
-            "kvNamespaceId",
-            "kv_id",
-            "kvId",
-        )
-        if not kv_namespace and explicit_cloudflare_hint:
-            kv_namespace = self._yaml_ref_value(
-                normalized,
-                "namespace_id",
-                "namespaceId",
-                "namespace-id",
-                "id",
-                "name",
-            )
-        if kv_namespace and (explicit_cloudflare_hint or has_kv_key):
-            _append("kv", kv_namespace)
-
-        worker_name = self._yaml_ref_value(
-            normalized,
-            "cloudflare_worker",
-            "cloudflareWorker",
-            "cloudflare_worker_name",
-            "cloudflareWorkerName",
-            "worker_name",
-            "workerName",
-        )
-        if not worker_name and (explicit_cloudflare_hint or has_worker_markers):
-            worker_name = self._yaml_ref_value(normalized, "name")
-        if worker_name and (
-            has_worker_key
-            or has_worker_markers
-            or self._yaml_has_hint(path_hint, "worker", "workers", "wrangler")
-        ):
-            _append("worker", worker_name)
-
-        pages_project = self._yaml_ref_value(
-            normalized,
-            "cloudflare_pages_project",
-            "cloudflarePagesProject",
-            "cloudflare_pages_project_name",
-            "cloudflarePagesProjectName",
-            "pages_project",
-            "pagesProject",
-            "pages_project_name",
-            "pagesProjectName",
-            "project_name",
-            "projectName",
-        )
-        if not pages_project and (
-            self._yaml_has_hint(path_hint, "pages")
-            or any(key in normalized for key in ("pages_build_output_dir", "pagesbuildoutputdir"))
-        ):
-            pages_project = self._yaml_ref_value(normalized, "name")
-        if pages_project and (
-            has_pages_key
-            or self._yaml_has_hint(path_hint, "pages")
-            or any(key in normalized for key in ("pages_build_output_dir", "pagesbuildoutputdir"))
-        ):
-            _append("pages", pages_project)
-
-        candidate_entries = self._run_ordered_local_batch(
-            candidate_refs,
-            self._cloudflare_uri_candidate_entry,
-            default_factory=str,
-        )
-        candidates: list[str] = []
-        seen: set[str] = set()
-        for candidate in candidate_entries:
-            if not candidate or candidate in seen:
-                continue
-            seen.add(candidate)
-            candidates.append(candidate)
-        return candidates
 
     @classmethod
     def _cloudflare_uri_candidate_entry(cls, ref_entry: tuple[str, Any]) -> str:
-        family, value = ref_entry
-        return cls._cloudflare_uri_candidate(str(family or ""), str(value or ""))
+        return cloudflare_uri_candidate_entry_for_processor(
+            ref_entry,
+            cloudflare_uri_candidate=cls._cloudflare_uri_candidate,
+        )
 
     @staticmethod
     def _yaml_candidate_batch_entries(
         candidate_batch: tuple[int, Sequence[str]],
     ) -> list[str]:
-        _batch_index, batch = candidate_batch
-        return [candidate for candidate in batch]
+        return yaml_candidate_batch_entries_for_processor(candidate_batch)
 
     @staticmethod
     def _yaml_candidate_family_entries(
         candidate_family: tuple[int, Sequence[str]],
     ) -> list[str]:
-        _family_index, family = candidate_family
-        return [candidate for candidate in family]
+        return yaml_candidate_family_entries_for_processor(candidate_family)
 
     @staticmethod
     def _yaml_candidate_merge_entry(
         candidate_entry: tuple[int, str],
     ) -> str | None:
-        _candidate_index, candidate = candidate_entry
-        value = str(candidate or "").strip()
-        if not value:
-            return None
-        return value
+        return yaml_candidate_merge_entry_for_processor(candidate_entry)
 
     def _borg_repository_candidates_from_env_map(self, env_map: dict[str, str]) -> list[str]:
-        if not env_map:
-            return []
-        normalized = self._yaml_normalized_mapping(env_map)
-        repository_values: list[str] = []
-        seen_values: set[str] = set()
-        for key in (
-            "BORG_REPO",
-            "BORG_REPOSITORY",
-            "BORG_REPOSITORY_LOCATION",
-            "BORG_REMOTE",
-            "BORG_REMOTE_URL",
-            "BORG_LOCATION",
-        ):
-            value = str(
-                env_map.get(key) or normalized.get(self._yaml_key_fingerprint(key)) or ""
-            ).strip()
-            lowered = value.lower()
-            if not value or lowered in seen_values:
-                continue
-            seen_values.add(lowered)
-            repository_values.append(value)
-        candidate_batches = self._run_ordered_local_batch(
-            repository_values,
-            lambda repository: self._borg_repository_candidates(repository, normalized),
-            default_factory=list,
+        return borg_repository_candidates_from_env_map_for_processor(
+            env_map,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_key_fingerprint=self._yaml_key_fingerprint,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+            borg_repository_candidates=self._borg_repository_candidates,
         )
-        candidates: list[str] = []
-        seen_candidates: set[str] = set()
-        for candidate_batch in candidate_batches:
-            for candidate in candidate_batch:
-                lowered = str(candidate or "").strip().lower()
-                if not candidate or lowered in seen_candidates:
-                    continue
-                seen_candidates.add(lowered)
-                candidates.append(candidate)
-        return candidates
 
     def _borg_repository_candidates(
         self,
         repository: str,
         context: dict[str, Any],
     ) -> list[str]:
-        value = str(repository or "").strip().strip("\"'")
-        if not value or "{{" in value or "}}" in value or re.search(r"\s", value):
-            return []
-        parsed = urlparse(value)
-        scheme = parsed.scheme.lower()
-        candidates: list[str] = []
-
-        def _append(candidate: str) -> None:
-            normalized = str(candidate or "").strip()
-            if normalized:
-                candidates.append(normalized)
-
-        if scheme in {"http", "https"}:
-            managed_url = _artifact_managed_cloud_url_candidate(value)
-            if managed_url:
-                _append(managed_url)
-        elif scheme == "s3":
-            for candidate in self._borg_s3_repository_candidates(value):
-                _append(candidate)
-        elif scheme in {"gcd", "gcs", "gs", "google", "googlestorage", "googlecloudstorage"}:
-            bucket = self._borg_bucket_from_repository_url(value)
-            if bucket:
-                _append(f"gs://{bucket}")
-        elif scheme in {"azure", "az", "azureblob"}:
-            account_name = (
-                str(
-                    self._yaml_ref_value(
-                        context,
-                        "storage_account_name",
-                        "storageAccountName",
-                        "account_name",
-                        "accountName",
-                        "account",
-                        "azure_storage_account",
-                        "azureStorageAccount",
-                        "AZURE_STORAGE_ACCOUNT",
-                        "AZURE_BLOB_ACCOUNT",
-                    )
-                )
-                .strip()
-                .lower()
-            )
-            container_name = self._borg_bucket_from_repository_url(value)
-            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
-                r"[^/?#]+", container_name
-            ):
-                _append(f"https://{account_name}.blob.core.windows.net/{container_name}")
-        elif scheme in {"ssh", "sftp"}:
-            _append(self._borg_network_repository_candidate(value))
-        elif not scheme:
-            _append(self._borg_network_repository_candidate(value))
-
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for candidate in candidates:
-            lowered = str(candidate or "").strip().lower()
-            if not candidate or lowered in seen:
-                continue
-            seen.add(lowered)
-            deduped.append(candidate)
-        return deduped
+        return borg_repository_candidates_for_processor(
+            repository,
+            context,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+            artifact_managed_cloud_url_candidate=_artifact_managed_cloud_url_candidate,
+            strip_artifact_network_dsn_userinfo=_strip_artifact_network_dsn_userinfo,
+            borg_s3_repository_candidates=borg_s3_repository_candidates_for_processor,
+            borg_bucket_from_repository_url=borg_bucket_from_repository_url_for_processor,
+            borg_network_repository_candidate=borg_network_repository_candidate_for_processor,
+        )
 
     def _borg_s3_repository_candidates(self, repository_url: str) -> list[str]:
-        parsed = urlparse(str(repository_url or "").strip())
-        candidates: list[str] = []
-        netloc = parsed.netloc.strip()
-        path_segments = [segment for segment in parsed.path.split("/") if segment]
-        bucket_candidate = ""
-        if "@" in netloc:
-            bucket_candidate = netloc.rsplit("@", 1)[1]
-        elif netloc and "." in netloc and path_segments:
-            bucket_candidate = path_segments[0]
-            endpoint_url = _artifact_managed_cloud_url_candidate(
-                f"https://{netloc}/{bucket_candidate}"
-            )
-            if endpoint_url:
-                candidates.append(endpoint_url)
-        elif netloc:
-            bucket_candidate = netloc
-        elif path_segments:
-            bucket_candidate = path_segments[0]
-        bucket = self._yaml_valid_bucket_name(bucket_candidate)
-        if bucket and re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket):
-            candidates.append(f"s3://{bucket}")
-        return candidates
+        return borg_s3_repository_candidates_for_processor(
+            repository_url,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+            artifact_managed_cloud_url_candidate=_artifact_managed_cloud_url_candidate,
+        )
 
     def _borg_bucket_from_repository_url(self, repository_url: str) -> str:
-        parsed = urlparse(str(repository_url or "").strip())
-        if parsed.netloc:
-            bucket = parsed.netloc
-        elif parsed.path.startswith("/"):
-            path_segments = [segment for segment in parsed.path.split("/") if segment]
-            bucket = path_segments[0] if path_segments else ""
-        else:
-            bucket = parsed.path
-        bucket = str(bucket or "").split("/", 1)[0].split(":", 1)[0].strip()
-        return self._yaml_valid_bucket_name(bucket)
+        return borg_bucket_from_repository_url_for_processor(
+            repository_url,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+        )
 
     def _borg_network_repository_candidate(self, repository: str) -> str:
-        value = str(repository or "").strip().strip("\"'")
-        if not value or re.search(r"\s", value):
-            return ""
-        parsed = urlparse(value)
-        if parsed.scheme.lower() in {"ssh", "sftp"} and parsed.hostname:
-            return _strip_artifact_network_dsn_userinfo(value)
-        if re.match(r"^[A-Za-z]:[\\/]", value):
-            return ""
-        scp_match = re.match(
-            r"^(?:(?:[^@\s:/]+)@)?(?P<host>[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+):(?P<path>[^\"'<>`\s]+)$",
-            value,
+        return borg_network_repository_candidate_for_processor(
+            repository,
+            strip_artifact_network_dsn_userinfo=_strip_artifact_network_dsn_userinfo,
         )
-        if not scp_match:
-            return ""
-        host = scp_match.group("host").lower().strip(".")
-        path = scp_match.group("path").replace("\\", "/").lstrip("/")
-        if not host or not path:
-            return ""
-        return f"ssh://{host}/{path}"
 
     def _restic_repository_candidates_from_env_map(self, env_map: dict[str, str]) -> list[str]:
-        repository = str(env_map.get("RESTIC_REPOSITORY") or "").strip()
-        if not repository:
-            return []
-        return self._restic_repository_candidates(repository, env_map)
+        return restic_repository_candidates_from_env_map_for_processor(
+            env_map,
+            restic_repository_candidates=self._restic_repository_candidates,
+        )
 
     def _restic_repository_candidates(
         self,
         repository: str,
         env_map: dict[str, str],
     ) -> list[str]:
-        value = str(repository or "").strip().strip("\"'")
-        if not value:
-            return []
-        candidates: list[str] = []
-
-        def _append(candidate: str) -> None:
-            normalized = str(candidate or "").strip()
-            if normalized:
-                candidates.append(normalized)
-
-        if value.startswith(("http://", "https://")):
-            managed_url = _artifact_managed_cloud_url_candidate(value)
-            if managed_url:
-                _append(managed_url)
-        elif value.startswith("rest:"):
-            managed_url = _artifact_managed_cloud_url_candidate(value[5:])
-            if managed_url:
-                _append(managed_url)
-        elif value.startswith("s3:"):
-            for candidate in self._restic_s3_repository_candidates(value[3:]):
-                _append(candidate)
-        elif value.startswith("gs:"):
-            bucket = self._restic_bucket_from_pathish(value[3:])
-            if bucket:
-                _append(f"gs://{bucket}")
-        elif value.startswith("azure:"):
-            account_name = (
-                str(
-                    env_map.get("AZURE_STORAGE_ACCOUNT")
-                    or env_map.get("AZURE_ACCOUNT_NAME")
-                    or env_map.get("AZURE_ACCOUNT")
-                    or ""
-                )
-                .strip()
-                .lower()
-            )
-            container_name = self._restic_bucket_from_pathish(value[6:])
-            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
-                r"[^/?#]+", container_name
-            ):
-                _append(f"https://{account_name}.blob.core.windows.net/{container_name}")
-
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for candidate in candidates:
-            lowered = candidate.lower()
-            if lowered in seen:
-                continue
-            seen.add(lowered)
-            deduped.append(candidate)
-        return deduped
+        return restic_repository_candidates_for_processor(
+            repository,
+            env_map,
+            artifact_managed_cloud_url_candidate=_artifact_managed_cloud_url_candidate,
+            restic_s3_repository_candidates=self._restic_s3_repository_candidates,
+            restic_bucket_from_pathish=self._restic_bucket_from_pathish,
+        )
 
     def _restic_s3_repository_candidates(self, repository_suffix: str) -> list[str]:
-        suffix = str(repository_suffix or "").strip().strip("/")
-        if not suffix:
-            return []
-        candidates: list[str] = []
-        if suffix.startswith(("http://", "https://")):
-            managed_url = _artifact_managed_cloud_url_candidate(suffix)
-            if managed_url:
-                candidates.append(managed_url)
-            parsed = urlparse(suffix)
-            path_segments = [segment for segment in parsed.path.split("/") if segment]
-            bucket = self._yaml_valid_bucket_name(path_segments[0] if path_segments else "")
-            if bucket and re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket):
-                candidates.append(f"s3://{bucket}")
-            return candidates
-        segments = [segment for segment in suffix.split("/") if segment]
-        if not segments:
-            return []
-        bucket_candidate = segments[1] if "." in segments[0] and len(segments) > 1 else segments[0]
-        bucket = self._yaml_valid_bucket_name(bucket_candidate)
-        if bucket and re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket):
-            candidates.append(f"s3://{bucket}")
-        if "." in segments[0]:
-            managed_url = _artifact_managed_cloud_url_candidate(f"https://{suffix}")
-            if managed_url:
-                candidates.append(managed_url)
-        return candidates
+        return restic_s3_repository_candidates_for_processor(
+            repository_suffix,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+            artifact_managed_cloud_url_candidate=_artifact_managed_cloud_url_candidate,
+        )
 
     def _restic_bucket_from_pathish(self, value: str) -> str:
-        pathish = str(value or "").strip().strip("/")
-        if not pathish:
-            return ""
-        bucket = pathish.split(":", 1)[0].split("/", 1)[0].strip()
-        return self._yaml_valid_bucket_name(bucket)
+        return restic_bucket_from_pathish_for_processor(
+            value,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+        )
 
     def _duplicati_target_url_candidates_from_env_map(self, env_map: dict[str, str]) -> list[str]:
-        target_url = str(
-            env_map.get("TARGETURL")
-            or env_map.get("TARGET_URL")
-            or env_map.get("TARGETURI")
-            or env_map.get("TARGET_URI")
-            or env_map.get("REMOTEURL")
-            or env_map.get("REMOTE_URL")
-            or ""
-        ).strip()
-        if not target_url:
-            return []
-        return self._duplicati_target_url_candidates(
-            target_url,
-            self._yaml_normalized_mapping(env_map),
+        return duplicati_target_url_candidates_from_env_map_for_processor(
+            env_map,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            duplicati_target_url_candidates=self._duplicati_target_url_candidates,
         )
 
     def _duplicati_target_url_candidates(
@@ -34526,81 +27169,28 @@ class ArtifactQueueProcessor:
         target_url: str,
         context: dict[str, Any],
     ) -> list[str]:
-        value = str(target_url or "").strip().strip("\"'")
-        if not value:
-            return []
-        parsed = urlparse(value)
-        scheme = parsed.scheme.lower()
-        if scheme in {"http", "https"}:
-            managed_url = _artifact_managed_cloud_url_candidate(value)
-            return [managed_url] if managed_url else []
-        if scheme == "s3":
-            return self._duplicati_s3_target_candidates(value)
-        if scheme in {"gcd", "gcs", "gs", "google", "googlestorage", "googlecloudstorage"}:
-            bucket = self._duplicati_bucket_from_target_url(value)
-            return [f"gs://{bucket}"] if bucket else []
-        if scheme in {"azure", "az", "azureblob"}:
-            account_name = (
-                str(
-                    self._yaml_ref_value(
-                        context,
-                        "storage_account_name",
-                        "storageAccountName",
-                        "account_name",
-                        "accountName",
-                        "account",
-                        "azure_storage_account",
-                        "azureStorageAccount",
-                        "auth_username",
-                        "authUsername",
-                        "username",
-                    )
-                )
-                .strip()
-                .lower()
-            )
-            container_name = self._duplicati_bucket_from_target_url(value)
-            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
-                r"[^/?#]+", container_name
-            ):
-                return [f"https://{account_name}.blob.core.windows.net/{container_name}"]
-        return []
+        return duplicati_target_url_candidates_for_processor(
+            target_url,
+            context,
+            yaml_ref_value=self._yaml_ref_value,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+            artifact_managed_cloud_url_candidate=_artifact_managed_cloud_url_candidate,
+            duplicati_s3_target_candidates=duplicati_s3_target_candidates_for_processor,
+            duplicati_bucket_from_target_url=duplicati_bucket_from_target_url_for_processor,
+        )
 
     def _duplicati_s3_target_candidates(self, target_url: str) -> list[str]:
-        parsed = urlparse(str(target_url or "").strip())
-        candidates: list[str] = []
-        netloc = parsed.netloc.strip()
-        path_segments = [segment for segment in parsed.path.split("/") if segment]
-        bucket_candidate = ""
-        if "@" in netloc:
-            bucket_candidate = netloc.rsplit("@", 1)[1]
-        elif netloc and "." in netloc and path_segments:
-            bucket_candidate = path_segments[0]
-            endpoint_url = _artifact_managed_cloud_url_candidate(
-                f"https://{netloc}/{bucket_candidate}"
-            )
-            if endpoint_url:
-                candidates.append(endpoint_url)
-        elif netloc:
-            bucket_candidate = netloc
-        elif path_segments:
-            bucket_candidate = path_segments[0]
-        bucket = self._yaml_valid_bucket_name(bucket_candidate)
-        if bucket and re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket):
-            candidates.append(f"s3://{bucket}")
-        return candidates
+        return duplicati_s3_target_candidates_for_processor(
+            target_url,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+            artifact_managed_cloud_url_candidate=_artifact_managed_cloud_url_candidate,
+        )
 
     def _duplicati_bucket_from_target_url(self, target_url: str) -> str:
-        parsed = urlparse(str(target_url or "").strip())
-        if parsed.netloc:
-            bucket = parsed.netloc
-        elif parsed.path.startswith("/"):
-            path_segments = [segment for segment in parsed.path.split("/") if segment]
-            bucket = path_segments[0] if path_segments else ""
-        else:
-            bucket = parsed.path
-        bucket = str(bucket or "").split("/", 1)[0].split(":", 1)[0].strip()
-        return self._yaml_valid_bucket_name(bucket)
+        return duplicati_bucket_from_target_url_for_processor(
+            target_url,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+        )
 
     def _yaml_env_candidate_family(
         self,
@@ -34609,338 +27199,129 @@ class ArtifactQueueProcessor:
         *,
         source_hint: str = "",
     ) -> list[str]:
-        if family == "firebase":
-            firebase_ref = self._yaml_valid_project_ref(
-                env_map.get("FIREBASE_PROJECT_ID")
-                or env_map.get("FIREBASE_PROJECT")
-                or env_map.get("RTDB_PROJECT_ID")
-                or env_map.get("FIREBASE_DATABASE_PROJECT")
-                or ""
-            )
-            if firebase_ref:
-                return [f"https://{firebase_ref}.firebaseio.com"]
-            return []
-        if family == "supabase":
-            supabase_ref = self._yaml_valid_project_ref(
-                env_map.get("SUPABASE_PROJECT_REF")
-                or env_map.get("SUPABASE_REF")
-                or env_map.get("NEXT_PUBLIC_SUPABASE_PROJECT_REF")
-                or ""
-            )
-            if supabase_ref:
-                return [f"https://{supabase_ref}.supabase.co"]
-            return []
-        if family == "s3":
-            s3_bucket = self._yaml_valid_bucket_name(
-                env_map.get("AWS_S3_BUCKET")
-                or env_map.get("S3_BUCKET")
-                or env_map.get("S3_BUCKET_NAME")
-                or ""
-            )
-            if s3_bucket and re.fullmatch(r"[a-z0-9.\-]{3,63}", s3_bucket):
-                return [f"s3://{s3_bucket}"]
-            return []
-        if family == "gcs":
-            gcs_bucket = self._yaml_valid_bucket_name(
-                env_map.get("GCS_BUCKET")
-                or env_map.get("GOOGLE_STORAGE_BUCKET")
-                or env_map.get("GCLOUD_STORAGE_BUCKET")
-                or ""
-            )
-            if gcs_bucket:
-                return [f"gs://{gcs_bucket}"]
-            return []
-        if family == "do_spaces":
-            do_bucket = self._yaml_valid_bucket_name(
-                env_map.get("DO_SPACES_BUCKET") or env_map.get("DIGITALOCEAN_SPACES_BUCKET") or ""
-            )
-            do_region = (
-                str(
-                    env_map.get("DO_SPACES_REGION")
-                    or env_map.get("DIGITALOCEAN_SPACES_REGION")
-                    or ""
-                )
-                .strip()
-                .lower()
-            )
-            if do_bucket and re.fullmatch(r"[a-z0-9\-]{2,32}", do_region):
-                return [f"https://{do_bucket}.{do_region}.digitaloceanspaces.com"]
-            return []
-        if family == "azure":
-            azure_account = (
-                str(env_map.get("AZURE_STORAGE_ACCOUNT") or env_map.get("AZURE_BLOB_ACCOUNT") or "")
-                .strip()
-                .lower()
-            )
-            azure_container = (
-                str(
-                    env_map.get("AZURE_STORAGE_CONTAINER")
-                    or env_map.get("AZURE_BLOB_CONTAINER")
-                    or ""
-                )
-                .strip()
-                .lower()
-            )
-            if re.fullmatch(r"[a-z0-9\-]{3,24}", azure_account) and re.fullmatch(
-                r"[^/?#]+", azure_container
-            ):
-                return [f"https://{azure_account}.blob.core.windows.net/{azure_container}"]
-            return []
-        if family == "managed_hosting":
-            candidates: list[str] = []
-            seen: set[str] = set()
-            candidate_entries = self._run_ordered_local_batch(
-                list(env_map.items()),
-                self._yaml_managed_hosting_env_entry,
-                default_factory=lambda: None,
-            )
-            for managed_url in candidate_entries:
-                if not managed_url or managed_url in seen:
-                    continue
-                seen.add(managed_url)
-                candidates.append(managed_url)
-            return candidates
-        if family == "cloudflare":
-            normalized = self._yaml_normalized_mapping(env_map)
-            return self._yaml_cloudflare_structured_candidates(env_map, normalized, "env")
-        if family == "amplify_client_config":
-            return amplify_client_config_candidates(env_map, source_hint=source_hint)
-        if family == "sanity":
-            return sanity_env_urls(env_map)
-        if family == "docker_auth":
-            return self._docker_auth_structured_candidates_from_env_map(env_map)
-        if family == "restic":
-            return self._restic_repository_candidates_from_env_map(env_map)
-        if family == "borg":
-            return self._borg_repository_candidates_from_env_map(env_map)
-        if family == "duplicati":
-            return self._duplicati_target_url_candidates_from_env_map(env_map)
-        if family == "env_values":
-            candidate_entries = self._run_ordered_local_batch(
-                list(env_map.items()),
-                self._yaml_env_value_candidate_entry,
-                default_factory=lambda: None,
-            )
-            return [candidate for candidate in candidate_entries if candidate]
-        return []
+        return yaml_env_candidate_family_for_processor(
+            env_map,
+            family,
+            source_hint=source_hint,
+            yaml_valid_project_ref=self._yaml_valid_project_ref,
+            yaml_valid_bucket_name=self._yaml_valid_bucket_name,
+            run_ordered_local_batch=self._run_ordered_local_batch,
+            yaml_managed_hosting_env_entry=self._yaml_managed_hosting_env_entry,
+            yaml_normalized_mapping=self._yaml_normalized_mapping,
+            yaml_cloudflare_structured_candidates=self._yaml_cloudflare_structured_candidates,
+            amplify_client_config_candidates=amplify_client_config_candidates,
+            sanity_env_urls=sanity_env_urls,
+            docker_auth_structured_candidates_from_env_map=(
+                self._docker_auth_structured_candidates_from_env_map
+            ),
+            restic_repository_candidates_from_env_map=self._restic_repository_candidates_from_env_map,
+            borg_repository_candidates_from_env_map=self._borg_repository_candidates_from_env_map,
+            duplicati_target_url_candidates_from_env_map=self._duplicati_target_url_candidates_from_env_map,
+            yaml_env_value_candidate_entry=self._yaml_env_value_candidate_entry,
+        )
 
     @staticmethod
     def _yaml_managed_hosting_env_entry(entry: tuple[str, str]) -> str | None:
-        env_name, env_value = entry
-        upper_name = str(env_name or "").strip().upper()
-        if not any(
-            marker in upper_name
-            for marker in (
-                "URL",
-                "URI",
-                "HOST",
-                "HOSTNAME",
-                "DOMAIN",
-                "ENDPOINT",
-                "VERCEL",
-                "NETLIFY",
-                "AMPLIFY",
-                "HEROKU",
-            )
-        ):
-            return None
-        managed_url = _artifact_managed_cloud_url_candidate(env_value)
-        return managed_url or None
+        return yaml_managed_hosting_env_entry_for_processor(
+            entry,
+            artifact_managed_cloud_url_candidate=_artifact_managed_cloud_url_candidate,
+        )
 
     @staticmethod
     def _yaml_env_value_candidate_entry(entry: tuple[str, str]) -> str | None:
-        env_name, env_value = entry
-        upper_name = str(env_name or "").strip().upper()
-        value = str(env_value or "").strip()
-        if not upper_name or not value:
-            return None
-        if "EMAIL" in upper_name and re.fullmatch(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", value):
-            return value.lower()
-        if any(
-            marker in upper_name
-            for marker in ("URL", "URI", "ENDPOINT", "PORTAL", "BASE_URL", "BASEURI")
-        ):
-            if value.startswith(("http://", "https://", "s3://", "gs://")):
-                return value
-            managed_url = _artifact_managed_cloud_url_candidate(value)
-            if managed_url:
-                return managed_url
-        return None
+        return yaml_env_value_candidate_entry_for_processor(
+            entry,
+            artifact_managed_cloud_url_candidate=_artifact_managed_cloud_url_candidate,
+        )
 
     @classmethod
     def _docker_auth_structured_candidates_from_env_map(cls, env_map: dict[str, str]) -> list[str]:
-        candidates: list[str] = []
-        seen: set[str] = set()
-        candidate_batches = cls._run_ordered_static_batch(
-            list(env_map.items()),
-            cls._docker_auth_structured_env_entry_candidates,
-            default_factory=list,
+        return docker_auth_structured_candidates_from_env_map_for_processor(
+            env_map,
+            run_ordered_static_batch=cls._run_ordered_static_batch,
+            docker_auth_structured_env_entry_candidates=(
+                cls._docker_auth_structured_env_entry_candidates
+            ),
         )
-        for candidate_batch in candidate_batches:
-            for candidate in candidate_batch:
-                lowered = candidate.lower()
-                if lowered in seen:
-                    continue
-                seen.add(lowered)
-                candidates.append(candidate)
-        return candidates
 
     @classmethod
     def _docker_auth_structured_env_entry_candidates(cls, item: tuple[str, str]) -> list[str]:
-        raw_name, raw_value = item
-        env_name = str(raw_name or "").strip().upper()
-        value = str(raw_value or "").strip()
-        if not value:
-            return []
-        if not cls._env_value_may_hold_docker_auth(env_name, value):
-            return []
-        return cls._docker_auth_config_candidates(value)
+        return docker_auth_structured_env_entry_candidates_for_processor(
+            item,
+            env_value_may_hold_docker_auth=cls._env_value_may_hold_docker_auth,
+            docker_auth_config_candidates=cls._docker_auth_config_candidates,
+        )
 
     @staticmethod
     def _env_value_may_hold_docker_auth(env_name: str, value: str) -> bool:
-        if "DOCKER" in env_name or "CONTAINER_REGISTRY" in env_name:
-            return True
-        text = str(value or "").lstrip()
-        return text.startswith("{") and '"auths"' in text[:512]
+        return env_value_may_hold_docker_auth_for_processor(env_name, value)
 
     @classmethod
     def _docker_auth_config_candidates(cls, value: Any) -> list[str]:
-        payload = value if isinstance(value, dict) else _safe_json_loads(str(value or ""))
-        if not isinstance(payload, dict):
-            return []
-
-        candidates: list[str] = []
-        seen: set[str] = set()
-
-        def _append_many(candidate_batch: Sequence[str]) -> None:
-            for candidate in candidate_batch:
-                normalized = str(candidate or "").strip()
-                lowered = normalized.lower()
-                if not normalized or lowered in seen:
-                    continue
-                seen.add(lowered)
-                candidates.append(normalized)
-
-        auths = payload.get("auths")
-        if isinstance(auths, dict):
-            auth_entry_batches = cls._run_ordered_static_batch(
-                list(auths.items()),
-                cls._docker_auth_config_auth_entry_candidates,
-                default_factory=list,
-            )
-            for candidate_batch in auth_entry_batches:
-                _append_many(candidate_batch)
-
-        cred_helpers = payload.get("credHelpers") or payload.get("credhelpers")
-        if isinstance(cred_helpers, dict):
-            helper_batches = cls._run_ordered_static_batch(
-                list(cred_helpers),
-                cls._docker_auth_config_cred_helper_candidates,
-                default_factory=list,
-            )
-            for candidate_batch in helper_batches:
-                _append_many(candidate_batch)
-
-        if not isinstance(auths, dict):
-            legacy_batches = cls._run_ordered_static_batch(
-                list(payload.items()),
-                cls._docker_auth_config_legacy_entry_candidates,
-                default_factory=list,
-            )
-            for candidate_batch in legacy_batches:
-                _append_many(candidate_batch)
-        return candidates
+        return docker_auth_config_candidates_for_processor(
+            value,
+            safe_json_loads=_safe_json_loads,
+            run_ordered_static_batch=cls._run_ordered_static_batch,
+            docker_auth_config_auth_entry_candidates=(
+                cls._docker_auth_config_auth_entry_candidates
+            ),
+            docker_auth_config_cred_helper_candidates=(
+                cls._docker_auth_config_cred_helper_candidates
+            ),
+            docker_auth_config_legacy_entry_candidates=(
+                cls._docker_auth_config_legacy_entry_candidates
+            ),
+        )
 
     @classmethod
     def _docker_auth_config_auth_entry_candidates(cls, item: tuple[Any, Any]) -> list[str]:
-        raw_registry, raw_entry = item
-        candidates: list[str] = []
-        registry_url = cls._docker_registry_url_candidate(raw_registry)
-        if registry_url:
-            candidates.append(registry_url)
-        if isinstance(raw_entry, dict):
-            candidates.extend(cls._docker_auth_entry_principals(raw_entry))
-        return candidates
+        return docker_auth_config_auth_entry_candidates_for_processor(
+            item,
+            docker_registry_url_candidate=cls._docker_registry_url_candidate,
+            docker_auth_entry_principals=cls._docker_auth_entry_principals,
+        )
 
     @classmethod
     def _docker_auth_config_cred_helper_candidates(cls, raw_registry: Any) -> list[str]:
-        registry_url = cls._docker_registry_url_candidate(raw_registry)
-        return [registry_url] if registry_url else []
+        return docker_auth_config_cred_helper_candidates_for_processor(
+            raw_registry,
+            docker_registry_url_candidate=cls._docker_registry_url_candidate,
+        )
 
     @classmethod
     def _docker_auth_config_legacy_entry_candidates(cls, item: tuple[Any, Any]) -> list[str]:
-        raw_registry, raw_entry = item
-        if str(raw_registry or "").strip() in {
-            "credsStore",
-            "credStore",
-            "credHelpers",
-            "credhelpers",
-        }:
-            return []
-        if not isinstance(raw_entry, dict):
-            return []
-        return cls._docker_auth_config_auth_entry_candidates((raw_registry, raw_entry))
+        return docker_auth_config_legacy_entry_candidates_for_processor(
+            item,
+            docker_auth_config_auth_entry_candidates=cls._docker_auth_config_auth_entry_candidates,
+        )
 
     @staticmethod
     def _docker_registry_url_candidate(value: Any) -> str:
-        raw = str(value or "").strip()
-        if not raw or raw == "*":
-            return ""
-        if raw.startswith("//"):
-            raw = f"https:{raw}"
-        elif "://" not in raw:
-            raw = f"https://{raw}"
-        parsed = urlparse(raw)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            return ""
-        host = parsed.hostname.lower()
-        try:
-            netloc = f"{host}:{parsed.port}" if parsed.port else host
-        except ValueError:
-            netloc = host
-        path = parsed.path.rstrip("/")
-        return f"{parsed.scheme.lower()}://{netloc}{path}"
+        return docker_registry_url_candidate_for_processor(value)
 
     @classmethod
     def _docker_auth_entry_principals(cls, entry: dict[str, Any]) -> list[str]:
-        candidates: list[str] = []
-        for key in ("email", "username", "user"):
-            principal = cls._docker_auth_principal_candidate(entry.get(key))
-            if principal:
-                candidates.append(principal)
-        auth_principal = cls._docker_auth_principal_from_auth_field(entry.get("auth"))
-        if auth_principal:
-            candidates.append(auth_principal)
-        return candidates
+        return docker_auth_entry_principals_for_processor(
+            entry,
+            docker_auth_principal_candidate=cls._docker_auth_principal_candidate,
+            docker_auth_principal_from_auth_field=cls._docker_auth_principal_from_auth_field,
+        )
 
     @staticmethod
     def _docker_auth_principal_candidate(value: Any) -> str:
-        principal = str(value or "").strip()
-        if _classify_seed_value(principal) == "email":
-            return principal.lower()
-        return ""
+        return docker_auth_principal_candidate_for_processor(
+            value,
+            classify_seed_value=_classify_seed_value,
+        )
 
     @classmethod
     def _docker_auth_principal_from_auth_field(cls, value: Any) -> str:
-        auth = str(value or "").strip()
-        if not auth:
-            return ""
-        compact = re.sub(r"\s+", "", auth)
-        if not compact:
-            return ""
-        padding = "=" * (-len(compact) % 4)
-        try:
-            decoded = base64.b64decode(compact + padding, validate=True).decode("utf-8", "ignore")
-        except Exception:  # noqa: BLE001
-            return ""
-        principal, separator, _secret = decoded.partition(":")
-        if not separator:
-            return ""
-        return cls._docker_auth_principal_candidate(principal)
+        return docker_auth_principal_from_auth_field_for_processor(
+            value,
+            docker_auth_principal_candidate=cls._docker_auth_principal_candidate,
+        )
 
-    def _yaml_env_list_structured_candidates(
-        self, entries: list[Any], *, source_hint: str = ""
-    ) -> list[str]:
+    def _yaml_env_list_structured_candidates(self, entries: list[Any], *, source_hint: str = "") -> list[str]:
         return self._yaml_structured_candidates_from_env_map(
             self._yaml_env_map(entries),
             source_hint=source_hint,
@@ -34955,9 +27336,7 @@ class ArtifactQueueProcessor:
         source_hint: str = "",
     ) -> None:
         if isinstance(value, dict):
-            for candidate in self._yaml_map_structured_candidates(
-                value, path, source_hint=source_hint
-            ):
+            for candidate in self._yaml_map_structured_candidates(value, path, source_hint=source_hint):
                 append(candidate)
             child_jobs = [
                 ((*path, str(key or "").strip().lower()), item, source_hint)
@@ -34973,9 +27352,7 @@ class ArtifactQueueProcessor:
                     append(candidate)
             return
         if isinstance(value, list):
-            for candidate in self._yaml_env_list_structured_candidates(
-                value, source_hint=source_hint
-            ):
+            for candidate in self._yaml_env_list_structured_candidates(value, source_hint=source_hint):
                 append(candidate)
             child_batches = self._run_ordered_local_batch(
                 [(path, item, source_hint) for item in value],
@@ -35001,9 +27378,7 @@ class ArtifactQueueProcessor:
         return lines
 
     @staticmethod
-    def _iter_terraform_state_resource_values(
-        payload: dict[str, Any],
-    ) -> list[tuple[str, dict[str, Any]]]:
+    def _iter_terraform_state_resource_values(payload: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
         values: list[tuple[str, dict[str, Any]]] = []
 
         def _append(resource_type: str, item: Any) -> None:
@@ -35088,17 +27463,13 @@ class ArtifactQueueProcessor:
                 return self._extract_embedded_plist_payloads(path)
             if _burp_site_map_artifact_label(path.name):
                 return self._extract_burp_site_map_payloads(path)
-            if path.suffix.lower() in _PLIST_SUFFIXES or path.read_bytes()[:8].startswith(
-                _PLIST_MAGIC
-            ):
+            if path.suffix.lower() in _PLIST_SUFFIXES or path.read_bytes()[:8].startswith(_PLIST_MAGIC):
                 return self._extract_plist_payloads(path)
             if _looks_like_terraform_state_name(path.name):
                 return self._extract_terraform_state_payloads(path)
             return [(str(path), path.name, self._read_text(path))]
         if artifact_type == "document":
-            if path.suffix.lower() in _PCAP_SUFFIXES or self._looks_like_pcap_bytes(
-                path.read_bytes()[:4], path.name
-            ):
+            if path.suffix.lower() in _PCAP_SUFFIXES or self._looks_like_pcap_bytes(path.read_bytes()[:4], path.name):
                 return self._extract_pcap_payloads(path)
             if _looks_like_browser_binary_string_artifact_name(path.name):
                 return self._extract_legacy_binary_payloads(
@@ -35125,9 +27496,7 @@ class ArtifactQueueProcessor:
                     path.name,
                     depth=depth,
                 )
-            if path.suffix.lower() in _SQLITE_DATABASE_SUFFIXES or path.read_bytes()[
-                :16
-            ].startswith(_SQLITE_MAGIC):
+            if path.suffix.lower() in _SQLITE_DATABASE_SUFFIXES or path.read_bytes()[:16].startswith(_SQLITE_MAGIC):
                 return self._extract_sqlite_payloads(path)
             if path.suffix.lower() == ".msg":
                 return self._extract_msg_payloads(path, depth=depth)
@@ -35178,66 +27547,34 @@ class ArtifactQueueProcessor:
 
     @staticmethod
     def _safe_archive_member_name(raw_member_name: str) -> str:
-        member_name = str(raw_member_name or "").strip().replace("\\", "/")
-        if not member_name:
-            return ""
-        if member_name.startswith("/") or re.match(r"^[A-Za-z]:", member_name):
-            return ""
-        parts = [part for part in member_name.split("/") if part and part != "."]
-        if not parts or any(part == ".." for part in parts):
-            return ""
-        return "/".join(parts)
+        return _orchestration_safe_archive_member_name(raw_member_name)
 
     @staticmethod
     def _text_zip_member_entry(member: zipfile.ZipInfo) -> dict[str, str] | None:
-        if member.is_dir():
-            return None
-        member_name = str(member.filename or "")
-        size_limit = _artifact_member_scan_byte_limit(member_name)
-        if member.file_size > size_limit:
-            return None
-        return {"name": member_name}
+        return _orchestration_text_zip_member_entry(
+            member,
+            artifact_member_scan_byte_limit=_artifact_member_scan_byte_limit,
+        )
 
     @staticmethod
     def _text_tar_member_entry(member: tarfile.TarInfo) -> dict[str, str] | None:
-        if not member.isfile():
-            return None
-        member_name = str(member.name or "")
-        size_limit = _artifact_member_scan_byte_limit(member_name)
-        if member.size > size_limit:
-            return None
-        return {"name": member_name}
+        return _orchestration_text_tar_member_entry(
+            member,
+            artifact_member_scan_byte_limit=_artifact_member_scan_byte_limit,
+        )
 
     @staticmethod
     def _text_7z_member_entry(member: Any) -> dict[str, str] | None:
-        raw_member_name = str(getattr(member, "filename", "") or "")
-        member_name = ArtifactQueueProcessor._safe_archive_member_name(raw_member_name)
-        if not member_name:
-            return None
-        if bool(getattr(member, "is_directory", False)) or bool(
-            getattr(member, "is_symlink", False)
-        ):
-            return None
-        if not bool(getattr(member, "is_file", True)):
-            return None
-        size_limit = _artifact_member_scan_byte_limit(member_name)
-        try:
-            member_size = int(getattr(member, "uncompressed", 0) or 0)
-        except (TypeError, ValueError):
-            member_size = 0
-        if member_size > size_limit:
-            return None
-        return {"name": member_name, "target": raw_member_name}
+        return _orchestration_text_7z_member_entry(
+            member,
+            artifact_member_scan_byte_limit=_artifact_member_scan_byte_limit,
+        )
 
     @staticmethod
     def _text_member_job(
         member_job: tuple[str, bytes],
     ) -> tuple[str, bytes] | None:
-        member_name, member_bytes = member_job
-        normalized_name = str(member_name or "").strip()
-        if not normalized_name or not member_bytes:
-            return None
-        return normalized_name, bytes(member_bytes)
+        return _orchestration_text_member_job(member_job)
 
     def _extract_text_payloads_from_zip(
         self,
@@ -35257,36 +27594,15 @@ class ArtifactQueueProcessor:
             if not isinstance(member_entry, dict):
                 continue
             raw_member_jobs.append((str(member_entry["name"]), zf.read(member)))
-        member_jobs = self._run_ordered_local_batch(
+        return _orchestration_extract_text_member_payloads_from_jobs(
             raw_member_jobs,
-            self._text_member_job,
-            default_factory=lambda: None,
+            source_file=source_file,
+            depth=depth,
+            run_ordered_batch=self._run_ordered_local_batch,
+            text_member_job=self._text_member_job,
+            extract_member_data_payloads=self._extract_member_data_payloads,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        member_jobs = [member_job for member_job in member_jobs if isinstance(member_job, tuple)]
-        if not member_jobs:
-            return []
-        ordered_payloads = self._run_ordered_local_batch(
-            member_jobs,
-            lambda member_job: self._extract_member_data_payloads(
-                member_job[1],
-                source_file,
-                member_job[0],
-                depth=depth,
-            ),
-            default_factory=list,
-        )
-        prepared_payload_batches = self._run_ordered_local_batch(
-            [
-                (member_index, member_payloads or [])
-                for member_index, member_payloads in enumerate(ordered_payloads)
-            ],
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for member_payloads in prepared_payload_batches:
-            payloads.extend(member_payloads)
-        return payloads
 
     def _extract_text_payloads_from_7z(
         self,
@@ -35307,7 +27623,11 @@ class ArtifactQueueProcessor:
                     self._text_7z_member_entry,
                     default_factory=lambda: None,
                 )
-                selected_entries = [entry for entry in member_entries if isinstance(entry, dict)]
+                selected_entries = [
+                    entry
+                    for entry in member_entries
+                    if isinstance(entry, dict)
+                ]
                 if not selected_entries:
                     return []
                 raw_member_jobs: list[tuple[str, bytes]] = []
@@ -35338,36 +27658,15 @@ class ArtifactQueueProcessor:
         except Exception:  # noqa: BLE001
             return []
 
-        member_jobs = self._run_ordered_local_batch(
+        return _orchestration_extract_text_member_payloads_from_jobs(
             raw_member_jobs,
-            self._text_member_job,
-            default_factory=lambda: None,
+            source_file=source_file,
+            depth=depth,
+            run_ordered_batch=self._run_ordered_local_batch,
+            text_member_job=self._text_member_job,
+            extract_member_data_payloads=self._extract_member_data_payloads,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        member_jobs = [member_job for member_job in member_jobs if isinstance(member_job, tuple)]
-        if not member_jobs:
-            return []
-        ordered_payloads = self._run_ordered_local_batch(
-            member_jobs,
-            lambda member_job: self._extract_member_data_payloads(
-                member_job[1],
-                source_file,
-                member_job[0],
-                depth=depth,
-            ),
-            default_factory=list,
-        )
-        prepared_payload_batches = self._run_ordered_local_batch(
-            [
-                (member_index, member_payloads or [])
-                for member_index, member_payloads in enumerate(ordered_payloads)
-            ],
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for member_payloads in prepared_payload_batches:
-            payloads.extend(member_payloads)
-        return payloads
 
     def _extract_text_payloads_from_tar(
         self,
@@ -35390,36 +27689,15 @@ class ArtifactQueueProcessor:
             if extracted is None:
                 continue
             raw_member_jobs.append((str(member_entry["name"]), extracted.read()))
-        member_jobs = self._run_ordered_local_batch(
+        return _orchestration_extract_text_member_payloads_from_jobs(
             raw_member_jobs,
-            self._text_member_job,
-            default_factory=lambda: None,
+            source_file=source_file,
+            depth=depth,
+            run_ordered_batch=self._run_ordered_local_batch,
+            text_member_job=self._text_member_job,
+            extract_member_data_payloads=self._extract_member_data_payloads,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        member_jobs = [member_job for member_job in member_jobs if isinstance(member_job, tuple)]
-        if not member_jobs:
-            return []
-        ordered_payloads = self._run_ordered_local_batch(
-            member_jobs,
-            lambda member_job: self._extract_member_data_payloads(
-                member_job[1],
-                source_file,
-                member_job[0],
-                depth=depth,
-            ),
-            default_factory=list,
-        )
-        prepared_payload_batches = self._run_ordered_local_batch(
-            [
-                (member_index, member_payloads or [])
-                for member_index, member_payloads in enumerate(ordered_payloads)
-            ],
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for member_payloads in prepared_payload_batches:
-            payloads.extend(member_payloads)
-        return payloads
 
     @staticmethod
     def _tar_member_bytes(
@@ -35489,8 +27767,12 @@ class ArtifactQueueProcessor:
         for manifest_digest in manifest_digests:
             manifest_member = oci_blob_member_name(manifest_digest)
             manifest_bytes = _append_member_payloads(manifest_member)
-            manifest_payload = _safe_json_loads(self._decode_text_artifact_bytes(manifest_bytes))
-            config_member = oci_blob_member_name(oci_manifest_config_digest(manifest_payload))
+            manifest_payload = _safe_json_loads(
+                self._decode_text_artifact_bytes(manifest_bytes)
+            )
+            config_member = oci_blob_member_name(
+                oci_manifest_config_digest(manifest_payload)
+            )
             if config_member:
                 _append_member_payloads(config_member)
             for layer_digest in oci_manifest_layer_digests(manifest_payload):
@@ -35774,9 +28056,9 @@ class ArtifactQueueProcessor:
                 source_file,
                 member_name,
             )
-        if _looks_like_container_image_blob_path(
-            member_name
-        ) and _looks_like_container_image_json_payload(data):
+        if _looks_like_container_image_blob_path(member_name) and _looks_like_container_image_json_payload(
+            data
+        ):
             return self._member_payloads(source_file, member_name, data)
         if _looks_text_config_name(member_name) or lowered.endswith(".rels"):
             return self._member_payloads(source_file, member_name, data)
@@ -35794,35 +28076,19 @@ class ArtifactQueueProcessor:
         *,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if depth > 2 or not data:
-            return []
-        if self._looks_like_warc_bytes(data, member_name):
-            return self._extract_warc_bytes_payloads(
-                data[:_MAX_ARTIFACT_MEMBER_BYTES],
-                source_file,
-                member_name,
-            )
-        if self._looks_like_pcap_bytes(data, member_name):
-            return self._extract_pcap_bytes_payloads(
-                data[:_MAX_ARTIFACT_MEMBER_BYTES],
-                source_file,
-                member_name,
-            )
-        payload_families = self._run_ordered_local_batch(
-            ("crx", "zip", "7z", "ar", "tar", "cpio", "asar", "decompress"),
-            lambda family: self._extract_archive_payload_family(
-                family,
-                data=data,
-                source_file=source_file,
-                member_name=member_name,
-                depth=depth,
-            ),
-            default_factory=list,
+        return _orchestration_extract_archive_bytes_payloads(
+            data,
+            source_file,
+            member_name,
+            depth=depth,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            run_ordered_batch=self._run_ordered_local_batch,
+            looks_like_warc_bytes=self._looks_like_warc_bytes,
+            extract_warc_bytes_payloads=self._extract_warc_bytes_payloads,
+            looks_like_pcap_bytes=self._looks_like_pcap_bytes,
+            extract_pcap_bytes_payloads=self._extract_pcap_bytes_payloads,
+            extract_archive_payload_family=self._extract_archive_payload_family,
         )
-        for family_payloads in payload_families:
-            if family_payloads:
-                return family_payloads
-        return []
 
     def _extract_archive_payload_family(
         self,
@@ -35833,87 +28099,28 @@ class ArtifactQueueProcessor:
         member_name: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if family == "crx":
-            return self._extract_archive_crx_payloads(
-                data,
-                source_file=source_file,
-                depth=depth,
-            )
-        if family == "zip":
-            return self._extract_archive_zip_payloads(
-                data,
-                source_file=source_file,
-                depth=depth,
-            )
-        if family == "7z":
-            return self._extract_archive_7z_payloads(
-                data,
-                source_file=source_file,
-                depth=depth,
-            )
-        if family == "ar":
-            return self._extract_archive_ar_payloads(
-                data,
-                source_file=source_file,
-                depth=depth,
-            )
-        if family == "tar":
-            return self._extract_archive_tar_payloads(
-                data,
-                source_file=source_file,
-                depth=depth,
-            )
-        if family == "cpio":
-            return self._extract_archive_cpio_payloads(
-                data,
-                source_file=source_file,
-                depth=depth,
-            )
-        if family == "asar":
-            return self._extract_archive_asar_payloads(
-                data,
-                source_file=source_file,
-                depth=depth,
-            )
-        if family == "decompress":
-            return self._extract_archive_decompressed_payloads(
-                data,
-                source_file=source_file,
-                member_name=member_name,
-                depth=depth,
-            )
-        return []
+        return _orchestration_extract_archive_payload_family(
+            family,
+            data=data,
+            source_file=source_file,
+            member_name=member_name,
+            depth=depth,
+            extract_archive_crx_payloads=self._extract_archive_crx_payloads,
+            extract_archive_zip_payloads=self._extract_archive_zip_payloads,
+            extract_archive_7z_payloads=self._extract_archive_7z_payloads,
+            extract_archive_ar_payloads=self._extract_archive_ar_payloads,
+            extract_archive_tar_payloads=self._extract_archive_tar_payloads,
+            extract_archive_cpio_payloads=self._extract_archive_cpio_payloads,
+            extract_archive_asar_payloads=self._extract_archive_asar_payloads,
+            extract_archive_decompressed_payloads=self._extract_archive_decompressed_payloads,
+        )
 
     @staticmethod
     def _crx_zip_payload_bytes(data: bytes) -> bytes:
-        if len(data) < 12 or not data.startswith(_CRX_ARCHIVE_MAGIC):
-            return b""
-        try:
-            version = struct.unpack("<I", data[4:8])[0]
-        except struct.error:
-            return b""
-        if version == 2:
-            if len(data) < 16:
-                return b""
-            try:
-                public_key_len, signature_len = struct.unpack("<II", data[8:16])
-            except struct.error:
-                return b""
-            offset = 16 + public_key_len + signature_len
-        elif version == 3:
-            try:
-                header_len = struct.unpack("<I", data[8:12])[0]
-            except struct.error:
-                return b""
-            offset = 12 + header_len
-        else:
-            return b""
-        if offset >= len(data):
-            return b""
-        payload = data[offset:]
-        if not payload.startswith(b"PK\x03\x04"):
-            return b""
-        return payload
+        return _orchestration_crx_zip_payload_bytes(
+            data,
+            crx_archive_magic=_CRX_ARCHIVE_MAGIC,
+        )
 
     def _extract_archive_crx_payloads(
         self,
@@ -35922,13 +28129,12 @@ class ArtifactQueueProcessor:
         source_file: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        zip_payload = self._crx_zip_payload_bytes(data)
-        if not zip_payload:
-            return []
-        return self._extract_archive_zip_payloads(
-            zip_payload,
+        return _orchestration_extract_archive_crx_payloads(
+            data,
             source_file=source_file,
             depth=depth,
+            crx_zip_payload_bytes=self._crx_zip_payload_bytes,
+            extract_archive_zip_payloads=self._extract_archive_zip_payloads,
         )
 
     def _extract_archive_zip_payloads(
@@ -35938,75 +28144,43 @@ class ArtifactQueueProcessor:
         source_file: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        try:
-            if not zipfile.is_zipfile(BytesIO(data)):
-                return []
-            with zipfile.ZipFile(BytesIO(data)) as nested_zip:
-                payloads = self._extract_text_payloads_from_zip(
-                    nested_zip,
-                    source_file,
-                    depth=depth,
-                )
-                payloads.extend(self._extract_saz_session_pairing_payloads(nested_zip, source_file))
-                return payloads
-        except Exception:  # noqa: BLE001
-            return []
+        return _orchestration_extract_archive_zip_payloads(
+            data,
+            source_file=source_file,
+            depth=depth,
+            extract_text_payloads_from_zip=lambda nested_zip, nested_source: self._extract_text_payloads_from_zip(
+                nested_zip,
+                nested_source,
+                depth=depth,
+            ),
+            extract_saz_session_pairing_payloads=self._extract_saz_session_pairing_payloads,
+        )
 
     def _extract_saz_session_pairing_payloads(
         self,
         zf: zipfile.ZipFile,
         source_file: str,
     ) -> list[tuple[str, str, str]]:
-        sessions: dict[str, dict[str, tuple[str, bytes]]] = {}
-        members = zf.infolist()
-        member_entries = self._run_ordered_local_batch(
-            members,
-            self._saz_raw_session_member_entry,
-            default_factory=lambda: None,
+        return _orchestration_extract_saz_session_pairing_payloads(
+            zf,
+            source_file=source_file,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            run_ordered_batch=self._run_ordered_local_batch,
+            saz_raw_session_member_entry=self._saz_raw_session_member_entry,
+            saz_session_pairing_payload=lambda job: self._saz_session_pairing_payload(
+                job,
+                source_file=source_file,
+            ),
         )
-        for member, entry in zip(members, member_entries):
-            if entry is None:
-                continue
-            session_id, side, member_name = entry
-            try:
-                member_bytes = zf.read(member)[:_MAX_ARTIFACT_MEMBER_BYTES]
-            except Exception:  # noqa: BLE001
-                continue
-            if not member_bytes:
-                continue
-            sessions.setdefault(session_id, {})[side] = (member_name, member_bytes)
-        if not sessions:
-            return []
-        session_jobs = [
-            (session_id, session["c"], session["s"])
-            for session_id, session in sorted(sessions.items())
-            if "c" in session and "s" in session
-        ]
-        if not session_jobs:
-            return []
-        payload_batches = self._run_ordered_local_batch(
-            session_jobs,
-            lambda job: self._saz_session_pairing_payload(job, source_file=source_file),
-            default_factory=lambda: None,
-        )
-        return [payload for payload in payload_batches if isinstance(payload, tuple)]
 
     @staticmethod
     def _saz_raw_session_member_entry(
         member: zipfile.ZipInfo,
     ) -> tuple[str, str, str] | None:
-        if member.is_dir() or member.file_size > _MAX_ARTIFACT_MEMBER_BYTES:
-            return None
-        member_name = ArtifactQueueProcessor._safe_archive_member_name(str(member.filename or ""))
-        if not member_name:
-            return None
-        match = _SAZ_RAW_SESSION_MEMBER_RE.search(member_name)
-        if not match:
-            return None
-        return (
-            str(match.group("session_id") or ""),
-            str(match.group("side") or "").lower(),
-            member_name,
+        return _orchestration_saz_raw_session_member_entry(
+            member,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            normalize_archive_member_name=ArtifactQueueProcessor._safe_archive_member_name,
         )
 
     def _saz_session_pairing_payload(
@@ -36015,64 +28189,29 @@ class ArtifactQueueProcessor:
         *,
         source_file: str,
     ) -> tuple[str, str, str] | None:
-        session_id, request_member, response_member = job
-        request_member_name, request_bytes = request_member
-        response_member_name, response_bytes = response_member
-        request_text = self._decode_text_artifact_bytes(request_bytes[:_MAX_ARTIFACT_MEMBER_BYTES])
-        response_text = self._decode_text_artifact_bytes(
-            response_bytes[:_MAX_ARTIFACT_MEMBER_BYTES]
-        )
-        origin_url = self._saz_request_origin_url(request_text)
-        if not origin_url:
-            return None
-        lines: list[str] = []
-        for location in self._saz_response_relative_locations(response_text):
-            candidate = self._http_transcript_url_candidate_entry(
-                urljoin(f"{origin_url}/", location)
-            )
-            if candidate and candidate not in lines:
-                lines.append(candidate)
-        if not lines:
-            return None
-        extract_path = f"raw/{session_id}_c+s.txt#saz-session-pair"
-        return (
-            source_file,
-            extract_path,
-            "\n".join(
-                [
-                    f"request.member={request_member_name}",
-                    f"response.member={response_member_name}",
-                    *lines[:32],
-                ]
-            ),
+        return _orchestration_saz_session_pairing_payload(
+            job,
+            source_file=source_file,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            decode_text_artifact_bytes=self._decode_text_artifact_bytes,
+            http_transcript_text_candidate_values=self._http_transcript_text_candidate_values,
+            http_transcript_url_candidate_entry=self._http_transcript_url_candidate_entry,
+            http_transcript_header_re=_HTTP_TRANSCRIPT_HEADER_RE,
         )
 
     def _saz_request_origin_url(self, request_text: str) -> str:
-        for value in self._http_transcript_text_candidate_values(request_text):
-            candidate = self._http_transcript_url_candidate_entry(value)
-            parsed = urlparse(candidate)
-            if parsed.scheme in {"http", "https"} and parsed.netloc:
-                return (
-                    parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
-                )
-        return ""
+        return _orchestration_saz_request_origin_url(
+            request_text,
+            http_transcript_text_candidate_values=self._http_transcript_text_candidate_values,
+            http_transcript_url_candidate_entry=self._http_transcript_url_candidate_entry,
+        )
 
     @staticmethod
     def _saz_response_relative_locations(response_text: str) -> list[str]:
-        locations: list[str] = []
-        for line in str(response_text or "").splitlines()[:2048]:
-            header_match = _HTTP_TRANSCRIPT_HEADER_RE.match(line.strip())
-            if not header_match:
-                continue
-            name = str(header_match.group("name") or "").strip().lower()
-            if name not in {"location", "content-location"}:
-                continue
-            value = str(header_match.group("value") or "").strip().strip("\"'")
-            if not value.startswith("/") or value.startswith("//"):
-                continue
-            if value not in locations:
-                locations.append(value)
-        return locations[:32]
+        return _orchestration_saz_response_relative_locations(
+            response_text,
+            http_transcript_header_re=_HTTP_TRANSCRIPT_HEADER_RE,
+        )
 
     def _extract_archive_7z_payloads(
         self,
@@ -36081,12 +28220,16 @@ class ArtifactQueueProcessor:
         source_file: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if py7zr is None or data[:6] != b"7z\xbc\xaf'\x1c":
-            return []
-        return self._extract_text_payloads_from_7z(
+        return _orchestration_extract_archive_7z_payloads(
             data,
-            source_file,
+            source_file=source_file,
             depth=depth,
+            py7zr_available=py7zr is not None,
+            extract_text_payloads_from_7z=lambda nested_data, nested_source: self._extract_text_payloads_from_7z(
+                nested_data,
+                nested_source,
+                depth=depth,
+            ),
         )
 
     def _extract_archive_ar_payloads(
@@ -36096,85 +28239,29 @@ class ArtifactQueueProcessor:
         source_file: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        member_jobs = self._ar_archive_member_jobs(data)
-        if not member_jobs:
-            return []
-        ordered_payloads = self._run_ordered_local_batch(
-            member_jobs,
-            lambda member_job: self._extract_member_data_payloads(
-                member_job[1],
-                source_file,
-                member_job[0],
+        return _orchestration_extract_archive_ar_payloads(
+            data,
+            source_file=source_file,
+            depth=depth,
+            ar_archive_member_jobs=self._ar_archive_member_jobs,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_member_data_payloads=lambda member_data, nested_source, member_name: self._extract_member_data_payloads(
+                member_data,
+                nested_source,
+                member_name,
                 depth=depth,
             ),
-            default_factory=list,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        prepared_payload_batches = self._run_ordered_local_batch(
-            [
-                (member_index, member_payloads or [])
-                for member_index, member_payloads in enumerate(ordered_payloads)
-            ],
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for member_payloads in prepared_payload_batches:
-            payloads.extend(member_payloads)
-        return payloads
 
     @staticmethod
     def _ar_archive_member_jobs(data: bytes) -> list[tuple[str, bytes]]:
-        if not data.startswith(_AR_ARCHIVE_MAGIC):
-            return []
-        jobs: list[tuple[str, bytes]] = []
-        string_table = b""
-        offset = len(_AR_ARCHIVE_MAGIC)
-        while offset + 60 <= len(data):
-            header = data[offset : offset + 60]
-            if header[58:60] != b"`\n":
-                break
-            raw_name = header[:16].decode("utf-8", errors="ignore").strip()
-            try:
-                member_size = int(header[48:58].decode("ascii", errors="ignore").strip() or "0")
-            except ValueError:
-                break
-            member_start = offset + 60
-            member_end = member_start + member_size
-            if member_end > len(data):
-                break
-            member_data = data[member_start:member_end]
-            offset = member_end + (member_size % 2)
-
-            if raw_name in {"/", "/SYM64/"}:
-                continue
-            if raw_name == "//":
-                string_table = member_data
-                continue
-
-            member_name = raw_name.rstrip("/").strip()
-            payload = member_data
-            if raw_name.startswith("#1/"):
-                try:
-                    name_size = int(raw_name[3:])
-                except ValueError:
-                    continue
-                if name_size <= 0 or name_size > len(member_data):
-                    continue
-                member_name = member_data[:name_size].decode("utf-8", errors="ignore").strip()
-                payload = member_data[name_size:]
-            elif raw_name.startswith("/") and raw_name[1:].isdigit() and string_table:
-                table_offset = int(raw_name[1:])
-                if table_offset >= len(string_table):
-                    continue
-                table_tail = string_table[table_offset:]
-                member_name = table_tail.split(b"\n", 1)[0].decode("utf-8", errors="ignore")
-                member_name = member_name.rstrip("/").strip()
-
-            safe_name = ArtifactQueueProcessor._safe_archive_member_name(member_name)
-            if not safe_name or not payload or len(payload) > _REMOTE_ARTIFACT_MAX_BYTES:
-                continue
-            jobs.append((safe_name, bytes(payload)))
-        return jobs
+        return _orchestration_ar_archive_member_jobs(
+            data,
+            remote_artifact_max_bytes=_REMOTE_ARTIFACT_MAX_BYTES,
+            ar_archive_magic=_AR_ARCHIVE_MAGIC,
+            normalize_archive_member_name=ArtifactQueueProcessor._safe_archive_member_name,
+        )
 
     def _extract_archive_cpio_payloads(
         self,
@@ -36183,71 +28270,31 @@ class ArtifactQueueProcessor:
         source_file: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        member_jobs = self._cpio_newc_member_jobs(data)
-        if not member_jobs:
-            return []
-        ordered_payloads = self._run_ordered_local_batch(
-            member_jobs,
-            lambda member_job: self._extract_member_data_payloads(
-                member_job[1],
-                source_file,
-                member_job[0],
-                depth=depth,
+        return _orchestration_extract_archive_cpio_payloads(
+            data,
+            source_file=source_file,
+            depth=depth,
+            cpio_newc_member_jobs=self._cpio_newc_member_jobs,
+            extract_text_member_payloads_from_jobs=lambda member_jobs, nested_source, nested_depth: _orchestration_extract_text_member_payloads_from_jobs(
+                member_jobs,
+                source_file=nested_source,
+                depth=nested_depth,
+                run_ordered_batch=self._run_ordered_local_batch,
+                text_member_job=self._text_member_job,
+                extract_member_data_payloads=self._extract_member_data_payloads,
+                artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
             ),
-            default_factory=list,
         )
-        prepared_payload_batches = self._run_ordered_local_batch(
-            [
-                (member_index, member_payloads or [])
-                for member_index, member_payloads in enumerate(ordered_payloads)
-            ],
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for member_payloads in prepared_payload_batches:
-            payloads.extend(member_payloads)
-        return payloads
 
     @staticmethod
     def _cpio_newc_member_jobs(data: bytes) -> list[tuple[str, bytes]]:
-        if data[:6] not in _CPIO_NEWC_MAGICS:
-            return []
-        jobs: list[tuple[str, bytes]] = []
-        offset = 0
-        while offset + 110 <= len(data):
-            header = data[offset : offset + 110]
-            if header[:6] not in _CPIO_NEWC_MAGICS:
-                break
-            try:
-                mode = int(header[14:22].decode("ascii", errors="ignore"), 16)
-                file_size = int(header[54:62].decode("ascii", errors="ignore"), 16)
-                name_size = int(header[94:102].decode("ascii", errors="ignore"), 16)
-            except ValueError:
-                break
-            if name_size <= 0 or name_size > _MAX_ARTIFACT_MEMBER_BYTES:
-                break
-            name_start = offset + 110
-            name_end = name_start + name_size
-            if name_end > len(data):
-                break
-            raw_name = data[name_start:name_end].rstrip(b"\x00").decode("utf-8", errors="ignore")
-            data_start = name_end + ((4 - (name_end % 4)) % 4)
-            data_end = data_start + file_size
-            if data_end > len(data):
-                break
-            offset = data_end + ((4 - (data_end % 4)) % 4)
-            if raw_name == "TRAILER!!!":
-                break
-            if file_size <= 0 or file_size > _REMOTE_ARTIFACT_MAX_BYTES:
-                continue
-            if mode & 0o170000 != 0o100000:
-                continue
-            safe_name = ArtifactQueueProcessor._safe_archive_member_name(raw_name)
-            if not safe_name:
-                continue
-            jobs.append((safe_name, bytes(data[data_start:data_end])))
-        return jobs
+        return _orchestration_cpio_newc_member_jobs(
+            data,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            remote_artifact_max_bytes=_REMOTE_ARTIFACT_MAX_BYTES,
+            cpio_newc_magics=tuple(_CPIO_NEWC_MAGICS),
+            normalize_archive_member_name=ArtifactQueueProcessor._safe_archive_member_name,
+        )
 
     def _extract_archive_asar_payloads(
         self,
@@ -36256,128 +28303,45 @@ class ArtifactQueueProcessor:
         source_file: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        member_jobs = self._asar_archive_member_jobs(data)
-        if not member_jobs:
-            return []
-        ordered_payloads = self._run_ordered_local_batch(
-            member_jobs,
-            lambda member_job: self._extract_member_data_payloads(
-                member_job[1],
-                source_file,
-                member_job[0],
-                depth=depth,
+        return _orchestration_extract_archive_asar_payloads(
+            data,
+            source_file=source_file,
+            depth=depth,
+            asar_archive_member_jobs=self._asar_archive_member_jobs,
+            extract_text_member_payloads_from_jobs=lambda member_jobs, nested_source, nested_depth: _orchestration_extract_text_member_payloads_from_jobs(
+                member_jobs,
+                source_file=nested_source,
+                depth=nested_depth,
+                run_ordered_batch=self._run_ordered_local_batch,
+                text_member_job=self._text_member_job,
+                extract_member_data_payloads=self._extract_member_data_payloads,
+                artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
             ),
-            default_factory=list,
         )
-        prepared_payload_batches = self._run_ordered_local_batch(
-            [
-                (member_index, member_payloads or [])
-                for member_index, member_payloads in enumerate(ordered_payloads)
-            ],
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for member_payloads in prepared_payload_batches:
-            payloads.extend(member_payloads)
-        return payloads
 
     @staticmethod
     def _asar_header_and_content_base(data: bytes) -> tuple[dict[str, Any], int] | None:
-        if len(data) < 12:
-            return None
-        try:
-            header_size, header_json_size = struct.unpack("<II", data[:8])
-        except struct.error:
-            return None
-        if (
-            header_size < 4
-            or header_json_size <= 0
-            or header_size > _MAX_ASAR_HEADER_BYTES
-            or header_json_size > _MAX_ASAR_HEADER_BYTES
-            or header_json_size > header_size - 4
-        ):
-            return None
-        header_start = 8
-        header_end = header_start + header_json_size
-        content_base = 8 + header_size
-        if header_end > len(data) or content_base > len(data) or content_base < header_end:
-            return None
-        try:
-            header_text = data[header_start:header_end].decode("utf-8").strip()
-            parsed = json.loads(header_text)
-        except Exception:  # noqa: BLE001
-            return None
-        if not isinstance(parsed, dict) or not isinstance(parsed.get("files"), dict):
-            return None
-        return parsed, content_base
+        return _orchestration_asar_header_and_content_base(
+            data,
+            max_asar_header_bytes=_MAX_ASAR_HEADER_BYTES,
+        )
 
     @staticmethod
     def _asar_non_negative_int(value: Any) -> int | None:
-        if isinstance(value, bool):
-            return None
-        if isinstance(value, int):
-            return value if value >= 0 else None
-        text = str(value or "").strip()
-        if not text or not text.isdigit():
-            return None
-        try:
-            return int(text)
-        except ValueError:
-            return None
+        return _orchestration_asar_non_negative_int(value)
 
     @classmethod
     def _asar_archive_member_jobs(cls, data: bytes) -> list[tuple[str, bytes]]:
-        header_info = cls._asar_header_and_content_base(data)
-        if header_info is None:
-            return []
-        header, content_base = header_info
-        root_files = header.get("files")
-        if not isinstance(root_files, dict):
-            return []
-
-        jobs: list[tuple[str, bytes]] = []
-
-        def _visit(prefix: tuple[str, ...], entries: dict[str, Any], depth: int) -> None:
-            if depth > 32 or len(jobs) >= _MAX_ASAR_MEMBERS:
-                return
-            for raw_name, entry in entries.items():
-                if len(jobs) >= _MAX_ASAR_MEMBERS:
-                    return
-                name = str(raw_name or "").strip()
-                if not name or not isinstance(entry, dict):
-                    continue
-                member_parts = (*prefix, name)
-                child_files = entry.get("files")
-                if isinstance(child_files, dict):
-                    _visit(member_parts, child_files, depth + 1)
-                    continue
-                if bool(entry.get("unpacked")):
-                    continue
-                member_size = cls._asar_non_negative_int(entry.get("size"))
-                relative_offset = cls._asar_non_negative_int(entry.get("offset"))
-                if member_size is None or relative_offset is None or member_size <= 0:
-                    continue
-                member_name = "/".join(member_parts)
-                safe_name = ArtifactQueueProcessor._safe_archive_member_name(member_name)
-                if not safe_name:
-                    continue
-                suffix = Path(safe_name.lower()).suffix
-                size_limit = (
-                    _MAX_OCR_IMAGE_BYTES
-                    if suffix in _OCR_IMAGE_SUFFIXES
-                    else _MAX_ARTIFACT_MEMBER_BYTES
-                )
-                if member_size > size_limit:
-                    continue
-                member_start = content_base + relative_offset
-                member_end = member_start + member_size
-                if member_start < content_base or member_end > len(data):
-                    continue
-                jobs.append((safe_name, bytes(data[member_start:member_end])))
-
-        _visit((), root_files, 0)
-        return jobs
+        return _orchestration_asar_archive_member_jobs(
+            data,
+            max_asar_header_bytes=_MAX_ASAR_HEADER_BYTES,
+            max_asar_members=_MAX_ASAR_MEMBERS,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            max_ocr_image_bytes=_MAX_OCR_IMAGE_BYTES,
+            ocr_image_suffixes=tuple(_OCR_IMAGE_SUFFIXES),
+            normalize_archive_member_name=ArtifactQueueProcessor._safe_archive_member_name,
+            parse_non_negative_int=cls._asar_non_negative_int,
+        )
 
     def _extract_archive_tar_payloads(
         self,
@@ -36386,34 +28350,28 @@ class ArtifactQueueProcessor:
         source_file: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        try:
-            with tarfile.open(fileobj=BytesIO(data), mode="r:*") as nested_tar:
-                members = nested_tar.getmembers()
-                if not any(member.isfile() for member in members):
-                    return []
-                oci_payloads = self._extract_oci_image_layout_tar_payloads(
-                    nested_tar,
-                    members,
-                    source_file,
-                    depth=depth,
-                )
-                if oci_payloads:
-                    return oci_payloads
-                docker_save_payloads = self._extract_docker_save_image_tar_payloads(
-                    nested_tar,
-                    members,
-                    source_file,
-                    depth=depth,
-                )
-                if docker_save_payloads:
-                    return docker_save_payloads
-                return self._extract_text_payloads_from_tar(
-                    nested_tar,
-                    source_file,
-                    depth=depth,
-                )
-        except Exception:  # noqa: BLE001
-            return []
+        return _orchestration_extract_archive_tar_payloads(
+            data,
+            source_file=source_file,
+            depth=depth,
+            extract_oci_image_layout_tar_payloads=lambda nested_tar, members, nested_source: self._extract_oci_image_layout_tar_payloads(
+                nested_tar,
+                list(members),
+                nested_source,
+                depth=depth,
+            ),
+            extract_docker_save_image_tar_payloads=lambda nested_tar, members, nested_source: self._extract_docker_save_image_tar_payloads(
+                nested_tar,
+                list(members),
+                nested_source,
+                depth=depth,
+            ),
+            extract_text_payloads_from_tar=lambda nested_tar, nested_source: self._extract_text_payloads_from_tar(
+                nested_tar,
+                nested_source,
+                depth=depth,
+            ),
+        )
 
     def _extract_archive_decompressed_payloads(
         self,
@@ -36423,110 +28381,42 @@ class ArtifactQueueProcessor:
         member_name: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        decompressed = self._decompress_archive_stream_bytes(data, member_name)
-        if decompressed is None:
-            return []
-
-        compression_kind, decompressed_bytes = decompressed
-        nested_name = f"{member_name}#decompressed-{compression_kind}"
-        nested_payloads = self._extract_archive_bytes_payloads(
-            decompressed_bytes,
-            source_file,
-            nested_name,
-            depth=depth + 1,
+        return _orchestration_extract_archive_decompressed_payloads(
+            data,
+            source_file=source_file,
+            member_name=member_name,
+            depth=depth,
+            decompress_archive_stream=self._decompress_archive_stream_bytes,
+            extract_archive_bytes=lambda nested_data, nested_source, nested_name: self._extract_archive_bytes_payloads(
+                nested_data,
+                nested_source,
+                nested_name,
+                depth=depth + 1,
+            ),
+            decode_text_artifact_bytes=self._decode_text_artifact_bytes,
         )
-        if nested_payloads:
-            return nested_payloads
-        return [
-            (
-                source_file,
-                f"{nested_name}.txt",
-                self._decode_text_artifact_bytes(decompressed_bytes),
-            )
-        ]
 
     @staticmethod
     def _archive_stream_kind(data: bytes, member_name: str) -> str:
-        lowered = member_name.lower()
-        if lowered.endswith((".gz", ".tgz", ".tar.gz")) or data[:2] == b"\x1f\x8b":
-            return "gz"
-        if lowered.endswith((".bz2", ".tbz", ".tbz2", ".tar.bz2")) or data[:3] == b"BZh":
-            return "bz2"
-        if lowered.endswith((".xz", ".txz", ".tar.xz")) or data[:6] == b"\xfd7zXZ\x00":
-            return "xz"
-        if lowered.endswith((".zst", ".tzst", ".tar.zst")) or data[:4] == b"\x28\xb5\x2f\xfd":
-            return "zst"
-        if lowered.endswith((".br", ".tbr", ".tar.br")):
-            return "br"
-        if lowered.endswith((".lz4", ".tlz4", ".tar.lz4")) or data[:4] == b"\x04\x22\x4d\x18":
-            return "lz4"
-        return ""
+        return _orchestration_archive_stream_kind(data, member_name)
 
     def _decompress_archive_stream_bytes(
         self,
         data: bytes,
         member_name: str,
     ) -> tuple[str, bytes] | None:
-        archive_kind = self._archive_stream_kind(data, member_name)
-        if not archive_kind:
-            return None
-        try:
-            if archive_kind == "gz":
-                try:
-                    return archive_kind, gzip.decompress(data)
-                except Exception:  # noqa: BLE001
-                    return archive_kind, zlib.decompress(data, wbits=16 + zlib.MAX_WBITS)
-            if archive_kind == "bz2":
-                try:
-                    return archive_kind, bz2.decompress(data)
-                except Exception:  # noqa: BLE001
-                    decompressor = bz2.BZ2Decompressor()
-                    return archive_kind, decompressor.decompress(data)
-            if archive_kind == "xz":
-                try:
-                    return archive_kind, lzma.decompress(data)
-                except Exception:  # noqa: BLE001
-                    decompressor = lzma.LZMADecompressor()
-                    return archive_kind, decompressor.decompress(data)
-            if archive_kind == "zst" and zstandard is not None:
-                decompressor = zstandard.ZstdDecompressor()
-                with decompressor.stream_reader(BytesIO(data)) as reader:
-                    decompressed = reader.read(_REMOTE_ARTIFACT_MAX_BYTES + 1)
-                if len(decompressed) > _REMOTE_ARTIFACT_MAX_BYTES:
-                    return None
-                return archive_kind, decompressed
-            if archive_kind == "br" and brotli is not None:
-                decompressed = brotli.decompress(data)
-                if len(decompressed) > _REMOTE_ARTIFACT_MAX_BYTES:
-                    return None
-                return archive_kind, decompressed
-            if archive_kind == "lz4" and lz4_frame is not None:
-                decompressor = lz4_frame.LZ4FrameDecompressor()
-                decompressed = decompressor.decompress(
-                    data,
-                    max_length=_REMOTE_ARTIFACT_MAX_BYTES + 1,
-                )
-                if len(decompressed) > _REMOTE_ARTIFACT_MAX_BYTES:
-                    return None
-                if not getattr(decompressor, "eof", False):
-                    return None
-                return archive_kind, decompressed
-        except Exception:  # noqa: BLE001
-            return None
-        return None
+        return _orchestration_decompress_archive_stream_bytes(
+            data,
+            member_name,
+            remote_artifact_max_bytes=_REMOTE_ARTIFACT_MAX_BYTES,
+        )
 
     @classmethod
     def _static_batch_worker_count(cls, item_count: int) -> int:
-        if item_count <= 1:
-            return max(0, item_count)
-        raw_value = os.environ.get("FORGE_STATIC_ARTIFACT_MAX_WORKERS", "").strip()
-        if not raw_value:
-            return 1
-        try:
-            configured = int(raw_value)
-        except ValueError:
-            return 1
-        return max(1, min(cls._MAX_STATIC_BATCH_WORKERS, item_count, configured))
+        return _orchestration_static_batch_worker_count(
+            item_count,
+            max_static_batch_workers=cls._MAX_STATIC_BATCH_WORKERS,
+        )
 
     @classmethod
     def _run_ordered_static_batch(
@@ -36537,35 +28427,13 @@ class ArtifactQueueProcessor:
         default_factory: Callable[[], Any],
         max_workers: int | None = None,
     ) -> list[Any]:
-        batch_items = list(items)
-        if not batch_items:
-            return []
-        if max_workers is None:
-            bounded_workers = cls._static_batch_worker_count(len(batch_items))
-        else:
-            bounded_workers = max(
-                1, min(cls._MAX_STATIC_BATCH_WORKERS, len(batch_items), int(max_workers))
-            )
-        if bounded_workers <= 1:
-            results: list[Any] = []
-            for item in batch_items:
-                try:
-                    results.append(worker(item))
-                except Exception:  # noqa: BLE001
-                    results.append(default_factory())
-            return results
-        ordered_results: list[Any | None] = [None] * len(batch_items)
-        with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
-            future_map = {
-                executor.submit(worker, item): index for index, item in enumerate(batch_items)
-            }
-            for future in as_completed(future_map):
-                index = future_map[future]
-                try:
-                    ordered_results[index] = future.result()
-                except Exception:  # noqa: BLE001
-                    ordered_results[index] = default_factory()
-        return [result if result is not None else default_factory() for result in ordered_results]
+        return _orchestration_run_ordered_static_batch(
+            items,
+            worker,
+            default_factory=default_factory,
+            max_workers=max_workers,
+            max_static_batch_workers=cls._MAX_STATIC_BATCH_WORKERS,
+        )
 
     @classmethod
     def _decode_text_artifact_bytes(
@@ -36574,47 +28442,16 @@ class ArtifactQueueProcessor:
         *,
         limit: int = _MAX_ARTIFACT_MEMBER_BYTES,
     ) -> str:
-        bounded = data[:limit]
-        fallback = ""
-        decoded_candidates = cls._run_ordered_static_batch(
-            [
-                (encoding, bounded)
-                for encoding in (
-                    "utf-8-sig",
-                    "utf-16",
-                    "utf-16-le",
-                    "utf-16-be",
-                    "utf-8",
-                    "cp1252",
-                    "latin-1",
-                )
-            ],
-            cls._decode_text_artifact_entry,
-            default_factory=str,
+        return _orchestration_decode_text_artifact_bytes(
+            data,
+            limit=limit,
+            run_ordered_batch=cls._run_ordered_static_batch,
+            decode_entry=cls._decode_text_artifact_entry,
         )
-        for text in decoded_candidates:
-            if not text:
-                continue
-            if not fallback:
-                fallback = text
-            if (
-                any(char.isalpha() for char in text[:512])
-                or "://" in text
-                or "@" in text
-                or "=" in text
-                or ";" in text
-                or "{" in text
-            ):
-                return text
-        return fallback
 
     @staticmethod
     def _decode_text_artifact_entry(entry: tuple[str, bytes]) -> str:
-        encoding, bounded = entry
-        try:
-            return bounded.decode(encoding, errors="ignore").replace("\x00", "").strip()
-        except Exception:  # noqa: BLE001
-            return ""
+        return _orchestration_decode_text_artifact_entry(entry)
 
     @staticmethod
     def _read_text(path: Path) -> str:
@@ -36719,26 +28556,22 @@ class ArtifactQueueProcessor:
 
     def _extract_pdf_payloads(self, path: Path) -> list[tuple[str, str, str]]:
         data = path.read_bytes()[:_MAX_ARTIFACT_MEMBER_BYTES]
-        payload_fragments = self._run_ordered_local_batch(
-            ("text", "metadata", "xmp", "ocr"),
-            lambda family: self._extract_pdf_payload_fragment(
-                family,
-                data=data,
-                source_file=str(path),
-                member_name=path.name,
-                path=path,
+        return _orchestration_extract_pdf_payloads(
+            data,
+            source_file=str(path),
+            member_name=path.name,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_pdf_payload_fragment=lambda family, data, source_file, member_name: (
+                self._extract_pdf_payload_fragment(
+                    family,
+                    data=data,
+                    source_file=source_file,
+                    member_name=member_name,
+                    path=path,
+                )
             ),
-            default_factory=list,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        prepared_fragments = self._run_ordered_local_batch(
-            list(enumerate(payload_fragments)),
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for fragment in prepared_fragments:
-            payloads.extend(fragment)
-        return payloads
 
     def _extract_pdf_bytes_payloads(
         self,
@@ -36747,25 +28580,21 @@ class ArtifactQueueProcessor:
         member_name: str,
     ) -> list[tuple[str, str, str]]:
         bounded = data[:_MAX_ARTIFACT_MEMBER_BYTES]
-        payload_fragments = self._run_ordered_local_batch(
-            ("text", "metadata", "xmp", "ocr"),
-            lambda family: self._extract_pdf_payload_fragment(
-                family,
-                data=bounded,
-                source_file=source_file,
-                member_name=member_name,
+        return _orchestration_extract_pdf_payloads(
+            bounded,
+            source_file=source_file,
+            member_name=member_name,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_pdf_payload_fragment=lambda family, data, source_file, member_name: (
+                self._extract_pdf_payload_fragment(
+                    family,
+                    data=data,
+                    source_file=source_file,
+                    member_name=member_name,
+                )
             ),
-            default_factory=list,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        prepared_fragments = self._run_ordered_local_batch(
-            list(enumerate(payload_fragments)),
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for fragment in prepared_fragments:
-            payloads.extend(fragment)
-        return payloads
 
     def _extract_pdf_payload_fragment(
         self,
@@ -36776,41 +28605,52 @@ class ArtifactQueueProcessor:
         member_name: str,
         path: Path | None = None,
     ) -> list[tuple[str, str, str]]:
-        if family == "text":
+        def _extract_text_payloads(
+            fragment_data: bytes,
+            fragment_source_file: str,
+            fragment_member_name: str,
+        ) -> list[tuple[str, str, str]]:
             if path is not None:
                 return self._extract_pdf_text_payloads_from_path(path)
             return self._extract_pdf_text_payloads_from_bytes(
-                data,
-                source_file=source_file,
-                member_name=member_name,
+                fragment_data,
+                source_file=fragment_source_file,
+                member_name=fragment_member_name,
             )
-        if family == "metadata":
-            metadata_lines = self._pdf_metadata_lines(data)
-            if metadata_lines:
-                return [(source_file, f"{member_name}#pdf-metadata", "\n".join(metadata_lines))]
-            return []
-        if family == "xmp":
-            xmp_payload = self._pdf_xmp_payload(data)
-            if xmp_payload:
-                return [(source_file, f"{member_name}#pdf-xmp", xmp_payload)]
-            return []
-        if family == "ocr":
+
+        def _extract_ocr_payloads(
+            fragment_data: bytes,
+            fragment_source_file: str,
+            fragment_member_name: str,
+        ) -> list[tuple[str, str, str]]:
             if path is not None:
                 return self._extract_pdf_ocr_payloads(path)
             return self._extract_pdf_bytes_ocr_payloads(
-                data,
-                source_file,
-                member_name,
+                fragment_data,
+                fragment_source_file,
+                fragment_member_name,
             )
-        return []
+
+        return _orchestration_extract_pdf_payload_fragment(
+            family,
+            data=data,
+            source_file=source_file,
+            member_name=member_name,
+            extract_pdf_text_payloads=_extract_text_payloads,
+            pdf_metadata_lines=self._pdf_metadata_lines,
+            pdf_xmp_payload=self._pdf_xmp_payload,
+            extract_pdf_ocr_payloads=_extract_ocr_payloads,
+        )
 
     def _extract_pdf_text_payloads_from_path(
         self,
         path: Path,
     ) -> list[tuple[str, str, str]]:
-        if not path.exists():
-            return []
-        return [(str(path), path.name, self._read_text(path))]
+        return _orchestration_extract_pdf_text_payloads_from_path(
+            path,
+            path_exists=Path.exists,
+            read_text=self._read_text,
+        )
 
     def _extract_pdf_text_payloads_from_bytes(
         self,
@@ -36819,13 +28659,12 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        return [
-            (
-                source_file,
-                member_name,
-                data[:_MAX_ARTIFACT_MEMBER_BYTES].decode("latin-1", errors="ignore"),
-            )
-        ]
+        return _orchestration_extract_pdf_text_payloads_from_bytes(
+            data,
+            source_file=source_file,
+            member_name=member_name,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+        )
 
     def _extract_sqlite_payloads(self, path: Path) -> list[tuple[str, str, str]]:
         if not path.exists():
@@ -37030,7 +28869,11 @@ class ArtifactQueueProcessor:
             ),
             default_factory=lambda: None,
         )
-        property_jobs = [job for job in job_batches if isinstance(job, MsgOLEPropertyJob)]
+        property_jobs = [
+            job
+            for job in job_batches
+            if isinstance(job, MsgOLEPropertyJob)
+        ]
 
         ordered_property_results = self._run_ordered_local_batch(
             property_jobs,
@@ -37079,9 +28922,7 @@ class ArtifactQueueProcessor:
             default_factory=list,
         )
         family_head_payloads = prepared_payload_families[0] if prepared_payload_families else []
-        family_tail_payloads = (
-            prepared_payload_families[1] if len(prepared_payload_families) > 1 else []
-        )
+        family_tail_payloads = prepared_payload_families[1] if len(prepared_payload_families) > 1 else []
         return [*family_head_payloads, *payloads, *family_tail_payloads]
 
     @staticmethod
@@ -37230,9 +29071,7 @@ class ArtifactQueueProcessor:
         if not property_text:
             return MsgOLEPropertyResult()
         if job.prop_id in {"1000", "1013"}:
-            suffix = (
-                ".html" if job.prop_id == "1013" or "<html" in property_text.lower() else ".txt"
-            )
+            suffix = ".html" if job.prop_id == "1013" or "<html" in property_text.lower() else ".txt"
             return MsgOLEPropertyResult(
                 payloads=[
                     (
@@ -37317,9 +29156,7 @@ class ArtifactQueueProcessor:
     @staticmethod
     def _looks_like_pcap_bytes(data: bytes, member_name: str = "") -> bool:
         lowered = str(member_name or "").strip().lower()
-        if lowered.endswith(tuple(_PCAP_SUFFIXES)) or any(
-            f"{suffix}#" in lowered for suffix in _PCAP_SUFFIXES
-        ):
+        if lowered.endswith(tuple(_PCAP_SUFFIXES)) or any(f"{suffix}#" in lowered for suffix in _PCAP_SUFFIXES):
             return True
         return data[:4] in _PCAP_CLASSIC_MAGICS or data[:4] == _PCAPNG_MAGIC
 
@@ -37453,9 +29290,7 @@ class ArtifactQueueProcessor:
                 interface_count += 1
             elif block_type == 0x00000006 and block_length >= 32:
                 try:
-                    captured_length = struct.unpack(f"{endian}I", data[offset + 20 : offset + 24])[
-                        0
-                    ]
+                    captured_length = struct.unpack(f"{endian}I", data[offset + 20 : offset + 24])[0]
                 except struct.error:
                     captured_length = 0
                 packet_count += 1
@@ -37525,7 +29360,11 @@ class ArtifactQueueProcessor:
             ),
             default_factory=lambda: None,
         )
-        record_jobs = [job for job in job_batches if isinstance(job, WARCRecordExtractionJob)]
+        record_jobs = [
+            job
+            for job in job_batches
+            if isinstance(job, WARCRecordExtractionJob)
+        ]
         ordered_payloads = self._run_ordered_local_batch(
             record_jobs,
             self._extract_warc_record_payloads,
@@ -37677,8 +29516,8 @@ class ArtifactQueueProcessor:
         http_header_bytes = b""
         body_bytes = content_bytes
         if self._looks_like_http_message_bytes(content_bytes):
-            http_header_bytes, http_body_bytes, _http_separator_length = (
-                self._split_bytes_header_block(content_bytes)
+            http_header_bytes, http_body_bytes, _http_separator_length = self._split_bytes_header_block(
+                content_bytes
             )
             body_bytes = http_body_bytes
         family_results = self._run_ordered_local_batch(
@@ -37750,9 +29589,7 @@ class ArtifactQueueProcessor:
     def _looks_like_http_message_bytes(data: bytes) -> bool:
         if not data:
             return False
-        header_bytes, _remainder, _separator_length = (
-            ArtifactQueueProcessor._split_bytes_header_block(data)
-        )
+        header_bytes, _remainder, _separator_length = ArtifactQueueProcessor._split_bytes_header_block(data)
         first_line = header_bytes.splitlines()[0].strip() if header_bytes.splitlines() else b""
         if not first_line:
             return False
@@ -38231,9 +30068,7 @@ class ArtifactQueueProcessor:
         mime_type = self._har_scalar_text(response_content.get("mimeType"))
         if mime_type:
             lines.append(f"response.content.mimeType={mime_type}")
-        image_payload_lines = self._har_content_image_payload_lines(
-            response_content, mime_type=mime_type
-        )
+        image_payload_lines = self._har_content_image_payload_lines(response_content, mime_type=mime_type)
         if image_payload_lines:
             lines.extend(image_payload_lines)
             return lines
@@ -38397,9 +30232,7 @@ class ArtifactQueueProcessor:
         if family == "values":
             flattened_lines = self._plist_text_lines(payload)
             if flattened_lines:
-                return [
-                    (source_file, f"{member_name}#plist-values", "\n".join(flattened_lines[:256]))
-                ]
+                return [(source_file, f"{member_name}#plist-values", "\n".join(flattened_lines[:256]))]
             return []
         return []
 
@@ -38423,11 +30256,7 @@ class ArtifactQueueProcessor:
         if not data:
             return None
         stripped = data.lstrip()
-        if (
-            stripped.startswith(_PLIST_MAGIC)
-            or stripped.startswith(b"<?xml")
-            or stripped.startswith(b"<plist")
-        ):
+        if stripped.startswith(_PLIST_MAGIC) or stripped.startswith(b"<?xml") or stripped.startswith(b"<plist"):
             return stripped
 
         xml_start = data.find(b"<?xml")
@@ -38463,7 +30292,11 @@ class ArtifactQueueProcessor:
             ),
             default_factory=lambda: None,
         )
-        entry_jobs = [entry_job for entry_job in entry_jobs if isinstance(entry_job, tuple)]
+        entry_jobs = [
+            entry_job
+            for entry_job in entry_jobs
+            if isinstance(entry_job, tuple)
+        ]
         entry_batches = self._run_ordered_local_batch(
             entry_jobs,
             self._plist_entry_lines,
@@ -38585,7 +30418,11 @@ class ArtifactQueueProcessor:
             ),
             default_factory=lambda: None,
         )
-        jobs = [job for job in job_batches if isinstance(job, SQLiteObjectExtractionJob)]
+        jobs = [
+            job
+            for job in job_batches
+            if isinstance(job, SQLiteObjectExtractionJob)
+        ]
         if not jobs:
             return payloads
 
@@ -38614,23 +30451,25 @@ class ArtifactQueueProcessor:
                 )
             return payloads
 
-        payload_families = self._run_ordered_local_batch(
-            ("summary", "objects"),
-            lambda family: self._extract_sqlite_connection_payload_family(
-                family,
-                jobs=jobs,
+        payloads.extend(
+            _orchestration_extract_sqlite_connection_payloads_from_jobs(
+                jobs,
                 source_file=source_file,
                 member_name=member_name,
-            ),
-            default_factory=list,
+                run_ordered_batch=self._run_ordered_local_batch,
+                extract_sqlite_connection_payload_family=(
+                    lambda family, jobs, source_file, member_name: (
+                        self._extract_sqlite_connection_payload_family(
+                            family,
+                            jobs=list(jobs),
+                            source_file=source_file,
+                            member_name=member_name,
+                        )
+                    )
+                ),
+                artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
+            )
         )
-        prepared_payload_families = self._run_ordered_local_batch(
-            list(enumerate(payload_families)),
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        for family_payloads in prepared_payload_families:
-            payloads.extend(family_payloads)
         return payloads
 
     @staticmethod
@@ -38660,15 +30499,24 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        if family == "summary":
-            return self._extract_sqlite_connection_summary_payloads(
-                jobs,
-                source_file=source_file,
-                member_name=member_name,
-            )
-        if family == "objects":
-            return self._extract_sqlite_connection_object_payloads(jobs)
-        return []
+        return _orchestration_extract_sqlite_connection_payload_family(
+            family,
+            jobs=jobs,
+            source_file=source_file,
+            member_name=member_name,
+            extract_sqlite_connection_summary_payloads=(
+                lambda jobs, source_file, member_name: (
+                    self._extract_sqlite_connection_summary_payloads(
+                        list(jobs),
+                        source_file=source_file,
+                        member_name=member_name,
+                    )
+                )
+            ),
+            extract_sqlite_connection_object_payloads=(
+                lambda jobs: self._extract_sqlite_connection_object_payloads(list(jobs))
+            ),
+        )
 
     def _extract_sqlite_connection_summary_payloads(
         self,
@@ -38692,25 +30540,12 @@ class ArtifactQueueProcessor:
         self,
         jobs: list[SQLiteObjectExtractionJob],
     ) -> list[tuple[str, str, str]]:
-        if not jobs:
-            return []
-        ordered_payloads = self._run_ordered_local_batch(
+        return _orchestration_extract_sqlite_connection_object_payloads_from_jobs(
             jobs,
-            self._extract_sqlite_object_payloads,
-            default_factory=list,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_sqlite_object_payloads=self._extract_sqlite_object_payloads,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        payloads: list[tuple[str, str, str]] = []
-        prepared_object_payloads = self._run_ordered_local_batch(
-            [
-                (object_index, object_payloads or [])
-                for object_index, object_payloads in enumerate(ordered_payloads)
-            ],
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        for object_payloads in prepared_object_payloads:
-            payloads.extend(object_payloads)
-        return payloads
 
     @staticmethod
     def _sqlite_connection_path(con: sqlite3.Connection) -> str:
@@ -38759,48 +30594,18 @@ class ArtifactQueueProcessor:
         object_name: str,
         object_sql: str,
     ) -> list[tuple[str, str, str]]:
-        name = str(object_name or "").strip()
-        if not name:
-            return []
-        sql_text = str(object_sql or "").strip()
-        try:
-            column_rows = con.execute(
-                f"PRAGMA table_info({self._sqlite_identifier(name)})"
-            ).fetchall()
-        except sqlite3.Error:
-            column_rows = []
-        column_names = [
-            str(row[1] or "").strip() for row in column_rows if str(row[1] or "").strip()
-        ]
-        try:
-            sample_rows = con.execute(
-                f"SELECT * FROM {self._sqlite_identifier(name)} LIMIT ?",
-                (_MAX_SQLITE_ROWS_PER_TABLE,),
-            ).fetchall()
-        except sqlite3.Error:
-            sample_rows = []
-        payload_families = self._run_ordered_local_batch(
-            ("schema", "columns", "rows"),
-            lambda family: self._extract_sqlite_object_payload_family(
-                family,
-                source_file=source_file,
-                member_name=member_name,
-                object_name=name,
-                sql_text=sql_text,
-                column_names=column_names,
-                sample_rows=sample_rows,
-            ),
-            default_factory=list,
+        return _orchestration_extract_sqlite_object_payloads_from_connection(
+            con,
+            source_file=source_file,
+            member_name=member_name,
+            object_name=object_name,
+            object_sql=object_sql,
+            max_sqlite_rows_per_table=_MAX_SQLITE_ROWS_PER_TABLE,
+            sqlite_identifier=self._sqlite_identifier,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_sqlite_object_payload_family=self._extract_sqlite_object_payload_family,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        prepared_payload_families = self._run_ordered_local_batch(
-            list(enumerate(payload_families)),
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for family_payloads in prepared_payload_families:
-            payloads.extend(family_payloads)
-        return payloads
 
     @staticmethod
     def _artifact_payload_tuple_batch_entries(
@@ -38830,29 +30635,18 @@ class ArtifactQueueProcessor:
         column_names: Sequence[str],
         sample_rows: Sequence[Sequence[Any]],
     ) -> list[tuple[str, str, str]]:
-        if family == "schema":
-            return self._extract_sqlite_object_schema_payloads(
-                source_file=source_file,
-                member_name=member_name,
-                object_name=object_name,
-                sql_text=sql_text,
-            )
-        if family == "columns":
-            return self._extract_sqlite_object_column_payloads(
-                source_file=source_file,
-                member_name=member_name,
-                object_name=object_name,
-                column_names=column_names,
-            )
-        if family == "rows":
-            return self._extract_sqlite_object_row_payloads(
-                source_file=source_file,
-                member_name=member_name,
-                object_name=object_name,
-                column_names=column_names,
-                sample_rows=sample_rows,
-            )
-        return []
+        return _orchestration_extract_sqlite_object_payload_family(
+            family,
+            source_file=source_file,
+            member_name=member_name,
+            object_name=object_name,
+            sql_text=sql_text,
+            column_names=column_names,
+            sample_rows=sample_rows,
+            extract_sqlite_object_schema_payloads=self._extract_sqlite_object_schema_payloads,
+            extract_sqlite_object_column_payloads=self._extract_sqlite_object_column_payloads,
+            extract_sqlite_object_row_payloads=self._extract_sqlite_object_row_payloads,
+        )
 
     def _extract_sqlite_object_schema_payloads(
         self,
@@ -38874,11 +30668,7 @@ class ArtifactQueueProcessor:
         object_name: str,
         column_names: Sequence[str],
     ) -> list[tuple[str, str, str]]:
-        names = [
-            str(column_name or "").strip()
-            for column_name in column_names
-            if str(column_name or "").strip()
-        ]
+        names = [str(column_name or "").strip() for column_name in column_names if str(column_name or "").strip()]
         if not names:
             return []
         return [
@@ -38898,18 +30688,15 @@ class ArtifactQueueProcessor:
         column_names: Sequence[str],
         sample_rows: Sequence[Sequence[Any]],
     ) -> list[tuple[str, str, str]]:
-        row_payloads = self._run_ordered_local_batch(
-            list(enumerate(sample_rows, start=1)),
-            lambda row_job: self._extract_sqlite_row_payload(
-                row_job,
-                source_file=source_file,
-                member_name=member_name,
-                object_name=object_name,
-                column_names=column_names,
-            ),
-            default_factory=lambda: None,
+        return _orchestration_extract_sqlite_object_row_payloads(
+            source_file=source_file,
+            member_name=member_name,
+            object_name=object_name,
+            column_names=column_names,
+            sample_rows=sample_rows,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_sqlite_row_payload=self._extract_sqlite_row_payload,
         )
-        return [payload for payload in row_payloads if payload is not None]
 
     def _extract_sqlite_row_payload(
         self,
@@ -38920,22 +30707,16 @@ class ArtifactQueueProcessor:
         object_name: str,
         column_names: Sequence[str],
     ) -> tuple[str, str, str] | None:
-        index, row = row_job
-        cell_candidates = self._run_ordered_local_batch(
-            list(enumerate(row)),
-            lambda cell_job: self._extract_sqlite_row_cell_line(
+        return _orchestration_extract_sqlite_row_payload(
+            row_job,
+            source_file=source_file,
+            member_name=member_name,
+            object_name=object_name,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_sqlite_row_cell_line=lambda cell_job: self._extract_sqlite_row_cell_line(
                 cell_job,
                 column_names=column_names,
             ),
-            default_factory=str,
-        )
-        cells = [cell for cell in cell_candidates if cell]
-        if not cells:
-            return None
-        return (
-            source_file,
-            f"{member_name}#sqlite-row-{object_name}-{index}",
-            "\n".join(cells),
         )
 
     def _extract_sqlite_row_cell_line(
@@ -38944,16 +30725,11 @@ class ArtifactQueueProcessor:
         *,
         column_names: Sequence[str],
     ) -> str:
-        cell_index, value = cell_job
-        rendered = self._sqlite_cell_text(value)
-        if not rendered:
-            return ""
-        column_name = (
-            column_names[cell_index]
-            if cell_index < len(column_names) and column_names[cell_index]
-            else f"col_{cell_index + 1}"
+        return _orchestration_extract_sqlite_row_cell_line(
+            cell_job,
+            column_names=column_names,
+            sqlite_cell_text=self._sqlite_cell_text,
         )
-        return f"{column_name}={rendered}"
 
     def _extract_email_message_payloads(
         self,
@@ -38963,42 +30739,20 @@ class ArtifactQueueProcessor:
         *,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if depth > 2 or not data:
-            return []
-        try:
-            message = BytesParser(policy=email_policy.default).parsebytes(data)
-        except Exception:  # noqa: BLE001
-            return [
-                (
-                    source_file,
-                    member_name,
-                    data[:_MAX_ARTIFACT_MEMBER_BYTES].decode("utf-8", errors="ignore"),
-                )
-            ]
-
-        metadata_lines = self._email_message_metadata_lines(message)
-        leaf_parts = [part for part in message.walk() if not part.is_multipart()]
-        payload_families = self._run_ordered_local_batch(
-            ("summary", "parts"),
-            lambda family: self._extract_email_message_payload_family(
-                family,
-                metadata_lines=metadata_lines,
-                leaf_parts=leaf_parts,
-                source_file=source_file,
-                member_name=member_name,
-                depth=depth,
-            ),
-            default_factory=list,
+        return _orchestration_extract_email_message_payloads(
+            data,
+            source_file=source_file,
+            member_name=member_name,
+            depth=depth,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            parse_email_message=lambda payload: BytesParser(
+                policy=email_policy.default
+            ).parsebytes(payload),
+            email_message_metadata_lines=self._email_message_metadata_lines,
+            extract_email_message_payload_family=self._extract_email_message_payload_family,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
+            run_ordered_batch=self._run_ordered_local_batch,
         )
-        prepared_payload_families = self._run_ordered_local_batch(
-            list(enumerate(payload_families)),
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for family_payloads in prepared_payload_families:
-            payloads.extend(family_payloads)
-        return payloads
 
     def _extract_email_message_payload_family(
         self,
@@ -39010,20 +30764,29 @@ class ArtifactQueueProcessor:
         member_name: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if family == "summary":
-            return self._extract_email_message_summary_payloads(
-                metadata_lines,
-                source_file=source_file,
-                member_name=member_name,
-            )
-        if family == "parts":
-            return self._extract_email_message_part_payloads(
-                leaf_parts,
-                source_file=source_file,
-                member_name=member_name,
-                depth=depth,
-            )
-        return []
+        return _orchestration_extract_email_message_payload_family(
+            family,
+            metadata_lines=metadata_lines,
+            leaf_parts=leaf_parts,
+            source_file=source_file,
+            member_name=member_name,
+            depth=depth,
+            extract_email_message_summary_payloads=(
+                lambda lines, file_name, message_name: self._extract_email_message_summary_payloads(
+                    lines,
+                    source_file=file_name,
+                    member_name=message_name,
+                )
+            ),
+            extract_email_message_part_payloads=(
+                lambda parts, file_name, message_name, message_depth: self._extract_email_message_part_payloads(
+                    parts,
+                    source_file=file_name,
+                    member_name=message_name,
+                    depth=message_depth,
+                )
+            ),
+        )
 
     def _extract_email_message_summary_payloads(
         self,
@@ -39032,9 +30795,11 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        if not metadata_lines:
-            return []
-        return [(source_file, f"{member_name}#message-meta", "\n".join(metadata_lines))]
+        return _orchestration_extract_email_message_summary_payloads(
+            metadata_lines,
+            source_file=source_file,
+            member_name=member_name,
+        )
 
     def _extract_email_message_part_payloads(
         self,
@@ -39044,59 +30809,22 @@ class ArtifactQueueProcessor:
         member_name: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        ordered_part_payloads: list[list[tuple[str, str, str]] | None] = []
-        part_jobs: list[tuple[int, EmailPartExtractionJob]] = []
-        part_entries = self._run_ordered_local_batch(
-            list(enumerate(leaf_parts, start=1)),
-            lambda part_job: self._email_message_part_entry(
-                part_job,
-                source_file=source_file,
-                member_name=member_name,
-                depth=depth,
+        return _orchestration_extract_email_message_part_payloads(
+            leaf_parts,
+            source_file=source_file,
+            member_name=member_name,
+            depth=depth,
+            run_ordered_batch=self._run_ordered_local_batch,
+            email_message_part_entry=self._email_message_part_entry,
+            is_email_part_planning_entry=lambda entry: isinstance(
+                entry,
+                EmailPartPlanningEntry,
             ),
-            default_factory=lambda: None,
+            email_part_entry_payloads=lambda entry: list(entry.payloads or []),
+            email_part_entry_extraction_job=lambda entry: entry.extraction_job,
+            extract_email_part_job_payload_entry=self._extract_email_part_job_payload_entry,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        for part_entry in part_entries:
-            if not isinstance(part_entry, EmailPartPlanningEntry):
-                continue
-            if part_entry.payloads:
-                ordered_part_payloads.append(part_entry.payloads)
-                continue
-            if part_entry.extraction_job is None:
-                continue
-            result_index = len(ordered_part_payloads)
-            ordered_part_payloads.append(None)
-            part_jobs.append((result_index, part_entry.extraction_job))
-        if part_jobs:
-            extracted_part_payloads = self._run_ordered_local_batch(
-                part_jobs,
-                self._extract_email_part_job_payload_entry,
-                default_factory=lambda: None,
-            )
-            for extracted_part_payload in extracted_part_payloads:
-                if (
-                    not isinstance(extracted_part_payload, tuple)
-                    or len(extracted_part_payload) != 2
-                ):
-                    continue
-                result_index, part_payloads = extracted_part_payload
-                if not isinstance(result_index, int) or result_index < 0:
-                    continue
-                if result_index >= len(ordered_part_payloads):
-                    continue
-                ordered_part_payloads[result_index] = list(part_payloads or [])
-        prepared_part_payloads = self._run_ordered_local_batch(
-            [
-                (part_index, part_payloads or [])
-                for part_index, part_payloads in enumerate(ordered_part_payloads)
-            ],
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        flattened_payloads: list[tuple[str, str, str]] = []
-        for part_payloads in prepared_part_payloads:
-            flattened_payloads.extend(part_payloads)
-        return flattened_payloads
 
     def _email_message_part_entry(
         self,
@@ -39127,7 +30855,9 @@ class ArtifactQueueProcessor:
                 default_factory=lambda: None,
             )
             nested_jobs = [
-                nested_job for nested_job in nested_jobs if isinstance(nested_job, tuple)
+                nested_job
+                for nested_job in nested_jobs
+                if isinstance(nested_job, tuple)
             ]
             if not nested_jobs:
                 return None
@@ -39162,9 +30892,7 @@ class ArtifactQueueProcessor:
 
         attachment_name = filename or f"{member_name}.attachment-{part_index}"
         suffix = Path(attachment_name.lower()).suffix
-        size_limit = (
-            _MAX_OCR_IMAGE_BYTES if suffix in _OCR_IMAGE_SUFFIXES else _MAX_ARTIFACT_MEMBER_BYTES
-        )
+        size_limit = _MAX_OCR_IMAGE_BYTES if suffix in _OCR_IMAGE_SUFFIXES else _MAX_ARTIFACT_MEMBER_BYTES
         if len(payload_bytes) > size_limit:
             return None
         return EmailPartPlanningEntry(
@@ -39180,55 +30908,30 @@ class ArtifactQueueProcessor:
     def _nested_email_message_job(
         nested_job: tuple[str, bytes],
     ) -> tuple[str, bytes] | None:
-        nested_name, nested_bytes = nested_job
-        normalized_name = str(nested_name or "").strip()
-        if not normalized_name or not nested_bytes:
-            return None
-        return normalized_name, bytes(nested_bytes)[:_MAX_ARTIFACT_MEMBER_BYTES]
+        return _orchestration_nested_email_message_job(
+            nested_job,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+        )
 
     def _extract_email_part_job_payload_entry(
         self,
         part_job: tuple[int, EmailPartExtractionJob],
     ) -> tuple[int, list[tuple[str, str, str]]] | None:
-        result_index, job = part_job
-        if result_index < 0:
-            return None
-        return result_index, self._extract_email_part_job(job)
+        return _orchestration_extract_email_part_job_payload_entry(
+            part_job,
+            extract_email_part_job=self._extract_email_part_job,
+        )
 
     def _extract_email_part_job(
         self,
         job: EmailPartExtractionJob,
     ) -> list[tuple[str, str, str]]:
-        if job.nested_messages:
-            nested_payloads = self._run_ordered_local_batch(
-                job.nested_messages,
-                lambda nested_job: self._extract_email_message_payloads(
-                    nested_job[1],
-                    job.source_file,
-                    nested_job[0],
-                    depth=job.depth + 1,
-                ),
-                default_factory=list,
-            )
-            prepared_nested_payloads = self._run_ordered_local_batch(
-                [
-                    (nested_index, nested_message_payloads or [])
-                    for nested_index, nested_message_payloads in enumerate(nested_payloads)
-                ],
-                self._artifact_payload_tuple_batch_entries,
-                default_factory=list,
-            )
-            payloads: list[tuple[str, str, str]] = []
-            for nested_message_payloads in prepared_nested_payloads:
-                payloads.extend(nested_message_payloads)
-            return payloads
-        if not job.payload_bytes:
-            return []
-        return self._extract_member_data_payloads(
-            job.payload_bytes,
-            job.source_file,
-            job.member_name,
-            depth=job.depth,
+        return _orchestration_extract_email_part_job(
+            job,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_email_message_payloads=self._extract_email_message_payloads,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
+            extract_member_data_payloads=self._extract_member_data_payloads,
         )
 
     def _extract_mbox_bytes_payloads(
@@ -39239,82 +30942,19 @@ class ArtifactQueueProcessor:
         *,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if depth > 2 or not data:
-            return []
-        bounded = data[:_MAX_ARTIFACT_MEMBER_BYTES]
-        raw_message_jobs: list[tuple[int, bytes]] = []
-        payloads: list[tuple[str, str, str]] = []
-        message_count = 0
-        try:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir) / "mailbox.mbox"
-                temp_path.write_bytes(bounded)
-                box = mailbox.mbox(str(temp_path), create=False)
-                try:
-                    for index, message in enumerate(box, start=1):
-                        message_count += 1
-                        try:
-                            message_bytes = message.as_bytes(policy=email_policy.default)
-                        except TypeError:
-                            message_bytes = message.as_bytes()
-                        except Exception:  # noqa: BLE001
-                            continue
-                        raw_message_jobs.append((index, message_bytes))
-                finally:
-                    try:
-                        box.close()
-                    except Exception:  # noqa: BLE001
-                        pass
-        except Exception:  # noqa: BLE001
-            return [
-                (
-                    source_file,
-                    member_name,
-                    bounded.decode("utf-8", errors="ignore"),
-                )
-            ]
-
-        job_batches = self._run_ordered_local_batch(
-            raw_message_jobs,
-            self._mbox_message_job,
-            default_factory=lambda: None,
+        return _orchestration_extract_mbox_bytes_payloads(
+            data,
+            source_file=source_file,
+            member_name=member_name,
+            depth=depth,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            run_ordered_batch=self._run_ordered_local_batch,
+            mbox_raw_message_jobs=_orchestration_mbox_raw_message_jobs,
+            mbox_message_job=self._mbox_message_job,
+            extract_mbox_payload_family=self._extract_mbox_payload_family,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
+            extract_mbox_summary_payloads=self._extract_mbox_summary_payloads,
         )
-        message_jobs = [job for job in job_batches if isinstance(job, tuple)]
-        if message_jobs:
-            payload_families = self._run_ordered_local_batch(
-                ("summary", "messages"),
-                lambda family: self._extract_mbox_payload_family(
-                    family,
-                    message_jobs=message_jobs,
-                    message_count=message_count,
-                    source_file=source_file,
-                    member_name=member_name,
-                    depth=depth,
-                ),
-                default_factory=list,
-            )
-            prepared_payload_families = self._run_ordered_local_batch(
-                list(enumerate(payload_families)),
-                self._artifact_payload_tuple_batch_entries,
-                default_factory=list,
-            )
-            payloads: list[tuple[str, str, str]] = []
-            for family_payloads in prepared_payload_families:
-                payloads.extend(family_payloads)
-            return payloads
-        if message_count:
-            return self._extract_mbox_summary_payloads(
-                message_count,
-                source_file=source_file,
-                member_name=member_name,
-            )
-        return [
-            (
-                source_file,
-                member_name,
-                bounded.decode("utf-8", errors="ignore"),
-            )
-        ]
 
     def _extract_mbox_payload_family(
         self,
@@ -39326,30 +30966,25 @@ class ArtifactQueueProcessor:
         member_name: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if family == "summary":
-            return self._extract_mbox_summary_payloads(
-                message_count,
-                source_file=source_file,
-                member_name=member_name,
-            )
-        if family == "messages":
-            return self._extract_mbox_message_payloads(
-                message_jobs,
-                source_file=source_file,
-                member_name=member_name,
-                depth=depth,
-            )
-        return []
+        return _orchestration_extract_mbox_payload_family(
+            family,
+            message_jobs=message_jobs,
+            message_count=message_count,
+            source_file=source_file,
+            member_name=member_name,
+            depth=depth,
+            extract_mbox_summary_payloads=self._extract_mbox_summary_payloads,
+            extract_mbox_message_payloads=self._extract_mbox_message_payloads,
+        )
 
     @staticmethod
     def _mbox_message_job(
         message_job: tuple[int, bytes],
     ) -> tuple[int, bytes] | None:
-        index, message_bytes = message_job
-        bounded_bytes = bytes(message_bytes[:_MAX_ARTIFACT_MEMBER_BYTES])
-        if index <= 0 or not bounded_bytes:
-            return None
-        return index, bounded_bytes
+        return _orchestration_mbox_message_job(
+            message_job,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+        )
 
     def _extract_mbox_summary_payloads(
         self,
@@ -39358,9 +30993,11 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        if message_count <= 0:
-            return []
-        return [(source_file, f"{member_name}#mbox-meta", f"message_count={message_count}")]
+        return _orchestration_extract_mbox_summary_payloads(
+            message_count,
+            source_file=source_file,
+            member_name=member_name,
+        )
 
     def _extract_mbox_message_payloads(
         self,
@@ -39370,54 +31007,29 @@ class ArtifactQueueProcessor:
         member_name: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        ordered_payloads = self._run_ordered_local_batch(
+        return _orchestration_extract_mbox_message_payloads(
             message_jobs,
-            lambda message_job: self._extract_email_message_payloads(
-                message_job[1],
-                source_file,
-                f"{member_name}.message-{message_job[0]}.eml",
-                depth=depth,
-            ),
-            default_factory=list,
+            source_file=source_file,
+            member_name=member_name,
+            depth=depth,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_email_message_payloads=self._extract_email_message_payloads,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        prepared_payloads = self._run_ordered_local_batch(
-            [
-                (message_index, message_payloads or [])
-                for message_index, message_payloads in enumerate(ordered_payloads)
-            ],
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for message_payloads in prepared_payloads:
-            payloads.extend(message_payloads)
-        return payloads
 
     @classmethod
     def _decode_email_part_text(cls, part: Any, data: bytes) -> str:
-        charset = str(part.get_content_charset() or "").strip().lower()
-        bounded = data[:_MAX_ARTIFACT_MEMBER_BYTES]
-        decode_entries = [
-            (encoding, bounded) for encoding in (charset, "utf-8", "latin-1") if encoding
-        ]
-        decoded_candidates = cls._run_ordered_static_batch(
-            decode_entries,
-            cls._decode_email_part_entry,
-            default_factory=lambda: None,
-            max_workers=len(decode_entries),
+        return _orchestration_decode_email_part_text(
+            part,
+            data,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            run_ordered_static_batch=cls._run_ordered_static_batch,
+            decode_email_part_entry=cls._decode_email_part_entry,
         )
-        for decoded_candidate in decoded_candidates:
-            if decoded_candidate is not None:
-                return str(decoded_candidate)
-        return data[:_MAX_ARTIFACT_MEMBER_BYTES].decode("utf-8", errors="ignore")
 
     @staticmethod
     def _decode_email_part_entry(entry: tuple[str, bytes]) -> str | None:
-        encoding, bounded = entry
-        try:
-            return bounded.decode(encoding, errors="ignore")
-        except Exception:  # noqa: BLE001
-            return None
+        return _orchestration_decode_email_part_entry(entry)
 
     def _extract_legacy_document_payloads(
         self,
@@ -39448,34 +31060,16 @@ class ArtifactQueueProcessor:
         *,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        text_payload = self._rtf_to_text(data)
-        if text_payload.strip():
-            payload_families = self._run_ordered_local_batch(
-                ("text", "embedded_archive"),
-                lambda family: self._extract_rtf_payload_family(
-                    family,
-                    data=data,
-                    source_file=source_file,
-                    member_name=member_name,
-                    text_payload=text_payload,
-                    depth=depth,
-                ),
-                default_factory=list,
-            )
-            prepared_payload_families = self._run_ordered_local_batch(
-                list(enumerate(payload_families)),
-                self._artifact_payload_tuple_batch_entries,
-                default_factory=list,
-            )
-            payloads: list[tuple[str, str, str]] = []
-            for family_payloads in prepared_payload_families:
-                payloads.extend(family_payloads)
-            return payloads
-        return self._extract_legacy_binary_payloads(
+        return _orchestration_extract_rtf_bytes_payloads(
             data,
-            source_file,
-            member_name,
+            source_file=source_file,
+            member_name=member_name,
             depth=depth,
+            rtf_to_text=self._rtf_to_text,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_rtf_payload_family=self._extract_rtf_payload_family,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
+            extract_legacy_binary_payloads=self._extract_legacy_binary_payloads,
         )
 
     def _extract_rtf_payload_family(
@@ -39488,20 +31082,16 @@ class ArtifactQueueProcessor:
         text_payload: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if family == "text":
-            return self._extract_rtf_text_payloads(
-                text_payload,
-                source_file=source_file,
-                member_name=member_name,
-            )
-        if family == "embedded_archive":
-            return self._extract_rtf_embedded_archive_payloads(
-                data,
-                source_file=source_file,
-                member_name=member_name,
-                depth=depth,
-            )
-        return []
+        return _orchestration_extract_rtf_payload_family(
+            family,
+            data=data,
+            source_file=source_file,
+            member_name=member_name,
+            text_payload=text_payload,
+            depth=depth,
+            extract_rtf_text_payloads=self._extract_rtf_text_payloads,
+            extract_rtf_embedded_archive_payloads=self._extract_rtf_embedded_archive_payloads,
+        )
 
     def _extract_rtf_text_payloads(
         self,
@@ -39510,9 +31100,11 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        if not text_payload.strip():
-            return []
-        return [(source_file, f"{member_name}#rtf-text", text_payload)]
+        return _orchestration_extract_rtf_text_payloads(
+            text_payload,
+            source_file=source_file,
+            member_name=member_name,
+        )
 
     def _extract_rtf_embedded_archive_payloads(
         self,
@@ -39522,13 +31114,12 @@ class ArtifactQueueProcessor:
         member_name: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if depth >= 2:
-            return []
-        return self._extract_embedded_archive_payloads(
+        return _orchestration_extract_rtf_embedded_archive_payloads(
             data,
-            source_file,
-            member_name,
+            source_file=source_file,
+            member_name=member_name,
             depth=depth,
+            extract_embedded_archive_payloads=self._extract_embedded_archive_payloads,
         )
 
     def _extract_legacy_binary_payloads(
@@ -39539,26 +31130,15 @@ class ArtifactQueueProcessor:
         *,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        payload_families = self._run_ordered_local_batch(
-            ("strings", "embedded_archive", "ole"),
-            lambda family: self._extract_legacy_binary_payload_family(
-                family,
-                data=data,
-                source_file=source_file,
-                member_name=member_name,
-                depth=depth,
-            ),
-            default_factory=list,
+        return _orchestration_extract_legacy_binary_payloads(
+            data,
+            source_file=source_file,
+            member_name=member_name,
+            depth=depth,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_legacy_binary_payload_family=self._extract_legacy_binary_payload_family,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        prepared_payload_families = self._run_ordered_local_batch(
-            list(enumerate(payload_families)),
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for family_payloads in prepared_payload_families:
-            payloads.extend(family_payloads)
-        return payloads
 
     def _extract_parquet_payloads(
         self,
@@ -39566,23 +31146,12 @@ class ArtifactQueueProcessor:
         *,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        try:
-            if path.stat().st_size > _MAX_ARTIFACT_MEMBER_BYTES:
-                raise ValueError("parquet artifact exceeds bounded parse size")
-            data = path.read_bytes()
-        except Exception:  # noqa: BLE001
-            data = path.read_bytes()[:_MAX_ARTIFACT_MEMBER_BYTES] if path.exists() else b""
-            return self._extract_legacy_binary_payloads(
-                data,
-                str(path),
-                path.name,
-                depth=depth,
-            )
-        return self._extract_parquet_bytes_payloads(
-            data,
-            str(path),
-            path.name,
+        return _orchestration_extract_parquet_path_payloads(
+            path,
             depth=depth,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            extract_parquet_bytes_payloads=self._extract_parquet_bytes_payloads,
+            extract_legacy_binary_payloads=self._extract_legacy_binary_payloads,
         )
 
     def _extract_parquet_bytes_payloads(
@@ -39595,9 +31164,6 @@ class ArtifactQueueProcessor:
     ) -> list[tuple[str, str, str]]:
         try:
             import pyarrow.parquet as pq
-
-            parquet_file = pq.ParquetFile(BytesIO(data))
-            lines = self._parquet_summary_lines(parquet_file)
         except Exception:  # noqa: BLE001
             return self._extract_legacy_binary_payloads(
                 data[:_MAX_ARTIFACT_MEMBER_BYTES],
@@ -39605,76 +31171,42 @@ class ArtifactQueueProcessor:
                 member_name,
                 depth=depth,
             )
-        payloads = [(source_file, f"{member_name}#parquet-table", "\n".join(lines))]
-        payloads.extend(
-            self._extract_legacy_binary_payloads(
-                data[:_MAX_ARTIFACT_MEMBER_BYTES],
-                source_file,
-                member_name,
-                depth=depth,
-            )
+        return _orchestration_extract_parquet_bytes_payloads(
+            data,
+            source_file,
+            member_name,
+            depth=depth,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            parquet_file_factory=lambda parquet_data: pq.ParquetFile(BytesIO(parquet_data)),
+            parquet_summary_lines=self._parquet_summary_lines,
+            extract_legacy_binary_payloads=self._extract_legacy_binary_payloads,
         )
-        return payloads
 
     def _parquet_summary_lines(self, parquet_file: Any) -> list[str]:
-        columns = list(parquet_file.schema_arrow.names)[:64]
-        lines = ["format=parquet", f"columns={','.join(columns)}"]
-        metadata = parquet_file.metadata
-        if metadata is not None and getattr(metadata, "metadata", None):
-            for key, value in list(metadata.metadata.items())[:64]:
-                key_text = self._parquet_cell_text(key)
-                value_text = self._parquet_cell_text(value)
-                if key_text and value_text:
-                    lines.append(f"metadata.{key_text}={value_text}")
-        for row_group_index in range(min(int(parquet_file.num_row_groups or 0), 4)):
-            table = parquet_file.read_row_group(row_group_index, columns=columns)
-            lines.extend(self._parquet_table_lines(table, row_group_index))
-            if len(lines) >= 256:
-                break
-        return lines[:256]
+        return _orchestration_parquet_summary_lines(
+            parquet_file,
+            parquet_cell_text=self._parquet_cell_text,
+            parquet_table_lines=self._parquet_table_lines,
+        )
 
     def _parquet_table_lines(self, table: Any, row_group_index: int) -> list[str]:
-        lines: list[str] = []
-        row_count = min(int(getattr(table, "num_rows", 0) or 0), 64)
-        for column_name in list(table.column_names)[:64]:
-            values = table[column_name].slice(0, row_count).to_pylist()
-            for row_index, raw_value in enumerate(values):
-                value = self._parquet_cell_text(raw_value)
-                if not self._parquet_interesting_value(value):
-                    continue
-                lines.append(f"row_group[{row_group_index}].row[{row_index}].{column_name}={value}")
-                if len(lines) >= 192:
-                    return lines
-        return lines
+        return _orchestration_parquet_table_lines(
+            table,
+            row_group_index,
+            parquet_cell_text=self._parquet_cell_text,
+            parquet_interesting_value=self._parquet_interesting_value,
+        )
 
     @staticmethod
     def _parquet_cell_text(value: Any) -> str:
-        if value is None:
-            return ""
-        if isinstance(value, bytes | bytearray):
-            return ArtifactQueueProcessor._decode_text_artifact_bytes(bytes(value), limit=512)
-        if isinstance(value, (dict, list, tuple)):
-            try:
-                return json.dumps(value, default=str, sort_keys=True)[:512]
-            except Exception:  # noqa: BLE001
-                return str(value)[:512]
-        return str(value).strip()[:512]
+        return _orchestration_parquet_cell_text(
+            value,
+            decode_text_artifact_bytes=ArtifactQueueProcessor._decode_text_artifact_bytes,
+        )
 
     @staticmethod
     def _parquet_interesting_value(value: str) -> bool:
-        lowered = str(value or "").lower()
-        return any(
-            marker in lowered
-            for marker in (
-                "@",
-                "://",
-                "firebaseio.com",
-                "supabase.co",
-                ".s3.",
-                "s3://",
-                "gs://",
-            )
-        )
+        return _orchestration_parquet_interesting_value(value)
 
     def _extract_legacy_binary_payload_family(
         self,
@@ -39685,27 +31217,16 @@ class ArtifactQueueProcessor:
         member_name: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if family == "strings":
-            return self._extract_legacy_binary_string_payloads(
-                data,
-                source_file=source_file,
-                member_name=member_name,
-            )
-        if family == "embedded_archive":
-            return self._extract_legacy_binary_embedded_archive_payloads(
-                data,
-                source_file=source_file,
-                member_name=member_name,
-                depth=depth,
-            )
-        if family == "ole":
-            return self._extract_legacy_binary_ole_payloads(
-                data,
-                source_file=source_file,
-                member_name=member_name,
-                depth=depth,
-            )
-        return []
+        return _orchestration_extract_legacy_binary_payload_family(
+            family,
+            data=data,
+            source_file=source_file,
+            member_name=member_name,
+            depth=depth,
+            extract_legacy_binary_string_payloads=self._extract_legacy_binary_string_payloads,
+            extract_legacy_binary_embedded_archive_payloads=self._extract_legacy_binary_embedded_archive_payloads,
+            extract_legacy_binary_ole_payloads=self._extract_legacy_binary_ole_payloads,
+        )
 
     def _extract_legacy_binary_string_payloads(
         self,
@@ -39714,10 +31235,12 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        binary_payload = self._binary_string_payload(data)
-        if not binary_payload:
-            return []
-        return [(source_file, f"{member_name}#binary-strings", binary_payload)]
+        return _orchestration_extract_legacy_binary_string_payloads(
+            data,
+            source_file=source_file,
+            member_name=member_name,
+            binary_string_payload=self._binary_string_payload,
+        )
 
     def _extract_legacy_binary_embedded_archive_payloads(
         self,
@@ -39727,16 +31250,14 @@ class ArtifactQueueProcessor:
         member_name: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if depth >= 2:
-            return []
-        payloads = self._extract_embedded_archive_payloads(
+        return _orchestration_extract_legacy_binary_embedded_archive_payloads(
             data,
-            source_file,
-            member_name,
+            source_file=source_file,
+            member_name=member_name,
             depth=depth,
+            extract_embedded_archive_payloads=self._extract_embedded_archive_payloads,
+            extract_embedded_image_payloads=self._extract_embedded_image_payloads,
         )
-        payloads.extend(self._extract_embedded_image_payloads(data, source_file, member_name))
-        return payloads
 
     def _extract_legacy_binary_ole_payloads(
         self,
@@ -39746,9 +31267,14 @@ class ArtifactQueueProcessor:
         member_name: str,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if not data.startswith(_OLE_MAGIC):
-            return []
-        return self._extract_ole_payloads(data, source_file, member_name, depth=depth)
+        return _orchestration_extract_legacy_binary_ole_payloads(
+            data,
+            source_file=source_file,
+            member_name=member_name,
+            depth=depth,
+            ole_magic=_OLE_MAGIC,
+            extract_ole_payloads=self._extract_ole_payloads,
+        )
 
     def _extract_ole_payloads(
         self,
@@ -39765,69 +31291,31 @@ class ArtifactQueueProcessor:
         try:
             with olefile.OleFileIO(BytesIO(data)) as ole:
                 metadata_lines = self._ole_metadata_lines(ole)
-                raw_stream_entries: list[tuple[tuple[Any, ...], bytes]] = []
-                for stream_parts in ole.listdir(streams=True, storages=False):
-                    try:
-                        stream_data = ole.openstream(stream_parts).read(_MAX_ARTIFACT_MEMBER_BYTES)
-                    except Exception:  # noqa: BLE001
-                        continue
-                    raw_stream_entries.append((tuple(stream_parts), stream_data))
-                stream_entries = self._run_ordered_local_batch(
-                    raw_stream_entries,
-                    self._ole_stream_entry,
-                    default_factory=lambda: None,
+                raw_stream_entries = _orchestration_ole_raw_stream_entries(
+                    ole,
+                    max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
                 )
-                stream_entries = [
-                    stream_entry
-                    for stream_entry in stream_entries
-                    if isinstance(stream_entry, tuple)
-                ]
-                job_batches = self._run_ordered_local_batch(
-                    stream_entries,
-                    lambda stream_entry: self._ole_stream_job(
-                        stream_entry,
-                        source_file=source_file,
-                        member_name=member_name,
-                        depth=depth,
-                    ),
-                    default_factory=lambda: None,
-                )
-                stream_jobs = [
-                    job for job in job_batches if isinstance(job, OLEStreamExtractionJob)
-                ]
         except Exception:  # noqa: BLE001
             return []
-        payload_families = self._run_ordered_local_batch(
-            ("summary", "streams"),
-            lambda family: self._extract_ole_payload_family(
-                family,
-                metadata_lines=metadata_lines,
-                stream_jobs=stream_jobs,
-                source_file=source_file,
-                member_name=member_name,
-            ),
-            default_factory=list,
+        return _orchestration_extract_ole_payloads_from_stream_entries(
+            raw_stream_entries,
+            metadata_lines=metadata_lines,
+            source_file=source_file,
+            member_name=member_name,
+            depth=depth,
+            ole_stream_extraction_job=OLEStreamExtractionJob,
+            run_ordered_batch=self._run_ordered_local_batch,
+            ole_stream_entry=self._ole_stream_entry,
+            ole_stream_job=self._ole_stream_job,
+            extract_ole_payload_family=self._extract_ole_payload_family,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        prepared_payload_families = self._run_ordered_local_batch(
-            list(enumerate(payload_families)),
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for family_payloads in prepared_payload_families:
-            payloads.extend(family_payloads)
-        return payloads
 
     @staticmethod
     def _ole_stream_entry(
         stream_entry: tuple[Sequence[Any], bytes],
     ) -> tuple[tuple[Any, ...], bytes] | None:
-        stream_parts, stream_data = stream_entry
-        normalized_parts = tuple(stream_parts)
-        stream_name = "/".join(str(part) for part in normalized_parts if str(part).strip())
-        if not stream_name:
-            return None
-        return normalized_parts, bytes(stream_data)
+        return _orchestration_ole_stream_entry(stream_entry)
 
     def _ole_stream_job(
         self,
@@ -39837,16 +31325,12 @@ class ArtifactQueueProcessor:
         member_name: str,
         depth: int,
     ) -> OLEStreamExtractionJob | None:
-        stream_parts, stream_data = stream_entry
-        stream_name = "/".join(str(part) for part in stream_parts if str(part).strip())
-        if not stream_name:
-            return None
-        return OLEStreamExtractionJob(
+        return _orchestration_ole_stream_job(
+            stream_entry,
             source_file=source_file,
             member_name=member_name,
-            stream_name=stream_name,
-            stream_data=stream_data,
             depth=depth,
+            ole_stream_extraction_job=OLEStreamExtractionJob,
         )
 
     def _extract_ole_payload_family(
@@ -39858,15 +31342,15 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        if family == "summary":
-            return self._extract_ole_metadata_payloads(
-                metadata_lines,
-                source_file=source_file,
-                member_name=member_name,
-            )
-        if family == "streams":
-            return self._extract_ole_stream_job_payloads(stream_jobs)
-        return []
+        return _orchestration_extract_ole_payload_family(
+            family,
+            metadata_lines=metadata_lines,
+            stream_jobs=stream_jobs,
+            source_file=source_file,
+            member_name=member_name,
+            extract_ole_metadata_payloads=self._extract_ole_metadata_payloads,
+            extract_ole_stream_job_payloads=self._extract_ole_stream_job_payloads,
+        )
 
     def _extract_ole_metadata_payloads(
         self,
@@ -39875,52 +31359,33 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        if not metadata_lines:
-            return []
-        return [(source_file, f"{member_name}#ole-metadata", "\n".join(metadata_lines))]
+        return _orchestration_extract_ole_metadata_payloads(
+            metadata_lines,
+            source_file=source_file,
+            member_name=member_name,
+        )
 
     def _extract_ole_stream_job_payloads(
         self,
         stream_jobs: Sequence[OLEStreamExtractionJob],
     ) -> list[tuple[str, str, str]]:
-        if not stream_jobs:
-            return []
-        ordered_payloads = self._run_ordered_local_batch(
+        return _orchestration_extract_ole_stream_job_payloads(
             stream_jobs,
-            self._extract_ole_stream_payloads,
-            default_factory=list,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_ole_stream_payloads=self._extract_ole_stream_payloads,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        prepared_payloads = self._run_ordered_local_batch(
-            [
-                (stream_index, stream_payloads or [])
-                for stream_index, stream_payloads in enumerate(ordered_payloads)
-            ],
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for stream_payloads in prepared_payloads:
-            payloads.extend(stream_payloads)
-        return payloads
 
     def _extract_ole_stream_payloads(
         self,
         job: OLEStreamExtractionJob,
     ) -> list[tuple[str, str, str]]:
-        payload_families = self._run_ordered_local_batch(
-            ("strings", "nested_archive", "embedded_archive"),
-            lambda family: self._extract_ole_stream_payload_family(family, job=job),
-            default_factory=list,
+        return _orchestration_extract_ole_stream_payloads(
+            job,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_ole_stream_payload_family=self._extract_ole_stream_payload_family,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        prepared_payload_families = self._run_ordered_local_batch(
-            list(enumerate(payload_families)),
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for family_payloads in prepared_payload_families:
-            payloads.extend(family_payloads)
-        return payloads
 
     def _extract_ole_stream_payload_family(
         self,
@@ -39928,160 +31393,46 @@ class ArtifactQueueProcessor:
         *,
         job: OLEStreamExtractionJob,
     ) -> list[tuple[str, str, str]]:
-        if family == "strings":
-            return self._extract_ole_stream_string_payloads(job)
-        if family == "nested_archive":
-            return self._extract_ole_stream_nested_archive_payloads(job)
-        if family == "embedded_archive":
-            return self._extract_ole_stream_embedded_archive_payloads(job)
-        return []
+        return _orchestration_extract_ole_stream_payload_family(
+            family,
+            job=job,
+            extract_ole_stream_string_payloads=self._extract_ole_stream_string_payloads,
+            extract_ole_stream_nested_archive_payloads=self._extract_ole_stream_nested_archive_payloads,
+            extract_ole_stream_embedded_archive_payloads=self._extract_ole_stream_embedded_archive_payloads,
+        )
 
     def _extract_ole_stream_string_payloads(
         self,
         job: OLEStreamExtractionJob,
     ) -> list[tuple[str, str, str]]:
-        payload = self._binary_string_payload(job.stream_data)
-        if not payload:
-            return []
-        return [
-            (
-                job.source_file,
-                f"{job.member_name}#ole-stream:{job.stream_name}",
-                payload,
-            )
-        ]
+        return _orchestration_extract_ole_stream_string_payloads(
+            job,
+            binary_string_payload=self._binary_string_payload,
+        )
 
     def _extract_ole_stream_nested_archive_payloads(
         self,
         job: OLEStreamExtractionJob,
     ) -> list[tuple[str, str, str]]:
-        if job.depth >= 2 or not self._looks_like_archive_bytes(job.stream_data):
-            return []
-        return self._extract_nested_archive_bytes(
-            job.stream_data,
-            job.source_file,
-            f"{job.member_name}/{job.stream_name}",
-            job.depth + 1,
+        return _orchestration_extract_ole_stream_nested_archive_payloads(
+            job,
+            looks_like_archive_bytes=self._looks_like_archive_bytes,
+            extract_nested_archive_bytes=self._extract_nested_archive_bytes,
         )
 
     def _extract_ole_stream_embedded_archive_payloads(
         self,
         job: OLEStreamExtractionJob,
     ) -> list[tuple[str, str, str]]:
-        if job.depth >= 2:
-            return []
-        member_name = f"{job.member_name}/{job.stream_name}"
-        payloads = self._extract_embedded_archive_payloads(
-            job.stream_data,
-            job.source_file,
-            member_name,
-            depth=job.depth,
+        return _orchestration_extract_ole_stream_embedded_archive_payloads(
+            job,
+            extract_embedded_archive_payloads=self._extract_embedded_archive_payloads,
+            extract_embedded_image_payloads=self._extract_embedded_image_payloads,
         )
-        payloads.extend(
-            self._extract_embedded_image_payloads(
-                job.stream_data,
-                job.source_file,
-                member_name,
-            )
-        )
-        return payloads
 
     @staticmethod
     def _rtf_to_text(data: bytes) -> str:
-        raw = data.decode("latin-1", errors="ignore")
-        if not raw:
-            return ""
-        out: list[str] = []
-        index = 0
-        skip_unicode_fallback = False
-        while index < len(raw):
-            char = raw[index]
-            if char == "\\":
-                if skip_unicode_fallback:
-                    skip_unicode_fallback = False
-                index += 1
-                if index >= len(raw):
-                    break
-                control = raw[index]
-                if control in {"\\", "{", "}"}:
-                    out.append(control)
-                    index += 1
-                    continue
-                if control == "'":
-                    if index + 2 < len(raw):
-                        hex_value = raw[index + 1 : index + 3]
-                        if re.fullmatch(r"[0-9a-fA-F]{2}", hex_value):
-                            try:
-                                out.append(
-                                    bytes.fromhex(hex_value).decode("cp1252", errors="ignore")
-                                )
-                            except Exception:  # noqa: BLE001
-                                pass
-                            index += 3
-                            continue
-                if control == "~":
-                    out.append(" ")
-                    index += 1
-                    continue
-                if control == "_":
-                    out.append("-")
-                    index += 1
-                    continue
-                if control == "-":
-                    index += 1
-                    continue
-                if control == "*":
-                    index += 1
-                    continue
-                if control.isalpha():
-                    start = index
-                    while index < len(raw) and raw[index].isalpha():
-                        index += 1
-                    word = raw[start:index].lower()
-                    sign = 1
-                    if index < len(raw) and raw[index] == "-":
-                        sign = -1
-                        index += 1
-                    number_start = index
-                    while index < len(raw) and raw[index].isdigit():
-                        index += 1
-                    number: int | None = None
-                    if index > number_start:
-                        number = int(raw[number_start:index]) * sign
-                    if index < len(raw) and raw[index] == " ":
-                        index += 1
-                    if word in {"line", "par"}:
-                        out.append("\n")
-                    elif word == "tab":
-                        out.append("\t")
-                    elif word in {"emdash", "endash"}:
-                        out.append("-")
-                    elif word == "bullet":
-                        out.append("*")
-                    elif word == "u" and number is not None:
-                        if number < 0:
-                            number += 65536
-                        try:
-                            out.append(chr(number))
-                        except Exception:  # noqa: BLE001
-                            pass
-                        skip_unicode_fallback = True
-                    continue
-                index += 1
-                continue
-            if char in {"{", "}"}:
-                index += 1
-                continue
-            if skip_unicode_fallback:
-                skip_unicode_fallback = False
-                index += 1
-                continue
-            out.append(char)
-            index += 1
-        text = "".join(out).replace("\x00", "")
-        text = re.sub(r"[ \t]+\n", "\n", text)
-        text = re.sub(r"\n{3,}", "\n\n", text)
-        return text.strip()
+        return _orchestration_rtf_to_text(data)
 
     def _extract_embedded_archive_payloads(
         self,
@@ -40091,39 +31442,18 @@ class ArtifactQueueProcessor:
         *,
         depth: int,
     ) -> list[tuple[str, str, str]]:
-        if depth >= 2:
-            return []
-        job_batches = self._run_ordered_local_batch(
-            self._embedded_archive_offsets(data)[:3],
-            lambda offset_job: self._embedded_archive_job_entry(
-                offset_job,
-                source_file=source_file,
-                member_name=member_name,
-                data=data,
-                depth=depth,
-            ),
-            default_factory=lambda: None,
+        return _orchestration_extract_embedded_archive_payloads(
+            data,
+            source_file,
+            member_name,
+            depth=depth,
+            embedded_archive_offsets=self._embedded_archive_offsets,
+            run_ordered_batch=self._run_ordered_local_batch,
+            embedded_archive_job_entry=self._embedded_archive_job_entry,
+            extract_embedded_archive_job=self._extract_embedded_archive_job,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
+            embedded_archive_job_type=EmbeddedArchiveExtractionJob,
         )
-        jobs = [job for job in job_batches if isinstance(job, EmbeddedArchiveExtractionJob)]
-        if not jobs:
-            return []
-        ordered_payloads = self._run_ordered_local_batch(
-            jobs,
-            self._extract_embedded_archive_job,
-            default_factory=list,
-        )
-        prepared_payloads = self._run_ordered_local_batch(
-            [
-                (nested_index, nested_payloads or [])
-                for nested_index, nested_payloads in enumerate(ordered_payloads)
-            ],
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for nested_payloads in prepared_payloads:
-            payloads.extend(nested_payloads)
-        return payloads
 
     @staticmethod
     def _embedded_archive_job_entry(
@@ -40134,16 +31464,12 @@ class ArtifactQueueProcessor:
         data: bytes,
         depth: int,
     ) -> EmbeddedArchiveExtractionJob | None:
-        archive_kind, offset = offset_job
-        if offset < 0:
-            return None
-        return EmbeddedArchiveExtractionJob(
-            source_file,
-            member_name,
-            archive_kind,
-            offset,
-            data[offset:],
-            depth + 1,
+        return _orchestration_embedded_archive_job_entry(
+            offset_job,
+            source_file=source_file,
+            member_name=member_name,
+            data=data,
+            depth=depth,
         )
 
     def _extract_embedded_archive_job(
@@ -40173,19 +31499,14 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        if not self._pdf_raster_binary or not data:
-            return []
-        try:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir) / "embedded.pdf"
-                temp_path.write_bytes(data[:_MAX_ARTIFACT_MEMBER_BYTES])
-                return self._extract_pdf_ocr_payloads_from_path(
-                    temp_path,
-                    source_file=source_file,
-                    member_name=member_name,
-                )
-        except Exception:  # noqa: BLE001
-            return []
+        return _orchestration_extract_pdf_bytes_ocr_payloads(
+            data,
+            source_file=source_file,
+            member_name=member_name,
+            pdf_raster_available=bool(self._pdf_raster_binary),
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            extract_pdf_ocr_payloads_from_path=self._extract_pdf_ocr_payloads_from_path,
+        )
 
     def _extract_pdf_ocr_payloads_from_path(
         self,
@@ -40194,136 +31515,47 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        if not self._pdf_raster_binary or not path.exists():
-            return []
-
-        def _page_payloads(index: int, image_path: Path) -> list[tuple[str, str, str]]:
-            try:
-                payloads: list[tuple[str, str, str]] = []
-                ocr_text = self._ocr_image_path(image_path)
-                if ocr_text.strip():
-                    payloads.append((source_file, f"{member_name}#ocr-page-{index}", ocr_text))
-                barcode_payload = self._barcode_image_path_payload(image_path)
-                if barcode_payload.strip():
-                    payloads.append(
-                        (source_file, f"{member_name}#barcode-page-{index}", barcode_payload)
-                    )
-                return payloads
-            finally:
-                image_path.unlink(missing_ok=True)
-
-        page_job_batches = self._run_ordered_local_batch(
-            list(enumerate(self._render_pdf_pages_for_ocr(path), start=1)),
-            self._pdf_ocr_page_job,
-            default_factory=lambda: None,
+        return _orchestration_extract_pdf_ocr_payloads_from_path(
+            path,
+            source_file=source_file,
+            member_name=member_name,
+            pdf_raster_available=bool(self._pdf_raster_binary),
+            render_pdf_pages_for_ocr=self._render_pdf_pages_for_ocr,
+            pdf_ocr_page_job=self._pdf_ocr_page_job,
+            ocr_image_path=self._ocr_image_path,
+            barcode_image_path_payload=self._barcode_image_path_payload,
+            run_ordered_batch=self._run_ordered_local_batch,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        page_images = [page_job for page_job in page_job_batches if isinstance(page_job, tuple)]
-        if not page_images:
-            return []
-        ordered_payloads = self._run_ordered_local_batch(
-            page_images,
-            lambda page_image: _page_payloads(*page_image),
-            default_factory=list,
-        )
-        prepared_payloads = self._run_ordered_local_batch(
-            [
-                (page_index, page_payloads if isinstance(page_payloads, list) else [])
-                for page_index, page_payloads in enumerate(ordered_payloads)
-            ],
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for page_payloads in prepared_payloads:
-            payloads.extend(page_payloads)
-        return payloads
 
     @staticmethod
     def _pdf_ocr_page_job(
         page_job: tuple[int, Path],
     ) -> tuple[int, Path] | None:
-        index, image_path = page_job
-        if index <= 0:
-            return None
-        return index, Path(image_path)
+        return _orchestration_pdf_ocr_page_job(page_job)
 
     @staticmethod
     def _retained_pdf_ocr_image_path(image_path: Path) -> Path | None:
-        source_path = Path(image_path)
-        if not source_path.exists():
-            return None
-        retained_path: Path | None = None
-        try:
-            with tempfile.NamedTemporaryFile(
-                delete=False, suffix=source_path.suffix or ".png"
-            ) as handle:
-                handle.write(source_path.read_bytes())
-                retained_path = Path(handle.name)
-            return retained_path
-        except Exception:  # noqa: BLE001
-            if retained_path is not None:
-                retained_path.unlink(missing_ok=True)
-            return None
+        return _orchestration_retained_pdf_ocr_image_path(image_path)
 
     def _render_pdf_pages_for_ocr(self, path: Path) -> list[Path]:
-        if not self._pdf_raster_binary or not path.exists():
-            return []
-        temp_dir = tempfile.TemporaryDirectory()
-        temp_root = Path(temp_dir.name)
-        output_prefix = temp_root / "page"
-        try:
-            proc = subprocess.run(
-                [
-                    self._pdf_raster_binary,
-                    "-png",
-                    "-f",
-                    "1",
-                    "-l",
-                    str(_PDF_OCR_MAX_PAGES),
-                    str(path),
-                    str(output_prefix),
-                ],
-                capture_output=True,
-                text=True,
-                timeout=_PDF_RENDER_TIMEOUT_SECONDS,
-                check=False,
-            )
-        except Exception:  # noqa: BLE001
-            temp_dir.cleanup()
-            return []
-        if proc.returncode != 0:
-            temp_dir.cleanup()
-            return []
-        image_paths = sorted(temp_root.glob("page-*.png"))
-        if not image_paths:
-            temp_dir.cleanup()
-            return []
-        retained_paths = self._run_ordered_local_batch(
-            image_paths[:_PDF_OCR_MAX_PAGES],
-            self._retained_pdf_ocr_image_path,
-            default_factory=lambda: None,
+        return _orchestration_render_pdf_pages_for_ocr(
+            path,
+            pdf_raster_binary=self._pdf_raster_binary,
+            pdf_ocr_max_pages=_PDF_OCR_MAX_PAGES,
+            pdf_render_timeout_seconds=_PDF_RENDER_TIMEOUT_SECONDS,
+            run_ordered_batch=self._run_ordered_local_batch,
+            retained_pdf_ocr_image_path=self._retained_pdf_ocr_image_path,
+            subprocess_run=subprocess.run,
         )
-        results = [
-            retained_path for retained_path in retained_paths if isinstance(retained_path, Path)
-        ]
-        temp_dir.cleanup()
-        return results
 
     def _extract_image_payloads(self, path: Path) -> list[tuple[str, str, str]]:
-        family_payloads = self._run_ordered_local_batch(
-            ("ocr", "barcode", "metadata"),
-            lambda family: self._extract_image_payload_family(family, path),
-            default_factory=list,
+        return _orchestration_extract_image_payloads(
+            path,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_image_payload_family=self._extract_image_payload_family,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        payload_batches = self._run_ordered_local_batch(
-            list(enumerate(family_payloads)),
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for batch in payload_batches:
-            payloads.extend(batch)
-        return payloads
 
     def _extract_image_member_payloads(
         self,
@@ -40331,25 +31563,14 @@ class ArtifactQueueProcessor:
         member_name: str,
         data: bytes,
     ) -> list[tuple[str, str, str]]:
-        family_payloads = self._run_ordered_local_batch(
-            ("ocr", "barcode", "metadata"),
-            lambda family: self._extract_image_member_payload_family(
-                family,
-                source_file=source_file,
-                member_name=member_name,
-                data=data,
-            ),
-            default_factory=list,
+        return _orchestration_extract_image_member_payloads(
+            source_file,
+            member_name,
+            data,
+            run_ordered_batch=self._run_ordered_local_batch,
+            extract_image_member_payload_family=self._extract_image_member_payload_family,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
         )
-        payload_batches = self._run_ordered_local_batch(
-            list(enumerate(family_payloads)),
-            self._artifact_payload_tuple_batch_entries,
-            default_factory=list,
-        )
-        payloads: list[tuple[str, str, str]] = []
-        for batch in payload_batches:
-            payloads.extend(batch)
-        return payloads
 
     def _extract_embedded_image_payloads(
         self,
@@ -40357,22 +31578,14 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        image_entries = self._embedded_image_entries(data)
-        if not image_entries:
-            return []
-        payload_batches = self._run_ordered_local_batch(
-            list(enumerate(image_entries)),
-            lambda entry: self._embedded_image_payload_batch(
-                entry,
-                source_file=source_file,
-                member_name=member_name,
-            ),
-            default_factory=list,
+        return _orchestration_extract_embedded_image_payloads(
+            data,
+            source_file,
+            member_name,
+            embedded_image_entries=self._embedded_image_entries,
+            run_ordered_batch=self._run_ordered_local_batch,
+            embedded_image_payload_batch=self._embedded_image_payload_batch,
         )
-        payloads: list[tuple[str, str, str]] = []
-        for payload_batch in payload_batches:
-            payloads.extend(payload_batch)
-        return payloads
 
     def _embedded_image_payload_batch(
         self,
@@ -40381,36 +31594,26 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        image_index, image_entry = indexed_entry
-        _kind, suffix, _offset, image_data = image_entry
-        image_member_name = f"{member_name}#embedded-image-{image_index}{suffix}"
-        return self._extract_image_member_payloads(source_file, image_member_name, image_data)
+        return _orchestration_embedded_image_payload_batch(
+            indexed_entry,
+            source_file=source_file,
+            member_name=member_name,
+            extract_image_member_payloads=self._extract_image_member_payloads,
+        )
 
     def _extract_image_payload_family(
         self,
         family: str,
         path: Path,
     ) -> list[tuple[str, str, str]]:
-        if family == "ocr":
-            ocr_text = self._ocr_image_path(path)
-            if not ocr_text.strip():
-                return []
-            return [(str(path), f"{path.name}#ocr", ocr_text)]
-        if family == "barcode":
-            barcode_payload = self._barcode_image_path_payload(path)
-            if not barcode_payload:
-                return []
-            return [(str(path), f"{path.name}#barcode", barcode_payload)]
-        if family == "metadata":
-            try:
-                data = path.read_bytes()[:_MAX_OCR_IMAGE_BYTES]
-            except Exception:  # noqa: BLE001
-                return []
-            metadata_payload = self._image_metadata_payload(data)
-            if not metadata_payload:
-                return []
-            return [(str(path), f"{path.name}#image-metadata", metadata_payload)]
-        return []
+        return _orchestration_extract_image_payload_family(
+            family,
+            path,
+            ocr_image_path=self._ocr_image_path,
+            barcode_image_path_payload=self._barcode_image_path_payload,
+            image_metadata_payload=self._image_metadata_payload,
+            max_ocr_image_bytes=_MAX_OCR_IMAGE_BYTES,
+        )
 
     def _extract_image_member_payload_family(
         self,
@@ -40420,143 +31623,74 @@ class ArtifactQueueProcessor:
         member_name: str,
         data: bytes,
     ) -> list[tuple[str, str, str]]:
-        if family == "ocr":
-            ocr_text = self._ocr_image_bytes(data, Path(member_name).suffix.lower())
-            if not ocr_text.strip():
-                return []
-            return [(source_file, f"{member_name}#ocr", ocr_text)]
-        if family == "barcode":
-            barcode_payload = self._barcode_image_bytes_payload(data)
-            if not barcode_payload:
-                return []
-            return [(source_file, f"{member_name}#barcode", barcode_payload)]
-        if family == "metadata":
-            metadata_payload = self._image_metadata_payload(data[:_MAX_OCR_IMAGE_BYTES])
-            if not metadata_payload:
-                return []
-            return [(source_file, f"{member_name}#image-metadata", metadata_payload)]
-        return []
+        return _orchestration_extract_image_member_payload_family(
+            family,
+            source_file=source_file,
+            member_name=member_name,
+            data=data,
+            ocr_image_bytes=self._ocr_image_bytes,
+            barcode_image_bytes_payload=self._barcode_image_bytes_payload,
+            image_metadata_payload=self._image_metadata_payload,
+            max_ocr_image_bytes=_MAX_OCR_IMAGE_BYTES,
+        )
 
     def _image_metadata_payload(self, data: bytes) -> str:
-        # EXIF/XMP/PNG text chunks are often enough for passive pivot extraction
-        # even when OCR is unavailable on the operator workstation.
-        return self._binary_string_payload(data)
+        return _orchestration_image_metadata_payload(
+            data,
+            binary_string_payload=self._binary_string_payload,
+        )
 
     def _barcode_image_path_payload(self, path: Path) -> str:
-        return "\n".join(barcode_payloads_from_path(path, max_bytes=_MAX_OCR_IMAGE_BYTES))
+        return _orchestration_barcode_image_path_payload(
+            path,
+            barcode_payloads_from_path=barcode_payloads_from_path,
+            max_ocr_image_bytes=_MAX_OCR_IMAGE_BYTES,
+        )
 
     def _barcode_image_bytes_payload(self, data: bytes) -> str:
-        return "\n".join(barcode_payloads_from_bytes(data[:_MAX_OCR_IMAGE_BYTES]))
+        return _orchestration_barcode_image_bytes_payload(
+            data,
+            barcode_payloads_from_bytes=barcode_payloads_from_bytes,
+            max_ocr_image_bytes=_MAX_OCR_IMAGE_BYTES,
+        )
 
     def _ocr_image_path(self, path: Path) -> str:
-        if not self._ocr_binary or not path.exists():
-            return ""
-        try:
-            proc = subprocess.run(
-                [self._ocr_binary, str(path), "stdout", "--psm", "6"],
-                capture_output=True,
-                text=True,
-                timeout=_OCR_TIMEOUT_SECONDS,
-                check=False,
-            )
-        except Exception:  # noqa: BLE001
-            return ""
-        if proc.returncode != 0:
-            return ""
-        return proc.stdout.replace("\x0c", "\n").strip()[:_OCR_TEXT_LIMIT]
+        return _orchestration_ocr_image_path(
+            path,
+            ocr_binary=self._ocr_binary,
+            ocr_timeout_seconds=_OCR_TIMEOUT_SECONDS,
+            ocr_text_limit=_OCR_TEXT_LIMIT,
+            subprocess_run=subprocess.run,
+        )
 
     def _ocr_image_bytes(self, data: bytes, suffix: str) -> str:
-        temp_path: Path | None = None
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix or ".img") as handle:
-                handle.write(data[:_MAX_OCR_IMAGE_BYTES])
-                temp_path = Path(handle.name)
-            return self._ocr_image_path(temp_path)
-        finally:
-            if temp_path is not None:
-                temp_path.unlink(missing_ok=True)
+        return _orchestration_ocr_image_bytes(
+            data,
+            suffix,
+            max_ocr_image_bytes=_MAX_OCR_IMAGE_BYTES,
+            ocr_image_path=self._ocr_image_path,
+        )
 
     @staticmethod
     def _looks_like_archive_bytes(data: bytes) -> bool:
-        prefix = data[:4]
-        if prefix == _CRX_ARCHIVE_MAGIC:
-            return True
-        if prefix == b"PK\x03\x04" or prefix[:2] == b"\x1f\x8b" or prefix[:3] == b"BZh":
-            return True
-        if data[:6] == b"\xfd7zXZ\x00":
-            return True
-        if prefix == b"\x28\xb5\x2f\xfd":
-            return True
-        if prefix == b"\x04\x22\x4d\x18":
-            return True
-        if data[:6] == b"7z\xbc\xaf'\x1c":
-            return True
-        if data.startswith(_AR_ARCHIVE_MAGIC):
-            return True
-        if data[:6] in _CPIO_NEWC_MAGICS:
-            return True
-        if ArtifactQueueProcessor._asar_header_and_content_base(data) is not None:
-            return True
-        if len(data) > 262 and data[257:262] == b"ustar":
-            return True
-        return False
+        return _orchestration_looks_like_archive_bytes(
+            data,
+            ar_archive_magic=_AR_ARCHIVE_MAGIC,
+            cpio_newc_magics=tuple(_CPIO_NEWC_MAGICS),
+            crx_archive_magic=_CRX_ARCHIVE_MAGIC,
+            asar_header_and_content_base=ArtifactQueueProcessor._asar_header_and_content_base,
+        )
 
     def _embedded_image_entries(self, data: bytes) -> list[tuple[str, str, int, bytes]]:
-        if len(data) < 10:
-            return []
-        max_scan = min(len(data), _MAX_ARTIFACT_MEMBER_BYTES)
-        signatures = (
-            ("png", ".png", b"\x89PNG\r\n\x1a\n"),
-            ("jpeg", ".jpg", b"\xff\xd8\xff"),
-            ("gif", ".gif", b"GIF87a"),
-            ("gif", ".gif", b"GIF89a"),
-            ("webp", ".webp", b"RIFF"),
-            ("tiff", ".tif", b"II*\x00"),
-            ("tiff", ".tif", b"MM\x00*"),
+        return _orchestration_embedded_image_entries(
+            data,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            max_ocr_image_bytes=_MAX_OCR_IMAGE_BYTES,
+            embedded_image_max_candidates=_EMBEDDED_IMAGE_MAX_CANDIDATES,
+            run_ordered_batch=self._run_ordered_local_batch,
+            embedded_image_signature_matches=self._embedded_image_signature_matches,
+            embedded_image_bytes=self._embedded_image_bytes,
         )
-        match_batches = self._run_ordered_local_batch(
-            signatures,
-            lambda signature_job: self._embedded_image_signature_matches(
-                signature_job,
-                data=data,
-                max_scan=max_scan,
-            ),
-            default_factory=list,
-        )
-        raw_matches = [match for match_batch in match_batches for match in match_batch]
-        matches: list[tuple[str, str, int]] = []
-        seen_offsets: set[int] = set()
-        for kind, suffix, offset in sorted(raw_matches, key=lambda item: item[2]):
-            if offset in seen_offsets:
-                continue
-            seen_offsets.add(offset)
-            matches.append((kind, suffix, offset))
-        entries: list[tuple[str, str, int, bytes]] = []
-        covered_until = -1
-        for index, (kind, suffix, offset) in enumerate(matches):
-            if offset < covered_until:
-                continue
-            next_offset = next(
-                (
-                    candidate_offset
-                    for _next_kind, _next_suffix, candidate_offset in matches[index + 1 :]
-                    if candidate_offset > offset
-                ),
-                0,
-            )
-            image_data = self._embedded_image_bytes(
-                kind,
-                data,
-                offset,
-                next_offset=next_offset,
-            )
-            if not image_data:
-                continue
-            covered_until = max(covered_until, offset + len(image_data))
-            entries.append((kind, suffix, offset, image_data))
-            if len(entries) >= _EMBEDDED_IMAGE_MAX_CANDIDATES:
-                break
-        return entries
 
     @staticmethod
     def _embedded_image_signature_matches(
@@ -40565,17 +31699,11 @@ class ArtifactQueueProcessor:
         data: bytes,
         max_scan: int,
     ) -> list[tuple[str, str, int]]:
-        image_kind, suffix, signature = signature_job
-        matches: list[tuple[str, str, int]] = []
-        start = 0
-        while start < max_scan:
-            offset = data.find(signature, start, max_scan)
-            if offset < 0:
-                break
-            if image_kind != "webp" or data[offset + 8 : offset + 12] == b"WEBP":
-                matches.append((image_kind, suffix, offset))
-            start = offset + 1
-        return matches
+        return _orchestration_embedded_image_signature_matches(
+            signature_job,
+            data=data,
+            max_scan=max_scan,
+        )
 
     @staticmethod
     def _embedded_image_bytes(
@@ -40584,77 +31712,24 @@ class ArtifactQueueProcessor:
         offset: int,
         *,
         next_offset: int = 0,
+        max_ocr_image_bytes: int = _MAX_OCR_IMAGE_BYTES,
     ) -> bytes:
-        if offset < 0 or offset >= len(data):
-            return b""
-        max_end = min(len(data), offset + _MAX_OCR_IMAGE_BYTES)
-        if image_kind == "png":
-            marker = data.find(b"IEND", offset + 8, max_end)
-            end = marker + 8 if marker >= 0 else 0
-        elif image_kind == "jpeg":
-            marker = data.find(b"\xff\xd9", offset + 2, max_end)
-            end = marker + 2 if marker >= 0 else 0
-        elif image_kind == "gif":
-            marker = data.find(b"\x3b", offset + 6, max_end)
-            end = marker + 1 if marker >= 0 else 0
-        elif image_kind == "webp":
-            if offset + 12 > len(data) or data[offset : offset + 4] != b"RIFF":
-                return b""
-            if data[offset + 8 : offset + 12] != b"WEBP":
-                return b""
-            payload_size = int.from_bytes(data[offset + 4 : offset + 8], "little")
-            end = offset + 8 + payload_size
-        elif image_kind == "tiff":
-            end = next_offset if next_offset > offset else max_end
-        else:
-            return b""
-        if end <= offset or end > max_end:
-            return b""
-        return data[offset:end]
+        return _orchestration_embedded_image_bytes(
+            image_kind,
+            data,
+            offset,
+            next_offset=next_offset,
+            max_ocr_image_bytes=max_ocr_image_bytes,
+        )
 
     def _embedded_archive_offsets(self, data: bytes) -> list[tuple[str, int]]:
-        if len(data) < 8:
-            return []
-        max_scan = min(len(data), _MAX_ARTIFACT_MEMBER_BYTES)
-        signatures = (
-            ("zip", b"PK\x03\x04"),
-            ("gz", b"\x1f\x8b\x08"),
-            ("bz2", b"BZh"),
-            ("xz", b"\xfd7zXZ\x00"),
-            ("zst", b"\x28\xb5\x2f\xfd"),
-            ("lz4", b"\x04\x22\x4d\x18"),
-            ("7z", b"7z\xbc\xaf'\x1c"),
+        return _orchestration_embedded_archive_offsets(
+            data,
+            max_artifact_member_bytes=_MAX_ARTIFACT_MEMBER_BYTES,
+            run_ordered_batch=self._run_ordered_local_batch,
+            embedded_archive_signature_matches=self._embedded_archive_signature_matches,
+            embedded_archive_match_entry=self._embedded_archive_match_entry,
         )
-        match_batches = self._run_ordered_local_batch(
-            signatures,
-            lambda signature_job: self._embedded_archive_signature_matches(
-                signature_job,
-                data=data,
-                max_scan=max_scan,
-            ),
-            default_factory=list,
-        )
-        prepared_match_entries = self._run_ordered_local_batch(
-            [
-                (match_index, match_entry)
-                for match_index, match_entry in enumerate(
-                    match_entry for match_batch in match_batches for match_entry in match_batch
-                )
-            ],
-            self._embedded_archive_match_entry,
-            default_factory=lambda: None,
-        )
-        matches: list[tuple[str, int]] = []
-        seen: set[tuple[str, int]] = set()
-        for key in prepared_match_entries:
-            if not isinstance(key, tuple) or len(key) != 2:
-                continue
-            if key in seen:
-                continue
-            seen.add(key)
-            matches.append(key)
-        matches.sort(key=lambda item: item[1])
-        return matches[:8]
 
     @staticmethod
     def _embedded_archive_signature_matches(
@@ -40663,185 +31738,91 @@ class ArtifactQueueProcessor:
         data: bytes,
         max_scan: int,
     ) -> list[tuple[str, int]]:
-        archive_kind, signature = signature_job
-        matches: list[tuple[str, int]] = []
-        start = 1
-        while start < max_scan:
-            offset = data.find(signature, start, max_scan)
-            if offset < 1:
-                break
-            matches.append((archive_kind, offset))
-            start = offset + 1
-        return matches
+        return _orchestration_embedded_archive_signature_matches(
+            signature_job,
+            data=data,
+            max_scan=max_scan,
+        )
 
     @staticmethod
     def _embedded_archive_match_entry(
         match_entry: tuple[int, tuple[str, int]],
     ) -> tuple[str, int] | None:
-        _match_index, entry = match_entry
-        if not isinstance(entry, tuple) or len(entry) != 2:
-            return None
-        archive_kind, offset = entry
-        kind = str(archive_kind or "").strip()
-        if not kind:
-            return None
-        try:
-            normalized_offset = int(offset)
-        except (TypeError, ValueError):
-            return None
-        if normalized_offset < 1:
-            return None
-        return kind, normalized_offset
+        return _orchestration_embedded_archive_match_entry(match_entry)
 
     @staticmethod
     def _interesting_binary_string(value: str) -> bool:
-        text = str(value or "").strip()
-        if len(text) < 6 or len(text) > 512:
-            return False
-        if not any(char.isalpha() for char in text):
-            return False
-        return any(marker in text for marker in ("@", "://", "/", ".", "_", "-", " "))
+        return _orchestration_interesting_binary_string(value)
 
     def _binary_string_payload(self, data: bytes) -> str:
-        family_candidates = self._run_ordered_local_batch(
-            ("ascii", "utf16"),
-            lambda family: self._binary_string_candidate_family(data, family),
-            default_factory=list,
+        return _orchestration_binary_string_payload(
+            data,
+            run_ordered_batch=self._run_ordered_local_batch,
+            binary_string_candidate_family=self._binary_string_candidate_family,
+            binary_string_family_entries=self._binary_string_family_entries,
+            binary_string_value_entry=self._binary_string_value_entry,
         )
-        family_entry_batches = self._run_ordered_local_batch(
-            list(enumerate(family_candidates)),
-            self._binary_string_family_entries,
-            default_factory=list,
-        )
-        prepared_value_entries = self._run_ordered_local_batch(
-            [
-                (candidate_index, candidate)
-                for candidate_index, candidate in enumerate(
-                    candidate for candidates in family_entry_batches for candidate in candidates
-                )
-            ],
-            self._binary_string_value_entry,
-            default_factory=lambda: None,
-        )
-        values: list[str] = []
-        seen: set[str] = set()
-        for candidate in prepared_value_entries:
-            if not candidate or candidate in seen:
-                continue
-            seen.add(candidate)
-            values.append(candidate)
-        return "\n".join(values[:128])
 
     def _binary_string_candidate_family(
         self,
         data: bytes,
         family: str,
     ) -> list[str]:
-        if family == "ascii":
-            return self._binary_string_ascii_candidates(data)
-        if family == "utf16":
-            return self._binary_string_utf16_candidates(data)
-        return []
+        return _orchestration_binary_string_candidate_family(
+            data,
+            family,
+            binary_string_ascii_candidates=self._binary_string_ascii_candidates,
+            binary_string_utf16_candidates=self._binary_string_utf16_candidates,
+        )
 
     @staticmethod
     def _binary_string_family_entries(
         family_batch: tuple[int, Sequence[str]],
     ) -> list[str]:
-        _family_index, candidates = family_batch
-        values: list[str] = []
-        for candidate in candidates:
-            normalized = str(candidate or "").strip()
-            if normalized:
-                values.append(normalized)
-        return values
+        return _orchestration_binary_string_family_entries(family_batch)
 
     @staticmethod
     def _binary_string_value_entry(
         candidate_entry: tuple[int, str],
     ) -> str | None:
-        _candidate_index, candidate = candidate_entry
-        value = str(candidate or "").strip()
-        if not value:
-            return None
-        return value
+        return _orchestration_binary_string_value_entry(candidate_entry)
 
     def _binary_string_ascii_candidates(self, data: bytes) -> list[str]:
-        raw_matches = [match.group(0) for match in re.finditer(rb"[ -~]{6,}", data)]
-        candidate_lines = self._run_ordered_local_batch(
-            raw_matches,
-            self._binary_string_ascii_candidate,
-            default_factory=str,
+        return _orchestration_binary_string_ascii_candidates(
+            data,
+            run_ordered_batch=self._run_ordered_local_batch,
+            binary_string_ascii_candidate=self._binary_string_ascii_candidate,
         )
-        return [candidate for candidate in candidate_lines if candidate]
 
     def _binary_string_ascii_candidate(self, raw_match: bytes) -> str:
-        try:
-            candidate = raw_match.decode("latin-1", errors="ignore").strip()
-        except Exception:  # noqa: BLE001
-            return ""
-        if self._interesting_binary_string(candidate):
-            return candidate
-        return ""
+        return _orchestration_binary_string_ascii_candidate(
+            raw_match,
+            interesting_binary_string=self._interesting_binary_string,
+        )
 
     def _binary_string_utf16_candidates(self, data: bytes) -> list[str]:
-        raw_matches = [match.group(0) for match in re.finditer(rb"(?:[\x20-\x7e]\x00){6,}", data)]
-        candidate_lines = self._run_ordered_local_batch(
-            raw_matches,
-            self._binary_string_utf16_candidate,
-            default_factory=str,
+        return _orchestration_binary_string_utf16_candidates(
+            data,
+            run_ordered_batch=self._run_ordered_local_batch,
+            binary_string_utf16_candidate=self._binary_string_utf16_candidate,
         )
-        return [candidate for candidate in candidate_lines if candidate]
 
     def _binary_string_utf16_candidate(self, raw_match: bytes) -> str:
-        try:
-            candidate = raw_match.decode("utf-16le", errors="ignore").strip()
-        except Exception:  # noqa: BLE001
-            return ""
-        if self._interesting_binary_string(candidate):
-            return candidate
-        return ""
+        return _orchestration_binary_string_utf16_candidate(
+            raw_match,
+            interesting_binary_string=self._interesting_binary_string,
+        )
 
     def _ole_metadata_lines(self, ole: Any) -> list[str]:
-        try:
-            metadata = ole.get_metadata()
-        except Exception:  # noqa: BLE001
-            return []
-        line_candidates = self._run_ordered_local_batch(
-            (
-                "title",
-                "subject",
-                "author",
-                "last_saved_by",
-                "comments",
-                "keywords",
-                "company",
-                "manager",
-            ),
-            lambda key: self._ole_metadata_line(metadata, key),
-            default_factory=str,
+        return _orchestration_ole_metadata_lines(
+            ole,
+            run_ordered_batch=self._run_ordered_local_batch,
+            ole_metadata_line=self._ole_metadata_line,
         )
-        lines = [line for line in line_candidates if line]
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for line in lines:
-            if line in seen:
-                continue
-            seen.add(line)
-            deduped.append(line)
-        return deduped[:64]
 
     @staticmethod
     def _ole_metadata_line(metadata: Any, key: str) -> str:
-        try:
-            value = getattr(metadata, key, None)
-        except Exception:  # noqa: BLE001
-            value = None
-        if value is None:
-            return ""
-        text = str(value).strip()
-        if not text:
-            return ""
-        return f"{key}={text}"
+        return _orchestration_ole_metadata_line(metadata, key)
 
     def _member_payloads(
         self,
@@ -40849,47 +31830,17 @@ class ArtifactQueueProcessor:
         member_name: str,
         data: bytes,
     ) -> list[tuple[str, str, str]]:
-        lowered = member_name.lower()
-        text = self._decode_text_artifact_bytes(data)
-        if android_manifest_artifact_label(member_name):
-            return [(source_file, member_name, text)]
-        if lowered.endswith(".rels"):
-            payloads = self._run_ordered_local_batch(
-                ("relationships",),
-                lambda family: self._extract_member_payload_family(
-                    family,
-                    source_file=source_file,
-                    member_name=member_name,
-                    lowered=lowered,
-                    text=text,
-                ),
-                default_factory=list,
-            )
-            return payloads[0] if payloads else []
-        if lowered.endswith((".xml", ".xhtml", ".xht", ".opf", ".ncx")):
-            if database_client_config_artifact_label(member_name):
-                return [(source_file, member_name, text)]
-            payload_families = self._run_ordered_local_batch(
-                ("text", "meta"),
-                lambda family: self._extract_member_payload_family(
-                    family,
-                    source_file=source_file,
-                    member_name=member_name,
-                    lowered=lowered,
-                    text=text,
-                ),
-                default_factory=list,
-            )
-            prepared_payload_families = self._run_ordered_local_batch(
-                list(enumerate(payload_families)),
-                self._artifact_payload_tuple_batch_entries,
-                default_factory=list,
-            )
-            payloads: list[tuple[str, str, str]] = []
-            for family_payloads in prepared_payload_families:
-                payloads.extend(family_payloads)
-            return payloads
-        return [(source_file, member_name, text)]
+        return _orchestration_member_payloads(
+            source_file=source_file,
+            member_name=member_name,
+            data=data,
+            run_ordered_batch=self._run_ordered_local_batch,
+            decode_text_artifact_bytes=self._decode_text_artifact_bytes,
+            android_manifest_artifact_label=android_manifest_artifact_label,
+            database_client_config_artifact_label=database_client_config_artifact_label,
+            extract_member_payload_family=self._extract_member_payload_family,
+            artifact_payload_tuple_batch_entries=self._artifact_payload_tuple_batch_entries,
+        )
 
     def _extract_member_payload_family(
         self,
@@ -40900,215 +31851,99 @@ class ArtifactQueueProcessor:
         lowered: str,
         text: str,
     ) -> list[tuple[str, str, str]]:
-        if family == "relationships" and lowered.endswith(".rels"):
-            relationship_payload = self._relationship_payload(text)
-            if relationship_payload:
-                return [(source_file, f"{member_name}#relationships", relationship_payload)]
-            return []
-        if family == "text" and lowered.endswith((".xml", ".xhtml", ".xht", ".opf", ".ncx")):
-            xml_text = self._xml_text_payload(text)
-            if xml_text:
-                return [(source_file, member_name, xml_text)]
-            return []
-        if family == "meta" and lowered.endswith((".xml", ".xhtml", ".xht", ".opf", ".ncx")):
-            property_payload = self._xml_property_payload(member_name, text)
-            if property_payload:
-                return [(source_file, f"{member_name}#meta", property_payload)]
-            return []
-        return []
+        return _orchestration_extract_member_payload_family(
+            family,
+            source_file=source_file,
+            member_name=member_name,
+            lowered=lowered,
+            text=text,
+            relationship_payload=self._relationship_payload,
+            xml_text_payload=self._xml_text_payload,
+            xml_property_payload=self._xml_property_payload,
+        )
 
     @staticmethod
     def _normalize_xml_tag(tag: str) -> str:
-        if "}" in tag:
-            return tag.rsplit("}", 1)[-1]
-        return tag
+        return _orchestration_normalize_xml_tag(tag)
 
     def _xml_text_payload(self, text: str) -> str:
-        try:
-            root = ElementTree.fromstring(text)
-        except Exception:  # noqa: BLE001
-            return text
-        value_candidates = self._run_ordered_local_batch(
-            list(root.itertext()),
-            self._xml_text_value,
-            default_factory=str,
+        return _orchestration_xml_text_payload(
+            text,
+            run_ordered_batch=self._run_ordered_local_batch,
+            xml_text_value=self._xml_text_value,
         )
-        values = [value for value in value_candidates if value]
-        return "\n".join(values)
 
     @staticmethod
     def _xml_text_value(value: Any) -> str:
-        return str(value).strip()
+        return _orchestration_xml_text_value(value)
 
     def _xml_property_payload(self, member_name: str, text: str) -> str:
-        lowered = member_name.lower()
-        interesting = (
-            lowered.startswith("docprops/")
-            or "comments" in lowered
-            or "notesslides/" in lowered
-            or "slide" in lowered
-            or "sharedstrings" in lowered
-            or lowered.endswith("workbook.xml")
-            or lowered.endswith("document.xml")
-            or lowered.endswith("presentation.xml")
+        return _orchestration_xml_property_payload(
+            member_name,
+            text,
+            run_ordered_batch=self._run_ordered_local_batch,
+            xml_property_line=self._xml_property_line,
+            ordered_line_entry=self._ordered_line_entry,
         )
-        if not interesting:
-            return ""
-        try:
-            root = ElementTree.fromstring(text)
-        except Exception:  # noqa: BLE001
-            return ""
-        line_candidates = self._run_ordered_local_batch(
-            list(root.iter()),
-            self._xml_property_line,
-            default_factory=str,
-        )
-        line_entries = self._run_ordered_local_batch(
-            list(enumerate(line_candidates)),
-            self._ordered_line_entry,
-            default_factory=lambda: None,
-        )
-        lines = [line for line in line_entries if isinstance(line, str)]
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for line in lines:
-            if line in seen:
-                continue
-            seen.add(line)
-            deduped.append(line)
-        return "\n".join(deduped[:64])
 
     def _xml_property_line(self, element: Any) -> str:
-        children = list(element)
-        value = "".join(part.strip() for part in element.itertext() if part and part.strip())
-        if children or not value:
-            return ""
-        tag = self._normalize_xml_tag(element.tag)
-        return f"{tag}={value}"
+        return _orchestration_xml_property_line(
+            element,
+            normalize_xml_tag=self._normalize_xml_tag,
+        )
 
     def _relationship_payload(self, text: str) -> str:
-        try:
-            root = ElementTree.fromstring(text)
-        except Exception:  # noqa: BLE001
-            return ""
-        line_candidates = self._run_ordered_local_batch(
-            list(root),
-            self._relationship_line,
-            default_factory=str,
+        return _orchestration_relationship_payload(
+            text,
+            run_ordered_batch=self._run_ordered_local_batch,
+            relationship_line=self._relationship_line,
+            ordered_line_entry=self._ordered_line_entry,
         )
-        line_entries = self._run_ordered_local_batch(
-            list(enumerate(line_candidates)),
-            self._ordered_line_entry,
-            default_factory=lambda: None,
-        )
-        lines = [line for line in line_entries if isinstance(line, str)]
-        return "\n".join(lines[:64])
 
     @staticmethod
     def _relationship_line(element: Any) -> str:
-        target = str(element.attrib.get("Target") or "").strip()
-        if not target:
-            return ""
-        rel_type = str(element.attrib.get("Type") or "").rsplit("/", 1)[-1]
-        if rel_type:
-            return f"{rel_type}={target}"
-        return target
+        return _orchestration_relationship_line(element)
 
     def _pdf_metadata_lines(self, data: bytes) -> list[str]:
-        text = data.decode("latin-1", errors="ignore")
-        line_families = self._run_ordered_local_batch(
-            ("Title", "Author", "Creator", "Producer", "Subject", "Keywords", "URI"),
-            lambda key: self._pdf_metadata_lines_for_key(text, key),
-            default_factory=list,
+        return _orchestration_pdf_metadata_lines(
+            data,
+            run_ordered_batch=self._run_ordered_local_batch,
+            pdf_metadata_lines_for_key=self._pdf_metadata_lines_for_key,
+            ordered_line_batch_entries=self._ordered_line_batch_entries,
         )
-        line_batches = self._run_ordered_local_batch(
-            list(enumerate(line_families)),
-            self._ordered_line_batch_entries,
-            default_factory=list,
-        )
-        lines: list[str] = []
-        for family_lines in line_batches:
-            lines.extend(family_lines)
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for line in lines:
-            if line in seen:
-                continue
-            seen.add(line)
-            deduped.append(line)
-        return deduped[:64]
 
     @staticmethod
     def _ordered_line_batch_entries(
         line_batch: tuple[int, Sequence[str]],
     ) -> list[str]:
-        _batch_index, batch = line_batch
-        return [line for line in batch if line]
+        return _orchestration_ordered_line_batch_entries(line_batch)
 
     @staticmethod
     def _ordered_line_entry(
         line_entry: tuple[int, str],
     ) -> str | None:
-        _entry_index, line = line_entry
-        if not line:
-            return None
-        return line
+        return _orchestration_ordered_line_entry(line_entry)
 
     @staticmethod
     def _pdf_metadata_lines_for_key(text: str, key: str) -> list[str]:
-        lines: list[str] = []
-        if key == "URI":
-            for match in re.finditer(r"/URI\s*\((.*?)\)", text, re.DOTALL):
-                value = match.group(1).strip()
-                if value:
-                    lines.append(f"uri={value}")
-            return lines
-        for match in re.finditer(rf"/{key}\s*\((.*?)\)", text, re.DOTALL):
-            value = match.group(1).replace("\\(", "(").replace("\\)", ")").strip()
-            if value:
-                lines.append(f"{key.lower()}={value}")
-        return lines
+        return _orchestration_pdf_metadata_lines_for_key(text, key)
 
     def _pdf_xmp_payload(self, data: bytes) -> str:
-        text = data.decode("latin-1", errors="ignore")
-        match = re.search(r"<x:xmpmeta\b.*?</x:xmpmeta>", text, re.DOTALL | re.IGNORECASE)
-        if not match:
-            return ""
-        return self._xml_text_payload(match.group(0))
+        return _orchestration_pdf_xmp_payload(
+            data,
+            xml_text_payload=self._xml_text_payload,
+        )
 
     def _email_message_metadata_lines(self, message: Any) -> list[str]:
-        line_candidates = self._run_ordered_local_batch(
-            (
-                "subject",
-                "from",
-                "to",
-                "cc",
-                "bcc",
-                "reply-to",
-                "date",
-                "message-id",
-                "x-mailer",
-            ),
-            lambda header_name: self._email_message_metadata_line(message, header_name),
-            default_factory=str,
+        return _orchestration_email_message_metadata_lines(
+            message,
+            run_ordered_batch=self._run_ordered_local_batch,
+            email_message_metadata_line=self._email_message_metadata_line,
         )
-        lines = [line for line in line_candidates if line]
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for line in lines:
-            lowered = line.lower()
-            if lowered in seen:
-                continue
-            seen.add(lowered)
-            deduped.append(line)
-        return deduped[:64]
 
     @staticmethod
     def _email_message_metadata_line(message: Any, header_name: str) -> str:
-        value = str(message.get(header_name) or "").strip()
-        if not value:
-            return ""
-        return f"{header_name}={value}"
+        return _orchestration_email_message_metadata_line(message, header_name)
 
     def _artifact_payload_summary(
         self,
@@ -41116,46 +31951,21 @@ class ArtifactQueueProcessor:
         artifact_type: str,
         payloads: list[tuple[str, str, str]],
     ) -> dict[str, Any]:
-        metadata_payloads = [extract_path for _, extract_path, _ in payloads if "#" in extract_path]
-        relationship_payloads = [
-            value for value in metadata_payloads if value.endswith("#relationships")
-        ]
-        ocr_payloads = [value for value in metadata_payloads if "#ocr" in value]
-        barcode_payloads = [value for value in metadata_payloads if "#barcode" in value]
-        return {
-            "parser": artifact_type,
-            "format": _artifact_format_label(path),
-            "payload_count": len(payloads),
-            "metadata_payload_count": len(metadata_payloads),
-            "relationship_payload_count": len(relationship_payloads),
-            "ocr_payload_count": len(ocr_payloads),
-            "barcode_payload_count": len(barcode_payloads),
-            "barcode_decoder_backends": list(self._barcode_decoder_backends),
-        }
+        return _orchestration_artifact_payload_summary(
+            path,
+            artifact_type,
+            payloads,
+            artifact_format_label=_artifact_format_label,
+            barcode_decoder_backends=self._barcode_decoder_backends,
+        )
 
     @staticmethod
     def _dedupe_firebase_projects(projects: list[FirebaseProject]) -> list[FirebaseProject]:
-        deduped: list[FirebaseProject] = []
-        seen: set[tuple[str, str, str]] = set()
-        for project in projects:
-            key = (project.project_id, project.source_file, project.extract_path)
-            if key in seen:
-                continue
-            seen.add(key)
-            deduped.append(project)
-        return deduped
+        return dedupe_firebase_projects(projects)
 
     @staticmethod
     def _dedupe_supabase_configs(configs: list[SupabaseConfig]) -> list[SupabaseConfig]:
-        deduped: list[SupabaseConfig] = []
-        seen: set[tuple[str, str, str]] = set()
-        for config in configs:
-            key = (config.project_ref, config.source_file, config.extract_path)
-            if key in seen:
-                continue
-            seen.add(key)
-            deduped.append(config)
-        return deduped
+        return dedupe_supabase_configs(configs)
 
     def _store_key_finding(
         self,
@@ -41171,24 +31981,18 @@ class ArtifactQueueProcessor:
         repo_name: str | None = None,
         validation_detail: str = "artifact_queue_ingest",
     ) -> None:
-        con.execute(
-            """
-            INSERT OR IGNORE INTO key_scanner_findings
-                (engagement_id, domain, service, pattern_name, source_backend, source_url, repo_name, key_redacted, key_enc, validation_state, validation_detail)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'UNCONFIRMED', ?)
-            """,
-            (
-                self._engagement_id,
-                domain,
-                service,
-                pattern_name,
-                source_backend,
-                source_url,
-                repo_name or Path(source_url).name,
-                key_redacted,
-                key_enc,
-                validation_detail,
-            ),
+        _orchestration_store_artifact_key_finding(
+            con,
+            self._engagement_id,
+            service=service,
+            domain=domain,
+            source_url=source_url,
+            pattern_name=pattern_name,
+            key_redacted=key_redacted,
+            key_enc=key_enc,
+            source_backend=source_backend,
+            repo_name=repo_name,
+            validation_detail=validation_detail,
         )
 
     def _insert_seed(
@@ -41201,42 +32005,26 @@ class ArtifactQueueProcessor:
         confidence: float,
         depth: int = 1,
     ) -> bool:
-        normalized_depth = max(0, int(depth or 0))
-        before = con.total_changes
-        con.execute(
-            """
-            INSERT INTO engagement_seeds
-                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, '{}')
-            ON CONFLICT(engagement_id, seed_type, seed_value) DO UPDATE SET
-                source=excluded.source,
-                status='pending',
-                depth=MIN(engagement_seeds.depth, excluded.depth),
-                confidence=MAX(engagement_seeds.confidence, excluded.confidence),
-                updated_at=CURRENT_TIMESTAMP
-            """,
-            (self._engagement_id, seed_value, seed_type, source, normalized_depth, confidence),
+        return _orchestration_insert_artifact_seed(
+            con,
+            self._engagement_id,
+            seed_value,
+            seed_type,
+            source=source,
+            confidence=confidence,
+            depth=depth,
         )
-        return con.total_changes > before
 
     def _artifact_child_seed_depth(
         self,
         con: sqlite3.Connection,
         source_seed_id: int | None,
     ) -> int:
-        if source_seed_id is None:
-            return 1
-        row = con.execute(
-            """
-            SELECT depth
-            FROM engagement_seeds
-            WHERE id=? AND engagement_id=?
-            """,
-            (source_seed_id, self._engagement_id),
-        ).fetchone()
-        if row is None:
-            return 1
-        return max(1, int(row[0] or 0) + 1)
+        return _orchestration_artifact_child_seed_depth(
+            con,
+            self._engagement_id,
+            source_seed_id,
+        )
 
     def _lookup_seed_id(
         self,
@@ -41244,39 +32032,25 @@ class ArtifactQueueProcessor:
         seed_value: str,
         seed_type: str,
     ) -> int | None:
-        row = con.execute(
-            """
-            SELECT id
-            FROM engagement_seeds
-            WHERE engagement_id=? AND seed_type=? AND seed_value=?
-            """,
-            (self._engagement_id, seed_type, seed_value),
-        ).fetchone()
-        if row is None:
-            return None
-        return int(row[0])
+        return _orchestration_lookup_artifact_seed_id(
+            con,
+            self._engagement_id,
+            seed_value,
+            seed_type,
+        )
 
     def _artifact_source_seed_id(
         self,
         con: sqlite3.Connection,
         source_url: str,
     ) -> int | None:
-        normalized = str(source_url or "").strip()
-        if not normalized:
-            return None
-        seed_type = _classify_seed_value(normalized)
-        if seed_type not in {"url", "apk_url"}:
-            return None
-        candidate_types = [seed_type]
-        if seed_type == "apk_url":
-            candidate_types.append("url")
-        elif seed_type == "url" and _is_mobile_bundle_url(normalized):
-            candidate_types.insert(0, "apk_url")
-        for candidate_type in dict.fromkeys(candidate_types):
-            seed_id = self._lookup_seed_id(con, normalized, candidate_type)
-            if seed_id is not None:
-                return seed_id
-        return None
+        return _orchestration_artifact_source_seed_id(
+            con,
+            self._engagement_id,
+            source_url,
+            classify_seed_value=_classify_seed_value,
+            is_mobile_bundle_url=_is_mobile_bundle_url,
+        )
 
     def _ensure_local_artifact_source_seed(
         self,
@@ -41285,35 +32059,12 @@ class ArtifactQueueProcessor:
         *,
         artifact_context: dict[str, Any] | None,
     ) -> int | None:
-        parsed_source = str(parsed.source_url or "").strip()
-        parsed_url = urlparse(parsed_source)
-        if parsed_url.scheme in {"http", "https"} and parsed_url.netloc:
-            return None
-        seed_value = f"artifact://queue/{int(parsed.artifact_id)}"
-        metadata = self._local_artifact_source_seed_metadata(
+        return _orchestration_ensure_local_artifact_source_seed(
+            con,
+            self._engagement_id,
             parsed,
             artifact_context=artifact_context,
-            seed_value=seed_value,
         )
-        con.execute(
-            """
-            INSERT INTO engagement_seeds
-                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
-            VALUES (?, ?, 'other', 'artifact', 'completed', 0, 0.9, ?)
-            ON CONFLICT(engagement_id, seed_type, seed_value) DO UPDATE SET
-                source='artifact',
-                status='completed',
-                confidence=MAX(engagement_seeds.confidence, excluded.confidence),
-                metadata_json=excluded.metadata_json,
-                updated_at=CURRENT_TIMESTAMP
-            """,
-            (
-                self._engagement_id,
-                seed_value,
-                json.dumps(metadata, sort_keys=True),
-            ),
-        )
-        return self._lookup_seed_id(con, seed_value, "other")
 
     @staticmethod
     def _local_artifact_source_seed_metadata(
@@ -41322,98 +32073,19 @@ class ArtifactQueueProcessor:
         artifact_context: dict[str, Any] | None,
         seed_value: str,
     ) -> dict[str, Any]:
-        metadata: dict[str, Any] = {
-            "artifact_provenance": True,
-            "artifact_source_seed": True,
-            "artifact_queue_id": int(parsed.artifact_id),
-            "source_url": seed_value,
-        }
-        artifact_type = str(parsed.artifact_type or "").strip()
-        if artifact_type:
-            metadata["artifact_type"] = artifact_type[:64]
-        for key, value in dict(artifact_context or {}).items():
-            if key in {
-                "artifact_type",
-                "barcode_payload_count",
-                "content_type",
-                "download_filename",
-                "downloaded_from_remote",
-                "format",
-                "metadata_payload_count",
-                "ocr_payload_count",
-                "parser",
-                "payload_count",
-                "relationship_payload_count",
-            } and isinstance(value, (str, int, float, bool)):
-                metadata[key] = value
-        return metadata
+        return local_artifact_source_seed_metadata(
+            artifact_id=parsed.artifact_id,
+            artifact_type=parsed.artifact_type,
+            artifact_context=artifact_context,
+            seed_value=seed_value,
+        )
 
     @staticmethod
     def _artifact_source_seed_provenance(
         con: sqlite3.Connection,
         source_seed_id: int,
     ) -> dict[str, Any]:
-        row = con.execute(
-            """
-            SELECT metadata_json
-            FROM engagement_seeds
-            WHERE id=?
-            """,
-            (source_seed_id,),
-        ).fetchone()
-        if row is None:
-            return {}
-        metadata = _safe_json_loads(str(row[0] or "{}"))
-        if not isinstance(metadata, dict):
-            return {}
-        provenance: dict[str, Any] = {}
-        for key in (
-            "archive_sources",
-            "provider_sources",
-            "root_domain",
-            "discovered_from",
-            "source",
-            "source_backend",
-            "source_provider",
-            "fixture_provider",
-            "source_url",
-            "source_seed_url",
-            "source_rule",
-            "content_type",
-            "download_filename",
-            "downloaded_from_remote",
-            "parser",
-            "payload_count",
-            "metadata_payload_count",
-            "relationship_payload_count",
-            "ocr_payload_count",
-            "barcode_payload_count",
-            "helm_index_url",
-            "hostname",
-            "scan_domain",
-            "scan_id",
-            "scheme",
-            "port",
-        ):
-            value = metadata.get(key)
-            if value in (None, "", [], {}):
-                continue
-            if key in {"archive_sources", "provider_sources"}:
-                if not isinstance(value, list):
-                    continue
-                normalized: list[str] = []
-                for raw_item in value:
-                    item = str(raw_item or "").strip()
-                    if item and item not in normalized:
-                        normalized.append(item)
-                    if len(normalized) >= 8:
-                        break
-                if normalized:
-                    provenance[key] = normalized
-                continue
-            if isinstance(value, (str, int, float, bool)):
-                provenance[key] = value
-        return provenance
+        return _orchestration_artifact_source_seed_provenance_from_db(con, source_seed_id)
 
     @staticmethod
     def _artifact_seed_metadata_from_evidence(
@@ -41421,91 +32093,11 @@ class ArtifactQueueProcessor:
         *,
         source_seed_id: int,
     ) -> dict[str, Any]:
-        allowed_keys = {
-            "archive_sources",
-            "provider_sources",
-            "root_domain",
-            "discovered_from",
-            "source",
-            "source_backend",
-            "source_provider",
-            "fixture_provider",
-            "source_url",
-            "source_seed_url",
-            "source_file",
-            "source_rule",
-            "extract_path",
-            "extract_rule",
-            "format",
-            "helm_index_url",
-            "artifact_type",
-            "content_type",
-            "download_filename",
-            "downloaded_from_remote",
-            "parser",
-            "payload_count",
-            "metadata_payload_count",
-            "relationship_payload_count",
-            "ocr_payload_count",
-            "barcode_payload_count",
-            "hostname",
-            "scan_domain",
-            "scan_id",
-            "scheme",
-            "port",
-        }
-        metadata: dict[str, Any] = {
-            "artifact_provenance": True,
-            "artifact_source_seed_id": source_seed_id,
-        }
-        for key in sorted(allowed_keys):
-            value = evidence.get(key)
-            if value in (None, "", [], {}):
-                continue
-            if key in {"archive_sources", "provider_sources"}:
-                if not isinstance(value, list):
-                    continue
-                normalized: list[str] = []
-                for raw_item in value:
-                    item = str(raw_item or "").strip()
-                    if item and item not in normalized:
-                        normalized.append(item)
-                    if len(normalized) >= 8:
-                        break
-                if normalized:
-                    metadata[key] = normalized
-                continue
-            if isinstance(value, (str, int, float, bool)):
-                metadata[key] = value
-        return metadata
+        return artifact_seed_metadata_from_evidence(evidence, source_seed_id=source_seed_id)
 
     @staticmethod
     def _merge_artifact_seed_metadata(existing: Any, incoming: dict[str, Any]) -> dict[str, Any]:
-        merged = dict(existing) if isinstance(existing, dict) else {}
-        for key, value in incoming.items():
-            if value in (None, "", [], {}):
-                continue
-            if key in {"archive_sources", "provider_sources"}:
-                existing_sources = merged.get(key)
-                normalized: list[str] = []
-                if isinstance(existing_sources, list):
-                    for raw_item in existing_sources:
-                        item = str(raw_item or "").strip()
-                        if item and item not in normalized:
-                            normalized.append(item)
-                if isinstance(value, list):
-                    for raw_item in value:
-                        item = str(raw_item or "").strip()
-                        if item and item not in normalized:
-                            normalized.append(item)
-                        if len(normalized) >= 8:
-                            break
-                if normalized:
-                    merged[key] = normalized
-                continue
-            if key not in merged or merged.get(key) in (None, "", [], {}):
-                merged[key] = value
-        return merged
+        return merge_artifact_seed_metadata(existing, incoming)
 
     def _merge_artifact_provenance_into_seed(
         self,
@@ -41515,36 +32107,12 @@ class ArtifactQueueProcessor:
         *,
         source_seed_id: int,
     ) -> None:
-        incoming = self._artifact_seed_metadata_from_evidence(
+        _orchestration_merge_artifact_provenance_into_seed(
+            con,
+            self._engagement_id,
+            target_seed_id,
             evidence,
             source_seed_id=source_seed_id,
-        )
-        if not incoming:
-            return
-        row = con.execute(
-            """
-            SELECT metadata_json
-            FROM engagement_seeds
-            WHERE id=? AND engagement_id=?
-            """,
-            (target_seed_id, self._engagement_id),
-        ).fetchone()
-        if row is None:
-            return
-        existing = _safe_json_loads(str(row[0] or "{}"))
-        merged = self._merge_artifact_seed_metadata(existing, incoming)
-        con.execute(
-            """
-            UPDATE engagement_seeds
-            SET metadata_json=?,
-                updated_at=CURRENT_TIMESTAMP
-            WHERE id=? AND engagement_id=?
-            """,
-            (
-                json.dumps(merged, sort_keys=True),
-                target_seed_id,
-                self._engagement_id,
-            ),
         )
 
     @staticmethod
@@ -41552,14 +32120,7 @@ class ArtifactQueueProcessor:
         existing: Any,
         incoming: dict[str, Any] | None,
     ) -> dict[str, Any]:
-        merged = dict(existing) if isinstance(existing, dict) else {}
-        if not incoming:
-            return merged
-        for key, value in incoming.items():
-            if value in (None, "", [], {}):
-                continue
-            merged[str(key)] = value
-        return merged
+        return merge_artifact_relation_evidence(existing, incoming)
 
     def _insert_relation(
         self,
@@ -41570,48 +32131,14 @@ class ArtifactQueueProcessor:
         confidence: float,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        existing_row = con.execute(
-            """
-            SELECT confidence, evidence_json
-            FROM seed_relations
-            WHERE engagement_id=? AND source_seed_id=? AND target_seed_id=? AND relation_type=?
-            """,
-            (self._engagement_id, source_seed_id, target_seed_id, relation_type),
-        ).fetchone()
-        if existing_row is not None:
-            existing_metadata = _safe_json_loads(str(existing_row[1] or "{}"))
-            merged_metadata = self._merge_relation_evidence(existing_metadata, metadata)
-            con.execute(
-                """
-                UPDATE seed_relations
-                SET confidence=?,
-                    evidence_json=?
-                WHERE engagement_id=? AND source_seed_id=? AND target_seed_id=? AND relation_type=?
-                """,
-                (
-                    max(float(existing_row[0] or 0.0), float(confidence or 0.0)),
-                    json.dumps(merged_metadata, sort_keys=True),
-                    self._engagement_id,
-                    source_seed_id,
-                    target_seed_id,
-                    relation_type,
-                ),
-            )
-            return
-        con.execute(
-            """
-            INSERT INTO seed_relations
-                (engagement_id, source_seed_id, target_seed_id, relation_type, confidence, evidence_json)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                self._engagement_id,
-                source_seed_id,
-                target_seed_id,
-                relation_type,
-                confidence,
-                json.dumps(metadata or {}),
-            ),
+        _orchestration_insert_artifact_seed_relation(
+            con,
+            self._engagement_id,
+            source_seed_id,
+            target_seed_id,
+            relation_type,
+            confidence,
+            metadata,
         )
 
     def _link_artifact_source_seed(
@@ -41624,34 +32151,14 @@ class ArtifactQueueProcessor:
         confidence: float,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        if source_seed_id is None:
-            return
-        target_seed_id = self._lookup_seed_id(con, target_seed_value, target_seed_type)
-        if target_seed_id is None or target_seed_id == source_seed_id:
-            return
-        evidence = {"rule": "artifact_seed_provenance"}
-        if metadata:
-            for key, value in metadata.items():
-                if key == "rule":
-                    if value:
-                        evidence["extract_rule"] = value
-                    continue
-                evidence[key] = value
-        for key, value in self._artifact_source_seed_provenance(con, source_seed_id).items():
-            evidence.setdefault(key, value)
-        self._merge_artifact_provenance_into_seed(
+        _orchestration_link_artifact_source_seed(
             con,
-            target_seed_id,
-            evidence,
-            source_seed_id=source_seed_id,
-        )
-        self._insert_relation(
-            con,
+            self._engagement_id,
             source_seed_id,
-            target_seed_id,
-            "derived_from",
-            confidence,
-            evidence,
+            target_seed_value,
+            target_seed_type,
+            confidence=confidence,
+            metadata=metadata,
         )
 
     def _insert_email(
@@ -41662,31 +32169,13 @@ class ArtifactQueueProcessor:
         source: str,
         depth: int = 1,
     ) -> bool:
-        normalized = email.strip().lower()
-        if "@" not in normalized:
-            return False
-        before = con.total_changes
-        try:
-            con.execute(
-                """
-                INSERT INTO emails (engagement_id, email, domain, source)
-                VALUES (?, ?, ?, ?)
-                """,
-                (self._engagement_id, normalized, normalized.split("@", 1)[1], source),
-            )
-        except sqlite3.IntegrityError:
-            pass
-        except sqlite3.OperationalError:
-            return False
-        self._insert_seed(
+        return _orchestration_insert_artifact_email(
             con,
-            normalized,
-            "email",
-            source="artifact",
-            confidence=0.74,
+            self._engagement_id,
+            email,
+            source=source,
             depth=depth,
         )
-        return con.total_changes > before
 
     @staticmethod
     def _classify_artifact(path: Path) -> str | None:
@@ -41694,130 +32183,24 @@ class ArtifactQueueProcessor:
 
     @staticmethod
     def _resolve_local_path(local_path: str, source_url: str) -> Path | None:
-        for candidate in (local_path, source_url):
-            if not candidate:
-                continue
-            path = Path(candidate)
-            if path.exists():
-                return path
-        return None
+        return _orchestration_resolve_local_artifact_path(local_path, source_url)
 
     def _download_remote_artifact_request(
         self,
         request: ArtifactDownloadRequest,
     ) -> ArtifactDownloadResult:
-        artifact_id = request.artifact_id
-        source_url = request.source_url
-        artifact_type = request.artifact_type
-        parsed = urlparse(source_url)
-        if parsed.scheme not in {"http", "https"}:
-            return ArtifactDownloadResult(
-                artifact_id=artifact_id,
-                source_url=source_url,
-                artifact_type=artifact_type,
-            )
-        cache_dir = self._db_path.parent / "artifact_cache" / str(self._engagement_id)
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        filename = _select_remote_artifact_filename(
-            artifact_id,
-            source_url,
-            artifact_type,
-        )
-        download_path = cache_dir / f"{artifact_id}-{filename}"
-        if download_path.exists() and download_path.is_file():
-            inferred_type = self._classify_artifact(download_path) or artifact_type
-            return ArtifactDownloadResult(
-                artifact_id=artifact_id,
-                source_url=source_url,
-                artifact_type=inferred_type,
-                path=download_path,
-                metadata_extra={"download_filename": download_path.name},
-            )
-        content_type = ""
-        content_disposition = ""
-        try:
-            from urllib.error import HTTPError
-            from urllib.request import Request, urlopen
-
-            attempts = web_fetch_rate_limit_retries() + 1
-            sleep_rate_limit_cooldown("web_fetch", source_url)
-            for attempt in range(attempts):
-                request_delay = web_fetch_request_delay_seconds()
-                if request_delay > 0:
-                    time.sleep(request_delay)
-                request = Request(
-                    source_url,
-                    headers={"User-Agent": "FORGE/1.0 artifact-fetch"},
-                )
-                try:
-                    total_bytes = 0
-                    with urlopen(request, timeout=20.0) as response:
-                        content_type = (
-                            str(response.headers.get("Content-Type") or "").strip().lower()
-                        )
-                        content_disposition = str(
-                            response.headers.get("Content-Disposition") or ""
-                        ).strip()
-                        filename = _select_remote_artifact_filename(
-                            artifact_id,
-                            source_url,
-                            artifact_type,
-                            content_disposition=content_disposition,
-                            content_type=content_type,
-                        )
-                        download_path = cache_dir / f"{artifact_id}-{filename}"
-                        if download_path.exists() and download_path.is_file():
-                            inferred_type = self._classify_artifact(download_path) or artifact_type
-                            return ArtifactDownloadResult(
-                                artifact_id=artifact_id,
-                                source_url=source_url,
-                                artifact_type=inferred_type,
-                                path=download_path,
-                                metadata_extra={
-                                    "content_disposition": content_disposition,
-                                    "content_type": content_type,
-                                    "download_filename": download_path.name,
-                                },
-                            )
-                        with download_path.open("wb") as handle:
-                            while True:
-                                chunk = response.read(65_536)
-                                if not chunk:
-                                    break
-                                total_bytes += len(chunk)
-                                if total_bytes > _REMOTE_ARTIFACT_MAX_BYTES:
-                                    raise ValueError("remote artifact exceeds size limit")
-                                handle.write(chunk)
-                    break
-                except HTTPError as exc:
-                    if exc.code == 429:
-                        wait_seconds = web_fetch_retry_after_seconds(exc)
-                        record_rate_limit_cooldown("web_fetch", source_url, wait_seconds)
-                        if wait_seconds > 0:
-                            time.sleep(wait_seconds)
-                        if attempt < attempts - 1:
-                            continue
-                    raise
-            else:
-                raise RuntimeError("remote acquisition exhausted web-fetch retry budget")
-        except Exception as exc:  # noqa: BLE001
-            return ArtifactDownloadResult(
-                artifact_id,
-                source_url,
-                artifact_type,
-                error=f"remote acquisition failed: {type(exc).__name__}: {str(exc)[:180]}",
-            )
-        inferred_type = self._classify_artifact(download_path) or artifact_type
-        return ArtifactDownloadResult(
-            artifact_id=artifact_id,
-            source_url=source_url,
-            artifact_type=inferred_type,
-            path=download_path,
-            metadata_extra={
-                "content_disposition": content_disposition,
-                "content_type": content_type,
-                "download_filename": download_path.name,
-            },
+        return _orchestration_download_remote_artifact_request(
+            request,
+            cache_dir=self._db_path.parent / "artifact_cache" / str(self._engagement_id),
+            select_remote_artifact_filename=_select_remote_artifact_filename,
+            classify_artifact=self._classify_artifact,
+            remote_artifact_max_bytes=_REMOTE_ARTIFACT_MAX_BYTES,
+            rate_limit_retries=web_fetch_rate_limit_retries,
+            sleep_rate_limit_cooldown=sleep_rate_limit_cooldown,
+            web_fetch_request_delay_seconds=web_fetch_request_delay_seconds,
+            web_fetch_retry_after_seconds=web_fetch_retry_after_seconds,
+            record_rate_limit_cooldown=record_rate_limit_cooldown,
+            sleep=time.sleep,
         )
 
     def _download_remote_artifact(
@@ -41827,31 +32210,40 @@ class ArtifactQueueProcessor:
         source_url: str,
         artifact_type: str,
     ) -> Path | None:
-        result = self._download_remote_artifact_request(
-            ArtifactDownloadRequest(
-                artifact_id=artifact_id,
-                source_url=source_url,
-                artifact_type=artifact_type,
-            )
-        )
-        if result.error:
+        def _update_status(
+            target_artifact_id: int,
+            status: str,
+            notes: str,
+        ) -> None:
             self._update_artifact_status(
                 con,
-                artifact_id,
-                "failed",
-                result.error,
+                target_artifact_id,
+                status,
+                notes,
             )
-            return None
-        if result.path is None:
-            return None
-        self._set_artifact_local_path(
-            con,
-            artifact_id,
-            result.path,
-            artifact_type=result.artifact_type,
-            metadata_extra=result.metadata_extra,
+
+        def _set_local_path(
+            target_artifact_id: int,
+            local_path: Path,
+            resolved_artifact_type: str,
+            metadata_extra: dict[str, Any],
+        ) -> None:
+            self._set_artifact_local_path(
+                con,
+                target_artifact_id,
+                local_path,
+                artifact_type=resolved_artifact_type,
+                metadata_extra=metadata_extra,
+            )
+
+        return download_remote_artifact_for_queue_record(
+            artifact_id=artifact_id,
+            source_url=source_url,
+            artifact_type=artifact_type,
+            download_one=self._download_remote_artifact_request,
+            update_artifact_status=_update_status,
+            set_artifact_local_path=_set_local_path,
         )
-        return result.path
 
     @staticmethod
     def _set_artifact_local_path(
@@ -41862,36 +32254,12 @@ class ArtifactQueueProcessor:
         artifact_type: str | None = None,
         metadata_extra: dict[str, Any] | None = None,
     ) -> None:
-        row = con.execute(
-            "SELECT metadata_json FROM artifact_queue WHERE id=?",
-            (artifact_id,),
-        ).fetchone()
-        existing_metadata = _safe_json_loads(str(row[0] or "{}")) if row is not None else {}
-        merged_metadata = existing_metadata if isinstance(existing_metadata, dict) else {}
-        merged_metadata.update(
-            {
-                "downloaded_from_remote": True,
-                "download_path": local_path.as_posix(),
-            }
-        )
-        if metadata_extra:
-            merged_metadata.update(metadata_extra)
-        con.execute(
-            """
-            UPDATE artifact_queue
-            SET local_path=?,
-                artifact_type=COALESCE(?, artifact_type),
-                status='downloaded',
-                metadata_json=?,
-                updated_at=CURRENT_TIMESTAMP
-            WHERE id=?
-            """,
-            (
-                local_path.as_posix(),
-                artifact_type,
-                json.dumps(merged_metadata, sort_keys=True),
-                artifact_id,
-            ),
+        _orchestration_set_artifact_local_path(
+            con,
+            artifact_id,
+            local_path,
+            artifact_type=artifact_type,
+            metadata_extra=metadata_extra,
         )
 
     @staticmethod
@@ -41902,19 +32270,10 @@ class ArtifactQueueProcessor:
         notes: str,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        row = con.execute(
-            "SELECT metadata_json FROM artifact_queue WHERE id=?",
-            (artifact_id,),
-        ).fetchone()
-        existing_metadata = _safe_json_loads(str(row[0] or "{}")) if row is not None else {}
-        merged_metadata = existing_metadata if isinstance(existing_metadata, dict) else {}
-        if metadata:
-            merged_metadata.update(metadata)
-        con.execute(
-            """
-            UPDATE artifact_queue
-            SET status=?, notes=?, metadata_json=?, updated_at=CURRENT_TIMESTAMP
-            WHERE id=?
-            """,
-            (status, notes[:1024], json.dumps(merged_metadata, sort_keys=True), artifact_id),
+        _orchestration_update_artifact_status(
+            con,
+            artifact_id,
+            status,
+            notes,
+            metadata=metadata,
         )

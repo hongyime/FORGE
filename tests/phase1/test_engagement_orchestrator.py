@@ -6963,7 +6963,9 @@ def test_synthesis_engine_parallelizes_host_seed_rows_and_preserves_order(
     engine = EngagementSynthesisEngine(db_path, 1001)
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
     delays = {
         "app.acme.example": 0.05,
         "edge.acme.example": 0.01,
@@ -6999,11 +7001,15 @@ def test_synthesis_engine_parallelizes_host_seed_rows_and_preserves_order(
         seed_depths: dict[tuple[str, str], int],
     ) -> list[SeedCandidate]:
         key = str(row["hostname"] or row["ip"] or "").lower().strip()
-        nonlocal active, peak
+        nonlocal active, peak, entered
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            if entered >= 4:
+                gate.set()
         try:
+            gate.wait(timeout=1.0)
             time.sleep(delays[key])
             return original_host_seed_candidates(self, row, seed_depths)
         finally:
@@ -7046,7 +7052,9 @@ def test_synthesis_engine_parallelizes_artifact_seed_rows_and_supports_local_mob
     engine = EngagementSynthesisEngine(db_path, 1001)
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
     local_apk = (tmp_path / "local-client.apk").resolve()
     local_apk.write_bytes(b"binary")
     delays = {
@@ -7146,11 +7154,15 @@ def test_synthesis_engine_parallelizes_artifact_seed_rows_and_supports_local_mob
         seed_depths: dict[tuple[str, str], int],
     ) -> list[SeedCandidate]:
         key = str(row["source_url"] or row["local_path"] or "").strip()
-        nonlocal active, peak
+        nonlocal active, peak, entered
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            if entered >= 4:
+                gate.set()
         try:
+            gate.wait(timeout=1.0)
             time.sleep(delays[key])
             return original_artifact_seed_candidates(self, row, seed_depths)
         finally:
@@ -41996,16 +42008,22 @@ def test_artifact_queue_processor_parallelizes_nested_tar_mobile_member_planning
         "packages/ignore.txt": 0.01,
     }
     active = 0
+    entered = 0
     peak = 0
     lock = threading.Lock()
+    gate = threading.Event()
     original_entry = ArtifactQueueProcessor._nested_mobile_tar_member_entry
 
     def _tracking_entry(member):  # noqa: ANN001
-        nonlocal active, peak
+        nonlocal active, entered, peak
         with lock:
             active += 1
+            entered += 1
             peak = max(peak, active)
+            if entered >= 4:
+                gate.set()
         try:
+            gate.wait(timeout=1.0)
             time.sleep(delays[member.name])
             return original_entry(member)
         finally:
@@ -50349,23 +50367,33 @@ def test_artifact_queue_processor_parallelizes_nested_member_rebase_entries_and_
         "supabase-5": 0.04,
     }
     active_payload = 0
+    entered_payload = 0
     peak_payload = 0
     active_project = 0
+    entered_project = 0
     peak_project = 0
     active_config = 0
+    entered_config = 0
     peak_config = 0
     lock = threading.Lock()
+    payload_gate = threading.Event()
+    project_gate = threading.Event()
+    config_gate = threading.Event()
     original_payload_entry = ArtifactQueueProcessor._rebased_mobile_member_payload_entry
     original_project_entry = ArtifactQueueProcessor._rebased_mobile_member_project_entry
     original_config_entry = ArtifactQueueProcessor._rebased_mobile_member_config_entry
 
     def _tracking_payload_entry(payload, *, source_path, member_name):  # noqa: ANN001
         del source_path, member_name
-        nonlocal active_payload, peak_payload
+        nonlocal active_payload, entered_payload, peak_payload
         with lock:
             active_payload += 1
+            entered_payload += 1
             peak_payload = max(peak_payload, active_payload)
+            if entered_payload >= 4:
+                payload_gate.set()
         try:
+            payload_gate.wait(timeout=1.0)
             time.sleep(payload_delays[payload[1]])
             return original_payload_entry(
                 payload, source_path=source_archive, member_name="packages/client.apk"
@@ -50376,11 +50404,15 @@ def test_artifact_queue_processor_parallelizes_nested_member_rebase_entries_and_
 
     def _tracking_project_entry(project, *, source_path, member_name):  # noqa: ANN001
         del source_path, member_name
-        nonlocal active_project, peak_project
+        nonlocal active_project, entered_project, peak_project
         with lock:
             active_project += 1
+            entered_project += 1
             peak_project = max(peak_project, active_project)
+            if entered_project >= 4:
+                project_gate.set()
         try:
+            project_gate.wait(timeout=1.0)
             time.sleep(project_delays[project.project_id])
             return original_project_entry(
                 project, source_path=source_archive, member_name="packages/client.apk"
@@ -50391,11 +50423,15 @@ def test_artifact_queue_processor_parallelizes_nested_member_rebase_entries_and_
 
     def _tracking_config_entry(config, *, source_path, member_name):  # noqa: ANN001
         del source_path, member_name
-        nonlocal active_config, peak_config
+        nonlocal active_config, entered_config, peak_config
         with lock:
             active_config += 1
+            entered_config += 1
             peak_config = max(peak_config, active_config)
+            if entered_config >= 4:
+                config_gate.set()
         try:
+            config_gate.wait(timeout=1.0)
             time.sleep(config_delays[config.project_ref])
             return original_config_entry(
                 config, source_path=source_archive, member_name="packages/client.apk"
@@ -50607,9 +50643,9 @@ def test_artifact_queue_processor_parallelizes_payload_text_discovery_collection
 ) -> None:
     db_path = tmp_path / "engagement.db"
     discovery_jobs = [
-        (str(tmp_path / "artifact-one.txt"), "one"),
-        (str(tmp_path / "artifact-two.txt"), "two"),
-        (str(tmp_path / "artifact-three.txt"), "three"),
+        (str(tmp_path / "artifact-one.txt"), "one-source", "one"),
+        (str(tmp_path / "artifact-two.txt"), "two-source", "two"),
+        (str(tmp_path / "artifact-three.txt"), "three-source", "three"),
     ]
     delays = {
         "one": 0.05,
@@ -50625,7 +50661,9 @@ def test_artifact_queue_processor_parallelizes_payload_text_discovery_collection
         text: str,
         *,
         source_file: str,
+        source_hint: str = "",
     ) -> ArtifactTextDiscoveryBatch:  # noqa: ANN001
+        del source_hint
         nonlocal active, peak
         with lock:
             active += 1
@@ -50674,13 +50712,13 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_job_planni
 ) -> None:
     db_path = tmp_path / "engagement.db"
     discovery_jobs = [
-        (str(tmp_path / "artifact-one.txt"), "one"),
-        (str(tmp_path / "artifact-blank.txt"), "   "),
-        (str(tmp_path / "artifact-two.txt"), "two"),
-        (str(tmp_path / "artifact-empty.txt"), ""),
-        (str(tmp_path / "artifact-three.txt"), "three"),
-        (str(tmp_path / "artifact-four.txt"), "four"),
-        (str(tmp_path / "artifact-five.txt"), "five"),
+        (str(tmp_path / "artifact-one.txt"), "one-source", "one"),
+        (str(tmp_path / "artifact-blank.txt"), "blank-source", "   "),
+        (str(tmp_path / "artifact-two.txt"), "two-source", "two"),
+        (str(tmp_path / "artifact-empty.txt"), "empty-source", ""),
+        (str(tmp_path / "artifact-three.txt"), "three-source", "three"),
+        (str(tmp_path / "artifact-four.txt"), "four-source", "four"),
+        (str(tmp_path / "artifact-five.txt"), "five-source", "five"),
     ]
     delays = {
         str(tmp_path / "artifact-one.txt"): 0.05,
@@ -50693,16 +50731,24 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_job_planni
     }
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
     original_entry = ArtifactQueueProcessor._generic_text_discovery_job
 
     def _tracking_entry(discovery_job):  # noqa: ANN001
-        nonlocal active, peak
-        source_file, _text = discovery_job
+        nonlocal active, peak, entered
+        source_file, _source_hint, _text = discovery_job
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 4:
+                gate.set()
         try:
+            if current_entered <= 4:
+                assert gate.wait(timeout=1.0)
             time.sleep(delays[source_file])
             return original_entry(discovery_job)
         finally:
@@ -50714,7 +50760,9 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_job_planni
         text: str,
         *,
         source_file: str,
+        source_hint: str = "",
     ) -> ArtifactTextDiscoveryBatch:  # noqa: ANN001
+        del source_hint
         assert text.strip()
         return ArtifactTextDiscoveryBatch(
             source_file=source_file,
@@ -50776,7 +50824,9 @@ def test_artifact_queue_processor_parallelizes_per_payload_text_discovery_extrac
         *,
         text: str,
         source_file: str,
+        source_hint: str = "",
     ) -> ArtifactTextDiscoveryBatch:  # noqa: ANN001
+        del source_hint
         assert text == "payload-text"
         nonlocal active, peak
         with lock:
@@ -51578,6 +51628,7 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_family_mer
         4: 0.04,
         5: 0.015,
         6: 0.025,
+        7: 0.035,
     }
     active = 0
     peak = 0
@@ -51603,7 +51654,9 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_family_mer
         *,
         text: str,
         source_file: str,
+        source_hint: str = "",
     ) -> ArtifactTextDiscoveryBatch:  # noqa: ANN001
+        del source_hint
         assert text == "payload-text"
         batch = ArtifactTextDiscoveryBatch(source_file=source_file)
         if family == "emails":
@@ -51690,6 +51743,7 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_merge_entr
         4: 0.04,
         5: 0.015,
         6: 0.025,
+        7: 0.035,
     }
     active = 0
     peak = 0
@@ -51723,7 +51777,9 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_merge_entr
         *,
         text: str,
         source_file: str,
+        source_hint: str = "",
     ) -> ArtifactTextDiscoveryBatch:  # noqa: ANN001
+        del source_hint
         assert text == "payload-text"
         batch = ArtifactTextDiscoveryBatch(source_file=source_file)
         if family == "emails":
@@ -51806,7 +51862,9 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_merge_fami
         "emails": 0.05,
         "phones": 0.01,
         "ip_seeds": 0.03,
+        "host_seeds": 0.035,
         "urls": 0.02,
+        "identity_seeds": 0.025,
         "key_findings": 0.04,
         "cloud_assets": 0.015,
     }
@@ -51841,7 +51899,9 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_merge_fami
         *,
         text: str,
         source_file: str,
+        source_hint: str = "",
     ) -> ArtifactTextDiscoveryBatch:  # noqa: ANN001
+        del source_hint
         assert text == "payload-text"
         batch = ArtifactTextDiscoveryBatch(source_file=source_file)
         if family == "emails":
@@ -52009,7 +52069,9 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_persistenc
     }
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
     inserted_emails: list[str] = []
     inserted_seeds: list[tuple[str, str]] = []
     linked_targets: list[tuple[str, str]] = []
@@ -52025,11 +52087,17 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_persistenc
     original_cloud_entry = ArtifactQueueProcessor._artifact_text_cloud_asset_persistence_entry
 
     def _track_delay(key: str) -> None:
-        nonlocal active, peak
+        nonlocal active, peak, entered
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 4:
+                gate.set()
         try:
+            if current_entered <= 4:
+                assert gate.wait(timeout=1.0)
             time.sleep(delays[key])
         finally:
             with lock:
@@ -52230,7 +52298,9 @@ def test_artifact_queue_processor_parallelizes_artifact_url_seed_prep_and_preser
     }
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
     insert_seed_calls: list[tuple[str, str]] = []
     link_calls: list[tuple[str, str, dict[str, object] | None]] = []
     relation_calls: list[tuple[int, int, str, float, dict[str, object]]] = []
@@ -52240,11 +52310,17 @@ def test_artifact_queue_processor_parallelizes_artifact_url_seed_prep_and_preser
         assert url == "https://portal.example.com/app"
         assert hostname == "portal.example.com"
         assert relation_metadata == {"rule": "artifact_text_extract", "source_file": "artifact.txt"}
-        nonlocal active, peak
+        nonlocal active, peak, entered
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 3:
+                gate.set()
         try:
+            if current_entered <= 3:
+                assert gate.wait(timeout=1.0)
             time.sleep(delays[family])
             if family == "social_pivots":
                 relation_evidence = dict(relation_metadata)
@@ -52309,8 +52385,8 @@ def test_artifact_queue_processor_parallelizes_artifact_url_seed_prep_and_preser
             with lock:
                 active -= 1
 
-    def _fake_insert_seed(self, con, seed_value, seed_type, *, source, confidence):  # noqa: ANN001
-        del self, con, source, confidence
+    def _fake_insert_seed(self, con, seed_value, seed_type, *, source, confidence, depth=1):  # noqa: ANN001
+        del self, con, source, confidence, depth
         insert_seed_calls.append((str(seed_value), str(seed_type)))
         return True
 
@@ -52360,8 +52436,8 @@ def test_artifact_queue_processor_parallelizes_artifact_url_seed_prep_and_preser
         )
         return True
 
-    def _fake_store_cloud_asset_reference(self, con, *, asset_type, identifier, source):  # noqa: ANN001
-        del self, con
+    def _fake_store_cloud_asset_reference(self, con, *, asset_type, identifier, source, metadata=None):  # noqa: ANN001
+        del self, con, metadata
         cloud_asset_calls.append((str(asset_type), str(identifier), str(source)))
 
     monkeypatch.setattr(
@@ -52685,8 +52761,8 @@ def test_artifact_queue_processor_parallelizes_social_profile_url_pivot_entries_
         }
         return seed_map.get((str(seed_value), str(seed_type)))
 
-    def _fake_insert_seed(self, con, seed_value, seed_type, *, source, confidence):  # noqa: ANN001
-        del self, con, source, confidence
+    def _fake_insert_seed(self, con, seed_value, seed_type, *, source, confidence, depth=1):  # noqa: ANN001
+        del self, con, source, confidence, depth
         insert_seed_calls.append((str(seed_value), str(seed_type)))
         return True
 
@@ -52805,8 +52881,8 @@ def test_artifact_queue_processor_parallelizes_cloud_asset_url_entries_and_prese
             with lock:
                 active -= 1
 
-    def _fake_store_cloud_asset_reference(self, con, *, asset_type, identifier, source):  # noqa: ANN001
-        del self, con
+    def _fake_store_cloud_asset_reference(self, con, *, asset_type, identifier, source, metadata=None):  # noqa: ANN001
+        del self, con, metadata
         cloud_asset_calls.append((str(asset_type), str(identifier), str(source)))
 
     monkeypatch.setattr(
@@ -52932,18 +53008,19 @@ def test_artifact_queue_processor_parallelizes_structured_discovery_job_expansio
     def _fake_structured_discovery_jobs_for_payload(
         _self,
         payload: tuple[str, str, str],
-    ) -> list[tuple[str, str]]:  # noqa: ANN001
+    ) -> list[tuple[str, str, str]]:  # noqa: ANN001
         nonlocal active, peak
-        source_file, _extract_path, text = payload
+        source_file, extract_path, text = payload
+        source_hint = f"{source_file}/{extract_path}"
         with lock:
             active += 1
             peak = max(peak, active)
         try:
             time.sleep(delays[text])
             return [
-                (source_file, f"{text}-iac"),
-                (source_file, f"{text}-json"),
-                (source_file, text),
+                (source_file, source_hint, f"{text}-iac"),
+                (source_file, source_hint, f"{text}-json"),
+                (source_file, source_hint, text),
             ]
         finally:
             with lock:
@@ -52960,15 +53037,15 @@ def test_artifact_queue_processor_parallelizes_structured_discovery_job_expansio
 
     assert peak == 2
     assert discovery_jobs == [
-        (str(tmp_path / "artifact-one.txt"), "one-iac"),
-        (str(tmp_path / "artifact-one.txt"), "one-json"),
-        (str(tmp_path / "artifact-one.txt"), "one"),
-        (str(tmp_path / "artifact-two.txt"), "two-iac"),
-        (str(tmp_path / "artifact-two.txt"), "two-json"),
-        (str(tmp_path / "artifact-two.txt"), "two"),
-        (str(tmp_path / "artifact-three.txt"), "three-iac"),
-        (str(tmp_path / "artifact-three.txt"), "three-json"),
-        (str(tmp_path / "artifact-three.txt"), "three"),
+        (str(tmp_path / "artifact-one.txt"), f"{tmp_path / 'artifact-one.txt'}/payload-1.txt", "one-iac"),
+        (str(tmp_path / "artifact-one.txt"), f"{tmp_path / 'artifact-one.txt'}/payload-1.txt", "one-json"),
+        (str(tmp_path / "artifact-one.txt"), f"{tmp_path / 'artifact-one.txt'}/payload-1.txt", "one"),
+        (str(tmp_path / "artifact-two.txt"), f"{tmp_path / 'artifact-two.txt'}/payload-2.txt", "two-iac"),
+        (str(tmp_path / "artifact-two.txt"), f"{tmp_path / 'artifact-two.txt'}/payload-2.txt", "two-json"),
+        (str(tmp_path / "artifact-two.txt"), f"{tmp_path / 'artifact-two.txt'}/payload-2.txt", "two"),
+        (str(tmp_path / "artifact-three.txt"), f"{tmp_path / 'artifact-three.txt'}/payload-3.txt", "three-iac"),
+        (str(tmp_path / "artifact-three.txt"), f"{tmp_path / 'artifact-three.txt'}/payload-3.txt", "three-json"),
+        (str(tmp_path / "artifact-three.txt"), f"{tmp_path / 'artifact-three.txt'}/payload-3.txt", "three"),
     ]
 
 
@@ -53008,12 +53085,13 @@ def test_artifact_queue_processor_parallelizes_structured_discovery_result_batch
     def _fake_structured_discovery_jobs_for_payload(
         _self,
         payload: tuple[str, str, str],
-    ) -> list[tuple[str, str]]:  # noqa: ANN001
-        source_file, _extract_path, text = payload
+    ) -> list[tuple[str, str, str]]:  # noqa: ANN001
+        source_file, extract_path, text = payload
+        source_hint = f"{source_file}/{extract_path}"
         return [
-            (source_file, f"{text}-iac"),
-            (source_file, f"{text}-json"),
-            (source_file, text),
+            (source_file, source_hint, f"{text}-iac"),
+            (source_file, source_hint, f"{text}-json"),
+            (source_file, source_hint, text),
         ]
 
     monkeypatch.setattr(
@@ -53032,15 +53110,15 @@ def test_artifact_queue_processor_parallelizes_structured_discovery_result_batch
 
     assert peak == 2
     assert discovery_jobs == [
-        (str(tmp_path / "artifact-one.txt"), "one-iac"),
-        (str(tmp_path / "artifact-one.txt"), "one-json"),
-        (str(tmp_path / "artifact-one.txt"), "one"),
-        (str(tmp_path / "artifact-two.txt"), "two-iac"),
-        (str(tmp_path / "artifact-two.txt"), "two-json"),
-        (str(tmp_path / "artifact-two.txt"), "two"),
-        (str(tmp_path / "artifact-three.txt"), "three-iac"),
-        (str(tmp_path / "artifact-three.txt"), "three-json"),
-        (str(tmp_path / "artifact-three.txt"), "three"),
+        (str(tmp_path / "artifact-one.txt"), f"{tmp_path / 'artifact-one.txt'}/payload-1.txt", "one-iac"),
+        (str(tmp_path / "artifact-one.txt"), f"{tmp_path / 'artifact-one.txt'}/payload-1.txt", "one-json"),
+        (str(tmp_path / "artifact-one.txt"), f"{tmp_path / 'artifact-one.txt'}/payload-1.txt", "one"),
+        (str(tmp_path / "artifact-two.txt"), f"{tmp_path / 'artifact-two.txt'}/payload-2.txt", "two-iac"),
+        (str(tmp_path / "artifact-two.txt"), f"{tmp_path / 'artifact-two.txt'}/payload-2.txt", "two-json"),
+        (str(tmp_path / "artifact-two.txt"), f"{tmp_path / 'artifact-two.txt'}/payload-2.txt", "two"),
+        (str(tmp_path / "artifact-three.txt"), f"{tmp_path / 'artifact-three.txt'}/payload-3.txt", "three-iac"),
+        (str(tmp_path / "artifact-three.txt"), f"{tmp_path / 'artifact-three.txt'}/payload-3.txt", "three-json"),
+        (str(tmp_path / "artifact-three.txt"), f"{tmp_path / 'artifact-three.txt'}/payload-3.txt", "three"),
     ]
 
 
@@ -53069,15 +53147,23 @@ def test_artifact_queue_processor_parallelizes_structured_discovery_payload_job_
     }
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
     original_entry = ArtifactQueueProcessor._structured_discovery_payload_job
 
     def _tracking_entry(payload):  # noqa: ANN001
-        nonlocal active, peak
+        nonlocal active, peak, entered
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 4:
+                gate.set()
         try:
+            if current_entered <= 4:
+                assert gate.wait(timeout=1.0)
             time.sleep(delays[payload[1]])
             return original_entry(payload)
         finally:
@@ -53087,13 +53173,14 @@ def test_artifact_queue_processor_parallelizes_structured_discovery_payload_job_
     def _fake_structured_discovery_jobs_for_payload(
         _self,
         payload: tuple[str, str, str],
-    ) -> list[tuple[str, str]]:  # noqa: ANN001
-        source_file, _extract_path, text = payload
+    ) -> list[tuple[str, str, str]]:  # noqa: ANN001
+        source_file, extract_path, text = payload
+        source_hint = f"{source_file}/{extract_path}"
         assert text.strip()
         return [
-            (source_file, f"{text}-iac"),
-            (source_file, f"{text}-json"),
-            (source_file, text),
+            (source_file, source_hint, f"{text}-iac"),
+            (source_file, source_hint, f"{text}-json"),
+            (source_file, source_hint, text),
         ]
 
     monkeypatch.setattr(
@@ -53112,21 +53199,21 @@ def test_artifact_queue_processor_parallelizes_structured_discovery_payload_job_
 
     assert peak == 4
     assert discovery_jobs == [
-        (str(tmp_path / "artifact-one.txt"), "one-iac"),
-        (str(tmp_path / "artifact-one.txt"), "one-json"),
-        (str(tmp_path / "artifact-one.txt"), "one"),
-        (str(tmp_path / "artifact-two.txt"), "two-iac"),
-        (str(tmp_path / "artifact-two.txt"), "two-json"),
-        (str(tmp_path / "artifact-two.txt"), "two"),
-        (str(tmp_path / "artifact-three.txt"), "three-iac"),
-        (str(tmp_path / "artifact-three.txt"), "three-json"),
-        (str(tmp_path / "artifact-three.txt"), "three"),
-        (str(tmp_path / "artifact-four.txt"), "four-iac"),
-        (str(tmp_path / "artifact-four.txt"), "four-json"),
-        (str(tmp_path / "artifact-four.txt"), "four"),
-        (str(tmp_path / "artifact-five.txt"), "five-iac"),
-        (str(tmp_path / "artifact-five.txt"), "five-json"),
-        (str(tmp_path / "artifact-five.txt"), "five"),
+        (str(tmp_path / "artifact-one.txt"), f"{tmp_path / 'artifact-one.txt'}/payload-1.txt", "one-iac"),
+        (str(tmp_path / "artifact-one.txt"), f"{tmp_path / 'artifact-one.txt'}/payload-1.txt", "one-json"),
+        (str(tmp_path / "artifact-one.txt"), f"{tmp_path / 'artifact-one.txt'}/payload-1.txt", "one"),
+        (str(tmp_path / "artifact-two.txt"), f"{tmp_path / 'artifact-two.txt'}/payload-2.txt", "two-iac"),
+        (str(tmp_path / "artifact-two.txt"), f"{tmp_path / 'artifact-two.txt'}/payload-2.txt", "two-json"),
+        (str(tmp_path / "artifact-two.txt"), f"{tmp_path / 'artifact-two.txt'}/payload-2.txt", "two"),
+        (str(tmp_path / "artifact-three.txt"), f"{tmp_path / 'artifact-three.txt'}/payload-3.txt", "three-iac"),
+        (str(tmp_path / "artifact-three.txt"), f"{tmp_path / 'artifact-three.txt'}/payload-3.txt", "three-json"),
+        (str(tmp_path / "artifact-three.txt"), f"{tmp_path / 'artifact-three.txt'}/payload-3.txt", "three"),
+        (str(tmp_path / "artifact-four.txt"), f"{tmp_path / 'artifact-four.txt'}/payload-4.txt", "four-iac"),
+        (str(tmp_path / "artifact-four.txt"), f"{tmp_path / 'artifact-four.txt'}/payload-4.txt", "four-json"),
+        (str(tmp_path / "artifact-four.txt"), f"{tmp_path / 'artifact-four.txt'}/payload-4.txt", "four"),
+        (str(tmp_path / "artifact-five.txt"), f"{tmp_path / 'artifact-five.txt'}/payload-5.txt", "five-iac"),
+        (str(tmp_path / "artifact-five.txt"), f"{tmp_path / 'artifact-five.txt'}/payload-5.txt", "five-json"),
+        (str(tmp_path / "artifact-five.txt"), f"{tmp_path / 'artifact-five.txt'}/payload-5.txt", "five"),
     ]
 
 
@@ -53183,11 +53270,12 @@ def test_artifact_queue_processor_parallelizes_per_payload_structured_extractors
 
     assert peak == 2
     assert seen_families == expected_families
+    source_hint = f"{source_file}/payload.txt"
     assert discovery_jobs == [
-        (source_file, f"{family}:payload.txt:payload-text")
+        (source_file, source_hint, f"{family}:payload.txt:payload-text")
         for family in expected_families
         if family != "raw"
-    ] + [(source_file, "payload-text")]
+    ] + [(source_file, source_hint, "payload-text")]
 
 
 def test_artifact_queue_processor_parallelizes_structured_discovery_payload_entries_and_preserves_order(
@@ -53202,7 +53290,9 @@ def test_artifact_queue_processor_parallelizes_structured_discovery_payload_entr
     expected_families = list(ArtifactQueueProcessor._STRUCTURED_DISCOVERY_FAMILIES)
     original_entry = ArtifactQueueProcessor._structured_discovery_payload_entry
 
-    def _tracking_entry(payload_batch, *, source_file: str):  # noqa: ANN001
+    def _tracking_entry(
+        payload_batch, *, source_file: str, source_hint: str
+    ):  # noqa: ANN001
         nonlocal active, peak
         payload_index, _structured_payload = payload_batch
         with lock:
@@ -53210,7 +53300,11 @@ def test_artifact_queue_processor_parallelizes_structured_discovery_payload_entr
             peak = max(peak, active)
         try:
             time.sleep(0.01 + ((payload_index % 7) * 0.003))
-            return original_entry(payload_batch, source_file=source_file)
+            return original_entry(
+                payload_batch,
+                source_file=source_file,
+                source_hint=source_hint,
+            )
         finally:
             with lock:
                 active -= 1
@@ -53250,11 +53344,12 @@ def test_artifact_queue_processor_parallelizes_structured_discovery_payload_entr
     )
 
     assert peak == 4
+    source_hint = f"{source_file}/payload.txt"
     assert discovery_jobs == [
-        (source_file, f"{family}:payload.txt:payload-text")
+        (source_file, source_hint, f"{family}:payload.txt:payload-text")
         for family in expected_families
         if family not in {"key_value", "raw"}
-    ] + [(source_file, "payload-text")]
+    ] + [(source_file, source_hint, "payload-text")]
 
 
 def test_artifact_queue_processor_parallelizes_terraform_state_structured_and_text_families_and_preserves_order(
@@ -65502,7 +65597,9 @@ def test_artifact_queue_processor_parallelizes_remote_result_reconciliation_and_
 
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
     delays = {
         11: 0.05,
         12: 0.01,
@@ -65516,11 +65613,17 @@ def test_artifact_queue_processor_parallelizes_remote_result_reconciliation_and_
     def _tracking_reconciliation_entry(self, item):  # noqa: ANN001
         _index, request, _result = item
         artifact_id = int(request.artifact_id)
-        nonlocal active, peak
+        nonlocal active, peak, entered
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 4:
+                gate.set()
         try:
+            if current_entered <= 4:
+                assert gate.wait(timeout=1.0)
             time.sleep(delays[artifact_id])
             return original_reconciliation_entry(self, item)
         finally:
@@ -65681,7 +65784,9 @@ def test_artifact_queue_processor_parallelizes_firebase_project_persistence_prep
     ]
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
     delays = {
         "firebase-one": 0.05,
         "firebase-two": 0.01,
@@ -65698,19 +65803,25 @@ def test_artifact_queue_processor_parallelizes_firebase_project_persistence_prep
 
     def _tracking_entry(self, project, *, source_url):  # noqa: ANN001
         project_id = str(project.project_id)
-        nonlocal active, peak
+        nonlocal active, peak, entered
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 4:
+                gate.set()
         try:
+            if current_entered <= 4:
+                assert gate.wait(timeout=1.0)
             time.sleep(delays[project_id])
             return original_entry(self, project, source_url=source_url)
         finally:
             with lock:
                 active -= 1
 
-    def _fake_insert_seed(self, con, seed_value, seed_type, *, source, confidence):  # noqa: ANN001
-        del self, con, seed_type, source, confidence
+    def _fake_insert_seed(self, con, seed_value, seed_type, *, source, confidence, depth=1):  # noqa: ANN001
+        del self, con, seed_type, source, confidence, depth
         insert_seed_calls.append(str(seed_value))
         return True
 
@@ -65735,9 +65846,10 @@ def test_artifact_queue_processor_parallelizes_firebase_project_persistence_prep
         source,
         confidence,
         source_seed_id,
+        depth,
         relation_metadata,
     ):
-        del self, con, source, confidence, source_seed_id
+        del self, con, source, confidence, source_seed_id, depth
         url_seed_calls.append(str(url))
         return relation_metadata.get("rule") == "artifact_mobile_config_storage_bucket"
 
@@ -65910,14 +66022,15 @@ def test_artifact_queue_processor_parallelizes_supabase_config_persistence_prep_
         source,
         confidence,
         source_seed_id,
+        depth,
         relation_metadata,
     ):
-        del self, con, source, confidence, source_seed_id, relation_metadata
+        del self, con, source, confidence, source_seed_id, depth, relation_metadata
         url_seed_calls.append(str(url))
         return True
 
-    def _fake_insert_seed(self, con, seed_value, seed_type, *, source, confidence):  # noqa: ANN001
-        del self, con, seed_type, source, confidence
+    def _fake_insert_seed(self, con, seed_value, seed_type, *, source, confidence, depth=1):  # noqa: ANN001
+        del self, con, seed_type, source, confidence, depth
         insert_seed_calls.append(str(seed_value))
         return True
 
@@ -83612,6 +83725,22 @@ def test_kill_chain_default_local_artifact_roots_include_artifacts_directory(
 
     from forge.cli import kill_chain
 
+    scope_manifest = tmp_path / "scope.json"
+    scope_manifest.write_text(
+        json.dumps(
+            {
+                "domains": [
+                    "acme.example",
+                    "*.acme.example",
+                    "*.firebaseio.com",
+                ],
+                "authorized_seeds": ["+15550102030"],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
     kill_chain(
         seed="+15550102030",
         related_seed=[],
@@ -83623,6 +83752,7 @@ def test_kill_chain_default_local_artifact_roots_include_artifacts_directory(
         skip_cloud=False,
         skip_keyscan=True,
         parallel_fanout=2,
+        scope_manifest=str(scope_manifest),
     )
 
     db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
@@ -90640,6 +90770,16 @@ def test_kill_chain_parallel_batches_module_seed_run_dry_run_finalize(
     db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
     _bootstrap_engagement(db_path)
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "authorized_seeds": ["@alicehandle", "+15550000001"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
@@ -90665,6 +90805,8 @@ def test_kill_chain_parallel_batches_module_seed_run_dry_run_finalize(
         skip_cloud=True,
         skip_keyscan=True,
         parallel_fanout=2,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
     )
 
     assert any(

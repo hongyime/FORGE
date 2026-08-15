@@ -2,7 +2,7 @@
 tests/phase0/test_nvd_fetcher.py — NVD fetcher tests.
 
 Coverage targets:
-  - _normalise(): valid item, missing CVE ID, CVSSv3 preference over v2,
+  - _normalise(): valid item, missing CVE ID, CVSSv4/v3/v2 capture,
     severity mapping, CPE extraction, 50-CPE cap.
   - _bulk_upsert(): INSERT OR REPLACE (update-on-conflict); count accuracy.
   - _score_to_severity(): boundary conditions for all four severity tiers.
@@ -22,6 +22,7 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 from forge.phase0.etl_runner import _bootstrap_db, _NVD_SCHEMA
+from forge.phase0.kb_query import get_cve, get_cvss, init_kb
 from forge.phase0.nvd_fetcher import (
     _MODIFIED_URL,
     _YEARLY_YEARS,
@@ -76,6 +77,56 @@ def _make_nvd_item(
     if cvss_v2 is not None:
         item["impact"]["baseMetricV2"] = {"cvssV2": {"baseScore": cvss_v2}}
     return item
+
+
+def _make_nvd_v2_item(
+    cve_id: str = "CVE-2026-12345",
+    description: str = "NVD 2.0 CVSS v4 vulnerability",
+    cvss_v4: float | None = 9.3,
+    cvss_v4_vector: str = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N/E:A",
+    cvss_v3: float | None = 8.8,
+    cvss_v3_vector: str = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    cvss_v2: float | None = None,
+    cvss_v2_vector: str = "",
+) -> dict:
+    metrics: dict[str, list[dict]] = {}
+    if cvss_v4 is not None or cvss_v4_vector:
+        metrics["cvssMetricV40"] = [
+            {"cvssData": {"baseScore": cvss_v4, "vectorString": cvss_v4_vector}}
+        ]
+    if cvss_v3 is not None or cvss_v3_vector:
+        metrics["cvssMetricV31"] = [
+            {"cvssData": {"baseScore": cvss_v3, "vectorString": cvss_v3_vector}}
+        ]
+    if cvss_v2 is not None or cvss_v2_vector:
+        metrics["cvssMetricV2"] = [
+            {"cvssData": {"baseScore": cvss_v2, "vectorString": cvss_v2_vector}}
+        ]
+    return {
+        "id": cve_id,
+        "descriptions": [
+            {"lang": "en", "value": description},
+            {"lang": "es", "value": "descripción"},
+        ],
+        "configurations": [
+            {
+                "nodes": [
+                    {
+                        "cpeMatch": [
+                            {
+                                "criteria": (
+                                    "cpe:2.3:a:acme:app:2.0:*:*:*:*:*:*:*"
+                                )
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
+        "published": "2026-01-02T03:04:05.000",
+        "lastModified": "2026-01-03T03:04:05.000",
+        "metrics": metrics,
+    }
 
 
 def _gzip_feed(items: list[dict]) -> bytes:
@@ -151,6 +202,18 @@ class TestNormalise:
         cve_row, _ = _normalise(_make_nvd_item(cvss_v3=7.5, cvss_v2=5.0))
         assert cve_row["severity"] == "HIGH"
 
+    def test_nvd_2_cvss_v4_and_vectors_are_captured(self) -> None:
+        cve_row, cvss_row = _normalise(_make_nvd_v2_item())
+        assert cve_row is not None
+        assert cve_row["severity"] == "CRITICAL"
+        assert cvss_row is not None
+        assert cvss_row["cvss_v4"] == 9.3
+        assert cvss_row["cvss_v4_vector"].startswith("CVSS:4.0/")
+        assert cvss_row["cvss_v3"] == 8.8
+        assert cvss_row["cvss_v3_vector"].startswith("CVSS:3.1/")
+        assert cvss_row["cvss_v2"] is None
+        assert cvss_row["cvss_v2_vector"] == ""
+
     def test_no_cvss_returns_none_cvss_row(self) -> None:
         cve_row, cvss_row = _normalise(_make_nvd_item(cvss_v3=None, cvss_v2=None))
         assert cve_row is not None
@@ -200,6 +263,86 @@ class TestBulkUpsert:
             "SELECT rowid FROM cve_fts WHERE cve_fts MATCH 'Log4Shell'"
         ).fetchall()
         assert len(results) >= 1
+
+    def test_persists_cvss_v4_and_vectors(self, nvd_db: sqlite3.Connection) -> None:
+        cve_row, cvss_row = _normalise(_make_nvd_v2_item())
+        _bulk_upsert(nvd_db, [cve_row], [cvss_row])
+        row = nvd_db.execute(
+            """
+            SELECT cvss_v4, cvss_v4_vector, cvss_v3, cvss_v3_vector,
+                   cvss_v2, cvss_v2_vector
+            FROM cvss_scores
+            WHERE cve_id='CVE-2026-12345'
+            """
+        ).fetchone()
+        assert row["cvss_v4"] == 9.3
+        assert row["cvss_v4_vector"].startswith("CVSS:4.0/")
+        assert row["cvss_v3"] == 8.8
+        assert row["cvss_v3_vector"].startswith("CVSS:3.1/")
+        assert row["cvss_v2"] is None
+        assert row["cvss_v2_vector"] == ""
+
+    def test_upsert_migrates_legacy_cvss_schema(self, tmp_path: Path) -> None:
+        legacy = sqlite3.connect(tmp_path / "legacy_nvd_cache.db")
+        legacy.row_factory = sqlite3.Row
+        try:
+            legacy.executescript(
+                """
+                CREATE TABLE cve (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cve_id TEXT NOT NULL UNIQUE,
+                    description TEXT,
+                    severity TEXT,
+                    published_at TIMESTAMP,
+                    modified_at TIMESTAMP,
+                    cpe_matches TEXT
+                );
+                CREATE TABLE cvss_scores (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cve_id TEXT NOT NULL UNIQUE REFERENCES cve(cve_id),
+                    cvss_v3 REAL,
+                    cvss_v2 REAL
+                );
+                """
+            )
+            cve_row, cvss_row = _normalise(_make_nvd_v2_item())
+            _bulk_upsert(legacy, [cve_row], [cvss_row])
+            columns = {
+                row[1]
+                for row in legacy.execute("PRAGMA table_info(cvss_scores)").fetchall()
+            }
+            row = legacy.execute(
+                "SELECT cvss_v4, cvss_v4_vector FROM cvss_scores WHERE cve_id=?",
+                ("CVE-2026-12345",),
+            ).fetchone()
+        finally:
+            legacy.close()
+
+        assert {"cvss_v4", "cvss_v4_vector", "cvss_v3_vector", "cvss_v2_vector"} <= columns
+        assert row["cvss_v4"] == 9.3
+        assert row["cvss_v4_vector"].startswith("CVSS:4.0/")
+
+    def test_kb_query_prefers_cvss_v4(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "nvd_cache.db"
+        nvd_conn = _bootstrap_db(db_path, _NVD_SCHEMA)
+        cve_row, cvss_row = _normalise(_make_nvd_v2_item())
+        try:
+            _bulk_upsert(nvd_conn, [cve_row], [cvss_row])
+        finally:
+            nvd_conn.close()
+
+        empty_lolbas = tmp_path / "lolbas.db"
+        empty_exploitdb = tmp_path / "ref_cache.db"
+        empty_lolbas.write_bytes(b"")
+        empty_exploitdb.write_bytes(b"")
+        init_kb(empty_lolbas, db_path, empty_exploitdb)
+        get_cvss.cache_clear()
+
+        cve = get_cve("CVE-2026-12345")
+        assert get_cvss("CVE-2026-12345") == 9.3
+        assert cve["cvss_v4"] == 9.3
+        assert cve["cvss_v4_vector"].startswith("CVSS:4.0/")
+        assert cve["cvss_v3"] == 8.8
 
 
 # ---------------------------------------------------------------------------

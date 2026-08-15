@@ -29,6 +29,92 @@ def test_mint_verify_roundtrip() -> None:
     assert auth_mod.verify_token(token) == _TEST_SUBJECT
 
 
+def test_verify_principal_roundtrip_with_workspace_claims() -> None:
+    token = auth_mod.mint_token(
+        _TEST_SUBJECT,
+        ttl_seconds=60,
+        workspace_id="acme",
+        roles=("admin", "operator"),
+        permissions=("engagements:read", "engagements:write"),
+    )
+
+    principal = auth_mod.verify_principal(token)
+
+    assert principal is not None
+    assert principal.subject == _TEST_SUBJECT
+    assert principal.workspace_id == "acme"
+    assert principal.roles == ("admin", "operator")
+    assert principal.permissions == ("engagements:read", "engagements:write")
+    assert principal.has_permission("engagements:read")
+    assert not principal.has_permission("reports:read")
+    assert auth_mod.verify_token(token) == _TEST_SUBJECT
+
+
+def test_mint_token_derives_permissions_from_explicit_roles() -> None:
+    viewer_token = auth_mod.mint_token(
+        _TEST_SUBJECT,
+        ttl_seconds=60,
+        workspace_id="acme",
+        roles=("viewer",),
+    )
+    owner_token = auth_mod.mint_token(
+        _TEST_SUBJECT,
+        ttl_seconds=60,
+        workspace_id="acme",
+        roles=("owner",),
+    )
+
+    viewer = auth_mod.verify_principal(viewer_token)
+    owner = auth_mod.verify_principal(owner_token)
+
+    assert viewer is not None
+    assert viewer.roles == ("viewer",)
+    assert viewer.has_permission("engagements:read")
+    assert viewer.has_permission("connectors:read")
+    assert viewer.has_permission("workspaces:read")
+    assert not viewer.has_permission("engagements:write")
+    assert not viewer.has_permission("connectors:write")
+    assert not viewer.has_permission("workspaces:members:write")
+    assert not viewer.has_permission("workspaces:any")
+    assert owner is not None
+    assert owner.has_permission("engagements:write")
+    assert owner.has_permission("workspaces:any")
+
+
+def test_principal_supports_namespace_permission_wildcards() -> None:
+    principal = auth_mod.Principal(
+        subject=_TEST_SUBJECT,
+        permissions=("engagements:*",),
+    )
+
+    assert principal.has_permission("engagements:read")
+    assert principal.has_permission("engagements:write")
+    assert not principal.has_permission("assets:read")
+
+
+def test_verify_principal_defaults_legacy_token_claims() -> None:
+    now = int(time.time())
+    payload = {
+        "sub": _TEST_SUBJECT,
+        "iat": now,
+        "nbf": now,
+        "exp": now + 60,
+        "jti": "abcdef" * 4,
+        "iss": "forge-webui",
+        "aud": "forge-webui",
+    }
+    token = jwt.encode(payload, _TEST_SECRET, algorithm="HS256")
+
+    principal = auth_mod.verify_principal(token)
+
+    assert principal is not None
+    assert principal.subject == _TEST_SUBJECT
+    assert principal.workspace_id == "default"
+    assert principal.roles == ("operator",)
+    assert principal.permissions == ("*", "workspaces:legacy")
+    assert principal.has_permission("engagements:write")
+
+
 def test_mint_includes_required_claims() -> None:
     token = auth_mod.mint_token(_TEST_SUBJECT, ttl_seconds=60)
     payload = jwt.decode(

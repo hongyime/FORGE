@@ -23,7 +23,7 @@ from forge import cli
 def _click_command_for(subcommand: str) -> click.Command:
     """Compile ``cloud_app`` and return the concrete Click subcommand."""
     click_group = typer.main.get_command(cli.cloud_app)
-    assert isinstance(click_group, click.Group), type(click_group)
+    assert hasattr(click_group, "get_command"), type(click_group)
     resolved = click_group.get_command(click.Context(click_group), subcommand)
     assert resolved is not None, f"no cloud subcommand named {subcommand!r}"
     return resolved
@@ -31,7 +31,7 @@ def _click_command_for(subcommand: str) -> click.Command:
 
 def _flag_names(cmd: click.Command) -> Iterable[str]:
     for param in cmd.params:
-        if isinstance(param, click.Option):
+        if hasattr(param, "opts"):
             yield from param.opts
             yield from param.secondary_opts
 

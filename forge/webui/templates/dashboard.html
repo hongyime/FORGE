@@ -226,8 +226,11 @@
     let ws = null;
 
     function connectWs() {
+      if (!bearer || !currentEngagement) return;
       if (ws !== null && ws.readyState === WebSocket.OPEN) return;
-      ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/progress");
+      const url = (location.protocol === "https:" ? "wss://" : "ws://") +
+        location.host + "/ws/progress?engagement_id=" + encodeURIComponent(String(currentEngagement));
+      ws = new WebSocket(url, ["forge-progress", bearer]);
       ws.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data);

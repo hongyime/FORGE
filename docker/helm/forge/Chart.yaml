@@ -1,0 +1,6 @@
+apiVersion: v2
+name: forge
+description: FORGE production self-host baseline chart
+type: application
+version: 0.1.0
+appVersion: "7.2.0"

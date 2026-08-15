@@ -121,9 +121,21 @@ class TestBootstrapDb:
             r[0]
             for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
+        cvss_columns = {
+            r[1]
+            for r in conn.execute("PRAGMA table_info(cvss_scores)").fetchall()
+        }
         conn.close()
         assert "cve" in tables
         assert "cvss_scores" in tables
+        assert {
+            "cvss_v4",
+            "cvss_v4_vector",
+            "cvss_v3",
+            "cvss_v3_vector",
+            "cvss_v2",
+            "cvss_v2_vector",
+        } <= cvss_columns
 
     def test_creates_exploitdb_tables(self, exploitdb_db: Path) -> None:
         conn = sqlite3.connect(str(exploitdb_db))

@@ -36,6 +36,7 @@ _GRAPH_METADATA_KEYS = {
     "scan_domain",
     "scan_id",
     "scheme",
+    "seed_type",
     "source",
     "source_backend",
     "source_file",

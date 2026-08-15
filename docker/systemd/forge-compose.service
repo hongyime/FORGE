@@ -1,0 +1,21 @@
+[Unit]
+Description=FORGE production self-host compose stack
+Documentation=https://github.com/
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/forge
+EnvironmentFile=/etc/forge/forge.env
+ExecStartPre=/usr/bin/docker compose -f /opt/forge/docker/docker-compose.yml config --quiet
+ExecStart=/usr/bin/docker compose -f /opt/forge/docker/docker-compose.yml up -d --remove-orphans
+ExecReload=/usr/bin/docker compose -f /opt/forge/docker/docker-compose.yml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f /opt/forge/docker/docker-compose.yml down
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

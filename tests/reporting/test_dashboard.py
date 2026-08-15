@@ -7,11 +7,19 @@ import zipfile
 from pathlib import Path
 
 from forge.audit.manifest import write_run_audit_manifest
+from forge.db.migrations import run_migrations
+from forge.db.schema import apply_schema
+from forge.graph.assets import entity_id_for_key, sync_engagement_asset_graph, upsert_ownership_claim
+from forge.monitoring.continuous import create_monitoring_snapshot, upsert_monitoring_policy
+from forge.monitoring.delivery import add_monitoring_alert_suppression, upsert_monitoring_alert_route
+from forge.remediation.workflow import upsert_monitoring_alert_remediation
 from forge.reporting.dashboard import (
+    _asset_graph_fix_candidate_section_row,
     _relation_evidence_preview,
     _reportable_vulnerability_rows,
     generate_dashboard,
 )
+from forge.retention.policy import run_retention, upsert_retention_policy
 
 
 def _write_mtgx_graph(path: Path, graphml: str) -> None:
@@ -43,6 +51,32 @@ def test_relation_evidence_preview_surfaces_did_artifact_metadata_without_secret
     assert "source=https://id.acme.example/.well-known/did" in preview
     assert "never-render-this" not in preview
     assert "token" not in preview
+
+
+def test_asset_graph_fix_candidate_row_surfaces_permission_risk_factors() -> None:
+    row = _asset_graph_fix_candidate_section_row(
+        {
+            "label": "payments-prod-admin",
+            "entity_type": "identity",
+            "reason": "reduce_cloud_identity_privilege",
+            "owner_display": "Cloud Platform",
+            "supporting_path_count": 2,
+            "expected_risk_reduction": 87.6,
+            "risk_factors": [
+                "wildcard_action=true",
+                "wildcard_resource=true",
+                "write_actions=2",
+            ],
+            "remediation": {"item_count": 0},
+        }
+    )
+
+    assert row["Entity"] == "payments-prod-admin"
+    assert row["Type"] == "identity"
+    assert row["Reason"] == "reduce_cloud_identity_privilege"
+    assert row["Risk Factors"] == (
+        "wildcard_action=true; wildcard_resource=true; write_actions=2"
+    )
 
 
 def _build_minimal_engagement_db(db_path: Path) -> None:
@@ -737,6 +771,42 @@ def _write_report_family(
         "record_type,engagement_id,title\nsummary,,\n",
         encoding="utf-8",
     )
+
+
+def test_generate_dashboard_defaults_to_explicit_data_dir(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    data_dir = tmp_path / "explicit_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    legacy_root = workspace / ".forge_data" / "engagements"
+    db_root.mkdir(parents=True)
+    legacy_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+    monkeypatch.chdir(workspace)
+
+    _build_minimal_engagement_db(db_root / "1001.db")
+    legacy_db = legacy_root / "2002.db"
+    _build_minimal_engagement_db(legacy_db)
+    con = sqlite3.connect(legacy_db)
+    try:
+        con.execute(
+            "UPDATE engagements SET id=2002, name='Legacy Workspace' WHERE id=1001"
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    output_path = reports_dir / "dashboard.html"
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
+
+    index_json = reports_dir / "dashboard" / "data" / "engagements.json"
+    payload = json.loads(index_json.read_text(encoding="utf-8"))
+    names = {item["name"] for item in payload["items"]}
+    assert names == {"Acme Example"}
+    assert "Legacy Workspace" not in output_path.read_text(encoding="utf-8")
 
 
 def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) -> None:
@@ -3504,6 +3574,162 @@ def test_generate_dashboard_surfaces_key_validation_proof_rows(tmp_path: Path) -
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
 
 
+def test_generate_dashboard_surfaces_secret_lifecycle_rows_without_secret_material(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    _insert_dashboard_key_scanner_row(
+        db_path,
+        service="github",
+        pattern_name="github_pat",
+        key_redacted="ghp_...ABCD",
+        validation_detail=(
+            "VALIDATED:github_token_validate:GitHub token ok: "
+            "viewer_id=12345 owner_login_hash=d2836b7de9447c4a"
+        ),
+    )
+    con = sqlite3.connect(db_path)
+    try:
+        key_id = int(
+            con.execute(
+                "SELECT id FROM key_scanner_findings WHERE engagement_id=1001"
+            ).fetchone()[0]
+        )
+        con.execute(
+            """
+            UPDATE key_scanner_findings
+            SET source_url='https://user:pass@github.com/acme/mobile/blob/main/config.js?token=secret&ok=1',
+                repo_name='acme/mobile'
+            WHERE id=?
+            """,
+            (key_id,),
+        )
+        con.executescript(
+            """
+            CREATE TABLE secret_lifecycle_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                key_finding_id INTEGER,
+                lifecycle_status TEXT,
+                owner TEXT,
+                owner_source TEXT,
+                revocation_guidance_json TEXT,
+                prevention_guidance_json TEXT,
+                suppression_id INTEGER,
+                suppressed INTEGER,
+                metadata_json TEXT,
+                updated_at TEXT
+            );
+            CREATE TABLE remediation_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                finding_table TEXT,
+                finding_ref TEXT,
+                status TEXT
+            );
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO secret_lifecycle_items
+                (engagement_id, key_finding_id, lifecycle_status, owner, owner_source,
+                 revocation_guidance_json, prevention_guidance_json, suppression_id,
+                 suppressed, metadata_json, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?)
+            """,
+            (
+                1001,
+                key_id,
+                "owner_routed",
+                "appsec@example.com",
+                "validation_claims",
+                json.dumps(
+                    {
+                        "rotation_summary": "Revoke the exposed token and redeploy dependent services.",
+                        "provider_docs": ["https://docs.github.com/secret-scanning"],
+                        "raw_token": "raw-secret-never-render",
+                    },
+                    sort_keys=True,
+                ),
+                json.dumps(
+                    [
+                        {"tool": "gitleaks", "workflow": "pre-commit", "cost": "free/local"},
+                        {"tool": "trufflehog", "workflow": "pr", "cost": "free/local"},
+                        {
+                            "tool": "detect-secrets",
+                            "workflow": "push",
+                            "command": "detect-secrets scan --string raw-secret-never-render",
+                        },
+                    ],
+                    sort_keys=True,
+                ),
+                json.dumps(
+                    {
+                        "key_redacted": "ghp_...ABCD",
+                        "key_enc": "encrypted-secret-never-render",
+                        "raw_token": "raw-secret-never-render",
+                        "source_backend": "artifact_queue_ingest",
+                    },
+                    sort_keys=True,
+                ),
+                "2026-07-15T10:01:02",
+            ),
+        )
+        con.execute(
+            """
+            INSERT INTO remediation_items
+                (engagement_id, finding_table, finding_ref, status)
+            VALUES (1001, 'key_scanner_findings', ?, 'assigned')
+            """,
+            (str(key_id),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    output_path = reports_dir / "dashboard.html"
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    lifecycle_row = detail_payload["sections"]["secret_lifecycle_items"][0]
+
+    assert detail_payload["counts"]["secret_lifecycle_items"] == 1
+    assert lifecycle_row["Key"] == str(key_id)
+    assert lifecycle_row["Service"] == "github"
+    assert lifecycle_row["Pattern"] == "github_pat"
+    assert lifecycle_row["Lifecycle"] == "owner_routed"
+    assert lifecycle_row["Owner"] == "appsec@example.com"
+    assert lifecycle_row["Owner Source"] == "validation_claims"
+    assert lifecycle_row["Suppressed"] == "no"
+    assert lifecycle_row["Remediation"] == "#1 assigned"
+    assert lifecycle_row["Source"] == "https://github.com/acme/mobile/blob/main/config.js?ok=1"
+    assert "Revoke the exposed token" in lifecycle_row["Guidance"]
+    assert "gitleaks:pre-commit" in lifecycle_row["Prevention"]
+    assert "trufflehog:pr" in lifecycle_row["Prevention"]
+    assert "detect-secrets:push" in lifecycle_row["Prevention"]
+    assert "command" not in lifecycle_row["Prevention"]
+    assert lifecycle_row["Meta"] == "key_redacted, source_backend"
+    assert lifecycle_row["Updated"] == "2026-07-15 10:01:02"
+
+    payload_text = json.dumps(detail_payload, sort_keys=True)
+    detail_html = (reports_dir / "dashboard" / "engagements" / "engagement-1001-acme-example" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert "Secret Lifecycle" in detail_html
+    assert "encrypted-secret-never-render" not in payload_text
+    assert "raw-secret-never-render" not in payload_text
+    assert "token=secret" not in payload_text
+    assert "user:pass" not in payload_text
+
+
 def test_generate_dashboard_downgrades_stale_key_validation_proof_rows(tmp_path: Path) -> None:
     data_dir = tmp_path / ".forge_data"
     reports_dir = tmp_path / "reports"
@@ -3976,3 +4202,526 @@ def test_generate_dashboard_falls_back_to_seed_graph_payload_when_no_graph_artif
     assert "seed_root" in edge_types
     assert "related_asset" in edge_types
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload, sort_keys=True)
+
+
+def test_generate_dashboard_surfaces_monitoring_review_sections(tmp_path: Path) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        apply_schema(con)
+        run_migrations(con)
+        con.execute(
+            """
+            INSERT INTO engagements
+                (id, name, scope_json, status, operator, metadata_json, created_at, updated_at)
+            VALUES (
+                1001,
+                'Acme Example',
+                '["acme.example"]',
+                'ACTIVE',
+                'delta-one',
+                '{"tags":["monitoring"]}',
+                '2026-07-09T08:00:00',
+                '2026-07-09T10:00:00'
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO hosts (engagement_id, ip, hostname, os_family, host_context, discovered_at)
+            VALUES (1001, '203.0.113.10', 'app.acme.example', 'linux', '{}',
+                    '2026-07-09T08:05:00')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title, description, evidence)
+            VALUES
+                (1001, 'EXPOSED_SERVICE', 'https://app.acme.example', 'https',
+                 'HIGH', 'Exposed application surface',
+                 'Baseline passive exposure finding.', '{"source":"baseline"}')
+            """
+        )
+        policy = upsert_monitoring_policy(
+            con,
+            engagement_id=1001,
+            name="Hourly passive",
+            schedule_interval_minutes=60,
+            mode="passive",
+            metadata={"source": "dashboard-test"},
+        )
+        baseline = create_monitoring_snapshot(
+            con,
+            engagement_id=1001,
+            policy_id=int(policy["id"]),
+            snapshot_kind="manual",
+        )
+        assert baseline["changes"] == []
+
+        con.execute(
+            """
+            INSERT INTO hosts (engagement_id, ip, hostname, os_family, host_context, discovered_at)
+            VALUES (1001, '203.0.113.20', 'vpn.acme.example', 'linux', '{}',
+                    '2026-07-09T09:01:00')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title, description, evidence)
+            VALUES
+                (1001, 'EXPOSED_VPN', 'https://vpn.acme.example', 'vpn',
+                 'CRITICAL', 'Exposed VPN admin surface',
+                 'Monitoring found a new external VPN admin surface.', '{"source":"monitoring"}')
+            """
+        )
+        vpn_vuln_id = int(
+            con.execute(
+                """
+                SELECT id
+                FROM vulnerability_findings
+                WHERE engagement_id=1001 AND title='Exposed VPN admin surface'
+                """
+            ).fetchone()[0]
+        )
+        con.execute(
+            """
+            INSERT INTO remediation_items
+                (engagement_id, finding_table, finding_id, finding_ref, title, severity,
+                 owner, sla_due_at, status, retest_status, ticket_system, ticket_ref,
+                 ticket_url)
+            VALUES
+                (1001, 'vulnerability_findings', ?, ?, 'Fix VPN exposure', 'CRITICAL',
+                 'appsec', '2026-07-16T10:00:00Z', 'retest_pending', 'pending',
+                 'jira', 'SEC-2001',
+                 'https://user:pass@acme.atlassian.net/browse/SEC-2001?token=never&view=ok')
+            """,
+            (vpn_vuln_id, str(vpn_vuln_id)),
+        )
+        vpn_remediation_id = int(con.execute("SELECT last_insert_rowid()").fetchone()[0])
+        con.execute(
+            """
+            INSERT INTO remediation_ticket_events
+                (engagement_id, remediation_item_id, connector, destination,
+                 action, status, item_updated_at, attempt_count, last_error,
+                 metadata_json, updated_at)
+            VALUES
+                (1001, ?, 'jira',
+                 'https://acme.atlassian.net/rest/api/3/issue/SEC?token=dashboard-ticket-secret&view=ok',
+                 'update', 'failed', '2026-07-09T10:00:00Z', 2,
+                 'PATCH https://acme.atlassian.net/rest/api/3/issue/SEC?token=dashboard-ticket-secret failed',
+                 '{"operator":"dashboard-ticket-sync"}',
+                 '2026-07-09T10:05:00Z')
+            """,
+            (vpn_remediation_id,),
+        )
+        diff = create_monitoring_snapshot(
+            con,
+            engagement_id=1001,
+            policy_id=int(policy["id"]),
+            snapshot_kind="scheduled",
+        )
+        assert any(change["entity_key"] == "host:vpn.acme.example" for change in diff["changes"])
+        alert_id = int(diff["alerts"][0]["id"])
+        upsert_monitoring_alert_route(
+            con,
+            engagement_id=1001,
+            name="appsec-local",
+            channel="jsonl",
+            destination="monitoring-alerts.jsonl",
+            min_severity="INFO",
+            owner="appsec",
+            escalation="business-hours",
+            metadata={"sla_days": 7},
+        )
+        add_monitoring_alert_suppression(
+            con,
+            engagement_id=1001,
+            entity_prefix="host:maintenance.",
+            severity="LOW",
+            reason="maintenance window",
+            created_by="delta-one",
+            expires_at="2099-01-01T00:00:00Z",
+        )
+        upsert_monitoring_alert_remediation(
+            con,
+            engagement_id=1001,
+            alert_id=alert_id,
+            operator="delta-one",
+            ticket_ref="SEC-1001",
+            now="2026-07-09T10:00:00Z",
+        )
+        upsert_retention_policy(
+            con,
+            engagement_id=1001,
+            audit_review_days=45,
+            monitoring_days=30,
+            remediation_event_days=60,
+            retention_run_days=90,
+            metadata={
+                "source": "dashboard-test",
+                "token": "retention-token-never-render",
+            },
+        )
+        run_retention(
+            con,
+            engagement_id=1001,
+            apply=False,
+            operator="delta-one",
+            now="2026-10-20T00:00:00Z",
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_assets
+                (engagement_id, asset_type, identifier, provider_identifier,
+                 source, metadata_json)
+            VALUES
+                (1001, 'aws_s3', 'payments-sensitive',
+                 'arn:aws:s3:::payments-sensitive', 'dashboard-test',
+                 '{"account_id":"123456789012","region":"us-east-1",
+                   "data_classification":"restricted","contains_pii":true,
+                   "public_access":true,
+                   "workload_context":{
+                     "name":"payments-api",
+                     "runtime_kind":"kubernetes",
+                     "cluster":"prod-eks",
+                     "namespace":"payments",
+                     "environment":"prod"
+                   },
+                   "iam_context":{
+                     "principal_arn":"arn:aws:iam::123456789012:role/payments-prod-admin",
+                     "principal_type":"role",
+                     "principal_name":"payments-prod-admin",
+                     "privilege":"read_write_admin",
+                     "managed_policies":["AdministratorAccess"],
+                     "policy_document":{
+                       "Statement":[{
+                         "Effect":"Allow",
+                         "Action":["s3:*","iam:PassRole","kms:Decrypt"],
+                         "Resource":"*"
+                       }]
+                     },
+                     "token":"dashboard-iam-token-never-render"
+                   }}')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, provider_identifier,
+                 validation_status, validation_method, http_status, evidence)
+            VALUES
+                (1001, 'aws_s3', 'payments-sensitive',
+                 'arn:aws:s3:::payments-sensitive', 'VALIDATED',
+                 's3_public_listing', 200, 'HTTP 200 public listing')
+            """
+        )
+        sync_engagement_asset_graph(con, 1001)
+        vpn_entity_id = entity_id_for_key(con, engagement_id=1001, entity_key="host:vpn.acme.example")
+        assert vpn_entity_id is not None
+        upsert_ownership_claim(
+            con,
+            engagement_id=1001,
+            entity_id=vpn_entity_id,
+            owner_kind="team",
+            owner_ref="network-team",
+            owner_display="Network Team",
+            claim_type="manual",
+            confidence=0.95,
+            source="dashboard-test",
+            evidence={
+                "source": "manual-dashboard-test",
+                "reason": "VPN surface owner",
+                "token": "asset-graph-token-never-render",
+            },
+            created_by="delta-one",
+        )
+        upsert_ownership_claim(
+            con,
+            engagement_id=1001,
+            entity_id=vpn_entity_id,
+            owner_kind="team",
+            owner_ref="legacy-network",
+            owner_display="Legacy Network",
+            claim_type="inferred",
+            confidence=0.5,
+            source="dashboard-test",
+            evidence={"source": "legacy", "secret": "legacy-owner-secret-never-render"},
+            created_by="delta-one",
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    output_path = reports_dir / "dashboard.html"
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
+
+    site_root = reports_dir / "dashboard"
+    detail_page = site_root / "engagements" / "engagement-1001-acme-example" / "index.html"
+    detail_json = site_root / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    sections = detail_payload["sections"]
+
+    assert detail_payload["counts"]["monitoring_policies"] == 1
+    assert detail_payload["counts"]["monitoring_snapshots"] == 2
+    assert detail_payload["counts"]["monitoring_changes"] >= 2
+    assert detail_payload["counts"]["monitoring_alerts"] >= 2
+    assert detail_payload["counts"]["monitoring_trend_points"] == 2
+    assert detail_payload["counts"]["monitoring_alert_routes"] == 1
+    assert detail_payload["counts"]["monitoring_alert_suppressions"] == 1
+    assert detail_payload["counts"]["remediation_items"] == 2
+    assert detail_payload["counts"]["retention_policies"] == 1
+    assert detail_payload["counts"]["retention_runs"] == 1
+    assert detail_payload["counts"]["retention_run_items"] >= 1
+    assert detail_payload["counts"]["asset_entities"] >= 4
+    assert detail_payload["counts"]["asset_relationships"] >= 2
+    assert detail_payload["counts"]["asset_ownership_claims"] >= 1
+    assert detail_payload["counts"]["asset_ownership_conflicts"] >= 1
+    assert detail_payload["asset_graph_summary"]["node_count"] == detail_payload["counts"]["asset_entities"]
+    assert detail_payload["asset_graph_summary"]["ownership_claim_count"] >= 1
+    assert detail_payload["asset_graph_summary"]["active_owner_count"] >= 1
+    assert detail_payload["asset_graph_summary"]["ownership_conflict_count"] >= 1
+    assert "attack_path_count" in detail_payload["asset_graph_summary"]
+    assert "choke_point_count" in detail_payload["asset_graph_summary"]
+    assert detail_payload["asset_graph_summary"]["top_path_tier"] in {
+        "none",
+        "low",
+        "medium",
+        "high",
+        "critical",
+    }
+    assert "host" in detail_payload["asset_graph_summary"]["entity_types"]
+    provenance_rows = {row["Surface"]: row for row in sections["evidence_provenance"]}
+    assert provenance_rows["Cloud validation"]["Tables"] == "cloud_validation_results"
+    assert "s3_public_listing" in provenance_rows["Cloud validation"]["Validation"]
+    assert provenance_rows["Cloud validation"]["Reportability"] == "no=1"
+    assert provenance_rows["Reportable findings"]["Reportability"] == "reportable filtered"
+    assert "open_alerts=" in provenance_rows["Monitoring"]["Reportability"]
+    assert "monitoring_alerts" in provenance_rows["Monitoring"]["Tables"]
+    assert "retest_pending" in provenance_rows["Remediation workflow"]["Workflow"]
+    assert "asset_graph_*" in provenance_rows["Asset graph"]["Tables"]
+    assert sections["monitoring_policies"][0]["Name"] == "Hourly passive"
+    assert sections["monitoring_policies"][0]["Interval"] == "60m"
+    assert sections["monitoring_alert_routes"][0]["Name"] == "appsec-local"
+    assert sections["monitoring_alert_routes"][0]["Owner"] == "appsec"
+    assert sections["monitoring_alert_suppressions"][0]["Reason"] == "maintenance window"
+    assert sections["monitoring_alert_suppressions"][0]["Active"] == "yes"
+    assert any(
+        row["Owner"] == "appsec"
+        and row["Ticket"] == "SEC-1001"
+        and row["Finding"].startswith("monitoring_alerts:")
+        for row in sections["remediation_items"]
+    )
+    assert sections["retention_policies"][0]["Name"] == "default"
+    assert sections["retention_policies"][0]["Monitoring"] == "30d"
+    assert sections["retention_policies"][0]["Legal Hold"] == "no"
+    assert sections["retention_runs"][0]["Mode"] == "preview"
+    assert sections["retention_runs"][0]["Status"] == "completed"
+    assert int(sections["retention_runs"][0]["Eligible"]) >= 1
+    assert any(row["Table"] == "monitoring_trend_points" for row in sections["retention_run_items"])
+    assert any(row["Key"] == "host:vpn.acme.example" for row in sections["asset_entities"])
+    assert any(row["Owner"] == "Network Team" for row in sections["asset_ownership_claims"])
+    assert any(row["Type"] == "owned_by" for row in sections["asset_relationships"])
+    assert sections["asset_ownership_conflicts"][0]["Asset"] == "vpn.acme.example"
+    assert "Network Team" in sections["asset_ownership_conflicts"][0]["Owners"]
+    assert "Legacy Network" in sections["asset_ownership_conflicts"][0]["Owners"]
+    assert sections["asset_graph_attack_paths"]
+    assert sections["asset_graph_choke_points"]
+    assert sections["asset_graph_fix_candidates"]
+    assert any("SEC-2001" in row["Action"] for row in sections["asset_graph_attack_paths"])
+    assert any("ticketed=1" in row["Remediation"] for row in sections["asset_graph_choke_points"])
+    cloud_choke_rows = [
+        row
+        for row in sections["asset_graph_choke_points"]
+        if "accounts=123456789012" in row["Cloud Context"]
+    ]
+    assert cloud_choke_rows
+    assert any("sensitivity=" in row["Cloud Context"] for row in cloud_choke_rows)
+    assert any("public_sensitive_data_exposure" in row["Toxic Combinations"] for row in cloud_choke_rows)
+    assert any("critical" in row["Risk Mix"] for row in cloud_choke_rows)
+    assert any(row["Critical Assets"] != "-" for row in cloud_choke_rows)
+    assert any(
+        row["Reason"] == "remediate_highest_risk_finding" and "SEC-2001" in row["Action"]
+        for row in sections["asset_graph_fix_candidates"]
+    )
+    assert any(
+        row["Reason"] == "restrict_public_sensitive_data_asset"
+        and "disable_public_access" in row["Action"]
+        and "confirm_data_classification" in row["Action"]
+        for row in sections["asset_graph_fix_candidates"]
+    )
+    assert any(
+        "ticket sync failed" in row["Reason"]
+        and row["Ticket"] == "jira: SEC-2001"
+        and row["Ticket Sync"] == "jira failed"
+        and row["Sync Attempts"] == "2"
+        and row["Sync Error"] == "PATCH https://acme.atlassian.net/rest/api/3/issue/SEC failed"
+        for row in sections["remediation_review_queue"]
+    )
+    assert sections["monitoring_snapshots"][0]["Kind"] == "scheduled"
+    assert sections["monitoring_trend_points"][0]["Assets"] == "2"
+    assert sections["monitoring_trend_points"][0]["Findings"] == "2"
+    assert sections["monitoring_trend_points"][0]["Added"] == "2"
+    assert sections["monitoring_trend_points"][0]["Open Alerts"] == "2"
+    assert int(sections["monitoring_snapshots"][0]["Assets"]) >= 2
+    assert int(sections["monitoring_snapshots"][0]["Findings"]) >= 2
+    assert any(row["Entity"] == "host:vpn.acme.example" for row in sections["monitoring_changes"])
+    assert any(row["After"] == "vpn.acme.example" for row in sections["monitoring_changes"])
+    assert any(row["Status"] == "open" for row in sections["monitoring_alerts"])
+    assert any("Added asset: vpn.acme.example" in row["Title"] for row in sections["monitoring_alerts"])
+    operational_timeline = detail_payload["operational_timeline"]
+    assert any(event["category"] == "Monitoring" for event in operational_timeline)
+    assert any(
+        event["category"] == "Monitoring alert"
+        and event["provenance"] == "monitoring_alerts"
+        and event["status"] == "open"
+        for event in operational_timeline
+    )
+    assert any(
+        event["category"] == "Monitoring change"
+        and event["provenance"] == "monitoring_changes"
+        and event["severity"] == "CRITICAL"
+        for event in operational_timeline
+    )
+    assert any(
+        event["category"] == "Remediation"
+        and event["provenance"].startswith("monitoring_alerts:")
+        and event["status"] == "assigned"
+        for event in operational_timeline
+    )
+
+    detail_html = detail_page.read_text(encoding="utf-8")
+    assert "Operational Timeline" in detail_html
+    assert "Evidence Provenance Summary" in detail_html
+    assert "source monitoring_alerts" in detail_html
+    assert "status open" in detail_html
+    assert "Monitoring Snapshot Trend" in detail_html
+    assert "Monitoring Alert Routes" in detail_html
+    assert "Monitoring Alert Suppressions" in detail_html
+    assert "Remediation Workflow" in detail_html
+    assert "Retention Policies" in detail_html
+    assert "Retention Runs" in detail_html
+    assert "Retention Run Items" in detail_html
+    assert "Asset Graph Entities" in detail_html
+    assert "Asset Graph Relationships" in detail_html
+    assert "Asset Ownership Claims" in detail_html
+    assert "Asset Ownership Conflicts" in detail_html
+    assert "Asset Graph Attack Paths" in detail_html
+    assert "Asset Graph Choke Points" in detail_html
+    assert "Asset Graph Fix Candidates" in detail_html
+    assert "Cloud Context" in detail_html
+    assert "Toxic Combinations" in detail_html
+    assert "accounts=123456789012" in detail_html
+    assert "SEC-2001" in detail_html
+    assert "Graph paths / choke points" in detail_html
+    assert "Network Team" in detail_html
+    assert "asset-graph-token-never-render" not in json.dumps(detail_payload, sort_keys=True)
+    assert "asset-graph-token-never-render" not in detail_html
+    assert "legacy-owner-secret-never-render" not in json.dumps(detail_payload, sort_keys=True)
+    assert "legacy-owner-secret-never-render" not in detail_html
+    assert "retention-token-never-render" not in json.dumps(detail_payload, sort_keys=True)
+    assert "retention-token-never-render" not in detail_html
+    assert "dashboard-ticket-secret" not in json.dumps(detail_payload, sort_keys=True)
+    assert "dashboard-ticket-secret" not in detail_html
+    assert "user:pass" not in json.dumps(detail_payload, sort_keys=True)
+    assert "user:pass" not in detail_html
+    assert "token=never" not in json.dumps(detail_payload, sort_keys=True)
+    assert "token=never" not in detail_html
+    assert "Monitoring Trend Aggregates" in detail_html
+    assert "Monitoring Exposure Changes" in detail_html
+    assert "Monitoring Alerts" in detail_html
+
+
+def test_generate_dashboard_tolerates_legacy_remediation_without_risk_expiry(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    con = sqlite3.connect(db_path)
+    try:
+        con.executescript(
+            """
+            CREATE TABLE engagements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                scope_json TEXT NOT NULL DEFAULT '[]',
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                operator TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE remediation_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER NOT NULL,
+                finding_table TEXT NOT NULL DEFAULT 'manual',
+                finding_ref TEXT NOT NULL,
+                title TEXT NOT NULL,
+                severity TEXT NOT NULL DEFAULT 'INFO',
+                owner TEXT,
+                sla_due_at TEXT,
+                status TEXT NOT NULL DEFAULT 'risk_accepted',
+                risk_acceptance_reason TEXT,
+                risk_accepted_by TEXT,
+                risk_accepted_at TIMESTAMP,
+                retest_status TEXT NOT NULL DEFAULT 'not_requested',
+                retest_requested_at TIMESTAMP,
+                retested_at TIMESTAMP,
+                ticket_system TEXT,
+                ticket_ref TEXT,
+                ticket_url TEXT,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO engagements
+                (id, name, scope_json, status, operator, created_at, updated_at)
+            VALUES
+                (1001, 'Legacy Remediation', '["legacy.example"]', 'ACTIVE',
+                 'delta-one', '2026-07-09T08:00:00', '2026-07-09T10:00:00');
+            INSERT INTO remediation_items
+                (engagement_id, finding_table, finding_ref, title, severity,
+                 owner, sla_due_at, status, risk_acceptance_reason,
+                 risk_accepted_by, risk_accepted_at, retest_status,
+                 ticket_ref, metadata_json, created_at, updated_at)
+            VALUES
+                (1001, 'manual', 'legacy-risk', 'Legacy accepted risk', 'HIGH',
+                 'appsec', '2026-08-31T00:00:00Z', 'risk_accepted',
+                 'accepted before expiry tracking', 'delta-one',
+                 '2026-07-09T09:00:00Z', 'not_requested', 'SEC-1', '{}',
+                 '2026-07-09T09:00:00Z', '2026-07-09T10:00:00Z');
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    output_path = reports_dir / "dashboard.html"
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
+
+    detail_json = (
+        reports_dir
+        / "dashboard"
+        / "data"
+        / "engagements"
+        / "engagement-1001-legacy-remediation.json"
+    )
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    remediation_rows = detail_payload["sections"]["remediation_items"]
+
+    assert detail_payload["counts"]["remediation_items"] == 1
+    assert remediation_rows[0]["Risk Expiry"] == ""
+    assert remediation_rows[0]["Risk Review"] == "missing_expiry"
+    assert detail_payload["sections"]["remediation_review_queue"] == []
