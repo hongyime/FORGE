@@ -32,6 +32,17 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Game engine metadata artifact regression
+modularization is complete. `tests/phase1/creative_artifact_cases.py` now owns
+the Unity scene, asmdef, Unreal project/plugin, shader/HLSL/USH, prefab, and
+nested game asset archive fixture, while the original pytest node remains a
+thin wrapper in `tests/phase1/test_engagement_orchestrator.py`. This keeps
+coverage for game resource labels, nested ZIP payload parsing, URL/email seeds,
+S3/GCS/Firebase/Supabase assets, and artifact metadata labels without changing
+production parser behavior, live probing, provider calls, credential use,
+scope, validation/report gates, scheduler behavior, or persistent non-test
+engagement data. Verification passed for the preserved game engine wrapper
+test (`1 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B412.
 Latest checkpoint (2026-08-16): Apple resource metadata artifact regression
 modularization is complete. `tests/phase1/creative_artifact_cases.py` now owns
 the Storyboard, Xcode privacy manifest, string catalog, XIB, stringsdict, and

@@ -355,3 +355,211 @@ def run_apple_resource_metadata_artifacts(tmp_path: Path) -> None:
         assert artifact_meta[nested_bundle.resolve().as_posix()]["payload_count"] >= 3
     finally:
         con.close()
+
+
+def run_game_engine_metadata_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_game_engine"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    unity_scene_path = artifact_root / "Main.unity"
+    unity_scene_path.write_text(
+        dedent(
+            """
+            %YAML 1.1
+            --- !u!1 &100000
+            GameObject:
+              m_Name: AcmeNetworkBootstrap
+              m_TagString: unity-owner@acme.example
+              m_EditorClassIdentifier: https://unity.acme.example/scene
+              firebaseDatabaseUrl: https://unity-firebase.firebaseio.com
+              supabaseApi: https://unityvault.supabase.co/rest/v1
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    asmdef_path = artifact_root / "Acme.Runtime.asmdef"
+    asmdef_path.write_text(
+        dedent(
+            """
+            {
+              "name": "Acme.Runtime",
+              "owner": "asmdef-owner@acme.example",
+              "documentationUrl": "https://asmdef.acme.example/runtime",
+              "releaseManifest": "s3://acme-asmdef-bucket/runtime/latest.json"
+            }
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    unreal_project_path = artifact_root / "AcmeGame.uproject"
+    unreal_project_path.write_text(
+        dedent(
+            """
+            {
+              "FileVersion": 3,
+              "EngineAssociation": "5.4",
+              "Owner": "uproject-owner@acme.example",
+              "Homepage": "https://uproject.acme.example/game",
+              "BuildArtifact": "gs://acme-uproject-gcs/game/latest.json"
+            }
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    nested_bundle = artifact_root / "game-engine-metadata.zip"
+    with zipfile.ZipFile(nested_bundle, "w") as zf:
+        zf.writestr(
+            "Assets/Player.prefab",
+            dedent(
+                """
+                %YAML 1.1
+                --- !u!1 &200000
+                GameObject:
+                  m_Name: PlayerNetworkProfile
+                  m_TagString: prefab-owner@acme.example
+                  m_EditorClassIdentifier: https://prefab.acme.example/player
+                  archive: s3://acme-prefab-bucket/player/latest.prefab
+                """
+            ).strip(),
+        )
+        zf.writestr(
+            "Assets/Shaders/Network.shader",
+            dedent(
+                """
+                Shader "Acme/Network"
+                {
+                  // owner shader-owner@acme.example
+                  // endpoint https://shader.acme.example/render
+                  // firebase https://shader-firebase.firebaseio.com
+                  SubShader { Pass {} }
+                }
+                """
+            ).strip(),
+        )
+        zf.writestr(
+            "Assets/Shaders/PostProcess.hlsl",
+            dedent(
+                """
+                // owner hlsl-owner@acme.example
+                // render endpoint https://hlsl.acme.example/render
+                // firebase https://hlsl-firebase.firebaseio.com
+                float4 main() : SV_Target { return float4(1, 1, 1, 1); }
+                """
+            ).strip(),
+        )
+        zf.writestr(
+            "Plugins/Acme.uplugin",
+            dedent(
+                """
+                {
+                  "FileVersion": 3,
+                  "FriendlyName": "Acme",
+                  "Owner": "uplugin-owner@acme.example",
+                  "DocsURL": "https://uplugin.acme.example/docs",
+                  "Supabase": "https://upluginvault.supabase.co/rest/v1"
+                }
+                """
+            ).strip(),
+        )
+        zf.writestr(
+            "Shaders/Common.ush",
+            dedent(
+                """
+                // owner ush-owner@acme.example
+                // shared shader docs https://ush.acme.example/shader
+                // gcs mirror gs://acme-ush-gcs/shaders/latest.ush
+                """
+            ).strip(),
+        )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 4
+    assert summary.processed >= 4
+    assert summary.discovered_seeds >= 16
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        for expected_email in {
+            "unity-owner@acme.example",
+            "asmdef-owner@acme.example",
+            "uproject-owner@acme.example",
+            "prefab-owner@acme.example",
+            "shader-owner@acme.example",
+            "hlsl-owner@acme.example",
+            "uplugin-owner@acme.example",
+            "ush-owner@acme.example",
+        }:
+            assert expected_email in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        for expected_url in {
+            "https://unity.acme.example/scene",
+            "https://asmdef.acme.example/runtime",
+            "https://uproject.acme.example/game",
+            "https://prefab.acme.example/player",
+            "https://shader.acme.example/render",
+            "https://hlsl.acme.example/render",
+            "https://uplugin.acme.example/docs",
+            "https://ush.acme.example/shader",
+        }:
+            assert (expected_url, "url") in seeds
+        assert ("unity-owner@acme.example", "email") in seeds
+        assert ("hlsl-owner@acme.example", "email") in seeds
+        assert ("uplugin-owner@acme.example", "email") in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-asmdef-bucket") in cloud_assets
+        assert ("aws_s3", "acme-prefab-bucket") in cloud_assets
+        assert ("firebase", "hlsl-firebase") in cloud_assets
+        assert ("firebase", "shader-firebase") in cloud_assets
+        assert ("firebase", "unity-firebase") in cloud_assets
+        assert ("gcs", "acme-uproject-gcs") in cloud_assets
+        assert ("gcs", "acme-ush-gcs") in cloud_assets
+        assert ("supabase", "unityvault") in cloud_assets
+        assert ("supabase", "upluginvault") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[unity_scene_path.resolve().as_posix()]["format"] == "unity"
+        assert artifact_meta[asmdef_path.resolve().as_posix()]["format"] == "asmdef"
+        assert artifact_meta[unreal_project_path.resolve().as_posix()]["format"] == "uproject"
+        assert artifact_meta[nested_bundle.resolve().as_posix()]["format"] == "zip"
+        assert artifact_meta[nested_bundle.resolve().as_posix()]["payload_count"] >= 5
+    finally:
+        con.close()
