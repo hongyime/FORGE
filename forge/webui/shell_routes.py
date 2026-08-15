@@ -26,6 +26,22 @@ def frontend_entry_response(
     return file_response(legacy_template_path)
 
 
+def build_frontend_entry_response_provider(
+    *,
+    frontend_index_path: Path,
+    legacy_template_path: Path,
+    file_response: type[Any],
+) -> Callable[[], Any]:
+    def _frontend_entry_response() -> Any:
+        return frontend_entry_response(
+            frontend_index_path=frontend_index_path,
+            legacy_template_path=legacy_template_path,
+            file_response=file_response,
+        )
+
+    return _frontend_entry_response
+
+
 def frontend_asset_response(
     *,
     frontend_dist_dir: Path,
@@ -80,6 +96,7 @@ def generated_dashboard_data_response(
 
 __all__ = [
     "ShellRouteNotFound",
+    "build_frontend_entry_response_provider",
     "frontend_asset_response",
     "frontend_entry_response",
     "generated_dashboard_data_response",

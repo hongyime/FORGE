@@ -300,6 +300,15 @@ sentences as historical notes only, not as current instructions.
   Web UI run-status tests (`10 passed`), HTMX app wiring tests (`19 passed`),
   Ruff, and `py_compile` passed. Backprop: `SPEC.md` B364.
 
+- [x] Web UI shell entry provider extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now builds the frontend entry response provider
+  through `forge.webui.shell_routes.build_frontend_entry_response_provider`
+  instead of binding frontend index, legacy template, and `FileResponse` in an
+  inline closure. The helper preserves React-index preference and legacy
+  fallback behavior while keeping shell route binding in the shell module.
+  Verification: Web UI shell route tests (`7 passed`), HTMX app wiring tests
+  (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B365.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

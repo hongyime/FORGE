@@ -211,8 +211,8 @@ from forge.webui.run_status import (
 )
 from forge.webui.shell_routes import (
     ShellRouteNotFound,
+    build_frontend_entry_response_provider,
     frontend_asset_response,
-    frontend_entry_response,
     generated_dashboard_data_response,
 )
 from forge.webui.seed_routes import (
@@ -376,12 +376,11 @@ def create_app() -> Any:
 
     _reports_dir = build_reports_dir_provider()
 
-    def _frontend_entry_response() -> Any:
-        return frontend_entry_response(
-            frontend_index_path=frontend_index_path,
-            legacy_template_path=legacy_template_path,
-            file_response=FileResponse,
-        )
+    _frontend_entry_response = build_frontend_entry_response_provider(
+        frontend_index_path=frontend_index_path,
+        legacy_template_path=legacy_template_path,
+        file_response=FileResponse,
+    )
 
     def _principal_can_access_workspace(
         principal: Principal | None,

@@ -6,6 +6,7 @@ import pytest
 from forge.webui.engagement_index_routes import EngagementIndexRouteNotFound
 from forge.webui.shell_routes import (
     ShellRouteNotFound,
+    build_frontend_entry_response_provider,
     frontend_asset_response,
     frontend_entry_response,
     generated_dashboard_data_response,
@@ -36,6 +37,12 @@ def test_frontend_entry_response_prefers_react_index(tmp_path: Path) -> None:
     )
 
     assert response.path == frontend_index
+    provider_response = build_frontend_entry_response_provider(
+        frontend_index_path=frontend_index,
+        legacy_template_path=legacy_template,
+        file_response=_FakeFileResponse,
+    )()
+    assert provider_response.path == frontend_index
 
 
 def test_frontend_entry_response_falls_back_to_legacy_template(tmp_path: Path) -> None:

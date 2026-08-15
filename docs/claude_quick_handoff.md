@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI frontend entry response binding was
+split out of `forge.webui.app.create_app()`.
+`forge.webui.shell_routes.build_frontend_entry_response_provider` now binds the
+React index path, legacy template path, and `FileResponse` used by dashboard and
+SPA fallback routes. Verification passed for Web UI shell route tests (`7
+passed`), HTMX app wiring tests (`19 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B365.
 Latest checkpoint (2026-08-16): A stale Web UI latest-running run wrapper was
 removed from `forge.webui.app.create_app()`.
 `forge.webui.run_status.latest_running_engagement_run` remains the owned query
