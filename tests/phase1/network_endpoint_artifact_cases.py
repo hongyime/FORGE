@@ -215,6 +215,183 @@ def run_network_endpoint_family_dispatch_uses_bounded_workers_and_preserves_orde
     ]
 
 
+def run_queue_processor_extracts_ssh_artifacts_for_recursive_hosts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_ssh_hosts"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    known_hosts = artifact_root / "known_hosts"
+    known_hosts.write_text(
+        dedent(
+            """
+            bastion.acme.example,203.0.113.77 ssh-ed25519 AAAAknownhost ops@acme.example
+            [git.acme.example]:2222 ssh-rsa AAAAgitkey
+            github.com ssh-ed25519 AAAAgithub
+            [gitlab.com]:22 ssh-rsa AAAAgitlab
+            support.taplink.ws ssh-ed25519 AAAAtaplink
+            msha.ke ssh-ed25519 AAAAmilkshake
+            bento.me ssh-ed25519 AAAAbento
+            hoo.be ssh-ed25519 AAAAhoobe
+            |1|hashed-host|hashed-key ssh-ed25519 AAAAhashed
+            @cert-authority *.corp.acme.example ecdsa-sha2-nistp256 AAAAca
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    authorized_keys = artifact_root / "authorized_keys"
+    authorized_keys.write_text(
+        ("ssh-ed25519 AAAAauthorized deploy@acme.example https://jump.acme.example/admin\n"),
+        encoding="utf-8",
+    )
+
+    ssh_bundle = artifact_root / "ssh-evidence.zip"
+    with zipfile.ZipFile(ssh_bundle, "w") as zf:
+        zf.writestr(
+            ".ssh/ssh_config",
+            dedent(
+                """
+                Host production-jump
+                  HostName jumpbox.acme.example
+                  User deploy
+                """
+            ).strip(),
+        )
+        zf.writestr(
+            ".ssh/ssh_known_hosts",
+            "edge.acme.example ssh-ed25519 AAAAedge edge-owner@acme.example\n",
+        )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 3
+    assert summary.processed >= 3
+    assert summary.discovered_seeds >= 8
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "deploy@acme.example" in emails
+        assert "edge-owner@acme.example" in emails
+        assert "ops@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("203.0.113.77", "ipv4") in seeds
+        assert ("acme.example", "domain") in seeds
+        assert ("bastion.acme.example", "subdomain") in seeds
+        assert ("corp.acme.example", "subdomain") in seeds
+        assert ("edge.acme.example", "subdomain") in seeds
+        assert ("git.acme.example", "subdomain") in seeds
+        assert ("jumpbox.acme.example", "subdomain") in seeds
+        assert ("https://jump.acme.example/admin", "url") in seeds
+        assert ("github.com", "domain") not in seeds
+        assert ("gitlab.com", "domain") not in seeds
+        assert ("support.taplink.ws", "subdomain") not in seeds
+        assert ("taplink.ws", "domain") not in seeds
+        assert ("msha.ke", "domain") not in seeds
+        assert ("bento.me", "domain") not in seeds
+        assert ("hoo.be", "domain") not in seeds
+        assert ("|1|hashed-host|hashed-key", "other") not in seeds
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[known_hosts.resolve().as_posix()]["format"] == "known_hosts"
+        assert artifact_meta[authorized_keys.resolve().as_posix()]["format"] == "authorized_keys"
+        assert artifact_meta[ssh_bundle.resolve().as_posix()]["format"] == "zip"
+        assert artifact_meta[ssh_bundle.resolve().as_posix()]["payload_count"] >= 2
+    finally:
+        con.close()
+
+
+def run_ssh_host_seed_extraction_uses_bounded_static_workers_and_preserves_order(
+    monkeypatch: Any,
+) -> None:
+    import forge.engagement_orchestrator as orchestrator
+
+    monkeypatch.setenv("FORGE_STATIC_ARTIFACT_MAX_WORKERS", "4")
+    original_entry = orchestrator._ssh_known_host_token_seed_entries
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+    delays = {
+        "bastion.acme.example": 0.05,
+        "203.0.113.77": 0.04,
+        "[git.acme.example]:2222": 0.03,
+        "*.corp.acme.example": 0.02,
+        "github.com": 0.01,
+        "msha.ke": 0.01,
+        "bento.me": 0.01,
+        "hoo.be": 0.01,
+        "jumpbox.acme.example": 0.02,
+    }
+
+    def _fake_ssh_known_host_token_seed_entries(raw_host: str) -> list[tuple[str, str]]:
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(delays.get(str(raw_host), 0.01))
+            return original_entry(raw_host)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        orchestrator,
+        "_ssh_known_host_token_seed_entries",
+        _fake_ssh_known_host_token_seed_entries,
+    )
+
+    seeds = orchestrator._extract_artifact_ssh_host_seeds(
+        dedent(
+            """
+            bastion.acme.example,203.0.113.77 ssh-ed25519 AAAAknownhost ops@acme.example
+            [git.acme.example]:2222 ssh-rsa AAAAgitkey
+            github.com ssh-ed25519 AAAAgithub
+            msha.ke ssh-ed25519 AAAAmilkshake
+            bento.me ssh-ed25519 AAAAbento
+            hoo.be ssh-ed25519 AAAAhoobe
+            @cert-authority *.corp.acme.example ecdsa-sha2-nistp256 AAAAca
+            HostName jumpbox.acme.example
+            """
+        ).strip()
+    )
+
+    assert peak == 4
+    assert seeds == [
+        ("bastion.acme.example", "subdomain"),
+        ("acme.example", "domain"),
+        ("203.0.113.77", "ipv4"),
+        ("git.acme.example", "subdomain"),
+        ("corp.acme.example", "subdomain"),
+        ("jumpbox.acme.example", "subdomain"),
+    ]
+
+
 def run_dns_zone_records() -> None:
     seeds = set(
         _extract_artifact_network_endpoint_seeds(

@@ -32,6 +32,20 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): SSH artifact and host worker-order
+regression modularization is complete.
+`tests/phase1/network_endpoint_artifact_cases.py` now also owns the
+known_hosts, authorized_keys, nested SSH config/known_hosts ZIP fixture, and
+the bounded static-worker host extraction regression, while the original pytest
+nodes remain thin wrappers in `tests/phase1/test_engagement_orchestrator.py`.
+This keeps coverage for recursive SSH host seed promotion, public-host
+exclusions, hashed known-host exclusion, nested ZIP payload extraction, and
+worker-order preservation without changing production parser behavior, live
+probing, provider calls, credential use, scope, validation/report gates,
+scheduler behavior, or persistent non-test engagement data. Verification passed
+for the preserved wrappers plus adjacent network endpoint helper wrappers
+(`4 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B449.
 Latest checkpoint (2026-08-16): Dependency lock and manifest
 artifact-ingestion regression modularization is complete.
 `tests/phase1/package_manager_artifact_cases.py` now also owns the Yarn lock,
