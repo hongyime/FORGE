@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from forge.engagement_orchestrator import ArtifactQueueProcessor
+from forge.engagement_orchestrator import ArtifactQueueProcessor, EngagementSynthesisEngine
 from forge.phase4.mobile_config_parse import FirebaseProject, SupabaseConfig
 from tests.phase1.artifact_test_support import bootstrap_engagement
 
@@ -1048,6 +1048,120 @@ def run_parallelizes_nested_mobile_member_result_batches_and_preserves_order(
         "packages/client-2.ipa!supabase.json",
         "packages/client-3.apkm!supabase.json",
     ]
+
+
+def run_nested_mobile_configs_from_apkm_bundle(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_apkm"
+    artifact_root.mkdir()
+    bootstrap_engagement(
+        db_path,
+        name="Acme Example",
+        scope_json='["*.acme.example","+15551234567","security@acme.example","https://downloads.acme.example/app.apk"]',
+        operator="delta-one",
+    )
+
+    base_apk_bytes = BytesIO()
+    with zipfile.ZipFile(base_apk_bytes, "w") as zf:
+        zf.writestr(
+            "google-services.json",
+            """
+            {
+              "project_info": {
+                "project_id": "acme-apkm-firebase",
+                "firebase_url": "https://acme-apkm-firebase.firebaseio.com",
+                "storage_bucket": "acme-apkm-firebase.appspot.com"
+              },
+              "client": [
+                {
+                  "api_key": [
+                    { "current_key": "AIzaSyAPKMKEY1234567890" }
+                  ]
+                }
+              ]
+            }
+            """.strip(),
+        )
+        zf.writestr(
+            "assets/supabase.js",
+            """
+            export const url = "https://apkmbundle.supabase.co";
+            export const anon = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFwa21idW5kbGUiLCJyb2xlIjoiYW5vbiJ9.signature123";
+            export const owner = "apkm-owner@acme.example";
+            export const endpoint = "https://apkm.acme.example/mobile";
+            """.strip(),
+        )
+
+    apkm_path = artifact_root / "acme-client.apkm"
+    with zipfile.ZipFile(apkm_path, "w") as zf:
+        zf.writestr("manifest.json", '{"name":"Acme Client APKM"}')
+        zf.writestr("base.apk", base_apk_bytes.getvalue())
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+    synthesis_summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
+
+    assert queued >= 1
+    assert summary.processed >= 1
+    assert summary.firebase_projects >= 1
+    assert summary.supabase_configs >= 1
+    assert summary.discovered_seeds >= 5
+    assert "acme.example" in synthesis_summary.root_domains
+    assert "acme-apkm-firebase" not in synthesis_summary.root_domains
+    assert "apkmbundle" not in synthesis_summary.root_domains
+
+    con = sqlite3.connect(db_path)
+    try:
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("firebase", "acme-apkm-firebase") in cloud_assets
+        assert ("gcs", "acme-apkm-firebase.appspot.com") in cloud_assets
+        assert ("supabase", "apkmbundle") in cloud_assets
+
+        key_findings = con.execute(
+            "SELECT service, pattern_name FROM key_scanner_findings WHERE engagement_id=1001 ORDER BY service"
+        ).fetchall()
+        assert ("firebase", "firebase_mobile_config") in key_findings
+        assert ("supabase", "supabase_mobile_config") in key_findings
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("acme-apkm-firebase", "other") in seeds
+        assert ("https://storage.googleapis.com/acme-apkm-firebase.appspot.com", "url") in seeds
+        assert ("https://apkmbundle.supabase.co", "url") in seeds
+        assert ("apkmbundle", "other") in seeds
+        assert ("apkm-owner@acme.example", "email") in seeds
+        assert ("https://apkm.acme.example/mobile", "url") in seeds
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[apkm_path.resolve().as_posix()]["format"] == "apkm"
+        assert artifact_meta[apkm_path.resolve().as_posix()]["nested_mobile_member_count"] >= 1
+    finally:
+        con.close()
 
 
 def run_nested_archive_style_mobile_bundle_from_outer_archive(tmp_path: Path) -> None:
