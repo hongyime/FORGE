@@ -741,6 +741,105 @@ def run_parallelizes_nested_tar_mobile_member_extraction_and_preserves_order(
     ]
 
 
+def run_parallelizes_nested_tar_mobile_member_planning_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    archive_path = tmp_path / "parallel-mobile-member-plan.tar"
+    member_names = [
+        "packages/client-1.ipa",
+        "packages/client-2.apk",
+        "packages/client-3.apkm",
+        "packages/client-4.xapk",
+        "packages/client-5.aab",
+    ]
+    with tarfile.open(archive_path, "w") as tf:
+        for member_name in member_names:
+            payload = member_name.encode("utf-8")
+            info = tarfile.TarInfo(member_name)
+            info.size = len(payload)
+            tf.addfile(info, BytesIO(payload))
+        ignore_info = tarfile.TarInfo("packages/ignore.txt")
+        ignore_payload = b"ignore"
+        ignore_info.size = len(ignore_payload)
+        tf.addfile(ignore_info, BytesIO(ignore_payload))
+
+    delays = {
+        "packages/client-1.ipa": 0.05,
+        "packages/client-2.apk": 0.01,
+        "packages/client-3.apkm": 0.03,
+        "packages/client-4.xapk": 0.02,
+        "packages/client-5.aab": 0.04,
+        "packages/ignore.txt": 0.01,
+    }
+    active = 0
+    entered = 0
+    peak = 0
+    lock = threading.Lock()
+    gate = threading.Event()
+    original_entry = ArtifactQueueProcessor._nested_mobile_tar_member_entry
+
+    def tracking_entry(member):  # noqa: ANN001
+        nonlocal active, entered, peak
+        with lock:
+            active += 1
+            entered += 1
+            peak = max(peak, active)
+            if entered >= 4:
+                gate.set()
+        try:
+            gate.wait(timeout=1.0)
+            time.sleep(delays[member.name])
+            return original_entry(member)
+        finally:
+            with lock:
+                active -= 1
+
+    def fake_extract_mobile_configs_from_member_bytes(
+        _self,
+        data: bytes,
+        source_path: Path,
+        member_name: str,
+    ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig]]:
+        del data
+        project_id = Path(member_name).stem.lower().replace("client-", "member-")
+        return (
+            [(str(source_path), f"{member_name}!payload.txt", project_id)],
+            [],
+            [],
+        )
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_nested_mobile_tar_member_entry",
+        staticmethod(tracking_entry),
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_mobile_configs_from_member_bytes",
+        fake_extract_mobile_configs_from_member_bytes,
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=8)
+    with tarfile.open(archive_path) as tf:
+        payloads, firebase_projects, supabase_configs, mobile_members = (
+            processor._extract_nested_mobile_configs_from_tar(tf, archive_path)
+        )
+
+    assert peak == 4
+    assert mobile_members == 5
+    assert payloads == [
+        (str(archive_path), "packages/client-1.ipa!payload.txt", "member-1"),
+        (str(archive_path), "packages/client-2.apk!payload.txt", "member-2"),
+        (str(archive_path), "packages/client-3.apkm!payload.txt", "member-3"),
+        (str(archive_path), "packages/client-4.xapk!payload.txt", "member-4"),
+        (str(archive_path), "packages/client-5.aab!payload.txt", "member-5"),
+    ]
+    assert firebase_projects == []
+    assert supabase_configs == []
+
+
 def run_nested_archive_style_mobile_bundle_from_outer_archive(tmp_path: Path) -> None:
     db_path = tmp_path / "engagement.db"
     artifact_root = tmp_path / "artifact_nested_archive_mobile"
