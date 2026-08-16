@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import tarfile
+import gzip
 from io import BytesIO
 from pathlib import Path
 from textwrap import dedent
@@ -696,6 +697,100 @@ def run_cpio_package_artifacts(tmp_path: Path) -> None:
         }
         assert artifact_meta[cpio_path.resolve().as_posix()]["format"] == "cpio"
         assert artifact_meta[cpio_path.resolve().as_posix()]["payload_count"] >= 2
+    finally:
+        con.close()
+
+
+def run_rpm_package_static_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_rpm_packages"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    rpm_path = artifact_root / "acme-agent-1.0.0.x86_64.rpm"
+    compressed_payload = gzip.compress(
+        _cpio_newc_bytes(
+            [
+                (
+                    "etc/acme/rpm.env",
+                    dedent(
+                        """
+                        OWNER=rpm-owner@acme.example
+                        API_BASE=https://rpm.acme.example/api
+                        FIREBASE_URL=https://rpm-firebase.firebaseio.com
+                        SUPABASE_URL=https://rpmworkspace.supabase.co
+                        RELEASE_BUCKET=s3://acme-rpm-bucket/releases/acme-agent.rpm
+                        GCS=gs://acme-rpm-gcs/reports/latest.json
+                        """
+                    )
+                    .strip()
+                    .encode("utf-8"),
+                )
+            ]
+        )
+    )
+    rpm_path.write_bytes(
+        b"\xed\xab\xee\xdbrpm-header-owner@acme.example\x00payload follows\x00" + compressed_payload
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 1
+    assert summary.processed >= 1
+    assert summary.discovered_seeds >= 5
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "rpm-header-owner@acme.example" in emails
+        assert "rpm-owner@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("rpm-header-owner@acme.example", "email") in seeds
+        assert ("rpm-owner@acme.example", "email") in seeds
+        assert ("https://rpm.acme.example/api", "url") in seeds
+        assert ("https://rpmworkspace.supabase.co", "url") in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-rpm-bucket") in cloud_assets
+        assert ("firebase", "rpm-firebase") in cloud_assets
+        assert ("gcs", "acme-rpm-gcs") in cloud_assets
+        assert ("supabase", "rpmworkspace") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[rpm_path.resolve().as_posix()]["format"] == "rpm"
+        assert artifact_meta[rpm_path.resolve().as_posix()]["payload_count"] >= 2
+        assert artifact_meta[rpm_path.resolve().as_posix()]["metadata_payload_count"] >= 1
     finally:
         con.close()
 
