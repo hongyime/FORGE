@@ -154,3 +154,131 @@ def run_columnar_data_export_static_artifacts(tmp_path: Path) -> None:
         assert artifact_meta[hdf5_path.resolve().as_posix()]["payload_count"] >= 1
     finally:
         con.close()
+
+
+def run_model_binary_static_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_model_binaries"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    onnx_path = artifact_root / "ranker.onnx"
+    onnx_path.write_bytes(
+        b"\x08\x07onnx\x00"
+        b"onnx-owner@acme.example\x00"
+        b"https://onnx.acme.example/models/ranker\x00"
+        b"https://onnx-firebase.firebaseio.com\x00"
+    )
+
+    safetensors_path = artifact_root / "embed.safetensors"
+    safetensors_path.write_bytes(
+        b"\x20\x00\x00\x00SAFE\x00"
+        b"safetensors-owner@acme.example\x00"
+        b"https://safetensors.acme.example/embed\x00"
+        b"s3://acme-safetensors-bucket/models/embed.safetensors\x00"
+    )
+
+    joblib_path = artifact_root / "vectorizer.joblib"
+    joblib_path.write_bytes(
+        b"\x80\x04joblib\x00"
+        b"joblib-owner@acme.example\x00"
+        b"https://joblib.acme.example/vectorizer\x00"
+        b"https://joblibvault.supabase.co/rest/v1/models\x00"
+    )
+
+    pickle_path = artifact_root / "pipeline.pkl"
+    pickle_path.write_bytes(
+        b"\x80\x05pickle\x00"
+        b"pickle-owner@acme.example\x00"
+        b"https://pickle.acme.example/pipeline\x00"
+        b"gs://acme-pickle-gcs/models/pipeline.pkl\x00"
+    )
+
+    torch_path = artifact_root / "checkpoint.pt"
+    torch_path.write_bytes(
+        b"PK\x03\x04torch\x00"
+        b"torch-owner@acme.example\x00"
+        b"https://torch.acme.example/checkpoints/latest\x00"
+        b"s3://acme-torch-bucket/checkpoints/latest.pt\x00"
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued == 5
+    assert summary.processed == 5
+    assert summary.discovered_seeds >= 10
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "onnx-owner@acme.example" in emails
+        assert "safetensors-owner@acme.example" in emails
+        assert "joblib-owner@acme.example" in emails
+        assert "pickle-owner@acme.example" in emails
+        assert "torch-owner@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("onnx-owner@acme.example", "email") in seeds
+        assert ("safetensors-owner@acme.example", "email") in seeds
+        assert ("joblib-owner@acme.example", "email") in seeds
+        assert ("pickle-owner@acme.example", "email") in seeds
+        assert ("torch-owner@acme.example", "email") in seeds
+        assert ("https://onnx.acme.example/models/ranker", "url") in seeds
+        assert ("https://safetensors.acme.example/embed", "url") in seeds
+        assert ("https://joblib.acme.example/vectorizer", "url") in seeds
+        assert ("https://joblibvault.supabase.co/rest/v1/models", "url") in seeds
+        assert ("https://pickle.acme.example/pipeline", "url") in seeds
+        assert ("https://torch.acme.example/checkpoints/latest", "url") in seeds
+
+        cloud_assets = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT asset_type, identifier
+                FROM cloud_assets
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("aws_s3", "acme-safetensors-bucket") in cloud_assets
+        assert ("aws_s3", "acme-torch-bucket") in cloud_assets
+        assert ("firebase", "onnx-firebase") in cloud_assets
+        assert ("gcs", "acme-pickle-gcs") in cloud_assets
+        assert ("supabase", "joblibvault") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[onnx_path.resolve().as_posix()]["format"] == "onnx"
+        assert artifact_meta[onnx_path.resolve().as_posix()]["payload_count"] >= 1
+        assert artifact_meta[safetensors_path.resolve().as_posix()]["format"] == "safetensors"
+        assert artifact_meta[safetensors_path.resolve().as_posix()]["payload_count"] >= 1
+        assert artifact_meta[joblib_path.resolve().as_posix()]["format"] == "joblib"
+        assert artifact_meta[joblib_path.resolve().as_posix()]["payload_count"] >= 1
+        assert artifact_meta[pickle_path.resolve().as_posix()]["format"] == "pkl"
+        assert artifact_meta[pickle_path.resolve().as_posix()]["payload_count"] >= 1
+        assert artifact_meta[torch_path.resolve().as_posix()]["format"] == "pt"
+        assert artifact_meta[torch_path.resolve().as_posix()]["payload_count"] >= 1
+    finally:
+        con.close()
