@@ -814,3 +814,70 @@ def run_email_part_payload_entries_parallel_order(tmp_path: Path, monkeypatch) -
         (source_file, f"{member_name}.part-2.bin", "part-2"),
         (source_file, f"{member_name}.part-3.bin", "part-3"),
     ]
+
+
+def run_nested_email_part_messages_parallel_order(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    db_path = tmp_path / "engagement.db"
+    source_file = str(tmp_path / "outer-message.eml")
+    delays = {
+        "nested-1.eml": 0.05,
+        "nested-2.eml": 0.01,
+        "nested-3.eml": 0.03,
+    }
+    payload_texts = {
+        "nested-1.eml": "nested-one@acme.example",
+        "nested-2.eml": "nested-two@acme.example",
+        "nested-3.eml": "nested-three@acme.example",
+    }
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def _fake_extract_email_message_payloads(
+        _self,
+        nested_bytes: bytes,
+        nested_source_file: str,
+        nested_name: str,
+        *,
+        depth: int,
+    ) -> list[tuple[str, str, str]]:  # noqa: ANN001
+        assert nested_source_file == source_file
+        assert nested_bytes == f"payload-{nested_name}".encode("utf-8")
+        assert depth == 2
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(delays[nested_name])
+            return [(nested_source_file, nested_name, payload_texts[nested_name])]
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_email_message_payloads",
+        _fake_extract_email_message_payloads,
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=4)
+    payloads = processor._extract_email_part_job(
+        EmailPartExtractionJob(
+            source_file=source_file,
+            member_name="attached.eml",
+            depth=1,
+            nested_messages=[
+                ("nested-1.eml", b"payload-nested-1.eml"),
+                ("nested-2.eml", b"payload-nested-2.eml"),
+                ("nested-3.eml", b"payload-nested-3.eml"),
+            ],
+        )
+    )
+
+    assert peak == 3
+    assert payloads == [
+        (source_file, "nested-1.eml", "nested-one@acme.example"),
+        (source_file, "nested-2.eml", "nested-two@acme.example"),
+        (source_file, "nested-3.eml", "nested-three@acme.example"),
+    ]
