@@ -267,6 +267,7 @@ from tests.phase1.network_endpoint_artifact_cases import (
     run_dns_zone_line_parsing_uses_bounded_workers_and_preserves_origin_order,
     run_dns_zone_artifacts,
     run_dns_zone_records,
+    run_queue_processor_extracts_dns_resolver_and_takeover_outputs,
     run_hosts_file_aliases,
     run_hosts_file_artifacts,
     run_hosts_file_line_tokenization_uses_bounded_workers_and_preserves_order,
@@ -27434,148 +27435,7 @@ def test_artifact_queue_processor_extracts_cms_scanner_outputs(
 def test_artifact_queue_processor_extracts_dns_resolver_and_takeover_outputs(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_dns_resolver_outputs"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    massdns_path = artifact_root / "massdns-results.txt"
-    massdns_path.write_text(
-        "massdns.acme.example. A 203.0.113.80 massdns-owner@acme.example\n",
-        encoding="utf-8",
-    )
-
-    puredns_path = artifact_root / "puredns-resolve.txt"
-    puredns_path.write_text(
-        "puredns.acme.example\n"
-        "https://puredns.acme.example/status?token=puredns-token-do-not-store&view=public\n",
-        encoding="utf-8",
-    )
-
-    dnsrecon_path = artifact_root / "dnsrecon.json"
-    dnsrecon_path.write_text(
-        json.dumps(
-            {
-                "records": [
-                    {
-                        "name": "dnsrecon.acme.example",
-                        "address": "203.0.113.81",
-                        "owner": "dnsrecon-owner@acme.example",
-                    }
-                ]
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    dnsenum_path = artifact_root / "dnsenum-report.xml"
-    dnsenum_path.write_text(
-        """
-        <dnsenum>
-          <host>dnsenum.acme.example</host>
-          <owner>dnsenum-owner@acme.example</owner>
-          <url>https://dnsenum.acme.example/report?api_key=dnsenum-token-do-not-store&amp;download=1</url>
-        </dnsenum>
-        """.strip(),
-        encoding="utf-8",
-    )
-
-    subjack_path = artifact_root / "subjack-takeovers.json"
-    subjack_path.write_text(
-        json.dumps(
-            {
-                "host": "takeover.acme.example",
-                "url": "https://takeover.acme.example",
-                "owner": "subjack-owner@acme.example",
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    subzy_path = artifact_root / "subzy-results.json"
-    subzy_path.write_text(
-        json.dumps(
-            {
-                "result": {
-                    "hostname": "subzy.acme.example",
-                    "url": "https://subzy.acme.example/check?session=subzy-token-do-not-store&state=open",
-                    "archive": "s3://acme-subzy-results/latest.json",
-                },
-                "owner": "subzy-owner@acme.example",
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 6
-    assert summary.processed >= 6
-    assert summary.discovered_seeds >= 12
-
-    con = sqlite3.connect(db_path)
-    try:
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        for expected_seed in {
-            ("massdns.acme.example", "subdomain"),
-            ("puredns.acme.example", "subdomain"),
-            ("https://puredns.acme.example/status?view=public", "url"),
-            ("https://dnsrecon.acme.example", "url"),
-            ("https://dnsenum.acme.example/report?download=1", "url"),
-            ("https://takeover.acme.example", "url"),
-            ("https://subzy.acme.example/check?state=open", "url"),
-            ("massdns-owner@acme.example", "email"),
-            ("dnsrecon-owner@acme.example", "email"),
-            ("dnsenum-owner@acme.example", "email"),
-            ("subjack-owner@acme.example", "email"),
-            ("subzy-owner@acme.example", "email"),
-        }:
-            assert expected_seed in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-subzy-results") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[massdns_path.resolve().as_posix()]["format"] == "massdns-output"
-        assert artifact_meta[puredns_path.resolve().as_posix()]["format"] == "puredns-output"
-        assert artifact_meta[dnsrecon_path.resolve().as_posix()]["format"] == "dnsrecon-output"
-        assert artifact_meta[dnsenum_path.resolve().as_posix()]["format"] == "dnsenum-output"
-        assert artifact_meta[subjack_path.resolve().as_posix()]["format"] == "subjack-output"
-        assert artifact_meta[subzy_path.resolve().as_posix()]["format"] == "subzy-output"
-
-        db_dump = "\n".join(con.iterdump())
-        assert "puredns-token-do-not-store" not in db_dump
-        assert "dnsenum-token-do-not-store" not in db_dump
-        assert "subzy-token-do-not-store" not in db_dump
-    finally:
-        con.close()
+    run_queue_processor_extracts_dns_resolver_and_takeover_outputs(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_sarif_scan_artifacts(
