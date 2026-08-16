@@ -302,6 +302,7 @@ from tests.phase1.security_scanner_artifact_cases import (
     run_detect_secrets_baseline_without_secret_material,
     run_queue_processor_extracts_sbom_and_security_tool_output_artifacts,
     run_queue_processor_extracts_sarif_scan_artifacts,
+    run_queue_processor_extracts_supply_chain_attestation_and_vex_artifacts,
     run_security_scanner_control_files,
     run_security_scanner_policy_configs,
 )
@@ -27455,140 +27456,7 @@ def test_artifact_queue_processor_extracts_sbom_and_security_tool_output_artifac
 def test_artifact_queue_processor_extracts_supply_chain_attestation_and_vex_artifacts(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_supply_chain_attestations"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    intoto_path = artifact_root / "release.intoto"
-    intoto_path.write_text(
-        dedent(
-            """
-            {
-              "_type": "https://in-toto.io/Statement/v1",
-              "predicateType": "https://slsa.dev/provenance/v1",
-              "builder": {"id": "https://provenance.acme.example/builders/release"},
-              "metadata": {
-                "owner": "provenance-owner@acme.example",
-                "notes": "https://attest-firebase.firebaseio.com s3://acme-attestation-bucket/releases/statement.json"
-              },
-              "materials": [
-                {"uri": "https://provenance.acme.example/builds/42"},
-                {"uri": "SUPABASE_URL=https://attestworkspace.supabase.co"}
-              ]
-            }
-            """
-        ).strip(),
-        encoding="utf-8",
-    )
-    vex_path = artifact_root / "advisory.vex"
-    vex_path.write_text(
-        dedent(
-            """
-            vex-owner@acme.example
-            https://vex.acme.example/advisories/CVE-2026-0001
-            gs://acme-vex-gcs/reports/current.json
-            """
-        ).strip(),
-        encoding="utf-8",
-    )
-
-    bundle_path = artifact_root / "supply-chain-evidence.zip"
-    with zipfile.ZipFile(bundle_path, "w") as zf:
-        zf.writestr(
-            "csaf/root.csaf",
-            """
-            csaf-owner@acme.example https://csaf.acme.example/security/root.json
-            https://csafblob.blob.core.windows.net/public/root.json
-            """.strip(),
-        )
-        zf.writestr(
-            "osv/package.osv",
-            """
-            osv-owner@acme.example https://osv.acme.example/vulns/OSV-2026-1
-            https://osv-firebase.firebaseio.com
-            """.strip(),
-        )
-        zf.writestr(
-            "slsa/build.provenance",
-            """
-            slsa-owner@acme.example https://slsa.acme.example/provenance/build
-            SUPABASE_URL=https://slsaworkspace.supabase.co
-            """.strip(),
-        )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 3
-    assert summary.processed >= 3
-    assert summary.firebase_projects >= 2
-    assert summary.discovered_seeds >= 8
-
-    con = sqlite3.connect(db_path)
-    try:
-        emails = {
-            row[0]
-            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
-        }
-        assert "provenance-owner@acme.example" in emails
-        assert "vex-owner@acme.example" in emails
-        assert "csaf-owner@acme.example" in emails
-        assert "osv-owner@acme.example" in emails
-        assert "slsa-owner@acme.example" in emails
-
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("https://provenance.acme.example/builders/release", "url") in seeds
-        assert ("https://provenance.acme.example/builds/42", "url") in seeds
-        assert ("https://vex.acme.example/advisories/CVE-2026-0001", "url") in seeds
-        assert ("https://csaf.acme.example/security/root.json", "url") in seeds
-        assert ("https://osv.acme.example/vulns/OSV-2026-1", "url") in seeds
-        assert ("https://slsa.acme.example/provenance/build", "url") in seeds
-        assert ("provenance-owner@acme.example", "email") in seeds
-        assert ("slsa-owner@acme.example", "email") in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-attestation-bucket") in cloud_assets
-        assert ("azure_blob", "csafblob/public") in cloud_assets
-        assert ("firebase", "attest-firebase") in cloud_assets
-        assert ("firebase", "osv-firebase") in cloud_assets
-        assert ("gcs", "acme-vex-gcs") in cloud_assets
-        assert ("supabase", "attestworkspace") in cloud_assets
-        assert ("supabase", "slsaworkspace") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[intoto_path.resolve().as_posix()]["format"] == "intoto"
-        assert artifact_meta[vex_path.resolve().as_posix()]["format"] == "vex"
-        assert artifact_meta[bundle_path.resolve().as_posix()]["format"] == "zip"
-        assert artifact_meta[bundle_path.resolve().as_posix()]["payload_count"] >= 3
-    finally:
-        con.close()
+    run_queue_processor_extracts_supply_chain_attestation_and_vex_artifacts(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_ci_test_and_coverage_report_artifacts(
