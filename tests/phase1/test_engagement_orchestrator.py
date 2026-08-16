@@ -222,6 +222,7 @@ from tests.phase1.log_artifact_cases import (
 )
 from tests.phase1.mobile_binary_artifact_cases import (
     run_compiled_mobile_jvm_static_artifacts,
+    run_wasm_binary_string_artifacts,
 )
 from tests.phase1.crash_artifact_cases import (
     run_queue_processor_extracts_crash_diagnostic_artifacts,
@@ -27582,97 +27583,7 @@ def test_artifact_queue_processor_extracts_installer_binary_static_artifacts(
 def test_artifact_queue_processor_extracts_wasm_binary_string_artifacts(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_wasm"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    wasm_path = artifact_root / "client_module.wasm"
-    wasm_path.write_bytes(
-        b"\x00asm\x01\x00\x00\x00"
-        b"wasm-owner@acme.example\x00"
-        b"https://wasm.acme.example/api\x00"
-        b"https://wasm-firebase.firebaseio.com\x00"
-        b"https://wasmworkspace.supabase.co/rest/v1/users\x00"
-        b"s3://acme-wasm-bucket/releases/module.wasm\x00"
-        b"gs://acme-wasm-gcs/reports/latest.json\x00"
-    )
-
-    bundle_path = artifact_root / "wasm-bundle.zip"
-    with zipfile.ZipFile(bundle_path, "w") as zf:
-        zf.writestr(
-            "pkg/nested_worker.wasm",
-            (
-                b"\x00asm\x01\x00\x00\x00"
-                b"nested-wasm-owner@acme.example\x00"
-                b"https://nested-wasm.acme.example/pivot\x00"
-                b"https://nested-wasm-firebase.firebaseio.com\x00"
-            ),
-        )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 2
-    assert summary.processed >= 2
-    assert summary.discovered_seeds >= 6
-
-    con = sqlite3.connect(db_path)
-    try:
-        emails = {
-            row[0]
-            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
-        }
-        assert "wasm-owner@acme.example" in emails
-        assert "nested-wasm-owner@acme.example" in emails
-
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("wasm-owner@acme.example", "email") in seeds
-        assert ("nested-wasm-owner@acme.example", "email") in seeds
-        assert ("https://wasm.acme.example/api", "url") in seeds
-        assert ("https://nested-wasm.acme.example/pivot", "url") in seeds
-        assert ("https://wasmworkspace.supabase.co/rest/v1/users", "url") in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-wasm-bucket") in cloud_assets
-        assert ("firebase", "wasm-firebase") in cloud_assets
-        assert ("firebase", "nested-wasm-firebase") in cloud_assets
-        assert ("gcs", "acme-wasm-gcs") in cloud_assets
-        assert ("supabase", "wasmworkspace") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[wasm_path.resolve().as_posix()]["format"] == "wasm"
-        assert artifact_meta[wasm_path.resolve().as_posix()]["payload_count"] >= 1
-        assert artifact_meta[bundle_path.resolve().as_posix()]["format"] == "zip"
-        assert artifact_meta[bundle_path.resolve().as_posix()]["payload_count"] >= 1
-    finally:
-        con.close()
+    run_wasm_binary_string_artifacts(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_keystore_binary_string_artifacts(
