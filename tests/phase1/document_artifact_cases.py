@@ -9,7 +9,11 @@ from email.message import EmailMessage
 from io import BytesIO
 from pathlib import Path
 
-from forge.engagement_orchestrator import ArtifactQueueProcessor
+from forge.engagement_orchestrator import (
+    ArtifactQueueProcessor,
+    EmailPartExtractionJob,
+    EmailPartPlanningEntry,
+)
 from tests.phase1.artifact_test_support import bootstrap_engagement
 
 
@@ -712,4 +716,101 @@ def run_nested_email_message_job_planning_parallel_order(
         (source_file, expected_names[2], expected_names[2]),
         (source_file, expected_names[3], expected_names[3]),
         (source_file, expected_names[4], expected_names[4]),
+    ]
+
+
+def run_email_part_payload_entries_parallel_order(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    db_path = tmp_path / "engagement.db"
+    source_file = str(tmp_path / "part-entry-message.eml")
+    member_name = "part-entry-message.eml"
+    active = 0
+    peak = 0
+    entered = 0
+    lock = threading.Lock()
+    gate = threading.Event()
+    delays = {0: 0.05, 1: 0.01, 2: 0.03}
+    original_entry = ArtifactQueueProcessor._artifact_payload_tuple_batch_entries
+
+    def _tracking_entry(payload_batch):  # noqa: ANN001
+        nonlocal active, peak, entered
+        batch_index, _batch = payload_batch
+        with lock:
+            active += 1
+            peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 3:
+                gate.set()
+        try:
+            if current_entered <= 3:
+                assert gate.wait(timeout=1.0)
+            time.sleep(delays[batch_index])
+            return original_entry(payload_batch)
+        finally:
+            with lock:
+                active -= 1
+
+    def _fake_email_message_part_entry(
+        _self,
+        part_job,
+        *,
+        source_file: str,
+        member_name: str,
+        depth: int,
+    ) -> EmailPartPlanningEntry:  # noqa: ANN001
+        part_index, _part = part_job
+        if part_index == 1:
+            return EmailPartPlanningEntry(
+                payloads=[
+                    (source_file, f"{member_name}.part-1.txt", "direct"),
+                    ("", "ignored", "ignored"),
+                ]
+            )
+        return EmailPartPlanningEntry(
+            extraction_job=EmailPartExtractionJob(
+                source_file=source_file,
+                member_name=f"{member_name}.part-{part_index}.bin",
+                depth=depth,
+                payload_bytes=f"part-{part_index}".encode("utf-8"),
+            )
+        )
+
+    def _fake_extract_email_part_job(
+        _self,
+        job: EmailPartExtractionJob,
+    ) -> list[tuple[str, str, str]]:
+        return [
+            (job.source_file, job.member_name, job.payload_bytes.decode("utf-8")),
+            (job.source_file, f"{job.member_name}#empty", ""),
+        ]
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_artifact_payload_tuple_batch_entries",
+        staticmethod(_tracking_entry),
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_email_message_part_entry",
+        _fake_email_message_part_entry,
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_email_part_job",
+        _fake_extract_email_part_job,
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=4)
+    payloads = processor._extract_email_message_part_payloads(
+        [object(), object(), object()],
+        source_file=source_file,
+        member_name=member_name,
+        depth=1,
+    )
+
+    assert peak == 3
+    assert payloads == [
+        (source_file, f"{member_name}.part-1.txt", "direct"),
+        (source_file, f"{member_name}.part-2.bin", "part-2"),
+        (source_file, f"{member_name}.part-3.bin", "part-3"),
     ]
