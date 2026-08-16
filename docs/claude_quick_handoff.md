@@ -32,6 +32,20 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Browser extension package artifact-ingestion
+regression modularization is complete.
+`tests/phase1/browser_extension_artifact_cases.py` now owns the XPI and CRX
+fixture, while the original pytest node remains a thin wrapper in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for browser
+extension remote classification, CRX header/ZIP payload extraction, manifest
+and JavaScript metadata extraction, email/URL/subdomain seed promotion, and
+S3/GCS/Firebase/Supabase asset detection without changing production parser
+behavior, live probing, provider calls, credential use, scope,
+validation/report gates, scheduler behavior, or persistent non-test engagement
+data. Verification passed for the preserved wrapper plus adjacent Windows
+execution-history and nested-mobile-config artifact wrappers (`3 passed`),
+Ruff, and `py_compile`.
+Backprop: `SPEC.md` B479.
 Latest checkpoint (2026-08-16): Windows execution-history artifact-ingestion
 regression modularization is complete.
 `tests/phase1/windows_event_artifact_cases.py` now also owns the Prefetch,
