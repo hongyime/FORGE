@@ -243,6 +243,7 @@ from tests.phase1.document_artifact_cases import (
     run_email_payload_family_entries_parallel_order,
     run_email_summary_and_part_families_parallel_order,
     run_eml_bodies_and_nested_attachments,
+    run_emlx_bodies_and_nested_attachments,
     run_epub_findings,
     run_mhtml_findings,
     run_nested_email_part_messages_parallel_order,
@@ -27980,136 +27981,7 @@ def test_artifact_queue_processor_parallelizes_email_payload_family_entries_and_
 def test_artifact_queue_processor_extracts_emlx_bodies_and_nested_attachments(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_emlx"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    emlx_path = artifact_root / "engagement-briefing.emlx"
-    nested_bundle_path = artifact_root / "mail-bundle.zip"
-
-    attachment_zip = BytesIO()
-    with zipfile.ZipFile(attachment_zip, "w") as zf:
-        zf.writestr(
-            "config/app.env",
-            """
-            SUPABASE_URL=https://emlxbrief.supabase.co
-            SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtbHhicmllZiIsInJvbGUiOiJhbm9uIn0.signature999
-            FIREBASE_DB=https://emlx-firebase.firebaseio.com
-            PUBLIC_BUCKET=s3://acme-emlx-bucket/reports/latest.pdf
-            CONTACT=emlx-attachment-owner@acme.example
-            """.strip(),
-        )
-
-    message = EmailMessage()
-    message["Subject"] = "Apple Mail Briefing"
-    message["From"] = "EMLX Analyst <emlx-analyst@acme.example>"
-    message["To"] = "Security Team <emlx-security@acme.example>"
-    message["Cc"] = "Lead <emlx-lead@acme.example>"
-    message.set_content(
-        "Contact emlx-owner@acme.example and review https://emlx.acme.example/brief"
-    )
-    message.add_alternative(
-        "<html><body>See https://html-emlx.acme.example/panel for updates.</body></html>",
-        subtype="html",
-    )
-    message.add_attachment(
-        attachment_zip.getvalue(),
-        maintype="application",
-        subtype="zip",
-        filename="evidence.zip",
-    )
-    raw_message = message.as_bytes()
-    emlx_path.write_bytes(
-        f"{len(raw_message)}\n".encode("ascii")
-        + raw_message
-        + b"\n<?xml version='1.0'?><plist version='1.0'><dict><key>remote-id</key><integer>7</integer></dict></plist>"
-    )
-
-    nested_message = EmailMessage()
-    nested_message["From"] = "nested-emlx-analyst@acme.example"
-    nested_message["To"] = "nested-ops@acme.example"
-    nested_message["Subject"] = "Nested Apple Mail"
-    nested_message.set_content(
-        "Escalate to nested-emlx-owner@acme.example and review https://nested-emlx.acme.example/brief"
-    )
-    nested_raw_message = nested_message.as_bytes()
-    nested_emlx_bytes = (
-        f"{len(nested_raw_message)}\n".encode("ascii")
-        + nested_raw_message
-        + b"\n<?xml version='1.0'?><plist version='1.0'><dict><key>flags</key><integer>1</integer></dict></plist>"
-    )
-    with zipfile.ZipFile(nested_bundle_path, "w") as zf:
-        zf.writestr("mail/inbox/forwarded.emlx", nested_emlx_bytes)
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 2
-    assert summary.processed >= 2
-    assert summary.firebase_projects >= 1
-    assert summary.supabase_configs >= 1
-    assert summary.discovered_seeds >= 9
-
-    con = sqlite3.connect(db_path)
-    try:
-        emails = {
-            row[0]
-            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
-        }
-        assert "emlx-analyst@acme.example" in emails
-        assert "emlx-security@acme.example" in emails
-        assert "emlx-lead@acme.example" in emails
-        assert "emlx-owner@acme.example" in emails
-        assert "emlx-attachment-owner@acme.example" in emails
-        assert "nested-emlx-owner@acme.example" in emails
-
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("https://emlx.acme.example/brief", "url") in seeds
-        assert ("https://html-emlx.acme.example/panel", "url") in seeds
-        assert ("https://nested-emlx.acme.example/brief", "url") in seeds
-        assert ("emlx-owner@acme.example", "email") in seeds
-        assert ("emlx-attachment-owner@acme.example", "email") in seeds
-        assert ("nested-emlx-owner@acme.example", "email") in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-emlx-bucket") in cloud_assets
-        assert ("firebase", "emlx-firebase") in cloud_assets
-        assert ("supabase", "emlxbrief") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[emlx_path.resolve().as_posix()]["format"] == "emlx"
-        assert artifact_meta[emlx_path.resolve().as_posix()]["metadata_payload_count"] >= 1
-        assert artifact_meta[nested_bundle_path.resolve().as_posix()]["format"] == "zip"
-        assert artifact_meta[nested_bundle_path.resolve().as_posix()]["metadata_payload_count"] >= 1
-    finally:
-        con.close()
+    run_emlx_bodies_and_nested_attachments(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_msg_bodies_and_nested_msg_attachments(
