@@ -32,6 +32,20 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Nested archive-style mobile bundle
+artifact-ingestion regression modularization is complete.
+`tests/phase1/nested_mobile_artifact_cases.py` now also owns the ZIP-wrapped
+XAPK/APK fixture with Firebase, GCS, and Supabase payloads, while the original
+pytest node remains a thin wrapper in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for nested
+archive-style mobile member extraction, Firebase/GCS/Supabase asset promotion,
+email/URL/other seed promotion, and nested-mobile artifact metadata counters
+without changing production parser behavior, live probing, provider calls,
+credential use, scope, validation/report gates, scheduler behavior, or
+persistent non-test engagement data. Verification passed for the preserved
+wrapper plus adjacent nested IPA archive-bundle and nested 7z mobile wrappers
+(`3 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B481.
 Latest checkpoint (2026-08-16): Nested mobile config archive-bundle
 artifact-ingestion regression modularization is complete.
 `tests/phase1/nested_mobile_artifact_cases.py` now owns the ZIP-wrapped IPA
