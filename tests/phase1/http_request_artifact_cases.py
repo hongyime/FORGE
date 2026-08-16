@@ -555,3 +555,82 @@ def run_har_entries_parallel_order(tmp_path: Path, monkeypatch: Any) -> None:
         (str(tmp_path / "parallel.har"), "parallel.har#har-entry-2", "entry-2"),
         (str(tmp_path / "parallel.har"), "parallel.har#har-entry-3", "entry-3"),
     ]
+
+
+def run_har_entry_job_planning_parallel_order(tmp_path: Path, monkeypatch: Any) -> None:
+    db_path = tmp_path / "engagement.db"
+    source_file = str(tmp_path / "parallel.har")
+    member_name = "parallel.har"
+    payload = {
+        "log": {
+            "version": "1.2",
+            "entries": [
+                {"request": {"url": "https://one.acme.example"}},
+                {"request": {"url": "https://two.acme.example"}},
+                {"request": {"url": "https://three.acme.example"}},
+                {"request": {"url": "https://four.acme.example"}},
+                {"request": {"url": "https://five.acme.example"}},
+            ],
+        }
+    }
+    delays = {
+        1: 0.05,
+        2: 0.01,
+        3: 0.03,
+        4: 0.02,
+        5: 0.04,
+    }
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+    original_entry = ArtifactQueueProcessor._har_entry_job
+
+    def _tracking_entry(item, *, source_file, member_name):  # noqa: ANN001
+        nonlocal active, peak
+        entry_index, _entry = item
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(delays[entry_index])
+            return original_entry(item, source_file=source_file, member_name=member_name)
+        finally:
+            with lock:
+                active -= 1
+
+    def _fake_extract_har_entry_payload(
+        _self,
+        job,
+    ) -> tuple[str, str, str]:  # noqa: ANN001
+        return (
+            job.source_file,
+            f"{job.member_name}#har-entry-{job.entry_index}",
+            f"entry-{job.entry_index}",
+        )
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_har_entry_job",
+        staticmethod(_tracking_entry),
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_har_entry_payload",
+        _fake_extract_har_entry_payload,
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=8)
+    payloads = processor._extract_har_entry_payloads(
+        payload["log"],
+        source_file=source_file,
+        member_name=member_name,
+    )
+
+    assert peak == 4
+    assert payloads == [
+        (source_file, "parallel.har#har-entry-1", "entry-1"),
+        (source_file, "parallel.har#har-entry-2", "entry-2"),
+        (source_file, "parallel.har#har-entry-3", "entry-3"),
+        (source_file, "parallel.har#har-entry-4", "entry-4"),
+        (source_file, "parallel.har#har-entry-5", "entry-5"),
+    ]
