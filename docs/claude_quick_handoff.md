@@ -32,6 +32,19 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): EML body and nested attachment
+artifact-ingestion regression modularization is complete.
+`tests/phase1/document_artifact_cases.py` now also owns the EML fixture,
+while the original pytest node remains a thin wrapper in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for EML
+header/plain/HTML body extraction, nested ZIP and DOCX attachment parsing,
+Firebase/Supabase/S3 promotion, email and URL seed promotion, and artifact
+metadata format assertions without changing production parser behavior, live
+probing, provider calls, credential use, scope, validation/report gates,
+scheduler behavior, or persistent non-test engagement data. Verification
+passed for the preserved wrapper plus adjacent MHTML and PDF wrappers (`3
+passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B497.
 Latest checkpoint (2026-08-16): MHTML artifact-ingestion regression
 modularization is complete.
 `tests/phase1/document_artifact_cases.py` now also owns the MHTML fixture,

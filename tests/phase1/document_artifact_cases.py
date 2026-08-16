@@ -4,6 +4,7 @@ import json
 import sqlite3
 import zipfile
 from email.message import EmailMessage
+from io import BytesIO
 from pathlib import Path
 
 from forge.engagement_orchestrator import ArtifactQueueProcessor
@@ -219,5 +220,148 @@ def run_mhtml_findings(tmp_path: Path) -> None:
             ).fetchall()
         }
         assert artifact_meta[mhtml_path.resolve().as_posix()]["format"] == "mhtml"
+    finally:
+        con.close()
+
+
+def run_eml_bodies_and_nested_attachments(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_mail"
+    artifact_root.mkdir()
+    bootstrap_engagement(
+        db_path,
+        name="Acme Example",
+        scope_json='["*.acme.example","+15551234567","security@acme.example","https://downloads.acme.example/app.apk"]',
+        operator="delta-one",
+    )
+
+    eml_path = artifact_root / "engagement-briefing.eml"
+
+    attachment_zip = BytesIO()
+    with zipfile.ZipFile(attachment_zip, "w") as zf:
+        zf.writestr(
+            "config/app.env",
+            """
+            SUPABASE_URL=https://mailbrief.supabase.co
+            SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1haWxicmllZiIsInJvbGUiOiJhbm9uIn0.signature789
+            FIREBASE_DB=https://mail-firebase.firebaseio.com
+            PUBLIC_BUCKET=s3://acme-mail-bucket/reports/latest.pdf
+            CONTACT=attachment-owner@acme.example
+            """.strip(),
+        )
+
+    docx_bytes = BytesIO()
+    with zipfile.ZipFile(docx_bytes, "w") as zf:
+        zf.writestr(
+            "word/document.xml",
+            """
+            <w:document>
+              <w:body>
+                <w:p>docx-owner@acme.example https://docx.acme.example/report</w:p>
+              </w:body>
+            </w:document>
+            """.strip(),
+        )
+        zf.writestr(
+            "docProps/core.xml",
+            """
+            <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+                               xmlns:dc="http://purl.org/dc/elements/1.1/">
+              <dc:creator>docx-owner@acme.example</dc:creator>
+              <dc:title>Mail Attachment Briefing</dc:title>
+            </cp:coreProperties>
+            """.strip(),
+        )
+
+    message = EmailMessage()
+    message["Subject"] = "Executive Briefing"
+    message["From"] = "Analyst <analyst@acme.example>"
+    message["To"] = "Security Team <security@acme.example>"
+    message["Cc"] = "Lead <lead@acme.example>"
+    message.set_content(
+        "Contact mail-owner@acme.example and review https://mail.acme.example/brief"
+    )
+    message.add_alternative(
+        "<html><body>See https://htmlmail.acme.example/panel for updates.</body></html>",
+        subtype="html",
+    )
+    message.add_attachment(
+        attachment_zip.getvalue(),
+        maintype="application",
+        subtype="zip",
+        filename="evidence.zip",
+    )
+    message.add_attachment(
+        docx_bytes.getvalue(),
+        maintype="application",
+        subtype="vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename="briefing.docx",
+    )
+    eml_path.write_bytes(message.as_bytes())
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 1
+    assert summary.processed >= 1
+    assert summary.firebase_projects >= 1
+    assert summary.supabase_configs >= 1
+    assert summary.discovered_seeds >= 8
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "analyst@acme.example" in emails
+        assert "security@acme.example" in emails
+        assert "lead@acme.example" in emails
+        assert "mail-owner@acme.example" in emails
+        assert "attachment-owner@acme.example" in emails
+        assert "docx-owner@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("https://mail.acme.example/brief", "url") in seeds
+        assert ("https://htmlmail.acme.example/panel", "url") in seeds
+        assert ("https://docx.acme.example/report", "url") in seeds
+        assert ("mail-owner@acme.example", "email") in seeds
+        assert ("attachment-owner@acme.example", "email") in seeds
+        assert ("docx-owner@acme.example", "email") in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-mail-bucket") in cloud_assets
+        assert ("firebase", "mail-firebase") in cloud_assets
+        assert ("supabase", "mailbrief") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[eml_path.resolve().as_posix()]["format"] == "eml"
+        assert artifact_meta[eml_path.resolve().as_posix()]["metadata_payload_count"] >= 2
     finally:
         con.close()
