@@ -32,6 +32,20 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Burp site-map XML artifact-ingestion
+regression modularization is complete.
+`tests/phase1/http_request_artifact_cases.py` now also owns the Burp site-map
+fixture, while the original pytest node remains a thin wrapper in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for Burp
+site-map XML parsing, base64 request/response extraction, query secret
+redaction, redirect URL promotion, S3/Firebase/Supabase promotion, email seed
+promotion, synthesis root-domain guarding for cloud refs, and artifact metadata
+payload counts without changing production parser behavior, live probing,
+provider calls, credential use, scope, validation/report gates, scheduler
+behavior, or persistent non-test engagement data. Verification passed for the
+preserved wrapper plus adjacent Charles session and HAR entry wrappers (`3
+passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B512.
 Latest checkpoint (2026-08-16): Charles session JSON artifact-ingestion
 regression modularization is complete.
 `tests/phase1/http_request_artifact_cases.py` now also owns the Charles

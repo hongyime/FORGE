@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import sqlite3
 import zipfile
@@ -356,5 +357,137 @@ def run_charles_session_json_artifacts(tmp_path: Path) -> None:
         }
         assert artifact_meta[charles_path.resolve().as_posix()]["format"] == "charles-session-json"
         assert artifact_meta[charles_path.resolve().as_posix()]["payload_count"] >= 1
+    finally:
+        con.close()
+
+
+def run_burp_site_map_xml_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_burp_site_map"
+    artifact_root.mkdir()
+    bootstrap_engagement(
+        db_path,
+        name="Acme Example",
+        scope_json='["*.acme.example","+15551234567","security@acme.example","https://downloads.acme.example/app.apk"]',
+        operator="delta-one",
+    )
+
+    request_text = "\r\n".join(
+        [
+            "GET /api/config?api_key=hidden&view=public HTTP/1.1",
+            "Host: burp.acme.example",
+            "X-Owner: burp-request@acme.example",
+            "",
+            "",
+        ]
+    )
+    response_text = "\r\n".join(
+        [
+            "HTTP/1.1 302 Found",
+            "Location: /login?session_token=hidden&next=home",
+            "Content-Type: application/json",
+            "",
+            json.dumps(
+                {
+                    "support": "burp-body@acme.example",
+                    "firebase": "https://burp-firebase.firebaseio.com",
+                    "supabase_url": "https://burpworkspace.supabase.co",
+                    "supabase_anon_key": (
+                        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+                        "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1cnB3b3Jrc3BhY2UiLCJyb2xlIjoiYW5vbiJ9."
+                        "signature987"
+                    ),
+                    "bucket": "s3://acme-burp-bucket/reports/latest.pdf",
+                },
+                sort_keys=True,
+            ),
+        ]
+    )
+    burp_path = artifact_root / "burp-site-map.xml"
+    burp_path.write_text(
+        dedent(
+            f"""
+            <?xml version="1.0"?>
+            <items>
+              <item>
+                <url>https://burp.acme.example/api/config?api_key=hidden&amp;view=public</url>
+                <host ip="203.0.113.45">burp.acme.example</host>
+                <protocol>https</protocol>
+                <path>/api/config?api_key=hidden&amp;view=public</path>
+                <request base64="true">{base64.b64encode(request_text.encode("utf-8")).decode("ascii")}</request>
+                <response base64="true">{base64.b64encode(response_text.encode("utf-8")).decode("ascii")}</response>
+              </item>
+            </items>
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+    synthesis_summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
+
+    assert queued >= 1
+    assert summary.processed >= 1
+    assert summary.firebase_projects >= 1
+    assert summary.supabase_configs >= 1
+    assert summary.discovered_seeds >= 6
+    assert "acme.example" in synthesis_summary.root_domains
+    assert "burp-firebase" not in synthesis_summary.root_domains
+    assert "burpworkspace" not in synthesis_summary.root_domains
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "burp-request@acme.example" in emails
+        assert "burp-body@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("https://burp.acme.example/api/config?view=public", "url") in seeds
+        assert ("https://burp.acme.example/login?next=home", "url") in seeds
+        assert ("burp-request@acme.example", "email") in seeds
+        assert ("burp-body@acme.example", "email") in seeds
+        assert ("burpworkspace", "other") in seeds
+        assert ("burp-firebase", "other") in seeds
+        assert ("burpworkspace.supabase.co", "subdomain") not in seeds
+        assert ("burp-firebase.firebaseio.com", "subdomain") not in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-burp-bucket") in cloud_assets
+        assert ("firebase", "burp-firebase") in cloud_assets
+        assert ("supabase", "burpworkspace") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[burp_path.resolve().as_posix()]["format"] == "burp-site-map"
+        assert artifact_meta[burp_path.resolve().as_posix()]["payload_count"] >= 1
     finally:
         con.close()
