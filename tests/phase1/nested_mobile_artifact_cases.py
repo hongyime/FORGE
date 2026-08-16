@@ -447,6 +447,93 @@ def run_parallelizes_nested_7z_mobile_member_extraction_and_preserves_order(
     ]
 
 
+def run_parallelizes_nested_zip_mobile_member_planning_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    archive_path = tmp_path / "parallel-mobile-member-plan.zip"
+    member_names = [
+        "packages/client-1.ipa",
+        "packages/client-2.apk",
+        "packages/client-3.xapk",
+        "packages/client-4.apkm",
+        "packages/client-5.aab",
+    ]
+    with zipfile.ZipFile(archive_path, "w") as zf:
+        for member_name in member_names:
+            zf.writestr(member_name, member_name.encode("utf-8"))
+        zf.writestr("packages/ignore.txt", b"ignore")
+
+    delays = {
+        "packages/client-1.ipa": 0.05,
+        "packages/client-2.apk": 0.01,
+        "packages/client-3.xapk": 0.03,
+        "packages/client-4.apkm": 0.02,
+        "packages/client-5.aab": 0.04,
+        "packages/ignore.txt": 0.01,
+    }
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+    original_entry = ArtifactQueueProcessor._nested_mobile_zip_member_entry
+
+    def tracking_entry(member):  # noqa: ANN001
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(delays[member.filename])
+            return original_entry(member)
+        finally:
+            with lock:
+                active -= 1
+
+    def fake_extract_mobile_configs_from_member_bytes(
+        _self,
+        data: bytes,
+        source_path: Path,
+        member_name: str,
+    ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig]]:
+        del data
+        project_id = Path(member_name).stem.lower().replace("client-", "member-")
+        return (
+            [(str(source_path), f"{member_name}!payload.txt", project_id)],
+            [],
+            [],
+        )
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_nested_mobile_zip_member_entry",
+        staticmethod(tracking_entry),
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_mobile_configs_from_member_bytes",
+        fake_extract_mobile_configs_from_member_bytes,
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=8)
+    with zipfile.ZipFile(archive_path) as zf:
+        payloads, firebase_projects, supabase_configs, mobile_members = (
+            processor._extract_nested_mobile_configs_from_zip(zf, archive_path)
+        )
+
+    assert peak == 4
+    assert mobile_members == 5
+    assert payloads == [
+        (str(archive_path), "packages/client-1.ipa!payload.txt", "member-1"),
+        (str(archive_path), "packages/client-2.apk!payload.txt", "member-2"),
+        (str(archive_path), "packages/client-3.xapk!payload.txt", "member-3"),
+        (str(archive_path), "packages/client-4.apkm!payload.txt", "member-4"),
+        (str(archive_path), "packages/client-5.aab!payload.txt", "member-5"),
+    ]
+    assert firebase_projects == []
+    assert supabase_configs == []
+
+
 def run_nested_archive_style_mobile_bundle_from_outer_archive(tmp_path: Path) -> None:
     db_path = tmp_path / "engagement.db"
     artifact_root = tmp_path / "artifact_nested_archive_mobile"
