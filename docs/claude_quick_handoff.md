@@ -32,6 +32,19 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Debian/IPK and CPIO package
+artifact-ingestion regression modularization is complete.
+`tests/phase1/package_manager_artifact_cases.py` now also owns the Debian,
+IPK, and CPIO package fixtures plus the small ar/tar/cpio builders they need,
+while the original pytest nodes remain thin wrappers in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for nested
+package payload extraction, maintainer/owner email promotion, URL seed
+promotion, and S3/GCS/Firebase/Supabase asset detection without changing
+production parser behavior, live probing, provider calls, credential use,
+scope, validation/report gates, scheduler behavior, or persistent non-test
+engagement data. Verification passed for the preserved wrappers plus adjacent
+package archive wrapper (`3 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B451.
 Latest checkpoint (2026-08-16): Package archive artifact-ingestion regression
 modularization is complete.
 `tests/phase1/package_manager_artifact_cases.py` now also owns the wheel,

@@ -19,6 +19,70 @@ from forge.engagement_orchestrator import (
 from tests.phase1.artifact_test_support import bootstrap_engagement
 
 
+def _tar_bytes(member_name: str, payload: bytes, *, mode: str = "w:gz") -> bytes:
+    bundle = BytesIO()
+    with tarfile.open(fileobj=bundle, mode=mode) as tf:
+        info = tarfile.TarInfo(member_name)
+        info.size = len(payload)
+        tf.addfile(info, BytesIO(payload))
+    return bundle.getvalue()
+
+
+def _write_ar_archive(path: Path, members: list[tuple[str, bytes]]) -> None:
+    with path.open("wb") as handle:
+        handle.write(b"!<arch>\n")
+        for name, payload in members:
+            encoded_name = f"{name}/".encode("ascii")
+            if len(encoded_name) > 16:
+                raise AssertionError(f"test ar member name too long: {name}")
+            handle.write(encoded_name.ljust(16))
+            handle.write(b"0           ")
+            handle.write(b"0     ")
+            handle.write(b"0     ")
+            handle.write(b"100644  ")
+            handle.write(str(len(payload)).encode("ascii").ljust(10))
+            handle.write(b"`\n")
+            handle.write(payload)
+            if len(payload) % 2:
+                handle.write(b"\n")
+
+
+def _cpio_newc_bytes(members: list[tuple[str, bytes]]) -> bytes:
+    bundle = bytearray()
+
+    def _pad4() -> None:
+        bundle.extend(b"\x00" * ((4 - (len(bundle) % 4)) % 4))
+
+    def _append_member(name: str, payload: bytes, *, mode: int = 0o100644) -> None:
+        encoded_name = name.encode("utf-8") + b"\x00"
+        fields = (
+            1,
+            mode,
+            0,
+            0,
+            1,
+            0,
+            len(payload),
+            0,
+            0,
+            0,
+            0,
+            len(encoded_name),
+            0,
+        )
+        header = "070701" + "".join(f"{field:08x}" for field in fields)
+        bundle.extend(header.encode("ascii"))
+        bundle.extend(encoded_name)
+        _pad4()
+        bundle.extend(payload)
+        _pad4()
+
+    for member_name, member_payload in members:
+        _append_member(member_name, member_payload)
+    _append_member("TRAILER!!!", b"", mode=0)
+    return bytes(bundle)
+
+
 def run_dependency_lock_and_manifest_artifacts(tmp_path: Path) -> None:
     db_path = tmp_path / "engagement.db"
     artifact_root = tmp_path / "artifact_dependency_manifests"
@@ -415,6 +479,223 @@ def run_package_archive_artifacts(tmp_path: Path) -> None:
         assert artifact_meta[crate_path.resolve().as_posix()]["format"] == "crate"
         assert artifact_meta[wheel_path.resolve().as_posix()]["payload_count"] >= 1
         assert artifact_meta[crate_path.resolve().as_posix()]["payload_count"] >= 1
+    finally:
+        con.close()
+
+
+def run_debian_and_ipk_package_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_debian_packages"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    deb_path = artifact_root / "acme-agent_1.0.0_all.deb"
+    deb_config = (
+        dedent(
+            """
+        OWNER=deb-owner@acme.example
+        API_BASE=https://deb.acme.example/api
+        FIREBASE_URL=https://deb-firebase.firebaseio.com
+        SUPABASE_URL=https://debworkspace.supabase.co
+        RELEASE_BUCKET=s3://acme-deb-bucket/releases/acme-agent.deb
+        """
+        )
+        .strip()
+        .encode("utf-8")
+    )
+    _write_ar_archive(
+        deb_path,
+        [
+            ("debian-binary", b"2.0\n"),
+            (
+                "control.tar.gz",
+                _tar_bytes(
+                    "control",
+                    b"Package: acme-agent\nMaintainer: deb-maintainer@acme.example\n",
+                ),
+            ),
+            ("data.tar.gz", _tar_bytes("etc/acme/agent.env", deb_config)),
+        ],
+    )
+
+    ipk_path = artifact_root / "acme-router_1.0.0_all.ipk"
+    ipk_config = (
+        dedent(
+            """
+        OWNER=ipk-owner@acme.example
+        ADMIN_URL=https://ipk.acme.example/admin
+        GCS=gs://acme-ipk-gcs/feeds/latest.ipk
+        """
+        )
+        .strip()
+        .encode("utf-8")
+    )
+    _write_ar_archive(
+        ipk_path,
+        [
+            ("debian-binary", b"2.0\n"),
+            (
+                "control.tar.gz",
+                _tar_bytes(
+                    "control", b"Package: acme-router\nMaintainer: ipk-maintainer@acme.example\n"
+                ),
+            ),
+            ("data.tar.xz", _tar_bytes("etc/config/acme", ipk_config, mode="w:xz")),
+        ],
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 2
+    assert summary.processed >= 2
+    assert summary.discovered_seeds >= 6
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "deb-owner@acme.example" in emails
+        assert "deb-maintainer@acme.example" in emails
+        assert "ipk-owner@acme.example" in emails
+        assert "ipk-maintainer@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("deb-owner@acme.example", "email") in seeds
+        assert ("ipk-owner@acme.example", "email") in seeds
+        assert ("https://deb.acme.example/api", "url") in seeds
+        assert ("https://debworkspace.supabase.co", "url") in seeds
+        assert ("https://ipk.acme.example/admin", "url") in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-deb-bucket") in cloud_assets
+        assert ("firebase", "deb-firebase") in cloud_assets
+        assert ("gcs", "acme-ipk-gcs") in cloud_assets
+        assert ("supabase", "debworkspace") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[deb_path.resolve().as_posix()]["format"] == "deb"
+        assert artifact_meta[ipk_path.resolve().as_posix()]["format"] == "ipk"
+        assert artifact_meta[deb_path.resolve().as_posix()]["payload_count"] >= 2
+        assert artifact_meta[ipk_path.resolve().as_posix()]["payload_count"] >= 2
+    finally:
+        con.close()
+
+
+def run_cpio_package_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_cpio_packages"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    cpio_path = artifact_root / "initramfs.cpio"
+    cpio_config = (
+        dedent(
+            """
+        OWNER=cpio-owner@acme.example
+        API_BASE=https://cpio.acme.example/api
+        FIREBASE_URL=https://cpio-firebase.firebaseio.com
+        SUPABASE_URL=https://cpioworkspace.supabase.co
+        RELEASE_BUCKET=s3://acme-cpio-bucket/releases/initramfs.cpio
+        GCS=gs://acme-cpio-gcs/reports/latest.json
+        """
+        )
+        .strip()
+        .encode("utf-8")
+    )
+    cpio_path.write_bytes(
+        _cpio_newc_bytes(
+            [
+                ("etc/acme/agent.env", cpio_config),
+                ("usr/share/doc/acme/contact.txt", b"Maintainer: cpio-maintainer@acme.example\n"),
+            ]
+        )
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 1
+    assert summary.processed >= 1
+    assert summary.discovered_seeds >= 5
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "cpio-owner@acme.example" in emails
+        assert "cpio-maintainer@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("cpio-owner@acme.example", "email") in seeds
+        assert ("https://cpio.acme.example/api", "url") in seeds
+        assert ("https://cpioworkspace.supabase.co", "url") in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-cpio-bucket") in cloud_assets
+        assert ("firebase", "cpio-firebase") in cloud_assets
+        assert ("gcs", "acme-cpio-gcs") in cloud_assets
+        assert ("supabase", "cpioworkspace") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[cpio_path.resolve().as_posix()]["format"] == "cpio"
+        assert artifact_meta[cpio_path.resolve().as_posix()]["payload_count"] >= 2
     finally:
         con.close()
 

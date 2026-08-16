@@ -90,6 +90,23 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Debian/IPK and CPIO package artifact-ingestion modularization checkpoint
+  (2026-08-16): the Debian, IPK, and CPIO package fixtures plus the small
+  ar/tar/cpio builders they need now live alongside the package-manager helper
+  in `tests/phase1/package_manager_artifact_cases.py`, with the original pytest
+  nodes retained as thin wrappers in the Phase 1 mega test. This keeps coverage
+  for nested package payload extraction, maintainer/owner email promotion, URL
+  seed promotion, and S3/GCS/Firebase/Supabase asset detection while reducing
+  inline fixture weight in `tests/phase1/test_engagement_orchestrator.py`.
+  Files: `tests/phase1/test_engagement_orchestrator.py`,
+  `tests/phase1/package_manager_artifact_cases.py`, `SPEC.md`,
+  `docs/claude_quick_handoff.md`, and this tasklist. Verification: preserved
+  wrappers plus adjacent package archive wrapper -> `3 passed`; Ruff and
+  `py_compile` passed for touched Python files. Safety note: test
+  modularization only; no production parser behavior, live probing, provider
+  calls, credential use, scope changes, validation/report gates, scheduler
+  behavior, or persistent non-test engagement data changed.
+
 - [x] Package archive artifact-ingestion modularization checkpoint
   (2026-08-16): the wheel, NuGet, VSIX, and Crate archive fixture now lives
   alongside the package-manager helper in
