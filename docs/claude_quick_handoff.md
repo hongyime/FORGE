@@ -32,6 +32,19 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Firmware binary artifact-ingestion regression
+modularization is complete.
+`tests/phase1/firmware_binary_artifact_cases.py` now owns the firmware BIN and
+nested native-agent ZIP payload fixture, while the original pytest node remains
+a thin wrapper in `tests/phase1/test_engagement_orchestrator.py`. This keeps
+coverage for firmware/native binary format labels, nested ZIP payload
+extraction, email/URL seed promotion, and S3/GCS/Firebase/Supabase asset
+detection without changing production parser behavior, live probing, provider
+calls, credential use, scope, validation/report gates, scheduler behavior, or
+persistent non-test engagement data. Verification passed for the preserved
+wrapper plus adjacent native/firmware-image artifact wrappers (`3 passed`),
+Ruff, and `py_compile`.
+Backprop: `SPEC.md` B466.
 Latest checkpoint (2026-08-16): Native binary artifact-ingestion regression
 modularization is complete.
 `tests/phase1/native_binary_artifact_cases.py` now owns the ELF/shared library
