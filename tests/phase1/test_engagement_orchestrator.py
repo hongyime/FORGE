@@ -239,6 +239,7 @@ from tests.phase1.nested_mobile_artifact_cases import (
     run_nested_mobile_configs_from_7z_archive,
     run_nested_mobile_configs_from_archive_bundles,
     run_parallelizes_nested_7z_mobile_member_extraction_and_preserves_order,
+    run_parallelizes_nested_mobile_member_result_batches_and_preserves_order,
     run_parallelizes_nested_tar_mobile_member_extraction_and_preserves_order,
     run_parallelizes_nested_tar_mobile_member_job_planning_and_preserves_order,
     run_parallelizes_nested_tar_mobile_member_planning_and_preserves_order,
@@ -27845,110 +27846,10 @@ def test_artifact_queue_processor_parallelizes_nested_mobile_member_result_batch
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    source_path = tmp_path / "bundle.zip"
-    member_jobs = [
-        ("packages/client-1.apk", b"one"),
-        ("packages/client-2.ipa", b"two"),
-        ("packages/client-3.apkm", b"three"),
-    ]
-    delays = {
-        0: 0.05,
-        1: 0.01,
-        2: 0.03,
-    }
-    active = 0
-    peak = 0
-    lock = threading.Lock()
-    original_entry = ArtifactQueueProcessor._nested_mobile_member_result_entry
-
-    def _tracking_entry(result_entry):  # noqa: ANN001
-        nonlocal active, peak
-        result_index, _result = result_entry
-        with lock:
-            active += 1
-            peak = max(peak, active)
-        try:
-            time.sleep(delays[result_index])
-            return original_entry(result_entry)
-        finally:
-            with lock:
-                active -= 1
-
-    def _fake_extract_mobile_configs_from_member_bytes(
-        _self,
-        data: bytes,
-        source_path: Path,
-        member_name: str,
-    ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig]]:  # noqa: ANN001
-        label = Path(member_name).stem
-        assert data in {b"one", b"two", b"three"}
-        return (
-            [(str(source_path), f"{member_name}!payload.txt", label)],
-            [
-                FirebaseProject(
-                    project_id=f"{label}-firebase",
-                    api_key_enc=None,
-                    rtdb_url=None,
-                    bundle_id=None,
-                    source_file=str(source_path),
-                    extract_path=f"{member_name}!google-services.json",
-                )
-            ],
-            [
-                SupabaseConfig(
-                    project_ref=f"{label}-supabase",
-                    project_url=f"https://{label}.supabase.co",
-                    anon_key="anon",
-                    source_file=str(source_path),
-                    extract_path=f"{member_name}!supabase.json",
-                )
-            ],
-        )
-
-    monkeypatch.setattr(
-        ArtifactQueueProcessor,
-        "_nested_mobile_member_result_entry",
-        staticmethod(_tracking_entry),
+    run_parallelizes_nested_mobile_member_result_batches_and_preserves_order(
+        tmp_path,
+        monkeypatch,
     )
-    monkeypatch.setattr(
-        ArtifactQueueProcessor,
-        "_extract_mobile_configs_from_member_bytes",
-        _fake_extract_mobile_configs_from_member_bytes,
-    )
-
-    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=2)
-    payloads, firebase_projects, supabase_configs, mobile_members = (
-        processor._extract_nested_mobile_configs_from_member_jobs(member_jobs, source_path)
-    )
-
-    assert peak == 2
-    assert mobile_members == 3
-    assert payloads == [
-        (str(source_path), "packages/client-1.apk!payload.txt", "client-1"),
-        (str(source_path), "packages/client-2.ipa!payload.txt", "client-2"),
-        (str(source_path), "packages/client-3.apkm!payload.txt", "client-3"),
-    ]
-    assert [project.project_id for project in firebase_projects] == [
-        "client-1-firebase",
-        "client-2-firebase",
-        "client-3-firebase",
-    ]
-    assert [project.extract_path for project in firebase_projects] == [
-        "packages/client-1.apk!google-services.json",
-        "packages/client-2.ipa!google-services.json",
-        "packages/client-3.apkm!google-services.json",
-    ]
-    assert [config.project_ref for config in supabase_configs] == [
-        "client-1-supabase",
-        "client-2-supabase",
-        "client-3-supabase",
-    ]
-    assert [config.extract_path for config in supabase_configs] == [
-        "packages/client-1.apk!supabase.json",
-        "packages/client-2.ipa!supabase.json",
-        "packages/client-3.apkm!supabase.json",
-    ]
 
 
 def test_artifact_queue_processor_extracts_nested_mobile_configs_from_apkm_bundle(
