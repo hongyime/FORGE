@@ -32,6 +32,17 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Screenshot tool output artifact-ingestion
+regression modularization is complete. `tests/phase1/passive_scan_artifact_cases.py`
+now also owns the Gowitness, EyeWitness, and Aquatone output fixture, while the
+original pytest node remains a thin wrapper in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for
+screenshot tool artifact labels, URL/token redaction, email/URL seed promotion,
+and GCS asset detection without changing production parser behavior, live
+probing, provider calls, credential use, scope, validation/report gates,
+scheduler behavior, or persistent non-test engagement data. Verification passed
+for the preserved wrapper plus adjacent scan helper wrappers (`3 passed`),
+Ruff, and `py_compile`. Backprop: `SPEC.md` B439.
 Latest checkpoint (2026-08-16): Imported scanner JSON artifact-ingestion
 regression modularization is complete. `tests/phase1/passive_scan_artifact_cases.py`
 now also owns the Nuclei, Naabu, ffuf, Feroxbuster, dirsearch, and ZAP JSON

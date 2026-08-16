@@ -304,3 +304,116 @@ def run_queue_processor_extracts_imported_scanner_json_outputs(
         assert "zap-token-do-not-store" not in db_dump
     finally:
         con.close()
+
+
+def run_queue_processor_extracts_screenshot_tool_outputs(
+    tmp_path: Path,
+    bootstrap_engagement: Callable[[Path], None],
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_screenshot_tool_outputs"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    gowitness_path = artifact_root / "gowitness-report.json"
+    gowitness_path.write_text(
+        json.dumps(
+            {
+                "results": [
+                    {
+                        "url": "https://gowitness.acme.example/login?api_key=gowitness-token-do-not-store&view=summary",
+                        "host": "gowitness.acme.example",
+                    }
+                ],
+                "owner": "gowitness-owner@acme.example",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    eyewitness_path = artifact_root / "eyewitness-results.json"
+    eyewitness_path.write_text(
+        json.dumps(
+            {
+                "pages": [
+                    {
+                        "url": "https://eyewitness.acme.example/report?session=eyewitness-token-do-not-store&mode=public",
+                        "hostname": "eyewitness.acme.example",
+                    }
+                ],
+                "contact": "eyewitness-owner@acme.example",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    aquatone_path = artifact_root / "aquatone-urls.txt"
+    aquatone_path.write_text(
+        "https://aquatone.acme.example/screenshot?token=aquatone-token-do-not-store&page=1\n"
+        "gs://acme-aquatone-shots/latest.json\n"
+        "aquatone-owner@acme.example\n",
+        encoding="utf-8",
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 3
+    assert summary.processed >= 3
+    assert summary.discovered_seeds >= 6
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        for expected_seed in {
+            ("https://gowitness.acme.example/login?view=summary", "url"),
+            ("https://gowitness.acme.example", "url"),
+            ("https://eyewitness.acme.example/report?mode=public", "url"),
+            ("https://eyewitness.acme.example", "url"),
+            ("https://aquatone.acme.example/screenshot?page=1", "url"),
+            ("gowitness-owner@acme.example", "email"),
+            ("eyewitness-owner@acme.example", "email"),
+            ("aquatone-owner@acme.example", "email"),
+        }:
+            assert expected_seed in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("gcs", "acme-aquatone-shots") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[gowitness_path.resolve().as_posix()]["format"] == "gowitness-output"
+        assert artifact_meta[eyewitness_path.resolve().as_posix()]["format"] == "eyewitness-output"
+        assert artifact_meta[aquatone_path.resolve().as_posix()]["format"] == "aquatone-output"
+
+        db_dump = "\n".join(con.iterdump())
+        assert "gowitness-token-do-not-store" not in db_dump
+        assert "eyewitness-token-do-not-store" not in db_dump
+        assert "aquatone-token-do-not-store" not in db_dump
+    finally:
+        con.close()
