@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
+import sqlite3
+import zipfile
 from pathlib import Path
 from textwrap import dedent
 from typing import Any
 
-from forge.engagement_orchestrator import ArtifactQueueProcessor
+from forge.engagement_orchestrator import ArtifactQueueProcessor, EngagementSynthesisEngine
+from tests.phase1.artifact_test_support import bootstrap_engagement
 
 
 def run_http_request_text_structured_payload_uses_bounded_workers_and_preserves_order(
@@ -100,3 +104,127 @@ def run_hurl_request_text_structured_payload_uses_bounded_workers_and_preserves_
         "https://hurl-one.acme.example/v1/users",
         "https://hurl-two.acme.example/v2/session",
     ]
+
+
+def run_saz_http_transcript_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_saz_http_transcript"
+    artifact_root.mkdir()
+    bootstrap_engagement(
+        db_path,
+        name="Acme Example",
+        scope_json='["*.acme.example","+15551234567","security@acme.example","https://downloads.acme.example/app.apk"]',
+        operator="delta-one",
+    )
+
+    saz_path = artifact_root / "browser-session.saz"
+    with zipfile.ZipFile(saz_path, "w") as zf:
+        zf.writestr(
+            "raw/0001_c.txt",
+            "\r\n".join(
+                [
+                    "GET /api/v1/config?token=secret-token&view=public HTTP/1.1",
+                    "Host: transcript.acme.example",
+                    "X-Forwarded-Proto: https",
+                    "Origin: https://origin.acme.example",
+                    "X-Owner: saz-owner@acme.example",
+                    "",
+                    "",
+                ]
+            ),
+        )
+        zf.writestr(
+            "raw/0001_s.txt",
+            "\r\n".join(
+                [
+                    "HTTP/1.1 200 OK",
+                    "Content-Type: application/json",
+                    "Location: /redirect/next?session_token=hidden&view=public",
+                    "",
+                    json.dumps(
+                        {
+                            "support": "saz-body@acme.example",
+                            "firebase": "https://saz-firebase.firebaseio.com",
+                            "supabase_url": "https://sazworkspace.supabase.co",
+                            "supabase_anon_key": (
+                                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+                                "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhendvcmtzcGFjZSIsInJvbGUiOiJhbm9uIn0."
+                                "signature789"
+                            ),
+                            "bucket": "s3://acme-saz-bucket/reports/latest.pdf",
+                        },
+                        sort_keys=True,
+                    ),
+                ]
+            ),
+        )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+    synthesis_summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
+
+    assert queued >= 1
+    assert summary.processed >= 1
+    assert summary.firebase_projects >= 1
+    assert summary.supabase_configs >= 1
+    assert summary.discovered_seeds >= 6
+    assert "acme.example" in synthesis_summary.root_domains
+    assert "saz-firebase" not in synthesis_summary.root_domains
+    assert "sazworkspace" not in synthesis_summary.root_domains
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "saz-owner@acme.example" in emails
+        assert "saz-body@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("https://transcript.acme.example/api/v1/config?view=public", "url") in seeds
+        assert ("https://transcript.acme.example/redirect/next?view=public", "url") in seeds
+        assert ("https://origin.acme.example", "url") in seeds
+        assert ("saz-owner@acme.example", "email") in seeds
+        assert ("saz-body@acme.example", "email") in seeds
+        assert ("sazworkspace", "other") in seeds
+        assert ("saz-firebase", "other") in seeds
+        assert ("sazworkspace.supabase.co", "subdomain") not in seeds
+        assert ("saz-firebase.firebaseio.com", "subdomain") not in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-saz-bucket") in cloud_assets
+        assert ("firebase", "saz-firebase") in cloud_assets
+        assert ("supabase", "sazworkspace") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[saz_path.resolve().as_posix()]["format"] == "saz"
+        assert artifact_meta[saz_path.resolve().as_posix()]["payload_count"] >= 2
+    finally:
+        con.close()
