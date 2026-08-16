@@ -32,6 +32,20 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Shell-history artifact-ingestion regression
+modularization is complete.
+`tests/phase1/shell_history_artifact_cases.py` now owns the bash history,
+PowerShell history, and nested zsh-history ZIP fixture, while the original
+pytest node remains a thin wrapper in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for
+shell-history name/remote classification, history format labels, nested ZIP
+payload extraction, email/URL seed promotion, and S3/GCS/Firebase/Supabase
+asset detection without changing production parser behavior, live probing,
+provider calls, credential use, scope, validation/report gates, scheduler
+behavior, or persistent non-test engagement data. Verification passed for the
+preserved wrapper plus adjacent shortcut-link and Windows registry export
+artifact wrappers (`3 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B474.
 Latest checkpoint (2026-08-16): Shortcut/link artifact-ingestion regression
 modularization is complete.
 `tests/phase1/shortcut_link_artifact_cases.py` now owns the URL, website,
