@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import plistlib
 import sqlite3
+import threading
+import time
 import zipfile
 from io import BytesIO
 from pathlib import Path
@@ -10,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from forge.engagement_orchestrator import ArtifactQueueProcessor
+from forge.phase4.mobile_config_parse import FirebaseProject, SupabaseConfig
 from tests.phase1.artifact_test_support import bootstrap_engagement
 
 
@@ -112,6 +115,116 @@ def run_nested_mobile_configs_from_archive_bundles(tmp_path: Path) -> None:
         assert artifact_meta[bundle_path.resolve().as_posix()]["metadata_payload_count"] >= 1
     finally:
         con.close()
+
+
+def run_parallelizes_nested_zip_mobile_member_extraction_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    archive_path = tmp_path / "parallel-mobile-bundle.zip"
+    member_bytes = {
+        "packages/client-1.ipa": b"ipa-one",
+        "packages/client-2.apk": b"apk-two",
+        "packages/client-3.xapk": b"xapk-three",
+    }
+    with zipfile.ZipFile(archive_path, "w") as zf:
+        for member_name, data in member_bytes.items():
+            zf.writestr(member_name, data)
+
+    delays = {
+        "packages/client-1.ipa": 0.05,
+        "packages/client-2.apk": 0.01,
+        "packages/client-3.xapk": 0.03,
+    }
+    payload_texts = {
+        "packages/client-1.ipa": "nested-zip-one@acme.example",
+        "packages/client-2.apk": "nested-zip-two@acme.example",
+        "packages/client-3.xapk": "nested-zip-three@acme.example",
+    }
+    project_ids = {
+        "packages/client-1.ipa": "nested-zip-firebase-one",
+        "packages/client-2.apk": "nested-zip-firebase-two",
+        "packages/client-3.xapk": "nested-zip-firebase-three",
+    }
+    project_refs = {
+        "packages/client-1.ipa": "nestedzipone",
+        "packages/client-2.apk": "nestedziptwo",
+        "packages/client-3.xapk": "nestedzipthree",
+    }
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def fake_extract_mobile_configs_from_member_bytes(
+        _self,
+        data: bytes,
+        source_path: Path,
+        member_name: str,
+    ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig]]:
+        assert source_path == archive_path
+        assert data == member_bytes[member_name]
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(delays[member_name])
+            return (
+                [(str(source_path), f"{member_name}!payload.txt", payload_texts[member_name])],
+                [
+                    FirebaseProject(
+                        project_id=project_ids[member_name],
+                        api_key_enc=None,
+                        rtdb_url=None,
+                        bundle_id=None,
+                        source_file=str(source_path),
+                        extract_path=f"{member_name}!google-services.json",
+                    )
+                ],
+                [
+                    SupabaseConfig(
+                        project_ref=project_refs[member_name],
+                        project_url=f"https://{project_refs[member_name]}.supabase.co",
+                        anon_key="anon",
+                        source_file=str(source_path),
+                        extract_path=f"{member_name}!supabase.js",
+                    )
+                ],
+            )
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_mobile_configs_from_member_bytes",
+        fake_extract_mobile_configs_from_member_bytes,
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=2)
+    with zipfile.ZipFile(archive_path) as zf:
+        payloads, firebase_projects, supabase_configs, mobile_members = (
+            processor._extract_nested_mobile_configs_from_zip(zf, archive_path)
+        )
+
+    assert peak == 2
+    assert mobile_members == 3
+    assert payloads == [
+        (str(archive_path), "packages/client-1.ipa!payload.txt", "nested-zip-one@acme.example"),
+        (str(archive_path), "packages/client-2.apk!payload.txt", "nested-zip-two@acme.example"),
+        (str(archive_path), "packages/client-3.xapk!payload.txt", "nested-zip-three@acme.example"),
+    ]
+    assert [project.project_id for project in firebase_projects] == [
+        "nested-zip-firebase-one",
+        "nested-zip-firebase-two",
+        "nested-zip-firebase-three",
+    ]
+    assert [config.project_ref for config in supabase_configs] == [
+        "nestedzipone",
+        "nestedziptwo",
+        "nestedzipthree",
+    ]
 
 
 def run_nested_mobile_configs_from_7z_archive(tmp_path: Path) -> None:
