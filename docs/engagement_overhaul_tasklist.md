@@ -90,6 +90,22 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Android App Bundle artifact-ingestion modularization checkpoint
+  (2026-08-16): the AAB fixture now lives alongside the nested mobile archive
+  and worker fixtures in `tests/phase1/nested_mobile_artifact_cases.py`, with
+  the original pytest node retained as a thin wrapper in the Phase 1 mega test.
+  This keeps coverage for AAB Firebase, GCS, Supabase, key-finding, email
+  extraction, seed promotion, and artifact metadata counters while reducing
+  inline fixture weight in `tests/phase1/test_engagement_orchestrator.py`.
+  Files: `tests/phase1/test_engagement_orchestrator.py`,
+  `tests/phase1/nested_mobile_artifact_cases.py`, `SPEC.md`,
+  `docs/claude_quick_handoff.md`, and this tasklist. Verification: preserved
+  wrapper plus adjacent APKM bundle/OpenDocument wrappers -> `3 passed`; Ruff
+  and `py_compile` passed for touched Python files. Safety note: test
+  modularization only; no production parser behavior, live probing, provider
+  calls, credential use, scope changes, validation/report gates, scheduler
+  behavior, or persistent non-test engagement data changed.
+
 - [x] APKM nested mobile config artifact-ingestion modularization checkpoint
   (2026-08-16): the APKM bundle fixture now lives alongside the nested mobile
   archive and worker fixtures in `tests/phase1/nested_mobile_artifact_cases.py`,
