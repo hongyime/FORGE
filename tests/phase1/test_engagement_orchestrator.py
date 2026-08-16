@@ -249,6 +249,7 @@ from tests.phase1.nested_mobile_artifact_cases import (
     run_parallelizes_nested_zip_mobile_member_job_planning_and_preserves_order,
     run_parallelizes_nested_zip_mobile_member_planning_and_preserves_order,
 )
+from tests.phase1.opendocument_artifact_cases import run_opendocument_findings
 from tests.phase1.firmware_binary_artifact_cases import (
     run_firmware_binary_string_artifacts,
     run_firmware_image_binary_string_artifacts,
@@ -27867,97 +27868,7 @@ def test_artifact_queue_processor_extracts_android_app_bundle_findings(
 
 
 def test_artifact_queue_processor_extracts_opendocument_findings(tmp_path: Path) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_odf"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    odt_path = artifact_root / "engagement-brief.odt"
-    with zipfile.ZipFile(odt_path, "w") as zf:
-        zf.writestr("mimetype", "application/vnd.oasis.opendocument.text")
-        zf.writestr(
-            "content.xml",
-            """
-            <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
-                                     xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
-              <office:body>
-                <office:text>
-                  <text:p>odf-owner@acme.example</text:p>
-                  <text:p>https://odf.acme.example/briefing</text:p>
-                  <text:p>s3://acme-odf-bucket/reports/final.pdf</text:p>
-                  <text:p>https://storage.googleapis.com/acme-odf-public/reports/summary.pdf</text:p>
-                </office:text>
-              </office:body>
-            </office:document-content>
-            """.strip(),
-        )
-        zf.writestr(
-            "meta.xml",
-            """
-            <office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
-                                  xmlns:dc="http://purl.org/dc/elements/1.1/">
-              <office:meta>
-                <dc:creator>odf-meta@acme.example</dc:creator>
-              </office:meta>
-            </office:document-meta>
-            """.strip(),
-        )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 1
-    assert summary.processed >= 1
-    assert summary.discovered_seeds >= 4
-
-    con = sqlite3.connect(db_path)
-    try:
-        emails = {
-            row[0]
-            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
-        }
-        assert "odf-owner@acme.example" in emails
-        assert "odf-meta@acme.example" in emails
-
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("https://odf.acme.example/briefing", "url") in seeds
-        assert ("odf-owner@acme.example", "email") in seeds
-        assert ("odf-meta@acme.example", "email") in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-odf-bucket") in cloud_assets
-        assert ("gcs", "acme-odf-public") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[odt_path.resolve().as_posix()]["format"] == "odt"
-    finally:
-        con.close()
+    run_opendocument_findings(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_opendocument_spreadsheet_and_presentation_findings(
