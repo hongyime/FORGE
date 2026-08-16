@@ -76,6 +76,133 @@ def _emails(db_path: Path) -> set[str]:
         con.close()
 
 
+def run_queue_processor_extracts_ci_test_and_coverage_report_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_ci_test_reports"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    coverage_path = artifact_root / "coverage.lcov"
+    coverage_path.write_text(
+        dedent(
+            """
+            TN:coverage-owner@acme.example
+            SF:https://coverage.acme.example/src/app.js
+            DA:1,1
+            BRDA:1,0,0,1
+            FIREBASE_DATABASE=https://coverage-firebase.firebaseio.com
+            SUPABASE_URL=https://testresultsworkspace.supabase.co
+            SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlc3RyZXN1bHRzd29ya3NwYWNlIiwicm9sZSI6ImFub24ifQ.signature101
+            S3_URI=s3://acme-coverage-bucket/reports/lcov.info
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    lcov_info_path = artifact_root / "lcov.info"
+    lcov_info_path.write_text(
+        dedent(
+            """
+            TN:lcov-owner@acme.example
+            SF:https://lcov.acme.example/packages/portal.js
+            end_of_record
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    bundle_path = artifact_root / "test-report-bundle.zip"
+    with zipfile.ZipFile(bundle_path, "w") as zf:
+        zf.writestr(
+            "results/service.trx",
+            """
+            <TestRun>
+              <Owner>trx-owner@acme.example</Owner>
+              <ResultFiles>
+                <ResultFile path="https://trx.acme.example/results/42" />
+              </ResultFiles>
+              <StdOut>SUPABASE_URL=https://testresultsworkspace.supabase.co</StdOut>
+            </TestRun>
+            """.strip(),
+        )
+        zf.writestr(
+            "tap/api.tap",
+            """
+            TAP version 13
+            ok 1 - tap-owner@acme.example https://tap.acme.example/spec
+            """.strip(),
+        )
+        zf.writestr(
+            "coverage/frontend.cobertura",
+            """
+            <coverage>
+              <sources>
+                <source>gs://acme-coverage-gcs/reports/cobertura.xml</source>
+              </sources>
+              <packages>cobertura-owner@acme.example https://cobertura.acme.example/report</packages>
+            </coverage>
+            """.strip(),
+        )
+        zf.writestr(
+            "coverage/backend.jacoco",
+            """
+            <report>
+              <sessioninfo id="jacoco-owner@acme.example" />
+              <link href="https://coverageblob.blob.core.windows.net/public/jacoco.xml" />
+            </report>
+            """.strip(),
+        )
+        zf.writestr(
+            "results/unit.junit",
+            """
+            <testsuite name="unit">
+              <property name="owner" value="junit-owner@acme.example" />
+              <property name="url" value="https://junit.acme.example/results" />
+            </testsuite>
+            """.strip(),
+        )
+
+    queued, summary = _process_artifacts(db_path, artifact_root)
+
+    assert queued >= 3
+    assert summary.processed >= 3
+    assert summary.firebase_projects >= 1
+    assert summary.supabase_configs >= 1
+    assert summary.discovered_seeds >= 8
+
+    emails = _emails(db_path)
+    assert "coverage-owner@acme.example" in emails
+    assert "lcov-owner@acme.example" in emails
+    assert "trx-owner@acme.example" in emails
+    assert "tap-owner@acme.example" in emails
+    assert "cobertura-owner@acme.example" in emails
+    assert "jacoco-owner@acme.example" in emails
+    assert "junit-owner@acme.example" in emails
+
+    seeds = _seed_pairs(db_path)
+    assert ("https://coverage.acme.example/src/app.js", "url") in seeds
+    assert ("https://lcov.acme.example/packages/portal.js", "url") in seeds
+    assert ("https://trx.acme.example/results/42", "url") in seeds
+    assert ("https://tap.acme.example/spec", "url") in seeds
+    assert ("https://cobertura.acme.example/report", "url") in seeds
+    assert ("https://junit.acme.example/results", "url") in seeds
+    assert ("coverage-owner@acme.example", "email") in seeds
+    assert ("junit-owner@acme.example", "email") in seeds
+
+    cloud_assets = _cloud_assets(db_path)
+    assert ("aws_s3", "acme-coverage-bucket") in cloud_assets
+    assert ("azure_blob", "coverageblob/public") in cloud_assets
+    assert ("firebase", "coverage-firebase") in cloud_assets
+    assert ("gcs", "acme-coverage-gcs") in cloud_assets
+    assert ("supabase", "testresultsworkspace") in cloud_assets
+
+    artifact_meta = _artifact_meta(db_path)
+    assert artifact_meta[coverage_path.resolve().as_posix()]["format"] == "lcov"
+    assert artifact_meta[lcov_info_path.resolve().as_posix()]["format"] == "lcov"
+    assert artifact_meta[bundle_path.resolve().as_posix()]["format"] == "zip"
+    assert artifact_meta[bundle_path.resolve().as_posix()]["payload_count"] >= 5
+
+
 def run_codebuild_buildspec_secret_refs(tmp_path: Path) -> None:
     db_path = tmp_path / "engagement.db"
     artifact_root = tmp_path / "artifact_codebuild_buildspec"
