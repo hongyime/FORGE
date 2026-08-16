@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import tarfile
 import zipfile
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -328,5 +330,159 @@ def run_disk_image_binary_string_artifacts(tmp_path: Path) -> None:
         assert artifact_meta[iso_path.resolve().as_posix()]["payload_count"] >= 1
         assert artifact_meta[bundle_path.resolve().as_posix()]["format"] == "zip"
         assert artifact_meta[bundle_path.resolve().as_posix()]["payload_count"] >= 1
+    finally:
+        con.close()
+
+
+def run_virtual_disk_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_virtual_disks"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    vhdx_path = artifact_root / "vm-system.vhdx"
+    vhdx_path.write_bytes(
+        b"vhdxfile\x00"
+        b"vhdx-owner@acme.example\x00"
+        b"https://vhdx.acme.example/console\x00"
+        b"https://vhdx-firebase.firebaseio.com\x00"
+        b"https://vhdxvault.supabase.co/rest/v1/images\x00"
+        b"s3://acme-vhdx-bucket/images/vm-system.vhdx\x00"
+    )
+
+    qcow_path = artifact_root / "worker.qcow2"
+    qcow_path.write_bytes(
+        b"QFI\xfb\x00qcow-owner@acme.example\x00gs://acme-qcow-gcs/images/worker.qcow2\x00"
+    )
+
+    ova_path = artifact_root / "export.ova"
+    with tarfile.open(ova_path, "w") as tf:
+        descriptor = (
+            "<Envelope>"
+            "<Annotation>ova-owner@acme.example</Annotation>"
+            "<Url>https://ova.acme.example/ovf</Url>"
+            "<Firebase>https://ova-firebase.firebaseio.com</Firebase>"
+            "<Supabase>https://ovavault.supabase.co/rest/v1/export</Supabase>"
+            "</Envelope>"
+        ).encode()
+        descriptor_info = tarfile.TarInfo("descriptor.ovf")
+        descriptor_info.size = len(descriptor)
+        tf.addfile(descriptor_info, BytesIO(descriptor))
+
+        nested_disk = (
+            b"KDMV\x00"
+            b"nested-vmdk@acme.example\x00"
+            b"https://nested-vmdk.acme.example/pivot\x00"
+            b"https://nested-vmdk-firebase.firebaseio.com\x00"
+        )
+        disk_info = tarfile.TarInfo("disk.vmdk")
+        disk_info.size = len(nested_disk)
+        tf.addfile(disk_info, BytesIO(nested_disk))
+
+    standalone_ovf_path = artifact_root / "standalone.ovf"
+    standalone_ovf_path.write_text(
+        (
+            "<Envelope>"
+            "<Annotation>standalone-ovf@acme.example</Annotation>"
+            "<Url>https://standalone-ovf.acme.example/descriptor</Url>"
+            "<Firebase>https://standalone-ovf-firebase.firebaseio.com</Firebase>"
+            "<Supabase>https://standaloneovf.supabase.co/rest/v1/descriptors</Supabase>"
+            "</Envelope>"
+        ),
+        encoding="utf-8",
+    )
+
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/vm-system.vhdx") == "document"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/worker.qcow2?dl=1")
+        == "document"
+    )
+    assert _classify_remote_artifact_url("https://downloads.acme.example/export.ova") == "archive"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/descriptor.ovf") == "config"
+    )
+    assert _suffix_from_content_type("application/x-vhdx") == ".vhdx"
+    assert _suffix_from_content_type("application/x-qcow2") == ".qcow2"
+    assert _suffix_from_content_type("application/x-virtualbox-ova") == ".ova"
+    assert _suffix_from_content_type("application/ovf") == ".ovf"
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 4
+    assert summary.processed >= 4
+    assert summary.discovered_seeds >= 10
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "vhdx-owner@acme.example" in emails
+        assert "qcow-owner@acme.example" in emails
+        assert "ova-owner@acme.example" in emails
+        assert "nested-vmdk@acme.example" in emails
+        assert "standalone-ovf@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("vhdx-owner@acme.example", "email") in seeds
+        assert ("qcow-owner@acme.example", "email") in seeds
+        assert ("ova-owner@acme.example", "email") in seeds
+        assert ("nested-vmdk@acme.example", "email") in seeds
+        assert ("standalone-ovf@acme.example", "email") in seeds
+        assert ("https://vhdx.acme.example/console", "url") in seeds
+        assert ("https://ova.acme.example/ovf", "url") in seeds
+        assert ("https://nested-vmdk.acme.example/pivot", "url") in seeds
+        assert ("https://standalone-ovf.acme.example/descriptor", "url") in seeds
+        assert ("https://vhdxvault.supabase.co/rest/v1/images", "url") in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-vhdx-bucket") in cloud_assets
+        assert ("firebase", "nested-vmdk-firebase") in cloud_assets
+        assert ("firebase", "ova-firebase") in cloud_assets
+        assert ("firebase", "standalone-ovf-firebase") in cloud_assets
+        assert ("firebase", "vhdx-firebase") in cloud_assets
+        assert ("gcs", "acme-qcow-gcs") in cloud_assets
+        assert ("supabase", "standaloneovf") in cloud_assets
+        assert ("supabase", "ovavault") in cloud_assets
+        assert ("supabase", "vhdxvault") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[vhdx_path.resolve().as_posix()]["format"] == "vhdx"
+        assert artifact_meta[vhdx_path.resolve().as_posix()]["payload_count"] >= 1
+        assert artifact_meta[qcow_path.resolve().as_posix()]["format"] == "qcow2"
+        assert artifact_meta[qcow_path.resolve().as_posix()]["payload_count"] >= 1
+        assert artifact_meta[ova_path.resolve().as_posix()]["format"] == "ova"
+        assert artifact_meta[ova_path.resolve().as_posix()]["payload_count"] >= 1
+        assert artifact_meta[standalone_ovf_path.resolve().as_posix()]["format"] == "ovf"
     finally:
         con.close()
