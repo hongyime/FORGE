@@ -32,6 +32,19 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Nested email message job-planning concurrency
+regression modularization is complete.
+`tests/phase1/document_artifact_cases.py` now also owns the nested
+`message/rfc822` job-planning fixture, while the original pytest node remains
+a thin wrapper in `tests/phase1/test_engagement_orchestrator.py`. This keeps
+coverage for nested message job creation, empty nested payload filtering,
+bounded nested worker fanout, attachment job routing, and payload order
+preservation without changing production parser behavior, live probing,
+provider calls, credential use, scope, validation/report gates, scheduler
+behavior, or persistent non-test engagement data. Verification passed for the
+preserved wrapper plus adjacent email part-planning and email part payload
+entry wrappers (`3 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B500.
 Latest checkpoint (2026-08-16): Email part-planning concurrency regression
 modularization is complete.
 `tests/phase1/document_artifact_cases.py` now also owns the bounded EML

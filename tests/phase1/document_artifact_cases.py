@@ -601,3 +601,115 @@ def run_email_part_planning_parallel_order(tmp_path: Path, monkeypatch) -> None:
         (source_file, f"{member_name}.part-4.html", "<p>html-four@acme.example</p>"),
         (source_file, "attachment-5.bin", "attachment-five@acme.example"),
     ]
+
+
+def run_nested_email_message_job_planning_parallel_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    db_path = tmp_path / "engagement.db"
+    source_file = str(tmp_path / "outer-message.eml")
+    member_name = "outer-message.eml"
+    expected_names = [
+        f"{member_name}.attached-1-1.eml",
+        f"{member_name}.attached-1-2.eml",
+        f"{member_name}.attached-1-3.eml",
+        f"{member_name}.attached-1-4.eml",
+        f"{member_name}.attached-1-5.eml",
+    ]
+    delays = {
+        expected_names[0]: 0.05,
+        expected_names[1]: 0.01,
+        expected_names[2]: 0.03,
+        expected_names[3]: 0.02,
+        expected_names[4]: 0.04,
+        f"{member_name}.attached-1-6.eml": 0.01,
+    }
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+    original_job = ArtifactQueueProcessor._nested_email_message_job
+
+    class _FakeNestedMessage:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def as_bytes(self, policy=None) -> bytes:  # noqa: ANN001
+            del policy
+            return self._payload
+
+    class _FakePart:
+        def __init__(self, nested_messages) -> None:  # noqa: ANN001
+            self._nested_messages = list(nested_messages)
+
+        def get_content_type(self) -> str:
+            return "message/rfc822"
+
+        def get_filename(self) -> str:
+            return ""
+
+        def get_payload(self, decode: bool = False):  # noqa: ANN201
+            return None if decode else list(self._nested_messages)
+
+    def _tracking_job(nested_job):  # noqa: ANN001
+        nonlocal active, peak
+        nested_name, _nested_bytes = nested_job
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(delays[nested_name])
+            return original_job(nested_job)
+        finally:
+            with lock:
+                active -= 1
+
+    def _fake_extract_email_part_job(
+        _self,
+        job,
+    ) -> list[tuple[str, str, str]]:  # noqa: ANN001
+        assert job.member_name == f"{member_name}.attached-1.eml"
+        assert [nested_name for nested_name, _nested_bytes in job.nested_messages] == expected_names
+        return [
+            (job.source_file, nested_name, nested_name)
+            for nested_name, _nested_bytes in job.nested_messages
+        ]
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_nested_email_message_job",
+        staticmethod(_tracking_job),
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_email_part_job",
+        _fake_extract_email_part_job,
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=8)
+    payloads = processor._extract_email_message_part_payloads(
+        [
+            _FakePart(
+                [
+                    _FakeNestedMessage(b"nested-1"),
+                    _FakeNestedMessage(b"nested-2"),
+                    _FakeNestedMessage(b"nested-3"),
+                    _FakeNestedMessage(b"nested-4"),
+                    _FakeNestedMessage(b"nested-5"),
+                    _FakeNestedMessage(b""),
+                ]
+            )
+        ],
+        source_file=source_file,
+        member_name=member_name,
+        depth=1,
+    )
+
+    assert peak == 4
+    assert payloads == [
+        (source_file, expected_names[0], expected_names[0]),
+        (source_file, expected_names[1], expected_names[1]),
+        (source_file, expected_names[2], expected_names[2]),
+        (source_file, expected_names[3], expected_names[3]),
+        (source_file, expected_names[4], expected_names[4]),
+    ]
