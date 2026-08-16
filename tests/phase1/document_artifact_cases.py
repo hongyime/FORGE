@@ -1007,3 +1007,61 @@ def run_email_part_decoding_parallel_charset_order(monkeypatch) -> None:  # noqa
 
     assert peak == 3
     assert text == "owner@acme.example"
+
+
+def run_email_metadata_lines_parallel_order(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    delays = {
+        "subject": 0.05,
+        "from": 0.01,
+        "to": 0.03,
+        "cc": 0.02,
+        "bcc": 0.04,
+        "reply-to": 0.01,
+        "date": 0.03,
+        "message-id": 0.02,
+        "x-mailer": 0.04,
+    }
+    values = {
+        "subject": "Parallel metadata",
+        "from": "owner@acme.example",
+        "to": "ops@acme.example",
+        "cc": "cc@acme.example",
+        "bcc": "bcc@acme.example",
+        "reply-to": "reply@acme.example",
+        "date": "Tue, 14 Jul 2026 10:00:00 +0000",
+        "message-id": "<msg-1@acme.example>",
+        "x-mailer": "FORGE Mail",
+    }
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    class _FakeMessage:
+        def get(self, header_name: str) -> str:
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            try:
+                time.sleep(delays[header_name])
+                return values[header_name]
+            finally:
+                with lock:
+                    active -= 1
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=8)
+    lines = processor._email_message_metadata_lines(_FakeMessage())
+
+    assert peak == 4
+    assert lines == [
+        "subject=Parallel metadata",
+        "from=owner@acme.example",
+        "to=ops@acme.example",
+        "cc=cc@acme.example",
+        "bcc=bcc@acme.example",
+        "reply-to=reply@acme.example",
+        "date=Tue, 14 Jul 2026 10:00:00 +0000",
+        "message-id=<msg-1@acme.example>",
+        "x-mailer=FORGE Mail",
+    ]
