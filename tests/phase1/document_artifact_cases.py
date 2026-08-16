@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 import threading
 import time
+import types
 import zipfile
 from email.message import EmailMessage
 from io import BytesIO
@@ -1385,6 +1387,164 @@ def run_emlx_bodies_and_nested_attachments(tmp_path: Path) -> None:
         }
         assert artifact_meta[emlx_path.resolve().as_posix()]["format"] == "emlx"
         assert artifact_meta[emlx_path.resolve().as_posix()]["metadata_payload_count"] >= 1
+        assert artifact_meta[nested_bundle_path.resolve().as_posix()]["format"] == "zip"
+        assert artifact_meta[nested_bundle_path.resolve().as_posix()]["metadata_payload_count"] >= 1
+    finally:
+        con.close()
+
+
+def run_msg_bodies_and_nested_msg_attachments(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_msg"
+    artifact_root.mkdir()
+    bootstrap_engagement(
+        db_path,
+        name="Acme Example",
+        scope_json='["*.acme.example","+15551234567","security@acme.example","https://downloads.acme.example/app.apk"]',
+        operator="delta-one",
+    )
+
+    msg_path = artifact_root / "engagement-briefing.msg"
+    msg_path.write_bytes(b"TOPLEVEL-MSG")
+
+    nested_bundle_path = artifact_root / "nested-msg-bundle.zip"
+    with zipfile.ZipFile(nested_bundle_path, "w") as zf:
+        zf.writestr("mail/forwarded.msg", b"NESTED-MSG")
+
+    def _msg_utf16(value: str) -> bytes:
+        return f"{value}\x00".encode("utf-16-le")
+
+    def _msg_streams(marker: bytes) -> dict[tuple[str, ...], bytes]:
+        if b"NESTED" in marker:
+            return {
+                ("__substg1.0_0037001F",): _msg_utf16("Nested Outlook Brief"),
+                ("__substg1.0_0C1F001F",): _msg_utf16("nested-msg-sender@acme.example"),
+                ("__substg1.0_1000001F",): _msg_utf16(
+                    "Escalate to nested-msg-owner@acme.example and review "
+                    "https://nested-outlook.acme.example/portal "
+                    "Bucket: gs://nested-msg-gcs/reports/latest.json"
+                ),
+            }
+        return {
+            ("__substg1.0_0037001F",): _msg_utf16("Outlook Security Brief"),
+            ("__substg1.0_0C1F001F",): _msg_utf16("msg-sender@acme.example"),
+            ("__substg1.0_007D001F",): _msg_utf16("X-Owner: header-msg@acme.example"),
+            ("__substg1.0_1000001F",): _msg_utf16(
+                "Owner: outlook-owner@acme.example\n"
+                "Portal: https://outlook.acme.example/brief\n"
+                "Firebase: https://outlook-firebase.firebaseio.com\n"
+                "Bucket: s3://outlook-msg-bucket/reports/latest.pdf"
+            ),
+            (
+                "__substg1.0_10130102",
+            ): b"<html><body>See https://html-outlook.acme.example/panel</body></html>",
+            (
+                "__attach_version1.0_#00000000",
+                "__substg1.0_3707001F",
+            ): _msg_utf16("ops.env"),
+            (
+                "__attach_version1.0_#00000000",
+                "__substg1.0_370E001F",
+            ): _msg_utf16("text/plain"),
+            (
+                "__attach_version1.0_#00000000",
+                "__substg1.0_37010102",
+            ): (
+                b"SUPABASE_URL=https://msgworkspace.supabase.co\n"
+                b"CONTACT=msg-attachment@acme.example\n"
+            ),
+        }
+
+    class _FakeMsgOleFile:
+        def __init__(self, handle) -> None:  # noqa: ANN001
+            if hasattr(handle, "getvalue"):
+                marker = bytes(handle.getvalue())
+            else:
+                marker = b""
+            self._streams = _msg_streams(marker)
+
+        def __enter__(self) -> "_FakeMsgOleFile":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001
+            del exc_type, exc, tb
+
+        def listdir(self, streams=True, storages=False):  # noqa: ANN001
+            del streams, storages
+            return list(self._streams.keys())
+
+        def openstream(self, stream_parts):  # noqa: ANN001
+            return BytesIO(self._streams[tuple(stream_parts)])
+
+    monkeypatch.setitem(
+        sys.modules,
+        "olefile",
+        types.SimpleNamespace(OleFileIO=_FakeMsgOleFile),
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 2
+    assert summary.processed >= 2
+    assert summary.firebase_projects >= 1
+    assert summary.discovered_seeds >= 10
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "msg-sender@acme.example" in emails
+        assert "header-msg@acme.example" in emails
+        assert "outlook-owner@acme.example" in emails
+        assert "msg-attachment@acme.example" in emails
+        assert "nested-msg-owner@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("https://outlook.acme.example/brief", "url") in seeds
+        assert ("https://html-outlook.acme.example/panel", "url") in seeds
+        assert ("https://nested-outlook.acme.example/portal", "url") in seeds
+        assert ("outlook-owner@acme.example", "email") in seeds
+        assert ("msg-attachment@acme.example", "email") in seeds
+        assert ("nested-msg-owner@acme.example", "email") in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "outlook-msg-bucket") in cloud_assets
+        assert ("firebase", "outlook-firebase") in cloud_assets
+        assert ("gcs", "nested-msg-gcs") in cloud_assets
+        assert ("supabase", "msgworkspace") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[msg_path.resolve().as_posix()]["format"] == "msg"
+        assert artifact_meta[msg_path.resolve().as_posix()]["metadata_payload_count"] >= 1
         assert artifact_meta[nested_bundle_path.resolve().as_posix()]["format"] == "zip"
         assert artifact_meta[nested_bundle_path.resolve().as_posix()]["metadata_payload_count"] >= 1
     finally:
