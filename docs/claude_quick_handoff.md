@@ -32,6 +32,19 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Installer binary artifact-ingestion regression
+modularization is complete.
+`tests/phase1/installer_binary_artifact_cases.py` now owns the MSI and PKG/XAR
+payload fixture, while the original pytest node remains a thin wrapper in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for
+installer format labels, compressed PKG payload extraction, MSI metadata
+payload extraction, email/URL seed promotion, and S3/GCS/Firebase/Supabase
+asset detection without changing production parser behavior, live probing,
+provider calls, credential use, scope, validation/report gates, scheduler
+behavior, or persistent non-test engagement data. Verification passed for the
+preserved wrapper plus adjacent Keras/WASM artifact wrappers (`3 passed`),
+Ruff, and `py_compile`.
+Backprop: `SPEC.md` B459.
 Latest checkpoint (2026-08-16): Keras model archive artifact-ingestion
 regression modularization is complete.
 `tests/phase1/data_export_artifact_cases.py` now also owns the `.keras` ZIP and
