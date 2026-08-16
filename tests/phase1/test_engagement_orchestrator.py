@@ -238,6 +238,7 @@ from tests.phase1.nested_mobile_artifact_cases import (
     run_nested_archive_style_mobile_bundle_from_outer_archive,
     run_nested_mobile_configs_from_7z_archive,
     run_nested_mobile_configs_from_archive_bundles,
+    run_parallelizes_nested_7z_mobile_member_extraction_and_preserves_order,
     run_parallelizes_nested_zip_mobile_member_extraction_and_preserves_order,
 )
 from tests.phase1.firmware_binary_artifact_cases import (
@@ -27779,114 +27780,10 @@ def test_artifact_queue_processor_parallelizes_nested_7z_mobile_member_extractio
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    py7zr = pytest.importorskip("py7zr")
-
-    db_path = tmp_path / "engagement.db"
-    archive_path = tmp_path / "parallel-mobile-bundle.7z"
-    member_bytes = {
-        "packages/client-1.ipa": b"ipa-one",
-        "packages/client-2.apk": b"apk-two",
-        "packages/client-3.xapk": b"xapk-three",
-    }
-    with py7zr.SevenZipFile(archive_path, "w") as archive:
-        for member_name, data in member_bytes.items():
-            archive.writestr(data, member_name)
-
-    delays = {
-        "packages/client-1.ipa": 0.05,
-        "packages/client-2.apk": 0.01,
-        "packages/client-3.xapk": 0.03,
-    }
-    payload_texts = {
-        "packages/client-1.ipa": "nested-7z-one@acme.example",
-        "packages/client-2.apk": "nested-7z-two@acme.example",
-        "packages/client-3.xapk": "nested-7z-three@acme.example",
-    }
-    project_ids = {
-        "packages/client-1.ipa": "nested-7z-firebase-one",
-        "packages/client-2.apk": "nested-7z-firebase-two",
-        "packages/client-3.xapk": "nested-7z-firebase-three",
-    }
-    project_refs = {
-        "packages/client-1.ipa": "nested7zone",
-        "packages/client-2.apk": "nested7ztwo",
-        "packages/client-3.xapk": "nested7zthree",
-    }
-    active = 0
-    peak = 0
-    lock = threading.Lock()
-
-    def _fake_extract_mobile_configs_from_member_bytes(
-        _self,
-        data: bytes,
-        source_path: Path,
-        member_name: str,
-    ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig]]:  # noqa: ANN001
-        assert source_path == archive_path
-        assert data == member_bytes[member_name]
-        nonlocal active, peak
-        with lock:
-            active += 1
-            peak = max(peak, active)
-        try:
-            time.sleep(delays[member_name])
-            return (
-                [(str(source_path), f"{member_name}!payload.txt", payload_texts[member_name])],
-                [
-                    FirebaseProject(
-                        project_id=project_ids[member_name],
-                        api_key_enc=None,
-                        rtdb_url=None,
-                        bundle_id=None,
-                        source_file=str(source_path),
-                        extract_path=f"{member_name}!google-services.json",
-                    )
-                ],
-                [
-                    SupabaseConfig(
-                        project_ref=project_refs[member_name],
-                        project_url=f"https://{project_refs[member_name]}.supabase.co",
-                        anon_key="anon",
-                        source_file=str(source_path),
-                        extract_path=f"{member_name}!supabase.js",
-                    )
-                ],
-            )
-        finally:
-            with lock:
-                active -= 1
-
-    monkeypatch.setattr(
-        ArtifactQueueProcessor,
-        "_extract_mobile_configs_from_member_bytes",
-        _fake_extract_mobile_configs_from_member_bytes,
+    run_parallelizes_nested_7z_mobile_member_extraction_and_preserves_order(
+        tmp_path,
+        monkeypatch,
     )
-
-    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=2)
-    payloads, firebase_projects, supabase_configs, mobile_members = (
-        processor._extract_nested_mobile_configs_from_7z(
-            archive_path.read_bytes(),
-            archive_path,
-        )
-    )
-
-    assert peak == 2
-    assert mobile_members == 3
-    assert payloads == [
-        (str(archive_path), "packages/client-1.ipa!payload.txt", "nested-7z-one@acme.example"),
-        (str(archive_path), "packages/client-2.apk!payload.txt", "nested-7z-two@acme.example"),
-        (str(archive_path), "packages/client-3.xapk!payload.txt", "nested-7z-three@acme.example"),
-    ]
-    assert [project.project_id for project in firebase_projects] == [
-        "nested-7z-firebase-one",
-        "nested-7z-firebase-two",
-        "nested-7z-firebase-three",
-    ]
-    assert [config.project_ref for config in supabase_configs] == [
-        "nested7zone",
-        "nested7ztwo",
-        "nested7zthree",
-    ]
 
 
 def test_artifact_queue_processor_parallelizes_nested_zip_mobile_member_planning_and_preserves_order(
