@@ -1,10 +1,219 @@
 from __future__ import annotations
 
+import json
+import sqlite3
+import struct
+import zipfile
 from pathlib import Path
 from textwrap import dedent
 from typing import Any
 
 from forge.engagement_orchestrator import ArtifactQueueProcessor
+from tests.phase1.artifact_test_support import bootstrap_engagement
+
+
+def _asar_bytes(members: list[tuple[str, bytes]]) -> bytes:
+    header_files: dict[str, Any] = {}
+    content = bytearray()
+    for raw_member_name, payload in members:
+        parts = [part for part in str(raw_member_name).split("/") if part]
+        if not parts:
+            continue
+        cursor = header_files
+        for part in parts[:-1]:
+            entry = cursor.setdefault(part, {"files": {}})
+            cursor = entry["files"]
+        cursor[parts[-1]] = {"size": len(payload), "offset": str(len(content))}
+        content.extend(payload)
+
+    header_json = json.dumps({"files": header_files}, separators=(",", ":")).encode()
+    padding = b"\x00" * ((4 - (len(header_json) % 4)) % 4)
+    header_size = 4 + len(header_json) + len(padding)
+    return (
+        struct.pack("<II", header_size, len(header_json)) + header_json + padding + bytes(content)
+    )
+
+
+def run_queue_processor_extracts_electron_asar_static_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_asar"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    asar_path = artifact_root / "app.asar"
+    asar_path.write_bytes(
+        _asar_bytes(
+            [
+                (
+                    "app/main.js",
+                    dedent(
+                        """
+                        const owner = "asar-owner@acme.example";
+                        const apiBase = "https://electron.acme.example/api";
+                        const firebase = "https://asar-firebase.firebaseio.com";
+                        const supabase = "https://asarworkspace.supabase.co/rest/v1/events";
+                        const releaseBucket = "s3://acme-asar-bucket/releases/app.asar";
+                        const gcs = "gs://acme-asar-gcs/reports/latest.json";
+                        const nextArtifact = "https://downloads.acme.example/client.apk";
+                        """
+                    )
+                    .strip()
+                    .encode("utf-8"),
+                ),
+                (
+                    "resources/package.json",
+                    b'{"maintainer":"asar-package@acme.example","homepage":"https://asar.acme.example"}',
+                ),
+                ("../escaped.env", b"ESCAPED=escaped-asar@acme.example\n"),
+            ]
+        )
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 1
+    assert summary.processed >= 1
+    assert summary.discovered_seeds >= 5
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "asar-owner@acme.example" in emails
+        assert "asar-package@acme.example" in emails
+        assert "escaped-asar@acme.example" not in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("asar-owner@acme.example", "email") in seeds
+        assert ("asar-package@acme.example", "email") in seeds
+        assert ("https://electron.acme.example/api", "url") in seeds
+        assert ("https://asarworkspace.supabase.co/rest/v1/events", "url") in seeds
+        assert ("https://downloads.acme.example/client.apk", "apk_url") in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-asar-bucket") in cloud_assets
+        assert ("firebase", "asar-firebase") in cloud_assets
+        assert ("gcs", "acme-asar-gcs") in cloud_assets
+        assert ("supabase", "asarworkspace") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[asar_path.resolve().as_posix()]["format"] == "asar"
+        assert artifact_meta[asar_path.resolve().as_posix()]["payload_count"] >= 2
+    finally:
+        con.close()
+
+
+def run_queue_processor_extracts_nested_electron_asar_static_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_nested_asar"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    bundle_path = artifact_root / "electron-release.zip"
+    nested_asar = _asar_bytes(
+        [
+            (
+                "dist/preload.js",
+                b"\n".join(
+                    [
+                        b"const owner = 'nested-asar-owner@acme.example';",
+                        b"const api = 'https://nested-asar.acme.example/api';",
+                        b"const firebase = 'https://nested-asar-firebase.firebaseio.com';",
+                        b"const supabase = 'https://nestedasar.supabase.co/rest/v1/events';",
+                        b"const bucket = 's3://acme-nested-asar-bucket/releases/app.asar';",
+                    ]
+                ),
+            )
+        ]
+    )
+    with zipfile.ZipFile(bundle_path, "w") as zf:
+        zf.writestr("resources/app.asar", nested_asar)
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 1
+    assert summary.processed >= 1
+    assert summary.discovered_seeds >= 3
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "nested-asar-owner@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("nested-asar-owner@acme.example", "email") in seeds
+        assert ("https://nested-asar.acme.example/api", "url") in seeds
+        assert ("https://nestedasar.supabase.co/rest/v1/events", "url") in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-nested-asar-bucket") in cloud_assets
+        assert ("firebase", "nested-asar-firebase") in cloud_assets
+        assert ("supabase", "nestedasar") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[bundle_path.resolve().as_posix()]["format"] == "zip"
+        assert artifact_meta[bundle_path.resolve().as_posix()]["payload_count"] >= 1
+    finally:
+        con.close()
 
 
 def run_js_runtime_text_structured_payload_uses_bounded_workers_and_preserves_order(

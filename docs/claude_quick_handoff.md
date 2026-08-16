@@ -32,6 +32,19 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Electron ASAR artifact-ingestion regression
+modularization is complete.
+`tests/phase1/js_runtime_artifact_cases.py` now also owns the direct and nested
+Electron ASAR fixtures plus the small ASAR byte builder they need, while the
+original pytest nodes remain thin wrappers in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for nested
+ASAR payload extraction, traversal escape exclusion, APK URL seed promotion,
+email/URL seed promotion, and S3/GCS/Firebase/Supabase asset detection without
+changing production parser behavior, live probing, provider calls, credential
+use, scope, validation/report gates, scheduler behavior, or persistent non-test
+engagement data. Verification passed for the preserved wrappers plus adjacent
+JS runtime helper wrapper (`3 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B452.
 Latest checkpoint (2026-08-16): Debian/IPK and CPIO package
 artifact-ingestion regression modularization is complete.
 `tests/phase1/package_manager_artifact_cases.py` now also owns the Debian,
