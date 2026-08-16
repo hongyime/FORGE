@@ -155,6 +155,7 @@ from tests.phase1.package_manager_artifact_cases import (
     run_jvm_build_metadata_text_artifacts,
     run_maven_xml_structured_payload_uses_bounded_workers_and_preserves_order,
     run_os_package_repository_artifacts,
+    run_package_archive_artifacts,
     run_package_manager_credential_configs,
     run_package_index_url_credentials,
 )
@@ -27490,147 +27491,7 @@ def test_artifact_ssh_host_seed_extraction_uses_bounded_static_workers_and_prese
 def test_artifact_queue_processor_extracts_package_archive_artifacts(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_package_archives"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    wheel_path = artifact_root / "acme_portal-1.0.0-py3-none-any.whl"
-    with zipfile.ZipFile(wheel_path, "w") as zf:
-        zf.writestr(
-            "acme_portal/config.json",
-            json.dumps(
-                {
-                    "owner": "wheel-owner@acme.example",
-                    "portal": "https://wheel.acme.example/app",
-                    "firebase": "https://wheel-firebase.firebaseio.com",
-                    "supabaseUrl": "https://wheelworkspace.supabase.co",
-                    "s3": "s3://acme-wheel-bucket/releases/app.whl",
-                }
-            ),
-        )
-
-    nupkg_path = artifact_root / "Acme.Portal.1.0.0.nupkg"
-    with zipfile.ZipFile(nupkg_path, "w") as zf:
-        zf.writestr(
-            "contentFiles/any/any/appsettings.json",
-            json.dumps(
-                {
-                    "owner": "nupkg-owner@acme.example",
-                    "endpoint": "https://nupkg.acme.example/api",
-                    "gcs": "gs://acme-nupkg-gcs/releases/package.json",
-                }
-            ),
-        )
-
-    vsix_path = artifact_root / "acme-tools.vsix"
-    with zipfile.ZipFile(vsix_path, "w") as zf:
-        zf.writestr(
-            "extension/package.json",
-            json.dumps(
-                {
-                    "publisher": "acme",
-                    "owner": "vsix-owner@acme.example",
-                    "gallery": "https://vsix.acme.example/extension",
-                    "storage": "https://vsixblob.blob.core.windows.net/public/extension.json",
-                }
-            ),
-        )
-
-    crate_path = artifact_root / "acme-crate-1.0.0.crate"
-    with tarfile.open(crate_path, "w:gz") as tf:
-        payload = (
-            dedent(
-                """
-            crate-owner@acme.example
-            https://crate.acme.example/docs
-            https://crate-space.sgp1.digitaloceanspaces.com/releases/latest.json
-            """
-            )
-            .strip()
-            .encode("utf-8")
-        )
-        info = tarfile.TarInfo("acme-crate-1.0.0/src/config.rs")
-        info.size = len(payload)
-        tf.addfile(info, BytesIO(payload))
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 4
-    assert summary.processed >= 4
-    assert summary.firebase_projects >= 1
-    assert summary.discovered_seeds >= 8
-
-    con = sqlite3.connect(db_path)
-    try:
-        emails = {
-            row[0]
-            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
-        }
-        assert "wheel-owner@acme.example" in emails
-        assert "nupkg-owner@acme.example" in emails
-        assert "vsix-owner@acme.example" in emails
-        assert "crate-owner@acme.example" in emails
-
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("https://wheel.acme.example/app", "url") in seeds
-        assert ("https://wheel-firebase.firebaseio.com", "url") in seeds
-        assert ("https://wheelworkspace.supabase.co", "url") in seeds
-        assert ("https://nupkg.acme.example/api", "url") in seeds
-        assert ("https://vsix.acme.example/extension", "url") in seeds
-        assert ("https://vsixblob.blob.core.windows.net/public/extension.json", "url") in seeds
-        assert ("https://crate.acme.example/docs", "url") in seeds
-        assert (
-            "https://crate-space.sgp1.digitaloceanspaces.com/releases/latest.json",
-            "url",
-        ) in seeds
-        assert ("wheel-owner@acme.example", "email") in seeds
-        assert ("crate-owner@acme.example", "email") in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-wheel-bucket") in cloud_assets
-        assert ("azure_blob", "vsixblob/public") in cloud_assets
-        assert ("do_spaces", "sgp1/crate-space") in cloud_assets
-        assert ("firebase", "wheel-firebase") in cloud_assets
-        assert ("gcs", "acme-nupkg-gcs") in cloud_assets
-        assert ("supabase", "wheelworkspace") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[wheel_path.resolve().as_posix()]["format"] == "whl"
-        assert artifact_meta[nupkg_path.resolve().as_posix()]["format"] == "nupkg"
-        assert artifact_meta[vsix_path.resolve().as_posix()]["format"] == "vsix"
-        assert artifact_meta[crate_path.resolve().as_posix()]["format"] == "crate"
-        assert artifact_meta[wheel_path.resolve().as_posix()]["payload_count"] >= 1
-        assert artifact_meta[crate_path.resolve().as_posix()]["payload_count"] >= 1
-    finally:
-        con.close()
+    run_package_archive_artifacts(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_debian_and_ipk_package_artifacts(
