@@ -240,6 +240,7 @@ from tests.phase1.document_artifact_cases import (
     run_email_part_payload_entries_parallel_order,
     run_email_part_planning_parallel_order,
     run_email_metadata_lines_parallel_order,
+    run_email_summary_and_part_families_parallel_order,
     run_eml_bodies_and_nested_attachments,
     run_epub_findings,
     run_mhtml_findings,
@@ -27965,83 +27966,7 @@ def test_artifact_queue_processor_parallelizes_email_summary_and_part_families_a
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    eml_path = tmp_path / "parallel-families.eml"
-
-    message = EmailMessage()
-    message["Subject"] = "Parallel families"
-    message["From"] = "family-owner@acme.example"
-    message["To"] = "ops@acme.example"
-    message.set_content("Family body")
-    eml_path.write_bytes(message.as_bytes())
-
-    active = 0
-    peak = 0
-    lock = threading.Lock()
-
-    def _fake_extract_email_message_summary_payloads(
-        _self,
-        metadata_lines,
-        *,
-        source_file: str,
-        member_name: str,
-    ) -> list[tuple[str, str, str]]:  # noqa: ANN001
-        del metadata_lines
-        nonlocal active, peak
-        with lock:
-            active += 1
-            peak = max(peak, active)
-        try:
-            time.sleep(0.05)
-            return [(source_file, f"{member_name}#message-meta", "subject=Parallel families")]
-        finally:
-            with lock:
-                active -= 1
-
-    def _fake_extract_email_message_part_payloads(
-        _self,
-        leaf_parts,
-        *,
-        source_file: str,
-        member_name: str,
-        depth: int,
-    ) -> list[tuple[str, str, str]]:  # noqa: ANN001
-        del leaf_parts, depth
-        nonlocal active, peak
-        with lock:
-            active += 1
-            peak = max(peak, active)
-        try:
-            time.sleep(0.01)
-            return [(source_file, f"{member_name}.part-1.txt", "family-body@acme.example")]
-        finally:
-            with lock:
-                active -= 1
-
-    monkeypatch.setattr(
-        ArtifactQueueProcessor,
-        "_extract_email_message_summary_payloads",
-        _fake_extract_email_message_summary_payloads,
-    )
-    monkeypatch.setattr(
-        ArtifactQueueProcessor,
-        "_extract_email_message_part_payloads",
-        _fake_extract_email_message_part_payloads,
-    )
-
-    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=2)
-    payloads = processor._extract_email_message_payloads(
-        eml_path.read_bytes(),
-        str(eml_path),
-        eml_path.name,
-        depth=0,
-    )
-
-    assert peak == 2
-    assert payloads == [
-        (str(eml_path), f"{eml_path.name}#message-meta", "subject=Parallel families"),
-        (str(eml_path), f"{eml_path.name}.part-1.txt", "family-body@acme.example"),
-    ]
+    run_email_summary_and_part_families_parallel_order(tmp_path, monkeypatch)
 
 
 def test_artifact_queue_processor_parallelizes_email_payload_family_entries_and_preserves_order(

@@ -90,6 +90,24 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Email summary/part family concurrency modularization checkpoint
+  (2026-08-16): the email summary/part-family fixture now lives in
+  `tests/phase1/document_artifact_cases.py`, with the original pytest node
+  retained as a thin wrapper in the Phase 1 mega test. This keeps coverage for
+  parallel message summary and leaf-part extraction families, metadata payload
+  routing, body part payload routing, bounded worker fanout, and result order
+  preservation while reducing inline fixture weight in
+  `tests/phase1/test_engagement_orchestrator.py`. Files:
+  `tests/phase1/test_engagement_orchestrator.py`,
+  `tests/phase1/document_artifact_cases.py`, `SPEC.md`,
+  `docs/claude_quick_handoff.md`, and this tasklist. Verification: preserved
+  wrapper plus adjacent email metadata-line and email payload family entry
+  wrappers -> `3 passed`; Ruff and `py_compile` passed for touched Python
+  files. Safety note: test modularization only; no production parser behavior,
+  live probing, provider calls, credential use, scope changes,
+  validation/report gates, scheduler behavior, or persistent non-test
+  engagement data changed.
+
 - [x] Email metadata-line concurrency modularization checkpoint
   (2026-08-16): the email metadata-line fixture now lives in
   `tests/phase1/document_artifact_cases.py`, with the original pytest node
