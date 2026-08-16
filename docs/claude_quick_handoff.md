@@ -32,6 +32,19 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Managed-hosting artifact promotion regression
+modularization is complete.
+`tests/phase1/managed_hosting_artifact_cases.py` now owns the
+Vercel/Netlify/Amplify/GCP/GitHub/GitLab hosting endpoint fixture, while the
+original pytest node remains a thin wrapper in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for
+provider-specific cloud asset promotion and public-host root/domain
+non-promotion without changing production parser behavior, live probing,
+provider calls, credential use, scope, validation/report gates, scheduler
+behavior, or persistent non-test engagement data. Verification passed for the
+preserved wrapper plus adjacent firmware-image/bundle archive wrappers (`3
+passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B468.
 Latest checkpoint (2026-08-16): Firmware image artifact-ingestion regression
 modularization is complete.
 `tests/phase1/firmware_binary_artifact_cases.py` now also owns the `.fw`,
