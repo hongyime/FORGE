@@ -1148,3 +1148,106 @@ def run_email_summary_and_part_families_parallel_order(
         (str(eml_path), f"{eml_path.name}#message-meta", "subject=Parallel families"),
         (str(eml_path), f"{eml_path.name}.part-1.txt", "family-body@acme.example"),
     ]
+
+
+def run_email_payload_family_entries_parallel_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    db_path = tmp_path / "engagement.db"
+    eml_path = tmp_path / "parallel-family-entries.eml"
+
+    message = EmailMessage()
+    message["Subject"] = "Parallel family entries"
+    message["From"] = "family-owner@acme.example"
+    message["To"] = "ops@acme.example"
+    message.set_content("Family body")
+    eml_path.write_bytes(message.as_bytes())
+
+    delays = {
+        0: 0.05,
+        1: 0.01,
+    }
+    active = 0
+    peak = 0
+    entered = 0
+    lock = threading.Lock()
+    gate = threading.Event()
+    original_entry = ArtifactQueueProcessor._artifact_payload_tuple_batch_entries
+
+    def _tracking_entry(payload_batch):  # noqa: ANN001
+        nonlocal active, peak, entered
+        batch_index, _batch = payload_batch
+        with lock:
+            active += 1
+            peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 2:
+                gate.set()
+        try:
+            if current_entered <= 2:
+                assert gate.wait(timeout=1.0)
+            time.sleep(delays[batch_index])
+            return original_entry(payload_batch)
+        finally:
+            with lock:
+                active -= 1
+
+    def _fake_extract_email_message_summary_payloads(
+        _self,
+        metadata_lines,
+        *,
+        source_file: str,
+        member_name: str,
+    ) -> list[tuple[str, str, str]]:  # noqa: ANN001
+        assert "subject=Parallel family entries" in metadata_lines
+        return [
+            (source_file, f"{member_name}#message-meta", "summary"),
+            ("", "ignored", "ignored"),
+        ]
+
+    def _fake_extract_email_message_part_payloads(
+        _self,
+        leaf_parts,
+        *,
+        source_file: str,
+        member_name: str,
+        depth: int,
+    ) -> list[tuple[str, str, str]]:  # noqa: ANN001
+        assert len(leaf_parts) == 1
+        assert depth == 0
+        return [
+            (source_file, f"{member_name}.part-1.txt", "family-body@acme.example"),
+            (source_file, f"{member_name}.part-empty.txt", ""),
+        ]
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_artifact_payload_tuple_batch_entries",
+        staticmethod(_tracking_entry),
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_email_message_summary_payloads",
+        _fake_extract_email_message_summary_payloads,
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_email_message_part_payloads",
+        _fake_extract_email_message_part_payloads,
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=4)
+    payloads = processor._extract_email_message_payloads(
+        eml_path.read_bytes(),
+        str(eml_path),
+        eml_path.name,
+        depth=0,
+    )
+
+    assert peak == 2
+    assert payloads == [
+        (str(eml_path), f"{eml_path.name}#message-meta", "summary"),
+        (str(eml_path), f"{eml_path.name}.part-1.txt", "family-body@acme.example"),
+    ]
