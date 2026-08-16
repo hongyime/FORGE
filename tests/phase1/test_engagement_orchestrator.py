@@ -236,6 +236,7 @@ from tests.phase1.browser_extension_artifact_cases import (
 )
 from tests.phase1.document_artifact_cases import (
     run_email_attachment_parts_parallel_order,
+    run_email_part_decoding_parallel_charset_order,
     run_email_part_payload_entries_parallel_order,
     run_email_part_planning_parallel_order,
     run_eml_bodies_and_nested_attachments,
@@ -27950,48 +27951,7 @@ def test_artifact_queue_processor_parallelizes_nested_email_payload_entries_and_
 def test_artifact_queue_processor_parallelizes_email_part_decoding_and_preserves_charset_order(
     monkeypatch,
 ) -> None:
-    class _FakePart:
-        def get_content_charset(self) -> str:
-            return "x-invalid-charset"
-
-    active = 0
-    peak = 0
-    lock = threading.Lock()
-    delays = {
-        "x-invalid-charset": 0.05,
-        "utf-8": 0.01,
-        "latin-1": 0.03,
-    }
-    decoded = {
-        "x-invalid-charset": None,
-        "utf-8": "owner@acme.example",
-        "latin-1": "late-latin@acme.example",
-    }
-
-    def _fake_decode_email_part_entry(entry: tuple[str, bytes]) -> str | None:
-        encoding, bounded = entry
-        assert bounded == b"mail-bytes"
-        nonlocal active, peak
-        with lock:
-            active += 1
-            peak = max(peak, active)
-        try:
-            time.sleep(delays[encoding])
-            return decoded[encoding]
-        finally:
-            with lock:
-                active -= 1
-
-    monkeypatch.setattr(
-        ArtifactQueueProcessor,
-        "_decode_email_part_entry",
-        staticmethod(_fake_decode_email_part_entry),
-    )
-
-    text = ArtifactQueueProcessor._decode_email_part_text(_FakePart(), b"mail-bytes")
-
-    assert peak == 3
-    assert text == "owner@acme.example"
+    run_email_part_decoding_parallel_charset_order(monkeypatch)
 
 
 def test_artifact_queue_processor_parallelizes_email_metadata_lines_and_preserves_order(
