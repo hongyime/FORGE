@@ -32,6 +32,19 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Dependency lock and manifest
+artifact-ingestion regression modularization is complete.
+`tests/phase1/package_manager_artifact_cases.py` now also owns the Yarn lock,
+Pipfile, go.sum/go.work, Gradle lockfile, OPAM, Dune, Cabal, Bun lock, and
+nested Cargo lock fixture, while the original pytest node remains a thin
+wrapper in `tests/phase1/test_engagement_orchestrator.py`. This keeps coverage
+for dependency manifest labels, nested ZIP payload extraction, email/URL seed
+promotion, and S3/GCS/Firebase/Supabase asset detection without changing
+production parser behavior, live probing, provider calls, credential use,
+scope, validation/report gates, scheduler behavior, or persistent non-test
+engagement data. Verification passed for the preserved wrapper plus adjacent
+package-manager helper wrappers (`3 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B448.
 Latest checkpoint (2026-08-16): CI test and coverage report
 artifact-ingestion regression modularization is complete.
 `tests/phase1/ci_workflow_artifact_cases.py` now also owns the LCOV, TRX, TAP,
