@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import zipfile
 from pathlib import Path
 
 from forge.engagement_orchestrator import ArtifactQueueProcessor
@@ -280,5 +281,95 @@ def run_model_binary_static_artifacts(tmp_path: Path) -> None:
         assert artifact_meta[pickle_path.resolve().as_posix()]["payload_count"] >= 1
         assert artifact_meta[torch_path.resolve().as_posix()]["format"] == "pt"
         assert artifact_meta[torch_path.resolve().as_posix()]["payload_count"] >= 1
+    finally:
+        con.close()
+
+
+def run_keras_model_archive_static_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_keras_model_archives"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    keras_path = artifact_root / "fraud-model.keras"
+    config_payload = {
+        "owner": "keras-config@acme.example",
+        "servingUrl": "https://keras.acme.example/models/fraud",
+        "firebase": "https://keras-firebase.firebaseio.com",
+    }
+    h5_payload = (
+        b"\x89HDF\r\n\x1a\n"
+        b"keras-weights@acme.example\x00"
+        b"https://kerasweights.acme.example/assets\x00"
+        b"s3://acme-keras-weights/weights/fraud.h5\x00"
+        b"gs://acme-keras-gcs/models/fraud.json\x00"
+        b"https://kerasvault.supabase.co/rest/v1/models\x00"
+    )
+    with zipfile.ZipFile(keras_path, "w") as zf:
+        zf.writestr("metadata.json", json.dumps({"keras_version": "3.0.0"}, sort_keys=True))
+        zf.writestr("config.json", json.dumps(config_payload, sort_keys=True))
+        zf.writestr("model.weights.h5", h5_payload)
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued == 1
+    assert summary.processed == 1
+    assert summary.discovered_seeds >= 4
+    assert summary.firebase_projects >= 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "keras-config@acme.example" in emails
+        assert "keras-weights@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("keras-config@acme.example", "email") in seeds
+        assert ("keras-weights@acme.example", "email") in seeds
+        assert ("https://keras.acme.example/models/fraud", "url") in seeds
+        assert ("https://kerasweights.acme.example/assets", "url") in seeds
+        assert ("https://kerasvault.supabase.co/rest/v1/models", "url") in seeds
+
+        cloud_assets = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT asset_type, identifier
+                FROM cloud_assets
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("aws_s3", "acme-keras-weights") in cloud_assets
+        assert ("firebase", "keras-firebase") in cloud_assets
+        assert ("gcs", "acme-keras-gcs") in cloud_assets
+        assert ("supabase", "kerasvault") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[keras_path.resolve().as_posix()]["format"] == "keras"
+        assert artifact_meta[keras_path.resolve().as_posix()]["payload_count"] >= 2
     finally:
         con.close()
