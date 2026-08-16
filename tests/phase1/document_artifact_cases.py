@@ -440,3 +440,164 @@ def run_email_attachment_parts_parallel_order(tmp_path: Path, monkeypatch) -> No
         (str(eml_path), "attachment-2.bin", "attachment-two@acme.example"),
         (str(eml_path), "attachment-3.bin", "attachment-three@acme.example"),
     ]
+
+
+def run_email_part_planning_parallel_order(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    db_path = tmp_path / "engagement.db"
+    source_file = str(tmp_path / "planned-message.eml")
+    member_name = "planned-message.eml"
+    delays = {
+        1: 0.05,
+        2: 0.01,
+        3: 0.03,
+        4: 0.02,
+        5: 0.04,
+    }
+    active = 0
+    peak = 0
+    entered = 0
+    lock = threading.Lock()
+    gate = threading.Event()
+    original_entry = ArtifactQueueProcessor._email_message_part_entry
+
+    class _FakeNestedMessage:
+        def __init__(self, label: str) -> None:
+            self.label = label
+
+        def as_bytes(self, policy=None) -> bytes:  # noqa: ANN001
+            del policy
+            return f"payload-{self.label}".encode("utf-8")
+
+    class _FakePart:
+        def __init__(
+            self,
+            *,
+            content_type: str,
+            filename: str = "",
+            payload_bytes: bytes | None = None,
+            raw_payload: str | None = None,
+            nested_messages=None,  # noqa: ANN001
+            charset: str = "utf-8",
+        ) -> None:
+            self._content_type = content_type
+            self._filename = filename
+            self._payload_bytes = payload_bytes
+            self._raw_payload = raw_payload
+            self._nested_messages = list(nested_messages or [])
+            self._charset = charset
+
+        def get_content_type(self) -> str:
+            return self._content_type
+
+        def get_filename(self) -> str:
+            return self._filename
+
+        def get_payload(self, decode: bool = False):  # noqa: ANN201
+            if self._content_type == "message/rfc822":
+                return None if decode else list(self._nested_messages)
+            if decode:
+                return self._payload_bytes
+            if self._raw_payload is not None:
+                return self._raw_payload
+            return self._payload_bytes
+
+        def get_content_charset(self) -> str:
+            return self._charset
+
+    def _tracking_entry(
+        self,
+        part_job,
+        *,
+        source_file: str,
+        member_name: str,
+        depth: int,
+    ):  # noqa: ANN001
+        nonlocal active, peak, entered
+        part_index, _part = part_job
+        with lock:
+            active += 1
+            peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 4:
+                gate.set()
+        try:
+            if current_entered <= 4:
+                assert gate.wait(timeout=1.0)
+            time.sleep(delays[part_index])
+            return original_entry(
+                self,
+                part_job,
+                source_file=source_file,
+                member_name=member_name,
+                depth=depth,
+            )
+        finally:
+            with lock:
+                active -= 1
+
+    def _fake_extract_email_part_job(
+        _self,
+        job,
+    ) -> list[tuple[str, str, str]]:  # noqa: ANN001
+        if job.member_name == "attachment-2.bin":
+            assert job.payload_bytes == b"attachment-two"
+            assert job.nested_messages == []
+            return [(job.source_file, job.member_name, "attachment-two@acme.example")]
+        if job.member_name == "forwarded.eml":
+            assert job.payload_bytes is None
+            assert job.nested_messages == [("forwarded.eml", b"payload-forward-1")]
+            return [(job.source_file, job.member_name, "forwarded@acme.example")]
+        if job.member_name == "attachment-5.bin":
+            assert job.payload_bytes == b"attachment-five"
+            assert job.nested_messages == []
+            return [(job.source_file, job.member_name, "attachment-five@acme.example")]
+        raise AssertionError(f"unexpected job {job.member_name}")
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_email_message_part_entry",
+        _tracking_entry,
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_email_part_job",
+        _fake_extract_email_part_job,
+    )
+
+    leaf_parts = [
+        _FakePart(content_type="text/plain", payload_bytes=b"plain-one@acme.example"),
+        _FakePart(
+            content_type="application/octet-stream",
+            filename="attachment-2.bin",
+            payload_bytes=b"attachment-two",
+        ),
+        _FakePart(
+            content_type="message/rfc822",
+            filename="forwarded.eml",
+            nested_messages=[_FakeNestedMessage("forward-1")],
+        ),
+        _FakePart(content_type="text/html", payload_bytes=b"<p>html-four@acme.example</p>"),
+        _FakePart(
+            content_type="application/octet-stream",
+            filename="attachment-5.bin",
+            payload_bytes=b"attachment-five",
+        ),
+    ]
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=8)
+    payloads = processor._extract_email_message_part_payloads(
+        leaf_parts,
+        source_file=source_file,
+        member_name=member_name,
+        depth=1,
+    )
+
+    assert peak >= 4
+    assert payloads == [
+        (source_file, f"{member_name}.part-1.txt", "plain-one@acme.example"),
+        (source_file, "attachment-2.bin", "attachment-two@acme.example"),
+        (source_file, "forwarded.eml", "forwarded@acme.example"),
+        (source_file, f"{member_name}.part-4.html", "<p>html-four@acme.example</p>"),
+        (source_file, "attachment-5.bin", "attachment-five@acme.example"),
+    ]
