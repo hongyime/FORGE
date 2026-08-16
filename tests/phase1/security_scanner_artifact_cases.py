@@ -663,3 +663,90 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
     assert "clair-db-password-do-not-store" not in db_dump
     assert "cve-bin-tool-api-key-do-not-store" not in db_dump
     assert "detect-token-do-not-store" not in db_dump
+
+
+def run_queue_processor_extracts_sarif_scan_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_sarif"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    sarif_path = artifact_root / "security-results.sarif"
+    sarif_path.write_text(
+        json.dumps(
+            {
+                "version": "2.1.0",
+                "runs": [
+                    {
+                        "tool": {"driver": {"name": "FORGE Static Analyzer"}},
+                        "results": [
+                            {
+                                "message": {
+                                    "text": (
+                                        "Owner sarif-owner@acme.example exposed "
+                                        "https://sarif.acme.example/finding "
+                                        "with firebase https://sarif-firebase.firebaseio.com "
+                                        "and bucket s3://acme-sarif-bucket/reports/latest.pdf"
+                                    )
+                                },
+                                "locations": [
+                                    {
+                                        "physicalLocation": {
+                                            "artifactLocation": {
+                                                "uri": "https://sarif.acme.example/app/config.js"
+                                            }
+                                        }
+                                    }
+                                ],
+                            },
+                            {
+                                "message": {
+                                    "text": (
+                                        "SUPABASE_URL=https://sarifworkspace.supabase.co "
+                                        "SUPABASE_ANON_KEY="
+                                        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+                                        "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhcmlmd29ya3NwYWNlIiwicm9sZSI6ImFub24ifQ.signature888"
+                                    )
+                                },
+                            },
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 1
+    assert summary.processed >= 1
+    assert summary.firebase_projects >= 1
+    assert summary.supabase_configs >= 1
+    assert summary.discovered_seeds >= 3
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "sarif-owner@acme.example" in emails
+
+        seeds = _seed_pairs(db_path)
+        assert ("https://sarif.acme.example/finding", "url") in seeds
+        assert ("https://sarif.acme.example/app/config.js", "url") in seeds
+        assert ("sarif-owner@acme.example", "email") in seeds
+
+        cloud_assets = _cloud_assets(db_path)
+        assert ("aws_s3", "acme-sarif-bucket") in cloud_assets
+        assert ("firebase", "sarif-firebase") in cloud_assets
+        assert ("supabase", "sarifworkspace") in cloud_assets
+
+        artifact_meta = _artifact_meta(db_path)
+        assert artifact_meta[sarif_path.resolve().as_posix()]["format"] == "sarif"
+        assert artifact_meta[sarif_path.resolve().as_posix()]["payload_count"] >= 1
+    finally:
+        con.close()
