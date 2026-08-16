@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from forge.engagement_orchestrator import ArtifactQueueProcessor
+from forge.engagement_orchestrator import (
+    ArtifactQueueProcessor,
+    _classify_remote_artifact_url,
+    _suffix_from_content_type,
+)
 from tests.phase1.artifact_test_support import bootstrap_engagement
 
 
@@ -211,5 +215,118 @@ def run_zip_backed_bundle_archives(tmp_path: Path) -> None:
         assert artifact_meta[aar_path.resolve().as_posix()]["format"] == "aar"
         assert artifact_meta[war_path.resolve().as_posix()]["format"] == "war"
         assert artifact_meta[jar_path.resolve().as_posix()]["format"] == "jar"
+    finally:
+        con.close()
+
+
+def run_disk_image_binary_string_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_disk_images"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    dmg_path = artifact_root / "AcmeInstaller.dmg"
+    dmg_path.write_bytes(
+        b"koly\x00"
+        b"dmg-owner@acme.example\x00"
+        b"https://dmg.acme.example/install\x00"
+        b"https://dmg-firebase.firebaseio.com\x00"
+        b"https://dmgvault.supabase.co/rest/v1/installers\x00"
+        b"s3://acme-dmg-bucket/releases/AcmeInstaller.dmg\x00"
+    )
+
+    iso_path = artifact_root / "support-tools.iso"
+    iso_path.write_bytes(
+        b"CD001\x00iso-owner@acme.example\x00gs://acme-iso-gcs/releases/support-tools.iso\x00"
+    )
+
+    bundle_path = artifact_root / "disk-image-bundle.zip"
+    with zipfile.ZipFile(bundle_path, "w") as zf:
+        zf.writestr(
+            "media/nested-recovery.iso",
+            (
+                b"CD001\x00"
+                b"nested-iso@acme.example\x00"
+                b"https://nested-iso.acme.example/recover\x00"
+                b"https://nested-iso-firebase.firebaseio.com\x00"
+            ),
+        )
+
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/AcmeInstaller.dmg")
+        == "document"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/support-tools.iso?dl=1")
+        == "document"
+    )
+    assert _suffix_from_content_type("application/x-apple-diskimage") == ".dmg"
+    assert _suffix_from_content_type("application/x-iso9660-image") == ".iso"
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 3
+    assert summary.processed >= 3
+    assert summary.discovered_seeds >= 6
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "dmg-owner@acme.example" in emails
+        assert "iso-owner@acme.example" in emails
+        assert "nested-iso@acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("dmg-owner@acme.example", "email") in seeds
+        assert ("iso-owner@acme.example", "email") in seeds
+        assert ("nested-iso@acme.example", "email") in seeds
+        assert ("https://dmg.acme.example/install", "url") in seeds
+        assert ("https://nested-iso.acme.example/recover", "url") in seeds
+        assert ("https://dmgvault.supabase.co/rest/v1/installers", "url") in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-dmg-bucket") in cloud_assets
+        assert ("firebase", "dmg-firebase") in cloud_assets
+        assert ("firebase", "nested-iso-firebase") in cloud_assets
+        assert ("gcs", "acme-iso-gcs") in cloud_assets
+        assert ("supabase", "dmgvault") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[dmg_path.resolve().as_posix()]["format"] == "dmg"
+        assert artifact_meta[dmg_path.resolve().as_posix()]["payload_count"] >= 1
+        assert artifact_meta[iso_path.resolve().as_posix()]["format"] == "iso"
+        assert artifact_meta[iso_path.resolve().as_posix()]["payload_count"] >= 1
+        assert artifact_meta[bundle_path.resolve().as_posix()]["format"] == "zip"
+        assert artifact_meta[bundle_path.resolve().as_posix()]["payload_count"] >= 1
     finally:
         con.close()
