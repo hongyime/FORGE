@@ -234,6 +234,7 @@ from tests.phase1.windows_event_artifact_cases import (
 from tests.phase1.browser_extension_artifact_cases import (
     run_browser_extension_packages,
 )
+from tests.phase1.document_artifact_cases import run_epub_findings
 from tests.phase1.nested_mobile_artifact_cases import (
     run_android_app_bundle_findings,
     run_nested_archive_style_mobile_bundle_from_outer_archive,
@@ -27881,112 +27882,7 @@ def test_artifact_queue_processor_extracts_opendocument_spreadsheet_and_presenta
 
 
 def test_artifact_queue_processor_extracts_epub_findings(tmp_path: Path) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_epub"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    epub_path = artifact_root / "engagement-brief.epub"
-    with zipfile.ZipFile(epub_path, "w") as zf:
-        zf.writestr("mimetype", "application/epub+zip")
-        zf.writestr(
-            "META-INF/container.xml",
-            """
-            <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-              <rootfiles>
-                <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
-              </rootfiles>
-            </container>
-            """.strip(),
-        )
-        zf.writestr(
-            "OEBPS/content.opf",
-            """
-            <package version="3.0" xmlns="http://www.idpf.org/2007/opf">
-              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-                <dc:title>Acme External Surface Brief</dc:title>
-                <dc:creator>epub-meta@acme.example</dc:creator>
-              </metadata>
-            </package>
-            """.strip(),
-        )
-        zf.writestr(
-            "OEBPS/chapter1.xhtml",
-            """
-            <html xmlns="http://www.w3.org/1999/xhtml">
-              <body>
-                <p>epub-owner@acme.example</p>
-                <p>https://books.acme.example/briefing</p>
-                <p>https://acme-epub.firebaseio.com/public.json</p>
-                <p>https://storage.googleapis.com/acme-epub-public/reports/index.html</p>
-              </body>
-            </html>
-            """.strip(),
-        )
-        zf.writestr(
-            "OEBPS/toc.ncx",
-            """
-            <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
-              <docTitle><text>Acme</text></docTitle>
-            </ncx>
-            """.strip(),
-        )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 1
-    assert summary.processed >= 1
-    assert summary.discovered_seeds >= 4
-
-    con = sqlite3.connect(db_path)
-    try:
-        emails = {
-            row[0]
-            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
-        }
-        assert "epub-owner@acme.example" in emails
-        assert "epub-meta@acme.example" in emails
-
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("https://books.acme.example/briefing", "url") in seeds
-        assert ("epub-owner@acme.example", "email") in seeds
-        assert ("epub-meta@acme.example", "email") in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("firebase", "acme-epub") in cloud_assets
-        assert ("gcs", "acme-epub-public") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[epub_path.resolve().as_posix()]["format"] == "epub"
-    finally:
-        con.close()
+    run_epub_findings(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_mhtml_findings(tmp_path: Path) -> None:
