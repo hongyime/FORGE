@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
+import time
 import zipfile
 from email.message import EmailMessage
 from io import BytesIO
@@ -365,3 +367,76 @@ def run_eml_bodies_and_nested_attachments(tmp_path: Path) -> None:
         assert artifact_meta[eml_path.resolve().as_posix()]["metadata_payload_count"] >= 2
     finally:
         con.close()
+
+
+def run_email_attachment_parts_parallel_order(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    db_path = tmp_path / "engagement.db"
+    eml_path = tmp_path / "parallel-message.eml"
+
+    message = EmailMessage()
+    message["Subject"] = "Parallel attachments"
+    message["From"] = "parallel-owner@acme.example"
+    message["To"] = "ops@acme.example"
+    message.make_mixed()
+    for index in range(1, 4):
+        message.add_attachment(
+            f"attachment-{index}".encode("utf-8"),
+            maintype="application",
+            subtype="octet-stream",
+            filename=f"attachment-{index}.bin",
+        )
+    eml_path.write_bytes(message.as_bytes())
+
+    delays = {
+        "attachment-1.bin": 0.05,
+        "attachment-2.bin": 0.01,
+        "attachment-3.bin": 0.03,
+    }
+    payload_texts = {
+        "attachment-1.bin": "attachment-one@acme.example",
+        "attachment-2.bin": "attachment-two@acme.example",
+        "attachment-3.bin": "attachment-three@acme.example",
+    }
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def _fake_extract_email_part_job(
+        _self,
+        job,
+    ) -> list[tuple[str, str, str]]:  # noqa: ANN001
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(delays[job.member_name])
+            return [(job.source_file, job.member_name, payload_texts[job.member_name])]
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_email_part_job",
+        _fake_extract_email_part_job,
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=2)
+    payloads = processor._extract_email_message_payloads(
+        eml_path.read_bytes(),
+        str(eml_path),
+        eml_path.name,
+        depth=0,
+    )
+
+    assert peak == 2
+    assert payloads[0][0] == str(eml_path)
+    assert payloads[0][1] == f"{eml_path.name}#message-meta"
+    assert "subject=Parallel attachments" in payloads[0][2]
+    assert "from=parallel-owner@acme.example" in payloads[0][2]
+    assert payloads[1:] == [
+        (str(eml_path), "attachment-1.bin", "attachment-one@acme.example"),
+        (str(eml_path), "attachment-2.bin", "attachment-two@acme.example"),
+        (str(eml_path), "attachment-3.bin", "attachment-three@acme.example"),
+    ]
