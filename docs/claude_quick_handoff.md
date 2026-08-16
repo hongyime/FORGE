@@ -32,6 +32,20 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Windows event trace artifact-ingestion
+regression modularization is complete.
+`tests/phase1/windows_event_artifact_cases.py` now owns the EVTX and ETL
+fixture, while the original pytest node remains a thin wrapper in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for Windows
+event/trace remote and content-type classification, binary/UTF-16 payload
+extraction, email/URL/subdomain seed promotion, Supabase host suppression, and
+S3/GCS/Firebase/Supabase asset detection without changing production parser
+behavior, live probing, provider calls, credential use, scope,
+validation/report gates, scheduler behavior, or persistent non-test engagement
+data. Verification passed for the preserved wrapper plus adjacent registry-hive
+and Windows execution-history artifact wrappers (`3 passed`), Ruff, and
+`py_compile`.
+Backprop: `SPEC.md` B477.
 Latest checkpoint (2026-08-16): Windows registry hive artifact-ingestion
 regression modularization is complete.
 `tests/phase1/windows_registry_artifact_cases.py` now also owns the NTUSER,
