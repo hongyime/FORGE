@@ -580,3 +580,125 @@ def run_queue_processor_extracts_tech_waf_tls_scanner_outputs(
         assert "rustscan-token-do-not-store" not in db_dump
     finally:
         con.close()
+
+
+def run_queue_processor_extracts_cms_scanner_outputs(
+    tmp_path: Path,
+    bootstrap_engagement: Callable[[Path], None],
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_cms_scanner_outputs"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    wpscan_path = artifact_root / "wpscan-report.json"
+    wpscan_path.write_text(
+        json.dumps(
+            {
+                "target_url": "https://wordpress.acme.example/wp-admin?token=wp-token-do-not-store&view=public",
+                "base_url": "wordpress.acme.example",
+                "owner": "wpscan-owner@acme.example",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cmsmap_path = artifact_root / "cmsmap-output.txt"
+    cmsmap_path.write_text(
+        "https://cmsmap.acme.example/admin?api_key=cmsmap-token-do-not-store&status=open\n"
+        "cmsmap-owner@acme.example\n",
+        encoding="utf-8",
+    )
+
+    droopescan_path = artifact_root / "droopescan-results.json"
+    droopescan_path.write_text(
+        json.dumps(
+            {
+                "targetUrl": "https://drupal.acme.example/user/login?secret=drupal-token-do-not-store&mode=scan",
+                "siteUrl": "drupal.acme.example",
+                "contact": "droopescan-owner@acme.example",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    joomscan_path = artifact_root / "joomscan-report.txt"
+    joomscan_path.write_text(
+        "https://joomla.acme.example/administrator?session=joomla-token-do-not-store&check=1\n"
+        "joomscan-owner@acme.example\n",
+        encoding="utf-8",
+    )
+
+    cmseek_path = artifact_root / "cmseek-result.json"
+    cmseek_path.write_text(
+        json.dumps(
+            {
+                "site_url": "https://cmseek.acme.example/login?access_token=cmseek-token-do-not-store&result=1",
+                "scan_url": "cmseek.acme.example",
+                "email": "cmseek-owner@acme.example",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 5
+    assert summary.processed >= 5
+    assert summary.discovered_seeds >= 10
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        for expected_seed in {
+            ("https://wordpress.acme.example/wp-admin?view=public", "url"),
+            ("https://wordpress.acme.example", "url"),
+            ("https://cmsmap.acme.example/admin?status=open", "url"),
+            ("https://drupal.acme.example/user/login?mode=scan", "url"),
+            ("https://drupal.acme.example", "url"),
+            ("https://joomla.acme.example/administrator?check=1", "url"),
+            ("https://cmseek.acme.example/login?result=1", "url"),
+            ("https://cmseek.acme.example", "url"),
+            ("wpscan-owner@acme.example", "email"),
+            ("cmsmap-owner@acme.example", "email"),
+            ("droopescan-owner@acme.example", "email"),
+            ("joomscan-owner@acme.example", "email"),
+            ("cmseek-owner@acme.example", "email"),
+        }:
+            assert expected_seed in seeds
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[wpscan_path.resolve().as_posix()]["format"] == "wpscan-output"
+        assert artifact_meta[cmsmap_path.resolve().as_posix()]["format"] == "cmsmap-output"
+        assert artifact_meta[droopescan_path.resolve().as_posix()]["format"] == "droopescan-output"
+        assert artifact_meta[joomscan_path.resolve().as_posix()]["format"] == "joomscan-output"
+        assert artifact_meta[cmseek_path.resolve().as_posix()]["format"] == "cmseek-output"
+
+        db_dump = "\n".join(con.iterdump())
+        assert "wp-token-do-not-store" not in db_dump
+        assert "cmsmap-token-do-not-store" not in db_dump
+        assert "drupal-token-do-not-store" not in db_dump
+        assert "joomla-token-do-not-store" not in db_dump
+        assert "cmseek-token-do-not-store" not in db_dump
+    finally:
+        con.close()
