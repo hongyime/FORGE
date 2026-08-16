@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import json
 import sqlite3
+import threading
+import time
 import zipfile
 from pathlib import Path
 from textwrap import dedent
@@ -491,3 +493,65 @@ def run_burp_site_map_xml_artifacts(tmp_path: Path) -> None:
         assert artifact_meta[burp_path.resolve().as_posix()]["payload_count"] >= 1
     finally:
         con.close()
+
+
+def run_har_entries_parallel_order(tmp_path: Path, monkeypatch: Any) -> None:
+    db_path = tmp_path / "engagement.db"
+    payload = {
+        "log": {
+            "version": "1.2",
+            "entries": [
+                {"request": {"url": "https://one.acme.example"}},
+                {"request": {"url": "https://two.acme.example"}},
+                {"request": {"url": "https://three.acme.example"}},
+            ],
+        }
+    }
+    delays = {
+        1: 0.05,
+        2: 0.01,
+        3: 0.03,
+    }
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def _fake_extract_har_entry_payload(
+        _self,
+        job,
+    ) -> tuple[str, str, str]:  # noqa: ANN001
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(delays[job.entry_index])
+            return (
+                job.source_file,
+                f"{job.member_name}#har-entry-{job.entry_index}",
+                f"entry-{job.entry_index}",
+            )
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_har_entry_payload",
+        _fake_extract_har_entry_payload,
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=2)
+    payloads = processor._har_payload_tuples(
+        payload,
+        str(tmp_path / "parallel.har"),
+        "parallel.har",
+    )
+
+    assert peak == 2
+    assert payloads == [
+        (str(tmp_path / "parallel.har"), "parallel.har#har-summary", "log.version=1.2\nentries=3"),
+        (str(tmp_path / "parallel.har"), "parallel.har#har-entry-1", "entry-1"),
+        (str(tmp_path / "parallel.har"), "parallel.har#har-entry-2", "entry-2"),
+        (str(tmp_path / "parallel.har"), "parallel.har#har-entry-3", "entry-3"),
+    ]
