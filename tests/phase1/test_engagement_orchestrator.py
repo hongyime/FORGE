@@ -219,6 +219,7 @@ from tests.phase1.passive_scan_artifact_cases import (
     run_queue_processor_extracts_imported_scanner_json_outputs,
     run_queue_processor_extracts_passive_scan_output_artifacts,
     run_queue_processor_extracts_screenshot_tool_outputs,
+    run_queue_processor_extracts_tech_waf_tls_scanner_outputs,
 )
 from tests.phase1.graphql_config_artifact_cases import (
     run_graphql_config_text_structured_payload_uses_bounded_workers_and_preserves_order,
@@ -27414,163 +27415,10 @@ def test_artifact_queue_processor_extracts_search_recon_provider_exports(
 def test_artifact_queue_processor_extracts_tech_waf_tls_scanner_outputs(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_tech_waf_tls_scanner_outputs"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    whatweb_path = artifact_root / "whatweb-report.json"
-    whatweb_path.write_text(
-        json.dumps(
-            {
-                "target": "https://whatweb.acme.example/login?token=whatweb-token-do-not-store&view=public",
-                "plugins": {"Title": ["Acme Portal"]},
-                "owner": "whatweb-owner@acme.example",
-            }
-        ),
-        encoding="utf-8",
+    run_queue_processor_extracts_tech_waf_tls_scanner_outputs(
+        tmp_path,
+        _bootstrap_engagement,
     )
-
-    wafw00f_path = artifact_root / "wafw00f-results.json"
-    wafw00f_path.write_text(
-        json.dumps(
-            [
-                {
-                    "url": "https://wafw00f.acme.example/?api_key=waf-token-do-not-store&status=checked",
-                    "target": "wafw00f.acme.example",
-                    "firewall": "Cloudflare",
-                    "owner": "wafw00f-owner@acme.example",
-                }
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    sslscan_path = artifact_root / "sslscan-results.xml"
-    sslscan_path.write_text(
-        """
-        <document>
-          <ssltest>
-            <host>sslscan.acme.example</host>
-            <ip>203.0.113.90</ip>
-            <url>https://sslscan.acme.example/status?session=sslscan-token-do-not-store&amp;view=tls</url>
-            <owner>sslscan-owner@acme.example</owner>
-          </ssltest>
-        </document>
-        """.strip(),
-        encoding="utf-8",
-    )
-
-    testssl_path = artifact_root / "testssl-report.json"
-    testssl_path.write_text(
-        json.dumps(
-            {
-                "targetHost": "testssl.acme.example",
-                "uri": "https://testssl.acme.example:443/health?secret=testssl-token-do-not-store&mode=passive",
-                "contact": "testssl-owner@acme.example",
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    sslyze_path = artifact_root / "sslyze-results.json"
-    sslyze_path.write_text(
-        json.dumps(
-            {
-                "server_scan_results": [
-                    {
-                        "server_location": {
-                            "hostname": "sslyze.acme.example",
-                            "port": 443,
-                        },
-                        "notes": (
-                            "Contact sslyze-owner@acme.example and review "
-                            "https://sslyze.acme.example/tls?token=sslyze-token-do-not-store&report=1"
-                        ),
-                    }
-                ]
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    rustscan_path = artifact_root / "rustscan-output.json"
-    rustscan_path.write_text(
-        json.dumps(
-            [
-                {
-                    "host": "rustscan.acme.example",
-                    "ip": "203.0.113.91",
-                    "url": "https://rustscan.acme.example:8443/status?secret=rustscan-token-do-not-store&check=1",
-                    "owner": "rustscan-owner@acme.example",
-                }
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 6
-    assert summary.processed >= 6
-    assert summary.discovered_seeds >= 12
-
-    con = sqlite3.connect(db_path)
-    try:
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        for expected_seed in {
-            ("https://whatweb.acme.example/login?view=public", "url"),
-            ("https://wafw00f.acme.example/?status=checked", "url"),
-            ("https://sslscan.acme.example/status?view=tls", "url"),
-            ("https://testssl.acme.example:443/health?mode=passive", "url"),
-            ("https://sslyze.acme.example/tls?report=1", "url"),
-            ("https://rustscan.acme.example:8443/status?check=1", "url"),
-            ("whatweb-owner@acme.example", "email"),
-            ("wafw00f-owner@acme.example", "email"),
-            ("sslscan-owner@acme.example", "email"),
-            ("testssl-owner@acme.example", "email"),
-            ("sslyze-owner@acme.example", "email"),
-            ("rustscan-owner@acme.example", "email"),
-        }:
-            assert expected_seed in seeds
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[whatweb_path.resolve().as_posix()]["format"] == "whatweb-output"
-        assert artifact_meta[wafw00f_path.resolve().as_posix()]["format"] == "wafw00f-output"
-        assert artifact_meta[sslscan_path.resolve().as_posix()]["format"] == "sslscan-output"
-        assert artifact_meta[testssl_path.resolve().as_posix()]["format"] == "testssl-output"
-        assert artifact_meta[sslyze_path.resolve().as_posix()]["format"] == "sslyze-output"
-        assert artifact_meta[rustscan_path.resolve().as_posix()]["format"] == "rustscan-output"
-
-        db_dump = "\n".join(con.iterdump())
-        assert "whatweb-token-do-not-store" not in db_dump
-        assert "waf-token-do-not-store" not in db_dump
-        assert "sslscan-token-do-not-store" not in db_dump
-        assert "testssl-token-do-not-store" not in db_dump
-        assert "sslyze-token-do-not-store" not in db_dump
-        assert "rustscan-token-do-not-store" not in db_dump
-    finally:
-        con.close()
 
 
 def test_artifact_queue_processor_extracts_cms_scanner_outputs(
