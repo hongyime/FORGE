@@ -300,6 +300,7 @@ from tests.phase1.recon_tool_artifact_cases import (
 )
 from tests.phase1.security_scanner_artifact_cases import (
     run_detect_secrets_baseline_without_secret_material,
+    run_queue_processor_extracts_sbom_and_security_tool_output_artifacts,
     run_queue_processor_extracts_sarif_scan_artifacts,
     run_security_scanner_control_files,
     run_security_scanner_policy_configs,
@@ -27448,133 +27449,7 @@ def test_artifact_queue_processor_extracts_sarif_scan_artifacts(
 def test_artifact_queue_processor_extracts_sbom_and_security_tool_output_artifacts(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_tool_outputs"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    spdx_path = artifact_root / "inventory.spdx"
-    spdx_path.write_text(
-        """
-        SPDXVersion: SPDX-2.3
-        PackageName: acme-portal
-        PackageSupplier: Person: sbom-owner@acme.example
-        ExternalRef: SECURITY cpe23Type cpe:2.3:a:acme:portal:*:*:*:*:*:*:*:*
-        ExternalRef: PACKAGE-MANAGER purl pkg:npm/%40acme/portal-ui@1.2.3?repository_url=https://repo.acme.example/portal-ui
-        ExternalRef: PACKAGE-MANAGER purl pkg:github/acme/portal-api@v2.0.0
-        ExternalRef: PACKAGE-MANAGER purl pkg:pypi/acme-client@0.9.0
-        ExternalRef: PACKAGE-MANAGER purl pkg:golang/github.com/acme/worker@v1.2.3
-        ExternalRef: PACKAGE-MANAGER purl pkg:maven/com.acme/portal-core@1.4.0
-        ExternalRef: PACKAGE-MANAGER purl pkg:docker/acme/portal-worker@sha256:abcdef
-        ExternalRef: OTHER portal https://sbom.acme.example/packages/portal
-        AnnotationComment: https://sbom-firebase.firebaseio.com s3://acme-sbom-bucket/reports/latest.pdf
-        SUPABASE_URL=https://sbomworkspace.supabase.co
-        SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNib213b3Jrc3BhY2UiLCJyb2xlIjoiYW5vbiJ9.signature101
-        """.strip(),
-        encoding="utf-8",
-    )
-
-    bundle_path = artifact_root / "tool-output-bundle.zip"
-    with zipfile.ZipFile(bundle_path, "w") as zf:
-        zf.writestr(
-            "nuclei/findings.nuclei",
-            """
-            [critical] https://nuclei.acme.example/admin owner=nuclei-owner@acme.example
-            """.strip(),
-        )
-        zf.writestr(
-            "secrets/leaks.gitleaks",
-            """
-            Finding: gitleaks-owner@acme.example https://gitleaks.acme.example/repo
-            """.strip(),
-        )
-        zf.writestr(
-            "sast/results.semgrep",
-            """
-            semgrep-owner@acme.example https://semgrep.acme.example/path
-            """.strip(),
-        )
-        zf.writestr(
-            "network/external.masscan",
-            """
-            open tcp 443 203.0.113.44 https://masscan.acme.example:443 masscan-owner@acme.example
-            """.strip(),
-        )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 2
-    assert summary.processed >= 2
-    assert summary.firebase_projects >= 1
-    assert summary.supabase_configs >= 1
-    assert summary.discovered_seeds >= 8
-
-    con = sqlite3.connect(db_path)
-    try:
-        emails = {
-            row[0]
-            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
-        }
-        assert "sbom-owner@acme.example" in emails
-        assert "nuclei-owner@acme.example" in emails
-        assert "gitleaks-owner@acme.example" in emails
-        assert "semgrep-owner@acme.example" in emails
-        assert "masscan-owner@acme.example" in emails
-
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("https://sbom.acme.example/packages/portal", "url") in seeds
-        assert ("https://nuclei.acme.example/admin", "url") in seeds
-        assert ("https://gitleaks.acme.example/repo", "url") in seeds
-        assert ("https://semgrep.acme.example/path", "url") in seeds
-        assert ("https://masscan.acme.example:443", "url") in seeds
-        assert ("https://www.npmjs.com/package/@acme/portal-ui", "url") in seeds
-        assert ("https://github.com/acme/portal-api", "url") in seeds
-        assert ("https://pypi.org/project/acme-client/", "url") in seeds
-        assert ("https://pkg.go.dev/github.com/acme/worker", "url") in seeds
-        assert ("https://central.sonatype.com/artifact/com.acme/portal-core", "url") in seeds
-        assert ("https://hub.docker.com/r/acme/portal-worker", "url") in seeds
-        assert ("sbom-owner@acme.example", "email") in seeds
-        assert ("nuclei-owner@acme.example", "email") in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-sbom-bucket") in cloud_assets
-        assert ("firebase", "sbom-firebase") in cloud_assets
-        assert ("supabase", "sbomworkspace") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[spdx_path.resolve().as_posix()]["format"] == "spdx"
-        assert artifact_meta[spdx_path.resolve().as_posix()]["payload_count"] >= 1
-        assert artifact_meta[bundle_path.resolve().as_posix()]["format"] == "zip"
-        assert artifact_meta[bundle_path.resolve().as_posix()]["payload_count"] >= 4
-    finally:
-        con.close()
+    run_queue_processor_extracts_sbom_and_security_tool_output_artifacts(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_supply_chain_attestation_and_vex_artifacts(
