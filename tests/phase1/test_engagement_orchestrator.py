@@ -234,7 +234,7 @@ from tests.phase1.windows_event_artifact_cases import (
 from tests.phase1.browser_extension_artifact_cases import (
     run_browser_extension_packages,
 )
-from tests.phase1.document_artifact_cases import run_epub_findings
+from tests.phase1.document_artifact_cases import run_epub_findings, run_mhtml_findings
 from tests.phase1.nested_mobile_artifact_cases import (
     run_android_app_bundle_findings,
     run_nested_archive_style_mobile_bundle_from_outer_archive,
@@ -27886,97 +27886,7 @@ def test_artifact_queue_processor_extracts_epub_findings(tmp_path: Path) -> None
 
 
 def test_artifact_queue_processor_extracts_mhtml_findings(tmp_path: Path) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_mhtml"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    mhtml_path = artifact_root / "engagement-brief.mhtml"
-    message = EmailMessage()
-    message["Subject"] = "Acme MHTML Brief"
-    message["From"] = "mhtml-owner@acme.example"
-    message["To"] = "ops@acme.example"
-    message.set_type("multipart/related")
-    message.add_alternative(
-        """
-        <html><body>
-        analyst@mhtml.acme.example
-        https://portal.mhtml.acme.example/report
-        https://mhtml-firebase.firebaseio.com/public.json
-        https://storage.googleapis.com/mhtml-gcs-public/reports/final.pdf
-        </body></html>
-        """.strip(),
-        subtype="html",
-    )
-    message.add_attachment(
-        """
-        SUPABASE_URL=https://mhtmlbrief.supabase.co
-        FIREBASE_DB=https://mhtml-alt.firebaseio.com
-        """.strip().encode("utf-8"),
-        maintype="text",
-        subtype="plain",
-        filename="config.txt",
-    )
-    mhtml_path.write_bytes(message.as_bytes())
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 1
-    assert summary.processed >= 1
-    assert summary.discovered_seeds >= 4
-
-    con = sqlite3.connect(db_path)
-    try:
-        emails = {
-            row[0]
-            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
-        }
-        assert "mhtml-owner@acme.example" in emails
-        assert "ops@acme.example" in emails
-        assert "analyst@mhtml.acme.example" in emails
-
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("https://portal.mhtml.acme.example/report", "url") in seeds
-        assert ("mhtml-owner@acme.example", "email") in seeds
-        assert ("ops@acme.example", "email") in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("firebase", "mhtml-firebase") in cloud_assets
-        assert ("firebase", "mhtml-alt") in cloud_assets
-        assert ("gcs", "mhtml-gcs-public") in cloud_assets
-        assert ("supabase", "mhtmlbrief") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[mhtml_path.resolve().as_posix()]["format"] == "mhtml"
-    finally:
-        con.close()
+    run_mhtml_findings(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_eml_bodies_and_nested_attachments(

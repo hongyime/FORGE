@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import zipfile
+from email.message import EmailMessage
 from pathlib import Path
 
 from forge.engagement_orchestrator import ArtifactQueueProcessor
@@ -119,5 +120,104 @@ def run_epub_findings(tmp_path: Path) -> None:
             ).fetchall()
         }
         assert artifact_meta[epub_path.resolve().as_posix()]["format"] == "epub"
+    finally:
+        con.close()
+
+
+def run_mhtml_findings(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_mhtml"
+    artifact_root.mkdir()
+    bootstrap_engagement(
+        db_path,
+        name="Acme Example",
+        scope_json='["*.acme.example","+15551234567","security@acme.example","https://downloads.acme.example/app.apk"]',
+        operator="delta-one",
+    )
+
+    mhtml_path = artifact_root / "engagement-brief.mhtml"
+    message = EmailMessage()
+    message["Subject"] = "Acme MHTML Brief"
+    message["From"] = "mhtml-owner@acme.example"
+    message["To"] = "ops@acme.example"
+    message.set_type("multipart/related")
+    message.add_alternative(
+        """
+        <html><body>
+        analyst@mhtml.acme.example
+        https://portal.mhtml.acme.example/report
+        https://mhtml-firebase.firebaseio.com/public.json
+        https://storage.googleapis.com/mhtml-gcs-public/reports/final.pdf
+        </body></html>
+        """.strip(),
+        subtype="html",
+    )
+    message.add_attachment(
+        """
+        SUPABASE_URL=https://mhtmlbrief.supabase.co
+        FIREBASE_DB=https://mhtml-alt.firebaseio.com
+        """.strip().encode("utf-8"),
+        maintype="text",
+        subtype="plain",
+        filename="config.txt",
+    )
+    mhtml_path.write_bytes(message.as_bytes())
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 1
+    assert summary.processed >= 1
+    assert summary.discovered_seeds >= 4
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
+        }
+        assert "mhtml-owner@acme.example" in emails
+        assert "ops@acme.example" in emails
+        assert "analyst@mhtml.acme.example" in emails
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("https://portal.mhtml.acme.example/report", "url") in seeds
+        assert ("mhtml-owner@acme.example", "email") in seeds
+        assert ("ops@acme.example", "email") in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("firebase", "mhtml-firebase") in cloud_assets
+        assert ("firebase", "mhtml-alt") in cloud_assets
+        assert ("gcs", "mhtml-gcs-public") in cloud_assets
+        assert ("supabase", "mhtmlbrief") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[mhtml_path.resolve().as_posix()]["format"] == "mhtml"
     finally:
         con.close()
