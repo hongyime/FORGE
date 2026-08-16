@@ -32,6 +32,19 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Nested TAR mobile worker-order regression
+modularization is complete.
+`tests/phase1/nested_mobile_artifact_cases.py` now also owns the TAR nested
+mobile member extraction fixture, while the original pytest node remains a thin
+wrapper in `tests/phase1/test_engagement_orchestrator.py`. This keeps coverage
+for TAR max-worker concurrency, result-order preservation, Firebase and
+Supabase config aggregation, and payload tuple ordering without changing
+production parser behavior, live probing, provider calls, credential use,
+scope, validation/report gates, scheduler behavior, or persistent non-test
+engagement data. Verification passed for the preserved wrapper plus adjacent
+nested ZIP job-planning and nested TAR member-planning wrappers (`3 passed`),
+Ruff, and `py_compile`.
+Backprop: `SPEC.md` B487.
 Latest checkpoint (2026-08-16): Nested ZIP mobile member-job planning
 worker-order regression modularization is complete.
 `tests/phase1/nested_mobile_artifact_cases.py` now also owns the ZIP nested

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import plistlib
 import sqlite3
+import tarfile
 import threading
 import time
 import zipfile
@@ -626,6 +627,118 @@ def run_parallelizes_nested_zip_mobile_member_job_planning_and_preserves_order(
     ]
     assert firebase_projects == []
     assert supabase_configs == []
+
+
+def run_parallelizes_nested_tar_mobile_member_extraction_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    archive_path = tmp_path / "parallel-mobile-bundle.tar"
+    member_bytes = {
+        "packages/client-1.ipa": b"ipa-one",
+        "packages/client-2.apk": b"apk-two",
+        "packages/client-3.apkm": b"apkm-three",
+    }
+    with tarfile.open(archive_path, "w") as tf:
+        for member_name, data in member_bytes.items():
+            info = tarfile.TarInfo(member_name)
+            info.size = len(data)
+            tf.addfile(info, BytesIO(data))
+
+    delays = {
+        "packages/client-1.ipa": 0.05,
+        "packages/client-2.apk": 0.01,
+        "packages/client-3.apkm": 0.03,
+    }
+    payload_texts = {
+        "packages/client-1.ipa": "nested-tar-one@acme.example",
+        "packages/client-2.apk": "nested-tar-two@acme.example",
+        "packages/client-3.apkm": "nested-tar-three@acme.example",
+    }
+    project_ids = {
+        "packages/client-1.ipa": "nested-tar-firebase-one",
+        "packages/client-2.apk": "nested-tar-firebase-two",
+        "packages/client-3.apkm": "nested-tar-firebase-three",
+    }
+    project_refs = {
+        "packages/client-1.ipa": "nestedtarone",
+        "packages/client-2.apk": "nestedtartwo",
+        "packages/client-3.apkm": "nestedtarthree",
+    }
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def fake_extract_mobile_configs_from_member_bytes(
+        _self,
+        data: bytes,
+        source_path: Path,
+        member_name: str,
+    ) -> tuple[list[tuple[str, str, str]], list[FirebaseProject], list[SupabaseConfig]]:
+        assert source_path == archive_path
+        assert data == member_bytes[member_name]
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(delays[member_name])
+            return (
+                [(str(source_path), f"{member_name}!payload.txt", payload_texts[member_name])],
+                [
+                    FirebaseProject(
+                        project_id=project_ids[member_name],
+                        api_key_enc=None,
+                        rtdb_url=None,
+                        bundle_id=None,
+                        source_file=str(source_path),
+                        extract_path=f"{member_name}!google-services.json",
+                    )
+                ],
+                [
+                    SupabaseConfig(
+                        project_ref=project_refs[member_name],
+                        project_url=f"https://{project_refs[member_name]}.supabase.co",
+                        anon_key="anon",
+                        source_file=str(source_path),
+                        extract_path=f"{member_name}!supabase.js",
+                    )
+                ],
+            )
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_extract_mobile_configs_from_member_bytes",
+        fake_extract_mobile_configs_from_member_bytes,
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=2)
+    with tarfile.open(archive_path) as tf:
+        payloads, firebase_projects, supabase_configs, mobile_members = (
+            processor._extract_nested_mobile_configs_from_tar(tf, archive_path)
+        )
+
+    assert peak == 2
+    assert mobile_members == 3
+    assert payloads == [
+        (str(archive_path), "packages/client-1.ipa!payload.txt", "nested-tar-one@acme.example"),
+        (str(archive_path), "packages/client-2.apk!payload.txt", "nested-tar-two@acme.example"),
+        (str(archive_path), "packages/client-3.apkm!payload.txt", "nested-tar-three@acme.example"),
+    ]
+    assert [project.project_id for project in firebase_projects] == [
+        "nested-tar-firebase-one",
+        "nested-tar-firebase-two",
+        "nested-tar-firebase-three",
+    ]
+    assert [config.project_ref for config in supabase_configs] == [
+        "nestedtarone",
+        "nestedtartwo",
+        "nestedtarthree",
+    ]
 
 
 def run_nested_archive_style_mobile_bundle_from_outer_archive(tmp_path: Path) -> None:
