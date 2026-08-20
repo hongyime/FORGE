@@ -435,7 +435,18 @@ def _config_checks(cfg: ForgeConfig) -> list[DoctorCheck]:
             (
                 "legacy high-risk modules disabled"
                 if cfg.safe_mode
-                else "offensive legacy modules enabled; prefer FORGE_SAFE_MODE=1 for ASM"
+                else (
+                    "full mode active: legacy Phase 3/5 modules are importable; "
+                    "set FORGE_SAFE_MODE=1 for safe/core or production ASM"
+                )
+            ),
+            (
+                ""
+                if cfg.safe_mode
+                else (
+                    "Keep FORGE_SAFE_MODE=0 only when legacy offensive modules are "
+                    "intentionally in scope with written ROE."
+                )
             ),
         ),
     ]

@@ -510,6 +510,9 @@ def test_collect_doctor_checks_flags_paid_live_and_weak_web_auth(tmp_path) -> No
 
     rows = _rows(checks)
     assert rows["Safe Mode"].status == "WARN"
+    assert "full mode active" in rows["Safe Mode"].details
+    assert "FORGE_SAFE_MODE=1" in rows["Safe Mode"].details
+    assert "written ROE" in rows["Safe Mode"].remediation
     assert rows["Web UI Auth"].status == "ERROR"
     assert rows["Paid LLM Backends"].status == "WARN"
     assert rows["Active Validation"].status == "WARN"

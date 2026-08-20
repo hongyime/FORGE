@@ -873,7 +873,7 @@ the root CLI entry point focused on command handlers while preserving
 | `FORGE_CONTROL_TOMBSTONE_RETENTION_DAYS` | Days to keep missing control-index rows before purging; default `30`, set `off` to disable |
 | `FORGE_OPERATOR` | Callsign recorded in every `audit_log` entry |
 | `FORGE_NO_TOR` | `1` skips Tor daemon startup (10× speedup on offline commands) |
-| `FORGE_SAFE_MODE` | `1` keeps legacy high-risk modules disabled; keep enabled for the authorized ASM workflow |
+| `FORGE_SAFE_MODE` | `1` keeps legacy high-risk modules disabled for safe/core or production ASM; use `0` only when full legacy offensive modules are intentionally in scope with written ROE |
 | `FORGE_ROE_ID` | Optional ROE / written-authorization reference recorded on kill-chain runs |
 | `FORGE_SCOPE_MANIFEST` | Optional ROE/scope JSON manifest; required for live `--attack-mode` or `--auto-run-detected` |
 | `FORGE_REQUIRE_SCOPE_MANIFEST` | `1` requires a scope manifest for every non-dry-run kill-chain launch |

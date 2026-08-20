@@ -217,9 +217,11 @@ Progress:
 - Added read-only `latest_fallback_reports` samples to `report quality-audit` with sanitized fallback reasons, `repair_status`, and non-executing `forge report generate --engagement <id> --provider auto --yes` command arrays. GGUF-missing latest reports are marked `stale_after_model_available` when the default local GGUF model is now present.
 - Verified B575 with focused quality-audit tests (`6 passed`), Ruff, py_compile, `git diff --check`, and a real local `report quality-audit --json --top-limit 2` smoke showing path-neutral stale-after-model repair rows. No report regeneration, dashboard regeneration, engagement mutation, live run, provider call, scheduled-task change, or credential persistence was started.
 - Pushed B575 as `7cc7b77 feat: report latest fallback repair samples`.
+- Clarified Safe Mode doctor and env/docs wording so full mode is described as intentional ROE-backed legacy-offensive posture instead of broken setup; behavior and default status are unchanged.
+- Verified B576 with focused doctor tests (`44 passed`), Ruff, py_compile, `git diff --check`, and a real local doctor smoke. No safe-mode default change, live run, provider call, scheduled-task change, monitoring apply, report regeneration, engagement mutation, or credential persistence was started.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining queues include Safe Mode wording, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, Connector Secret Store process-env reload guidance, and optional deliberate report regeneration using the new quality-audit repair sample commands.
+- Commit/push B576, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining queues include Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, Connector Secret Store process-env reload guidance, optional deliberate report regeneration using the new quality-audit repair sample commands, and historical failed/long run review only if deliberately resumed.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
