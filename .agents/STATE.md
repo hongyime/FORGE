@@ -200,9 +200,10 @@ Progress:
 - Pushed B570 as `a8767b3 feat: install trufflehog release binary`.
 - Classified the intentionally disabled local `FORGE Import theprawnhunter Targets` scheduled task as paused/OFF in `forge doctor` unless `FORGE_TPH_TARGET_IMPORT_ENABLED=1` explicitly says the bridge should be running.
 - Verified B571 with focused doctor tests (`44 passed`), Ruff, py_compile, `git diff --check`, and a real local `.venv\Scripts\forge.exe doctor --json` smoke showing `TPH Target Import Bridge` status `OFF` with `task=disabled`. No scheduled-task enablement, import run, provider call, engagement mutation, monitoring execution, live run, report regeneration, or credential persistence was started.
+- Pushed B571 as `1d03fbf fix: treat disabled tph bridge as paused`.
 
 Next steps:
-- Commit/push B571, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
