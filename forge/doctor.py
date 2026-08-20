@@ -2298,6 +2298,15 @@ def _connector_secret_store_check(
                 "Restart this shell/service or "
                 f"{reload_guidance}; secret material is not printed."
             ),
+            (
+                {
+                    "id": "reload_connector_secret_key_env",
+                    "priority": "35",
+                    "status": "ready",
+                    "command": reload_command or "forge connectors secret-key-plan --json",
+                    "summary": "load persistent FORGE_ENGAGEMENT_KEY into this process without printing it",
+                },
+            ),
         )
     return DoctorCheck(
         "Connector Secret Store",
@@ -2309,6 +2318,15 @@ def _connector_secret_store_check(
         (
             "Run `forge connectors secret-key-plan --json` for non-secret setup "
             "commands, then set FORGE_ENGAGEMENT_KEY before `forge connectors secret-set`."
+        ),
+        (
+            {
+                "id": "setup_connector_secret_key",
+                "priority": "35",
+                "status": "attention",
+                "command": "forge connectors secret-key-plan --json",
+                "summary": "generate or load FORGE_ENGAGEMENT_KEY without printing secret material",
+            },
         ),
     )
 

@@ -235,9 +235,11 @@ Progress:
 - Quality-audit `review_resume_plan` now points to `forge targets resume-plan --json --redact-paths --limit N`.
 - Verified B580 with focused target resume/quality tests (`9 passed`), broader target-import/quality/CLI registry tests (`58 passed` with existing sqlite timestamp deprecation warnings), Ruff, py_compile, `git diff --check`, and real local read-only redacted resume-plan/quality-audit smokes. No resume-run, kill-chain, report regeneration, provider call, engagement mutation, scheduled-task change, monitoring apply, or credential persistence was started.
 - Pushed B580 as `30aae6f fix: redact resume plan review paths`.
+- Added Connector Secret Store doctor action items: `setup_connector_secret_key` for missing keys and `reload_connector_secret_key_env` for persistent Windows keys missing from the current process. The reload action uses only the literal process-env reload command and never prints secret material.
+- Verified B581 with focused Connector Secret Store doctor tests (`2 passed`), Ruff, py_compile, `git diff --check`, and a real local filtered doctor smoke showing Connector Secret Store `WARN` plus `reload_connector_secret_key_env` action status `ready`. No secret material was printed; no engagement mutation, provider call, live run, scheduled-task change, monitoring apply, report regeneration, or credential persistence was started.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Commit and push B581, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

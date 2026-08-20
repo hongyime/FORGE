@@ -402,6 +402,12 @@ def test_collect_doctor_checks_reports_stored_connector_rows_without_key(
     assert "1 stored connector secret row(s)" in row.details
     assert "decryptability not checked" in row.details
     assert "forge connectors secret-key-plan --json" in row.remediation
+    action_by_id = {
+        item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]
+    }
+    assert action_by_id["setup_connector_secret_key"]["command"] == (
+        "forge connectors secret-key-plan --json"
+    )
     assert raw_secret not in row.details
 
 
@@ -442,6 +448,14 @@ def test_collect_doctor_checks_reports_persistent_connector_secret_key_hint(
     assert "Restart this shell/service" in row.remediation
     assert "powershell_reload_persistent_env" not in row.remediation
     assert "$env:FORGE_ENGAGEMENT_KEY=" in row.remediation
+    action_by_id = {
+        item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]
+    }
+    assert action_by_id["reload_connector_secret_key_env"]["command"].startswith(
+        "$env:FORGE_ENGAGEMENT_KEY="
+    )
+    assert action_by_id["reload_connector_secret_key_env"]["status"] == "ready"
+    assert "abc123" not in action_by_id["reload_connector_secret_key_env"]["command"]
 
 
 def test_doctor_payload_json_is_machine_readable_and_actionable() -> None:

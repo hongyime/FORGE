@@ -68,3 +68,4 @@
 - 2026-08-20: Made monitoring due-plan a clearer read-only operator plan with stale-backlog age, capped batch estimates, policy composition, and safe action commands.
 - 2026-08-20: Added quality-audit operator action-plan buckets for stale report regeneration samples, resume planning, long-run review, and policy flag explanations.
 - 2026-08-20: Added redacted resume-plan review output and pointed quality-audit resume review commands at that path-safe mode.
+- 2026-08-20: Added value-safe Connector Secret Store doctor action items so secret-key setup/reload appears in the top-level action plan.
