@@ -2065,15 +2065,16 @@ def _connector_action_items(
             }
         )
         return tuple(items)
-    items.append(
-        {
-            "id": "install_free_binaries",
-            "priority": "10",
-            "status": "attention" if missing_binary else "ready",
-            "summary": _connector_missing_binary_label(missing_binary),
-            "command": "forge connectors install-plan --json",
-        }
-    )
+    if missing_binary:
+        items.append(
+            {
+                "id": "install_free_binaries",
+                "priority": "10",
+                "status": "attention",
+                "summary": _connector_missing_binary_label(missing_binary),
+                "command": "forge connectors install-plan --json",
+            }
+        )
     items.append(
         {
             "id": "run_free_connectors",

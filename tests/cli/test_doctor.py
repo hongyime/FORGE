@@ -197,6 +197,26 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert "hibp-secret" not in details
 
 
+def test_collect_doctor_checks_omits_free_binary_install_action_when_none_missing(
+    tmp_path,
+) -> None:
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        env={},
+        which=lambda name: f"C:/tools/{name}.exe",
+        provider_discovery=_provider_discovery,
+    )
+
+    rows = _rows(checks)
+    assert rows["Connector Action Plan"].status == "OK"
+    assert "missing binaries: 0 (none)" in rows["Connector Action Plan"].details
+    action_by_id = {
+        item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]
+    }
+    assert "install_free_binaries" not in action_by_id
+    assert action_by_id["run_free_connectors"]["status"] == "ready"
+
+
 def test_collect_doctor_checks_warns_when_free_first_connectors_are_not_executable(
     tmp_path,
 ) -> None:
