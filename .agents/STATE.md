@@ -89,9 +89,10 @@ Progress:
 - Pushed B542 as `c8bbb9d fix: default reports to auto provider`.
 - Added read-only `forge targets resume-candidates` JSON output for repeatable latest-run candidate review without engagement mutation or live resume.
 - Verified B543 with target resume/import tests, CLI registry/docs tests, Ruff, py_compile, `git diff --check`, and a local `.forge_data` read-only scan matching 49 candidates.
+- Pushed B543 as `65c9d68 feat: report target resume candidates`.
 
 Next steps:
-- Commit and push B543.
+- Use `forge targets resume-candidates --data-dir .forge_data --limit 1000` for read-only candidate review before any explicit live resume decision.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
 
 <!-- MOLT_AUTO_START -->
