@@ -39,6 +39,9 @@ Progress:
 - Added opt-in `forge connectors import-cti --fail-on-empty` so automation can fail when no observations survive normalization and filters.
 - Verified B527 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B527 as `3e85cdf feat: fail empty cti imports`.
+- Added local `.gz` report-file support for offline `forge connectors import-cti` so compressed JSON/CSV exports use the same sanitized import path.
+- Verified B528 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`; commit/push pending.
 
 Next steps:
+- Commit and push B528.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.

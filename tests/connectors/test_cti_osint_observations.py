@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 import sqlite3
 from pathlib import Path
@@ -1064,6 +1065,53 @@ def test_connector_cli_import_cti_invokes_offline_importer(
     assert payload["connector_id"] == "stix_taxii_import"
     assert payload["persisted_count"] == 1
     assert payload["promoted_seed_count"] == 1
+
+
+def test_connector_cli_import_cti_reads_gzipped_csv_export(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "threatfox.csv.gz"
+    with gzip.open(report_file, "wt", encoding="utf-8") as handle:
+        handle.write(
+            "\n".join(
+                [
+                    "id,ioc,ioc_type,confidence_level,first_seen",
+                    "41,Portal.Acme.Example,domain,75,2026-08-20 10:00:00 UTC",
+                ]
+            )
+        )
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "abusech_threatfox",
+            "--report-file",
+            str(report_file),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["source_format"] == "csv"
+    assert payload["parsed_count"] == 1
+    assert payload["persisted_count"] == 1
+    assert payload["parsed_indicator_type_counts"] == {"domain": 1}
 
 
 def test_connector_cli_import_cti_dry_run_writes_nothing(

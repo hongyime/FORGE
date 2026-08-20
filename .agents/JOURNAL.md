@@ -13,3 +13,4 @@
 - 2026-08-20: Added CSV as an offline CTI import format for provider exports; malformed JSON remains a hard JSON error and live provider fetching stays out of scope.
 - 2026-08-20: Added CTI import summary counts for indicator types, TLP levels, target-feed types, and skipped reasons so operators can triage offline imports without raw-provider inspection.
 - 2026-08-20: Added an opt-in CTI fail-on-empty automation gate that rejects files with no accepted observations while allowing duplicate-only re-imports.
+- 2026-08-20: Added local `.gz` CTI report-file support so compressed offline exports are decompressed before the same sanitized JSON/CSV import path.

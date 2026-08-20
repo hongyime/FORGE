@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import gzip
 import json
 import re
 import sqlite3
@@ -71,7 +72,7 @@ def import_cti_observations(
     if text is None:
         if config.report_path is None:
             raise ValueError("report_path is required")
-        text = config.report_path.read_text(encoding="utf-8")
+        text = _read_report_text(config.report_path)
     raw_items, source_format = _report_items(text)
     limit = _normalize_limit(config.limit)
     min_confidence = _normalize_min_confidence(config.min_confidence)
@@ -547,6 +548,13 @@ def _payload_items(payload: Any) -> list[Any]:
     if any(key in payload for key in ("indicator_type", "target_type", "type", "ioc", "value")):
         return [payload]
     raise ValueError("CTI observation report does not contain observations/items/data")
+
+
+def _read_report_text(path: Path) -> str:
+    if path.suffix.lower() == ".gz":
+        with gzip.open(path, "rt", encoding="utf-8") as handle:
+            return handle.read()
+    return path.read_text(encoding="utf-8")
 
 
 def _report_items(text: str) -> tuple[list[Any], str]:
