@@ -645,6 +645,7 @@ def provider_catalog_policy_summary() -> dict[str, Any]:
     default_entries = [entry for entry in entries if entry.default_enabled]
     opt_in_entries = [entry for entry in entries if not entry.default_enabled]
     return {
+        "schema_version": "forge.connector_policy_summary.v1",
         "total_count": len(entries),
         "default_enabled_count": len(default_entries),
         "opt_in_count": len(opt_in_entries),

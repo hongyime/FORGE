@@ -530,6 +530,9 @@ def test_connector_run_plan_reports_free_runnable_commands_without_execution() -
 
     assert plan["schema_version"] == "forge.connector_run_plan.v1"
     assert plan["execution_policy"] == "plan_only_no_commands_executed"
+    assert plan["total_count"] == 8
+    assert plan["selected_count"] == 6
+    assert plan["omitted_count"] == 2
     assert plan["runnable_count"] == 6
     by_id = {item["connector_id"]: item for item in plan["items"]}
     assert by_id["artifact_passive_parsers"]["command_template"] == [
@@ -626,6 +629,8 @@ def test_connector_run_plan_cli_outputs_json_without_running_connectors() -> Non
     payload = json.loads(result.output)
     assert payload["schema_version"] == "forge.connector_run_plan.v1"
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["total_count"] >= payload["selected_count"] >= 0
+    assert payload["omitted_count"] == payload["total_count"] - payload["selected_count"]
     assert isinstance(payload["items"], list)
     assert "DOMAIN_OR_URL" in result.output
 

@@ -849,6 +849,9 @@ def connector_run_plan(
     return {
         "schema_version": "forge.connector_run_plan.v1",
         "execution_policy": "plan_only_no_commands_executed",
+        "total_count": len(rows),
+        "selected_count": len(items),
+        "omitted_count": max(0, len(rows) - len(items)),
         "runnable_count": len(items),
         "items": items,
         "secret_material_policy": "Connector run plans report connector IDs and placeholders only; secret values are never returned.",

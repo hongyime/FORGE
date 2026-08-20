@@ -96,6 +96,7 @@ def test_provider_catalog_defaults_show_broad_source_backlog() -> None:
 def test_provider_catalog_policy_summary_maps_default_and_opt_in_sources() -> None:
     summary = provider_catalog_policy_summary()
 
+    assert summary["schema_version"] == "forge.connector_policy_summary.v1"
     assert summary["total_count"] == len(provider_catalog(include_sensitive=True))
     assert summary["default_enabled_count"] == len(provider_catalog())
     assert summary["opt_in_provider_ids"] == []
@@ -145,6 +146,7 @@ def test_connector_policy_summary_cli_outputs_catalog_policy_json() -> None:
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.connector_policy_summary.v1"
     assert payload["total_count"] == len(provider_catalog(include_sensitive=True))
     assert {
         "misp_event_import",
