@@ -427,6 +427,71 @@ def test_cti_import_accepts_stix_indicator_bundle_shape(tmp_path: Path) -> None:
     assert json.loads(row["tags_json"]) == ["osint", "phishing"]
 
 
+def test_cti_import_dry_run_does_not_write_observations_seeds_or_audit(
+    tmp_path: Path,
+) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    secret_value = "dry-run-secret"
+    report = {
+        "items": [
+            {
+                "type": "domain",
+                "value": "Portal.Acme.Example",
+                "confidence": 0.8,
+                "provenance": f"dry run token={secret_value}",
+            },
+            {
+                "type": "url",
+                "value": "https://outside.example/login",
+                "confidence": 0.7,
+            },
+        ]
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="stix_taxii_import",
+                engagement_id=1001,
+                source_url=f"local-fixture?token={secret_value}",
+                promote_targets=True,
+                dry_run=True,
+            ),
+            report_text=json.dumps(report),
+        )
+        cti_table = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cti_observations'"
+        ).fetchone()
+        seed_count = con.execute(
+            "SELECT COUNT(*) FROM engagement_seeds WHERE engagement_id=1001"
+        ).fetchone()[0]
+        audit_count = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM audit_log
+            WHERE engagement_id=1001 AND action='cti_observation_import'
+            """
+        ).fetchone()[0]
+    finally:
+        con.close()
+
+    blob = json.dumps(result, sort_keys=True)
+    assert result["status"] == "dry_run"
+    assert result["dry_run"] is True
+    assert result["parsed_count"] == 2
+    assert result["persisted_count"] == 0
+    assert result["would_persist_count"] == 2
+    assert result["promoted_seed_count"] == 0
+    assert result["would_promote_seed_count"] == 1
+    assert result["skipped_count"] == 1
+    assert result["skipped"][0]["reason"] == "out_of_scope"
+    assert cti_table is None
+    assert seed_count == 0
+    assert audit_count == 0
+    assert secret_value not in blob
+
+
 def test_cti_observations_surface_as_non_reportable_inventory(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     db_path = data_dir / "engagements" / "1001.db"
@@ -555,3 +620,68 @@ def test_connector_cli_import_cti_invokes_offline_importer(
     assert payload["connector_id"] == "stix_taxii_import"
     assert payload["persisted_count"] == 1
     assert payload["promoted_seed_count"] == 1
+
+
+def test_connector_cli_import_cti_dry_run_writes_nothing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    secret_value = "cli-dry-run-secret"
+    report_file = tmp_path / "cti.json"
+    report_file.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "type": "domain",
+                        "value": "portal.acme.example",
+                        "provenance": f"operator token={secret_value}",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "stix_taxii_import",
+            "--report-file",
+            str(report_file),
+            "--promote-targets",
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    con = sqlite3.connect(db_path)
+    try:
+        cti_table = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cti_observations'"
+        ).fetchone()
+    finally:
+        con.close()
+    assert payload["status"] == "dry_run"
+    assert payload["persisted_count"] == 0
+    assert payload["would_persist_count"] == 1
+    assert payload["promoted_seed_count"] == 0
+    assert payload["would_promote_seed_count"] == 1
+    assert cti_table is None
+    assert secret_value not in result.output

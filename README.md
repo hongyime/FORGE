@@ -245,7 +245,7 @@ forge active-validation preview|create|approve|run|list|methods|coverage
 forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-first connector/plugin catalog
 forge connectors run --engagement N --connector projectdiscovery_subfinder|projectdiscovery_httpx|projectdiscovery_katana|projectdiscovery_nuclei --target DOMAIN_OR_URL [--dry-run] [--max-results N]
 forge connectors import-discovery --engagement N --connector shodan_host_lookup|censys_lookup|urlscan_search --report-file REPORT.json [--target DOMAIN]
-forge connectors import-cti --engagement N --connector abusech_threatfox|abusech_urlhaus|stix_taxii_import --report-file OBSERVATIONS.json [--promote-targets]
+forge connectors import-cti --engagement N --connector abusech_threatfox|abusech_urlhaus|stix_taxii_import --report-file OBSERVATIONS.json [--dry-run] [--promote-targets]
 forge connectors run-identity --engagement N --connector hibp_pwned_passwords [--domain DOMAIN] [--offline-corpus PATH]
 forge connectors run-secrets --engagement N --connector gitleaks_local|trufflehog_local --source-path PATH --domain DOMAIN
 forge connectors import-secrets --engagement N --connector gitleaks_local|trufflehog_local --report-file REPORT.json --domain DOMAIN
@@ -281,7 +281,9 @@ observation JSON plus common downloaded/exported JSON shapes from abuse.ch
 ThreatFox (`data` IOC rows), abuse.ch URLHaus (`url` rows), and STIX indicator
 bundles (`objects`). Imported CTI rows are stored as analyst inventory with
 sanitized source/provenance and are not reportable findings unless a later
-independent scoped workflow validates promoted seeds.
+independent scoped workflow validates promoted seeds. Use `--dry-run` to parse,
+sanitize, and scope-check seed promotion candidates without writing
+observations, seeds, or audit rows.
 
 `forge monitoring status --json` is the read-only operator check for scheduled
 monitoring: it reports stale DB schemas, enabled/idle policy counts,

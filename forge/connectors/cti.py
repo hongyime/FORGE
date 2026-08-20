@@ -38,6 +38,7 @@ class CtiObservationImportConfig:
     collection_method: str = "offline_import"
     promote_targets: bool = False
     operator: str = "connector-import"
+    dry_run: bool = False
 
 
 def import_cti_observations(
@@ -63,12 +64,15 @@ def import_cti_observations(
         text = config.report_path.read_text(encoding="utf-8")
     payload = _json_document(text)
     raw_items = _payload_items(payload)
-    _ensure_cti_observation_table(con)
+    if not config.dry_run:
+        _ensure_cti_observation_table(con)
 
     parsed_count = 0
     persisted_count = 0
     duplicate_count = 0
     promoted_seed_count = 0
+    would_persist_count = 0
+    would_promote_seed_count = 0
     skipped: list[dict[str, str]] = []
     feed_items: list[dict[str, Any]] = []
     provider = config.provider.strip() or connector_id
@@ -94,19 +98,24 @@ def import_cti_observations(
             skipped.append({"index": str(index), "reason": "observation_rejected"})
             continue
         parsed_count += 1
-        persisted = _persist_observation(
-            con,
-            engagement_id=engagement_id,
-            observation=observation,
-        )
+        persisted = False
+        if not config.dry_run:
+            persisted = _persist_observation(
+                con,
+                engagement_id=engagement_id,
+                observation=observation,
+            )
         if persisted:
             persisted_count += 1
         else:
-            duplicate_count += 1
+            if config.dry_run:
+                would_persist_count += 1
+            else:
+                duplicate_count += 1
         feed_item = observation_to_target_feed_item(observation)
         if feed_item is not None:
             feed_items.append(feed_item)
-        if config.promote_targets and persisted and feed_item is not None:
+        if config.promote_targets and feed_item is not None and (persisted or config.dry_run):
             promoted = _promote_observation_seed(
                 con,
                 engagement_id=engagement_id,
@@ -114,9 +123,13 @@ def import_cti_observations(
                 observation=observation,
                 feed_item=feed_item,
                 scope=scope,
+                dry_run=config.dry_run,
             )
             if promoted["promoted"]:
-                promoted_seed_count += 1
+                if config.dry_run:
+                    would_promote_seed_count += 1
+                else:
+                    promoted_seed_count += 1
             else:
                 skipped.append(
                     {
@@ -130,10 +143,13 @@ def import_cti_observations(
         "connector_id": connector_id,
         "engagement_id": engagement_id,
         "status": "completed",
+        "dry_run": bool(config.dry_run),
         "parsed_count": parsed_count,
         "persisted_count": persisted_count,
         "duplicate_count": duplicate_count,
         "promoted_seed_count": promoted_seed_count,
+        "would_persist_count": would_persist_count,
+        "would_promote_seed_count": would_promote_seed_count,
         "skipped_count": len(skipped),
         "skipped": skipped[:25],
         "target_feed_items": feed_items[:100],
@@ -141,8 +157,15 @@ def import_cti_observations(
         "report_file": str(config.report_path or ""),
         "privacy": "Raw provider bodies, commands, credentials, and secret values are not persisted.",
     }
-    _audit_cti_import(con, config, result=result)
-    con.commit()
+    if config.dry_run:
+        result["status"] = "dry_run"
+        result["privacy"] = (
+            "Dry-run only: normalized observations were parsed, but no rows, seeds, "
+            "or audit receipts were written."
+        )
+    else:
+        _audit_cti_import(con, config, result=result)
+        con.commit()
     return result
 
 
@@ -237,6 +260,7 @@ def _promote_observation_seed(
     observation: OsintObservation,
     feed_item: Mapping[str, Any],
     scope: list[str],
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     seed_value = str(feed_item.get("target_value") or "").strip()
     seed_type = _seed_type_for_observation(observation, feed_item)
@@ -246,6 +270,12 @@ def _promote_observation_seed(
         _assert_seed_in_scope(seed_value, seed_type, scope)
     except ScopeViolationError:
         return {"promoted": False, "reason": "out_of_scope", "target": seed_value}
+    if dry_run:
+        return {
+            "promoted": True,
+            "reason": "dry_run_promotable",
+            "target": seed_value,
+        }
     metadata = {
         "connector_id": connector_id,
         "provider": observation.provider,

@@ -18,6 +18,7 @@ Progress:
 - Pushed B518 as `30cf1fc feat: accept provider cti export shapes`.
 - Documented offline CTI import support in README next to the public command list.
 - Pushed README checkpoint as `bfbda54 docs: document offline cti imports`.
+- Added `forge connectors import-cti --dry-run` to parse/sanitize offline CTI files and scope-check promotion candidates without writing observations, seeds, or audit rows.
 
 Next steps:
-- Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
+- Commit and push the CTI dry-run checkpoint.
