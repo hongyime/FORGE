@@ -83,3 +83,4 @@
 - 2026-08-21: Fixed stale-run output placement to write regenerated report families under the selected reports directory and report dashboard refresh follow-ups.
 - 2026-08-21: Completed local template-only stale latest-report repair and dashboard refresh; current stale-plan is empty while generated artifacts remain ignored local data.
 - 2026-08-21: Added explicit total/selected/omitted metadata to limited target resume plans so review pages cannot be mistaken for the full backlog.
+- 2026-08-21: Added non-mutating `targets resume-run --dry-run` and centralized dashboard error cleanup so resume batches and generated reports can be reviewed without launching child processes or rendering raw terminal noise.

@@ -251,6 +251,7 @@ def execute_target_resume_plan(
     max_runtime_minutes: int = DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
     batch_id: str | None = None,
     stop_on_failure: bool = True,
+    dry_run: bool = False,
     runner: ResumeRunner | None = None,
 ) -> dict[str, Any]:
     """Execute ready resume candidates strictly one child process at a time."""
@@ -269,6 +270,39 @@ def execute_target_resume_plan(
     lock_path = ledger_dir / "resume_batch.lock"
     results: list[dict[str, Any]] = []
     counts: Counter[str] = Counter()
+    if dry_run:
+        for item in plan["items"]:
+            checked = _refresh_plan_item(item)
+            if checked["status"] == "skipped":
+                counts["skipped"] += 1
+                results.append(checked)
+                continue
+            counts["dry_run"] += 1
+            results.append(
+                {
+                    **checked,
+                    "status": "dry_run",
+                    "returncode": None,
+                    "started_at": None,
+                    "completed_at": None,
+                    "stdout_tail": "",
+                    "stderr_tail": "",
+                }
+            )
+        return {
+            "schema_version": RESUME_RUN_SCHEMA_VERSION,
+            "execution_policy": "dry_run_no_commands_executed",
+            "dry_run": True,
+            "batch_id": batch,
+            "ledger_path": str(ledger_path),
+            "lock_path": str(lock_path),
+            "status": "dry_run",
+            "concurrency": "sequential",
+            "stop_on_failure": stop_on_failure,
+            "planned_count": plan["planned_count"],
+            "result_counts": dict(sorted(counts.items())),
+            "items": results,
+        }
     lock_acquired = False
     ledger_dir.mkdir(parents=True, exist_ok=True)
     try:
@@ -344,6 +378,7 @@ def execute_target_resume_plan(
         return {
             "schema_version": RESUME_RUN_SCHEMA_VERSION,
             "execution_policy": "blocked_existing_resume_batch_lock",
+            "dry_run": False,
             "batch_id": batch,
             "ledger_path": str(ledger_path),
             "lock_path": str(lock_path),
@@ -360,6 +395,7 @@ def execute_target_resume_plan(
     return {
         "schema_version": RESUME_RUN_SCHEMA_VERSION,
         "execution_policy": "executes_child_processes_sequentially",
+        "dry_run": False,
         "batch_id": batch,
         "ledger_path": str(ledger_path),
         "lock_path": str(lock_path),

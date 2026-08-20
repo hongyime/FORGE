@@ -324,10 +324,21 @@ _DASHBOARD_SCOPE_MANIFEST_ASSIGNMENT_RE = re.compile(
     r"(?:\{[^;]*\}|\[[^;]*\]|\"[^\"]*\"|'[^']*'|[^,\s;]+)"
 )
 _DASHBOARD_URL_RE = re.compile(r"https?://[^\s,;]+", re.IGNORECASE)
+_DASHBOARD_CLI_HELP_RE = re.compile(
+    r"(?is)(?:try\s+['\"]?[^'\"]*--help['\"]?\s+for\s+help\.?|"
+    r"(?:[\w.-]+\s+){0,4}--help['\"]?\s+for\s+help\.?)"
+)
+_DASHBOARD_RICH_BORDER_RE = re.compile(r"[\u2500-\u257f\u2580-\u259f]+")
+_DASHBOARD_TERMINAL_CONTROL_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 def _redact_dashboard_error(value: Any, limit: int = 140) -> str:
     text = str(value or "").strip()
+    if text.lower() == "abandoned before explicit completion":
+        text = "interrupted before finalization"
+    text = _DASHBOARD_TERMINAL_CONTROL_RE.sub("", text)
+    text = _DASHBOARD_RICH_BORDER_RE.sub(" ", text)
+    text = _DASHBOARD_CLI_HELP_RE.sub("CLI invocation rejected", text)
     text = _DASHBOARD_SCOPE_MANIFEST_ASSIGNMENT_RE.sub(
         lambda match: f"{match.group(1)}=[redacted]",
         text,
@@ -336,7 +347,9 @@ def _redact_dashboard_error(value: Any, limit: int = 140) -> str:
         lambda match: f"{match.group(1)}=[redacted]",
         text,
     )
-    return _truncate(_DASHBOARD_URL_RE.sub("[redacted-url]", text), limit)
+    text = _DASHBOARD_URL_RE.sub("[redacted-url]", text)
+    text = " ".join(text.split())
+    return _truncate(text, limit)
 
 
 def _safe_json_loads(value: str) -> Any:
@@ -612,6 +625,7 @@ def _run_summary_callbacks() -> RunSummaryCallbacks:
         format_dt=_format_dt,
         safe_json_loads=_safe_json_loads,
         truncate=_truncate,
+        redact_error=_redact_dashboard_error,
         summarize_run_audit_manifest=summarize_run_audit_manifest,
     )
 
@@ -1607,7 +1621,7 @@ def _seed_run_section_row(row: sqlite3.Row) -> dict[str, str]:
         "Out": str(row["output_count"] or ""),
         "Started": _format_dt(str(row["started_at"] or "")),
         "Completed": _format_dt(str(row["completed_at"] or "")),
-        "Error": _truncate(row["error"], 96),
+        "Error": _redact_dashboard_error(row["error"], 96),
     }
 
 
@@ -1727,6 +1741,7 @@ def _engagement_run_section_row(
         safe_json_loads=_safe_json_loads,
         format_dt=_format_dt,
         truncate=_truncate,
+        redact_error=_redact_dashboard_error,
     )
 
 

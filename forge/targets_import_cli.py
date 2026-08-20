@@ -295,6 +295,11 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "--stop-on-failure/--continue-on-failure",
             help="Stop after the first failed child process by default.",
         ),
+        dry_run: bool = typer.Option(
+            False,
+            "--dry-run",
+            help="Re-check and report the batch without writing a ledger or launching child processes.",
+        ),
         json_output: bool = typer.Option(
             False,
             "--json",
@@ -311,5 +316,6 @@ def register_target_import_commands(app: typer.Typer) -> None:
             max_runtime_minutes=max_runtime_minutes,
             batch_id=batch_id,
             stop_on_failure=stop_on_failure,
+            dry_run=dry_run,
         )
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))

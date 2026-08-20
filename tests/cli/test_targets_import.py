@@ -843,15 +843,21 @@ def test_targets_resume_plan_cli_outputs_json_without_running(tmp_path: Path) ->
 
 
 def test_targets_resume_run_cli_outputs_executor_payload(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "forge.targets_import_cli.execute_target_resume_plan",
-        lambda **kwargs: {
+    captured_kwargs: dict[str, object] = {}
+
+    def fake_execute(**kwargs: object) -> dict[str, object]:
+        captured_kwargs.update(kwargs)
+        return {
             "schema_version": "forge.targets.resume_run.v1",
-            "execution_policy": "executes_child_processes_sequentially",
+            "execution_policy": "dry_run_no_commands_executed",
             "batch_id": kwargs["batch_id"],
             "planned_count": 0,
             "items": [],
-        },
+        }
+
+    monkeypatch.setattr(
+        "forge.targets_import_cli.execute_target_resume_plan",
+        fake_execute,
     )
     app = typer.Typer()
     targets_app = typer.Typer()
@@ -865,6 +871,7 @@ def test_targets_resume_run_cli_outputs_executor_payload(monkeypatch: pytest.Mon
             "resume-run",
             "--batch-id",
             "cli-test",
+            "--dry-run",
             "--json",
         ],
     )
@@ -873,6 +880,7 @@ def test_targets_resume_run_cli_outputs_executor_payload(monkeypatch: pytest.Mon
     payload = json.loads(result.output)
     assert payload["schema_version"] == "forge.targets.resume_run.v1"
     assert payload["batch_id"] == "cli-test"
+    assert captured_kwargs["dry_run"] is True
 
 
 def test_resume_run_executes_sequentially_and_writes_ledger(tmp_path: Path) -> None:
@@ -915,6 +923,43 @@ def test_resume_run_executes_sequentially_and_writes_ledger(tmp_path: Path) -> N
         "batch_completed",
     ]
     assert not Path(payload["lock_path"]).exists()
+
+
+def test_resume_run_dry_run_does_not_call_runner_or_write_ledger(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+    )
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 1, stdout="should-not-run", stderr="")
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="dry-run-test",
+        max_runtime_minutes=13,
+        dry_run=True,
+        runner=fake_runner,
+    )
+
+    assert payload["schema_version"] == "forge.targets.resume_run.v1"
+    assert payload["execution_policy"] == "dry_run_no_commands_executed"
+    assert payload["dry_run"] is True
+    assert payload["status"] == "dry_run"
+    assert payload["result_counts"] == {"dry_run": 1}
+    assert payload["items"][0]["status"] == "dry_run"
+    assert payload["items"][0]["returncode"] is None
+    assert payload["items"][0]["command"][-2:] == ["--max-runtime-minutes", "13"]
+    assert calls == []
+    assert not (data_dir / "target_imports" / "resume_batches").exists()
 
 
 def test_resume_run_skips_no_longer_resumable_latest_run(

@@ -35,6 +35,7 @@ class RunSummaryCallbacks:
     format_dt: Callable[[str], str]
     safe_json_loads: Callable[[str], Any]
     truncate: Callable[[Any, int], str]
+    redact_error: Callable[[Any, int], str]
     summarize_run_audit_manifest: Callable[..., dict[str, Any]]
 
 
@@ -88,6 +89,7 @@ def default_run_summary_callbacks() -> RunSummaryCallbacks:
         format_dt=_format_dt,
         safe_json_loads=_safe_json_loads,
         truncate=_truncate,
+        redact_error=_truncate,
         summarize_run_audit_manifest=summarize_run_audit_manifest,
     )
 
@@ -279,7 +281,7 @@ def latest_engagement_run(
         "dry_run": bool(row["dry_run"]),
         "attack_mode": bool(row["attack_mode"]),
         **policy_summary,
-        "error": callbacks.truncate(row["error"], 160),
+        "error": callbacks.redact_error(row["error"], 160),
         "metadata": safe_run_metadata(metadata),
         "audit_manifest": callbacks.summarize_run_audit_manifest(
             con,
@@ -301,6 +303,7 @@ def engagement_run_section_row(
     safe_json_loads: Callable[[str], Any] = _safe_json_loads,
     format_dt: Callable[[str], str] = _format_dt,
     truncate: Callable[[Any, int], str] = _truncate,
+    redact_error: Callable[[Any, int], str] | None = None,
 ) -> dict[str, str]:
     metadata = safe_json_loads(str(row["metadata_json"] or "{}"))
     policy = run_policy_summary(
@@ -333,7 +336,7 @@ def engagement_run_section_row(
         "Post-Ex": "yes" if policy["post_exploitation_allowed"] else "no",
         "Started": format_dt(str(row["started_at"] or "")),
         "Completed": format_dt(str(row["completed_at"] or "")),
-        "Error": truncate(row["error"], 96),
+        "Error": (redact_error or truncate)(row["error"], 96),
     }
     result["Manifest"] = str(manifest.get("short_hash") or "-")
     result["Manifest OK"] = "yes" if manifest.get("verified") is True else manifest_status

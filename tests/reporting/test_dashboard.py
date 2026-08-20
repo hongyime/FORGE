@@ -15,6 +15,7 @@ from forge.monitoring.delivery import add_monitoring_alert_suppression, upsert_m
 from forge.remediation.workflow import upsert_monitoring_alert_remediation
 from forge.reporting.dashboard import (
     _asset_graph_fix_candidate_section_row,
+    _redact_dashboard_error,
     _relation_evidence_preview,
     _reportable_vulnerability_rows,
     generate_dashboard,
@@ -51,6 +52,29 @@ def test_relation_evidence_preview_surfaces_did_artifact_metadata_without_secret
     assert "source=https://id.acme.example/.well-known/did" in preview
     assert "never-render-this" not in preview
     assert "token" not in preview
+
+
+def test_dashboard_error_redaction_removes_terminal_help_noise() -> None:
+    raw = (
+        "osint harvest --help' for help.\n"
+        "\u250c\u2500 Error \u2500\u2500\u2500 Bad option --linkedin "
+        "scope_manifest=DO-NOT-LEAK token=SECRET"
+    )
+
+    cleaned = _redact_dashboard_error(raw, 200)
+
+    assert "CLI invocation rejected" in cleaned
+    assert "--help" not in cleaned
+    assert "\u250c" not in cleaned
+    assert "scope_manifest=[redacted]" in cleaned
+    assert "token=[redacted]" in cleaned
+
+
+def test_dashboard_error_redaction_renames_abandoned_runs() -> None:
+    assert (
+        _redact_dashboard_error("abandoned before explicit completion")
+        == "interrupted before finalization"
+    )
 
 
 def test_asset_graph_fix_candidate_row_surfaces_permission_risk_factors() -> None:

@@ -254,7 +254,7 @@ forge audit manifest-bundle-verify --bundle PATH
 forge targets import --feed-url URL|--feed-file PATH
 forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--json]  # Default also scans repo-local legacy dashboard DBs
 forge targets resume-plan [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--data-dir PATH] [--redact-paths] [--json]
-forge targets resume-run [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--batch-id ID] [--continue-on-failure] [--data-dir PATH] [--json]
+forge targets resume-run [--dry-run] [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--batch-id ID] [--continue-on-failure] [--data-dir PATH] [--json]
 forge targets backfill-scope-manifests [--apply] [--limit N] [--reason REASON] [--data-dir PATH] [--json]
 forge monitoring status|due-plan [--include-empty-db-results]|run-due|deliver-alerts|worker
 forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-retest|apply-retest-run|handoff-plan|integration-runbook|import-ticket-statuses|sync-tickets
@@ -320,9 +320,12 @@ resumes; blocked candidates are summarized by blocker so operators can backfill
 or fix gates first. Use `--redact-paths` for report/review output that should
 hide local DB and scope-manifest paths; omit it when copying commands to run
 manually on the same machine.
-`forge targets resume-run` is the explicit executor for that plan. It re-checks
-each latest run before launching, holds a batch lock, writes a JSONL ledger
-under `target_imports/resume_batches`, and starts at most one child
+`forge targets resume-run` is the explicit executor for that plan. With
+`--dry-run`, it re-checks the same candidates and reports the would-run batch
+without creating the batch lock, writing the ledger, or launching child
+processes. Without `--dry-run`, it re-checks each latest run before launching,
+holds a batch lock, writes a JSONL ledger under
+`target_imports/resume_batches`, and starts at most one child
 `forge kill-chain ... --resume` process at a time. Re-running after a candidate
 is already completed skips it instead of launching duplicate work.
 `forge targets backfill-scope-manifests` is also dry-run by default; with
