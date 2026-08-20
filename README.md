@@ -249,6 +249,8 @@ forge audit manifest-export --engagement N [--sign] [--remote-store]
 forge audit manifest-bundle-verify --bundle PATH
 forge targets import --feed-url URL|--feed-file PATH
 forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--json]  # Default also scans repo-local legacy dashboard DBs
+forge targets resume-plan [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--data-dir PATH] [--json]
+forge targets resume-run [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--batch-id ID] [--continue-on-failure] [--data-dir PATH] [--json]
 forge targets backfill-scope-manifests [--apply] [--limit N] [--reason REASON] [--data-dir PATH] [--json]
 forge monitoring status|due-plan|run-due|deliver-alerts|worker
 forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-retest|apply-retest-run|handoff-plan|integration-runbook|import-ticket-statuses|sync-tickets
@@ -303,6 +305,16 @@ starting, or mutating any engagement. The payload includes `resume_ready`,
 when ROE, scope manifest, and resume gates are present. Static dashboards also
 surface these latest-run candidates as a compact `Resume Review` overview
 column and detail section without exposing raw scope-manifest paths.
+`forge targets resume-plan` is read-only and turns ready candidates into a
+sequential manual command plan with an explicit per-run
+`--max-runtime-minutes` budget. It does not execute, enqueue, or parallelize
+resumes; blocked candidates are summarized by blocker so operators can backfill
+or fix gates first.
+`forge targets resume-run` is the explicit executor for that plan. It re-checks
+each latest run before launching, holds a batch lock, writes a JSONL ledger
+under `target_imports/resume_batches`, and starts at most one child
+`forge kill-chain ... --resume` process at a time. Re-running after a candidate
+is already completed skips it instead of launching duplicate work.
 `forge targets backfill-scope-manifests` is also dry-run by default; with
 `--apply`, it only writes recovered narrow scope manifests and updates the
 latest-run metadata for blocked resume candidates. It does not start or resume

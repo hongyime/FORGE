@@ -129,7 +129,11 @@ _BINARY_REMEDIATION: dict[str, str] = {
     "nuclei": "Install with `go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest` and pin templates.",
     "katana": "Install with `go install github.com/projectdiscovery/katana/cmd/katana@latest`.",
     "gitleaks": "Install Gitleaks and run `gitleaks detect --source . --redact --exit-code 1`.",
-    "trufflehog": "Install with `go install github.com/trufflesecurity/trufflehog/v3@latest`.",
+    "trufflehog": (
+        "Download a TruffleHog release binary and place it on PATH or "
+        "FORGE_CONNECTOR_BIN_DIRS; `forge connectors install-plan --json` shows "
+        "the current search paths."
+    ),
     "detect-secrets": "Install with `pipx install detect-secrets` or your Python tool manager.",
     "ollama": "Install Ollama and start a local model server, or use another discovered LLM backend.",
 }
@@ -297,7 +301,7 @@ def collect_doctor_checks(
 
     checks.extend(_binary_checks("Binary", _CORE_BINARIES, which))
     checks.extend(_binary_checks("ProjectDiscovery", _PROJECT_DISCOVERY_BINARIES, which))
-    checks.extend(_binary_checks("Secrets", _SECRET_BINARIES, which))
+    checks.extend(_binary_checks("Secrets", _SECRET_BINARIES, _connector_which_resolver(which, environ)))
     checks.extend(_binary_checks("LLM CLI", _LLM_BINARIES, which))
     checks.append(_connector_catalog_check(environ, which, cfg.data_dir if cfg is not None else None))
     checks.append(_cti_osint_policy_check())

@@ -2,21 +2,26 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
 from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from ipaddress import ip_address
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlsplit
 
 from forge.config import ForgeConfig
 from forge.engagement_ids import numeric_engagement_db_files
 
 RESUME_CANDIDATE_SCHEMA_VERSION = "forge.targets.resume_candidates.v1"
+RESUME_PLAN_SCHEMA_VERSION = "forge.targets.resume_plan.v1"
+RESUME_RUN_SCHEMA_VERSION = "forge.targets.resume_run.v1"
 SCOPE_BACKFILL_SCHEMA_VERSION = "forge.targets.scope_manifest_backfill.v1"
 DEFAULT_RESUME_CANDIDATE_LIMIT = 100
+DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES = 25
 TERMINAL_NON_SUCCESS_STATUSES = {"failed", "cancelled"}
+ResumeRunner = Callable[[list[str], int], subprocess.CompletedProcess[str]]
 _SENSITIVE_METADATA_KEYS = {
     "api_key",
     "apikey",
@@ -134,6 +139,214 @@ def collect_target_resume_candidates(
         "status_counts": dict(sorted(status_counts.items())),
         "skipped_counts": dict(sorted(skipped.items())),
         "items": [asdict(item) for item in candidates],
+    }
+
+
+def collect_target_resume_plan(
+    *,
+    data_dir: Path | None = None,
+    limit: int | None = DEFAULT_RESUME_CANDIDATE_LIMIT,
+    reason: str | None = None,
+    include_legacy: bool | None = None,
+    max_iter: int | None = None,
+    max_runtime_minutes: int = DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
+) -> dict[str, Any]:
+    """Return a read-only sequential plan for resuming ready target-import runs."""
+
+    payload = collect_target_resume_candidates(
+        data_dir=data_dir,
+        limit=limit,
+        reason=reason,
+        include_completed=False,
+        include_legacy=include_legacy,
+    )
+    runtime_minutes = _normalize_positive_int(
+        max_runtime_minutes,
+        default=DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
+    )
+    iter_override = _normalize_optional_positive_int(max_iter)
+    planned_items: list[dict[str, Any]] = []
+    skipped: Counter[str] = Counter()
+    for item in payload["items"]:
+        blockers = [str(blocker) for blocker in item.get("resume_blockers", [])]
+        if blockers or not bool(item.get("resume_ready")):
+            for blocker in blockers or ["not_resume_ready"]:
+                skipped[blocker] += 1
+            continue
+        command = _planned_resume_command(
+            [str(part) for part in item.get("resume_command", [])],
+            max_iter=iter_override,
+            max_runtime_minutes=runtime_minutes,
+        )
+        if not command:
+            skipped["resume_command_missing"] += 1
+            continue
+        planned_items.append(
+            {
+                "sequence": len(planned_items) + 1,
+                "engagement_id": _safe_int(item.get("engagement_id")),
+                "run_id": _safe_int(item.get("run_id")),
+                "db_path": str(item.get("db_path") or ""),
+                "reason": str(item.get("reason") or ""),
+                "seed_type": str(item.get("seed_type") or ""),
+                "seed_value": str(item.get("seed_value") or ""),
+                "pending_work_total": _safe_int(item.get("pending_work_total")),
+                "command": command,
+                "max_runtime_minutes": runtime_minutes,
+                "expected_execution": "manual_sequential",
+            }
+        )
+    return {
+        "schema_version": RESUME_PLAN_SCHEMA_VERSION,
+        "execution_policy": "plan_only_no_commands_executed",
+        "data_dir": payload["data_dir"],
+        "include_legacy": payload["include_legacy"],
+        "candidate_count": payload["candidate_count"],
+        "resume_ready_count": payload["resume_ready_count"],
+        "planned_count": len(planned_items),
+        "skipped_count": payload["candidate_count"] - len(planned_items),
+        "skipped_blocker_counts": dict(sorted(skipped.items())),
+        "reason_counts": payload["reason_counts"],
+        "limit": payload["limit"],
+        "reason_filter": payload["reason_filter"],
+        "concurrency": "sequential",
+        "operator_note": (
+            "Run planned commands one at a time only after confirming ROE/scope; "
+            "this command does not start or resume kill-chain runs."
+        ),
+        "estimated_serial_runtime_minutes": len(planned_items) * runtime_minutes,
+        "items": planned_items,
+    }
+
+
+def execute_target_resume_plan(
+    *,
+    data_dir: Path | None = None,
+    limit: int | None = DEFAULT_RESUME_CANDIDATE_LIMIT,
+    reason: str | None = None,
+    include_legacy: bool | None = None,
+    max_iter: int | None = None,
+    max_runtime_minutes: int = DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
+    batch_id: str | None = None,
+    stop_on_failure: bool = True,
+    runner: ResumeRunner | None = None,
+) -> dict[str, Any]:
+    """Execute ready resume candidates strictly one child process at a time."""
+
+    plan = collect_target_resume_plan(
+        data_dir=data_dir,
+        limit=limit,
+        reason=reason,
+        include_legacy=include_legacy,
+        max_iter=max_iter,
+        max_runtime_minutes=max_runtime_minutes,
+    )
+    batch = _safe_batch_id(batch_id)
+    ledger_dir = Path(plan["data_dir"]) / "target_imports" / "resume_batches"
+    ledger_path = ledger_dir / f"{batch}.jsonl"
+    lock_path = ledger_dir / "resume_batch.lock"
+    results: list[dict[str, Any]] = []
+    counts: Counter[str] = Counter()
+    lock_acquired = False
+    ledger_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        with lock_path.open("x", encoding="utf-8") as lock_file:
+            lock_file.write(
+                json.dumps(
+                    {
+                        "batch_id": batch,
+                        "created_at": _utc_now(),
+                        "pid": _current_pid(),
+                    },
+                    sort_keys=True,
+                )
+            )
+        lock_acquired = True
+        _append_ledger_event(
+            ledger_path,
+            {
+                "event": "batch_started",
+                "batch_id": batch,
+                "planned_count": plan["planned_count"],
+                "created_at": _utc_now(),
+            },
+        )
+        for item in plan["items"]:
+            checked = _refresh_plan_item(item)
+            if checked["status"] == "skipped":
+                counts["skipped"] += 1
+                results.append(checked)
+                _append_ledger_event(ledger_path, {"event": "item_skipped", **checked})
+                continue
+            command = [str(part) for part in checked["command"]]
+            timeout_seconds = _child_timeout_seconds(_safe_int(checked.get("max_runtime_minutes")))
+            started_at = _utc_now()
+            _append_ledger_event(
+                ledger_path,
+                {
+                    "event": "item_started",
+                    "batch_id": batch,
+                    "sequence": checked["sequence"],
+                    "engagement_id": checked["engagement_id"],
+                    "run_id": checked["run_id"],
+                    "started_at": started_at,
+                    "command": command,
+                },
+            )
+            completed = _run_resume_child(command, timeout_seconds=timeout_seconds, runner=runner)
+            status = "completed" if completed.returncode == 0 else "failed"
+            counts[status] += 1
+            result = {
+                **checked,
+                "status": status,
+                "returncode": completed.returncode,
+                "started_at": started_at,
+                "completed_at": _utc_now(),
+                "stdout_tail": _tail_text(completed.stdout),
+                "stderr_tail": _tail_text(completed.stderr),
+            }
+            results.append(result)
+            _append_ledger_event(ledger_path, {"event": f"item_{status}", **result})
+            if status == "failed" and stop_on_failure:
+                break
+        _append_ledger_event(
+            ledger_path,
+            {
+                "event": "batch_completed",
+                "batch_id": batch,
+                "completed_at": _utc_now(),
+                "result_counts": dict(sorted(counts.items())),
+            },
+        )
+    except FileExistsError:
+        return {
+            "schema_version": RESUME_RUN_SCHEMA_VERSION,
+            "execution_policy": "blocked_existing_resume_batch_lock",
+            "batch_id": batch,
+            "ledger_path": str(ledger_path),
+            "lock_path": str(lock_path),
+            "status": "blocked",
+            "result_counts": {"blocked": 1},
+            "items": [],
+        }
+    finally:
+        try:
+            if lock_acquired and lock_path.exists():
+                lock_path.unlink()
+        except OSError:
+            pass
+    return {
+        "schema_version": RESUME_RUN_SCHEMA_VERSION,
+        "execution_policy": "executes_child_processes_sequentially",
+        "batch_id": batch,
+        "ledger_path": str(ledger_path),
+        "lock_path": str(lock_path),
+        "status": "completed" if not counts.get("failed") else "failed",
+        "concurrency": "sequential",
+        "stop_on_failure": stop_on_failure,
+        "planned_count": plan["planned_count"],
+        "result_counts": dict(sorted(counts.items())),
+        "items": results,
     }
 
 
@@ -603,6 +816,148 @@ def _resume_command(
     ]
 
 
+def _planned_resume_command(
+    command: list[str],
+    *,
+    max_iter: int | None,
+    max_runtime_minutes: int,
+) -> list[str]:
+    if not command:
+        return []
+    planned = list(command)
+    if max_iter is not None:
+        planned = _replace_or_append_option(planned, "--max-iter", str(max_iter))
+    planned = _replace_or_append_option(
+        planned,
+        "--max-runtime-minutes",
+        str(max_runtime_minutes),
+    )
+    return planned
+
+
+def _refresh_plan_item(item: dict[str, Any]) -> dict[str, Any]:
+    db_path = Path(str(item.get("db_path") or ""))
+    candidate = target_resume_candidate_for_db(db_path) if db_path else None
+    if candidate is None:
+        return {
+            **item,
+            "status": "skipped",
+            "skip_reason": "latest_run_not_resumable",
+            "command": [],
+        }
+    if candidate.run_id != _safe_int(item.get("run_id")):
+        return {
+            **item,
+            "status": "skipped",
+            "skip_reason": "latest_run_changed",
+            "latest_run_id": candidate.run_id,
+            "command": [],
+        }
+    if not candidate.resume_ready:
+        return {
+            **item,
+            "status": "skipped",
+            "skip_reason": "resume_blocked",
+            "resume_blockers": candidate.resume_blockers,
+            "command": [],
+        }
+    return {**item, "status": "ready"}
+
+
+def _run_resume_child(
+    command: list[str],
+    *,
+    timeout_seconds: int,
+    runner: ResumeRunner | None,
+) -> subprocess.CompletedProcess[str]:
+    if runner is not None:
+        return runner(command, timeout_seconds)
+    try:
+        return subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return subprocess.CompletedProcess(
+            command,
+            124,
+            stdout=_coerce_text(exc.stdout),
+            stderr=f"resume child exceeded timeout_seconds={timeout_seconds}",
+        )
+
+
+def _append_ledger_event(path: Path, event: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {**event, "recorded_at": _utc_now()}
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _child_timeout_seconds(max_runtime_minutes: int) -> int:
+    minutes = _normalize_positive_int(
+        max_runtime_minutes,
+        default=DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
+    )
+    return minutes * 60 + 120
+
+
+def _safe_batch_id(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if raw:
+        cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in raw)
+        return cleaned[:80] or _default_batch_id()
+    return _default_batch_id()
+
+
+def _default_batch_id() -> str:
+    return "resume-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _current_pid() -> int:
+    try:
+        import os
+
+        return os.getpid()
+    except OSError:
+        return 0
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _tail_text(value: object, *, limit: int = 2000) -> str:
+    text = _coerce_text(value)
+    if len(text) <= limit:
+        return text
+    return text[-limit:]
+
+
+def _coerce_text(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
+def _replace_or_append_option(command: list[str], option: str, value: str) -> list[str]:
+    planned = list(command)
+    try:
+        index = planned.index(option)
+    except ValueError:
+        planned.extend([option, value])
+        return planned
+    if index + 1 < len(planned):
+        planned[index + 1] = value
+    else:
+        planned.append(value)
+    return planned
+
+
 def _safe_path_string(metadata: dict[str, Any], key: str) -> str:
     value = metadata.get(key)
     if value is None:
@@ -641,6 +996,24 @@ def _normalize_limit(limit: int | None) -> int | None:
     if limit is None:
         return None
     return max(0, int(limit))
+
+
+def _normalize_positive_int(value: object, *, default: int) -> int:
+    try:
+        parsed = int(value or 0)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _normalize_optional_positive_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
 
 
 def _engagement_id_from_db_path(path: Path) -> int | None:

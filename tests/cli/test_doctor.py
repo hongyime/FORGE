@@ -115,9 +115,8 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert rows["Free/Local Baseline"].status == "OK"
     assert rows["Secrets: gitleaks"].status == "OK"
     assert rows["Secrets: trufflehog"].status == "OPTIONAL"
-    assert "go install github.com/trufflesecurity/trufflehog/v3@latest" in rows[
-        "Secrets: trufflehog"
-    ].remediation
+    assert "TruffleHog release binary" in rows["Secrets: trufflehog"].remediation
+    assert "forge connectors install-plan --json" in rows["Secrets: trufflehog"].remediation
     assert rows["Connector Catalog"].status == "WARN"
     assert "free-first" in rows["Connector Catalog"].details
     assert "optional paid hidden by default" in rows["Connector Catalog"].details
@@ -223,6 +222,8 @@ def test_collect_doctor_checks_uses_connector_binary_search_paths(tmp_path) -> N
     tool_dir.mkdir()
     subfinder = tool_dir / ("subfinder.exe" if os.name == "nt" else "subfinder")
     subfinder.write_text("", encoding="utf-8")
+    detect_secrets = tool_dir / ("detect-secrets.exe" if os.name == "nt" else "detect-secrets")
+    detect_secrets.write_text("", encoding="utf-8")
 
     checks = collect_doctor_checks(
         config=_cfg(tmp_path),
@@ -232,6 +233,10 @@ def test_collect_doctor_checks_uses_connector_binary_search_paths(tmp_path) -> N
     )
 
     rows = _rows(checks)
+    assert rows["Secrets: detect-secrets"].status == "OK"
+    assert os.path.normcase(str(detect_secrets)) in os.path.normcase(
+        rows["Secrets: detect-secrets"].details
+    )
     assert "projectdiscovery_subfinder" not in rows["Connector Catalog"].details
     missing_fragment = rows["Connector Action Plan"].details.split("missing binaries:", 1)[1].split(
         ";", 1

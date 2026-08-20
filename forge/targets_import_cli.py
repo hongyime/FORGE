@@ -10,8 +10,11 @@ from rich.console import Console
 from forge.targets_import import import_targets
 from forge.targets_resume_candidates import (
     DEFAULT_RESUME_CANDIDATE_LIMIT,
+    DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
     backfill_target_resume_scope_manifests,
     collect_target_resume_candidates,
+    collect_target_resume_plan,
+    execute_target_resume_plan,
 )
 
 console = Console(stderr=True)
@@ -193,3 +196,109 @@ def register_target_import_commands(app: typer.Typer) -> None:
             f"[green]{mode}:[/green] inspected={payload['planned_count']} "
             f"actions={payload['action_counts']}"
         )
+
+    @app.command("resume-plan")
+    def targets_resume_plan(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help=(
+                "FORGE data directory to scan. Defaults to the configured data dir "
+                "plus repo-local legacy dashboard DBs."
+            ),
+        ),
+        limit: Optional[int] = typer.Option(
+            DEFAULT_RESUME_CANDIDATE_LIMIT,
+            "--limit",
+            help="Maximum candidate rows to inspect. Use 0 for none.",
+        ),
+        reason: Optional[str] = typer.Option(
+            None,
+            "--reason",
+            help="Only plan a specific resume reason such as pending_recursive_work.",
+        ),
+        max_iter: Optional[int] = typer.Option(
+            None,
+            "--max-iter",
+            help="Override the planned resume command max iterations.",
+        ),
+        max_runtime_minutes: int = typer.Option(
+            DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
+            "--max-runtime-minutes",
+            help="Append this per-run soft runtime budget to every planned command.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON. Accepted for parity; output is JSON by default.",
+        ),
+    ) -> None:
+        """Plan sequential resume commands without starting work."""
+        _ = json_output
+        payload = collect_target_resume_plan(
+            data_dir=data_dir,
+            limit=limit,
+            reason=reason,
+            max_iter=max_iter,
+            max_runtime_minutes=max_runtime_minutes,
+        )
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+    @app.command("resume-run")
+    def targets_resume_run(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help=(
+                "FORGE data directory to scan. Defaults to the configured data dir "
+                "plus repo-local legacy dashboard DBs."
+            ),
+        ),
+        limit: Optional[int] = typer.Option(
+            DEFAULT_RESUME_CANDIDATE_LIMIT,
+            "--limit",
+            help="Maximum candidate rows to inspect. Use 0 for none.",
+        ),
+        reason: Optional[str] = typer.Option(
+            None,
+            "--reason",
+            help="Only run a specific resume reason such as pending_recursive_work.",
+        ),
+        max_iter: Optional[int] = typer.Option(
+            None,
+            "--max-iter",
+            help="Override the resume command max iterations.",
+        ),
+        max_runtime_minutes: int = typer.Option(
+            DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
+            "--max-runtime-minutes",
+            help="Append this per-run soft runtime budget to every command.",
+        ),
+        batch_id: Optional[str] = typer.Option(
+            None,
+            "--batch-id",
+            help="Optional stable id for the resume batch ledger filename.",
+        ),
+        stop_on_failure: bool = typer.Option(
+            True,
+            "--stop-on-failure/--continue-on-failure",
+            help="Stop after the first failed child process by default.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON. Accepted for parity; output is JSON by default.",
+        ),
+    ) -> None:
+        """Execute ready resume candidates sequentially with a durable ledger."""
+        _ = json_output
+        payload = execute_target_resume_plan(
+            data_dir=data_dir,
+            limit=limit,
+            reason=reason,
+            max_iter=max_iter,
+            max_runtime_minutes=max_runtime_minutes,
+            batch_id=batch_id,
+            stop_on_failure=stop_on_failure,
+        )
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))

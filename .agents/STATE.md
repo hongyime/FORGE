@@ -181,9 +181,13 @@ Progress:
 - Locally installed/detected `detect-secrets`, `gitleaks`, `katana`, `nuclei`, and `subfinder`; `forge connectors install-plan --json` and `forge doctor --json` now agree that only connector binary `trufflehog` is missing.
 - Verified B565 with focused connector/bootstrap/doctor tests (`93 passed`), Ruff, py_compile, `git diff --check`, local install-plan/doctor smokes, scheduled-task status, and an orphan installer process check.
 - Pushed B565 as `e225c9f feat: bootstrap connector tools`.
+- Added read-only `forge targets resume-plan [--json]` to convert ready resume candidates into a sequential manual command plan with explicit `--max-runtime-minutes`, blocker summaries, and plan-only execution policy.
+- Added explicit `forge targets resume-run [--json]` to execute ready resume candidates one child process at a time with a batch lock, JSONL ledger, latest-run re-checks, rerun skips, and stop-on-failure behavior. No local resume-run was executed.
+- Aligned duplicate doctor secret-tool rows with connector binary discovery: `detect-secrets` now resolves from `.venv`/connector search paths and TruffleHog remediation points to manual release-binary/install-plan guidance.
+- Verified B566 with focused resume/doctor/CLI tests, broader target-import/doctor/CLI-registry tests (`72 passed`), Ruff, py_compile, local `targets resume-plan --limit 5 --json` smoke, and doctor smoke.
 
 Next steps:
-- Continue old product hardening from the next concrete quality-audit/doctor failure class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, Connector Secret Store in shells that have not loaded the user-level key, and Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply.
+- Commit and push B566, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, Connector Secret Store in shells that have not loaded the user-level key, and Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

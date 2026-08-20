@@ -53,3 +53,4 @@
 - 2026-08-20: Added non-secret connector secret-key setup planning and configured a local user-level FORGE_ENGAGEMENT_KEY without printing the key value.
 - 2026-08-20: Added a read-only monitoring due-plan before run-due so operators can inspect due scheduled work without creating snapshots, running refresh callbacks, or delivering alerts.
 - 2026-08-20: Aligned connector binary discovery across runtime, install-plan, and doctor; full bootstrap now best-effort installs bounded free/local connector tools while leaving TruffleHog as manual guidance.
+- 2026-08-20: Added target resume-plan/resume-run so historical failed target-import candidates can be planned read-only or resumed strictly sequentially with a ledger and lock.

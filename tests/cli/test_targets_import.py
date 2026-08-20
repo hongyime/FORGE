@@ -15,6 +15,8 @@ from forge.targets_import import import_targets, load_target_feed
 from forge.targets_resume_candidates import (
     backfill_target_resume_scope_manifests,
     collect_target_resume_candidates,
+    collect_target_resume_plan,
+    execute_target_resume_plan,
 )
 
 
@@ -649,6 +651,69 @@ def test_backfill_scope_manifests_apply_updates_latest_run_metadata(
     ]
 
 
+def test_resume_plan_reports_sequential_ready_commands_without_execution(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 12",
+        metadata={
+            "roe_id": "ROE-ACME-2026",
+            "scope_manifest": str(scope_path),
+            "pending_counts": {"artifact_queue": 12},
+        },
+    )
+    _write_candidate_run(
+        data_dir / "engagements" / "2.db",
+        engagement_id=2,
+        status="cancelled",
+        error="watchdog timeout after 45 minutes",
+    )
+
+    payload = collect_target_resume_plan(
+        data_dir=data_dir,
+        max_iter=5,
+        max_runtime_minutes=17,
+    )
+
+    assert payload["schema_version"] == "forge.targets.resume_plan.v1"
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["concurrency"] == "sequential"
+    assert payload["candidate_count"] == 2
+    assert payload["resume_ready_count"] == 1
+    assert payload["planned_count"] == 1
+    assert payload["skipped_count"] == 1
+    assert payload["skipped_blocker_counts"] == {
+        "roe_id_missing": 1,
+        "scope_manifest_missing": 1,
+    }
+    assert payload["estimated_serial_runtime_minutes"] == 17
+    item = payload["items"][0]
+    assert item["sequence"] == 1
+    assert item["engagement_id"] == 1
+    assert item["expected_execution"] == "manual_sequential"
+    assert item["pending_work_total"] == 12
+    assert item["command"] == [
+        "forge",
+        "kill-chain",
+        "example.com",
+        "--engagement",
+        "1",
+        "--roe-id",
+        "ROE-ACME-2026",
+        "--scope-manifest",
+        str(scope_path),
+        "--resume",
+        "--max-iter",
+        "5",
+        "--max-runtime-minutes",
+        "17",
+    ]
+
+
 def test_targets_backfill_scope_manifests_cli_outputs_json(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     _write_candidate_run(
@@ -679,6 +744,179 @@ def test_targets_backfill_scope_manifests_cli_outputs_json(tmp_path: Path) -> No
     payload = json.loads(result.output)
     assert payload["dry_run"] is True
     assert payload["action_counts"] == {"would_update": 1}
+
+
+def test_targets_resume_plan_cli_outputs_json_without_running(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+    )
+
+    app = typer.Typer()
+    targets_app = typer.Typer()
+    register_target_import_commands(targets_app)
+    app.add_typer(targets_app, name="targets")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "targets",
+            "resume-plan",
+            "--data-dir",
+            str(data_dir),
+            "--max-runtime-minutes",
+            "19",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["planned_count"] == 1
+    assert payload["items"][0]["command"][-2:] == ["--max-runtime-minutes", "19"]
+
+
+def test_targets_resume_run_cli_outputs_executor_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "forge.targets_import_cli.execute_target_resume_plan",
+        lambda **kwargs: {
+            "schema_version": "forge.targets.resume_run.v1",
+            "execution_policy": "executes_child_processes_sequentially",
+            "batch_id": kwargs["batch_id"],
+            "planned_count": 0,
+            "items": [],
+        },
+    )
+    app = typer.Typer()
+    targets_app = typer.Typer()
+    register_target_import_commands(targets_app)
+    app.add_typer(targets_app, name="targets")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "targets",
+            "resume-run",
+            "--batch-id",
+            "cli-test",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.targets.resume_run.v1"
+    assert payload["batch_id"] == "cli-test"
+
+
+def test_resume_run_executes_sequentially_and_writes_ledger(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+    )
+    calls: list[tuple[list[str], int]] = []
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> subprocess.CompletedProcess[str]:
+        calls.append((command, timeout_seconds))
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="unit-test",
+        max_runtime_minutes=13,
+        runner=fake_runner,
+    )
+
+    assert payload["schema_version"] == "forge.targets.resume_run.v1"
+    assert payload["execution_policy"] == "executes_child_processes_sequentially"
+    assert payload["status"] == "completed"
+    assert payload["result_counts"] == {"completed": 1}
+    assert len(calls) == 1
+    assert calls[0][0][-2:] == ["--max-runtime-minutes", "13"]
+    assert calls[0][1] == 13 * 60 + 120
+    ledger_path = Path(payload["ledger_path"])
+    lines = [json.loads(line) for line in ledger_path.read_text(encoding="utf-8").splitlines()]
+    assert [line["event"] for line in lines] == [
+        "batch_started",
+        "item_started",
+        "item_completed",
+        "batch_completed",
+    ]
+    assert not Path(payload["lock_path"]).exists()
+
+
+def test_resume_run_skips_no_longer_resumable_latest_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1.db"
+    _write_candidate_run(
+        db_path,
+        engagement_id=1,
+        status="completed",
+        error="",
+    )
+    monkeypatch.setattr(
+        "forge.targets_resume_candidates.collect_target_resume_plan",
+        lambda **_kwargs: {
+            "data_dir": str(data_dir),
+            "planned_count": 1,
+            "items": [
+                {
+                    "sequence": 1,
+                    "engagement_id": 1,
+                    "run_id": 1,
+                    "db_path": str(db_path),
+                    "command": ["forge", "kill-chain", "example.com"],
+                    "max_runtime_minutes": 25,
+                }
+            ],
+        },
+    )
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="skip-test",
+        runner=fake_runner,
+    )
+
+    assert payload["planned_count"] == 1
+    assert payload["result_counts"] == {"skipped": 1}
+    assert payload["items"][0]["skip_reason"] == "latest_run_not_resumable"
+    assert calls == []
+
+
+def test_resume_run_existing_lock_blocks_without_removing_lock(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    lock_path.write_text("active", encoding="utf-8")
+
+    payload = execute_target_resume_plan(data_dir=data_dir, batch_id="locked")
+
+    assert payload["status"] == "blocked"
+    assert payload["execution_policy"] == "blocked_existing_resume_batch_lock"
+    assert lock_path.read_text(encoding="utf-8") == "active"
 
 
 def test_start_launches_scoped_kill_chain_with_scope_and_roe(
