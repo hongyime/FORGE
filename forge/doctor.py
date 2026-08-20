@@ -369,6 +369,11 @@ def doctor_payload(checks: Sequence[DoctorCheck]) -> dict[str, Any]:
     ]
     return {
         "schema": "forge.doctor.v1",
+        "schema_version": "forge.doctor.v1",
+        "execution_policy": "read_only_environment_readiness_no_commands_executed",
+        "total_count": len(checks),
+        "selected_count": len(checks),
+        "omitted_count": 0,
         "summary": {
             "check_count": len(checks),
             "status_counts": dict(sorted(status_counts.items())),

@@ -573,6 +573,13 @@ def test_doctor_payload_json_is_machine_readable_and_actionable() -> None:
     data = json.loads(payload)
 
     assert data["schema"] == "forge.doctor.v1"
+    assert data["schema_version"] == "forge.doctor.v1"
+    assert data["execution_policy"] == (
+        "read_only_environment_readiness_no_commands_executed"
+    )
+    assert data["total_count"] == 2
+    assert data["selected_count"] == 2
+    assert data["omitted_count"] == 0
     assert data["summary"]["check_count"] == 2
     assert data["summary"]["attention_count"] == 1
     assert data["summary"]["action_count"] == 2
