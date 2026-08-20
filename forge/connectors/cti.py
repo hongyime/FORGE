@@ -10,7 +10,7 @@ from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from io import StringIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +32,7 @@ SUPPORTED_CTI_IMPORT_CONNECTORS = (
     "abusech_urlhaus",
     "stix_taxii_import",
 )
-MAX_ZIPPED_CTI_REPORT_BYTES = 100 * 1024 * 1024
+MAX_CTI_REPORT_TEXT_BYTES = 100 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -556,9 +556,10 @@ def _read_report_text(path: Path) -> str:
     if path.suffix.lower() == ".zip":
         return _read_zipped_report_text(path)
     if path.suffix.lower() == ".gz":
-        with gzip.open(path, "rt", encoding="utf-8") as handle:
-            return handle.read()
-    return path.read_text(encoding="utf-8")
+        return _decode_report_bytes(_read_gzip_bytes_capped(path))
+    if path.stat().st_size > MAX_CTI_REPORT_TEXT_BYTES:
+        raise ValueError("CTI observation report file is too large")
+    return _decode_report_bytes(path.read_bytes())
 
 
 def _read_zipped_report_text(path: Path) -> str:
@@ -572,16 +573,41 @@ def _read_zipped_report_text(path: Path) -> str:
             if not candidates:
                 raise ValueError("CTI observation ZIP report does not contain JSON, CSV, or GZ data")
             selected = sorted(candidates, key=lambda info: info.filename.lower())[0]
-            if selected.file_size > MAX_ZIPPED_CTI_REPORT_BYTES:
+            if selected.file_size > MAX_CTI_REPORT_TEXT_BYTES:
                 raise ValueError("CTI observation ZIP member is too large")
             data = archive.read(selected)
     except zipfile.BadZipFile as exc:
         raise ValueError("CTI observation report is not a valid ZIP file") from exc
     if selected.filename.lower().endswith(".gz"):
-        data = gzip.decompress(data)
-        if len(data) > MAX_ZIPPED_CTI_REPORT_BYTES:
-            raise ValueError("CTI observation gzipped ZIP member is too large")
-    return data.decode("utf-8")
+        data = _decompress_gzip_bytes_capped(data)
+    return _decode_report_bytes(data)
+
+
+def _read_gzip_bytes_capped(path: Path) -> bytes:
+    with gzip.open(path, "rb") as handle:
+        return _read_bytes_capped(handle, "CTI observation gzipped report is too large")
+
+
+def _decompress_gzip_bytes_capped(data: bytes) -> bytes:
+    with gzip.GzipFile(fileobj=BytesIO(data)) as handle:
+        return _read_bytes_capped(
+            handle,
+            "CTI observation gzipped ZIP member is too large",
+        )
+
+
+def _read_bytes_capped(handle: Any, message: str) -> bytes:
+    data = handle.read(MAX_CTI_REPORT_TEXT_BYTES + 1)
+    if len(data) > MAX_CTI_REPORT_TEXT_BYTES:
+        raise ValueError(message)
+    return data
+
+
+def _decode_report_bytes(data: bytes) -> str:
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("CTI observation report is not valid UTF-8 text") from exc
 
 
 def _zip_report_member_supported(filename: str) -> bool:

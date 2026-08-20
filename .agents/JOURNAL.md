@@ -15,3 +15,4 @@
 - 2026-08-20: Added an opt-in CTI fail-on-empty automation gate that rejects files with no accepted observations while allowing duplicate-only re-imports.
 - 2026-08-20: Added local `.gz` CTI report-file support so compressed offline exports are decompressed before the same sanitized JSON/CSV import path.
 - 2026-08-20: Added constrained local `.zip` CTI report-file support with deterministic supported-member selection and no archive extraction to disk.
+- 2026-08-20: Added a shared decoded-size cap for local CTI report files, including plain, gzip, ZIP member, and nested gzip-in-ZIP inputs.

@@ -10,6 +10,7 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
+import forge.connectors.cti as cti_module
 from forge.connectors.cli import register_connector_commands
 from forge.connectors.cti import CtiObservationImportConfig, import_cti_observations
 from forge.connectors.registry import connector_statuses
@@ -1168,6 +1169,85 @@ def test_connector_cli_import_cti_reads_zipped_csv_export(
     assert payload["persisted_count"] == 1
     assert payload["parsed_indicator_type_counts"] == {"url": 1}
     assert secret_value not in result.output
+
+
+def test_connector_cli_import_cti_rejects_oversized_gzip_report(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(cti_module, "MAX_CTI_REPORT_TEXT_BYTES", 32)
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "oversized.csv.gz"
+    with gzip.open(report_file, "wt", encoding="utf-8") as handle:
+        handle.write("id,ioc,ioc_type\n41,Portal.Acme.Example,domain\n")
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "abusech_threatfox",
+            "--report-file",
+            str(report_file),
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "gzipped report is too large" in result.output
+
+
+def test_connector_cli_import_cti_rejects_oversized_zip_member(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(cti_module, "MAX_CTI_REPORT_TEXT_BYTES", 32)
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "oversized.zip"
+    with zipfile.ZipFile(report_file, "w") as archive:
+        archive.writestr(
+            "exports/threatfox.csv",
+            "id,ioc,ioc_type\n41,Portal.Acme.Example,domain\n",
+        )
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "abusech_threatfox",
+            "--report-file",
+            str(report_file),
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "ZIP member is too large" in result.output
 
 
 def test_connector_cli_import_cti_rejects_zip_without_report_member(

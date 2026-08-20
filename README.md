@@ -285,7 +285,8 @@ sanitized source/provenance and are not reportable findings unless a later
 independent scoped workflow validates promoted seeds. Local `.gz` report files
 are decompressed before the same JSON/CSV parsing path; local `.zip` files use
 the first supported JSON, CSV, or GZ member by sorted archive name and reject
-archives without a supported report member. Use `--dry-run` to parse,
+archives without a supported report member. Local report files and decompressed
+content are capped at 100 MB before parsing. Use `--dry-run` to parse,
 sanitize, and scope-check seed promotion candidates without writing
 observations, seeds, or audit rows; dry-run reports new observations separately
 from existing or repeated observations with `would_persist_count` and

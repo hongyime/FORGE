@@ -45,6 +45,9 @@ Progress:
 - Added constrained local `.zip` report-file support for offline `forge connectors import-cti` with deterministic supported-member selection and no extraction to disk.
 - Verified B529 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B529 as `3890a87 feat: read zipped cti imports`.
+- Added a shared decoded-size cap for offline CTI report-file reads across plain, `.gz`, `.zip`, and nested gzip-in-ZIP inputs.
+- Verified B530 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`; commit/push pending.
 
 Next steps:
+- Commit and push B530.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
