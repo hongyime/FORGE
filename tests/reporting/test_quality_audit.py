@@ -438,6 +438,7 @@ def test_collect_long_run_review_plan_is_read_only_review_plan(tmp_path: Path) -
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
     assert payload["status"] == "review"
     assert payload["total_count"] == 1
+    assert payload["selected_count"] == 1
     assert payload["sample_limit"] == 1
     assert payload["sample_count"] == 1
     assert payload["omitted_count"] == 0
@@ -460,7 +461,9 @@ def test_collect_policy_flag_review_plan_explains_latest_run_metadata(
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
     assert payload["status"] == "explain"
     assert payload["counts"] == {"destructive_no": 1, "post_ex_no": 1}
-    assert payload["total_count"] == 2
+    assert payload["total_count"] == 1
+    assert payload["selected_count"] == 1
+    assert payload["flag_total_count"] == 2
     assert payload["dashboard_generated_at"] == "2026-08-20 10:00:00"
     assert payload["source"] == "generated_dashboard_run_summary"
     assert payload["meaning"] == "latest run metadata, not current global defaults"
@@ -835,6 +838,9 @@ def test_report_policy_plan_cli_outputs_json(tmp_path: Path) -> None:
     assert payload["schema_version"] == "forge.report_policy_flag_review_plan.v1"
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
     assert payload["counts"] == {"destructive_no": 1, "post_ex_no": 1}
+    assert payload["total_count"] == 1
+    assert payload["selected_count"] == 1
+    assert payload["flag_total_count"] == 2
     assert payload["commands"] == []
     assert payload["source"] == "generated_dashboard_run_summary"
     assert payload["meaning"] == "latest run metadata, not current global defaults"

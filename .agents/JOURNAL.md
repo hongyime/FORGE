@@ -96,3 +96,4 @@
 - 2026-08-21: Connector review plans now expose plan-compatible counts and policy-summary schema metadata for easier automation consumption.
 - 2026-08-21: Connector setup plans now expose plan-compatible execution/count metadata without executing installers or printing secret material.
 - 2026-08-21: Quality-audit action plans now distinguish total backlog, selected rows, samples, and omitted rows consistently for operator automation.
+- 2026-08-21: Long-run and policy follow-up plans now use row-based total/selected/omitted counts, with policy flag occurrence totals preserved separately.

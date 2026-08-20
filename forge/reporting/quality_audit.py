@@ -387,6 +387,7 @@ def collect_long_run_review_plan(
         "execution_policy": "plan_only_no_commands_executed",
         "long_run_threshold_seconds": float(long_run_seconds),
         "total_count": total_count,
+        "selected_count": len(samples),
         "sample_limit": sample_limit,
         "sample_count": len(samples),
         "omitted_count": omitted_count,
@@ -475,10 +476,11 @@ def collect_policy_flag_review_plan(
         if key in {"attack_no", "destructive_no", "post_ex_no"}
         and int(value or 0)
     }
-    total_count = sum(counts.values())
+    flag_total_count = sum(counts.values())
+    row_total_count = int(payload.get("policy_flag_sample_total", len(samples)) or 0)
     omitted_count = max(
         0,
-        int(payload.get("policy_flag_sample_total", len(samples)) or 0) - len(samples),
+        row_total_count - len(samples),
     )
     return {
         "schema_version": "forge.report_policy_flag_review_plan.v1",
@@ -494,7 +496,9 @@ def collect_policy_flag_review_plan(
             else "no policy *_no latest-run metadata counts were found"
         ),
         "counts": dict(sorted(counts.items())),
-        "total_count": total_count,
+        "total_count": row_total_count,
+        "selected_count": len(samples),
+        "flag_total_count": flag_total_count,
         "sample_limit": sample_limit,
         "sample_count": len(samples),
         "omitted_count": omitted_count,
@@ -508,7 +512,7 @@ def collect_policy_flag_review_plan(
                     "policy-plan",
                     "--json",
                     "--limit",
-                    str(len(samples) + omitted_count),
+                    str(row_total_count),
                 ]
             ]
             if omitted_count
