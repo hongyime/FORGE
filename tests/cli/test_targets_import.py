@@ -951,6 +951,10 @@ def test_resume_run_executes_sequentially_and_writes_ledger(tmp_path: Path) -> N
     assert payload["schema_version"] == "forge.targets.resume_run.v1"
     assert payload["execution_policy"] == "executes_child_processes_sequentially"
     assert payload["status"] == "completed"
+    assert payload["total_count"] == 1
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 0
+    assert payload["total_resume_ready_count"] == 1
     assert payload["result_counts"] == {"completed": 1}
     assert len(calls) == 1
     assert calls[0][0][-2:] == ["--max-runtime-minutes", "13"]
@@ -995,6 +999,10 @@ def test_resume_run_dry_run_does_not_call_runner_or_write_ledger(tmp_path: Path)
     assert payload["execution_policy"] == "dry_run_no_commands_executed"
     assert payload["dry_run"] is True
     assert payload["status"] == "dry_run"
+    assert payload["total_count"] == 1
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 0
+    assert payload["total_resume_ready_count"] == 1
     assert payload["result_counts"] == {"dry_run": 1}
     assert payload["items"][0]["status"] == "dry_run"
     assert payload["items"][0]["returncode"] is None
@@ -1007,17 +1015,19 @@ def test_resume_run_dry_run_can_redact_local_paths(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     scope_path = tmp_path / "scope.json"
     scope_path.write_text("{}", encoding="utf-8")
-    _write_candidate_run(
-        data_dir / "engagements" / "1.db",
-        engagement_id=1,
-        status="failed",
-        error="max iterations exhausted with pending recursive work: 1",
-        metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
-    )
+    for engagement_id in range(1, 4):
+        _write_candidate_run(
+            data_dir / "engagements" / f"{engagement_id}.db",
+            engagement_id=engagement_id,
+            status="failed",
+            error="max iterations exhausted with pending recursive work: 1",
+            metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+        )
 
     payload = execute_target_resume_plan(
         data_dir=data_dir,
         batch_id="dry-run-redacted",
+        limit=1,
         dry_run=True,
         redact_paths=True,
     )
@@ -1025,6 +1035,13 @@ def test_resume_run_dry_run_can_redact_local_paths(tmp_path: Path) -> None:
     serialized = json.dumps(payload)
     assert payload["execution_policy"] == "dry_run_no_commands_executed"
     assert payload["path_redaction"] == "local_paths_redacted"
+    assert payload["total_count"] == 3
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 2
+    assert payload["candidate_count"] == 1
+    assert payload["resume_ready_count"] == 1
+    assert payload["total_resume_ready_count"] == 3
+    assert payload["total_reason_counts"] == {"pending_recursive_work": 3}
     assert payload["ledger_path"] == ""
     assert payload["ledger_ref"] == "dry-run-redacted.jsonl"
     assert payload["lock_path"] == ""
@@ -1122,6 +1139,9 @@ def test_resume_run_existing_lock_blocks_without_removing_lock(tmp_path: Path) -
 
     assert payload["status"] == "blocked"
     assert payload["execution_policy"] == "blocked_existing_resume_batch_lock"
+    assert payload["total_count"] == 0
+    assert payload["selected_count"] == 0
+    assert payload["omitted_count"] == 0
     assert lock_path.read_text(encoding="utf-8") == "active"
 
 

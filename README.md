@@ -335,7 +335,9 @@ each latest run before launching,
 holds a batch lock, writes a JSONL ledger under
 `target_imports/resume_batches`, and starts at most one child
 `forge kill-chain ... --resume` process at a time. Re-running after a candidate
-is already completed skips it instead of launching duplicate work.
+is already completed skips it instead of launching duplicate work. Resume-run
+JSON includes `total_count`, `selected_count`, and `omitted_count`, matching
+resume-plan, so bounded rehearsals cannot be mistaken for the full backlog.
 `forge targets backfill-scope-manifests` is also dry-run by default; with
 `--apply`, it only writes recovered narrow scope manifests and updates the
 latest-run metadata for blocked resume candidates. It does not start or resume

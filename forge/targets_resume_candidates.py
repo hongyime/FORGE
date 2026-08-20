@@ -303,6 +303,7 @@ def execute_target_resume_plan(
         max_iter=max_iter,
         max_runtime_minutes=max_runtime_minutes,
     )
+    plan_count_fields = _resume_plan_count_fields(plan)
     batch = _safe_batch_id(batch_id)
     ledger_dir = Path(plan["data_dir"]) / "target_imports" / "resume_batches"
     ledger_path = ledger_dir / f"{batch}.jsonl"
@@ -343,6 +344,7 @@ def execute_target_resume_plan(
             "status": "dry_run",
             "concurrency": "sequential",
             "stop_on_failure": stop_on_failure,
+            **plan_count_fields,
             "planned_count": plan["planned_count"],
             "result_counts": dict(sorted(counts.items())),
             "items": results,
@@ -427,6 +429,8 @@ def execute_target_resume_plan(
             "ledger_path": str(ledger_path),
             "lock_path": str(lock_path),
             "status": "blocked",
+            **plan_count_fields,
+            "planned_count": plan["planned_count"],
             "result_counts": {"blocked": 1},
             "items": [],
         }
@@ -446,6 +450,7 @@ def execute_target_resume_plan(
         "status": "completed" if not counts.get("failed") else "failed",
         "concurrency": "sequential",
         "stop_on_failure": stop_on_failure,
+        **plan_count_fields,
         "planned_count": plan["planned_count"],
         "result_counts": dict(sorted(counts.items())),
         "items": results,
@@ -986,6 +991,21 @@ def _redact_resume_run_item(item: dict[str, Any]) -> dict[str, Any]:
     return redacted
 
 
+def _resume_plan_count_fields(plan: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "total_count": _safe_int(plan.get("total_count")),
+        "selected_count": _safe_int(plan.get("selected_count")),
+        "omitted_count": _safe_int(plan.get("omitted_count")),
+        "candidate_count": _safe_int(plan.get("candidate_count")),
+        "resume_ready_count": _safe_int(plan.get("resume_ready_count")),
+        "total_resume_ready_count": _safe_int(plan.get("total_resume_ready_count")),
+        "skipped_count": _safe_int(plan.get("skipped_count")),
+        "skipped_blocker_counts": dict(_mapping(plan.get("skipped_blocker_counts"))),
+        "reason_counts": dict(_mapping(plan.get("reason_counts"))),
+        "total_reason_counts": dict(_mapping(plan.get("total_reason_counts"))),
+    }
+
+
 def _refresh_plan_item(item: dict[str, Any]) -> dict[str, Any]:
     db_path = Path(str(item.get("db_path") or ""))
     candidate = target_resume_candidate_for_db(db_path) if db_path else None
@@ -1141,6 +1161,10 @@ def _safe_int(value: object) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def _normalize_limit(limit: int | None) -> int | None:
