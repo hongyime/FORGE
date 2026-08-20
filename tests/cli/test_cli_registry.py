@@ -299,6 +299,7 @@ def test_readme_public_commands_document_operator_defaults_from_cli_help() -> No
     assert "llama_cpp" in report_help.output
     assert "local Qwen" in report_help.output
     assert "forge report generate --engagement N [--provider auto|template|llama_cpp]" in public_block
+    assert "forge report quality-audit [--reports-dir reports] [--json]" in public_block
     assert "Phase 6 defaults to `auto`; use `llama_cpp` for explicit local GGUF" in public_block
     assert "--report-provider {auto,template,llama_cpp,...}" in readme
 

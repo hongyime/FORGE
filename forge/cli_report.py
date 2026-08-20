@@ -6,6 +6,7 @@ Extracted from forge/cli.py for modularity. All @report_app.command functions li
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -15,6 +16,11 @@ from forge.cli import report_app, console
 from forge.config import ForgeConfig
 from forge.cli_helpers import _cli_audit
 from forge.db.direct_connect import direct_connect
+from forge.reporting.quality_audit import (
+    DEFAULT_LONG_RUN_SECONDS,
+    DEFAULT_TOP_LIMIT,
+    collect_report_quality_audit,
+)
 
 
 @report_app.command("generate")
@@ -114,3 +120,64 @@ def report_generate(
         target=str(result_path) if result_path else None,
         result=f"success provider={provider or 'auto'}",
     )
+
+
+@report_app.command("quality-audit")
+def report_quality_audit(
+    reports_dir: Path = typer.Option(
+        Path("reports"),
+        "--reports-dir",
+        help="Reports directory containing dashboard/data/engagements.json.",
+    ),
+    long_run_seconds: float = typer.Option(
+        DEFAULT_LONG_RUN_SECONDS,
+        "--long-run-seconds",
+        help="Threshold for flagging long kill-chain/report runs.",
+    ),
+    top: int = typer.Option(
+        DEFAULT_TOP_LIMIT,
+        "--top",
+        help="Maximum sample rows per finding category.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable JSON.",
+    ),
+) -> None:
+    """Summarize local report/dashboard quality breakpoints without mutating data."""
+    payload = collect_report_quality_audit(
+        reports_dir=reports_dir,
+        long_run_seconds=long_run_seconds,
+        top_limit=top,
+    )
+    if json_output:
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+
+    console.print(
+        "[green]Report quality audit:[/green] "
+        f"{payload['engagement_count']} engagement(s), "
+        f"{payload['report_file_count']} report file(s), "
+        f"{payload['dashboard_html_count']} dashboard HTML file(s)"
+    )
+    console.print(
+        "  "
+        f"families={payload['report_family_count']} "
+        f"fallbacks={sum(payload['fallback_reason_counts'].values())} "
+        f"failed_runs={payload['failed_run_count']} "
+        f"long_runs={payload['long_run_count']} "
+        f"dashboard_refresh_failures={payload['dashboard_refresh_failure_count']} "
+        f"resume_reviews={payload['resume_review_count']}"
+    )
+    if payload["fallback_reason_counts"]:
+        console.print(f"  fallback reasons: {payload['fallback_reason_counts']}")
+    if payload["run_status_counts"]:
+        console.print(f"  run statuses: {payload['run_status_counts']}")
+    if payload["top_long_runs"]:
+        console.print("  longest runs:")
+        for row in payload["top_long_runs"]:
+            console.print(
+                f"    engagement={row['id']} status={row['status']} "
+                f"elapsed={row['elapsed_seconds']} seed={row['seed']}"
+            )

@@ -1,0 +1,271 @@
+"""Read-only report and dashboard quality audit helpers."""
+
+from __future__ import annotations
+
+import json
+from collections import Counter
+from pathlib import Path
+from typing import Any
+
+from forge.reporting.report_history import report_family_groups
+
+DEFAULT_LONG_RUN_SECONDS = 2700.0
+DEFAULT_TOP_LIMIT = 10
+
+
+def collect_report_quality_audit(
+    *,
+    reports_dir: Path,
+    long_run_seconds: float = DEFAULT_LONG_RUN_SECONDS,
+    top_limit: int = DEFAULT_TOP_LIMIT,
+) -> dict[str, Any]:
+    reports_root = Path(reports_dir)
+    dashboard_root = reports_root / "dashboard"
+    overview_path = dashboard_root / "data" / "engagements.json"
+    payload = _read_json_object(overview_path)
+    items = payload.get("items")
+    engagements = [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+    report_files = _report_files(reports_root)
+    dashboard_html_files = list(dashboard_root.rglob("*.html")) if dashboard_root.exists() else []
+    root_report_files = [path for path in report_files if path.parent == reports_root]
+
+    run_status_counts: Counter[str] = Counter()
+    report_backend_counts: Counter[str] = Counter()
+    fallback_counts: Counter[str] = Counter()
+    report_write_error_counts: Counter[str] = Counter()
+    policy_counts: Counter[str] = Counter()
+    dashboard_refresh_failures: list[dict[str, Any]] = []
+    failed_runs: list[dict[str, Any]] = []
+    long_runs: list[dict[str, Any]] = []
+    resume_review_count = 0
+
+    for item in engagements:
+        run_summary = _mapping(item.get("run_summary"))
+        report_summary = _mapping(item.get("report_summary"))
+        detail_payload = _detail_payload(dashboard_root, item)
+        run_status = _text(run_summary.get("status") or "untracked").lower()
+        run_status_counts[run_status] += 1
+        if item.get("target_resume_candidate"):
+            resume_review_count += 1
+        if run_summary.get("attack_mode") is True:
+            policy_counts["attack_yes"] += 1
+        elif run_summary:
+            policy_counts["attack_no"] += 1
+        if run_summary.get("resume_enabled") is True:
+            policy_counts["resume_yes"] += 1
+        elif run_summary:
+            policy_counts["resume_no"] += 1
+        if run_summary.get("destructive_actions_allowed") is True:
+            policy_counts["destructive_yes"] += 1
+        elif run_summary:
+            policy_counts["destructive_no"] += 1
+        if run_summary.get("post_exploitation_allowed") is True:
+            policy_counts["post_ex_yes"] += 1
+        elif run_summary:
+            policy_counts["post_ex_no"] += 1
+
+        report_entries = _report_entries(detail_payload, report_summary)
+        for report_entry in report_entries:
+            backend = _text(
+                report_entry.get("rendered_provider")
+                or report_entry.get("render_backend")
+                or report_entry.get("provider")
+                or "none"
+            )
+            report_backend_counts[backend] += 1
+
+            fallback_reason = _text(report_entry.get("fallback_reason"))
+            if fallback_reason:
+                fallback_counts[_classify_fallback_reason(fallback_reason)] += 1
+            write_error = _text(report_entry.get("report_write_error"))
+            if write_error:
+                report_write_error_counts[_classify_fallback_reason(write_error)] += 1
+
+        elapsed = _elapsed_seconds(run_summary)
+        if elapsed is not None and elapsed >= float(long_run_seconds):
+            long_runs.append(_run_row(item, run_summary, elapsed_seconds=elapsed))
+        if run_status in {"failed", "cancelled", "abandoned", "timeout", "stale"}:
+            failed_runs.append(_run_row(item, run_summary, elapsed_seconds=elapsed))
+
+        dashboard_refresh_failures.extend(_dashboard_refresh_failures(detail_payload, item))
+
+    long_runs.sort(key=lambda row: float(row.get("elapsed_seconds") or 0.0), reverse=True)
+    failed_runs.sort(key=lambda row: (str(row.get("status") or ""), str(row.get("id") or "")))
+    dashboard_refresh_failures.sort(key=lambda row: str(row.get("id") or ""))
+
+    return {
+        "schema_version": "forge.report_quality_audit.v1",
+        "reports_dir": str(reports_root),
+        "dashboard_generated_at": _text(payload.get("generated_at")),
+        "engagement_count": len(engagements),
+        "report_file_count": len(report_files),
+        "root_report_file_count": len(root_report_files),
+        "dashboard_html_count": len(dashboard_html_files),
+        "report_family_count": _report_family_count(root_report_files),
+        "run_status_counts": dict(sorted(run_status_counts.items())),
+        "report_backend_counts": dict(sorted(report_backend_counts.items())),
+        "fallback_reason_counts": dict(sorted(fallback_counts.items())),
+        "report_write_error_counts": dict(sorted(report_write_error_counts.items())),
+        "policy_counts": dict(sorted(policy_counts.items())),
+        "resume_review_count": resume_review_count,
+        "long_run_threshold_seconds": float(long_run_seconds),
+        "long_run_count": len(long_runs),
+        "top_long_runs": long_runs[: max(0, int(top_limit))],
+        "failed_run_count": len(failed_runs),
+        "failed_runs": failed_runs[: max(0, int(top_limit))],
+        "dashboard_refresh_failure_count": len(dashboard_refresh_failures),
+        "dashboard_refresh_failures": dashboard_refresh_failures[: max(0, int(top_limit))],
+    }
+
+
+def _read_json_object(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _detail_payload(dashboard_root: Path, item: dict[str, Any]) -> dict[str, Any]:
+    detail_data = _text(item.get("detail_data"))
+    if not detail_data:
+        return {}
+    root = dashboard_root.resolve()
+    detail_path = (dashboard_root / detail_data).resolve()
+    if not _is_relative_to(detail_path, root):
+        return {}
+    return _read_json_object(detail_path)
+
+
+def _report_entries(
+    detail_payload: dict[str, Any],
+    overview_report_summary: dict[str, Any],
+) -> list[dict[str, Any]]:
+    history = detail_payload.get("report_history")
+    if isinstance(history, list):
+        entries = [item for item in history if isinstance(item, dict)]
+        if entries:
+            return entries
+    return [overview_report_summary] if overview_report_summary else []
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _report_files(reports_dir: Path) -> list[Path]:
+    if not reports_dir.exists():
+        return []
+    return [path for path in reports_dir.rglob("*") if path.is_file()]
+
+
+def _report_family_count(root_report_files: list[Path]) -> int:
+    return len(report_family_groups(root_report_files))
+
+
+def _classify_fallback_reason(reason: str) -> str:
+    text = reason.lower()
+    if "gguf model not found" in text:
+        return "gguf_model_missing"
+    if "quota" in text or "rate limit" in text or "rate_limit" in text:
+        return "provider_quota_or_rate_limit"
+    if "template" in text:
+        return "template_fallback"
+    if "timeout" in text or "timed out" in text:
+        return "timeout"
+    if "invalid argument" in text:
+        return "invalid_argument"
+    if "not enough values to unpack" in text:
+        return "value_unpack_error"
+    return "other"
+
+
+def _elapsed_seconds(run_summary: dict[str, Any]) -> float | None:
+    for key in ("elapsed_seconds", "elapsed_s"):
+        value = run_summary.get(key)
+        if isinstance(value, int | float):
+            return float(value)
+    metadata = _mapping(run_summary.get("metadata"))
+    for key in ("elapsed_seconds", "elapsed_s"):
+        value = metadata.get(key)
+        if isinstance(value, int | float):
+            return float(value)
+    error = _text(run_summary.get("error"))
+    return _elapsed_from_text(error)
+
+
+def _elapsed_from_text(value: str) -> float | None:
+    marker = "elapsed_s="
+    if marker not in value:
+        return None
+    tail = value.split(marker, 1)[1].split()[0].strip(",;")
+    try:
+        return float(tail)
+    except ValueError:
+        return None
+
+
+def _run_row(
+    item: dict[str, Any],
+    run_summary: dict[str, Any],
+    *,
+    elapsed_seconds: float | None,
+) -> dict[str, Any]:
+    return {
+        "id": _text(item.get("id")),
+        "slug": _text(item.get("slug")),
+        "name": _text(item.get("name")),
+        "status": _text(run_summary.get("status")),
+        "seed": _text(run_summary.get("seed_value") or item.get("primary_seed")),
+        "run_kind": _text(run_summary.get("run_kind")),
+        "iteration": f"{run_summary.get('current_iteration', 0)}/{run_summary.get('max_iterations', 0)}",
+        "elapsed_seconds": elapsed_seconds,
+        "error": _text(run_summary.get("error"))[:240],
+    }
+
+
+def _dashboard_refresh_failures(
+    detail_payload: dict[str, Any],
+    item: dict[str, Any],
+) -> list[dict[str, Any]]:
+    sections = _mapping(detail_payload.get("sections"))
+    rows = sections.get("recent_audit_log") or sections.get("audit_log") or []
+    if not isinstance(rows, list):
+        return []
+    failures: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        action = _text(row.get("Action") or row.get("action"))
+        if action != "dashboard_review_refresh_failed":
+            continue
+        failures.append(
+            {
+                "id": _text(item.get("id")),
+                "slug": _text(item.get("slug")),
+                "target": _text(row.get("Target") or row.get("target")),
+                "result": _text(row.get("Result") or row.get("result"))[:240],
+            }
+        )
+    return failures
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+__all__ = [
+    "DEFAULT_LONG_RUN_SECONDS",
+    "DEFAULT_TOP_LIMIT",
+    "collect_report_quality_audit",
+]
