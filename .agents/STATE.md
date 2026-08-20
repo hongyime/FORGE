@@ -3,6 +3,7 @@
 Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
 
 Progress:
+- Pushed B634 as `9697ce3 fix: mark asset ownership writes`: asset graph ownership set/resolve JSON now exposes explicit local write policies and total/selected/omitted claim counts. Focused ownership CLI test, Ruff, py_compile, git diff check, and a temp CLI smoke passed.
 - Pushed B633 as `1a6e55c fix: mark asset attribution imports`: asset graph attribution import JSON now exposes explicit local write policy and processed/imported/error total/selected/omitted counts. Focused direct/CLI attribution tests, Ruff, py_compile, git diff check, and a temp direct smoke passed.
 - Pushed B632 as `d48392f fix: mark asset graph sync payloads`: asset graph sync CLI/helper JSON now exposes explicit graph-table write policy and node total/selected/omitted counts. Focused graph sync helper/CLI tests, Ruff, py_compile, git diff check, and a temp helper smoke passed.
 - Pushed B631 as `6254c74 fix: count asset graph list payloads`: asset graph list/API JSON now exposes read-only execution metadata and bounded node total/selected/omitted counts. Focused asset graph helper/API tests, Ruff, py_compile, git diff check, and a temp helper smoke passed.
