@@ -2405,6 +2405,10 @@ def _connector_secret_store_check(
             ),
         )
     key_plan = connector_secret_key_plan() if detect_persistent_key else connector_secret_key_plan(environ=env)
+    key_plan_total_count = str(int(key_plan.get("total_count") or 0))
+    key_plan_selected_count = str(int(key_plan.get("selected_count") or 0))
+    key_plan_omitted_count = str(int(key_plan.get("omitted_count") or 0))
+    key_plan_execution_policy = str(key_plan.get("execution_policy") or "")
     persistent_hint = key_plan.get("persistent_key_hint", {})
     if persistent_hint.get("key_configured"):
         source = str(persistent_hint.get("source") or "persistent")
@@ -2438,6 +2442,10 @@ def _connector_secret_store_check(
                     "status": "ready",
                     "command": reload_command or "forge connectors secret-key-plan --json",
                     "summary": "load persistent FORGE_ENGAGEMENT_KEY into this process without printing it",
+                    "execution_policy": key_plan_execution_policy,
+                    "total_count": key_plan_total_count,
+                    "selected_count": key_plan_selected_count,
+                    "omitted_count": key_plan_omitted_count,
                 },
             ),
         )
@@ -2459,6 +2467,10 @@ def _connector_secret_store_check(
                 "status": "attention",
                 "command": "forge connectors secret-key-plan --json",
                 "summary": "generate or load FORGE_ENGAGEMENT_KEY without printing secret material",
+                "execution_policy": key_plan_execution_policy,
+                "total_count": key_plan_total_count,
+                "selected_count": key_plan_selected_count,
+                "omitted_count": key_plan_omitted_count,
             },
         ),
     )

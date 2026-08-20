@@ -461,6 +461,13 @@ def test_collect_doctor_checks_reports_stored_connector_rows_without_key(
     assert action_by_id["setup_connector_secret_key"]["command"] == (
         "forge connectors secret-key-plan --json"
     )
+    assert action_by_id["setup_connector_secret_key"]["execution_policy"] == (
+        "plan_only_no_commands_executed"
+    )
+    assert int(action_by_id["setup_connector_secret_key"]["total_count"]) >= int(
+        action_by_id["setup_connector_secret_key"]["selected_count"]
+    )
+    assert int(action_by_id["setup_connector_secret_key"]["omitted_count"]) >= 0
     assert raw_secret not in row.details
 
 
@@ -471,6 +478,10 @@ def test_collect_doctor_checks_reports_persistent_connector_secret_key_hint(
     monkeypatch.setattr(
         "forge.doctor.connector_secret_key_plan",
         lambda **_kwargs: {
+            "execution_policy": "plan_only_no_commands_executed",
+            "total_count": 4,
+            "selected_count": 4,
+            "omitted_count": 0,
             "persistent_key_hint": {
                 "source": "user",
                 "key_configured": True,
@@ -508,6 +519,12 @@ def test_collect_doctor_checks_reports_persistent_connector_secret_key_hint(
         "$env:FORGE_ENGAGEMENT_KEY="
     )
     assert action_by_id["reload_connector_secret_key_env"]["status"] == "ready"
+    assert action_by_id["reload_connector_secret_key_env"]["execution_policy"] == (
+        "plan_only_no_commands_executed"
+    )
+    assert action_by_id["reload_connector_secret_key_env"]["total_count"] == "4"
+    assert action_by_id["reload_connector_secret_key_env"]["selected_count"] == "4"
+    assert action_by_id["reload_connector_secret_key_env"]["omitted_count"] == "0"
     assert "abc123" not in action_by_id["reload_connector_secret_key_env"]["command"]
 
 

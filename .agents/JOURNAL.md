@@ -101,3 +101,4 @@
 - 2026-08-21: Doctor Safe Mode warnings now emit a structured non-executing review action so automation does not skip the `FORGE_SAFE_MODE` decision.
 - 2026-08-21: Doctor Monitoring Schedules actions now include explicit backlog and capped-batch counts so automation does not parse remediation prose.
 - 2026-08-21: Connector doctor actions now expose selected/omitted counts, with `run_free_connectors` aligned to the actual connector run-plan payload.
+- 2026-08-21: Connector Secret Store doctor actions now mirror secret-key-plan execution/count metadata while preserving the no-secret-output contract.
