@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -35,9 +36,12 @@ def collect_report_quality_audit(
     report_write_error_counts: Counter[str] = Counter()
     policy_counts: Counter[str] = Counter()
     dashboard_refresh_failures: list[dict[str, Any]] = []
+    historical_dashboard_refresh_failures: list[dict[str, Any]] = []
     failed_runs: list[dict[str, Any]] = []
     long_runs: list[dict[str, Any]] = []
     resume_review_count = 0
+    dashboard_generated_at = _text(payload.get("generated_at"))
+    dashboard_generated_dt = _parse_datetime(dashboard_generated_at)
 
     for item in engagements:
         run_summary = _mapping(item.get("run_summary"))
@@ -87,16 +91,23 @@ def collect_report_quality_audit(
         if run_status in {"failed", "cancelled", "abandoned", "timeout", "stale"}:
             failed_runs.append(_run_row(item, run_summary, elapsed_seconds=elapsed))
 
-        dashboard_refresh_failures.extend(_dashboard_refresh_failures(detail_payload, item))
+        current_failures, historical_failures = _dashboard_refresh_failures(
+            detail_payload,
+            item,
+            dashboard_generated_dt=dashboard_generated_dt,
+        )
+        dashboard_refresh_failures.extend(current_failures)
+        historical_dashboard_refresh_failures.extend(historical_failures)
 
     long_runs.sort(key=lambda row: float(row.get("elapsed_seconds") or 0.0), reverse=True)
     failed_runs.sort(key=lambda row: (str(row.get("status") or ""), str(row.get("id") or "")))
     dashboard_refresh_failures.sort(key=lambda row: str(row.get("id") or ""))
+    historical_dashboard_refresh_failures.sort(key=lambda row: str(row.get("id") or ""))
 
     return {
         "schema_version": "forge.report_quality_audit.v1",
         "reports_dir": str(reports_root),
-        "dashboard_generated_at": _text(payload.get("generated_at")),
+        "dashboard_generated_at": dashboard_generated_at,
         "engagement_count": len(engagements),
         "report_file_count": len(report_files),
         "root_report_file_count": len(root_report_files),
@@ -115,6 +126,12 @@ def collect_report_quality_audit(
         "failed_runs": failed_runs[: max(0, int(top_limit))],
         "dashboard_refresh_failure_count": len(dashboard_refresh_failures),
         "dashboard_refresh_failures": dashboard_refresh_failures[: max(0, int(top_limit))],
+        "historical_dashboard_refresh_failure_count": len(
+            historical_dashboard_refresh_failures
+        ),
+        "historical_dashboard_refresh_failures": historical_dashboard_refresh_failures[
+            : max(0, int(top_limit))
+        ],
     }
 
 
@@ -233,27 +250,52 @@ def _run_row(
 def _dashboard_refresh_failures(
     detail_payload: dict[str, Any],
     item: dict[str, Any],
-) -> list[dict[str, Any]]:
+    *,
+    dashboard_generated_dt: datetime | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     sections = _mapping(detail_payload.get("sections"))
     rows = sections.get("recent_audit_log") or sections.get("audit_log") or []
     if not isinstance(rows, list):
-        return []
-    failures: list[dict[str, Any]] = []
+        return [], []
+    current_failures: list[dict[str, Any]] = []
+    historical_failures: list[dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
         action = _text(row.get("Action") or row.get("action"))
         if action != "dashboard_review_refresh_failed":
             continue
-        failures.append(
-            {
-                "id": _text(item.get("id")),
-                "slug": _text(item.get("slug")),
-                "target": _text(row.get("Target") or row.get("target")),
-                "result": _text(row.get("Result") or row.get("result"))[:240],
-            }
-        )
-    return failures
+        failure = {
+            "id": _text(item.get("id")),
+            "slug": _text(item.get("slug")),
+            "target": _text(row.get("Target") or row.get("target")),
+            "when": _text(row.get("When") or row.get("when")),
+            "result": _text(row.get("Result") or row.get("result"))[:240],
+        }
+        failure_dt = _parse_datetime(failure["when"])
+        if (
+            dashboard_generated_dt is not None
+            and failure_dt is not None
+            and failure_dt < dashboard_generated_dt
+        ):
+            historical_failures.append(failure)
+        else:
+            current_failures.append(failure)
+    return current_failures, historical_failures
+
+
+def _parse_datetime(value: str) -> datetime | None:
+    text = _text(value)
+    if not text:
+        return None
+    normalized = text.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is not None:
+        return parsed.replace(tzinfo=None)
+    return parsed
 
 
 def _is_relative_to(path: Path, parent: Path) -> bool:

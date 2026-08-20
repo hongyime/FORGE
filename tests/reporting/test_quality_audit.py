@@ -111,7 +111,35 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
     assert payload["long_run_count"] == 1
     assert payload["failed_run_count"] == 1
     assert payload["dashboard_refresh_failure_count"] == 1
+    assert payload["historical_dashboard_refresh_failure_count"] == 0
     assert payload["top_long_runs"][0]["elapsed_seconds"] == 3100.5
+
+
+def test_collect_report_quality_audit_separates_stale_dashboard_failures(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    detail_path = (
+        reports_dir
+        / "dashboard"
+        / "data"
+        / "engagements"
+        / "engagement-1001-acme.json"
+    )
+    detail_payload = json.loads(detail_path.read_text(encoding="utf-8"))
+    detail_payload["sections"]["recent_audit_log"][0]["When"] = "2026-08-19 09:00:00"
+    detail_path.write_text(json.dumps(detail_payload), encoding="utf-8")
+
+    payload = collect_report_quality_audit(reports_dir=reports_dir, top_limit=5)
+
+    assert payload["dashboard_generated_at"] == "2026-08-20 10:00:00"
+    assert payload["dashboard_refresh_failure_count"] == 0
+    assert payload["dashboard_refresh_failures"] == []
+    assert payload["historical_dashboard_refresh_failure_count"] == 1
+    assert payload["historical_dashboard_refresh_failures"][0]["when"] == (
+        "2026-08-19 09:00:00"
+    )
 
 
 def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:

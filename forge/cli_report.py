@@ -169,6 +169,8 @@ def report_quality_audit(
         f"failed_runs={payload['failed_run_count']} "
         f"long_runs={payload['long_run_count']} "
         f"dashboard_refresh_failures={payload['dashboard_refresh_failure_count']} "
+        f"historical_dashboard_refresh_failures="
+        f"{payload.get('historical_dashboard_refresh_failure_count', 0)} "
         f"resume_reviews={payload['resume_review_count']}"
     )
     if payload["fallback_reason_counts"]:
