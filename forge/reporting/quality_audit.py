@@ -22,6 +22,7 @@ def collect_report_quality_audit(
     reports_dir: Path,
     long_run_seconds: float = DEFAULT_LONG_RUN_SECONDS,
     top_limit: int = DEFAULT_TOP_LIMIT,
+    redact_paths: bool = False,
 ) -> dict[str, Any]:
     reports_root = Path(reports_dir)
     dashboard_root = reports_root / "dashboard"
@@ -167,7 +168,8 @@ def collect_report_quality_audit(
     return {
         "schema_version": "forge.report_quality_audit.v1",
         "execution_policy": "read_only_report_inventory_no_commands_executed",
-        "reports_dir": str(reports_root),
+        "reports_dir": "<redacted>" if redact_paths else str(reports_root),
+        "redact_paths": bool(redact_paths),
         "dashboard_generated_at": dashboard_generated_at,
         "engagement_count": len(engagements),
         "report_file_count": len(report_files),

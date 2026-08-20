@@ -106,6 +106,7 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
 
     assert payload["schema_version"] == "forge.report_quality_audit.v1"
     assert payload["execution_policy"] == "read_only_report_inventory_no_commands_executed"
+    assert payload["redact_paths"] is False
     assert payload["total_count"] == 5
     assert payload["selected_count"] == 5
     assert payload["omitted_count"] == 0
@@ -178,6 +179,20 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
         ["forge", "report", "policy-plan", "--json", "--limit", "1"]
     ]
     assert "latest run metadata" in action_by_id["review_policy_flags"]["summary"]
+
+
+def test_collect_report_quality_audit_redacts_reports_dir(tmp_path: Path) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+
+    payload = collect_report_quality_audit(
+        reports_dir=reports_dir,
+        redact_paths=True,
+    )
+
+    assert payload["redact_paths"] is True
+    assert payload["reports_dir"] == "<redacted>"
+    assert str(tmp_path) not in json.dumps(payload)
 
 
 def test_collect_report_quality_audit_separates_stale_dashboard_failures(
@@ -554,6 +569,30 @@ def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:
         "GGUF model not found; configure an LLM provider/model or regenerate after local model setup."
     )
     assert "C:/model.gguf" not in json.dumps(payload["latest_fallback_reports"])
+
+
+def test_report_quality_audit_cli_redacts_json_paths(tmp_path: Path) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "quality-audit",
+            "--reports-dir",
+            str(reports_dir),
+            "--redact-paths",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["redact_paths"] is True
+    assert payload["reports_dir"] == "<redacted>"
+    assert str(tmp_path) not in json.dumps(payload)
 
 
 def test_report_quality_audit_cli_prints_operator_action_plan(tmp_path: Path) -> None:

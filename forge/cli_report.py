@@ -144,6 +144,11 @@ def report_quality_audit(
         "--top-limit",
         help="Maximum sample rows per finding category.",
     ),
+    redact_paths: bool = typer.Option(
+        False,
+        "--redact-paths",
+        help="Hide local paths in JSON output.",
+    ),
     json_output: bool = typer.Option(
         False,
         "--json",
@@ -155,6 +160,7 @@ def report_quality_audit(
         reports_dir=reports_dir,
         long_run_seconds=long_run_seconds,
         top_limit=top,
+        redact_paths=redact_paths,
     )
     if json_output:
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
