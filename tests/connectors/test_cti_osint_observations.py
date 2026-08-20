@@ -66,6 +66,8 @@ def test_cti_connectors_are_catalog_only_and_free_first() -> None:
     assert by_id["abusech_threatfox"]["execution_paths"] == ["forge connectors import-cti"]
     assert by_id["abusech_urlhaus"]["cost_profile"] == "free_no_key"
     assert by_id["stix_taxii_import"]["safety"] == "passive_offline"
+    assert by_id["misp_event_import"]["safety"] == "passive_offline"
+    assert by_id["misp_event_import"]["execution_paths"] == ["forge connectors import-cti"]
     assert "scope_manifest_seed_promotion" in by_id["abusech_urlhaus"]["required_gates"]
 
 
@@ -73,7 +75,7 @@ def test_provider_catalog_defaults_skip_sensitive_social_sources() -> None:
     default_ids = {entry.id for entry in provider_catalog()}
     all_ids = {entry.id for entry in provider_catalog(include_sensitive=True)}
 
-    assert {"abusech_threatfox", "abusech_urlhaus", "stix_taxii_import"} <= default_ids
+    assert {"abusech_threatfox", "abusech_urlhaus", "stix_taxii_import", "misp_event_import"} <= default_ids
     assert "github_code_search_public" not in default_ids
     assert "social_search_curated" not in default_ids
     assert {"github_code_search_public", "social_search_curated"} <= all_ids
@@ -555,6 +557,69 @@ def test_cti_import_accepts_stix_indicator_bundle_shape(tmp_path: Path) -> None:
     assert row["provenance"] == "Acme phishing domain"
     assert row["source_url"] == "https://cti.example/stix/1"
     assert json.loads(row["tags_json"]) == ["osint", "phishing"]
+
+
+def test_cti_import_accepts_misp_event_attribute_shape(tmp_path: Path) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    report = {
+        "Event": {
+            "uuid": "event-1111",
+            "info": "Acme phishing campaign",
+            "date": "2026-08-20",
+            "Tag": [{"name": "tlp:amber"}, {"name": "campaign-x"}],
+            "Attribute": [
+                {
+                    "uuid": "attribute-1111",
+                    "type": "domain",
+                    "value": "Portal.Acme.Example",
+                    "to_ids": True,
+                    "comment": "landing domain",
+                    "Tag": [{"name": "phishing"}],
+                },
+                {
+                    "uuid": "attribute-2222",
+                    "type": "ip-dst|port",
+                    "value": "198.51.100.10|443",
+                    "to_ids": False,
+                },
+            ],
+        }
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="misp_event_import",
+                engagement_id=1001,
+                promote_targets=True,
+            ),
+            report_text=json.dumps(report),
+        )
+        rows = con.execute(
+            """
+            SELECT indicator_type, indicator_value, confidence, provenance, tlp, tags_json
+            FROM cti_observations
+            ORDER BY indicator_type, indicator_value
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert result["connector_id"] == "misp_event_import"
+    assert result["parsed_count"] == 2
+    assert result["persisted_count"] == 2
+    assert result["promoted_seed_count"] == 2
+    assert [(row["indicator_type"], row["indicator_value"]) for row in rows] == [
+        ("domain", "portal.acme.example"),
+        ("ip", "198.51.100.10"),
+    ]
+    assert rows[0]["confidence"] == 0.75
+    assert rows[1]["confidence"] == 0.4
+    assert rows[0]["tlp"] == "TLP:AMBER"
+    assert "MISP attribute attribute-1111" in rows[0]["provenance"]
+    assert "Acme phishing campaign" in rows[0]["provenance"]
+    assert json.loads(rows[0]["tags_json"]) == ["campaign-x", "phishing", "tlp:amber"]
 
 
 def test_cti_import_dry_run_does_not_write_observations_seeds_or_audit(

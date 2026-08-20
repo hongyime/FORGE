@@ -270,6 +270,18 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         execution_paths=("forge connectors import-cti",),
     ),
     ConnectorDefinition(
+        id="misp_event_import",
+        label="MISP Event Import",
+        domain="threat_intelligence",
+        cost_profile="free_local",
+        safety="passive_offline",
+        description="Offline MISP event and attribute normalization with sanitized provenance.",
+        capabilities=("misp_event_import", "ioc_enrichment", "tlp_preservation", "provider_provenance"),
+        outputs=("cti_observations", "misp_event", "indicator_confidence"),
+        input_formats=("misp_event_json",),
+        execution_paths=("forge connectors import-cti",),
+    ),
+    ConnectorDefinition(
         id="hibp_pwned_passwords",
         label="HIBP Pwned Passwords",
         domain="identity_exposure",

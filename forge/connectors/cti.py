@@ -30,6 +30,7 @@ from forge.utils.intel.observations import (
 SUPPORTED_CTI_IMPORT_CONNECTORS = (
     "abusech_threatfox",
     "abusech_urlhaus",
+    "misp_event_import",
     "stix_taxii_import",
 )
 CTI_IMPORT_RESULT_SCHEMA_VERSION = "forge.cti_observation_import.v1"
@@ -494,6 +495,8 @@ def _seed_type_for_observation(
     target_type = str(feed_item.get("target_type") or "").strip()
     if target_type in {"domain", "url", "email", "username"}:
         return target_type
+    if target_type == "ip":
+        return "ipv6" if ":" in observation.indicator_value else "ipv4"
     return ""
 
 
@@ -548,6 +551,9 @@ def _payload_items(payload: Any) -> list[Any]:
         return list(payload)
     if not isinstance(payload, Mapping):
         raise ValueError("CTI observation report must be a JSON object or list")
+    misp_items = _misp_payload_items(payload)
+    if misp_items:
+        return misp_items
     for key in ("observations", "items", "data", "indicators", "objects"):
         value = payload.get(key)
         if isinstance(value, list):
@@ -555,6 +561,35 @@ def _payload_items(payload: Any) -> list[Any]:
     if any(key in payload for key in ("indicator_type", "target_type", "type", "ioc", "value")):
         return [payload]
     raise ValueError("CTI observation report does not contain observations/items/data")
+
+
+def _misp_payload_items(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    events: list[Mapping[str, Any]] = []
+    if isinstance(payload.get("Event"), Mapping):
+        events.append(payload["Event"])
+    response = payload.get("response")
+    if isinstance(response, list):
+        for item in response:
+            if isinstance(item, Mapping) and isinstance(item.get("Event"), Mapping):
+                events.append(item["Event"])
+    if not events and isinstance(payload.get("Attribute"), list):
+        events.append(payload)
+    items: list[dict[str, Any]] = []
+    for event in events:
+        attributes = event.get("Attribute")
+        if not isinstance(attributes, list):
+            continue
+        event_context = {
+            "misp_event_uuid": event.get("uuid"),
+            "misp_event_info": event.get("info"),
+            "misp_event_date": event.get("date"),
+            "misp_event_timestamp": event.get("timestamp"),
+            "misp_event_tags": event.get("Tag"),
+        }
+        for attribute in attributes:
+            if isinstance(attribute, Mapping):
+                items.append({**event_context, **attribute})
+    return items
 
 
 def _read_report_text(path: Path) -> tuple[str, dict[str, str]]:
@@ -798,6 +833,8 @@ def _provider_observation_item(
     provider: str,
 ) -> dict[str, Any]:
     item = dict(raw)
+    if connector_id == "misp_event_import":
+        return _misp_observation_item(item, provider=provider)
     if _has_neutral_observation_fields(item):
         return item
     if connector_id == "abusech_threatfox":
@@ -857,6 +894,32 @@ def _urlhaus_observation_item(raw: Mapping[str, Any], *, provider: str) -> dict[
         "tags": raw.get("tags"),
         "provenance": " ".join(part for part in provenance_parts if part).strip()
         or str(raw.get("provenance") or raw.get("description") or ""),
+    }
+
+
+def _misp_observation_item(raw: Mapping[str, Any], *, provider: str) -> dict[str, Any]:
+    attribute_type = str(raw.get("type") or "").strip().lower()
+    value = str(raw.get("value") or "").strip()
+    mapped_type, mapped_value = _misp_indicator(attribute_type, value)
+    event_info = str(raw.get("misp_event_info") or "").strip()
+    attribute_uuid = str(raw.get("uuid") or raw.get("id") or "").strip()
+    provenance_parts = [
+        f"MISP attribute {attribute_uuid}" if attribute_uuid else "",
+        event_info,
+        str(raw.get("comment") or "").strip(),
+    ]
+    return {
+        **raw,
+        "provider": str(raw.get("provider") or provider),
+        "type": mapped_type,
+        "value": mapped_value,
+        "confidence": _misp_confidence(raw.get("to_ids"), raw.get("confidence")),
+        "observed_at": raw.get("timestamp") or raw.get("misp_event_timestamp") or raw.get("misp_event_date"),
+        "source_url": raw.get("reference") or raw.get("source_url") or "",
+        "tags": _misp_tags(raw),
+        "tlp": _misp_tlp(raw),
+        "provenance": " ".join(part for part in provenance_parts if part).strip()
+        or str(raw.get("provenance") or ""),
     }
 
 
@@ -951,6 +1014,66 @@ def _stix_pattern_observable(pattern: str) -> tuple[str, str]:
         "email-addr": "email",
     }
     return mapped.get(object_type, ""), value
+
+
+def _misp_indicator(attribute_type: str, value: str) -> tuple[str, str]:
+    text = str(value or "").strip()
+    normalized = str(attribute_type or "").strip().lower()
+    if "|" in normalized and "|" in text:
+        normalized = normalized.split("|", 1)[0]
+        text = text.split("|", 1)[0]
+    mapped = {
+        "domain": "domain",
+        "hostname": "domain",
+        "url": "url",
+        "ip-src": "ip",
+        "ip-dst": "ip",
+        "ip-src|port": "ip",
+        "ip-dst|port": "ip",
+        "email-src": "email",
+        "email-dst": "email",
+        "email": "email",
+        "md5": "hash",
+        "sha1": "hash",
+        "sha256": "hash",
+    }.get(normalized, normalized)
+    if mapped == "ip" and ":" in text and text.count(":") == 1:
+        text = text.rsplit(":", 1)[0]
+    return mapped, text
+
+
+def _misp_confidence(to_ids: Any, explicit: Any) -> float:
+    if explicit not in (None, ""):
+        return _percent_confidence(explicit, fallback=0.5)
+    if isinstance(to_ids, bool):
+        return 0.75 if to_ids else 0.4
+    text = str(to_ids or "").strip().lower()
+    if text in {"1", "true", "yes"}:
+        return 0.75
+    if text in {"0", "false", "no"}:
+        return 0.4
+    return 0.5
+
+
+def _misp_tags(raw: Mapping[str, Any]) -> list[str]:
+    values: list[str] = []
+    for key in ("Tag", "misp_event_tags"):
+        tags = raw.get(key)
+        if isinstance(tags, list):
+            for tag in tags:
+                if isinstance(tag, Mapping):
+                    values.append(str(tag.get("name") or ""))
+                else:
+                    values.append(str(tag))
+    return values
+
+
+def _misp_tlp(raw: Mapping[str, Any]) -> str:
+    for tag in _misp_tags(raw):
+        text = str(tag or "").strip().lower()
+        if text.startswith("tlp:"):
+            return text.upper()
+    return str(raw.get("tlp") or raw.get("marking") or "")
 
 
 def _stix_external_reference_url(value: Any) -> str:

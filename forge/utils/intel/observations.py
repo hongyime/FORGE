@@ -136,6 +136,16 @@ CTI_OSINT_PROVIDER_CATALOG: tuple[OsintProviderCatalogEntry, ...] = (
         notes="Offline STIX bundle normalization first; TAXII polling stays explicit.",
     ),
     OsintProviderCatalogEntry(
+        id="misp_event_import",
+        label="MISP Event Import",
+        category="threat_intelligence",
+        default_enabled=True,
+        safety_tier="passive_offline",
+        collection_method="offline_import",
+        outputs=("misp_event", "ioc_enrichment", "tlp", "provenance"),
+        notes="Offline MISP event/attribute normalization; no MISP API polling.",
+    ),
+    OsintProviderCatalogEntry(
         id="crtsh_certificate_transparency",
         label="crt.sh Certificate Transparency",
         category="discovery",

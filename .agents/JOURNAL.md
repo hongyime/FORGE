@@ -18,3 +18,4 @@
 - 2026-08-20: Added a shared decoded-size cap for local CTI report files, including plain, gzip, ZIP member, and nested gzip-in-ZIP inputs.
 - 2026-08-20: Added sanitized CTI report-read metadata so import JSON identifies plain/gzip/zip inputs and the selected ZIP member without storing report bodies.
 - 2026-08-20: Added a stable CTI import result schema marker for automation consuming `forge connectors import-cti --json`.
+- 2026-08-20: Added passive offline MISP event JSON import support through the existing sanitized CTI observation pipeline, with no MISP API polling.
