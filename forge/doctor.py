@@ -2164,7 +2164,10 @@ def _connector_secret_store_check(
             "FORGE_ENGAGEMENT_KEY is missing or shorter than 32 chars; "
             f"encrypted connector store is disabled{suffix}"
         ),
-        "Set FORGE_ENGAGEMENT_KEY to a random value of at least 32 characters before `forge connectors secret-set`.",
+        (
+            "Run `forge connectors secret-key-plan --json` for non-secret setup "
+            "commands, then set FORGE_ENGAGEMENT_KEY before `forge connectors secret-set`."
+        ),
     )
 
 

@@ -18,6 +18,7 @@ SECRET_MATERIAL_POLICY = (
     "Connector secrets are encrypted at rest with FORGE_ENGAGEMENT_KEY; "
     "list/audit outputs never include plaintext values."
 )
+SECRET_KEY_PLAN_SCHEMA_VERSION = "forge.connector_secret_key_plan.v1"
 
 _SECRET_NAME_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _SECRET_KEYWORDS = ("secret", "token", "password", "credential", "apikey", "api_key", "key")
@@ -115,6 +116,44 @@ def store_connector_secret(
         connector_id=connector,
         secret_name=name,
     )
+
+
+def connector_secret_key_plan(
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Return non-secret setup guidance for FORGE_ENGAGEMENT_KEY."""
+
+    env = environ if environ is not None else os.environ
+    key_material = str(env.get("FORGE_ENGAGEMENT_KEY", "")).strip()
+    configured = len(key_material) >= 32
+    return {
+        "schema_version": SECRET_KEY_PLAN_SCHEMA_VERSION,
+        "key_configured": configured,
+        "key_length": len(key_material),
+        "key_fingerprint": _key_fingerprint(key_material) if configured else "",
+        "minimum_length": 32,
+        "secret_material_printed": False,
+        "commands": {
+            "powershell_user_env": (
+                "$k=[Convert]::ToBase64String("
+                "[Security.Cryptography.RandomNumberGenerator]::GetBytes(32)); "
+                "[Environment]::SetEnvironmentVariable('FORGE_ENGAGEMENT_KEY',$k,'User')"
+            ),
+            "powershell_process_env": (
+                "$env:FORGE_ENGAGEMENT_KEY=[Convert]::ToBase64String("
+                "[Security.Cryptography.RandomNumberGenerator]::GetBytes(32))"
+            ),
+            "posix_shell": (
+                "export FORGE_ENGAGEMENT_KEY=$(python -c "
+                "\"import secrets; print(secrets.token_urlsafe(48))\")"
+            ),
+        },
+        "notes": [
+            "Commands generate the key inside the target shell and do not echo the value.",
+            "Restart shells or services after setting a persistent user/service environment variable.",
+        ],
+    }
 
 
 def list_connector_secrets(
@@ -327,6 +366,10 @@ def _master_key_material() -> str:
 def _key_hint() -> str:
     digest = hashlib.sha256(_master_key_material().encode("utf-8")).hexdigest()
     return f"sha256:{digest[:12]}"
+
+
+def _key_fingerprint(key_material: str) -> str:
+    return f"sha256:{hashlib.sha256(str(key_material).encode('utf-8')).hexdigest()[:12]}"
 
 
 def _secret_context(

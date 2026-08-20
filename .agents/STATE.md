@@ -167,9 +167,13 @@ Progress:
 - Real local `forge doctor --json` now reports Workspace Access `OK`: 50 engagement(s) across 50/930 DB(s), 50 usable control index rows, operator workspace memberships ready.
 - Verified B562 with focused workspace/doctor/CLI-registry tests (`65 passed`), Ruff, py_compile, and real local workspace/doctor smokes.
 - Pushed B562 as `09f9b2f feat: backfill workspace memberships`.
+- Added `forge connectors secret-key-plan [--json]`, which reports non-secret setup guidance for `FORGE_ENGAGEMENT_KEY` and never prints secret material.
+- Set a local Windows user-level `FORGE_ENGAGEMENT_KEY` without printing the value; verification only printed length 44 and fingerprint `sha256:e5e360873854`.
+- Real local `forge doctor --json` with the user env key loaded now reports Connector Secret Store `OK`; remaining doctor attention is Safe Mode, Monitoring Schedules, TPH Target Import Bridge, Connector Catalog, and Connector Action Plan.
+- Verified B563 with focused connector/doctor/CLI-registry tests (`63 passed`), Ruff, py_compile, `git diff --check`, and local secret-key/doctor smokes.
 
 Next steps:
-- Continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Commit and push B563, then continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

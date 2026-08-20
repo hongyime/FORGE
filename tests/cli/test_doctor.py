@@ -173,6 +173,9 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert connector_plan_check["action_items"]
     assert rows["Connector Secret Store"].status == "MISSING"
     assert "FORGE_ENGAGEMENT_KEY" in rows["Connector Secret Store"].details
+    assert "forge connectors secret-key-plan --json" in rows[
+        "Connector Secret Store"
+    ].remediation
     assert rows["Deployment Hardening"].status == "OK"
     assert "local profile" in rows["Deployment Hardening"].details
     assert rows["Retention Policies"].status == "OK"
@@ -365,6 +368,7 @@ def test_collect_doctor_checks_reports_stored_connector_rows_without_key(
     assert "FORGE_ENGAGEMENT_KEY is missing" in row.details
     assert "1 stored connector secret row(s)" in row.details
     assert "decryptability not checked" in row.details
+    assert "forge connectors secret-key-plan --json" in row.remediation
     assert raw_secret not in row.details
 
 

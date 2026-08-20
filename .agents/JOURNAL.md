@@ -50,3 +50,4 @@
 - 2026-08-20: Added resume readiness/blocker reporting plus dry-run-first scope-manifest backfill; locally recovered missing scope manifests for 49 historical failed target-import candidates without launching runs.
 - 2026-08-20: Surfaced resume readiness in static dashboards and recursively sanitized scope-manifest metadata paths from dashboard run summaries.
 - 2026-08-20: Added dry-run-first workspace membership/control-index backfill and locally repaired legacy workspace access drift so doctor reports Workspace Access OK.
+- 2026-08-20: Added non-secret connector secret-key setup planning and configured a local user-level FORGE_ENGAGEMENT_KEY without printing the key value.

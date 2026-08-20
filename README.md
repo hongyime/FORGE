@@ -255,6 +255,7 @@ forge connectors run-identity --engagement N --connector hibp_pwned_passwords [-
 forge connectors run-secrets --engagement N --connector gitleaks_local|trufflehog_local --source-path PATH --domain DOMAIN
 forge connectors import-secrets --engagement N --connector gitleaks_local|trufflehog_local --report-file REPORT.json --domain DOMAIN
 forge connectors secret-prevention-plan --engagement N [--workflow pre-commit|pull_request|push] [--json]
+forge connectors secret-key-plan [--json]   # Non-secret FORGE_ENGAGEMENT_KEY setup guidance
 forge connectors secret-set --engagement N --connector ID --name NAME --value-env ENV
 forge connectors secret-list --engagement N [--connector ID]
 forge connectors policy-summary [--json]

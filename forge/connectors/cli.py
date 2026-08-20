@@ -28,6 +28,7 @@ from forge.connectors.runner import (
 )
 from forge.connectors.secrets import (
     SECRET_MATERIAL_POLICY,
+    connector_secret_key_plan,
     connector_secret_readiness,
     list_connector_secrets,
     store_connector_secret,
@@ -159,6 +160,26 @@ def register_connector_commands(app: typer.Typer) -> None:
         console.print(
             "[dim]Install plan only; no command was executed. Rerun "
             "`forge doctor --json` after installing tools.[/dim]"
+        )
+
+    @app.command("secret-key-plan")
+    def secret_key_plan(
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Print non-secret FORGE_ENGAGEMENT_KEY setup guidance."""
+        plan = connector_secret_key_plan()
+        if json_output:
+            typer.echo(json.dumps(plan, sort_keys=True))
+            return
+        status = "configured" if plan["key_configured"] else "missing"
+        console.print(
+            "[bold]Connector secret key[/bold] "
+            f"status={status} length={plan['key_length']} "
+            f"fingerprint={plan['key_fingerprint'] or '-'}"
+        )
+        console.print(
+            "[dim]No secret material is printed. Use the JSON output for "
+            "platform-specific setup commands.[/dim]"
         )
 
     @app.command("policy-summary")
