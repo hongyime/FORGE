@@ -887,7 +887,12 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
     due_plan: dict[str, Any] | None = None
     due_plan_error = ""
     try:
-        due_plan = monitoring_due_plan_for_data_dir(data_dir, now=now, limit=0)
+        due_plan = monitoring_due_plan_for_data_dir(
+            data_dir,
+            now=now,
+            limit=0,
+            include_empty_db_results=False,
+        )
     except Exception as exc:  # noqa: BLE001 - doctor must keep reporting sampled readiness.
         due_plan_error = _clip(str(exc), limit=80)
     total_due_count = due_count
@@ -919,6 +924,22 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
                 f"due-plan total {total_due_count} due/overdue across "
                 f"{due_plan_engagement_count} engagement(s) in {due_plan_db_count} DB(s)"
             )
+        if total_due_count:
+            stale_backlog = (
+                due_plan.get("stale_backlog")
+                if isinstance(due_plan.get("stale_backlog"), dict)
+                else {}
+            )
+            if stale_backlog.get("enabled"):
+                due_plan_details.append(
+                    "oldest due backlog "
+                    f"{stale_backlog.get('oldest_overdue_days', 0)} day(s) overdue"
+                )
+            estimated_batches = int(due_plan.get("estimated_capped_invocations") or 0)
+            if estimated_batches:
+                due_plan_details.append(
+                    f"estimated capped run-due batch(es): {estimated_batches}"
+                )
         if due_plan_errors:
             due_plan_details.append(f"{len(due_plan_errors)} due-plan error(s)")
     elif due_plan_error:

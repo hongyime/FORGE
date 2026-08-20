@@ -1482,15 +1482,21 @@ def test_collect_doctor_checks_uses_due_plan_total_for_monitoring_summary(
     finally:
         con.close()
 
-    def _fake_due_plan(_data_dir, *, now=None, limit=None):
+    def _fake_due_plan(_data_dir, *, now=None, limit=None, include_empty_db_results=True):
         assert now
         assert limit == 0
+        assert include_empty_db_results is False
         return {
             "db_count": 101,
             "engagement_count": 101,
             "due_policy_count": 101,
             "planned_policy_count": 0,
             "limited_policy_count": 101,
+            "estimated_capped_invocations": 3,
+            "stale_backlog": {
+                "enabled": True,
+                "oldest_overdue_days": 4.96,
+            },
             "errors": [],
         }
 
@@ -1507,6 +1513,8 @@ def test_collect_doctor_checks_uses_due_plan_total_for_monitoring_summary(
     assert "1/1 enabled policy" in row.details
     assert "1 due/overdue" in row.details
     assert "due-plan total 101 due/overdue across 101 engagement(s) in 101 DB(s)" in row.details
+    assert "oldest due backlog 4.96 day(s) overdue" in row.details
+    assert "estimated capped run-due batch(es): 3" in row.details
     action_by_id = {item["id"]: item for item in row.action_items}
     assert action_by_id["review_due_monitoring"]["summary"] == (
         "101 due/overdue monitoring policy(ies)"

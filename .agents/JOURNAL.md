@@ -65,3 +65,4 @@
 - 2026-08-20: Added path-neutral latest fallback report repair samples to quality-audit so stale GGUF-missing reports can be regenerated deliberately.
 - 2026-08-20: Clarified Safe Mode doctor/env wording so full mode is treated as intentional ROE-backed posture rather than broken setup.
 - 2026-08-20: Surfaced value-safe Windows persistent FORGE_ENGAGEMENT_KEY reload guidance in secret-key-plan and doctor.
+- 2026-08-20: Made monitoring due-plan a clearer read-only operator plan with stale-backlog age, capped batch estimates, policy composition, and safe action commands.

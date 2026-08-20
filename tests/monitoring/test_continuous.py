@@ -2535,10 +2535,28 @@ def test_monitoring_due_plan_for_data_dir_is_read_only_and_bounded(tmp_path: Pat
     )
 
     assert result["execution_policy"] == "plan_only_no_commands_executed"
+    assert result["result_schema_version"] == "forge.monitoring.due_plan.v1"
     assert result["db_count"] == 2
     assert result["due_policy_count"] == 2
     assert result["planned_policy_count"] == 2
     assert result["limited_policy_count"] == 0
+    assert result["default_execution_limit"] == 50
+    assert result["estimated_capped_invocations"] == 1
+    assert result["oldest_due_at"] == "2026-07-09T10:00:00Z"
+    assert result["newest_due_at"] == "2026-07-09T10:00:00Z"
+    assert result["stale_backlog"]["enabled"] is False
+    assert result["policy_summary"]["refresh_type_counts"] == {
+        "connector": 1,
+        "seed_exposure": 1,
+    }
+    assert result["policy_summary"]["mode_counts"] == {"passive": 2}
+    assert result["policy_summary"]["schedule_interval_minutes_counts"] == {"60": 2}
+    assert [item["id"] for item in result["action_plan"]] == [
+        "review_due_monitoring",
+        "run_capped_due_monitoring",
+    ]
+    assert result["include_empty_db_results"] is False
+    assert len(result["db_results"]) == 1
     planned = [
         policy
         for db_result in result["db_results"]
@@ -2570,6 +2588,15 @@ def test_monitoring_due_plan_for_data_dir_is_read_only_and_bounded(tmp_path: Pat
     assert after_snapshots == before_snapshots
     assert after_due_audit == before_due_audit
     assert after_next_runs == before_next_runs
+
+    verbose = monitoring_due_plan_for_data_dir(
+        data_dir,
+        now="2026-07-09T10:00:00Z",
+        limit=2,
+        include_empty_db_results=True,
+    )
+    assert verbose["include_empty_db_results"] is True
+    assert len(verbose["db_results"]) == 2
 
 
 def test_monitoring_due_plan_reports_stale_schema_without_migrating(tmp_path: Path) -> None:
@@ -2700,8 +2727,11 @@ def test_monitoring_cli_due_plan_outputs_json_without_running_due(tmp_path: Path
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["result_schema_version"] == "forge.monitoring.due_plan.v1"
     assert payload["due_policy_count"] == 1
     assert payload["planned_policy_count"] == 1
+    assert payload["estimated_capped_invocations"] == 1
+    assert payload["action_plan"][0]["id"] == "review_due_monitoring"
     assert payload["db_results"][0]["policies"][0]["policy_name"] == "Hourly passive"
 
     con = direct_connect(db_path)

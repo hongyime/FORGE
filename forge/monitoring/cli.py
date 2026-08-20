@@ -80,19 +80,32 @@ def register_monitoring_commands(app: typer.Typer) -> None:
             "--json",
             help="Print machine-readable JSON.",
         ),
+        include_empty_db_results: bool = typer.Option(
+            False,
+            "--include-empty-db-results",
+            help="Include DB result rows with no planned policies.",
+        ),
     ) -> None:
         cfg = ForgeConfig.load()
         root = data_dir or cfg.data_dir
-        result = monitoring_due_plan_for_data_dir(root, now=now, limit=limit)
+        result = monitoring_due_plan_for_data_dir(
+            root,
+            now=now,
+            limit=limit,
+            include_empty_db_results=include_empty_db_results,
+        )
         if json_output:
             typer.echo(json.dumps(result, sort_keys=True))
             return
+        stale = result.get("stale_backlog") if isinstance(result.get("stale_backlog"), dict) else {}
         console.print(
             "[bold]Monitoring due plan[/bold] "
             f"dbs={result['db_count']} ready_dbs={result['schema_ready_db_count']} "
             f"engagements={result['engagement_count']} due={result['due_policy_count']} "
             f"planned={result['planned_policy_count']} "
             f"limited={result['limited_policy_count']} "
+            f"batches={result.get('estimated_capped_invocations', 0)} "
+            f"stale_days={stale.get('oldest_overdue_days', 0)} "
             f"errors={len(result['errors'])}"
         )
 
