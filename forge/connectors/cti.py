@@ -32,6 +32,7 @@ SUPPORTED_CTI_IMPORT_CONNECTORS = (
     "abusech_urlhaus",
     "stix_taxii_import",
 )
+CTI_IMPORT_RESULT_SCHEMA_VERSION = "forge.cti_observation_import.v1"
 MAX_CTI_REPORT_TEXT_BYTES = 100 * 1024 * 1024
 
 
@@ -232,6 +233,7 @@ def import_cti_observations(
                 )
 
     result = {
+        "result_schema_version": CTI_IMPORT_RESULT_SCHEMA_VERSION,
         "connector_id": connector_id,
         "engagement_id": engagement_id,
         "status": "completed",

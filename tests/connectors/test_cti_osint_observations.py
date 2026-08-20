@@ -245,6 +245,7 @@ def test_cti_observation_import_persists_normalized_rows_and_promotes_scoped_see
         sort_keys=True,
     )
     assert result["status"] == "completed"
+    assert result["result_schema_version"] == "forge.cti_observation_import.v1"
     assert result["parsed_count"] == 3
     assert result["persisted_count"] == 2
     assert result["duplicate_count"] == 1
@@ -1064,6 +1065,7 @@ def test_connector_cli_import_cti_invokes_offline_importer(
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["result_schema_version"] == "forge.cti_observation_import.v1"
     assert payload["connector_id"] == "stix_taxii_import"
     assert payload["report_container_format"] == "plain"
     assert payload["report_member"] == ""
