@@ -99,9 +99,10 @@ Progress:
 - Added read-only `CTI/OSINT Policy` output to `forge doctor` plus the `review_cti_osint_policy` action-plan item backed by aggregate provider policy counts.
 - Subagent spawn for the report/UI side audit failed because the current harness reported the agent thread limit was reached; continue old report/product audit locally when B546 is committed.
 - Verified B546 with full doctor tests plus focused CTI policy-summary tests (`42 passed`), Ruff, py_compile, `git diff --check`, and a `forge doctor --json` smoke confirming the CTI check/action are present.
+- Pushed B546 as `6780226 feat: surface cti policy in doctor`.
 
 Next steps:
-- Commit and push B546 doctor CTI/OSINT policy visibility.
+- Continue the old report/product hardening audit locally because subagent spawn is currently blocked by the harness thread limit.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
