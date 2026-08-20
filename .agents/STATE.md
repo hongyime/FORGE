@@ -198,9 +198,11 @@ Progress:
 - Added checksum-verified TruffleHog release-binary installation to `bootstrap.py setup`, updated install-plan/doctor guidance, and locally installed TruffleHog 3.97.0 at `AppData\Local\FORGE\tools\bin\trufflehog.exe`.
 - Verified B570 with focused bootstrap/connector/doctor tests (`52 passed`), Ruff, py_compile, `git diff --check`, local `.venv\Scripts\forge.exe connectors install-plan --json` showing `missing_binary_count=0`, local doctor showing Connector Catalog/Action Plan `OK`, and `trufflehog --version` returning 3.97.0. No provider scan, secret scan, engagement mutation, live run, scheduled-task change, report regeneration, or credential persistence was started.
 - Pushed B570 as `a8767b3 feat: install trufflehog release binary`.
+- Classified the intentionally disabled local `FORGE Import theprawnhunter Targets` scheduled task as paused/OFF in `forge doctor` unless `FORGE_TPH_TARGET_IMPORT_ENABLED=1` explicitly says the bridge should be running.
+- Verified B571 with focused doctor tests (`44 passed`), Ruff, py_compile, `git diff --check`, and a real local `.venv\Scripts\forge.exe doctor --json` smoke showing `TPH Target Import Bridge` status `OFF` with `task=disabled`. No scheduled-task enablement, import run, provider call, engagement mutation, monitoring execution, live run, report regeneration, or credential persistence was started.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge disabled by request, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
+- Commit/push B571, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

@@ -877,7 +877,7 @@ the root CLI entry point focused on command handlers while preserving
 | `FORGE_REQUIRE_SCOPE_MANIFEST` | `1` requires a scope manifest for every non-dry-run kill-chain launch |
 | `FORGE_DEPLOYMENT_PROFILE` | Set `production` before self-host/shared exposure; `forge doctor` then enforces the Deployment Hardening checklist |
 | `FORGE_ENV` | Runtime profile; use `production` with `FORGE_DEPLOYMENT_PROFILE=production` so web debug/dev behavior stays off |
-| `FORGE_TPH_TARGET_IMPORT_ENABLED` | `1` tells doctor the optional theprawnhunter target-import bridge is expected to be installed and healthy |
+| `FORGE_TPH_TARGET_IMPORT_ENABLED` | `1` tells doctor the optional theprawnhunter target-import bridge is expected to be installed and healthy; an installed but disabled scheduled task is otherwise reported as paused/OFF |
 | `FORGE_TPH_TARGET_IMPORT_API_URL` | Target feed URL for the theprawnhunter bridge; default `http://127.0.0.1:8011/monitor/targets/export` |
 | `FORGE_TPH_ENV_PATH` / `FORGE_TPH_COMPOSE_PATH` | Paths doctor checks for theprawnhunter monitor key source and Docker Compose app; values are not read for secrets |
 | `FORGE_TPH_TARGET_IMPORT_TASK_NAME` | Windows scheduled-task name for the TPH target import bridge |

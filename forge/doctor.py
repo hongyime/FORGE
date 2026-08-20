@@ -1025,6 +1025,17 @@ def _target_import_bridge_check(
             details,
             "Set FORGE_TPH_TARGET_IMPORT_ENABLED=1 after configuring theprawnhunter scheduled imports.",
         )
+    if task_status == "disabled" and not explicitly_enabled:
+        return DoctorCheck(
+            "TPH Target Import Bridge",
+            "OFF",
+            details,
+            (
+                "The scheduled target-import task is installed but paused. Set "
+                "FORGE_TPH_TARGET_IMPORT_ENABLED=1 and enable/reinstall the task when "
+                "automatic imports should run."
+            ),
+        )
     if not scripts_ready:
         return DoctorCheck(
             "TPH Target Import Bridge",

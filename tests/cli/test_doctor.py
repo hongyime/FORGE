@@ -1193,6 +1193,46 @@ def test_collect_doctor_checks_warns_on_enabled_tph_bridge_without_task_or_auth(
     assert "TPH_MONITOR_KEY" in row.remediation
 
 
+def test_collect_doctor_checks_treats_disabled_tph_task_as_off_by_default(
+    tmp_path,
+) -> None:
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    for name in (
+        "import_tph_targets.ps1",
+        "run_tph_target_import_task.ps1",
+        "install_tph_target_import_task.ps1",
+    ):
+        (scripts_dir / name).write_text("# fixture\n", encoding="utf-8")
+    tph_repo = tmp_path / "theprawnhunter"
+    tph_repo.mkdir()
+    tph_env = tph_repo / ".env"
+    tph_env.write_text("MONITOR_API_KEY=secret-never-print\n", encoding="utf-8")
+    (tph_repo / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        env={
+            "FORGE_TPH_TARGET_IMPORT_SCRIPT_DIR": str(scripts_dir),
+            "FORGE_TPH_ENV_PATH": str(tph_env),
+        },
+        which=lambda _name: None,
+        provider_discovery=_provider_discovery,
+        scheduled_task_query=lambda _task_name, _timeout_s: {
+            "status": "disabled",
+            "last_result": "1",
+            "last_run_time": "2026-08-20 11:05:09",
+            "next_run_time": "N/A",
+        },
+    )
+
+    row = _rows(checks)["TPH Target Import Bridge"]
+    assert row.status == "OFF"
+    assert "task=disabled" in row.details
+    assert "target-import task is installed but paused" in row.remediation
+    assert "secret-never-print" not in doctor_payload_json(checks)
+
+
 def test_collect_doctor_checks_reports_ready_remediation_status_import_task(
     tmp_path,
 ) -> None:
