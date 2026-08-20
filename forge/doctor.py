@@ -401,6 +401,39 @@ def doctor_payload_json(checks: Sequence[DoctorCheck]) -> str:
 
 
 _DOCTOR_ACTION_METADATA: dict[str, dict[str, str]] = {
+    "validate_plugin_manifests": {
+        "execution_policy": "local_manifest_validation_no_plugin_code_execution",
+    },
+    "install_free_binaries": {
+        "execution_policy": "plan_only_no_commands_executed",
+    },
+    "run_free_connectors": {
+        "execution_policy": "plan_only_no_connectors_executed",
+    },
+    "configure_optional_keys": {
+        "execution_policy": "operator_initiated_secret_setup_value_env_only",
+    },
+    "review_catalog_only": {
+        "execution_policy": "data_only_catalog_no_provider_execution",
+    },
+    "review_cti_osint_policy": {
+        "execution_policy": "data_only_catalog_no_provider_execution",
+    },
+    "keep_active_validation_fail_closed": {
+        "execution_policy": "operator_decision_no_commands_executed",
+    },
+    "review_paid_adapters": {
+        "execution_policy": "data_only_catalog_paid_hidden_no_provider_execution",
+    },
+    "review_due_monitoring": {
+        "execution_policy": "plan_only_no_monitoring_executed",
+    },
+    "dry_run_capped_due_monitoring": {
+        "execution_policy": "dry_run_no_monitoring_executed",
+    },
+    "run_capped_due_monitoring": {
+        "execution_policy": "executes_due_monitoring_policies",
+    },
     "review_paid_llm_backends": {
         "execution_policy": "operator_decision_no_commands_executed",
         "total_count": "1",

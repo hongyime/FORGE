@@ -156,6 +156,9 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert action_by_id["install_free_binaries"]["command"] == (
         "forge connectors install-plan --json"
     )
+    assert action_by_id["install_free_binaries"]["execution_policy"] == (
+        "plan_only_no_commands_executed"
+    )
     assert int(action_by_id["install_free_binaries"]["total_count"]) >= 1
     assert action_by_id["install_free_binaries"]["selected_count"] == action_by_id[
         "install_free_binaries"
@@ -166,6 +169,9 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert action_by_id["run_free_connectors"]["command"] == (
         "forge connectors run-plan --json"
     )
+    assert action_by_id["run_free_connectors"]["execution_policy"] == (
+        "plan_only_no_connectors_executed"
+    )
     assert int(action_by_id["run_free_connectors"]["total_count"]) >= int(
         action_by_id["run_free_connectors"]["selected_count"]
     )
@@ -175,6 +181,9 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert action_by_id["configure_optional_keys"]["command"] == (
         "forge connectors secret-set --engagement N --connector ID --name ENV_NAME --value-env ENV"
     )
+    assert action_by_id["configure_optional_keys"]["execution_policy"] == (
+        "operator_initiated_secret_setup_value_env_only"
+    )
     assert int(action_by_id["configure_optional_keys"]["total_count"]) >= 1
     assert action_by_id["configure_optional_keys"]["selected_count"] == action_by_id[
         "configure_optional_keys"
@@ -182,6 +191,9 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert action_by_id["review_cti_osint_policy"]["status"] == "review"
     assert action_by_id["review_cti_osint_policy"]["command"] == (
         "forge connectors policy-summary --json"
+    )
+    assert action_by_id["review_cti_osint_policy"]["execution_policy"] == (
+        "data_only_catalog_no_provider_execution"
     )
     assert action_by_id["review_cti_osint_policy"]["total_count"] == "48"
     assert action_by_id["review_cti_osint_policy"]["selected_count"] == "48"
@@ -191,6 +203,9 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
         "operator_opt_in_gated_count"
     ] == "21"
     assert action_by_id["keep_active_validation_fail_closed"]["status"] == "gated"
+    assert action_by_id["keep_active_validation_fail_closed"]["execution_policy"] == (
+        "operator_decision_no_commands_executed"
+    )
     assert int(action_by_id["keep_active_validation_fail_closed"]["total_count"]) >= 1
     assert action_by_id["keep_active_validation_fail_closed"]["selected_count"] == "0"
     assert "approval, roe_id, scope_manifest, and live_gate" in action_by_id[
@@ -198,6 +213,9 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     ]["command"]
     assert int(action_by_id["review_paid_adapters"]["total_count"]) >= 1
     assert action_by_id["review_paid_adapters"]["selected_count"] == "0"
+    assert action_by_id["review_paid_adapters"]["execution_policy"] == (
+        "data_only_catalog_paid_hidden_no_provider_execution"
+    )
     assert action_payload["summary"]["action_count"] >= 6
     connector_plan_check = next(
         check for check in action_payload["checks"] if check["component"] == "Connector Action Plan"
@@ -1623,6 +1641,9 @@ def test_collect_doctor_checks_warns_on_due_monitoring_schedules(tmp_path) -> No
         "due-plan",
         "--json",
     ]
+    assert payload_action_by_id["review_due_monitoring"]["execution_policy"] == (
+        "plan_only_no_monitoring_executed"
+    )
     assert action_by_id["dry_run_capped_due_monitoring"]["status"] == "ready"
     assert action_by_id["dry_run_capped_due_monitoring"]["command"] == (
         "forge monitoring run-due --dry-run --limit 50 --json"
@@ -1639,6 +1660,9 @@ def test_collect_doctor_checks_warns_on_due_monitoring_schedules(tmp_path) -> No
         "50",
         "--json",
     ]
+    assert payload_action_by_id["dry_run_capped_due_monitoring"]["execution_policy"] == (
+        "dry_run_no_monitoring_executed"
+    )
     assert action_by_id["run_capped_due_monitoring"]["status"] == "ready"
     assert action_by_id["run_capped_due_monitoring"]["command"] == (
         "forge monitoring run-due --limit 50 --json"
@@ -1646,6 +1670,9 @@ def test_collect_doctor_checks_warns_on_due_monitoring_schedules(tmp_path) -> No
     assert action_by_id["run_capped_due_monitoring"]["total_count"] == "1"
     assert action_by_id["run_capped_due_monitoring"]["selected_count"] == "1"
     assert action_by_id["run_capped_due_monitoring"]["omitted_count"] == "0"
+    assert payload_action_by_id["run_capped_due_monitoring"]["execution_policy"] == (
+        "executes_due_monitoring_policies"
+    )
 
 
 def test_collect_doctor_checks_uses_due_plan_total_for_monitoring_summary(
