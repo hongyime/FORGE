@@ -400,8 +400,33 @@ def doctor_payload_json(checks: Sequence[DoctorCheck]) -> str:
     return json.dumps(doctor_payload(checks), sort_keys=True)
 
 
+_DOCTOR_ACTION_METADATA: dict[str, dict[str, str]] = {
+    "review_paid_llm_backends": {
+        "execution_policy": "operator_decision_no_commands_executed",
+        "total_count": "1",
+        "selected_count": "0",
+        "omitted_count": "1",
+    },
+    "enable_live_validation_only_after_roe": {
+        "execution_policy": "dry_run_or_methods_review_no_live_validation",
+        "total_count": "1",
+        "selected_count": "1",
+        "omitted_count": "0",
+    },
+    "run_live_provider_probes_if_intended": {
+        "execution_policy": "operator_initiated_live_probe_no_default_execution",
+        "total_count": "1",
+        "selected_count": "0",
+        "omitted_count": "1",
+    },
+}
+
+
 def _doctor_action_payload(item: Mapping[str, Any]) -> dict[str, Any]:
     payload = dict(item)
+    action_id = str(payload.get("id") or "")
+    for key, value in _DOCTOR_ACTION_METADATA.get(action_id, {}).items():
+        payload.setdefault(key, value)
     if "command_args" not in payload:
         payload["command_args"] = _doctor_command_args(payload.get("command"))
     return payload

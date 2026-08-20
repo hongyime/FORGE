@@ -645,6 +645,12 @@ def test_collect_doctor_checks_flags_paid_live_and_weak_web_auth(tmp_path) -> No
     assert rows["LLM Providers"].status == "MISSING"
     action_by_id = {item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]}
     assert action_by_id["review_paid_llm_backends"]["status"] == "attention"
+    assert action_by_id["review_paid_llm_backends"]["execution_policy"] == (
+        "operator_decision_no_commands_executed"
+    )
+    assert action_by_id["review_paid_llm_backends"]["total_count"] == "1"
+    assert action_by_id["review_paid_llm_backends"]["selected_count"] == "0"
+    assert action_by_id["review_paid_llm_backends"]["omitted_count"] == "1"
     assert action_by_id["review_offline_strict"]["status"] == "review"
     assert action_by_id["review_offline_strict"]["command"] == (
         "set FORGE_OFFLINE_STRICT=1"
@@ -668,10 +674,22 @@ def test_collect_doctor_checks_flags_paid_live_and_weak_web_auth(tmp_path) -> No
         "review_paid_llm_backends"
     ]["summary"]
     assert action_by_id["enable_live_validation_only_after_roe"]["status"] == "attention"
+    assert action_by_id["enable_live_validation_only_after_roe"]["execution_policy"] == (
+        "dry_run_or_methods_review_no_live_validation"
+    )
+    assert action_by_id["enable_live_validation_only_after_roe"]["total_count"] == "1"
+    assert action_by_id["enable_live_validation_only_after_roe"]["selected_count"] == "1"
+    assert action_by_id["enable_live_validation_only_after_roe"]["omitted_count"] == "0"
     assert "approval, ROE, scope" in action_by_id[
         "enable_live_validation_only_after_roe"
     ]["summary"]
     assert action_by_id["run_live_provider_probes_if_intended"]["status"] == "attention"
+    assert action_by_id["run_live_provider_probes_if_intended"]["execution_policy"] == (
+        "operator_initiated_live_probe_no_default_execution"
+    )
+    assert action_by_id["run_live_provider_probes_if_intended"]["total_count"] == "1"
+    assert action_by_id["run_live_provider_probes_if_intended"]["selected_count"] == "0"
+    assert action_by_id["run_live_provider_probes_if_intended"]["omitted_count"] == "1"
     assert "no provider backend detected" in action_by_id[
         "run_live_provider_probes_if_intended"
     ]["summary"]
@@ -703,11 +721,20 @@ def test_collect_doctor_checks_defaults_to_static_provider_readiness(tmp_path) -
     assert "live-provider-probes" in row.remediation
     action_by_id = {item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]}
     assert action_by_id["run_live_provider_probes_if_intended"]["status"] == "optional"
+    assert action_by_id["run_live_provider_probes_if_intended"]["execution_policy"] == (
+        "operator_initiated_live_probe_no_default_execution"
+    )
     assert "static provider signal detected" in action_by_id[
         "run_live_provider_probes_if_intended"
     ]["summary"]
     assert action_by_id["review_paid_llm_backends"]["status"] == "ready"
+    assert action_by_id["review_paid_llm_backends"]["execution_policy"] == (
+        "operator_decision_no_commands_executed"
+    )
     assert action_by_id["enable_live_validation_only_after_roe"]["status"] == "gated"
+    assert action_by_id["enable_live_validation_only_after_roe"]["execution_policy"] == (
+        "dry_run_or_methods_review_no_live_validation"
+    )
     assert called is False
 
     live = collect_doctor_checks(
@@ -721,6 +748,9 @@ def test_collect_doctor_checks_defaults_to_static_provider_readiness(tmp_path) -
         item["id"]: item for item in json.loads(doctor_payload_json(live))["action_plan"]
     }
     assert live_action_by_id["run_live_provider_probes_if_intended"]["status"] == "ready"
+    assert live_action_by_id["run_live_provider_probes_if_intended"]["execution_policy"] == (
+        "operator_initiated_live_probe_no_default_execution"
+    )
     assert called is True
 
 
