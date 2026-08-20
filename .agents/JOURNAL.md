@@ -99,3 +99,4 @@
 - 2026-08-21: Long-run and policy follow-up plans now use row-based total/selected/omitted counts, with policy flag occurrence totals preserved separately.
 - 2026-08-21: Quality-audit policy action rows now expose `flag_total_count` to match dedicated policy-plan output without requiring recomputation from per-flag counts.
 - 2026-08-21: Doctor Safe Mode warnings now emit a structured non-executing review action so automation does not skip the `FORGE_SAFE_MODE` decision.
+- 2026-08-21: Doctor Monitoring Schedules actions now include explicit backlog and capped-batch counts so automation does not parse remediation prose.

@@ -1528,6 +1528,9 @@ def test_collect_doctor_checks_warns_on_due_monitoring_schedules(tmp_path) -> No
     assert action_by_id["review_due_monitoring"]["command"] == (
         "forge monitoring due-plan --json"
     )
+    assert action_by_id["review_due_monitoring"]["total_count"] == "1"
+    assert action_by_id["review_due_monitoring"]["selected_count"] == "1"
+    assert action_by_id["review_due_monitoring"]["omitted_count"] == "0"
     payload_action_by_id = {
         item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]
     }
@@ -1541,6 +1544,9 @@ def test_collect_doctor_checks_warns_on_due_monitoring_schedules(tmp_path) -> No
     assert action_by_id["dry_run_capped_due_monitoring"]["command"] == (
         "forge monitoring run-due --dry-run --limit 50 --json"
     )
+    assert action_by_id["dry_run_capped_due_monitoring"]["total_count"] == "1"
+    assert action_by_id["dry_run_capped_due_monitoring"]["selected_count"] == "1"
+    assert action_by_id["dry_run_capped_due_monitoring"]["omitted_count"] == "0"
     assert payload_action_by_id["dry_run_capped_due_monitoring"]["command_args"] == [
         "forge",
         "monitoring",
@@ -1554,6 +1560,9 @@ def test_collect_doctor_checks_warns_on_due_monitoring_schedules(tmp_path) -> No
     assert action_by_id["run_capped_due_monitoring"]["command"] == (
         "forge monitoring run-due --limit 50 --json"
     )
+    assert action_by_id["run_capped_due_monitoring"]["total_count"] == "1"
+    assert action_by_id["run_capped_due_monitoring"]["selected_count"] == "1"
+    assert action_by_id["run_capped_due_monitoring"]["omitted_count"] == "0"
 
 
 def test_collect_doctor_checks_uses_due_plan_total_for_monitoring_summary(
@@ -1626,12 +1635,24 @@ def test_collect_doctor_checks_uses_due_plan_total_for_monitoring_summary(
     assert action_by_id["review_due_monitoring"]["summary"] == (
         "101 due/overdue monitoring policy(ies)"
     )
+    assert action_by_id["review_due_monitoring"]["total_count"] == "101"
+    assert action_by_id["review_due_monitoring"]["selected_count"] == "101"
+    assert action_by_id["review_due_monitoring"]["omitted_count"] == "0"
+    assert action_by_id["review_due_monitoring"]["estimated_batch_count"] == "3"
     assert action_by_id["dry_run_capped_due_monitoring"]["command"] == (
         "forge monitoring run-due --dry-run --limit 50 --json"
     )
+    assert action_by_id["dry_run_capped_due_monitoring"]["total_count"] == "101"
+    assert action_by_id["dry_run_capped_due_monitoring"]["selected_count"] == "50"
+    assert action_by_id["dry_run_capped_due_monitoring"]["omitted_count"] == "51"
+    assert action_by_id["dry_run_capped_due_monitoring"]["estimated_batch_count"] == "3"
     assert action_by_id["run_capped_due_monitoring"]["command"] == (
         "forge monitoring run-due --limit 50 --json"
     )
+    assert action_by_id["run_capped_due_monitoring"]["total_count"] == "101"
+    assert action_by_id["run_capped_due_monitoring"]["selected_count"] == "50"
+    assert action_by_id["run_capped_due_monitoring"]["omitted_count"] == "51"
+    assert action_by_id["run_capped_due_monitoring"]["estimated_batch_count"] == "3"
 
 
 def test_collect_doctor_checks_warns_on_unrouted_monitoring_alerts(tmp_path) -> None:

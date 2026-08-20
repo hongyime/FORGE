@@ -1029,6 +1029,13 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
             "Run `forge monitoring deliver-alerts --json` and inspect failed delivery rows.",
         )
     if total_due_count:
+        capped_selected_count = min(50, max(0, int(total_due_count)))
+        capped_omitted_count = max(0, int(total_due_count) - capped_selected_count)
+        estimated_batches = (
+            int(due_plan.get("estimated_capped_invocations") or 0)
+            if due_plan
+            else (1 if total_due_count else 0)
+        )
         return DoctorCheck(
             "Monitoring Schedules",
             "WARN",
@@ -1046,6 +1053,10 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
                     "status": "attention",
                     "summary": f"{total_due_count} due/overdue monitoring policy(ies)",
                     "command": "forge monitoring due-plan --json",
+                    "total_count": str(total_due_count),
+                    "selected_count": str(total_due_count),
+                    "omitted_count": "0",
+                    "estimated_batch_count": str(estimated_batches),
                 },
                 {
                     "id": "dry_run_capped_due_monitoring",
@@ -1053,6 +1064,10 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
                     "status": "ready",
                     "summary": "rehearse bounded due monitoring work without writes",
                     "command": "forge monitoring run-due --dry-run --limit 50 --json",
+                    "total_count": str(total_due_count),
+                    "selected_count": str(capped_selected_count),
+                    "omitted_count": str(capped_omitted_count),
+                    "estimated_batch_count": str(estimated_batches),
                 },
                 {
                     "id": "run_capped_due_monitoring",
@@ -1060,6 +1075,10 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
                     "status": "ready",
                     "summary": "apply reviewed due monitoring work in bounded batches",
                     "command": "forge monitoring run-due --limit 50 --json",
+                    "total_count": str(total_due_count),
+                    "selected_count": str(capped_selected_count),
+                    "omitted_count": str(capped_omitted_count),
+                    "estimated_batch_count": str(estimated_batches),
                 },
             ),
         )
