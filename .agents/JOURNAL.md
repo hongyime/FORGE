@@ -108,3 +108,4 @@
 - 2026-08-21: Connector policy-summary now carries the same plan-compatible execution/count metadata as the other connector review commands.
 - 2026-08-21: Report quality-audit and stale-plan payloads now expose top-level execution/count metadata for read-only automation review.
 - 2026-08-21: Resume-candidates now reports read-only execution policy and total/selected/omitted counts so bounded candidate pages are not mistaken for the whole backlog.
+- 2026-08-21: CTI import results now carry common schema/execution/count aliases for both dry-run review and write/audit paths.
