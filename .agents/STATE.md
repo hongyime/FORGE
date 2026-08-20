@@ -27,6 +27,7 @@ Progress:
 - Added `forge connectors import-cti --min-confidence F` to skip low-confidence offline CTI observations before persistence or dry-run would-persist counts.
 - Pushed B522 as `af505aa feat: filter cti import confidence`.
 - Added `forge connectors import-cti --max-tlp LEVEL` to skip observations above an allowed TLP level before persistence or dry-run preview counts.
+- Pushed B523 as `cdb0e42 feat: filter cti import tlp`.
 
 Next steps:
-- Commit and push the CTI max-TLP filter checkpoint.
+- Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
