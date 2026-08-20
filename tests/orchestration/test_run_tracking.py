@@ -393,6 +393,26 @@ def test_engagement_run_terminal_entry_fails_with_pending_work() -> None:
     assert metadata["detected_prereqs"] == 4
 
 
+def test_engagement_run_terminal_entry_reports_runtime_budget_pending_work() -> None:
+    entry = engagement_run_terminal_entry(
+        base_metadata={"phase": "running", "runtime_budget_exhausted": True},
+        elapsed_seconds=1500,
+        planned_report_path="reports/planned.md",
+        report_path="reports/final.md",
+        report_ready=True,
+        report_provider="template",
+        report_max_loops=0,
+        finalization_failed=0,
+        pending_counts={"artifact_queue": 2, "engagement_seeds": 3},
+        report_finalization_metadata={"report_artifact_verified": True},
+    )
+
+    assert entry["status"] == "failed"
+    assert entry["pending_total"] == 5
+    assert entry["error"] == "runtime budget exhausted with pending recursive work: 5"
+    assert entry["metadata"]["runtime_budget_exhausted"] is True
+
+
 def test_engagement_run_terminal_entry_fails_without_report_artifact() -> None:
     entry = engagement_run_terminal_entry(
         base_metadata={"phase": "running"},

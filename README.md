@@ -154,6 +154,7 @@ Every run produces a Markdown report + Maltego workspace/GraphML artifacts + evi
 |---|---|---|
 | `--engagement N` / `-e N` | kill-chain auto-derives when omitted; existing-engagement commands usually require it | Engagement ID (scopes findings + audit log) |
 | `--max-iter N` | `7` | Spider iterations. Loop breaks early on stable snapshot; capped at `10` |
+| `--max-runtime-minutes N` | `25` | Soft wall-clock budget before graceful finalization; also configurable with `FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES` |
 | `--tor` | off | Route supported subcommands through the vendored Tor bundle for transport privacy only; not for rate-limit bypass |
 | `--dry-run` | off | Log every intended action, execute nothing outbound |
 | `--attack-mode` / `--no-attack-mode` | on | **SCOPED ACTIVE ASSESSMENT**: bounded live checks plus read-only proof-bound credential/resource validation. Live execution requires `--roe-id`/`FORGE_ROE_ID` and `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; pass `--no-attack-mode` for passive-only |

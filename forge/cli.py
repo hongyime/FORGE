@@ -379,6 +379,15 @@ def kill_chain(
             "Use 0 to disable retries."
         ),
     ),
+    max_runtime_minutes: Optional[int] = typer.Option(
+        None,
+        "--max-runtime-minutes",
+        envvar="FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES",
+        help=(
+            "Soft wall-clock budget for the kill-chain loop before graceful "
+            "finalization starts (default 25, max 1440)."
+        ),
+    ),
     auto_run_detected: bool = typer.Option(
         True,
         "--auto-run-detected/--no-auto-run-detected",
@@ -440,6 +449,7 @@ def kill_chain(
             parallel_fanout=parallel_fanout,
             report_provider=report_provider,
             report_max_loops=report_max_loops,
+            max_runtime_minutes=max_runtime_minutes,
             auto_run_detected=auto_run_detected,
             go_hard=go_hard,
             include_offensive_prereqs=include_offensive_prereqs,
@@ -464,6 +474,7 @@ def kill_chain(
     parallel_fanout = runtime_options.parallel_fanout
     report_provider = runtime_options.report_provider
     report_max_loops = runtime_options.report_max_loops
+    max_runtime_minutes = runtime_options.max_runtime_minutes
     auto_run_detected = runtime_options.auto_run_detected
     go_hard = runtime_options.go_hard
     include_offensive_prereqs = runtime_options.include_offensive_prereqs
@@ -1015,6 +1026,17 @@ def kill_chain(
                 ),
                 "report_provider": report_provider or "default",
                 "report_max_loops": report_max_loops,
+                "max_runtime_minutes": max_runtime_minutes,
+                "runtime_budget_exhausted": bool(
+                    run_progress_state.get("runtime_budget_exhausted")
+                ),
+                "runtime_budget_phase": str(
+                    run_progress_state.get("runtime_budget_phase") or ""
+                ),
+                "runtime_budget_elapsed_seconds": round(
+                    float(run_progress_state.get("runtime_budget_elapsed_seconds") or 0.0),
+                    3,
+                ),
             },
             live_execution_policy=_live_execution_policy_metadata(),
         )
@@ -1234,7 +1256,7 @@ def kill_chain(
                 f"auto_run_detected={auto_run_detected} "
                 f"roe_id={roe_id or '-'} "
                 f"scope_manifest={'present' if scope_manifest_metadata else '-'} "
-                f"max_iter={max_iter}"),
+                f"max_iter={max_iter} max_runtime_minutes={max_runtime_minutes}"),
     )
 
     def _publish_run_progress(step: str, msg: str = "", *, force: bool = False) -> None:
@@ -8524,10 +8546,49 @@ def kill_chain(
             run_progress_state["last_iteration_stable"] = False
         return counts
 
+    max_runtime_seconds = max(60.0, float(max_runtime_minutes) * 60.0)
+
+    def _runtime_budget_exhausted(phase: str) -> bool:
+        if bool(run_progress_state.get("runtime_budget_exhausted")):
+            return True
+        elapsed = _time.time() - step_start
+        if elapsed < max_runtime_seconds:
+            return False
+        pending_counts = _refresh_pending_work_state()
+        pending_total = sum(int(count or 0) for count in pending_counts.values())
+        run_progress_state["runtime_budget_exhausted"] = True
+        run_progress_state["runtime_budget_phase"] = str(phase)
+        run_progress_state["runtime_budget_elapsed_seconds"] = round(float(elapsed), 3)
+        run_progress_state["phase"] = "runtime_budget_exhausted"
+        _cli_audit(
+            db_path,
+            engagement_id,
+            "orchestrator",
+            "kill_chain",
+            "runtime_budget_exhausted",
+            target=domain or seed,
+            result=(
+                f"phase={phase} elapsed_seconds={elapsed:.3f} "
+                f"max_runtime_minutes={max_runtime_minutes} pending={pending_total}"
+            ),
+        )
+        _log(
+            "runtime budget",
+            (
+                f"[yellow]soft budget reached at {elapsed:.1f}s "
+                f"(max_runtime_minutes={max_runtime_minutes}); "
+                "starting graceful finalization[/yellow]"
+            ),
+        )
+        _flush_run_progress_state()
+        return True
+
     for iteration in range(1, max_iterations + 1):
         last_iteration = iteration
         if _maybe_interrupt_run(f"iteration_{iteration}_precheck"):
             return
+        if _runtime_budget_exhausted(f"iteration_{iteration}_precheck"):
+            break
         run_progress_state["phase"] = f"iteration_{iteration}"
         engagement_run_tracker.update_run(
             engagement_run_handle,
@@ -13256,6 +13317,8 @@ def kill_chain(
                  f"crawl=+{after[5]-before[5]} "
                  f"gh=+{after[6]-before[6]} "
                  f"social=+{after[7]-before[7]}")
+        if _runtime_budget_exhausted(f"iteration_{iteration}_complete"):
+            break
 
     # ═══════════════════════════════════════════════════════════════════
     # FINAL PHASE - synthesis only (per-iteration OSINT already fired above)

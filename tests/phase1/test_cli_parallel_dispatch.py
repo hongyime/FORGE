@@ -591,6 +591,7 @@ def test_kill_chain_help_exposes_auto_run_detected_option() -> None:
     assert "--auto-run-detected" in result.stdout
     assert "--include-offensive" in result.stdout
     assert "--roe-id" in result.stdout
+    assert "--max-runtime-minutes" in result.stdout
 
 
 def test_kill_chain_rejects_max_iter_out_of_range() -> None:
@@ -620,11 +621,18 @@ def test_kill_chain_rejects_budget_env_out_of_range() -> None:
         ["kill-chain", "acme.example", "--dry-run"],
         env={"FORGE_KILL_CHAIN_VALIDATION_BATCH_LIMIT": "65"},
     )
+    runtime_result = runner.invoke(
+        app,
+        ["kill-chain", "acme.example", "--dry-run"],
+        env={"FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES": "0"},
+    )
 
     assert depth_result.exit_code != 0
     assert batch_result.exit_code != 0
+    assert runtime_result.exit_code != 0
     assert "synthesis_depth must be between 1 and 5" in depth_result.output
     assert "validation_batch_limit must be between 1 and 64" in batch_result.output
+    assert "max_runtime_minutes must be between 1 and 1440" in runtime_result.output
 
 
 def test_kill_chain_url_seed_with_at_query_stays_url(tmp_path, monkeypatch) -> None:

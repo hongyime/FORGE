@@ -114,9 +114,14 @@ Progress:
 - Pushed B548 as `7c723d4 feat: audit report quality breakpoints`.
 - Fixed the next concrete report-quality failure class: `remediation_review_queue()` now tolerates legacy engagement DBs missing `risk_acceptance_expires_at` by selecting stable payload aliases with NULL/default values.
 - Verified the legacy schema fix with focused remediation/reporting regression tests, the full remediation connector test file (`33 passed`), Ruff, py_compile, `git diff --check`, and a read-only `forge report quality-audit --json` smoke. The smoke still reports four historical dashboard refresh-failure artifacts until those dashboards are regenerated; future queue reads should not hit the missing-column crash.
+- Pushed B549 as `e9244ce fix: support legacy remediation queues`.
+- Added `forge kill-chain --max-runtime-minutes` / `FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES` as a default 25-minute soft budget. The loop now stops only at iteration boundaries, audits `runtime_budget_exhausted`, records budget metadata, and proceeds through existing graceful finalization so collected evidence/report closeout is not lost to the external watchdog.
+- Terminal run errors now distinguish `runtime budget exhausted with pending recursive work` from max-iteration exhaustion when the soft budget caused the stop.
+- Documented the option in README and added SPEC checkpoint B550.
+- Verified B550 with focused runtime-option/CLI help/env validation/run-tracking/CLI registry tests (`36 passed`), Ruff, py_compile, `git diff --check`, direct-call search for `normalize_kill_chain_runtime_options`, and a read-only `forge report quality-audit --json` smoke. The smoke still reports historical long-run/dashboard-failure artifacts until future runs/reports are regenerated.
 
 Next steps:
-- Commit and push the B549 legacy remediation schema compatibility fix, then continue old product hardening only if a new concrete failure class appears; current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Commit and push B550, then continue old product hardening from the next concrete quality-audit failure class; current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
