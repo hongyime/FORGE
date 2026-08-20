@@ -115,3 +115,4 @@
 - 2026-08-21: Monitoring status now carries read-only schema/execution/count aliases so it aligns with monitoring due-plan and run-due payloads.
 - 2026-08-21: Standards STIX import/export JSON now carries common schema/count aliases and explicitly labels dry-run imports as no-write.
 - 2026-08-21: B626 secret prevention workflow plans now expose schema_version, plan-only execution_policy, and total/selected/omitted command counts while preserving the value-free payload contract; verified with focused tests, Ruff, py_compile, diff check, and a temp-DB smoke with no raw secret leakage.
+- 2026-08-21: B627 active-validation methods, preview, and coverage JSON now expose common schema/execution/count aliases while keeping create/approve/run behavior unchanged and live validation unexecuted.
