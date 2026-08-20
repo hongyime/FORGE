@@ -119,3 +119,4 @@
 - 2026-08-21: B628 active-validation list CLI/API payloads now report read-only schema/execution/count aliases with bounded job total/selected/omitted counts.
 - 2026-08-21: B629 audit manifest verification JSON now reports read-only schema/execution/count aliases for manifest and signed-bundle verification.
 - 2026-08-21: B630 audit manifest-export JSON now reports schema/execution/count aliases and distinguishes local bundle writes from explicit remote-store exports.
+- 2026-08-21: B631 asset graph list/API JSON now reports read-only schema/execution/count aliases with bounded node total/selected/omitted counts.
