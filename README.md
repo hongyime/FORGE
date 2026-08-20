@@ -283,7 +283,9 @@ bundles (`objects`). Imported CTI rows are stored as analyst inventory with
 sanitized source/provenance and are not reportable findings unless a later
 independent scoped workflow validates promoted seeds. Use `--dry-run` to parse,
 sanitize, and scope-check seed promotion candidates without writing
-observations, seeds, or audit rows.
+observations, seeds, or audit rows; dry-run reports new observations separately
+from existing or repeated observations with `would_persist_count` and
+`would_duplicate_count`.
 
 `forge monitoring status --json` is the read-only operator check for scheduled
 monitoring: it reports stale DB schemas, enabled/idle policy counts,

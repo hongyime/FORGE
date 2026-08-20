@@ -72,9 +72,11 @@ def import_cti_observations(
     duplicate_count = 0
     promoted_seed_count = 0
     would_persist_count = 0
+    would_duplicate_count = 0
     would_promote_seed_count = 0
     skipped: list[dict[str, str]] = []
     feed_items: list[dict[str, Any]] = []
+    dry_run_seen_keys: set[tuple[str, str, str, str, str]] = set()
     provider = config.provider.strip() or connector_id
     for index, raw_item in enumerate(raw_items):
         if not isinstance(raw_item, Mapping):
@@ -99,6 +101,7 @@ def import_cti_observations(
             continue
         parsed_count += 1
         persisted = False
+        eligible_for_promotion = False
         if not config.dry_run:
             persisted = _persist_observation(
                 con,
@@ -107,15 +110,29 @@ def import_cti_observations(
             )
         if persisted:
             persisted_count += 1
+            eligible_for_promotion = True
         else:
             if config.dry_run:
-                would_persist_count += 1
+                storage_key = _observation_storage_key(
+                    engagement_id=engagement_id,
+                    observation=observation,
+                )
+                if storage_key in dry_run_seen_keys or _observation_exists(
+                    con,
+                    engagement_id=engagement_id,
+                    observation=observation,
+                ):
+                    would_duplicate_count += 1
+                else:
+                    would_persist_count += 1
+                    dry_run_seen_keys.add(storage_key)
+                    eligible_for_promotion = True
             else:
                 duplicate_count += 1
         feed_item = observation_to_target_feed_item(observation)
         if feed_item is not None:
             feed_items.append(feed_item)
-        if config.promote_targets and feed_item is not None and (persisted or config.dry_run):
+        if config.promote_targets and feed_item is not None and eligible_for_promotion:
             promoted = _promote_observation_seed(
                 con,
                 engagement_id=engagement_id,
@@ -149,6 +166,7 @@ def import_cti_observations(
         "duplicate_count": duplicate_count,
         "promoted_seed_count": promoted_seed_count,
         "would_persist_count": would_persist_count,
+        "would_duplicate_count": would_duplicate_count,
         "would_promote_seed_count": would_promote_seed_count,
         "skipped_count": len(skipped),
         "skipped": skipped[:25],
@@ -250,6 +268,60 @@ def _persist_observation(
         ),
     )
     return int(cur.rowcount or 0) > 0
+
+
+def _observation_storage_key(
+    *,
+    engagement_id: int,
+    observation: OsintObservation,
+) -> tuple[str, str, str, str, str]:
+    return (
+        str(int(engagement_id)),
+        observation.provider,
+        observation.indicator_type,
+        observation.indicator_value,
+        observation.raw_artifact_hash,
+    )
+
+
+def _observation_exists(
+    con: sqlite3.Connection,
+    *,
+    engagement_id: int,
+    observation: OsintObservation,
+) -> bool:
+    if not _table_exists(con, "cti_observations"):
+        return False
+    columns = _table_columns(con, "cti_observations")
+    required = {
+        "engagement_id",
+        "provider",
+        "indicator_type",
+        "indicator_value",
+        "raw_artifact_hash",
+    }
+    if not required.issubset(columns):
+        return False
+    row = con.execute(
+        """
+        SELECT 1
+        FROM cti_observations
+        WHERE engagement_id=?
+          AND provider=?
+          AND indicator_type=?
+          AND indicator_value=?
+          AND raw_artifact_hash=?
+        LIMIT 1
+        """,
+        (
+            int(engagement_id),
+            observation.provider,
+            observation.indicator_type,
+            observation.indicator_value,
+            observation.raw_artifact_hash,
+        ),
+    ).fetchone()
+    return row is not None
 
 
 def _promote_observation_seed(
@@ -585,3 +657,9 @@ def _table_exists(con: sqlite3.Connection, table_name: str) -> bool:
         (table_name,),
     ).fetchone()
     return row is not None
+
+
+def _table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:
+    if not _table_exists(con, table_name):
+        return set()
+    return {str(row["name"]) for row in con.execute(f"PRAGMA table_info({table_name})")}

@@ -492,6 +492,81 @@ def test_cti_import_dry_run_does_not_write_observations_seeds_or_audit(
     assert secret_value not in blob
 
 
+def test_cti_import_dry_run_reports_existing_and_in_file_duplicates(
+    tmp_path: Path,
+) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    existing_report = {
+        "items": [
+            {
+                "type": "domain",
+                "value": "portal.acme.example",
+                "confidence": 0.8,
+                "provenance": "shared source",
+            }
+        ]
+    }
+    dry_run_report = {
+        "items": [
+            {
+                "type": "domain",
+                "value": "portal.acme.example",
+                "confidence": 0.8,
+                "provenance": "shared source",
+            },
+            {
+                "type": "domain",
+                "value": "new.acme.example",
+                "confidence": 0.7,
+                "provenance": "new source",
+            },
+            {
+                "type": "domain",
+                "value": "new.acme.example",
+                "confidence": 0.7,
+                "provenance": "new source",
+            },
+        ]
+    }
+
+    try:
+        import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="stix_taxii_import",
+                engagement_id=1001,
+            ),
+            report_text=json.dumps(existing_report),
+        )
+        before_count = con.execute("SELECT COUNT(*) FROM cti_observations").fetchone()[0]
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="stix_taxii_import",
+                engagement_id=1001,
+                promote_targets=True,
+                dry_run=True,
+            ),
+            report_text=json.dumps(dry_run_report),
+        )
+        after_count = con.execute("SELECT COUNT(*) FROM cti_observations").fetchone()[0]
+        seed_count = con.execute(
+            "SELECT COUNT(*) FROM engagement_seeds WHERE engagement_id=1001"
+        ).fetchone()[0]
+    finally:
+        con.close()
+
+    assert result["status"] == "dry_run"
+    assert result["parsed_count"] == 3
+    assert result["persisted_count"] == 0
+    assert result["would_persist_count"] == 1
+    assert result["would_duplicate_count"] == 2
+    assert result["would_promote_seed_count"] == 1
+    assert before_count == 1
+    assert after_count == 1
+    assert seed_count == 0
+
+
 def test_cti_observations_surface_as_non_reportable_inventory(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     db_path = data_dir / "engagements" / "1001.db"

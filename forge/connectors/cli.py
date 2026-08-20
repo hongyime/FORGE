@@ -491,6 +491,7 @@ def register_connector_commands(app: typer.Typer) -> None:
             f"persisted={result['persisted_count']} "
             f"would_persist={result.get('would_persist_count', 0)} "
             f"duplicates={result['duplicate_count']} "
+            f"would_duplicate={result.get('would_duplicate_count', 0)} "
             f"promoted={result['promoted_seed_count']} "
             f"would_promote={result.get('would_promote_seed_count', 0)} "
             f"skipped={result['skipped_count']}"
