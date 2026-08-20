@@ -272,9 +272,10 @@ Progress:
 - Pushed B590 as `91666dd fix: correct connector plan guidance`.
 - Added bounded sequential `forge report stale-run [--limit N] [--provider NAME] [--max-loops N] [--dry-run] [--json]`, backed by `run_stale_report_repair_plan()`, so stale latest reports can be regenerated from the existing stale-plan backlog without copying many commands by hand.
 - Verified B591 with focused reporting/CLI registry tests (`5 passed`), Ruff, py_compile, `git diff --check`, stale-run help smoke, and a real local `stale-run --dry-run --limit 3 --provider template --max-loops 0 --json` smoke. The dry-run selected 3 of 57 stale reports and attempted 0 generations. No report regeneration, provider call, resume-run, kill-chain, monitoring, scheduled-task, engagement mutation, or credential action was executed during verification.
+- Pushed B591 as `054858c feat: add stale report repair runner`.
 
 Next steps:
-- Commit and push B591, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
