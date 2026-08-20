@@ -3181,6 +3181,11 @@ def _dashboard_resume_candidate_payload(
         "roe_present": bool(candidate.roe_id.strip()),
         "report_available": candidate.report_path_exists,
         "scope_present": candidate.scope_manifest_exists,
+        "resume_ready": candidate.resume_ready,
+        "resume_blockers": [
+            _dashboard_resume_blocker_label(item)
+            for item in candidate.resume_blockers[:8]
+        ],
         "pending_work_total": candidate.pending_work_total,
         "completed_at": candidate.completed_at,
         "updated_at": candidate.updated_at,
@@ -3206,10 +3211,20 @@ def _dashboard_resume_candidate_section_row(
         "Attack": "yes" if candidate.get("attack_mode") else "no",
         "ROE": "yes" if candidate.get("roe_present") else "no",
         "Scope": "yes" if candidate.get("scope_present") else "no",
+        "Ready": "yes" if candidate.get("resume_ready") else "no",
+        "Blockers": ", ".join(str(item) for item in candidate.get("resume_blockers") or []),
         "Report": "yes" if candidate.get("report_available") else "no",
         "Error": str(candidate.get("error_summary") or ""),
         "Updated": _format_dt(str(candidate.get("updated_at") or "")),
     }
+
+
+def _dashboard_resume_blocker_label(value: str) -> str:
+    labels = {
+        "scope_manifest_missing": "scope_missing",
+        "scope_manifest_file_missing": "scope_file_missing",
+    }
+    return labels.get(str(value), str(value))
 
 
 def generate_dashboard(

@@ -164,13 +164,21 @@ def _overview_table_row(
     resume_reason = str(resume_candidate.get("reason") or "")
     resume_status = str(resume_candidate.get("status") or "")
     resume_pending = int(resume_candidate.get("pending_work_total") or 0)
+    resume_ready = bool(resume_candidate.get("resume_ready"))
+    resume_blockers = [
+        str(item) for item in (resume_candidate.get("resume_blockers") or [])[:3]
+    ]
     resume_review = "1" if resume_reason else "0"
     if resume_reason:
         resume_note = f"{resume_reason} \N{MIDDLE DOT} {resume_status}"
         if resume_pending:
             resume_note = f"{resume_note} \N{MIDDLE DOT} pending {resume_pending}"
+        if resume_blockers:
+            resume_note = f"{resume_note} \N{MIDDLE DOT} blocked: {', '.join(resume_blockers)}"
+        resume_label = "ready" if resume_ready else "blocked"
+        resume_class = "pill" if resume_ready else "pill warn"
         resume_html = (
-            f"<span class='pill warn'>{html.escape(resume_status or 'review')}</span>"
+            f"<span class='{resume_class}'>{html.escape(resume_label)}</span>"
             f"<div class='tiny muted'>{html.escape(resume_note)}</div>"
         )
     else:

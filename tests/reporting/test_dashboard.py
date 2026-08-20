@@ -563,7 +563,7 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
             VALUES
                 (1001, 'kill_chain', 'completed', 'acme.example', 'domain', 2, 3,
                  2, 1, 0, 0, NULL,
-                 '{"phase":"completed","roe_id":"ROE-ACME-2026-07","live_execution_policy":{"scope_gate":"engagement_scope_json_root_domains","roe_id":"ROE-ACME-2026-07","roe_present":true,"roe_missing":false,"live_probing_allowed":true,"tool_execution_allowed":true,"active_recon_allowed":false,"credential_validation_allowed":false,"destructive_actions_allowed":false,"post_exploitation_allowed":false,"requires_explicit_roe":false}}',
+                 '{"phase":"completed","roe_id":"ROE-ACME-2026-07","live_execution_policy":{"scope_gate":"engagement_scope_json_root_domains","roe_id":"ROE-ACME-2026-07","roe_present":true,"roe_missing":false,"scope_manifest_source":"C:/secret/scope.json","live_probing_allowed":true,"tool_execution_allowed":true,"active_recon_allowed":false,"credential_validation_allowed":false,"destructive_actions_allowed":false,"post_exploitation_allowed":false,"requires_explicit_roe":false}}',
                  '2026-07-09T09:00:00', '2026-07-09T09:44:12', '2026-07-09T09:44:12')
             """
         )
@@ -1256,12 +1256,16 @@ def test_generate_dashboard_surfaces_resume_candidate_review_without_manifest_pa
     assert candidate["pending_work_total"] == 4
     assert candidate["roe_present"] is True
     assert candidate["scope_present"] is False
+    assert candidate["resume_ready"] is False
+    assert candidate["resume_blockers"] == ["scope_file_missing"]
     assert "scope_manifest" not in serialized_overview
     assert "C:/secret/scope.json" not in serialized_detail
     assert "DO-NOT-LEAK" not in serialized_detail
     rows = detail_payload["sections"]["target_resume_candidate"]
     assert rows[0]["Reason"] == "pending_recursive_work"
     assert rows[0]["Pending"] == "4"
+    assert rows[0]["Ready"] == "no"
+    assert rows[0]["Blockers"] == "scope_file_missing"
 
 
 def test_generate_dashboard_excludes_report_prefix_collisions(tmp_path: Path) -> None:

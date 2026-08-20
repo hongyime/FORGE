@@ -157,9 +157,13 @@ Progress:
 - Follow-up real local `forge targets resume-candidates --limit 200 --json` smoke reports 49 candidates, 49 `resume_ready`, empty `resume_blocker_counts`, and suggested `forge kill-chain ... --resume --max-iter 3` command arrays. No kill-chain run was started.
 - Verified B560 with focused target-import/CLI-registry/quality-audit tests (`50 passed` in the broad slice, `45 passed` in the final target/registry slice), Ruff, py_compile, `git diff --check`, and local resume-candidate/backfill smokes.
 - Pushed B560 as `c72721f feat: backfill resume scope manifests`.
+- Added dashboard resume readiness/blocker fields and overview `ready`/`blocked` labels; dashboard blocker labels are path-neutral.
+- Tightened run-summary metadata sanitization to drop nested `scope_manifest*` keys, including `live_execution_policy.scope_manifest_source`.
+- Regenerated the ignored local static dashboard with current code. Generated dashboard JSON now has 49 resume items, 49 ready, 0 blocked, empty blocker set, and no `.forge_data/target_imports`, `scope_10001_recovered.json`, or `C:/secret/scope.json` path hits.
+- Verified B561 with focused dashboard/run-summary/target-import/quality-audit/CLI-registry tests (`33 passed` plus `25 passed`), Ruff, py_compile, `git diff --check`, and local dashboard/quality smokes.
 
 Next steps:
-- Continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Commit and push B561, then continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

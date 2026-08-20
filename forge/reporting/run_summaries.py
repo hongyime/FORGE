@@ -166,6 +166,7 @@ def safe_run_metadata(value: Any) -> dict[str, Any]:
         if (
             not key
             or normalized in _SENSITIVE_RUN_METADATA_KEYS
+            or normalized.startswith("scope_manifest")
             or normalized.endswith("_enc")
             or any(marker in normalized for marker in ("password", "secret", "token"))
         ):
