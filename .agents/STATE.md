@@ -275,9 +275,10 @@ Progress:
 - Pushed B591 as `054858c feat: add stale report repair runner`.
 - Surfaced the new stale-report runner from `report quality-audit`: `regenerate_stale_reports` now includes `follow_up=forge report stale-run --dry-run --json --limit N` and a machine-readable `batch_run_command` for bounded sequential regeneration.
 - Verified B592 with focused reporting tests (`4 passed`), Ruff, py_compile, `git diff --check`, and a real local read-only `quality-audit --top 1` smoke showing `follow_up=forge report stale-run --dry-run --json --limit 57`. No report regeneration, provider call, resume-run, kill-chain, monitoring, scheduled-task, engagement mutation, or credential action was executed.
+- Pushed B592 as `d6f4f16 fix: surface stale report runner`.
 
 Next steps:
-- Commit and push B592, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
