@@ -279,9 +279,10 @@ Progress:
 - Ran one local template-only stale report repair for engagement 10001. It succeeded without provider/live calls, but exposed that the runner wrote report families to the repo root when no output directory was passed. Moved that generated `engagement_10001_report_20260820T162240.*` family into `reports/`.
 - Fixed stale-run output placement: effective commands and execution now include `--output <reports-dir>`, and successful runs return `dashboard_refresh_required=true` plus post-run `forge dashboard -o <reports-dir>/dashboard.html` and `forge report quality-audit --json` commands.
 - Verified B593 with focused stale-run tests (`3 passed`), Ruff, py_compile, and `git diff --check`. The generated report family remains ignored local artifact data and is not committed. No provider call, resume-run, kill-chain, monitoring, scheduled-task, engagement mutation, or credential action was executed.
+- Pushed B593 as `5f63e55 fix: keep stale reports under reports dir`.
 
 Next steps:
-- Commit and push B593, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
