@@ -135,6 +135,45 @@ def test_provider_catalog_policy_summary_maps_default_and_opt_in_sources() -> No
     assert summary["collection_method_counts"]["catalog_only"] >= 6
 
 
+def test_connector_policy_summary_cli_outputs_catalog_policy_json() -> None:
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+
+    result = CliRunner().invoke(app, ["connectors", "policy-summary", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["total_count"] == len(provider_catalog(include_sensitive=True))
+    assert {
+        "misp_event_import",
+        "stix_taxii_import",
+        "supabase_table_import",
+    } <= set(payload["offline_import_provider_ids"])
+    assert {
+        "abusech_threatfox",
+        "abusech_urlhaus",
+    } <= set(payload["live_or_api_provider_ids"])
+    assert "raw" not in json.dumps(payload, sort_keys=True).lower()
+
+
+def test_connector_policy_summary_cli_human_output_is_non_executing() -> None:
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+
+    result = CliRunner().invoke(app, ["connectors", "policy-summary"])
+
+    assert result.exit_code == 0, result.output
+    normalized_output = " ".join(result.output.split())
+    assert "offline_import" in result.output
+    assert "live_or_api" in result.output
+    assert "no provider is contacted" in normalized_output
+    assert "third-party command" in normalized_output
+
+
 def test_observation_normalizes_to_target_feed_without_raw_provider_body() -> None:
     observation = normalize_observation(
         {

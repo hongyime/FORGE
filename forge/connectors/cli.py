@@ -36,6 +36,7 @@ from forge.db.migrations import run_migrations
 from forge.db.validation import validate_canonical_schema
 from forge.secrets.importers import SecretScanImportConfig, import_secret_scan_report
 from forge.secrets.lifecycle import secret_prevention_workflow_plan
+from forge.utils.intel import provider_catalog_policy_summary
 
 console = Console(stderr=True)
 
@@ -123,6 +124,58 @@ def register_connector_commands(app: typer.Typer) -> None:
             f"{summary['optional_paid_count']} optional paid adapters. "
             "Secret values are never printed."
             "[/dim]"
+        )
+
+    @app.command("policy-summary")
+    def policy_summary(
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Summarize CTI/OSINT source policy without running providers."""
+        summary = provider_catalog_policy_summary()
+        if json_output:
+            typer.echo(json.dumps(summary, sort_keys=True))
+            return
+
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Policy", width=28)
+        table.add_column("Count", width=10)
+        table.add_column("Providers")
+        rows = [
+            (
+                "total",
+                summary.get("total_count", 0),
+                summary.get("default_provider_ids", []),
+            ),
+            (
+                "offline_import",
+                len(summary.get("offline_import_provider_ids", [])),
+                summary.get("offline_import_provider_ids", []),
+            ),
+            (
+                "live_or_api",
+                len(summary.get("live_or_api_provider_ids", [])),
+                summary.get("live_or_api_provider_ids", []),
+            ),
+            (
+                "manual_opt_in",
+                len(summary.get("manual_opt_in_provider_ids", [])),
+                summary.get("manual_opt_in_provider_ids", []),
+            ),
+            (
+                "operator_opt_in_gate",
+                summary.get("required_gate_counts", {}).get("operator_opt_in", 0),
+                [],
+            ),
+        ]
+        for label, count, providers in rows:
+            provider_text = ", ".join(str(item) for item in list(providers)[:8])
+            if isinstance(providers, list) and len(providers) > 8:
+                provider_text = f"{provider_text}, +{len(providers) - 8}"
+            table.add_row(str(label), str(count), provider_text or "-")
+        console.print(table)
+        console.print(
+            "[dim]Catalog policy summary only; no provider is contacted and no "
+            "third-party command is executed.[/dim]"
         )
 
     @app.command("plugin-validate")

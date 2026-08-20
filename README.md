@@ -253,6 +253,7 @@ forge connectors import-secrets --engagement N --connector gitleaks_local|truffl
 forge connectors secret-prevention-plan --engagement N [--workflow pre-commit|pull_request|push] [--json]
 forge connectors secret-set --engagement N --connector ID --name NAME --value-env ENV
 forge connectors secret-list --engagement N [--connector ID]
+forge connectors policy-summary [--json]
 forge connectors plugin-validate [--plugin-dir PATH] [--json]
 forge standards import-stix|export-stix --engagement N --bundle-file bundle.json [--json]
 forge workspaces list|upsert|members|member-set|member-delete|audit
@@ -325,8 +326,9 @@ normalization and filters; duplicate-only re-imports still count as accepted
 because the file matched known observations. Use `--since ISO` and
 `--until ISO` to bound imports by observation time.
 
-The internal CTI/OSINT provider catalog exposes `provider_catalog_policy_summary()`
-for operator review and tests. It reports only aggregate counts and provider IDs:
+`forge connectors policy-summary --json` exposes the internal CTI/OSINT provider
+catalog policy summary for operator review and tests. It reports only aggregate
+counts and provider IDs:
 default-visible sources, manual/policy-controlled sources, offline import
 sources, live/API-style sources, blocked-sensitive backlog sources, categories,
 safety tiers, collection methods, and required gate counts. CTI sources such as
