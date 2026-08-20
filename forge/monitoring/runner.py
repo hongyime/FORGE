@@ -325,8 +325,13 @@ def monitoring_status_for_data_dir(data_dir: Path, *, now: str | None = None) ->
         ):
             totals[key] += int(result[key])
     return {
+        "schema_version": "forge.monitoring.status.v1",
+        "execution_policy": "read_only_monitoring_inventory_no_commands_executed",
         "data_dir": str(data_dir.resolve()),
         "observed_at": observed_at,
+        "total_count": totals["db_count"],
+        "selected_count": totals["db_count"],
+        "omitted_count": 0,
         **totals,
         "db_results": db_results,
         "errors": errors,

@@ -2492,6 +2492,11 @@ def test_monitoring_status_for_data_dir_reports_due_and_delivery_attention(
     )
 
     engagement = status["db_results"][0]["engagements"][0]
+    assert status["schema_version"] == "forge.monitoring.status.v1"
+    assert status["execution_policy"] == "read_only_monitoring_inventory_no_commands_executed"
+    assert status["total_count"] == 1
+    assert status["selected_count"] == 1
+    assert status["omitted_count"] == 0
     assert status["db_count"] == 1
     assert status["schema_ready_db_count"] == 1
     assert status["due_policy_count"] == 1
@@ -2535,6 +2540,11 @@ def test_monitoring_status_for_data_dir_reports_stale_schema_without_migrating(
     status = monitoring_status_for_data_dir(data_dir, now="2026-07-09T10:00:00Z")
 
     db_result = status["db_results"][0]
+    assert status["schema_version"] == "forge.monitoring.status.v1"
+    assert status["execution_policy"] == "read_only_monitoring_inventory_no_commands_executed"
+    assert status["total_count"] == 1
+    assert status["selected_count"] == 1
+    assert status["omitted_count"] == 0
     assert status["db_count"] == 1
     assert status["schema_ready_db_count"] == 0
     assert status["stale_db_count"] == 1
