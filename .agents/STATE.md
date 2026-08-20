@@ -21,6 +21,7 @@ Progress:
 - Added `forge connectors import-cti --dry-run` to parse/sanitize offline CTI files and scope-check promotion candidates without writing observations, seeds, or audit rows.
 - Pushed B519 as `b6314f0 feat: add cti import dry run`.
 - Hardened CTI dry-run preview to distinguish existing/in-file duplicate observations from new observations without creating tables or writing rows.
+- Pushed B520 as `eaf0343 feat: preview cti import duplicates`.
 
 Next steps:
-- Commit and push the CTI dry-run duplicate-preview checkpoint.
+- Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
