@@ -71,8 +71,8 @@ Progress:
 - Verified B537 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B537 as `3461eb5 feat: summarize sensitive cti rejections`.
 - Added CTI `unsafe_text_item_count` result metadata for command/script/install-like source rows and stripped unsafe command-bearing fields before normalization.
-- Verified B538 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`; commit and push are pending.
+- Verified B538 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
+- Pushed B538 as `7191ad1 feat: summarize unsafe cti text`.
 
 Next steps:
-- Commit and push B538.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
