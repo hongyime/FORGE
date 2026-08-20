@@ -97,7 +97,10 @@ def test_provider_catalog_policy_summary_maps_default_and_opt_in_sources() -> No
     summary = provider_catalog_policy_summary()
 
     assert summary["schema_version"] == "forge.connector_policy_summary.v1"
+    assert summary["execution_policy"] == "data_only_catalog_no_provider_execution"
     assert summary["total_count"] == len(provider_catalog(include_sensitive=True))
+    assert summary["selected_count"] == summary["total_count"]
+    assert summary["omitted_count"] == 0
     assert summary["default_enabled_count"] == len(provider_catalog())
     assert summary["opt_in_provider_ids"] == []
     assert {
@@ -147,7 +150,10 @@ def test_connector_policy_summary_cli_outputs_catalog_policy_json() -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["schema_version"] == "forge.connector_policy_summary.v1"
+    assert payload["execution_policy"] == "data_only_catalog_no_provider_execution"
     assert payload["total_count"] == len(provider_catalog(include_sensitive=True))
+    assert payload["selected_count"] == payload["total_count"]
+    assert payload["omitted_count"] == 0
     assert {
         "misp_event_import",
         "stix_taxii_import",
