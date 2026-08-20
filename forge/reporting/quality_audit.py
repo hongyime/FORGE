@@ -423,6 +423,7 @@ def collect_long_run_review_plan(
     reports_dir: Path,
     long_run_seconds: float = DEFAULT_LONG_RUN_SECONDS,
     limit: int = DEFAULT_TOP_LIMIT,
+    redact_paths: bool = False,
 ) -> dict[str, Any]:
     """Return a read-only review plan for unusually long latest runs."""
 
@@ -439,8 +440,11 @@ def collect_long_run_review_plan(
     omitted_count = max(0, total_count - len(samples))
     return {
         "schema_version": "forge.report_long_run_review_plan.v1",
-        "reports_dir": payload.get("reports_dir", str(Path(reports_dir))),
+        "reports_dir": (
+            "<redacted>" if redact_paths else payload.get("reports_dir", str(Path(reports_dir)))
+        ),
         "execution_policy": "plan_only_no_commands_executed",
+        "redact_paths": bool(redact_paths),
         "long_run_threshold_seconds": float(long_run_seconds),
         "total_count": total_count,
         "selected_count": len(samples),
@@ -515,6 +519,7 @@ def collect_policy_flag_review_plan(
     *,
     reports_dir: Path,
     limit: int = DEFAULT_TOP_LIMIT,
+    redact_paths: bool = False,
 ) -> dict[str, Any]:
     """Return a read-only review plan for latest-run policy flag counts."""
 
@@ -540,8 +545,11 @@ def collect_policy_flag_review_plan(
     )
     return {
         "schema_version": "forge.report_policy_flag_review_plan.v1",
-        "reports_dir": payload.get("reports_dir", str(Path(reports_dir))),
+        "reports_dir": (
+            "<redacted>" if redact_paths else payload.get("reports_dir", str(Path(reports_dir)))
+        ),
         "execution_policy": "plan_only_no_commands_executed",
+        "redact_paths": bool(redact_paths),
         "dashboard_generated_at": _text(payload.get("dashboard_generated_at")),
         "source": "generated_dashboard_run_summary",
         "meaning": "latest run metadata, not current global defaults",

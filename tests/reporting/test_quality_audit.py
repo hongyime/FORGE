@@ -501,6 +501,7 @@ def test_collect_long_run_review_plan_is_read_only_review_plan(tmp_path: Path) -
 
     assert payload["schema_version"] == "forge.report_long_run_review_plan.v1"
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["redact_paths"] is False
     assert payload["status"] == "review"
     assert payload["total_count"] == 1
     assert payload["selected_count"] == 1
@@ -514,6 +515,22 @@ def test_collect_long_run_review_plan_is_read_only_review_plan(tmp_path: Path) -
     assert "live resume" in payload["review_guidance"]
 
 
+def test_collect_long_run_review_plan_redacts_reports_dir(tmp_path: Path) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+
+    payload = collect_long_run_review_plan(
+        reports_dir=reports_dir,
+        long_run_seconds=2700,
+        limit=1,
+        redact_paths=True,
+    )
+
+    assert payload["redact_paths"] is True
+    assert payload["reports_dir"] == "<redacted>"
+    assert str(tmp_path) not in json.dumps(payload)
+
+
 def test_collect_policy_flag_review_plan_explains_latest_run_metadata(
     tmp_path: Path,
 ) -> None:
@@ -524,6 +541,7 @@ def test_collect_policy_flag_review_plan_explains_latest_run_metadata(
 
     assert payload["schema_version"] == "forge.report_policy_flag_review_plan.v1"
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["redact_paths"] is False
     assert payload["status"] == "explain"
     assert payload["counts"] == {"destructive_no": 1, "post_ex_no": 1}
     assert payload["total_count"] == 1
@@ -542,6 +560,21 @@ def test_collect_policy_flag_review_plan_explains_latest_run_metadata(
         "post_ex_no": "latest_run_policy_not_true_or_missing",
     }
     assert "latest run summaries" in payload["explanation"]
+
+
+def test_collect_policy_flag_review_plan_redacts_reports_dir(tmp_path: Path) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+
+    payload = collect_policy_flag_review_plan(
+        reports_dir=reports_dir,
+        limit=1,
+        redact_paths=True,
+    )
+
+    assert payload["redact_paths"] is True
+    assert payload["reports_dir"] == "<redacted>"
+    assert str(tmp_path) not in json.dumps(payload)
 
 
 def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:
@@ -968,6 +1001,34 @@ def test_report_long_run_plan_cli_outputs_json(tmp_path: Path) -> None:
     assert payload["samples"][0]["id"] == "1001"
 
 
+def test_report_long_run_plan_cli_redacts_json_paths(tmp_path: Path) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "long-run-plan",
+            "--reports-dir",
+            str(reports_dir),
+            "--long-run-seconds",
+            "2700",
+            "--limit",
+            "1",
+            "--redact-paths",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["redact_paths"] is True
+    assert payload["reports_dir"] == "<redacted>"
+    assert str(tmp_path) not in json.dumps(payload)
+
+
 def test_report_long_run_plan_cli_prints_human_plan(tmp_path: Path) -> None:
     from forge.cli import app  # noqa: PLC0415
 
@@ -1027,6 +1088,32 @@ def test_report_policy_plan_cli_outputs_json(tmp_path: Path) -> None:
     assert payload["samples"][0]["flag_reasons"]["destructive_no"] == (
         "latest_run_policy_not_true_or_missing"
     )
+
+
+def test_report_policy_plan_cli_redacts_json_paths(tmp_path: Path) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "policy-plan",
+            "--reports-dir",
+            str(reports_dir),
+            "--limit",
+            "1",
+            "--redact-paths",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["redact_paths"] is True
+    assert payload["reports_dir"] == "<redacted>"
+    assert str(tmp_path) not in json.dumps(payload)
 
 
 def test_report_policy_plan_cli_prints_human_plan(tmp_path: Path) -> None:

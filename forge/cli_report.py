@@ -393,6 +393,11 @@ def report_long_run_plan(
         "--limit",
         help="Maximum long-run review samples to include.",
     ),
+    redact_paths: bool = typer.Option(
+        False,
+        "--redact-paths",
+        help="Hide local paths in JSON output.",
+    ),
     json_output: bool = typer.Option(
         False,
         "--json",
@@ -404,6 +409,7 @@ def report_long_run_plan(
         reports_dir=reports_dir,
         long_run_seconds=long_run_seconds,
         limit=limit,
+        redact_paths=redact_paths,
     )
     if json_output:
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
@@ -447,6 +453,11 @@ def report_policy_plan(
         "--limit",
         help="Maximum policy-flag review samples to include.",
     ),
+    redact_paths: bool = typer.Option(
+        False,
+        "--redact-paths",
+        help="Hide local paths in JSON output.",
+    ),
     json_output: bool = typer.Option(
         False,
         "--json",
@@ -457,6 +468,7 @@ def report_policy_plan(
     payload = collect_policy_flag_review_plan(
         reports_dir=reports_dir,
         limit=limit,
+        redact_paths=redact_paths,
     )
     if json_output:
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
