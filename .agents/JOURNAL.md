@@ -25,3 +25,5 @@
 - 2026-08-20: CTI imports now report rejected sensitive observation categories only as aggregate type counts, not values.
 - 2026-08-20: CTI imports now report command/script/install-like source rows only as an unsafe-text count; command snippets remain non-executable and non-persistent.
 - 2026-08-20: Added an aggregate CTI/OSINT provider catalog policy summary so public source lists map to default, opt-in, offline, live/API-style, and gated categories without command material.
+- 2026-08-20: Expanded the CTI/OSINT provider catalog with default-visible CTI/social/source-list backlog entries while keeping them catalog data rather than runnable workflows.
+- 2026-08-20: Treated `ukr.pw` as unsafe public sysadmin snippet text and mapped it into default-visible catalog-only workflow ideas with redaction and no-execution metadata.

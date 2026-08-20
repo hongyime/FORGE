@@ -74,20 +74,23 @@ def test_cti_connectors_are_catalog_only_and_free_first() -> None:
     assert "scope_manifest_seed_promotion" in by_id["abusech_urlhaus"]["required_gates"]
 
 
-def test_provider_catalog_defaults_skip_sensitive_social_sources() -> None:
+def test_provider_catalog_defaults_show_broad_source_backlog() -> None:
     default_ids = {entry.id for entry in provider_catalog()}
     all_ids = {entry.id for entry in provider_catalog(include_sensitive=True)}
 
     assert {
         "abusech_threatfox",
         "abusech_urlhaus",
+        "alienvault_otx",
+        "osint_people_identity",
+        "osint_social_realtime_search",
         "stix_taxii_import",
         "misp_event_import",
         "supabase_table_import",
+        "ukr_pw_sysadmin_snippet_catalog",
+        "ukr_pw_network_firewall_config_patterns",
     } <= default_ids
-    assert "github_code_search_public" not in default_ids
-    assert "social_search_curated" not in default_ids
-    assert {"github_code_search_public", "social_search_curated"} <= all_ids
+    assert default_ids == all_ids
 
 
 def test_provider_catalog_policy_summary_maps_default_and_opt_in_sources() -> None:
@@ -95,11 +98,16 @@ def test_provider_catalog_policy_summary_maps_default_and_opt_in_sources() -> No
 
     assert summary["total_count"] == len(provider_catalog(include_sensitive=True))
     assert summary["default_enabled_count"] == len(provider_catalog())
-    assert summary["opt_in_provider_ids"] == [
+    assert summary["opt_in_provider_ids"] == []
+    assert {
         "github_code_search_public",
         "social_search_curated",
-    ]
-    assert "social_search_curated" not in summary["default_provider_ids"]
+        "osint_breach_social",
+        "osint_people_identity",
+        "osint_telegram_public_channels",
+        "ukr_pw_sysadmin_snippet_catalog",
+        "ukr_pw_webserver_config_patterns",
+    } <= set(summary["default_provider_ids"])
     assert {
         "misp_event_import",
         "stix_taxii_import",
@@ -112,12 +120,19 @@ def test_provider_catalog_policy_summary_maps_default_and_opt_in_sources() -> No
         "github_code_search_public",
         "social_search_curated",
     } <= set(summary["live_or_api_provider_ids"])
-    assert summary["manual_opt_in_provider_ids"] == [
+    assert {
         "github_code_search_public",
+        "osint_breach_social",
+        "osint_people_identity",
+        "osint_social_realtime_search",
         "social_search_curated",
-    ]
-    assert summary["required_gate_counts"]["operator_opt_in"] == 2
+    } <= set(summary["manual_opt_in_provider_ids"])
+    assert summary["required_gate_counts"]["operator_opt_in"] >= 20
+    assert summary["required_gate_counts"]["people_search_policy"] >= 10
     assert summary["required_gate_counts"]["provider_rate_limit"] >= 4
+    assert summary["safety_tier_counts"]["blocked_sensitive"] == 2
+    assert summary["safety_tier_counts"]["catalog_unsafe_text"] == 5
+    assert summary["collection_method_counts"]["catalog_only"] >= 6
 
 
 def test_observation_normalizes_to_target_feed_without_raw_provider_body() -> None:

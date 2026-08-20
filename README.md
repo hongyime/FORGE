@@ -318,10 +318,18 @@ because the file matched known observations. Use `--since ISO` and
 
 The internal CTI/OSINT provider catalog exposes `provider_catalog_policy_summary()`
 for operator review and tests. It reports only aggregate counts and provider IDs:
-default-enabled sources, opt-in sources, offline import sources, live/API-style
-sources, categories, safety tiers, collection methods, and required gate counts.
-Use it as the source-selection map for CTI/OSINT lists; do not treat public tool
-lists or provider notes as runnable commands.
+default-visible sources, manual/policy-controlled sources, offline import
+sources, live/API-style sources, blocked-sensitive backlog sources, categories,
+safety tiers, collection methods, and required gate counts. CTI sources such as
+additional abuse.ch feeds, OTX, urlscan, VirusTotal, OpenCTI, OpenIOC,
+IODEF/RID, VERIS, report-derived IOC imports, phishing triage exports, and
+standards are represented alongside social/real-time/general OSINT backlog
+entries from public source lists. Public admin snippet archives such as
+`ukr.pw` are represented as catalog-only unsafe text for redacted webserver,
+firewall/VPN/proxy, database/mail/file-service, and cloud-bootstrap workflow
+ideas. Use it as the source-selection map for CTI/OSINT lists; do not treat
+public tool lists, config snippets, install notes, or provider notes as runnable
+commands.
 
 `forge monitoring status --json` is the read-only operator check for scheduled
 monitoring: it reports stale DB schemas, enabled/idle policy counts,

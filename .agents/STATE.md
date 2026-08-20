@@ -74,8 +74,11 @@ Progress:
 - Verified B538 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B538 as `7191ad1 feat: summarize unsafe cti text`.
 - Added aggregate CTI/OSINT `provider_catalog_policy_summary()` for default/opt-in/offline/live-style/gate category review.
-- Verified B539 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`; commit and push are pending.
+- Verified B539 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
+- Pushed B539 as `9a3ec3e feat: summarize osint catalog policy`.
+- Expanded the CTI/OSINT provider catalog with default-visible backlog entries from the CTI, awesome-osint, and `ukr.pw` source-list/snippet research.
+- Verified B540 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 
 Next steps:
-- Commit and push B539.
+- Commit and push B540.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
