@@ -23,6 +23,7 @@ Progress:
 - Hardened CTI dry-run preview to distinguish existing/in-file duplicate observations from new observations without creating tables or writing rows.
 - Pushed B520 as `eaf0343 feat: preview cti import duplicates`.
 - Added `forge connectors import-cti --limit N` and result item-count metadata so large offline CTI exports can be processed in bounded batches.
+- Pushed B521 as `c90fbeb feat: bound cti import items`.
 
 Next steps:
-- Commit and push the CTI import item-limit checkpoint.
+- Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
