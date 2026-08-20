@@ -2868,6 +2868,10 @@ def _base_styles() -> str:
       padding:18px;border:1px dashed var(--border);border-radius:14px;color:var(--muted);
       background:rgba(255,255,255,.02)
     }
+    .empty-section-details summary{
+      cursor:pointer;color:var(--muted);font-weight:600;overflow-wrap:anywhere
+    }
+    .empty-section-details ul{margin:12px 0 0;columns:2;column-gap:28px}
     .toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
     .backlink{display:inline-flex;align-items:center;gap:8px;color:var(--accent-strong);font-weight:600}
     .summary-line{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -2891,6 +2895,7 @@ def _base_styles() -> str:
       .hero h1{font-size:28px}
       .grid,.route-grid{grid-template-columns:minmax(0,1fr)}
       .artifact-list,.meta-list{grid-template-columns:minmax(0,1fr)}
+      .empty-section-details ul{columns:1}
       th,td{padding:9px 10px}
     }
     """

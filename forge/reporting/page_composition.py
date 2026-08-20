@@ -485,10 +485,28 @@ def render_engagement_evidence_sections(
     render_table: Callable[[str, list[dict[str, str]]], str],
 ) -> str:
     """Render ordered evidence tables for an engagement detail page."""
-    return "".join(
-        render_table(title, sections.get(key, []))
-        for key, title in ENGAGEMENT_SECTION_TITLES.items()
-    )
+    rendered_sections: list[str] = []
+    empty_titles: list[str] = []
+    for key, title in ENGAGEMENT_SECTION_TITLES.items():
+        rows = sections.get(key, [])
+        if rows:
+            rendered_sections.append(render_table(title, rows))
+        else:
+            empty_titles.append(title)
+    if empty_titles:
+        empty_items = "".join(f"<li>{html.escape(title)}</li>" for title in empty_titles)
+        rendered_sections.append(
+            '<section class="panel empty-section-summary">'
+            '<div class="panel-head"><h3>Empty Evidence Sections</h3></div>'
+            '<div class="panel-body">'
+            '<details class="empty-section-details">'
+            f"<summary>{len(empty_titles)} sections have no rows in this engagement</summary>"
+            f"<ul>{empty_items}</ul>"
+            "</details>"
+            "</div>"
+            "</section>"
+        )
+    return "".join(rendered_sections)
 
 
 def render_engagement_detail_page(

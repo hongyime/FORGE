@@ -146,8 +146,13 @@ def test_render_engagement_evidence_sections_preserves_dashboard_order() -> None
     assert html.startswith("<section>Evidence Provenance Summary:1</section>")
     assert "<section>Recent Hosts:1</section>" in html
     assert "<section>Monitoring Alerts:1</section>" in html
-    assert html.endswith("<section>Recent Audit Log:1</section>")
-    assert html.count("<section>") == len(ENGAGEMENT_SECTION_TITLES)
+    assert "<section>Recent Audit Log:1</section>" in html
+    assert html.index("Recent Hosts") < html.index("Monitoring Alerts")
+    assert html.index("Recent Audit Log") < html.index("Empty Evidence Sections")
+    assert html.count("<section") == 5
+    assert "Empty Evidence Sections" in html
+    assert f"{len(ENGAGEMENT_SECTION_TITLES) - 4} sections have no rows" in html
+    assert "Recent Emails" in html
 
 
 def test_dashboard_engagement_evidence_sections_wrapper_preserves_module_output() -> None:
