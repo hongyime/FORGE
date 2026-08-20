@@ -231,9 +231,12 @@ Progress:
 - Added read-only quality-audit `operator_action_plan` buckets for stale latest-report regeneration samples, resume-plan review, long-run review, and policy flag explanation. Human output now prints the plan; JSON commands are arrays only and never invoke `resume-run`.
 - Verified B579 with focused quality-audit/CLI registry tests (`27 passed`), Ruff, py_compile, `git diff --check`, and real local read-only quality-audit JSON/human smokes. Local action plan reports 57 stale latest reports, 49 resume-plan reviews, 3 long-run reviews, and policy flag explanation for latest-run metadata. No report regeneration, resume-run, provider call, live run, scheduled-task change, engagement mutation, monitoring apply, or credential persistence was started.
 - Pushed B579 as `4491ffd feat: add report quality action plan`.
+- Added `forge targets resume-plan --redact-paths` for report/review output. Redacted mode hides local `data_dir`, clears item `db_path`, keeps `db_ref`/`scope_manifest_ref`, and replaces `--scope-manifest` command arguments with `<scope-manifest:filename>` placeholders. Default resume-plan and resume-run remain executable and unchanged.
+- Quality-audit `review_resume_plan` now points to `forge targets resume-plan --json --redact-paths --limit N`.
+- Verified B580 with focused target resume/quality tests (`9 passed`), broader target-import/quality/CLI registry tests (`58 passed` with existing sqlite timestamp deprecation warnings), Ruff, py_compile, `git diff --check`, and real local read-only redacted resume-plan/quality-audit smokes. No resume-run, kill-chain, report regeneration, provider call, engagement mutation, scheduled-task change, monitoring apply, or credential persistence was started.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Commit/push B580, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

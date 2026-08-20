@@ -685,6 +685,7 @@ def test_resume_plan_reports_sequential_ready_commands_without_execution(tmp_pat
 
     assert payload["schema_version"] == "forge.targets.resume_plan.v1"
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["path_redaction"] == "none"
     assert payload["concurrency"] == "sequential"
     assert payload["candidate_count"] == 2
     assert payload["resume_ready_count"] == 1
@@ -716,6 +717,22 @@ def test_resume_plan_reports_sequential_ready_commands_without_execution(tmp_pat
         "--max-runtime-minutes",
         "17",
     ]
+
+    redacted = collect_target_resume_plan(
+        data_dir=data_dir,
+        max_iter=5,
+        max_runtime_minutes=17,
+        redact_paths=True,
+    )
+    assert redacted["path_redaction"] == "local_paths_redacted"
+    assert redacted["data_dir"] == "<redacted>"
+    redacted_item = redacted["items"][0]
+    assert redacted_item["db_path"] == ""
+    assert redacted_item["db_ref"] == "1.db"
+    assert redacted_item["scope_manifest_ref"] == "scope.json"
+    assert str(scope_path) not in json.dumps(redacted)
+    assert str(data_dir) not in json.dumps(redacted)
+    assert "<scope-manifest:scope.json>" in redacted_item["command"]
 
 
 def test_targets_backfill_scope_manifests_cli_outputs_json(tmp_path: Path) -> None:
@@ -776,6 +793,7 @@ def test_targets_resume_plan_cli_outputs_json_without_running(tmp_path: Path) ->
             str(data_dir),
             "--max-runtime-minutes",
             "19",
+            "--redact-paths",
             "--json",
         ],
     )
@@ -783,8 +801,10 @@ def test_targets_resume_plan_cli_outputs_json_without_running(tmp_path: Path) ->
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["path_redaction"] == "local_paths_redacted"
     assert payload["planned_count"] == 1
     assert payload["items"][0]["command"][-2:] == ["--max-runtime-minutes", "19"]
+    assert str(scope_path) not in result.output
 
 
 def test_targets_resume_run_cli_outputs_executor_payload(monkeypatch: pytest.MonkeyPatch) -> None:

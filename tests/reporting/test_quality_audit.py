@@ -118,7 +118,7 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
     assert payload["top_long_runs"][0]["elapsed_seconds"] == 3100.5
     action_by_id = {item["id"]: item for item in payload["operator_action_plan"]}
     assert action_by_id["review_resume_plan"]["commands"] == [
-        ["forge", "targets", "resume-plan", "--json", "--limit", "1"]
+        ["forge", "targets", "resume-plan", "--json", "--redact-paths", "--limit", "1"]
     ]
     assert "resume-run" not in json.dumps(action_by_id["review_resume_plan"])
     assert action_by_id["review_long_runs"]["total_count"] == 1
@@ -320,7 +320,7 @@ def test_report_quality_audit_cli_prints_operator_action_plan(tmp_path: Path) ->
     assert result.exit_code == 0, result.output
     assert "operator action plan" in result.output
     assert "review_resume_plan" in result.output
-    assert "forge targets resume-plan --json --limit 1" in result.output
+    assert "forge targets resume-plan --json --redact-paths --limit 1" in result.output
     assert "resume-run" not in result.output
 
 

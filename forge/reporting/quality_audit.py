@@ -240,6 +240,7 @@ def _operator_action_plan(
                         "targets",
                         "resume-plan",
                         "--json",
+                        "--redact-paths",
                         "--limit",
                         str(failed_run_count),
                     ]

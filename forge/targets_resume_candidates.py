@@ -150,6 +150,7 @@ def collect_target_resume_plan(
     include_legacy: bool | None = None,
     max_iter: int | None = None,
     max_runtime_minutes: int = DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
+    redact_paths: bool = False,
 ) -> dict[str, Any]:
     """Return a read-only sequential plan for resuming ready target-import runs."""
 
@@ -186,12 +187,14 @@ def collect_target_resume_plan(
                 "sequence": len(planned_items) + 1,
                 "engagement_id": _safe_int(item.get("engagement_id")),
                 "run_id": _safe_int(item.get("run_id")),
-                "db_path": str(item.get("db_path") or ""),
+                "db_path": "" if redact_paths else str(item.get("db_path") or ""),
+                "db_ref": _path_ref(item.get("db_path")),
+                "scope_manifest_ref": _scope_manifest_ref_from_command(command),
                 "reason": str(item.get("reason") or ""),
                 "seed_type": str(item.get("seed_type") or ""),
                 "seed_value": str(item.get("seed_value") or ""),
                 "pending_work_total": _safe_int(item.get("pending_work_total")),
-                "command": command,
+                "command": _redact_resume_command_paths(command) if redact_paths else command,
                 "max_runtime_minutes": runtime_minutes,
                 "expected_execution": "manual_sequential",
             }
@@ -199,7 +202,8 @@ def collect_target_resume_plan(
     return {
         "schema_version": RESUME_PLAN_SCHEMA_VERSION,
         "execution_policy": "plan_only_no_commands_executed",
-        "data_dir": payload["data_dir"],
+        "data_dir": "<redacted>" if redact_paths else payload["data_dir"],
+        "path_redaction": "local_paths_redacted" if redact_paths else "none",
         "include_legacy": payload["include_legacy"],
         "candidate_count": payload["candidate_count"],
         "resume_ready_count": payload["resume_ready_count"],
@@ -833,6 +837,41 @@ def _planned_resume_command(
         str(max_runtime_minutes),
     )
     return planned
+
+
+def _path_ref(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        path = Path(text)
+    except (OSError, ValueError):
+        return "<path>"
+    name = path.name or text.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    return name or "<path>"
+
+
+def _scope_manifest_ref_from_command(command: list[str]) -> str:
+    try:
+        index = command.index("--scope-manifest")
+    except ValueError:
+        return ""
+    if index + 1 >= len(command):
+        return ""
+    return _path_ref(command[index + 1])
+
+
+def _redact_resume_command_paths(command: list[str]) -> list[str]:
+    redacted = list(command)
+    for option in ("--scope-manifest",):
+        try:
+            index = redacted.index(option)
+        except ValueError:
+            continue
+        if index + 1 < len(redacted):
+            ref = _path_ref(redacted[index + 1])
+            redacted[index + 1] = f"<scope-manifest:{ref or 'redacted'}>"
+    return redacted
 
 
 def _refresh_plan_item(item: dict[str, Any]) -> dict[str, Any]:

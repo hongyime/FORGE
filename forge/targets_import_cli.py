@@ -133,6 +133,11 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "--json",
             help="Print machine-readable JSON. Accepted for parity; output is JSON by default.",
         ),
+        redact_paths: bool = typer.Option(
+            False,
+            "--redact-paths",
+            help="Redact local DB and scope-manifest paths for review/report output.",
+        ),
     ) -> None:
         """Report failed/cancelled latest-run candidates without starting work."""
         _ = json_output
@@ -227,6 +232,11 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "--max-runtime-minutes",
             help="Append this per-run soft runtime budget to every planned command.",
         ),
+        redact_paths: bool = typer.Option(
+            False,
+            "--redact-paths",
+            help="Redact local DB and scope-manifest paths for review/report output.",
+        ),
         json_output: bool = typer.Option(
             False,
             "--json",
@@ -241,6 +251,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
             reason=reason,
             max_iter=max_iter,
             max_runtime_minutes=max_runtime_minutes,
+            redact_paths=redact_paths,
         )
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
