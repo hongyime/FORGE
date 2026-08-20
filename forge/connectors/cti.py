@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -75,10 +76,18 @@ def import_cti_observations(
         if not isinstance(raw_item, Mapping):
             skipped.append({"index": str(index), "reason": "item_not_object"})
             continue
-        observation = normalize_observation(
+        normalized_item = _provider_observation_item(
             raw_item,
-            provider=str(raw_item.get("provider") or provider),
-            source_url=config.source_url,
+            connector_id=connector_id,
+            provider=provider,
+        )
+        source_url = config.source_url
+        if any(normalized_item.get(key) for key in ("source_url", "reference")):
+            source_url = ""
+        observation = normalize_observation(
+            normalized_item,
+            provider=str(normalized_item.get("provider") or provider),
+            source_url=source_url,
             collection_method=config.collection_method,
         )
         if observation is None:
@@ -337,7 +346,7 @@ def _payload_items(payload: Any) -> list[Any]:
         return list(payload)
     if not isinstance(payload, Mapping):
         raise ValueError("CTI observation report must be a JSON object or list")
-    for key in ("observations", "items", "data", "indicators"):
+    for key in ("observations", "items", "data", "indicators", "objects"):
         value = payload.get(key)
         if isinstance(value, list):
             return list(value)
@@ -351,6 +360,179 @@ def _json_document(text: str) -> Any:
         return json.loads(str(text or ""))
     except json.JSONDecodeError as exc:
         raise ValueError("CTI observation report is not valid JSON") from exc
+
+
+def _provider_observation_item(
+    raw: Mapping[str, Any],
+    *,
+    connector_id: str,
+    provider: str,
+) -> dict[str, Any]:
+    item = dict(raw)
+    if _has_neutral_observation_fields(item):
+        return item
+    if connector_id == "abusech_threatfox":
+        return _threatfox_observation_item(item, provider=provider)
+    if connector_id == "abusech_urlhaus":
+        return _urlhaus_observation_item(item, provider=provider)
+    if connector_id == "stix_taxii_import":
+        return _stix_observation_item(item, provider=provider)
+    return item
+
+
+def _has_neutral_observation_fields(raw: Mapping[str, Any]) -> bool:
+    return any(key in raw for key in ("indicator_type", "target_type", "value", "target_value"))
+
+
+def _threatfox_observation_item(raw: Mapping[str, Any], *, provider: str) -> dict[str, Any]:
+    indicator_type = str(raw.get("ioc_type") or raw.get("type") or "").strip().lower()
+    value = str(raw.get("ioc") or raw.get("value") or "").strip()
+    mapped_type = _provider_indicator_type(indicator_type, value)
+    mapped_value = _provider_indicator_value(mapped_type, value)
+    confidence = _percent_confidence(raw.get("confidence_level"), fallback=raw.get("confidence"))
+    provenance_parts = [
+        f"ThreatFox IOC {raw.get('id')}" if raw.get("id") not in (None, "") else "",
+        str(raw.get("threat_type") or "").strip(),
+        str(raw.get("malware") or raw.get("malware_printable") or "").strip(),
+    ]
+    return {
+        **raw,
+        "provider": str(raw.get("provider") or provider),
+        "type": mapped_type,
+        "value": mapped_value,
+        "confidence": confidence,
+        "observed_at": raw.get("first_seen") or raw.get("last_seen") or raw.get("observed_at"),
+        "source_url": raw.get("reference") or raw.get("source_url") or "",
+        "tags": raw.get("tags"),
+        "provenance": " ".join(part for part in provenance_parts if part).strip()
+        or str(raw.get("provenance") or raw.get("description") or ""),
+    }
+
+
+def _urlhaus_observation_item(raw: Mapping[str, Any], *, provider: str) -> dict[str, Any]:
+    value = str(raw.get("url") or raw.get("ioc") or raw.get("value") or "").strip()
+    status = str(raw.get("url_status") or raw.get("status") or "").strip().lower()
+    provenance_parts = [
+        f"URLHaus URL {raw.get('id')}" if raw.get("id") not in (None, "") else "",
+        str(raw.get("threat") or raw.get("threat_type") or "").strip(),
+        status,
+    ]
+    return {
+        **raw,
+        "provider": str(raw.get("provider") or provider),
+        "type": "url",
+        "value": value,
+        "confidence": _urlhaus_confidence(status, raw.get("confidence")),
+        "observed_at": raw.get("dateadded") or raw.get("first_seen") or raw.get("observed_at"),
+        "source_url": raw.get("urlhaus_reference") or raw.get("reference") or raw.get("source_url") or "",
+        "tags": raw.get("tags"),
+        "provenance": " ".join(part for part in provenance_parts if part).strip()
+        or str(raw.get("provenance") or raw.get("description") or ""),
+    }
+
+
+def _stix_observation_item(raw: Mapping[str, Any], *, provider: str) -> dict[str, Any]:
+    if str(raw.get("type") or "").strip().lower() != "indicator":
+        return dict(raw)
+    pattern_type, pattern_value = _stix_pattern_observable(str(raw.get("pattern") or ""))
+    external_url = _stix_external_reference_url(raw.get("external_references"))
+    labels = raw.get("labels") if isinstance(raw.get("labels"), list) else []
+    return {
+        **raw,
+        "provider": str(raw.get("provider") or provider),
+        "type": pattern_type,
+        "value": pattern_value,
+        "confidence": _percent_confidence(raw.get("confidence"), fallback=0.5),
+        "observed_at": raw.get("valid_from") or raw.get("created") or raw.get("modified"),
+        "source_url": external_url or raw.get("source_url") or "",
+        "tags": labels,
+        "provenance": str(raw.get("name") or raw.get("description") or raw.get("id") or ""),
+    }
+
+
+def _provider_indicator_type(indicator_type: str, value: str) -> str:
+    normalized = indicator_type.replace("-", "_").replace(" ", "_").replace(":", "_")
+    aliases = {
+        "domain": "domain",
+        "hostname": "domain",
+        "url": "url",
+        "ip": "ip",
+        "ip_dst": "ip",
+        "ipv4": "ipv4",
+        "ipv6": "ipv6",
+        "md5_hash": "hash",
+        "sha1_hash": "hash",
+        "sha256_hash": "hash",
+    }
+    if normalized == "ip_port":
+        return "ipv6" if ":" in value.rsplit(":", 1)[0] else "ipv4"
+    return aliases.get(normalized, normalized)
+
+
+def _provider_indicator_value(indicator_type: str, value: str) -> str:
+    text = str(value or "").strip()
+    if indicator_type in {"ip", "ipv4"} and ":" in text and text.count(":") == 1:
+        return text.rsplit(":", 1)[0]
+    return text
+
+
+def _percent_confidence(value: Any, *, fallback: Any) -> float:
+    raw = value if value not in (None, "") else fallback
+    try:
+        parsed = float(raw)
+    except (TypeError, ValueError):
+        return 0.5
+    if parsed > 1.0:
+        parsed /= 100.0
+    return max(0.0, min(1.0, parsed))
+
+
+def _urlhaus_confidence(status: str, explicit: Any) -> float:
+    if explicit not in (None, ""):
+        return _percent_confidence(explicit, fallback=0.5)
+    if status in {"online", "active"}:
+        return 0.9
+    if status in {"offline", "inactive"}:
+        return 0.6
+    return 0.7
+
+
+_STIX_PATTERN_RE = re.compile(
+    r"""(?ix)
+    \[\s*
+    (?P<object>domain-name|url|ipv4-addr|ipv6-addr|email-addr)
+    \s*:\s*value\s*=\s*
+    (?P<quote>['"])(?P<value>.+?)(?P=quote)
+    \s*\]
+    """
+)
+
+
+def _stix_pattern_observable(pattern: str) -> tuple[str, str]:
+    match = _STIX_PATTERN_RE.search(pattern)
+    if not match:
+        return "", ""
+    object_type = match.group("object").lower()
+    value = match.group("value").strip()
+    mapped = {
+        "domain-name": "domain",
+        "url": "url",
+        "ipv4-addr": "ipv4",
+        "ipv6-addr": "ipv6",
+        "email-addr": "email",
+    }
+    return mapped.get(object_type, ""), value
+
+
+def _stix_external_reference_url(value: Any) -> str:
+    if not isinstance(value, list):
+        return ""
+    for item in value:
+        if isinstance(item, Mapping):
+            url = str(item.get("url") or "").strip()
+            if url:
+                return url
+    return ""
 
 
 def _scope_for_engagement(con: sqlite3.Connection, engagement_id: int) -> list[str]:

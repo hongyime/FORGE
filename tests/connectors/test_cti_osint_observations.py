@@ -261,6 +261,172 @@ def test_cti_observation_import_persists_normalized_rows_and_promotes_scoped_see
     assert secret_value not in blob
 
 
+def test_cti_import_accepts_threatfox_provider_export_shape(tmp_path: Path) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    report = {
+        "query_status": "ok",
+        "data": [
+            {
+                "id": "41",
+                "ioc": "Portal.Acme.Example",
+                "ioc_type": "domain",
+                "threat_type": "payload_delivery",
+                "malware": "example-loader",
+                "confidence_level": 75,
+                "first_seen": "2026-08-20 10:00:00 UTC",
+                "reference": "https://threatfox.abuse.ch/ioc/41/",
+                "tags": ["loader", "campaign-x"],
+            },
+            {
+                "id": "42",
+                "ioc": "198.51.100.10:443",
+                "ioc_type": "ip:port",
+                "confidence_level": "50",
+                "first_seen": "2026-08-20 10:05:00 UTC",
+            },
+        ],
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="abusech_threatfox",
+                engagement_id=1001,
+                source_url="https://threatfox.abuse.ch/api/",
+                promote_targets=True,
+            ),
+            report_text=json.dumps(report),
+        )
+        rows = con.execute(
+            """
+            SELECT indicator_type, indicator_value, confidence, provenance, source_url, tags_json
+            FROM cti_observations
+            ORDER BY indicator_type, indicator_value
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert result["parsed_count"] == 2
+    assert result["persisted_count"] == 2
+    assert result["promoted_seed_count"] == 2
+    assert [(row["indicator_type"], row["indicator_value"]) for row in rows] == [
+        ("domain", "portal.acme.example"),
+        ("ipv4", "198.51.100.10"),
+    ]
+    assert rows[0]["confidence"] == 0.75
+    assert "ThreatFox IOC 41" in rows[0]["provenance"]
+    assert rows[0]["source_url"] == "https://threatfox.abuse.ch/ioc/41/"
+    assert json.loads(rows[0]["tags_json"]) == ["campaign-x", "loader"]
+
+
+def test_cti_import_accepts_urlhaus_provider_export_shape(tmp_path: Path) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    secret_value = "urlhaus-auth-token"
+    report = {
+        "items": [
+            {
+                "id": "9001",
+                "url": f"https://portal.acme.example/download?token={secret_value}&ok=1",
+                "url_status": "online",
+                "threat": "malware_download",
+                "dateadded": "2026-08-20 10:00:00 UTC",
+                "urlhaus_reference": (
+                    f"https://urlhaus.abuse.ch/url/9001/?api_key={secret_value}&ok=1"
+                ),
+                "tags": ["exe", "loader"],
+            }
+        ]
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="abusech_urlhaus",
+                engagement_id=1001,
+                source_url="https://urlhaus-api.abuse.ch/v2/files/exports/recent.json",
+            ),
+            report_text=json.dumps(report),
+        )
+        row = con.execute(
+            """
+            SELECT indicator_type, indicator_value, confidence, provenance, source_url, tags_json
+            FROM cti_observations
+            """
+        ).fetchone()
+    finally:
+        con.close()
+
+    blob = json.dumps({"result": result, "row": dict(row)}, sort_keys=True)
+    assert result["parsed_count"] == 1
+    assert result["persisted_count"] == 1
+    assert row["indicator_type"] == "url"
+    assert row["indicator_value"] == "https://portal.acme.example/download?ok=1"
+    assert row["confidence"] == 0.9
+    assert "URLHaus URL 9001" in row["provenance"]
+    assert row["source_url"] == "https://urlhaus.abuse.ch/url/9001/?ok=1"
+    assert json.loads(row["tags_json"]) == ["exe", "loader"]
+    assert secret_value not in blob
+
+
+def test_cti_import_accepts_stix_indicator_bundle_shape(tmp_path: Path) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    report = {
+        "type": "bundle",
+        "objects": [
+            {
+                "type": "indicator",
+                "id": "indicator--11111111-1111-4111-8111-111111111111",
+                "name": "Acme phishing domain",
+                "pattern": "[domain-name:value = 'Portal.Acme.Example']",
+                "confidence": 80,
+                "valid_from": "2026-08-20T10:00:00Z",
+                "labels": ["phishing", "osint"],
+                "external_references": [
+                    {"source_name": "fixture", "url": "https://cti.example/stix/1"}
+                ],
+            },
+            {
+                "type": "malware",
+                "id": "malware--22222222-2222-4222-8222-222222222222",
+                "name": "ignored object",
+            },
+        ],
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="stix_taxii_import",
+                engagement_id=1001,
+                source_url="local-stix-bundle",
+            ),
+            report_text=json.dumps(report),
+        )
+        row = con.execute(
+            """
+            SELECT indicator_type, indicator_value, confidence, provenance, source_url, tags_json
+            FROM cti_observations
+            """
+        ).fetchone()
+    finally:
+        con.close()
+
+    assert result["parsed_count"] == 1
+    assert result["persisted_count"] == 1
+    assert result["skipped_count"] == 1
+    assert result["skipped"][0]["reason"] == "observation_rejected"
+    assert row["indicator_type"] == "domain"
+    assert row["indicator_value"] == "portal.acme.example"
+    assert row["confidence"] == 0.8
+    assert row["provenance"] == "Acme phishing domain"
+    assert row["source_url"] == "https://cti.example/stix/1"
+    assert json.loads(row["tags_json"]) == ["osint", "phishing"]
+
+
 def test_cti_observations_surface_as_non_reportable_inventory(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     db_path = data_dir / "engagements" / "1001.db"
