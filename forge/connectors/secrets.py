@@ -135,30 +135,37 @@ def connector_secret_key_plan(
         else {"source": "", "key_configured": False, "key_length": 0, "key_fingerprint": ""}
     )
     persistent_reload_command = _persistent_key_reload_command(persistent_hint)
+    commands = {
+        "powershell_user_env": (
+            "$k=[Convert]::ToBase64String("
+            "[Security.Cryptography.RandomNumberGenerator]::GetBytes(32)); "
+            "[Environment]::SetEnvironmentVariable('FORGE_ENGAGEMENT_KEY',$k,'User')"
+        ),
+        "powershell_process_env": (
+            "$env:FORGE_ENGAGEMENT_KEY=[Convert]::ToBase64String("
+            "[Security.Cryptography.RandomNumberGenerator]::GetBytes(32))"
+        ),
+        "posix_shell": (
+            "export FORGE_ENGAGEMENT_KEY=$(python -c "
+            "\"import secrets; print(secrets.token_urlsafe(48))\")"
+        ),
+        "powershell_reload_persistent_env": persistent_reload_command,
+    }
+    total_count = len(commands)
+    selected_count = sum(1 for command in commands.values() if str(command).strip())
     return {
         "schema_version": SECRET_KEY_PLAN_SCHEMA_VERSION,
+        "execution_policy": "plan_only_no_commands_executed",
+        "total_count": total_count,
+        "selected_count": selected_count,
+        "omitted_count": total_count - selected_count,
         "key_configured": configured,
         "key_length": len(key_material),
         "key_fingerprint": _key_fingerprint(key_material) if configured else "",
         "persistent_key_hint": persistent_hint,
         "minimum_length": 32,
         "secret_material_printed": False,
-        "commands": {
-            "powershell_user_env": (
-                "$k=[Convert]::ToBase64String("
-                "[Security.Cryptography.RandomNumberGenerator]::GetBytes(32)); "
-                "[Environment]::SetEnvironmentVariable('FORGE_ENGAGEMENT_KEY',$k,'User')"
-            ),
-            "powershell_process_env": (
-                "$env:FORGE_ENGAGEMENT_KEY=[Convert]::ToBase64String("
-                "[Security.Cryptography.RandomNumberGenerator]::GetBytes(32))"
-            ),
-            "posix_shell": (
-                "export FORGE_ENGAGEMENT_KEY=$(python -c "
-                "\"import secrets; print(secrets.token_urlsafe(48))\")"
-            ),
-            "powershell_reload_persistent_env": persistent_reload_command,
-        },
+        "commands": commands,
         "notes": [
             "Commands generate the key inside the target shell and do not echo the value.",
             "The reload command copies an existing Windows User/Machine key into only the current PowerShell process.",

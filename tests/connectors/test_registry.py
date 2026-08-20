@@ -433,6 +433,9 @@ def test_connector_install_plan_reports_missing_binaries_without_execution(tmp_p
 
     assert plan["schema_version"] == "forge.connector_install_plan.v1"
     assert plan["execution_policy"] == "plan_only_no_commands_executed"
+    assert plan["total_count"] == 1
+    assert plan["selected_count"] == 1
+    assert plan["omitted_count"] == 0
     assert isinstance(plan["binary_search_paths"], list)
     assert str(tool_dir) in plan["binary_search_paths"]
     by_binary = {item["binary"]: item for item in plan["items"]}
@@ -455,6 +458,9 @@ def test_connector_install_plan_cli_outputs_json_without_running_installers() ->
     payload = json.loads(result.output)
     assert payload["schema_version"] == "forge.connector_install_plan.v1"
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["total_count"] == payload["missing_binary_count"]
+    assert payload["selected_count"] == payload["missing_binary_count"]
+    assert payload["omitted_count"] == 0
     assert isinstance(payload["items"], list)
 
 
@@ -651,6 +657,10 @@ def test_connector_secret_key_plan_outputs_no_secret_material(monkeypatch) -> No
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["schema_version"] == "forge.connector_secret_key_plan.v1"
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["total_count"] == 4
+    assert payload["selected_count"] == 3
+    assert payload["omitted_count"] == 1
     assert payload["key_configured"] is False
     assert payload["secret_material_printed"] is False
     assert payload["key_fingerprint"] == ""
@@ -680,6 +690,8 @@ def test_connector_secret_key_plan_reports_existing_key_fingerprint(monkeypatch)
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["key_configured"] is True
+    assert payload["selected_count"] == 3
+    assert payload["omitted_count"] == 1
     assert payload["key_length"] == 48
     assert payload["key_fingerprint"].startswith("sha256:")
     assert payload["persistent_key_hint"]["key_configured"] is False
@@ -707,6 +719,8 @@ def test_connector_secret_key_plan_reports_persistent_key_hint(monkeypatch) -> N
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["key_configured"] is False
+    assert payload["selected_count"] == 4
+    assert payload["omitted_count"] == 0
     assert payload["persistent_key_hint"] == {
         "source": "user",
         "key_configured": True,

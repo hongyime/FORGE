@@ -798,6 +798,9 @@ def connector_install_plan(
         "schema_version": "forge.connector_install_plan.v1",
         "execution_policy": "plan_only_no_commands_executed",
         "missing_binary_count": len(items),
+        "total_count": len(items),
+        "selected_count": len(items),
+        "omitted_count": 0,
         "binary_search_paths": connector_binary_search_paths(env=environ),
         "items": items,
     }
