@@ -507,7 +507,7 @@ def _web_auth_checks(cfg: ForgeConfig) -> list[DoctorCheck]:
 
 
 def _workspace_access_check(data_dir: Path) -> DoctorCheck:
-    db_paths = numeric_engagement_db_files(data_dir)
+    db_paths = numeric_engagement_db_files(data_dir, include_legacy=True)
     if not db_paths:
         return DoctorCheck(
             "Workspace Access",
@@ -627,15 +627,20 @@ def _workspace_access_check(data_dir: Path) -> DoctorCheck:
         _sample_problem("unusable index", unusable_index),
     ]
     problems = [part for part in problem_parts if part]
+    legacy_note = (
+        "; includes repo-local legacy dashboard DBs"
+        if any(_is_legacy_engagement_db(path, data_dir) for path in db_paths)
+        else ""
+    )
     base = (
         f"{engagement_count} engagement(s) across {checked}/{len(db_paths)} DB(s); "
-        f"{indexed_count} usable control index row(s){suffix}"
+        f"{indexed_count} usable control index row(s){suffix}{legacy_note}"
     )
     if problems:
         return DoctorCheck(
             "Workspace Access",
             "WARN",
-            _clip(f"{base}; " + "; ".join(problems), limit=260),
+            _clip(f"{base}; " + "; ".join(problems), limit=420),
             (
                 "Backfill intended operator rows in workspace_memberships for both the "
                 "engagement DB and control DB, then run a web engagement list or the next "
@@ -647,6 +652,14 @@ def _workspace_access_check(data_dir: Path) -> DoctorCheck:
         "OK",
         f"{base}; operator workspace memberships ready",
     )
+
+
+def _is_legacy_engagement_db(db_path: Path, data_dir: Path) -> bool:
+    try:
+        db_path.resolve().relative_to((data_dir / "engagements").resolve())
+    except ValueError:
+        return True
+    return False
 
 
 def _control_audit_check(data_dir: Path) -> DoctorCheck:

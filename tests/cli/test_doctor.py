@@ -606,7 +606,11 @@ def test_collect_doctor_checks_accepts_hardened_production_deployment(tmp_path) 
     assert "customer-acme" not in row.details
 
 
-def test_collect_doctor_checks_warns_on_workspace_access_drift(tmp_path) -> None:
+def test_collect_doctor_checks_warns_on_workspace_access_drift(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
     db_root = tmp_path / "engagements"
     db_root.mkdir()
     con = sqlite3.connect(db_root / "1001.db")
@@ -641,7 +645,52 @@ def test_collect_doctor_checks_warns_on_workspace_access_drift(tmp_path) -> None
     assert "workspace_memberships" in row.remediation
 
 
-def test_collect_doctor_checks_accepts_ready_workspace_access(tmp_path) -> None:
+def test_collect_doctor_checks_workspace_access_includes_legacy_dashboard_dbs(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "configured"
+    legacy_root = tmp_path / ".forge_data" / "engagements"
+    for db_path, engagement_id, name in (
+        (data_dir / "engagements" / "1001.db", 1001, "Configured"),
+        (legacy_root / "2002.db", 2002, "Legacy"),
+    ):
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        con = sqlite3.connect(db_path)
+        try:
+            apply_schema(con)
+            run_migrations(con)
+            con.execute(
+                """
+                INSERT INTO engagements
+                    (id, name, workspace_id, scope_json, status, operator)
+                VALUES
+                    (?, ?, 'default', '["acme.example"]', 'ACTIVE', 'doctor-test')
+                """,
+                (engagement_id, name),
+            )
+            con.commit()
+        finally:
+            con.close()
+    monkeypatch.chdir(tmp_path)
+
+    checks = collect_doctor_checks(
+        config=_cfg(data_dir),
+        which=lambda _name: None,
+        provider_discovery=_provider_discovery,
+    )
+
+    row = _rows(checks)["Workspace Access"]
+    assert row.status == "WARN"
+    assert "2 engagement(s) across 2/2 DB" in row.details
+    assert "includes repo-local legacy dashboard DBs" in row.details
+    assert "local membership missing=2" in row.details
+    assert "control membership missing=2" in row.details
+    assert "missing index=2" in row.details
+
+
+def test_collect_doctor_checks_accepts_ready_workspace_access(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
     db_root = tmp_path / "engagements"
     db_root.mkdir()
     db_path = db_root / "1001.db"
