@@ -103,9 +103,10 @@ Progress:
 - Hardened dashboard graph/list wrapping for long labels and backfilled 844 ignored local `reports/dashboard` HTML files; browser smoke on the flagged 10441 page now shows no desktop/tablet overflow and only intentional mobile table-scroll overflow.
 - Changed `targets import --start` to use normal scoped kill-chain defaults instead of passing `--no-attack-mode` and `--no-auto-run-detected`; ROE/scope-manifest and start-limit protections remain.
 - Verified B547 with focused target-import/reporting/Windows launcher tests (`46 passed`), Ruff, py_compile, `git diff --check`, suppressor-flag scan, and Playwright static overflow smoke.
+- Pushed B547 as `739df24 fix: harden dashboard and target starts`.
 
 Next steps:
-- Commit and push B547 dashboard/import-start hardening.
+- Continue old product audit: model fallback/GGUF availability, failed-engagement resume strategy, and scheduled task/process status.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
