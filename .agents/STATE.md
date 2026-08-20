@@ -36,6 +36,9 @@ Progress:
 - Added CTI import JSON summary counts for normalized indicator types, TLP levels, target-feed-compatible types, and skipped reasons.
 - Verified B526 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B526 as `6c26b62 feat: summarize cti import composition`.
+- Added opt-in `forge connectors import-cti --fail-on-empty` so automation can fail when no observations survive normalization and filters.
+- Verified B527 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`; commit/push pending.
 
 Next steps:
+- Commit and push B527.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.

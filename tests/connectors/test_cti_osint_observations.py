@@ -693,6 +693,80 @@ def test_cti_import_dry_run_reports_existing_and_in_file_duplicates(
     assert seed_count == 0
 
 
+def test_cti_import_fail_on_empty_rejects_files_without_accepted_observations(
+    tmp_path: Path,
+) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    report = {
+        "items": [
+            {"type": "phone", "value": "+1 555 123 4567"},
+            {"type": "private_message", "value": "not importable"},
+        ]
+    }
+
+    try:
+        with pytest.raises(ValueError, match="no accepted observations"):
+            import_cti_observations(
+                con,
+                CtiObservationImportConfig(
+                    connector_id="stix_taxii_import",
+                    engagement_id=1001,
+                    dry_run=True,
+                    fail_on_empty=True,
+                ),
+                report_text=json.dumps(report),
+            )
+        cti_table = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cti_observations'"
+        ).fetchone()
+        seed_count = con.execute(
+            "SELECT COUNT(*) FROM engagement_seeds WHERE engagement_id=1001"
+        ).fetchone()[0]
+        audit_count = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM audit_log
+            WHERE engagement_id=1001 AND action='cti_observation_import'
+            """
+        ).fetchone()[0]
+    finally:
+        con.close()
+
+    assert cti_table is None
+    assert seed_count == 0
+    assert audit_count == 0
+
+
+def test_cti_import_fail_on_empty_allows_duplicate_only_reimport(tmp_path: Path) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    report = {"items": [{"type": "domain", "value": "portal.acme.example"}]}
+
+    try:
+        import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="stix_taxii_import",
+                engagement_id=1001,
+            ),
+            report_text=json.dumps(report),
+        )
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="stix_taxii_import",
+                engagement_id=1001,
+                fail_on_empty=True,
+            ),
+            report_text=json.dumps(report),
+        )
+    finally:
+        con.close()
+
+    assert result["fail_on_empty"] is True
+    assert result["persisted_count"] == 0
+    assert result["duplicate_count"] == 1
+
+
 def test_cti_import_limit_bounds_processed_items(tmp_path: Path) -> None:
     con = _build_cti_db(tmp_path / "engagement.db")
     report = {
@@ -1055,6 +1129,62 @@ def test_connector_cli_import_cti_dry_run_writes_nothing(
     assert payload["would_promote_seed_count"] == 1
     assert cti_table is None
     assert secret_value not in result.output
+
+
+def test_connector_cli_import_cti_fail_on_empty_exits_nonzero(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "cti.json"
+    report_file.write_text(
+        json.dumps({"items": [{"type": "phone", "value": "+1 555 123 4567"}]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "stix_taxii_import",
+            "--report-file",
+            str(report_file),
+            "--dry-run",
+            "--fail-on-empty",
+            "--json",
+        ],
+    )
+
+    con = sqlite3.connect(db_path)
+    try:
+        cti_table = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cti_observations'"
+        ).fetchone()
+        audit_count = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM audit_log
+            WHERE engagement_id=1001 AND action='cti_observation_import'
+            """
+        ).fetchone()[0]
+    finally:
+        con.close()
+    assert result.exit_code != 0
+    assert "no accepted observations" in result.output
+    assert cti_table is None
+    assert audit_count == 0
 
 
 def test_connector_cli_import_cti_limit_is_passed_to_importer(

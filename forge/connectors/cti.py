@@ -48,6 +48,7 @@ class CtiObservationImportConfig:
     max_tlp: str = ""
     since: str = ""
     until: str = ""
+    fail_on_empty: bool = False
 
 
 def import_cti_observations(
@@ -231,6 +232,7 @@ def import_cti_observations(
         "engagement_id": engagement_id,
         "status": "completed",
         "dry_run": bool(config.dry_run),
+        "fail_on_empty": bool(config.fail_on_empty),
         "limit": limit,
         "min_confidence": min_confidence,
         "max_tlp": max_tlp,
@@ -265,6 +267,12 @@ def import_cti_observations(
             "Dry-run only: normalized observations were parsed, but no rows, seeds, "
             "or audit receipts were written."
         )
+    if config.fail_on_empty and _accepted_observation_count(result) == 0:
+        raise ValueError(
+            "CTI import produced no accepted observations after normalization and filters"
+        )
+    if config.dry_run:
+        return result
     else:
         _audit_cti_import(con, config, result=result)
         con.commit()
@@ -599,6 +607,18 @@ def _skipped_reason_counts(skipped: list[dict[str, str]]) -> dict[str, int]:
         if reason:
             counts[reason] += 1
     return dict(sorted(counts.items()))
+
+
+def _accepted_observation_count(result: Mapping[str, Any]) -> int:
+    return sum(
+        int(result.get(key) or 0)
+        for key in (
+            "persisted_count",
+            "duplicate_count",
+            "would_persist_count",
+            "would_duplicate_count",
+        )
+    )
 
 
 def _normalize_limit(value: int | None) -> int | None:

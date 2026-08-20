@@ -489,6 +489,11 @@ def register_connector_commands(app: typer.Typer) -> None:
             "--until",
             help="Skip observations observed after this ISO timestamp.",
         ),
+        fail_on_empty: bool = typer.Option(
+            False,
+            "--fail-on-empty",
+            help="Exit non-zero when no observations survive normalization and filters.",
+        ),
         operator: str = typer.Option("connector-import", "--operator"),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
@@ -516,6 +521,7 @@ def register_connector_commands(app: typer.Typer) -> None:
                     max_tlp=max_tlp,
                     since=since,
                     until=until,
+                    fail_on_empty=fail_on_empty,
                 ),
             )
         except (FileNotFoundError, LookupError, ValueError) as exc:
