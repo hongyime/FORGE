@@ -16,6 +16,8 @@ Progress:
 - Pushed B517 as `3755cd8 feat: surface cti observation inventory`.
 - Added offline provider-shape adapters for common ThreatFox, URLHaus, and STIX indicator JSON exports so `forge connectors import-cti` can ingest real downloaded/exported data without live provider calls.
 - Pushed B518 as `30cf1fc feat: accept provider cti export shapes`.
+- Documented offline CTI import support in README next to the public command list.
+- Pushed README checkpoint as `0632e3f docs: document offline cti imports`.
 
 Next steps:
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.

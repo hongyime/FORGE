@@ -276,6 +276,13 @@ plain web URLs. Each imported engagement is also enrolled into the default
 so scheduled monitoring can diff future exposure state without a separate setup
 step.
 
+`forge connectors import-cti` is offline-only. It accepts FORGE's neutral
+observation JSON plus common downloaded/exported JSON shapes from abuse.ch
+ThreatFox (`data` IOC rows), abuse.ch URLHaus (`url` rows), and STIX indicator
+bundles (`objects`). Imported CTI rows are stored as analyst inventory with
+sanitized source/provenance and are not reportable findings unless a later
+independent scoped workflow validates promoted seeds.
+
 `forge monitoring status --json` is the read-only operator check for scheduled
 monitoring: it reports stale DB schemas, enabled/idle policy counts,
 due/overdue policies, open alerts, unrouted open alerts, failed alert-delivery
