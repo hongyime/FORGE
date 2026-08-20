@@ -10,6 +10,20 @@ from typing import Any, Callable
 
 from forge.audit.manifest import summarize_run_audit_manifest
 
+_SENSITIVE_RUN_METADATA_KEYS = {
+    "api_key",
+    "apikey",
+    "authorization",
+    "cookie",
+    "credential",
+    "password",
+    "scope_manifest",
+    "scope_manifest_json",
+    "scope_manifest_payload",
+    "secret",
+    "token",
+}
+
 
 @dataclass(frozen=True)
 class RunSummaryCallbacks:
@@ -142,6 +156,34 @@ def run_policy_summary(
     }
 
 
+def safe_run_metadata(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    clean: dict[str, Any] = {}
+    for raw_key, raw_value in value.items():
+        key = str(raw_key or "").strip()
+        normalized = key.lower()
+        if (
+            not key
+            or normalized in _SENSITIVE_RUN_METADATA_KEYS
+            or normalized.endswith("_enc")
+            or any(marker in normalized for marker in ("password", "secret", "token"))
+        ):
+            continue
+        clean[key] = _safe_run_metadata_value(raw_value)
+    return clean
+
+
+def _safe_run_metadata_value(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, list):
+        return [_safe_run_metadata_value(item) for item in value[:50]]
+    if isinstance(value, dict):
+        return safe_run_metadata(value)
+    return str(value)
+
+
 def annotate_audit_manifest_bundle(
     run_summary: dict[str, Any] | None,
     artifacts: list[dict[str, Any]],
@@ -237,7 +279,7 @@ def latest_engagement_run(
         "attack_mode": bool(row["attack_mode"]),
         **policy_summary,
         "error": callbacks.truncate(row["error"], 160),
-        "metadata": metadata if isinstance(metadata, dict) else {},
+        "metadata": safe_run_metadata(metadata),
         "audit_manifest": callbacks.summarize_run_audit_manifest(
             con,
             db_path=db_path,

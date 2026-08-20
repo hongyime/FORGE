@@ -281,7 +281,9 @@ step.
 `kill_chain` row in each local engagement DB, classifies failed or cancelled
 runs such as `pending_recursive_work`, `watchdog_timeout`, `abandoned`, and
 `stale_run_recovery`, and emits JSON for operator review without resuming,
-starting, or mutating any engagement.
+starting, or mutating any engagement. Static dashboards also surface these
+latest-run candidates as a compact `Resume Review` overview column and detail
+section without exposing raw scope-manifest paths.
 
 `forge connectors import-cti` is offline-only. It accepts FORGE's neutral
 observation JSON plus common downloaded/exported JSON or CSV shapes from

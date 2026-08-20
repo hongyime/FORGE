@@ -200,6 +200,10 @@ from forge.reporting.report_rendering import (
 )
 from forge.reporting.timeline import operational_timeline_events
 from forge.remediation.workflow import remediation_review_queue, risk_acceptance_review_status
+from forge.targets_resume_candidates import (
+    TargetResumeCandidate,
+    target_resume_candidate_for_db,
+)
 from forge.utils.cloud_asset_graph_metadata import stored_cloud_asset_graph_metadata
 from forge.utils.artifact_url_sanitizer import strip_sensitive_url_query
 from forge.utils.cloud_exposure_gate import (
@@ -3135,12 +3139,67 @@ def _enrich_engagement_dashboard_summary(
 
 
 def _dashboard_engagement_summary(db_path: Path, reports_dir: Path) -> dict[str, Any]:
-    return dashboard_engagement_summary(
+    engagement = dashboard_engagement_summary(
         db_path,
         reports_dir,
         engagement_summary=_engagement_summary,
         callbacks=_engagement_enrichment_callbacks(),
     )
+    candidate = target_resume_candidate_for_db(db_path)
+    if candidate is not None:
+        safe_candidate = _dashboard_resume_candidate_payload(candidate)
+        engagement["target_resume_candidate"] = safe_candidate
+        engagement.setdefault("sections", {})["target_resume_candidate"] = [
+            _dashboard_resume_candidate_section_row(safe_candidate)
+        ]
+    return engagement
+
+
+def _dashboard_resume_candidate_payload(
+    candidate: TargetResumeCandidate,
+) -> dict[str, Any]:
+    return {
+        "run_id": candidate.run_id,
+        "status": candidate.status,
+        "reason": candidate.reason,
+        "seed_value": _truncate(candidate.seed_value, 160),
+        "seed_type": candidate.seed_type,
+        "current_iteration": candidate.current_iteration,
+        "max_iterations": candidate.max_iterations,
+        "resume_enabled": candidate.resume_enabled,
+        "attack_mode": candidate.attack_mode,
+        "roe_present": bool(candidate.roe_id.strip()),
+        "report_available": candidate.report_path_exists,
+        "scope_present": candidate.scope_manifest_exists,
+        "pending_work_total": candidate.pending_work_total,
+        "completed_at": candidate.completed_at,
+        "updated_at": candidate.updated_at,
+        "error_summary": _redact_dashboard_error(candidate.error_summary, 240),
+    }
+
+
+def _dashboard_resume_candidate_section_row(
+    candidate: dict[str, Any],
+) -> dict[str, str]:
+    return {
+        "Run": str(candidate.get("run_id") or ""),
+        "Status": str(candidate.get("status") or ""),
+        "Reason": str(candidate.get("reason") or ""),
+        "Seed": _safe_dashboard_source_url(candidate.get("seed_value"), 160),
+        "Type": str(candidate.get("seed_type") or ""),
+        "Iteration": (
+            f"{int(candidate.get('current_iteration') or 0)}/"
+            f"{int(candidate.get('max_iterations') or 0)}"
+        ),
+        "Pending": str(int(candidate.get("pending_work_total") or 0)),
+        "Resume": "yes" if candidate.get("resume_enabled") else "no",
+        "Attack": "yes" if candidate.get("attack_mode") else "no",
+        "ROE": "yes" if candidate.get("roe_present") else "no",
+        "Scope": "yes" if candidate.get("scope_present") else "no",
+        "Report": "yes" if candidate.get("report_available") else "no",
+        "Error": str(candidate.get("error_summary") or ""),
+        "Updated": _format_dt(str(candidate.get("updated_at") or "")),
+    }
 
 
 def generate_dashboard(

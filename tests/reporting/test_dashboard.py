@@ -1197,6 +1197,73 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert manifest_hash[:12] in detail_html
 
 
+def test_generate_dashboard_surfaces_resume_candidate_review_without_manifest_path(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO engagement_runs
+                (engagement_id, run_kind, status, seed_value, seed_type, seed_count,
+                 max_iterations, current_iteration, resume_enabled, dry_run, attack_mode,
+                 error, metadata_json, started_at, completed_at, updated_at)
+            VALUES
+                (1001, 'kill_chain', 'failed', 'https://portal.acme.example/login',
+                 'url', 1, 1, 1, 1, 0, 0,
+                 'max iterations exhausted with pending recursive work: 4',
+                 '{"roe_id":"ROE-ACME-2026-07","scope_manifest":"C:/secret/scope.json","pending_counts":{"artifact_queue":4},"report_path":"reports/engagement_1001_kill_chain.md","api_token":"DO-NOT-LEAK"}',
+                 '2026-07-09T10:00:00', '2026-07-09T10:30:00', '2026-07-09T10:30:00')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    output_path = reports_dir / "dashboard.html"
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
+
+    site_root = reports_dir / "dashboard"
+    site_html = (site_root / "index.html").read_text(encoding="utf-8")
+    overview_payload = json.loads(
+        (site_root / "data" / "engagements.json").read_text(encoding="utf-8")
+    )
+    detail_payload = json.loads(
+        (
+            site_root
+            / "data"
+            / "engagements"
+            / "engagement-1001-acme-example.json"
+        ).read_text(encoding="utf-8")
+    )
+    serialized_overview = json.dumps(overview_payload, sort_keys=True)
+    serialized_detail = json.dumps(detail_payload, sort_keys=True)
+
+    assert "Resume Review" in site_html
+    assert "data-resume-review='1'" in site_html
+    assert "pending_recursive_work" in site_html
+    candidate = overview_payload["items"][0]["target_resume_candidate"]
+    assert candidate["reason"] == "pending_recursive_work"
+    assert candidate["status"] == "failed"
+    assert candidate["pending_work_total"] == 4
+    assert candidate["roe_present"] is True
+    assert candidate["scope_present"] is False
+    assert "scope_manifest" not in serialized_overview
+    assert "C:/secret/scope.json" not in serialized_detail
+    assert "DO-NOT-LEAK" not in serialized_detail
+    rows = detail_payload["sections"]["target_resume_candidate"]
+    assert rows[0]["Reason"] == "pending_recursive_work"
+    assert rows[0]["Pending"] == "4"
+
+
 def test_generate_dashboard_excludes_report_prefix_collisions(tmp_path: Path) -> None:
     data_dir = tmp_path / ".forge_data"
     reports_dir = tmp_path / "reports"

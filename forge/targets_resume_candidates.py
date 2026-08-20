@@ -51,6 +51,21 @@ class TargetResumeCandidate:
     error_summary: str
 
 
+def target_resume_candidate_for_db(
+    db_path: Path,
+    *,
+    include_completed: bool = False,
+) -> TargetResumeCandidate | None:
+    engagement_id = _engagement_id_from_db_path(db_path)
+    if engagement_id is None:
+        return None
+    return _latest_run_candidate(
+        db_path,
+        engagement_id=engagement_id,
+        include_completed=include_completed,
+    )
+
+
 def collect_target_resume_candidates(
     *,
     data_dir: Path | None = None,
@@ -314,4 +329,3 @@ def _engagement_id_from_db_path(path: Path) -> int | None:
         return int(path.stem)
     except ValueError:
         return None
-

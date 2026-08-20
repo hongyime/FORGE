@@ -44,6 +44,9 @@ def engagement_index_payload(engagement: dict[str, Any]) -> dict[str, Any]:
     report_summary = engagement.get("report_summary")
     if report_summary is not None:
         payload["report_summary"] = report_summary
+    target_resume_candidate = engagement.get("target_resume_candidate")
+    if target_resume_candidate is not None:
+        payload["target_resume_candidate"] = target_resume_candidate
     return payload
 
 
