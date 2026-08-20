@@ -832,18 +832,27 @@ def run_due_monitoring_for_data_dir(
     max_items = max(0, int(limit)) if limit is not None else None
     if dry_run:
         plan = monitoring_due_plan_for_data_dir(data_dir, now=now, limit=max_items)
+        due_count = int(plan.get("due_policy_count") or 0)
+        planned_count = int(plan.get("planned_policy_count") or 0)
+        limited_count = int(plan.get("limited_policy_count") or 0)
         return {
             "result_schema_version": "forge.monitoring.run_due.v1",
+            "schema_version": "forge.monitoring.run_due.v1",
             "execution_policy": "dry_run_no_monitoring_executed",
             "dry_run": True,
             "data_dir": str(data_dir.resolve()),
             "observed_at": plan.get("observed_at"),
             "db_count": int(plan.get("db_count") or 0),
             "engagement_count": int(plan.get("engagement_count") or 0),
-            "due_count": int(plan.get("due_policy_count") or 0),
+            "due_count": due_count,
+            **_run_due_count_aliases(
+                due_count=due_count,
+                selected_count=planned_count,
+                limited_count=limited_count,
+            ),
             "run_count": 0,
-            "planned_policy_count": int(plan.get("planned_policy_count") or 0),
-            "limited_policy_count": int(plan.get("limited_policy_count") or 0),
+            "planned_policy_count": planned_count,
+            "limited_policy_count": limited_count,
             "change_count": 0,
             "alert_count": 0,
             "execution_limit": max_items,
@@ -889,12 +898,32 @@ def run_due_monitoring_for_data_dir(
             totals[key] += int(result[key])
     return {
         "result_schema_version": "forge.monitoring.run_due.v1",
+        "schema_version": "forge.monitoring.run_due.v1",
         "execution_policy": "executes_due_monitoring_policies",
         "dry_run": False,
         **totals,
+        **_run_due_count_aliases(
+            due_count=int(totals["due_count"]),
+            selected_count=int(totals["run_count"]),
+            limited_count=int(totals["limited_policy_count"]),
+        ),
         "execution_limit": max_items,
         "db_results": db_results,
         "errors": errors,
+    }
+
+
+def _run_due_count_aliases(
+    *,
+    due_count: int,
+    selected_count: int,
+    limited_count: int,
+) -> dict[str, int]:
+    return {
+        "total_count": int(due_count),
+        "total_due_count": int(due_count),
+        "selected_count": int(selected_count),
+        "omitted_count": int(limited_count),
     }
 
 

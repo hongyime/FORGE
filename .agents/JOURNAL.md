@@ -91,3 +91,4 @@
 - 2026-08-21: Quality-audit resume review now recommends the path-redacted dry-run rehearsal by default, keeping review output non-mutating and shareable.
 - 2026-08-21: Resume-run results now preserve resume-plan total/selected/omitted metadata so bounded dry-run/live batches cannot be mistaken for the full backlog.
 - 2026-08-21: Monitoring due-plan now exposes plan-compatible schema/count aliases so bounded due-monitoring reviews are easier for automation to consume without changing execution behavior.
+- 2026-08-21: Monitoring run-due dry-run/live results now expose matching plan-compatible schema/count aliases so reviewed and executed batches can be compared directly.

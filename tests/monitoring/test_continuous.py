@@ -794,8 +794,13 @@ def test_run_due_monitoring_for_data_dir_limits_mutating_backlog(tmp_path: Path)
 
     assert result["db_count"] == 3
     assert result["due_count"] == 3
+    assert result["schema_version"] == "forge.monitoring.run_due.v1"
+    assert result["total_due_count"] == 3
+    assert result["total_count"] == 3
     assert result["run_count"] == 2
+    assert result["selected_count"] == 2
     assert result["limited_policy_count"] == 1
+    assert result["omitted_count"] == 1
     assert result["execution_limit"] == 2
     snapshot_counts: list[int] = []
     due_counts: list[int] = []
@@ -853,10 +858,15 @@ def test_run_due_monitoring_for_data_dir_dry_run_is_read_only(tmp_path: Path) ->
     )
 
     assert result["result_schema_version"] == "forge.monitoring.run_due.v1"
+    assert result["schema_version"] == "forge.monitoring.run_due.v1"
     assert result["execution_policy"] == "dry_run_no_monitoring_executed"
     assert result["dry_run"] is True
     assert result["due_count"] == 1
+    assert result["total_due_count"] == 1
+    assert result["total_count"] == 1
     assert result["planned_policy_count"] == 1
+    assert result["selected_count"] == 1
+    assert result["omitted_count"] == 0
     assert result["run_count"] == 0
     assert result["change_count"] == 0
     assert result["alert_count"] == 0
@@ -2786,8 +2796,12 @@ def test_monitoring_cli_run_due_dry_run_outputs_json_without_writes(tmp_path: Pa
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["execution_policy"] == "dry_run_no_monitoring_executed"
+    assert payload["schema_version"] == "forge.monitoring.run_due.v1"
     assert payload["dry_run"] is True
     assert payload["due_count"] == 1
+    assert payload["total_due_count"] == 1
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 0
     assert payload["run_count"] == 0
 
     con = direct_connect(db_path)
