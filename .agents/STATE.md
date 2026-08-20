@@ -3,6 +3,7 @@
 Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
 
 Progress:
+- Pushed B642 as `89f175a fix: redact report review plans`: long-run-plan and policy-plan JSON now support `--redact-paths`, hide local `reports_dir`, and expose `redact_paths=true` while preserving review samples/counts. Focused long-run/policy plan helper/CLI tests, Ruff, py_compile, git diff check, and a synthetic redacted plan smoke passed.
 - Pushed B641 as `19b75d7 fix: redact report quality audit`: quality-audit JSON now supports `--redact-paths`, hides local `reports_dir`, and exposes `redact_paths=true` while preserving review counts/action guidance. Focused quality-audit helper/CLI tests, Ruff, py_compile, git diff check, and a synthetic redacted quality-audit smoke passed.
 - Pushed B640 as `12d9acc fix: redact stale report plans`: stale-plan JSON now supports `--redact-paths`, hides local `reports_dir`, and exposes `redact_paths=true` while preserving safe command arrays. Focused stale-plan helper/CLI tests, Ruff, py_compile, git diff check, and a synthetic redacted stale-plan smoke passed.
 - Pushed B639 as `77c35db fix: redact stale report dry runs`: stale-run dry-run JSON now supports `--redact-paths`, hides local `reports_dir` and generated command output paths, and blocks live redacted stale-run. Focused stale-run CLI/helper tests, Ruff, py_compile, git diff check, and a synthetic redacted dry-run smoke passed.
