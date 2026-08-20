@@ -151,6 +151,9 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     } <= set(action_by_id)
     assert action_by_id["install_free_binaries"]["status"] == "attention"
     assert "trufflehog" in action_by_id["install_free_binaries"]["summary"]
+    assert action_by_id["install_free_binaries"]["command"] == (
+        "forge connectors install-plan --json"
+    )
     assert action_by_id["run_free_connectors"]["status"] == "ready"
     assert "projectdiscovery_subfinder" in action_by_id["run_free_connectors"]["summary"]
     assert action_by_id["configure_optional_keys"]["status"] == "optional"

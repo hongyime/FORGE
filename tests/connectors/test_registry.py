@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 
 from forge.connectors.cli import register_connector_commands
 from forge.connectors.registry import (
+    connector_install_plan,
     connector_plugin_manifest_statuses,
     connector_statuses,
     connector_summary,
@@ -380,6 +381,37 @@ def test_connector_cli_outputs_json_and_domain_filter() -> None:
     )
     assert unknown_result.exit_code != 0
     assert "unknown connector domain: not_a_domain" in unknown_result.output
+
+
+def test_connector_install_plan_reports_missing_binaries_without_execution() -> None:
+    statuses = connector_statuses(
+        which=lambda name: None if name in {"subfinder", "trufflehog"} else f"/bin/{name}"
+    )
+
+    plan = connector_install_plan(statuses)
+
+    assert plan["schema_version"] == "forge.connector_install_plan.v1"
+    assert plan["execution_policy"] == "plan_only_no_commands_executed"
+    by_binary = {item["binary"]: item for item in plan["items"]}
+    assert {"subfinder", "trufflehog"} <= set(by_binary)
+    assert by_binary["subfinder"]["command"].startswith("go install ")
+    assert "projectdiscovery_subfinder" in by_binary["subfinder"]["connector_ids"]
+    assert "trufflehog_local" in by_binary["trufflehog"]["connector_ids"]
+
+
+def test_connector_install_plan_cli_outputs_json_without_running_installers() -> None:
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+
+    result = CliRunner().invoke(app, ["connectors", "install-plan", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.connector_install_plan.v1"
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert isinstance(payload["items"], list)
 
 
 def test_connector_cli_loads_default_data_dir_plugin_manifests(

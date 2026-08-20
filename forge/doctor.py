@@ -1942,7 +1942,7 @@ def _connector_action_items(
             "priority": "10",
             "status": "attention" if missing_binary else "ready",
             "summary": _connector_missing_binary_label(missing_binary),
-            "command": "install missing local binaries; rerun forge doctor --json",
+            "command": "forge connectors install-plan --json",
         }
     )
     items.append(

@@ -14,6 +14,7 @@ from forge.connectors.cti import CtiObservationImportConfig, import_cti_observat
 from forge.connectors.discovery import DiscoveryReportImportConfig, import_discovery_report
 from forge.connectors.identity import IdentityExposureRunConfig, run_identity_exposure_connector
 from forge.connectors.registry import (
+    connector_install_plan,
     connector_plugin_dirs,
     connector_plugin_manifest_statuses,
     connector_statuses,
@@ -124,6 +125,40 @@ def register_connector_commands(app: typer.Typer) -> None:
             f"{summary['optional_paid_count']} optional paid adapters. "
             "Secret values are never printed."
             "[/dim]"
+        )
+
+    @app.command("install-plan")
+    def install_plan(
+        include_paid: bool = typer.Option(
+            False,
+            "--include-paid/--free-first-only",
+            help="Include optional paid adapters when calculating missing local binaries.",
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Print missing local binary install guidance without executing commands."""
+        rows = connector_statuses(include_paid=include_paid)
+        plan = connector_install_plan(rows)
+        if json_output:
+            typer.echo(json.dumps(plan, sort_keys=True))
+            return
+
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Binary", width=18)
+        table.add_column("Installer", width=12)
+        table.add_column("Connectors", width=34)
+        table.add_column("Command")
+        for item in plan["items"]:
+            table.add_row(
+                str(item["binary"]),
+                str(item["installer"]),
+                ", ".join(str(connector) for connector in item["connector_ids"]),
+                str(item["command"] or item["notes"]),
+            )
+        console.print(table)
+        console.print(
+            "[dim]Install plan only; no command was executed. Rerun "
+            "`forge doctor --json` after installing tools.[/dim]"
         )
 
     @app.command("policy-summary")

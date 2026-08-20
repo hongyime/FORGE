@@ -97,7 +97,7 @@ def test_cli_registry_registers_modular_command_groups() -> None:
     assert {"create", "approve", "run", "list", "methods", "coverage"}.issubset(
         _command_names(apps.active_validation_app)
     )
-    assert {"list", "plugin-validate", "secret-set", "secret-list"}.issubset(
+    assert {"list", "install-plan", "plugin-validate", "secret-set", "secret-list"}.issubset(
         _command_names(apps.connectors_app)
     )
     assert {"import-stix", "export-stix"}.issubset(_command_names(apps.standards_app))

@@ -46,6 +46,38 @@ _CONNECTOR_PLUGIN_DIR_ENV_VARS = (
     "FORGE_CONNECTOR_PLUGIN_DIR",
     "FORGE_CONNECTOR_PLUGIN_DIRS",
 )
+_LOCAL_BINARY_INSTALL_GUIDANCE: dict[str, dict[str, str]] = {
+    "detect-secrets": {
+        "installer": "pipx",
+        "command": "pipx install detect-secrets",
+        "notes": "Python local secret-baseline scanner.",
+    },
+    "gitleaks": {
+        "installer": "winget",
+        "command": "winget install --id Gitleaks.Gitleaks",
+        "notes": "Local secret scanner; alternatively install from the vendor release archive.",
+    },
+    "katana": {
+        "installer": "go",
+        "command": "go install github.com/projectdiscovery/katana/cmd/katana@latest",
+        "notes": "ProjectDiscovery crawl-based URL discovery.",
+    },
+    "nuclei": {
+        "installer": "go",
+        "command": "go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
+        "notes": "ProjectDiscovery template-based exposure checks; pin templates before use.",
+    },
+    "subfinder": {
+        "installer": "go",
+        "command": "go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+        "notes": "ProjectDiscovery passive subdomain discovery.",
+    },
+    "trufflehog": {
+        "installer": "go",
+        "command": "go install github.com/trufflesecurity/trufflehog/v3@latest",
+        "notes": "Local secret scanner; use redacted output for reports.",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -721,6 +753,40 @@ def connector_summary(statuses: list[dict[str, Any]] | None = None) -> dict[str,
         "plugin_manifest_catalog_count": execution_counts.get("plugin_manifest_catalog", 0),
         "planned_fail_closed_count": execution_counts.get("planned_fail_closed", 0),
         "secret_material_policy": "Connector readiness reports env var names only; secret values are never returned.",
+    }
+
+
+def connector_install_plan(statuses: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Return a read-only local binary install plan; commands are not executed."""
+    rows = statuses if statuses is not None else connector_statuses()
+    by_binary: dict[str, set[str]] = {}
+    for row in rows:
+        for binary in row.get("missing_binaries", []):
+            name = str(binary or "").strip()
+            if not name:
+                continue
+            by_binary.setdefault(name, set()).add(str(row.get("id") or "unknown"))
+
+    items: list[dict[str, Any]] = []
+    for binary in sorted(by_binary):
+        guidance = _LOCAL_BINARY_INSTALL_GUIDANCE.get(binary, {})
+        items.append(
+            {
+                "binary": binary,
+                "connector_ids": sorted(by_binary[binary]),
+                "installer": guidance.get("installer", "manual"),
+                "command": guidance.get("command", ""),
+                "notes": guidance.get(
+                    "notes",
+                    "Install this binary with your OS package manager and rerun doctor.",
+                ),
+            }
+        )
+    return {
+        "schema_version": "forge.connector_install_plan.v1",
+        "execution_policy": "plan_only_no_commands_executed",
+        "missing_binary_count": len(items),
+        "items": items,
     }
 
 
