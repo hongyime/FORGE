@@ -222,10 +222,11 @@ Progress:
 - Pushed B576 as `d60a343 fix: clarify safe mode doctor warning`.
 - Added value-safe Windows persistent `FORGE_ENGAGEMENT_KEY` reload guidance: `forge connectors secret-key-plan --json` now emits `commands.powershell_reload_persistent_env` when a User/Machine key exists, plain output shows persistent source/length/fingerprint plus the current-process reload command, and doctor remediation shows the exact reload command instead of only generic restart guidance.
 - Verified B577 with focused connector/doctor tests (`5 passed`), Ruff, py_compile, `git diff --check`, and real local secret-key-plan/doctor smokes. No secret material was printed, persisted, or committed; no engagement mutation, provider call, live run, monitoring apply, scheduled-task change, report regeneration, or credential persistence was started.
+- Pushed B577 as `e731c35 fix: surface connector key reload guidance`.
 - Closed three completed subagents. Their read-only audits recommended: improve monitoring due-plan summary/action-plan/stale-backlog fields next, and add report quality-audit operator action-plan buckets after that.
 
 Next steps:
-- Commit/push B577, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining queues include Monitoring Schedules due-plan operator-plan/stale-backlog clarity, optional quality-audit operator action-plan buckets for stale reports/resume/long-runs/policy flags, deliberate report regeneration only by explicit operator action, and historical failed/long run review only if deliberately resumed.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining queues include Monitoring Schedules due-plan operator-plan/stale-backlog clarity, optional quality-audit operator action-plan buckets for stale reports/resume/long-runs/policy flags, deliberate report regeneration only by explicit operator action, and historical failed/long run review only if deliberately resumed.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
