@@ -156,9 +156,10 @@ Progress:
 - Real local dry-run found 49 historical candidates all recoverable from `scope_manifest_missing`; applied the backfill locally, writing recovered narrow scope manifests under `.forge_data/target_imports/` and updating latest-run metadata only.
 - Follow-up real local `forge targets resume-candidates --limit 200 --json` smoke reports 49 candidates, 49 `resume_ready`, empty `resume_blocker_counts`, and suggested `forge kill-chain ... --resume --max-iter 3` command arrays. No kill-chain run was started.
 - Verified B560 with focused target-import/CLI-registry/quality-audit tests (`50 passed` in the broad slice, `45 passed` in the final target/registry slice), Ruff, py_compile, `git diff --check`, and local resume-candidate/backfill smokes.
+- Pushed B560 as `c72721f feat: backfill resume scope manifests`.
 
 Next steps:
-- Commit and push B560, then continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
