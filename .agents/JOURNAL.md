@@ -22,3 +22,4 @@
 - 2026-08-20: Normalized MISP Unix timestamps to UTC ISO strings so offline MISP imports work with CTI observed-time filters.
 - 2026-08-20: Extended offline MISP import to accept common attribute-search exports such as response.Attribute through the existing sanitized CTI observation path.
 - 2026-08-20: Added file-only Supabase table export ingestion to the CTI observation path; live Supabase API polling and key storage remain out of scope.
+- 2026-08-20: CTI imports now report rejected sensitive observation categories only as aggregate type counts, not values.

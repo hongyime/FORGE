@@ -305,7 +305,10 @@ observations below a chosen confidence threshold; skipped low-confidence rows
 are counted with `filtered_count`. Use `--max-tlp LEVEL` to skip observations
 above the TLP level an operator is allowed to retain or preview. JSON output
 also includes summary dictionaries for parsed indicator types, parsed TLP
-levels, target-feed-compatible types, and skipped reasons. Use
+levels, rejected sensitive observation types, target-feed-compatible types, and
+skipped reasons. Sensitive rows such as phone, person, private-message, and
+breach-record observations are rejected by default and are reported only as
+bounded type counts, not values. Use
 `--fail-on-empty` in automation to exit non-zero when no observations survive
 normalization and filters; duplicate-only re-imports still count as accepted
 because the file matched known observations. Use `--since ISO` and

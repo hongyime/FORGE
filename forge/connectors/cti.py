@@ -23,6 +23,7 @@ from forge.opsec.scope_gate import (
 )
 from forge.utils.intel.observations import (
     OsintObservation,
+    SENSITIVE_TARGET_TYPES,
     normalize_observation,
     observation_to_target_feed_item,
 )
@@ -108,6 +109,7 @@ def import_cti_observations(
     dry_run_seen_keys: set[tuple[str, str, str, str, str]] = set()
     parsed_indicator_type_counts: Counter[str] = Counter()
     parsed_tlp_counts: Counter[str] = Counter()
+    rejected_sensitive_type_counts: Counter[str] = Counter()
     provider = config.provider.strip() or connector_id
     for index, raw_item in enumerate(raw_items):
         if not isinstance(raw_item, Mapping):
@@ -128,6 +130,9 @@ def import_cti_observations(
             collection_method=config.collection_method,
         )
         if observation is None:
+            sensitive_type = _raw_sensitive_indicator_type(normalized_item)
+            if sensitive_type:
+                rejected_sensitive_type_counts[sensitive_type] += 1
             skipped.append({"index": str(index), "reason": "observation_rejected"})
             continue
         parsed_count += 1
@@ -263,6 +268,7 @@ def import_cti_observations(
         "skipped_count": len(skipped),
         "parsed_indicator_type_counts": dict(sorted(parsed_indicator_type_counts.items())),
         "parsed_tlp_counts": dict(sorted(parsed_tlp_counts.items())),
+        "rejected_sensitive_type_counts": dict(sorted(rejected_sensitive_type_counts.items())),
         "target_feed_type_counts": _target_feed_type_counts(feed_items),
         "skipped_reason_counts": _skipped_reason_counts(skipped),
         "skipped": skipped[:25],
@@ -862,6 +868,14 @@ def _provider_observation_item(
 
 def _has_neutral_observation_fields(raw: Mapping[str, Any]) -> bool:
     return any(key in raw for key in ("indicator_type", "target_type", "value", "target_value"))
+
+
+def _raw_sensitive_indicator_type(raw: Mapping[str, Any]) -> str:
+    raw_type = _first_text(raw, "indicator_type", "target_type", "type")
+    normalized = raw_type.strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized in SENSITIVE_TARGET_TYPES:
+        return normalized
+    return ""
 
 
 def _threatfox_observation_item(raw: Mapping[str, Any], *, provider: str) -> dict[str, Any]:

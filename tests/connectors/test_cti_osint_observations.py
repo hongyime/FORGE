@@ -263,6 +263,7 @@ def test_cti_observation_import_persists_normalized_rows_and_promotes_scoped_see
     assert result["skipped_count"] == 2
     assert result["parsed_indicator_type_counts"] == {"domain": 2, "url": 1}
     assert result["parsed_tlp_counts"] == {"TLP:CLEAR": 3}
+    assert result["rejected_sensitive_type_counts"] == {"phone": 1}
     assert result["target_feed_type_counts"] == {"domain": 2, "url": 1}
     assert result["skipped_reason_counts"] == {
         "observation_rejected": 1,
@@ -1707,6 +1708,71 @@ def test_connector_cli_import_cti_fail_on_empty_exits_nonzero(
     assert "no accepted observations" in result.output
     assert cti_table is None
     assert audit_count == 0
+
+
+def test_connector_cli_import_cti_reports_sensitive_rejection_counts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "cti.json"
+    secret_value = "private-message-token"
+    report_file.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {"type": "phone", "value": "+1 555 123 4567"},
+                    {"type": "person", "value": "Jane Example"},
+                    {"type": "private_message", "value": f"token={secret_value}"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "stix_taxii_import",
+            "--report-file",
+            str(report_file),
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    con = sqlite3.connect(db_path)
+    try:
+        cti_table = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cti_observations'"
+        ).fetchone()
+    finally:
+        con.close()
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "dry_run"
+    assert payload["parsed_count"] == 0
+    assert payload["skipped_count"] == 3
+    assert payload["rejected_sensitive_type_counts"] == {
+        "person": 1,
+        "phone": 1,
+        "private_message": 1,
+    }
+    assert cti_table is None
+    assert secret_value not in result.output
 
 
 def test_connector_cli_import_cti_limit_is_passed_to_importer(
