@@ -138,9 +138,10 @@ Progress:
 - Pushed B554 as `fb90e38 fix: separate historical dashboard refresh failures`.
 - Fixed quality-audit fallback signal noise: report backend/fallback/write-error counters are now split into all-history lineage counts and latest-report-only counts.
 - Verified B555 with focused quality-audit/CLI registry tests (`25 passed`), Ruff, py_compile, `git diff --check`, and a real local `forge report quality-audit --json --top-limit 5` smoke. The refreshed local audit still reports 149 historical GGUF-missing fallback generations, but `latest_fallback_reason_counts` is empty, so latest report summaries are not currently GGUF-missing.
+- Pushed B555 as `cf54e94 fix: report latest quality fallback counts`.
 
 Next steps:
-- Commit and push B555, then continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
