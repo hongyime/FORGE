@@ -115,6 +115,7 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert rows["Free/Local Baseline"].status == "OK"
     assert rows["Secrets: gitleaks"].status == "OK"
     assert rows["Secrets: trufflehog"].status == "OPTIONAL"
+    assert "python bootstrap.py setup" in rows["Secrets: trufflehog"].remediation
     assert "TruffleHog release binary" in rows["Secrets: trufflehog"].remediation
     assert "forge connectors install-plan --json" in rows["Secrets: trufflehog"].remediation
     assert rows["Connector Catalog"].status == "WARN"

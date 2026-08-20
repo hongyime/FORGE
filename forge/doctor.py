@@ -131,9 +131,10 @@ _BINARY_REMEDIATION: dict[str, str] = {
     "katana": "Install with `go install github.com/projectdiscovery/katana/cmd/katana@latest`.",
     "gitleaks": "Install Gitleaks and run `gitleaks detect --source . --redact --exit-code 1`.",
     "trufflehog": (
-        "Download a TruffleHog release binary and place it on PATH or "
-        "FORGE_CONNECTOR_BIN_DIRS; `forge connectors install-plan --json` shows "
-        "the current search paths."
+        "Run `python bootstrap.py setup` to install the checksum-checked "
+        "TruffleHog release binary, or place a TruffleHog binary on PATH/"
+        "FORGE_CONNECTOR_BIN_DIRS; `forge connectors install-plan --json` "
+        "shows the current search paths."
     ),
     "detect-secrets": "Install with `pipx install detect-secrets` or your Python tool manager.",
     "ollama": "Install Ollama and start a local model server, or use another discovered LLM backend.",

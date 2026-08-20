@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
+import platform
 import signal
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
+import urllib.request
 from pathlib import Path
 
 from forge.connectors.binaries import connector_binary_search_paths
@@ -99,6 +103,43 @@ CONNECTOR_GO_TOOLS = {
     "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
 }
 CONNECTOR_TOOL_INSTALL_TIMEOUT_SECONDS = 600
+TRUFFLEHOG_VERSION = "v3.97.0"
+TRUFFLEHOG_ASSET_VERSION = TRUFFLEHOG_VERSION.removeprefix("v")
+TRUFFLEHOG_RELEASE_BASE = (
+    "https://github.com/trufflesecurity/trufflehog/releases/download/"
+    f"{TRUFFLEHOG_VERSION}"
+)
+TRUFFLEHOG_URLS = {
+    ("Windows", "AMD64"): (
+        f"{TRUFFLEHOG_RELEASE_BASE}/"
+        f"trufflehog_{TRUFFLEHOG_ASSET_VERSION}_windows_amd64.tar.gz"
+    ),
+    ("Windows", "ARM64"): (
+        f"{TRUFFLEHOG_RELEASE_BASE}/"
+        f"trufflehog_{TRUFFLEHOG_ASSET_VERSION}_windows_arm64.tar.gz"
+    ),
+    ("Linux", "x86_64"): (
+        f"{TRUFFLEHOG_RELEASE_BASE}/"
+        f"trufflehog_{TRUFFLEHOG_ASSET_VERSION}_linux_amd64.tar.gz"
+    ),
+    ("Linux", "aarch64"): (
+        f"{TRUFFLEHOG_RELEASE_BASE}/"
+        f"trufflehog_{TRUFFLEHOG_ASSET_VERSION}_linux_arm64.tar.gz"
+    ),
+    ("Darwin", "x86_64"): (
+        f"{TRUFFLEHOG_RELEASE_BASE}/"
+        f"trufflehog_{TRUFFLEHOG_ASSET_VERSION}_darwin_amd64.tar.gz"
+    ),
+    ("Darwin", "arm64"): (
+        f"{TRUFFLEHOG_RELEASE_BASE}/"
+        f"trufflehog_{TRUFFLEHOG_ASSET_VERSION}_darwin_arm64.tar.gz"
+    ),
+}
+TRUFFLEHOG_CHECKSUMS_URL = (
+    f"{TRUFFLEHOG_RELEASE_BASE}/"
+    f"trufflehog_{TRUFFLEHOG_ASSET_VERSION}_checksums.txt"
+)
+TRUFFLEHOG_DOWNLOAD_MAX_BYTES = 250 * 1024 * 1024
 
 # Optional external Go binary installed to venv Scripts dir. Enables the
 # Google-dork half of Module 2-M (phone OSINT). No API key required.
@@ -623,6 +664,7 @@ def install_connector_tools(root: Path, vpy: Path) -> None:
                 "[FORGE Setup] Warning: Go is not on PATH; cannot install connector "
                 f"Go tools now: {missing}."
             )
+        install_trufflehog_release(root=root, vpy=vpy, timeout_seconds=timeout_seconds)
         return
 
     for binary, package in CONNECTOR_GO_TOOLS.items():
@@ -653,6 +695,122 @@ def install_connector_tools(root: Path, vpy: Path) -> None:
                 f"[FORGE Setup] Warning: {binary} installed but was not found in "
                 "FORGE connector search paths."
             )
+
+    install_trufflehog_release(root=root, vpy=vpy, timeout_seconds=timeout_seconds)
+
+
+def install_trufflehog_release(root: Path, vpy: Path, timeout_seconds: int) -> None:
+    """Best-effort install of the TruffleHog release binary into FORGE tools."""
+
+    if resolve_setup_binary("trufflehog", root=root, vpy=vpy):
+        print("[FORGE Setup] trufflehog already available.")
+        return
+    url = trufflehog_release_url()
+    if not url:
+        print(
+            "[FORGE Setup] Warning: no TruffleHog release binary for "
+            f"{platform.system()}/{platform.machine()}; install-plan will show guidance."
+        )
+        return
+    target_dir = Path(connector_binary_search_paths()[0])
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_exe = target_dir / ("trufflehog.exe" if os.name == "nt" else "trufflehog")
+    print(f"[FORGE Setup] Installing TruffleHog {TRUFFLEHOG_VERSION} binary...")
+    try:
+        archive_bytes = _download_url_bytes(url, timeout_seconds=timeout_seconds)
+        expected_sha = _trufflehog_expected_sha256(url, timeout_seconds=timeout_seconds)
+        actual_sha = hashlib.sha256(archive_bytes).hexdigest()
+        if expected_sha and actual_sha.lower() != expected_sha.lower():
+            print(
+                "[FORGE Setup] Warning: TruffleHog checksum mismatch; "
+                "download discarded."
+            )
+            return
+        _extract_trufflehog_archive(archive_bytes, target_exe)
+    except Exception as exc:  # noqa: BLE001 - setup is best-effort.
+        print(
+            "[FORGE Setup] Warning: TruffleHog release install failed "
+            f"({exc}). `forge connectors install-plan --json` will show guidance."
+        )
+        return
+    if target_exe.exists():
+        if os.name != "nt":
+            target_exe.chmod(0o755)
+        print(f"[FORGE Setup] TruffleHog installed at {target_exe}")
+    else:
+        print(
+            "[FORGE Setup] Warning: TruffleHog archive extraction did not "
+            "produce the binary."
+        )
+
+
+def trufflehog_release_url() -> str | None:
+    sys_key = (platform.system(), platform.machine())
+    machine_aliases = {
+        "AMD64": ("AMD64", "x86_64"),
+        "x86_64": ("x86_64", "AMD64"),
+        "arm64": ("arm64", "ARM64", "aarch64"),
+        "ARM64": ("ARM64", "arm64", "aarch64"),
+        "aarch64": ("aarch64", "arm64", "ARM64"),
+    }
+    for machine in machine_aliases.get(sys_key[1], (sys_key[1],)):
+        url = TRUFFLEHOG_URLS.get((sys_key[0], machine))
+        if url:
+            return url
+    return None
+
+
+def _trufflehog_expected_sha256(url: str, *, timeout_seconds: int) -> str | None:
+    checksum_text = _download_url_bytes(
+        TRUFFLEHOG_CHECKSUMS_URL,
+        timeout_seconds=timeout_seconds,
+        max_bytes=1024 * 1024,
+    ).decode("utf-8", errors="replace")
+    archive_name = url.rsplit("/", 1)[-1]
+    for raw_line in checksum_text.splitlines():
+        parts = raw_line.strip().split()
+        if len(parts) >= 2 and parts[-1] == archive_name:
+            return parts[0]
+    return None
+
+
+def _download_url_bytes(
+    url: str,
+    *,
+    timeout_seconds: int,
+    max_bytes: int = TRUFFLEHOG_DOWNLOAD_MAX_BYTES,
+) -> bytes:
+    with urllib.request.urlopen(url, timeout=timeout_seconds) as response:
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_bytes:
+                raise RuntimeError(f"download exceeded {max_bytes} byte cap")
+            chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _extract_trufflehog_archive(archive_bytes: bytes, target_exe: Path) -> None:
+    with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as tmp:
+        archive_path = Path(tmp.name)
+        tmp.write(archive_bytes)
+    try:
+        with tarfile.open(archive_path, "r:gz") as tf:
+            for member in tf.getmembers():
+                member_name = Path(member.name).name.lower()
+                if member.isfile() and member_name in {"trufflehog", "trufflehog.exe"}:
+                    extracted = tf.extractfile(member)
+                    if extracted is None:
+                        continue
+                    target_exe.write_bytes(extracted.read())
+                    return
+    finally:
+        archive_path.unlink(missing_ok=True)
+    raise RuntimeError("trufflehog binary not found in release archive")
 
 
 def setup_binary_search_paths(root: Path, vpy: Path) -> list[str]:

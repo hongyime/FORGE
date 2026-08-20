@@ -86,7 +86,7 @@ cd forge-toolkit
 Bootstrap creates `.venv` for FORGE runtime deps, installs external OSINT CLIs
 into per-tool venvs under local FORGE state, installs `phonenumbers` in the
 runtime, best-effort installs free/local connector CLIs for full mode
-(`subfinder`, `katana`, `nuclei`, `gitleaks`, and `detect-secrets`), reports
+(`subfinder`, `katana`, `nuclei`, `gitleaks`, `trufflehog`, and `detect-secrets`), reports
 manual TruffleHog setup guidance through the connector install plan, and detects
 installed LLM CLIs (Kiro / Claude / Codex / Gemini) for the Phase 6 report.
 Per-tool OSINT venvs prevent GHunt, Maigret, and theHarvester dependency pins

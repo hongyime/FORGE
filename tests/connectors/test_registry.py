@@ -429,8 +429,9 @@ def test_connector_install_plan_reports_missing_binaries_without_execution() -> 
     assert by_binary["subfinder"]["command"].startswith("go install ")
     assert "projectdiscovery_subfinder" in by_binary["subfinder"]["connector_ids"]
     assert "github.com/zricethezav/gitleaks/v8" in by_binary["gitleaks"]["command"]
-    assert by_binary["trufflehog"]["installer"] == "manual"
-    assert "release binary" in by_binary["trufflehog"]["command"]
+    assert by_binary["trufflehog"]["installer"] == "release"
+    assert by_binary["trufflehog"]["command"] == "python bootstrap.py setup"
+    assert "checksum-checked" in by_binary["trufflehog"]["notes"]
     assert "trufflehog_local" in by_binary["trufflehog"]["connector_ids"]
 
 

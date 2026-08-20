@@ -74,9 +74,12 @@ _LOCAL_BINARY_INSTALL_GUIDANCE: dict[str, dict[str, str]] = {
         "notes": "ProjectDiscovery passive subdomain discovery.",
     },
     "trufflehog": {
-        "installer": "manual",
-        "command": "download a TruffleHog release binary and place it on PATH or FORGE_CONNECTOR_BIN_DIRS",
-        "notes": "Local secret scanner; current upstream Go module is not installable with go install.",
+        "installer": "release",
+        "command": "python bootstrap.py setup",
+        "notes": (
+            "Local secret scanner; bootstrap downloads the official checksum-checked "
+            "TruffleHog release binary when a platform asset is available."
+        ),
     },
 }
 

@@ -57,3 +57,4 @@
 - 2026-08-20: Added non-secret Windows persistent FORGE_ENGAGEMENT_KEY detection so doctor distinguishes stale process env from missing connector secret-store setup.
 - 2026-08-20: Aligned Monitoring Schedules doctor output with the read-only due-plan total so bounded readiness sampling no longer understates the due monitoring backlog.
 - 2026-08-20: Made destructive/post-ex run-summary policy flags explicit scope-manifest policy metadata for target-import starts instead of hard-coded false values.
+- 2026-08-20: Added checksum-verified TruffleHog release installation to bootstrap and installed TruffleHog 3.97.0 locally so connector install-plan has no missing binaries.
