@@ -147,9 +147,10 @@ Progress:
 - Pushed B557 as `512399e fix: align doctor workspace legacy visibility`.
 - Added read-only `forge connectors install-plan [--json]` so doctor can point operators at a safe missing-local-binary plan rather than vague manual installation text. The command groups missing binaries by connector, emits suggested install commands, and declares `plan_only_no_commands_executed`.
 - Verified B558 with focused connector/doctor/CLI registry tests (`102 passed`), Ruff, py_compile, `git diff --check`, and a real local `forge connectors install-plan --json` smoke. The smoke reports six missing local tools: detect-secrets, gitleaks, katana, nuclei, subfinder, and trufflehog.
+- Pushed B558 as `1e39c5d feat: add connector install plan`.
 
 Next steps:
-- Commit and push B558, then continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
