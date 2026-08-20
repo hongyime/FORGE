@@ -928,6 +928,10 @@ def test_root_cli_registers_connectors_catalog() -> None:
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.connector_catalog.v1"
+    assert payload["execution_policy"] == "data_only_catalog_no_connectors_executed"
+    assert payload["total_count"] >= payload["selected_count"] >= 0
+    assert payload["omitted_count"] == payload["total_count"] - payload["selected_count"]
     ids = {row["id"] for row in payload["connectors"]}
     assert "remediation_jsonl" in ids
     assert "remediation_jira" not in ids

@@ -92,7 +92,19 @@ def register_connector_commands(app: typer.Typer) -> None:
             summary["engagement_id"] = int(engagement)
             summary["secret_store_connector_count"] = len(stored_secret_statuses)
         if json_output:
-            typer.echo(json.dumps({"connectors": rows, "summary": summary}, sort_keys=True))
+            payload = {
+                "schema_version": "forge.connector_catalog.v1",
+                "execution_policy": "data_only_catalog_no_connectors_executed",
+                "total_count": int(summary.get("connector_count", len(rows)) or 0),
+                "selected_count": len(rows),
+                "omitted_count": max(
+                    0,
+                    int(summary.get("connector_count", len(rows)) or 0) - len(rows),
+                ),
+                "connectors": rows,
+                "summary": summary,
+            }
+            typer.echo(json.dumps(payload, sort_keys=True))
             return
 
         table = Table(show_header=True, header_style="bold magenta")
