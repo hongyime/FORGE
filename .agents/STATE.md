@@ -191,9 +191,10 @@ Progress:
 - Pushed B567 as `40e9ba3 fix: detect persistent connector secret key`.
 - Aligned the Monitoring Schedules doctor warning with the read-only due-plan total so the row keeps sampled alert/delivery details but summarizes the full due backlog.
 - Verified B568 with focused doctor tests (`43 passed`), Ruff, py_compile, `git diff --check`, and real local `.venv\Scripts\forge.exe doctor --json` / `monitoring due-plan --limit 5 --json` smokes. Local doctor now reports 101 due/overdue monitoring policies while labeling the first-50 readiness sample separately.
+- Pushed B568 as `fca5ac6 fix: show total monitoring due backlog`.
 
 Next steps:
-- Commit and push B568, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
