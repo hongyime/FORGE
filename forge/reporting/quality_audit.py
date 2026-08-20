@@ -279,6 +279,7 @@ def run_stale_report_repair_plan(
             engagement_id=str(engagement_id),
             provider=provider,
             max_loops=max_loops,
+            output_path=str(Path(reports_dir)),
         )
         if dry_run:
             skipped_count += 1
@@ -299,6 +300,7 @@ def run_stale_report_repair_plan(
                 provider=provider,
                 max_loops=max_loops,
                 assume_yes=True,
+                output_path=str(Path(reports_dir)),
             )
         except Exception as exc:  # noqa: BLE001
             failed_count += 1
@@ -342,6 +344,20 @@ def run_stale_report_repair_plan(
         "omitted_count": max(0, int(plan.get("total_count", 0) or 0) - len(commands[:sample_limit])),
         "items": items,
         "follow_up_commands": plan.get("follow_up_commands", []),
+        "dashboard_refresh_required": bool(succeeded_count),
+        "post_run_commands": (
+            [
+                [
+                    "forge",
+                    "dashboard",
+                    "-o",
+                    str(Path(reports_dir) / "dashboard.html"),
+                ],
+                ["forge", "report", "quality-audit", "--json"],
+            ]
+            if succeeded_count
+            else []
+        ),
         "latest_fallback_reason_counts": plan.get("latest_fallback_reason_counts", {}),
     }
 
@@ -417,6 +433,7 @@ def _stale_report_run_command(
     engagement_id: str,
     provider: str,
     max_loops: int | None,
+    output_path: str | None = None,
 ) -> list[str]:
     command = [
         "forge",
@@ -428,6 +445,8 @@ def _stale_report_run_command(
         provider,
         "--yes",
     ]
+    if output_path:
+        command.extend(["--output", output_path])
     if max_loops is not None:
         command.extend(["--max-loops", str(max_loops)])
     return command

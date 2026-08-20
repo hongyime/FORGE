@@ -305,10 +305,11 @@ def report_stale_run(
         provider: str,
         max_loops: int | None,
         assume_yes: bool,
+        output_path: str,
     ) -> str | Path | None:
         return synthesise(
             engagement_id=engagement_id,
-            output_path=None,
+            output_path=output_path,
             assume_yes=assume_yes,
             provider=provider,
             max_correction_loops=max_loops,
@@ -346,6 +347,11 @@ def report_stale_run(
                     f"status={item.get('status', '')} "
                     f"command={' '.join(str(part) for part in command)}"
                 )
+    post_run_commands = payload.get("post_run_commands")
+    if isinstance(post_run_commands, list):
+        for command in post_run_commands[:3]:
+            if isinstance(command, list):
+                console.print(f"  post_run={' '.join(str(part) for part in command)}")
     if payload.get("failed_count"):
         raise typer.Exit(code=1)
 

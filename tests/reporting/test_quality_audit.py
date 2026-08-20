@@ -624,9 +624,13 @@ def test_run_stale_report_repair_plan_dry_run_is_bounded(
         "--provider",
         "template",
         "--yes",
+        "--output",
+        str(reports_dir),
         "--max-loops",
         "0",
     ]
+    assert payload["dashboard_refresh_required"] is False
+    assert payload["post_run_commands"] == []
 
 
 def test_run_stale_report_repair_plan_executes_with_injected_generator(
@@ -657,12 +661,18 @@ def test_run_stale_report_repair_plan_executes_with_injected_generator(
     assert payload["attempted_count"] == 1
     assert payload["succeeded_count"] == 1
     assert payload["failed_count"] == 0
+    assert payload["dashboard_refresh_required"] is True
+    assert payload["post_run_commands"] == [
+        ["forge", "dashboard", "-o", str(reports_dir / "dashboard.html")],
+        ["forge", "report", "quality-audit", "--json"],
+    ]
     assert calls == [
         {
             "engagement_id": "1001",
             "provider": "auto",
             "max_loops": None,
             "assume_yes": True,
+            "output_path": str(reports_dir),
         }
     ]
     assert payload["items"][0]["report_path"].endswith("regenerated.md")
@@ -703,6 +713,7 @@ def test_report_stale_run_cli_outputs_dry_run_json(
     assert payload["schema_version"] == "forge.report_stale_repair_run.v1"
     assert payload["execution_policy"] == "dry_run_no_commands_executed"
     assert payload["items"][0]["status"] == "dry_run"
+    assert "--output" in payload["items"][0]["command"]
     assert payload["items"][0]["command"][-2:] == ["--max-loops", "0"]
 
 
