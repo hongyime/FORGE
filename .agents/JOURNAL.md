@@ -8,3 +8,4 @@
 - 2026-08-20: CTI dry-run previews now read existing observation keys and track in-file repeats so `would_persist_count` excludes duplicates without creating tables or writing audit rows.
 - 2026-08-20: Added explicit CTI import item limits for large offline exports; result metadata reports total, processed, and limited item counts.
 - 2026-08-20: Added CTI min-confidence filtering as an operator noise-control gate before persistence or dry-run would-persist accounting; it does not change reportability.
+- 2026-08-20: Added CTI max-TLP filtering as an operator data-handling gate before persistence or dry-run preview accounting; it does not change validation/reportability.

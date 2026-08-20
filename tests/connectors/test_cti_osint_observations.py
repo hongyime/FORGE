@@ -647,6 +647,44 @@ def test_cti_import_min_confidence_filters_low_confidence_observations(
     assert values == ["high.acme.example"]
 
 
+def test_cti_import_max_tlp_filters_restricted_observations(tmp_path: Path) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    report = {
+        "items": [
+            {"type": "domain", "value": "clear.acme.example", "tlp": "clear"},
+            {"type": "domain", "value": "green.acme.example", "tlp": "green"},
+            {"type": "domain", "value": "amber.acme.example", "tlp": "amber"},
+        ]
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="stix_taxii_import",
+                engagement_id=1001,
+                max_tlp="green",
+            ),
+            report_text=json.dumps(report),
+        )
+        rows = con.execute(
+            "SELECT indicator_value, tlp FROM cti_observations ORDER BY indicator_value"
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert result["max_tlp"] == "TLP:GREEN"
+    assert result["parsed_count"] == 3
+    assert result["filtered_count"] == 1
+    assert result["persisted_count"] == 2
+    assert result["skipped_count"] == 1
+    assert result["skipped"][0]["reason"] == "above_max_tlp"
+    assert [(row["indicator_value"], row["tlp"]) for row in rows] == [
+        ("clear.acme.example", "TLP:CLEAR"),
+        ("green.acme.example", "TLP:GREEN"),
+    ]
+
+
 def test_cti_observations_surface_as_non_reportable_inventory(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     db_path = data_dir / "engagements" / "1001.db"
@@ -946,3 +984,57 @@ def test_connector_cli_import_cti_min_confidence_dry_run(
     assert payload["filtered_count"] == 1
     assert payload["would_persist_count"] == 1
     assert payload["skipped"][0]["reason"] == "below_min_confidence"
+
+
+def test_connector_cli_import_cti_max_tlp_dry_run(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "cti.json"
+    report_file.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {"type": "domain", "value": "green.acme.example", "tlp": "green"},
+                    {"type": "domain", "value": "red.acme.example", "tlp": "red"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "stix_taxii_import",
+            "--report-file",
+            str(report_file),
+            "--max-tlp",
+            "green",
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "dry_run"
+    assert payload["max_tlp"] == "TLP:GREEN"
+    assert payload["parsed_count"] == 2
+    assert payload["filtered_count"] == 1
+    assert payload["would_persist_count"] == 1
+    assert payload["skipped"][0]["reason"] == "above_max_tlp"

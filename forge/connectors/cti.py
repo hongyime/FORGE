@@ -41,6 +41,7 @@ class CtiObservationImportConfig:
     dry_run: bool = False
     limit: int | None = None
     min_confidence: float | None = None
+    max_tlp: str = ""
 
 
 def import_cti_observations(
@@ -68,6 +69,7 @@ def import_cti_observations(
     raw_items = _payload_items(payload)
     limit = _normalize_limit(config.limit)
     min_confidence = _normalize_min_confidence(config.min_confidence)
+    max_tlp = _normalize_max_tlp(config.max_tlp)
     total_item_count = len(raw_items)
     limited_item_count = 0
     if limit is not None and total_item_count > limit:
@@ -117,6 +119,16 @@ def import_cti_observations(
                     "index": str(index),
                     "reason": "below_min_confidence",
                     "confidence": f"{observation.confidence:.3f}",
+                }
+            )
+            continue
+        if max_tlp and _tlp_rank(observation.tlp) > _tlp_rank(max_tlp):
+            filtered_count += 1
+            skipped.append(
+                {
+                    "index": str(index),
+                    "reason": "above_max_tlp",
+                    "tlp": observation.tlp,
                 }
             )
             continue
@@ -183,6 +195,7 @@ def import_cti_observations(
         "dry_run": bool(config.dry_run),
         "limit": limit,
         "min_confidence": min_confidence,
+        "max_tlp": max_tlp,
         "total_item_count": total_item_count,
         "processed_item_count": len(raw_items),
         "limited_item_count": limited_item_count,
@@ -512,6 +525,34 @@ def _normalize_min_confidence(value: float | None) -> float | None:
     if parsed < 0.0 or parsed > 1.0:
         raise ValueError("CTI import min confidence must be between 0 and 1")
     return parsed
+
+
+def _normalize_max_tlp(value: str) -> str:
+    text = str(value or "").strip().upper().replace(" ", "")
+    if not text:
+        return ""
+    aliases = {
+        "CLEAR": "TLP:CLEAR",
+        "WHITE": "TLP:CLEAR",
+        "TLP:WHITE": "TLP:CLEAR",
+        "GREEN": "TLP:GREEN",
+        "AMBER": "TLP:AMBER",
+        "RED": "TLP:RED",
+    }
+    normalized = aliases.get(text, text)
+    if normalized not in {"TLP:CLEAR", "TLP:GREEN", "TLP:AMBER", "TLP:RED"}:
+        raise ValueError("CTI import max TLP must be one of clear, green, amber, or red")
+    return normalized
+
+
+def _tlp_rank(value: str) -> int:
+    normalized = _normalize_max_tlp(value) or "TLP:CLEAR"
+    return {
+        "TLP:CLEAR": 0,
+        "TLP:GREEN": 1,
+        "TLP:AMBER": 2,
+        "TLP:RED": 3,
+    }[normalized]
 
 
 def _provider_observation_item(
