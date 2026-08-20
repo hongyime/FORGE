@@ -144,9 +144,10 @@ Progress:
 - Pushed B556 as `c869d61 fix: align resume candidates with dashboard legacy data`.
 - Fixed a doctor/operator mismatch: the Workspace Access doctor check now includes repo-local legacy dashboard DBs like dashboard/resume review, and labels that inclusion in the details. Other operational checks remain scoped to the configured data dir.
 - Verified B557 with focused doctor/engagement-id tests (`45 passed`), Ruff, py_compile, `git diff --check`, and a real local `forge doctor --json` smoke. The real Workspace Access row now reports 48 engagements across 50/930 DBs checked, 47 usable control index rows, and notes repo-local legacy dashboard DB inclusion.
+- Pushed B557 as `512399e fix: align doctor workspace legacy visibility`.
 
 Next steps:
-- Commit and push B557, then continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
