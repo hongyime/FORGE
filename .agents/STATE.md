@@ -266,9 +266,10 @@ Progress:
 - Pushed B588 as `33aee7d feat: add connector run plan`.
 - Expanded connector run-plan templates for non-generic operator paths: `import-cti`, `import-discovery`, `run-secrets`, `run-identity`, remediation ticket sync, standards STIX import, and artifact intake review.
 - Verified B589 with focused connector run-plan tests (`2 passed`), Ruff, py_compile, `git diff --check`, and a real local read-only connector run-plan smoke. The smoke showed required placeholders for ThreatFox, urlscan, gitleaks, HIBP, and subfinder. No connector, provider, installer, report, resume-run, kill-chain, monitoring, scheduled-task, engagement, or credential action was executed.
+- Pushed B589 as `0dd0f8f fix: complete connector run templates`.
 
 Next steps:
-- Commit and push B589, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
