@@ -20,6 +20,7 @@ from rich.console import Console
 from rich.table import Table
 
 from forge.config import ForgeConfig
+from forge.connectors.binaries import resolve_connector_binary
 from forge.connectors.registry import (
     connector_plugin_dirs,
     connector_plugin_manifest_statuses,
@@ -63,6 +64,10 @@ _STATUS_STYLE = {
 }
 
 _ATTENTION_STATUSES = {"OPTIONAL", "WARN", "MISSING", "ERROR"}
+
+
+def _connector_which_resolver(which: WhichResolver, env: Mapping[str, str]) -> WhichResolver:
+    return (lambda name: resolve_connector_binary(name, env=env)) if which is shutil.which else which
 
 _CORE_BINARIES: tuple[tuple[str, str], ...] = (
     ("git", "repo evidence, hooks, and optional GitHub workflows"),
@@ -1745,6 +1750,7 @@ def _connector_catalog_check(
     which: WhichResolver,
     data_dir: Path | None,
 ) -> DoctorCheck:
+    connector_which = _connector_which_resolver(which, env)
     plugin_dirs = connector_plugin_dirs(data_dir=data_dir, env=env)
     plugin_manifest_rows = connector_plugin_manifest_statuses(plugin_dirs)
     invalid_plugin_rows = [
@@ -1770,13 +1776,13 @@ def _connector_catalog_check(
         )
     statuses = connector_statuses(
         env=env,
-        which=which,
+        which=connector_which,
         include_paid=False,
         plugin_dirs=plugin_dirs,
     )
     paid_statuses = connector_statuses(
         env=env,
-        which=which,
+        which=connector_which,
         include_paid=True,
         plugin_dirs=plugin_dirs,
     )
@@ -2006,6 +2012,7 @@ def _connector_action_plan_check(
     which: WhichResolver,
     data_dir: Path | None,
 ) -> DoctorCheck:
+    connector_which = _connector_which_resolver(which, env)
     plugin_dirs = connector_plugin_dirs(data_dir=data_dir, env=env)
     plugin_manifest_rows = connector_plugin_manifest_statuses(plugin_dirs)
     invalid_plugin_rows = [
@@ -2036,13 +2043,13 @@ def _connector_action_plan_check(
 
     statuses = connector_statuses(
         env=env,
-        which=which,
+        which=connector_which,
         include_paid=False,
         plugin_dirs=plugin_dirs,
     )
     paid_statuses = connector_statuses(
         env=env,
-        which=which,
+        which=connector_which,
         include_paid=True,
         plugin_dirs=plugin_dirs,
     )

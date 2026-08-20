@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import ipaddress
 import re
-import shutil
 import sqlite3
 import subprocess
 import tempfile
@@ -13,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, urlunparse
 
+from forge.connectors.binaries import resolve_connector_binary
 from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope, scope_entries_from_payload
 from forge.secrets.importers import SecretScanImportConfig, import_secret_scan_report
 from forge.standards.vulnerabilities import vulnerability_standards_metadata
@@ -84,27 +84,27 @@ def run_connector(
         return _run_projectdiscovery_httpx(
             con,
             config,
-            which=which or shutil.which,
+            which=which or resolve_connector_binary,
             process_runner=process_runner or _default_process_runner,
         )
     if connector_id == "projectdiscovery_katana":
         return _run_projectdiscovery_katana(
             con,
             config,
-            which=which or shutil.which,
+            which=which or resolve_connector_binary,
             process_runner=process_runner or _default_process_runner,
         )
     if connector_id == "projectdiscovery_nuclei":
         return _run_projectdiscovery_nuclei(
             con,
             config,
-            which=which or shutil.which,
+            which=which or resolve_connector_binary,
             process_runner=process_runner or _default_process_runner,
         )
     return _run_projectdiscovery_subfinder(
         con,
         config,
-        which=which or shutil.which,
+        which=which or resolve_connector_binary,
         process_runner=process_runner or _default_process_runner,
     )
 
@@ -128,7 +128,7 @@ def run_secret_scan_connector(
     domain = str(config.domain or "").strip().lower().strip(".")
     _assert_scoped(domain, _scope_for_engagement(con, int(config.engagement_id)))
     timeout = max(1.0, min(float(config.timeout_seconds or 300.0), 1800.0))
-    resolver = which or shutil.which
+    resolver = which or resolve_connector_binary
     runner = process_runner or _default_process_runner
     binary_name = "gitleaks" if connector_id == "gitleaks_local" else "trufflehog"
     binary = resolver(binary_name)

@@ -176,9 +176,13 @@ Progress:
 - Doctor's Monitoring Schedules due-policy warning now points first to `forge monitoring due-plan --json` and includes a `review_due_monitoring` action item.
 - Verified B564 with focused monitoring/doctor/CLI-registry tests, broader monitoring/doctor/CLI-registry tests (`97 passed`), Ruff, py_compile, `git diff --check`, a local `monitoring due-plan --limit 5 --json` smoke, and a doctor smoke confirming the Monitoring Schedules remediation points to `due-plan` first.
 - Pushed B564 as `3bc0c34 feat: add monitoring due plan`.
+- Added a shared connector binary resolver and wired it into connector readiness, runtime execution, install-plan, and doctor Connector Catalog/Action Plan checks so full/default free-local connector availability is evaluated consistently outside raw PATH.
+- Bootstrap full mode now best-effort installs bounded free/local connector tools (`detect-secrets`, `gitleaks`, `katana`, `nuclei`, `subfinder`) with per-tool timeouts and skip/timeout env controls; TruffleHog remains manual install-plan guidance because the current upstream Go module is not `go install` friendly.
+- Locally installed/detected `detect-secrets`, `gitleaks`, `katana`, `nuclei`, and `subfinder`; `forge connectors install-plan --json` and `forge doctor --json` now agree that only connector binary `trufflehog` is missing.
+- Verified B565 with focused connector/bootstrap/doctor tests (`93 passed`), Ruff, py_compile, `git diff --check`, local install-plan/doctor smokes, scheduled-task status, and an orphan installer process check.
 
 Next steps:
-- Continue old product hardening from the next concrete quality-audit/doctor failure class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog, and Connector Action Plan, plus Monitoring Schedules due work that should now be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply.
+- Continue old product hardening from the next concrete quality-audit/doctor failure class after B565 is committed and pushed. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, Connector Secret Store in shells that have not loaded the user-level key, and Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

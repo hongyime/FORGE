@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import sqlite3
 from types import SimpleNamespace
 
@@ -214,6 +216,27 @@ def test_collect_doctor_checks_warns_when_free_first_connectors_are_not_executab
     assert "gitleaks_local" in row.details
     assert "forge connectors list --json" in row.remediation
     assert "forge connectors install-plan --json" in row.remediation
+
+
+def test_collect_doctor_checks_uses_connector_binary_search_paths(tmp_path) -> None:
+    tool_dir = tmp_path / "tools"
+    tool_dir.mkdir()
+    subfinder = tool_dir / ("subfinder.exe" if os.name == "nt" else "subfinder")
+    subfinder.write_text("", encoding="utf-8")
+
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        env={"PATH": "", "FORGE_CONNECTOR_BIN_DIRS": str(tool_dir)},
+        which=shutil.which,
+        provider_discovery=_provider_discovery,
+    )
+
+    rows = _rows(checks)
+    assert "projectdiscovery_subfinder" not in rows["Connector Catalog"].details
+    missing_fragment = rows["Connector Action Plan"].details.split("missing binaries:", 1)[1].split(
+        ";", 1
+    )[0]
+    assert "subfinder" not in missing_fragment
 
 
 def test_collect_doctor_checks_reports_active_validation_plugin_manifests(

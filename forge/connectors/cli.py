@@ -138,8 +138,8 @@ def register_connector_commands(app: typer.Typer) -> None:
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
         """Print missing local binary install guidance without executing commands."""
-        rows = connector_statuses(include_paid=include_paid)
-        plan = connector_install_plan(rows)
+        rows = connector_statuses(include_paid=include_paid, env=os.environ)
+        plan = connector_install_plan(rows, env=os.environ)
         if json_output:
             typer.echo(json.dumps(plan, sort_keys=True))
             return

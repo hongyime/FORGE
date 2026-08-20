@@ -85,9 +85,16 @@ cd forge-toolkit
 
 Bootstrap creates `.venv` for FORGE runtime deps, installs external OSINT CLIs
 into per-tool venvs under local FORGE state, installs `phonenumbers` in the
-runtime, and detects installed LLM CLIs (Kiro / Claude / Codex / Gemini) for
-the Phase 6 report. Per-tool OSINT venvs prevent GHunt, Maigret, and
-theHarvester dependency pins from colliding with the main runtime.
+runtime, best-effort installs free/local connector CLIs for full mode
+(`subfinder`, `katana`, `nuclei`, `gitleaks`, and `detect-secrets`), reports
+manual TruffleHog setup guidance through the connector install plan, and detects
+installed LLM CLIs (Kiro / Claude / Codex / Gemini) for the Phase 6 report.
+Per-tool OSINT venvs prevent GHunt, Maigret, and theHarvester dependency pins
+from colliding with the main runtime.
+Connector binary resolution checks PATH plus `FORGE_CONNECTOR_BIN_DIR(S)`, the
+FORGE venv Scripts/bin directory, `%LOCALAPPDATA%\FORGE\tools\bin`, and
+`~/go/bin`; `forge connectors install-plan --json` prints the exact current
+search paths and any remaining missing tools.
 
 Local workspace verification:
 

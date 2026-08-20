@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -9,6 +10,7 @@ import typer
 from typer.testing import CliRunner
 
 from forge.connectors.cli import register_connector_commands
+from forge.connectors.binaries import resolve_connector_binary
 from forge.connectors.registry import (
     connector_install_plan,
     connector_plugin_manifest_statuses,
@@ -166,6 +168,31 @@ def test_connector_registry_can_filter_optional_paid_connectors() -> None:
     assert statuses
     assert all(row["cost_profile"] != "optional_paid" for row in statuses)
     assert any(row["cost_profile"] == "free_local" for row in statuses)
+
+
+def test_connector_registry_default_resolver_checks_configured_tool_dirs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    tool_dir = tmp_path / "tools"
+    tool_dir.mkdir()
+    suffix = ".exe" if os.name == "nt" else ""
+    binary = tool_dir / f"subfinder{suffix}"
+    binary.write_text("", encoding="utf-8")
+    if os.name != "nt":
+        binary.chmod(0o755)
+    monkeypatch.setenv("PATH", "")
+
+    injected_env = {"PATH": "", "FORGE_CONNECTOR_BIN_DIRS": str(tool_dir)}
+    statuses = connector_statuses(env=injected_env)
+    row = {item["id"]: item for item in statuses}["projectdiscovery_subfinder"]
+
+    resolved = resolve_connector_binary("subfinder", env=injected_env)
+    assert os.path.normcase(str(Path(resolved or "").resolve())) == os.path.normcase(
+        str(binary.resolve())
+    )
+    assert row["readiness"] == "available"
+    assert row["missing_binaries"] == []
 
 
 def test_connector_registry_validates_domain_filters() -> None:
@@ -385,17 +412,25 @@ def test_connector_cli_outputs_json_and_domain_filter() -> None:
 
 def test_connector_install_plan_reports_missing_binaries_without_execution() -> None:
     statuses = connector_statuses(
-        which=lambda name: None if name in {"subfinder", "trufflehog"} else f"/bin/{name}"
+        which=lambda name: None
+        if name in {"gitleaks", "subfinder", "trufflehog"}
+        else f"/bin/{name}"
     )
 
-    plan = connector_install_plan(statuses)
+    tool_dir = str(Path("/tmp/forge-connectors"))
+    plan = connector_install_plan(statuses, env={"FORGE_CONNECTOR_BIN_DIRS": tool_dir})
 
     assert plan["schema_version"] == "forge.connector_install_plan.v1"
     assert plan["execution_policy"] == "plan_only_no_commands_executed"
+    assert isinstance(plan["binary_search_paths"], list)
+    assert tool_dir in plan["binary_search_paths"]
     by_binary = {item["binary"]: item for item in plan["items"]}
     assert {"subfinder", "trufflehog"} <= set(by_binary)
     assert by_binary["subfinder"]["command"].startswith("go install ")
     assert "projectdiscovery_subfinder" in by_binary["subfinder"]["connector_ids"]
+    assert "github.com/zricethezav/gitleaks/v8" in by_binary["gitleaks"]["command"]
+    assert by_binary["trufflehog"]["installer"] == "manual"
+    assert "release binary" in by_binary["trufflehog"]["command"]
     assert "trufflehog_local" in by_binary["trufflehog"]["connector_ids"]
 
 
@@ -1833,6 +1868,45 @@ def test_projectdiscovery_nuclei_fails_closed_without_pinned_templates(
     assert result["status"] == "failed"
     assert result["reason"] == "missing_templates"
     assert result["template_count"] == 0
+
+
+def test_connector_runner_default_resolver_checks_configured_tool_dirs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    con = _build_connector_db(tmp_path / "engagement.db")
+    tool_dir = tmp_path / "tools"
+    tool_dir.mkdir()
+    suffix = ".exe" if os.name == "nt" else ""
+    binary = tool_dir / f"subfinder{suffix}"
+    binary.write_text("", encoding="utf-8")
+    if os.name != "nt":
+        binary.chmod(0o755)
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setenv("FORGE_CONNECTOR_BIN_DIRS", str(tool_dir))
+    calls: list[list[str]] = []
+
+    def fake_process(args, _timeout):
+        calls.append(list(args))
+        return subprocess.CompletedProcess(list(args), 0, '{"host":"www.acme.example"}\n', "")
+
+    try:
+        result = run_connector(
+            con,
+            ConnectorRunConfig(
+                connector_id="projectdiscovery_subfinder",
+                engagement_id=1001,
+                target="acme.example",
+            ),
+            process_runner=fake_process,
+        )
+    finally:
+        con.close()
+
+    assert result["status"] == "completed"
+    assert os.path.normcase(str(Path(calls[0][0]).resolve())) == os.path.normcase(
+        str(binary.resolve())
+    )
 
 
 def test_gitleaks_local_runner_executes_and_imports_redacted_lifecycle(

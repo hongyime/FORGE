@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from forge.connectors.binaries import connector_binary_search_paths, resolve_connector_binary
 
 WhichResolver = Callable[[str], str | None]
 
@@ -53,9 +54,9 @@ _LOCAL_BINARY_INSTALL_GUIDANCE: dict[str, dict[str, str]] = {
         "notes": "Python local secret-baseline scanner.",
     },
     "gitleaks": {
-        "installer": "winget",
-        "command": "winget install --id Gitleaks.Gitleaks",
-        "notes": "Local secret scanner; alternatively install from the vendor release archive.",
+        "installer": "go",
+        "command": "go install github.com/zricethezav/gitleaks/v8@latest",
+        "notes": "Local secret scanner; alternatively install with winget id Gitleaks.Gitleaks.",
     },
     "katana": {
         "installer": "go",
@@ -73,9 +74,9 @@ _LOCAL_BINARY_INSTALL_GUIDANCE: dict[str, dict[str, str]] = {
         "notes": "ProjectDiscovery passive subdomain discovery.",
     },
     "trufflehog": {
-        "installer": "go",
-        "command": "go install github.com/trufflesecurity/trufflehog/v3@latest",
-        "notes": "Local secret scanner; use redacted output for reports.",
+        "installer": "manual",
+        "command": "download a TruffleHog release binary and place it on PATH or FORGE_CONNECTOR_BIN_DIRS",
+        "notes": "Local secret scanner; current upstream Go module is not installable with go install.",
     },
 }
 
@@ -674,7 +675,7 @@ def connector_plugin_manifest_statuses(
 def connector_statuses(
     *,
     env: Mapping[str, str] | None = None,
-    which: WhichResolver = shutil.which,
+    which: WhichResolver | None = None,
     domain: str = "",
     include_paid: bool = False,
     stored_secrets: Mapping[str, Collection[str]] | None = None,
@@ -682,6 +683,7 @@ def connector_statuses(
     plugin_dirs: Sequence[str | Path] = (),
 ) -> list[dict[str, Any]]:
     environ = env if env is not None else os.environ
+    resolver = which or (lambda name: resolve_connector_binary(name, env=environ))
     secret_map = stored_secrets or {}
     secret_status_map = stored_secret_statuses or {}
     domain_filter = normalize_connector_domain(domain, plugin_dirs=plugin_dirs)
@@ -694,7 +696,7 @@ def connector_statuses(
         rows.append(
             connector.to_dict(
                 env=environ,
-                which=which,
+                which=resolver,
                 stored_secret_names=(
                     set(secret_map.get(connector.id, ()))
                     | set(secret_status_map.get(connector.id, {}))
@@ -756,9 +758,14 @@ def connector_summary(statuses: list[dict[str, Any]] | None = None) -> dict[str,
     }
 
 
-def connector_install_plan(statuses: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def connector_install_plan(
+    statuses: list[dict[str, Any]] | None = None,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     """Return a read-only local binary install plan; commands are not executed."""
-    rows = statuses if statuses is not None else connector_statuses()
+    environ = env if env is not None else os.environ
+    rows = statuses if statuses is not None else connector_statuses(env=environ)
     by_binary: dict[str, set[str]] = {}
     for row in rows:
         for binary in row.get("missing_binaries", []):
@@ -786,6 +793,7 @@ def connector_install_plan(statuses: list[dict[str, Any]] | None = None) -> dict
         "schema_version": "forge.connector_install_plan.v1",
         "execution_policy": "plan_only_no_commands_executed",
         "missing_binary_count": len(items),
+        "binary_search_paths": connector_binary_search_paths(env=environ),
         "items": items,
     }
 

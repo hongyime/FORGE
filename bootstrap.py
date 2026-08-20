@@ -3,10 +3,13 @@ from __future__ import annotations
 import argparse
 import os
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from forge.connectors.binaries import connector_binary_search_paths
 
 # ---------------------------------------------------------------------------
 # Graceful Ctrl+C — first press requests stop, second forces exit
@@ -84,6 +87,18 @@ OSINT_TOOL_PACKAGE_GROUPS = {
     "holehe": ["holehe"],              # Module 2-L account-existence per email
     "ghunt": ["ghunt"],                # Module 2-G Google account enrichment
 }
+
+CONNECTOR_PYTHON_TOOL_PACKAGES = {
+    "detect-secrets": ["detect-secrets"],
+}
+
+CONNECTOR_GO_TOOLS = {
+    "gitleaks": "github.com/zricethezav/gitleaks/v8@latest",
+    "katana": "github.com/projectdiscovery/katana/cmd/katana@latest",
+    "nuclei": "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
+    "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+}
+CONNECTOR_TOOL_INSTALL_TIMEOUT_SECONDS = 600
 
 # Optional external Go binary installed to venv Scripts dir. Enables the
 # Google-dork half of Module 2-M (phone OSINT). No API key required.
@@ -364,6 +379,9 @@ def setup_environment(root: Path, venv_dir: Path, dev: bool, check_only: bool) -
         if impacket.returncode != 0:
             print("[FORGE Setup] Warning: impacket install failed. Other phases remain usable.")
 
+    if not safe_mode:
+        install_connector_tools(root=root, vpy=vpy)
+
     # -----------------------------------------------------------------
     # OSINT external CLIs (2-E theHarvester, 2-H Sherlock/Maigret,
     # 2-L Holehe, GHunt). Keep these out of the FORGE runtime venv unless
@@ -549,6 +567,131 @@ def setup_environment(root: Path, venv_dir: Path, dev: bool, check_only: bool) -
 
     print("[FORGE Setup] Setup complete.")
     return 0
+
+
+def install_connector_tools(root: Path, vpy: Path) -> None:
+    """Best-effort install of free/local connector CLIs for full setup mode."""
+
+    if os.environ.get("FORGE_SKIP_CONNECTOR_TOOL_INSTALL", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }:
+        print("[FORGE Setup] Skipping connector tool install by FORGE_SKIP_CONNECTOR_TOOL_INSTALL.")
+        return
+
+    print("[FORGE Setup] Ensuring free/local connector tools...")
+    timeout_seconds = connector_tool_install_timeout_seconds()
+    for binary, packages in CONNECTOR_PYTHON_TOOL_PACKAGES.items():
+        if resolve_setup_binary(binary, root=root, vpy=vpy):
+            print(f"[FORGE Setup] {binary} already available.")
+            continue
+        try:
+            run = subprocess.run(
+                [str(vpy), "-m", "pip", "install", "--upgrade", *packages],
+                cwd=str(root),
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            print(
+                f"[FORGE Setup] Warning: {binary} install exceeded "
+                f"{timeout_seconds}s and was stopped."
+            )
+            continue
+        if run.returncode != 0:
+            print(
+                f"[FORGE Setup] Warning: {binary} install failed. "
+                "`forge connectors install-plan --json` will show manual guidance."
+            )
+        elif resolve_setup_binary(binary, root=root, vpy=vpy):
+            print(f"[FORGE Setup] {binary} installed.")
+        else:
+            print(
+                f"[FORGE Setup] Warning: {binary} installed but was not found in "
+                "FORGE connector search paths."
+            )
+
+    go_exe = shutil.which("go")
+    if not go_exe:
+        missing = ", ".join(
+            binary
+            for binary in CONNECTOR_GO_TOOLS
+            if not resolve_setup_binary(binary, root=root, vpy=vpy)
+        )
+        if missing:
+            print(
+                "[FORGE Setup] Warning: Go is not on PATH; cannot install connector "
+                f"Go tools now: {missing}."
+            )
+        return
+
+    for binary, package in CONNECTOR_GO_TOOLS.items():
+        if resolve_setup_binary(binary, root=root, vpy=vpy):
+            print(f"[FORGE Setup] {binary} already available.")
+            continue
+        try:
+            run = subprocess.run(
+                [go_exe, "install", package],
+                cwd=str(root),
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            print(
+                f"[FORGE Setup] Warning: {binary} go install exceeded "
+                f"{timeout_seconds}s and was stopped."
+            )
+            continue
+        if run.returncode != 0:
+            print(
+                f"[FORGE Setup] Warning: {binary} go install failed. "
+                "`forge connectors install-plan --json` will show manual guidance."
+            )
+        elif resolve_setup_binary(binary, root=root, vpy=vpy):
+            print(f"[FORGE Setup] {binary} installed.")
+        else:
+            print(
+                f"[FORGE Setup] Warning: {binary} installed but was not found in "
+                "FORGE connector search paths."
+            )
+
+
+def setup_binary_search_paths(root: Path, vpy: Path) -> list[str]:
+    scripts_dir = vpy.parent
+    scripts = "Scripts" if os.name == "nt" else "bin"
+    paths = [
+        str(scripts_dir),
+        str(root / ".venv" / scripts),
+        str(root / ".venv-osint" / "connectors" / scripts),
+        *connector_binary_search_paths(),
+    ]
+    seen: set[str] = set()
+    unique: list[str] = []
+    for path in paths:
+        key = path.lower() if os.name == "nt" else path
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(path)
+    return unique
+
+
+def connector_tool_install_timeout_seconds() -> int:
+    raw = os.environ.get("FORGE_CONNECTOR_TOOL_INSTALL_TIMEOUT_SECONDS", "").strip()
+    if not raw:
+        return CONNECTOR_TOOL_INSTALL_TIMEOUT_SECONDS
+    try:
+        parsed = int(raw)
+    except ValueError:
+        return CONNECTOR_TOOL_INSTALL_TIMEOUT_SECONDS
+    return max(30, min(parsed, 1800))
+
+
+def resolve_setup_binary(binary: str, *, root: Path, vpy: Path) -> str | None:
+    found = shutil.which(binary)
+    if found:
+        return found
+    extra = os.pathsep.join(setup_binary_search_paths(root, vpy))
+    return shutil.which(binary, path=extra) if extra else None
 
 
 def verify_install(root: Path, venv_dir: Path) -> bool:
