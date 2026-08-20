@@ -685,7 +685,8 @@ def test_run_stale_report_repair_plan_dry_run_is_bounded(
     assert payload["execution_policy"] == "dry_run_no_commands_executed"
     assert payload["selected_count"] == 1
     assert payload["attempted_count"] == 0
-    assert payload["skipped_count"] == 1
+    assert payload["dry_run_count"] == 1
+    assert payload["skipped_count"] == 0
     assert payload["items"][0]["status"] == "dry_run"
     assert payload["items"][0]["command"] == [
         "forge",
@@ -731,6 +732,7 @@ def test_run_stale_report_repair_plan_executes_with_injected_generator(
 
     assert payload["execution_policy"] == "bounded_sequential_report_generation"
     assert payload["attempted_count"] == 1
+    assert payload["dry_run_count"] == 0
     assert payload["succeeded_count"] == 1
     assert payload["failed_count"] == 0
     assert payload["dashboard_refresh_required"] is True

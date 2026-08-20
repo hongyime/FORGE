@@ -271,6 +271,7 @@ def run_stale_report_repair_plan(
     succeeded_count = 0
     failed_count = 0
     skipped_count = 0
+    dry_run_count = 0
     attempted_count = 0
 
     for command in commands[:sample_limit]:
@@ -303,7 +304,7 @@ def run_stale_report_repair_plan(
             output_path=str(Path(reports_dir)),
         )
         if dry_run:
-            skipped_count += 1
+            dry_run_count += 1
             items.append(
                 {
                     "engagement_id": str(engagement_id),
@@ -361,6 +362,7 @@ def run_stale_report_repair_plan(
         "attempted_count": attempted_count,
         "succeeded_count": succeeded_count,
         "failed_count": failed_count,
+        "dry_run_count": dry_run_count,
         "skipped_count": skipped_count,
         "omitted_count": max(0, int(plan.get("total_count", 0) or 0) - len(commands[:sample_limit])),
         "items": items,
