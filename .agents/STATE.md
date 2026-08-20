@@ -104,9 +104,12 @@ Progress:
 - Changed `targets import --start` to use normal scoped kill-chain defaults instead of passing `--no-attack-mode` and `--no-auto-run-detected`; ROE/scope-manifest and start-limit protections remain.
 - Verified B547 with focused target-import/reporting/Windows launcher tests (`46 passed`), Ruff, py_compile, `git diff --check`, suppressor-flag scan, and Playwright static overflow smoke.
 - Pushed B547 as `739df24 fix: harden dashboard and target starts`.
+- Downloaded the expected local fallback model to `C:\Users\bryan\.cache\forge\models\qwen2.5-1.5b-instruct-q4_k_m.gguf` (1,117,320,736 bytes); `llama_cpp` imports and doctor still detects Codex/Claude/Gemini CLI providers.
+- Inspected `ROE-BRYAN-PERMANENT-2026` in local target-import scope manifests: engagement 10441 authorizes only `https://vector.strategy360.live/` / `vector.strategy360.live`, and 824 local target-import manifests reference that ROE id.
+- Confirmed the `FORGE Import theprawnhunter Targets` scheduled task is Disabled and no Python process was listed by `Get-Process python`.
 
 Next steps:
-- Continue old product audit: model fallback/GGUF availability, failed-engagement resume strategy, and scheduled task/process status.
+- Continue old product audit: failed-engagement resume strategy and broader report-quality failure classification.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
