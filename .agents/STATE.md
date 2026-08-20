@@ -227,9 +227,10 @@ Progress:
 - Improved read-only `forge monitoring due-plan` as an operator plan: added schema version, default execution limit, estimated capped invocations, due/last-run time summaries, stale-backlog age, policy composition counts, action-plan command arrays, and `--include-empty-db-results` for verbose per-DB troubleshooting. Empty planned DB rows are omitted by default while stale/error rows remain visible.
 - Doctor Monitoring Schedules now calls due-plan summary-only and includes oldest stale backlog age plus estimated capped run-due batch count in its warning details.
 - Verified B578 with focused monitoring/doctor tests (`4 passed`), a broader monitoring/doctor/CLI registry slice (`27 passed`), Ruff, py_compile, `git diff --check`, and real local read-only due-plan/doctor smokes. Local due-plan reports 101 due seed-exposure policies, oldest backlog about 4.96 days, estimated 3 capped batches, and 5 planned rows for `--limit 5`. No monitoring `run-due`, worker execution, alert delivery, engagement mutation, provider call, live run, scheduled-task change, report regeneration, or credential persistence was started.
+- Pushed B578 as `c9a03ab feat: summarize monitoring due plans`.
 
 Next steps:
-- Commit/push B578, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining queues include optional quality-audit operator action-plan buckets for stale reports/resume/long-runs/policy flags, deliberate report regeneration only by explicit operator action, and historical failed/long run review only if deliberately resumed.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining queues include optional quality-audit operator action-plan buckets for stale reports/resume/long-runs/policy flags, deliberate report regeneration only by explicit operator action, and historical failed/long run review only if deliberately resumed.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
