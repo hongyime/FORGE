@@ -95,9 +95,10 @@ Progress:
 - Pushed B544 as `dd25905 feat: surface resume candidates in dashboard`.
 - Added read-only `forge connectors policy-summary [--json]` so operators can inspect CTI/OSINT provider policy counts and provider IDs without running providers or importing Python.
 - Verified B545 with focused policy-summary CLI tests, connector registry/docs tests, Ruff, py_compile, `git diff --check`, and a JSON smoke reporting 48 providers, 23 offline imports, 25 live/API-style, and 21 operator-opt-in-gated entries.
+- Pushed B545 as `b99bf2d feat: expose cti policy summary`.
 
 Next steps:
-- Commit and push B545.
+- Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
