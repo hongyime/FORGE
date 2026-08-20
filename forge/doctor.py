@@ -301,9 +301,10 @@ def collect_doctor_checks(
         checks.append(_remediation_ticket_events_check(cfg.data_dir))
         checks.append(_remediation_review_queue_check(cfg.data_dir))
 
+    connector_which = _connector_which_resolver(which, environ)
     checks.extend(_binary_checks("Binary", _CORE_BINARIES, which))
-    checks.extend(_binary_checks("ProjectDiscovery", _PROJECT_DISCOVERY_BINARIES, which))
-    checks.extend(_binary_checks("Secrets", _SECRET_BINARIES, _connector_which_resolver(which, environ)))
+    checks.extend(_binary_checks("ProjectDiscovery", _PROJECT_DISCOVERY_BINARIES, connector_which))
+    checks.extend(_binary_checks("Secrets", _SECRET_BINARIES, connector_which))
     checks.extend(_binary_checks("LLM CLI", _LLM_BINARIES, which))
     checks.append(_connector_catalog_check(environ, which, cfg.data_dir if cfg is not None else None))
     checks.append(_cti_osint_policy_check())

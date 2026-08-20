@@ -410,29 +410,36 @@ def test_connector_cli_outputs_json_and_domain_filter() -> None:
     assert "unknown connector domain: not_a_domain" in unknown_result.output
 
 
-def test_connector_install_plan_reports_missing_binaries_without_execution() -> None:
-    statuses = connector_statuses(
-        which=lambda name: None
-        if name in {"gitleaks", "subfinder", "trufflehog"}
-        else f"/bin/{name}"
-    )
-
-    tool_dir = str(Path("/tmp/forge-connectors"))
-    plan = connector_install_plan(statuses, env={"FORGE_CONNECTOR_BIN_DIRS": tool_dir})
+def test_connector_install_plan_reports_missing_binaries_without_execution(tmp_path: Path) -> None:
+    tool_dir = tmp_path / "tools"
+    tool_dir.mkdir()
+    suffix = ".exe" if os.name == "nt" else ""
+    subfinder = tool_dir / f"subfinder{suffix}"
+    subfinder.write_text("", encoding="utf-8")
+    if os.name != "nt":
+        subfinder.chmod(0o755)
+    statuses = [
+        {
+            "id": "projectdiscovery_subfinder",
+            "missing_binaries": ["subfinder"],
+        },
+        {
+            "id": "synthetic_connector",
+            "missing_binaries": ["forge-test-missing-bin"],
+        },
+    ]
+    plan = connector_install_plan(statuses, env={"FORGE_CONNECTOR_BIN_DIRS": str(tool_dir)})
 
     assert plan["schema_version"] == "forge.connector_install_plan.v1"
     assert plan["execution_policy"] == "plan_only_no_commands_executed"
     assert isinstance(plan["binary_search_paths"], list)
-    assert tool_dir in plan["binary_search_paths"]
+    assert str(tool_dir) in plan["binary_search_paths"]
     by_binary = {item["binary"]: item for item in plan["items"]}
-    assert {"subfinder", "trufflehog"} <= set(by_binary)
-    assert by_binary["subfinder"]["command"].startswith("go install ")
-    assert "projectdiscovery_subfinder" in by_binary["subfinder"]["connector_ids"]
-    assert "github.com/zricethezav/gitleaks/v8" in by_binary["gitleaks"]["command"]
-    assert by_binary["trufflehog"]["installer"] == "release"
-    assert by_binary["trufflehog"]["command"] == "python bootstrap.py setup"
-    assert "checksum-checked" in by_binary["trufflehog"]["notes"]
-    assert "trufflehog_local" in by_binary["trufflehog"]["connector_ids"]
+    assert "subfinder" not in by_binary
+    assert by_binary["forge-test-missing-bin"]["installer"] == "manual"
+    assert by_binary["forge-test-missing-bin"]["command"] == ""
+    assert "OS package manager" in by_binary["forge-test-missing-bin"]["notes"]
+    assert by_binary["forge-test-missing-bin"]["connector_ids"] == ["synthetic_connector"]
 
 
 def test_connector_install_plan_cli_outputs_json_without_running_installers() -> None:

@@ -775,6 +775,8 @@ def connector_install_plan(
             name = str(binary or "").strip()
             if not name:
                 continue
+            if resolve_connector_binary(name, env=environ):
+                continue
             by_binary.setdefault(name, set()).add(str(row.get("id") or "unknown"))
 
     items: list[dict[str, Any]] = []

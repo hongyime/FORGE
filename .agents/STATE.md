@@ -201,9 +201,12 @@ Progress:
 - Classified the intentionally disabled local `FORGE Import theprawnhunter Targets` scheduled task as paused/OFF in `forge doctor` unless `FORGE_TPH_TARGET_IMPORT_ENABLED=1` explicitly says the bridge should be running.
 - Verified B571 with focused doctor tests (`44 passed`), Ruff, py_compile, `git diff --check`, and a real local `.venv\Scripts\forge.exe doctor --json` smoke showing `TPH Target Import Bridge` status `OFF` with `task=disabled`. No scheduled-task enablement, import run, provider call, engagement mutation, monitoring execution, live run, report regeneration, or credential persistence was started.
 - Pushed B571 as `1d03fbf fix: treat disabled tph bridge as paused`.
+- Freed six completed subagent slots that were still counting against the harness limit; no active subagent work was interrupted.
+- Aligned ProjectDiscovery doctor binary rows with connector-aware binary resolution, and filtered `connector_install_plan(statuses=..., env=...)` missing-binary guidance through the env-aware resolver so custom `FORGE_CONNECTOR_BIN_DIR(S)` paths do not produce stale missing prompts.
+- Verified B572 with focused doctor/connector registry tests (`91 passed`), Ruff, py_compile, `git diff --check`, and real local `.venv\Scripts\forge.exe doctor --json` / `connectors install-plan --json` smokes showing ProjectDiscovery, Secrets, Connector Catalog, Connector Action Plan, and missing-binary count healthy. No installer execution, provider call, scheduled-task enablement, monitoring apply, engagement mutation, live run, report regeneration, or credential persistence was started.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
+- Commit/push B572, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

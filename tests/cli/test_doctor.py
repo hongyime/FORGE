@@ -234,6 +234,10 @@ def test_collect_doctor_checks_uses_connector_binary_search_paths(tmp_path) -> N
     )
 
     rows = _rows(checks)
+    assert rows["ProjectDiscovery: subfinder"].status == "OK"
+    assert os.path.normcase(str(subfinder)) in os.path.normcase(
+        rows["ProjectDiscovery: subfinder"].details
+    )
     assert rows["Secrets: detect-secrets"].status == "OK"
     assert os.path.normcase(str(detect_secrets)) in os.path.normcase(
         rows["Secrets: detect-secrets"].details
