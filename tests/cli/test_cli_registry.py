@@ -112,7 +112,7 @@ def test_cli_registry_registers_modular_command_groups() -> None:
     assert {"list", "upsert", "members", "member-set", "member-delete"}.issubset(
         _command_names(apps.workspaces_app)
     )
-    assert {"import"}.issubset(_command_names(apps.targets_app))
+    assert {"import", "resume-candidates"}.issubset(_command_names(apps.targets_app))
 
 
 def test_root_operator_commands_register_outside_cli_entrypoint() -> None:

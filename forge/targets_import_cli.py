@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -7,6 +8,10 @@ import typer
 from rich.console import Console
 
 from forge.targets_import import import_targets
+from forge.targets_resume_candidates import (
+    DEFAULT_RESUME_CANDIDATE_LIMIT,
+    collect_target_resume_candidates,
+)
 
 console = Console(stderr=True)
 
@@ -93,3 +98,35 @@ def register_target_import_commands(app: typer.Typer) -> None:
                 f"target={result.target_type}:{result.target_value} "
                 f"manifest={result.scope_manifest}"
             )
+
+    @app.command("resume-candidates")
+    def targets_resume_candidates(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help="FORGE data directory to scan. Defaults to the configured data dir.",
+        ),
+        limit: Optional[int] = typer.Option(
+            DEFAULT_RESUME_CANDIDATE_LIMIT,
+            "--limit",
+            help="Maximum candidate rows to return. Use 0 for none.",
+        ),
+        reason: Optional[str] = typer.Option(
+            None,
+            "--reason",
+            help="Only return a specific reason such as pending_recursive_work or watchdog_timeout.",
+        ),
+        include_completed: bool = typer.Option(
+            False,
+            "--include-completed",
+            help="Include completed latest runs only when classification is non-standard.",
+        ),
+    ) -> None:
+        """Report failed/cancelled latest-run candidates without starting work."""
+        payload = collect_target_resume_candidates(
+            data_dir=data_dir,
+            limit=limit,
+            reason=reason,
+            include_completed=include_completed,
+        )
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))

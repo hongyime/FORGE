@@ -87,9 +87,11 @@ Progress:
 - Broader B542 checks passed for targeted Phase 6 auto-provider fallbacks, CLI README docs, platform config defaults, report finalization provider plumbing, Ruff, py_compile, and `git diff --check`; the full combined pytest command exceeded 5 minutes and its orphaned pytest process was stopped.
 - Read-only latest-run resume audit found 49 failed/cancelled candidates: pending_recursive_work=31, watchdog_timeout=7, abandoned=6, stale_run_recovery=5. No resume/live action was started.
 - Pushed B542 as `c8bbb9d fix: default reports to auto provider`.
+- Added read-only `forge targets resume-candidates` JSON output for repeatable latest-run candidate review without engagement mutation or live resume.
+- Verified B543 with target resume/import tests, CLI registry/docs tests, Ruff, py_compile, `git diff --check`, and a local `.forge_data` read-only scan matching 49 candidates.
 
 Next steps:
-- Before any live resume, fix or explicitly accept the remaining pending-recursive-work/watchdog/abandoned/stale-run candidate groups.
+- Commit and push B543.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
 
 <!-- MOLT_AUTO_START -->

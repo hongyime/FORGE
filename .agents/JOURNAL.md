@@ -29,4 +29,5 @@
 - 2026-08-20: Treated `ukr.pw` as unsafe public sysadmin snippet text and mapped it into default-visible catalog-only workflow ideas with redaction and no-execution metadata.
 - 2026-08-20: Bounded dashboard seed/scope chip rendering and added wrapping/scroll containers so bulk-imported engagements remain reviewable in generated reports.
 - 2026-08-20: Switched Phase 6 report generation defaults from local-only `llama_cpp` to `auto` so configured CLI/API providers are tried before local GGUF and template fallback.
+- 2026-08-20: Added read-only target resume-candidate reporting as JSON; candidate review remains separate from any live resume or kill-chain launch.
 - 2026-08-20 15:31:25 +08:00 [PRAWN-E14/claude/session-start] branch=main head=0e89ae7 dirty=8

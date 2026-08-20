@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 from forge.db.session import get_engagement_db
 from forge.targets_import_cli import register_target_import_commands
 from forge.targets_import import import_targets, load_target_feed
+from forge.targets_resume_candidates import collect_target_resume_candidates
 
 
 class _FakeConfig:
@@ -108,6 +109,51 @@ def _write_unpack_error_feed(path: Path) -> None:
         ),
         encoding="utf-8",
     )
+
+
+def _write_candidate_run(
+    db_path: Path,
+    *,
+    engagement_id: int,
+    status: str,
+    error: str = "",
+    metadata: dict[str, object] | None = None,
+    seed_value: str = "example.com",
+    updated_at: str = "2026-08-08T00:00:00Z",
+) -> None:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = get_engagement_db(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator, metadata_json)
+            VALUES (?, ?, '{}', 'ACTIVE', 'tester', '{}')
+            """,
+            (engagement_id, f"engagement {engagement_id}"),
+        )
+        conn.execute(
+            """
+            INSERT INTO engagement_runs (
+                engagement_id, run_kind, status, seed_value, seed_type,
+                max_iterations, current_iteration, resume_enabled, dry_run,
+                attack_mode, error, metadata_json, started_at, completed_at, updated_at
+            )
+            VALUES (?, 'kill_chain', ?, ?, 'domain', 3, 3, 1, 0, 0, ?, ?, ?, ?, ?)
+            """,
+            (
+                engagement_id,
+                status,
+                seed_value,
+                error,
+                json.dumps(metadata or {}),
+                "2026-08-08T00:00:00Z",
+                "2026-08-08T00:30:00Z",
+                updated_at,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def test_import_feed_file_creates_deduped_engagements_and_manifests(tmp_path: Path) -> None:
@@ -371,6 +417,82 @@ def test_reimport_reuses_existing_engagement_ids(tmp_path: Path) -> None:
         conn.close()
     assert policy_rows == [("2026-08-08T00:00:00Z",)]
     assert snapshot_count == 1
+
+
+def test_resume_candidates_reports_latest_failed_runs_without_sensitive_metadata(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = data_dir / "target_imports" / "scope_1_demo.json"
+    scope_path.parent.mkdir(parents=True, exist_ok=True)
+    scope_path.write_text("{}", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 12",
+        metadata={
+            "roe_id": "ROE-ACME-2026",
+            "scope_manifest": str(scope_path),
+            "pending_counts": {"artifact_queue": 7, "cloud_assets": 5},
+            "api_token": "must-not-appear",
+        },
+    )
+    _write_candidate_run(
+        data_dir / "engagements" / "2.db",
+        engagement_id=2,
+        status="cancelled",
+        error="watchdog timeout after 45 minutes",
+        metadata={"password": "must-not-appear"},
+    )
+    _write_candidate_run(
+        data_dir / "engagements" / "3.db",
+        engagement_id=3,
+        status="completed",
+        error="",
+        metadata={},
+    )
+
+    payload = collect_target_resume_candidates(data_dir=data_dir)
+
+    assert payload["schema_version"] == "forge.targets.resume_candidates.v1"
+    assert payload["candidate_count"] == 2
+    assert payload["reason_counts"] == {
+        "pending_recursive_work": 1,
+        "watchdog_timeout": 1,
+    }
+    first = payload["items"][0]
+    assert first["engagement_id"] == 1
+    assert first["scope_manifest_exists"] is True
+    assert first["pending_work_total"] == 12
+    serialized = json.dumps(payload)
+    assert "must-not-appear" not in serialized
+
+
+def test_resume_candidates_reason_filter_and_limit(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="abandoned before explicit completion",
+    )
+    _write_candidate_run(
+        data_dir / "engagements" / "2.db",
+        engagement_id=2,
+        status="failed",
+        error="stale-run recovery marked this run failed",
+    )
+
+    payload = collect_target_resume_candidates(
+        data_dir=data_dir,
+        reason="stale_run_recovery",
+        limit=1,
+    )
+
+    assert payload["candidate_count"] == 1
+    assert payload["items"][0]["engagement_id"] == 2
+    assert payload["items"][0]["reason"] == "stale_run_recovery"
 
 
 def test_start_launches_passive_kill_chain_with_scope_and_roe(
@@ -818,3 +940,33 @@ def test_targets_import_cli_dry_run_skips_item_level_unpack_value_error(
     assert "DRY RUN" in result.output
     assert "1 target(s) parsed and deduped" in result.output
     assert "not enough values to unpack" not in result.output
+
+
+def test_targets_resume_candidates_cli_outputs_json(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+    )
+
+    app = typer.Typer()
+    targets_app = typer.Typer()
+    register_target_import_commands(targets_app)
+    app.add_typer(targets_app, name="targets")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "targets",
+            "resume-candidates",
+            "--data-dir",
+            str(data_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["candidate_count"] == 1
+    assert payload["items"][0]["reason"] == "pending_recursive_work"

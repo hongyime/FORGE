@@ -239,6 +239,7 @@ forge audit manifest-verify --engagement N
 forge audit manifest-export --engagement N [--sign] [--remote-store]
 forge audit manifest-bundle-verify --bundle PATH
 forge targets import --feed-url URL|--feed-file PATH
+forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH]
 forge monitoring status|run-due|deliver-alerts|worker
 forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-retest|apply-retest-run|handoff-plan|integration-runbook|import-ticket-statuses|sync-tickets
 forge active-validation preview|create|approve|run|list|methods|coverage
@@ -275,6 +276,12 @@ plain web URLs. Each imported engagement is also enrolled into the default
 `Target import seed exposure` passive monitoring policy with a baseline snapshot
 so scheduled monitoring can diff future exposure state without a separate setup
 step.
+
+`forge targets resume-candidates` is read-only. It scans the latest
+`kill_chain` row in each local engagement DB, classifies failed or cancelled
+runs such as `pending_recursive_work`, `watchdog_timeout`, `abandoned`, and
+`stale_run_recovery`, and emits JSON for operator review without resuming,
+starting, or mutating any engagement.
 
 `forge connectors import-cti` is offline-only. It accepts FORGE's neutral
 observation JSON plus common downloaded/exported JSON or CSV shapes from
