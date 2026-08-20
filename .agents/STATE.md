@@ -3,6 +3,7 @@
 Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
 
 Progress:
+- Pushed B636 as `0c97c59 fix: collapse empty dashboard sections`: dashboard evidence sections now render populated tables first and group no-row sections into one collapsible empty-section summary. Focused page-composition/dashboard/style tests, Ruff, py_compile, git diff check, and a direct render smoke passed.
 - Pushed B635 as `6623e73 fix: tighten dashboard report rendering`: static and React dashboards now handle long seed/scope lists, mobile table labels, bounded report previews, shortened GGUF/malformed CLI diagnostics, and latest-run policy source labels. Focused reporting/dashboard tests, Ruff, py_compile, git diff check, Vite build, and a renderer smoke passed.
 - Pushed B634 as `9697ce3 fix: mark asset ownership writes`: asset graph ownership set/resolve JSON now exposes explicit local write policies and total/selected/omitted claim counts. Focused ownership CLI test, Ruff, py_compile, git diff check, and a temp CLI smoke passed.
 - Pushed B633 as `1a6e55c fix: mark asset attribution imports`: asset graph attribution import JSON now exposes explicit local write policy and processed/imported/error total/selected/omitted counts. Focused direct/CLI attribution tests, Ruff, py_compile, git diff check, and a temp direct smoke passed.
