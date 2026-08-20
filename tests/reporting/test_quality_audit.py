@@ -290,6 +290,16 @@ def test_collect_report_quality_audit_marks_stale_gguf_fallbacks_when_model_exis
     assert action_by_id["regenerate_stale_reports"]["execution_policy"] == (
         "plan_only_no_commands_executed"
     )
+    assert action_by_id["regenerate_stale_reports"]["batch_run_command"] == [
+        "forge",
+        "report",
+        "stale-run",
+        "--limit",
+        "1",
+        "--provider",
+        "auto",
+        "--json",
+    ]
 
 
 def test_collect_report_quality_audit_shows_omitted_stale_report_commands(
@@ -346,7 +356,8 @@ def test_collect_report_quality_audit_shows_omitted_stale_report_commands(
     assert action["omitted_count"] == 1
     assert len(action["commands"]) == 2
     assert action["follow_up_commands"] == [
-        ["forge", "report", "stale-plan", "--json", "--limit", "3"]
+        ["forge", "report", "stale-plan", "--json", "--limit", "3"],
+        ["forge", "report", "stale-run", "--dry-run", "--json", "--limit", "3"],
     ]
 
 
@@ -507,6 +518,10 @@ def test_report_quality_audit_cli_prints_follow_up_commands(
 
     assert result.exit_code == 0, result.output
     assert "follow_up=forge report stale-plan --json --limit 2" in result.output
+    assert (
+        "follow_up=forge report stale-run --dry-run --json --limit 2"
+        in result.output
+    )
 
 
 def test_report_stale_plan_cli_outputs_json(tmp_path: Path, monkeypatch) -> None:

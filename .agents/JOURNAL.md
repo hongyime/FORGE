@@ -79,3 +79,4 @@
 - 2026-08-20: Expanded connector run-plan templates for non-generic operator paths so plan-only guidance includes required placeholders.
 - 2026-08-21: Corrected connector operator guidance so artifact passive parsers use a valid dry-run kill-chain template and doctor points to run-plan first.
 - 2026-08-21: Added bounded sequential `forge report stale-run` so stale latest reports can be regenerated from the stale-plan backlog without manual command copying.
+- 2026-08-21: Surfaced `forge report stale-run --dry-run` from quality-audit stale-report actions so the new bounded runner is discoverable.

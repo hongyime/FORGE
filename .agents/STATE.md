@@ -273,9 +273,11 @@ Progress:
 - Added bounded sequential `forge report stale-run [--limit N] [--provider NAME] [--max-loops N] [--dry-run] [--json]`, backed by `run_stale_report_repair_plan()`, so stale latest reports can be regenerated from the existing stale-plan backlog without copying many commands by hand.
 - Verified B591 with focused reporting/CLI registry tests (`5 passed`), Ruff, py_compile, `git diff --check`, stale-run help smoke, and a real local `stale-run --dry-run --limit 3 --provider template --max-loops 0 --json` smoke. The dry-run selected 3 of 57 stale reports and attempted 0 generations. No report regeneration, provider call, resume-run, kill-chain, monitoring, scheduled-task, engagement mutation, or credential action was executed during verification.
 - Pushed B591 as `054858c feat: add stale report repair runner`.
+- Surfaced the new stale-report runner from `report quality-audit`: `regenerate_stale_reports` now includes `follow_up=forge report stale-run --dry-run --json --limit N` and a machine-readable `batch_run_command` for bounded sequential regeneration.
+- Verified B592 with focused reporting tests (`4 passed`), Ruff, py_compile, `git diff --check`, and a real local read-only `quality-audit --top 1` smoke showing `follow_up=forge report stale-run --dry-run --json --limit 57`. No report regeneration, provider call, resume-run, kill-chain, monitoring, scheduled-task, engagement mutation, or credential action was executed.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Commit and push B592, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

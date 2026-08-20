@@ -544,11 +544,30 @@ def _operator_action_plan(
                             "--json",
                             "--limit",
                             str(len(stale_reports)),
+                        ],
+                        [
+                            "forge",
+                            "report",
+                            "stale-run",
+                            "--dry-run",
+                            "--json",
+                            "--limit",
+                            str(len(stale_reports)),
                         ]
                     ]
                     if omitted_count
                     else []
                 ),
+                "batch_run_command": [
+                    "forge",
+                    "report",
+                    "stale-run",
+                    "--limit",
+                    str(len(stale_reports)),
+                    "--provider",
+                    "auto",
+                    "--json",
+                ],
             }
         )
     elif latest_fallback_counts:
