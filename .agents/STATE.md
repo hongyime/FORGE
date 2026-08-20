@@ -185,9 +185,10 @@ Progress:
 - Added explicit `forge targets resume-run [--json]` to execute ready resume candidates one child process at a time with a batch lock, JSONL ledger, latest-run re-checks, rerun skips, and stop-on-failure behavior. No local resume-run was executed.
 - Aligned duplicate doctor secret-tool rows with connector binary discovery: `detect-secrets` now resolves from `.venv`/connector search paths and TruffleHog remediation points to manual release-binary/install-plan guidance.
 - Verified B566 with focused resume/doctor/CLI tests, broader target-import/doctor/CLI-registry tests (`72 passed`), Ruff, py_compile, local `targets resume-plan --limit 5 --json` smoke, and doctor smoke.
+- Pushed B566 as `bf3d13a feat: add target resume batch runner`.
 
 Next steps:
-- Commit and push B566, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, Connector Secret Store in shells that have not loaded the user-level key, and Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, Connector Secret Store in shells that have not loaded the user-level key, and Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
