@@ -2098,7 +2098,10 @@ def _connector_action_items(
             "priority": "30",
             "status": "optional" if optional_key else "ready",
             "summary": _connector_optional_key_label(optional_key),
-            "command": "forge connectors secrets set --engagement N --connector ID --name ENV_NAME",
+            "command": (
+                "forge connectors secret-set --engagement N --connector ID "
+                "--name ENV_NAME --value-env ENV"
+            ),
         }
     )
     items.append(
@@ -2224,7 +2227,7 @@ def _connector_action_plan_check(
         (
             "Review free runnable connector templates first with `forge connectors run-plan --json`; "
             "install missing binaries before expecting local execution; configure optional keys "
-            "through env vars or `forge connectors secrets set` only when the free tier is intended; "
+                "through env vars or `forge connectors secret-set --value-env ENV` only when the free tier is intended; "
             "treat catalog-only rows as import/review guidance, not executable adapters; keep "
             "active-validation plugins gated by approval, ROE, scope manifest, and live gate; "
             "review paid adapters only with `forge connectors list --include-paid --json`."

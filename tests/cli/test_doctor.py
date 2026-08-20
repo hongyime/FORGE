@@ -163,6 +163,9 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     )
     assert action_by_id["configure_optional_keys"]["status"] == "optional"
     assert "FORGE_SHODAN_API_KEY" in action_by_id["configure_optional_keys"]["summary"]
+    assert action_by_id["configure_optional_keys"]["command"] == (
+        "forge connectors secret-set --engagement N --connector ID --name ENV_NAME --value-env ENV"
+    )
     assert action_by_id["review_cti_osint_policy"]["status"] == "review"
     assert action_by_id["review_cti_osint_policy"]["command"] == (
         "forge connectors policy-summary --json"
