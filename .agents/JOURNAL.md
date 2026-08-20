@@ -123,3 +123,4 @@
 - 2026-08-21: B632 asset graph sync JSON now reports schema/execution/count aliases and explicitly labels canonical graph-table writes.
 - 2026-08-21: B633 asset graph attribution import JSON now reports schema/execution/count aliases with processed/imported/error records mapped to total/selected/omitted counts.
 - 2026-08-21: B634 asset graph ownership set/resolve JSON now reports explicit local write policies and claim total/selected/omitted counts for created and superseded ownership claims.
+- 2026-08-21: B635 dashboard/report rendering now caps heavy seed/scope chips, bounds previews, shortens noisy diagnostics, adds responsive table labels, and labels latest-run policy/ROE sources without regenerating live reports.
