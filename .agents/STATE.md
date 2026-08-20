@@ -208,10 +208,11 @@ Progress:
 - Added bounded monitoring apply limits: `forge monitoring run-due` now defaults to `--limit 50`, `forge monitoring worker` defaults to `--run-limit 50`, both support explicit `--all`, and JSON reports full due count plus `limited_policy_count`.
 - Doctor's Monitoring Schedules warning now keeps the read-only `due-plan` review action and adds a capped apply action for `forge monitoring run-due --limit 50 --json`.
 - Verified B573 with focused monitoring/doctor tests (`84 passed`), Ruff, py_compile, `git diff --check`, non-mutating `run-due --help` / `worker --help` smokes, a doctor JSON smoke showing capped monitoring remediation, and a read-only `monitoring due-plan --limit 0 --json` smoke showing 101 due policies. No monitoring `run-due`, worker execution, alert delivery, provider call, scheduled-task enablement, engagement mutation, live run, report regeneration, or credential persistence was started.
+- Pushed B573 as `5fc3550 fix: bound monitoring due execution`.
 - Read-only report-quality audit subagent found the next concrete backlog item: root `reports/engagement_<id>_stats.json` sidecars are counted as report families/latest backends, inflating `latest_report_backend_counts.none`.
 
 Next steps:
-- Commit/push B573, then fix the report-quality stats-sidecar classification bug. Remaining doctor attention is Safe Mode, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, and Connector Secret Store process-env reload guidance.
+- Fix the report-quality stats-sidecar classification bug. Remaining doctor attention is Safe Mode, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, and Connector Secret Store process-env reload guidance.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
