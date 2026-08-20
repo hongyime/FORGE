@@ -70,3 +70,4 @@
 - 2026-08-20: Added redacted resume-plan review output and pointed quality-audit resume review commands at that path-safe mode.
 - 2026-08-20: Added value-safe Connector Secret Store doctor action items so secret-key setup/reload appears in the top-level action plan.
 - 2026-08-20: Made quality-audit stale-report samples explicit with omitted counts/follow-up commands, made Offline Strict doctor actionable, and raised scheduled-task query timeout to reduce transient doctor noise.
+- 2026-08-20: Added read-only `forge report stale-plan` so stale latest-report repair commands have a dedicated plan command without regenerating reports.

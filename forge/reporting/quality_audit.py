@@ -6,7 +6,7 @@ import json
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from forge.reporting.audit_manifest_artifacts import is_report_metadata_sidecar
 from forge.reporting.report_history import report_family_groups
@@ -179,6 +179,47 @@ def collect_report_quality_audit(
     }
 
 
+def collect_stale_report_repair_plan(
+    *,
+    reports_dir: Path,
+    limit: int = DEFAULT_TOP_LIMIT,
+) -> dict[str, Any]:
+    """Return a read-only command plan for stale latest-report repair."""
+
+    sample_limit = max(0, int(limit))
+    payload = collect_report_quality_audit(
+        reports_dir=reports_dir,
+        top_limit=sample_limit,
+    )
+    action = _action_by_id(payload, "regenerate_stale_reports")
+    commands = action.get("commands") if action else []
+    if not isinstance(commands, list):
+        commands = []
+    follow_up_commands = action.get("follow_up_commands") if action else []
+    if not isinstance(follow_up_commands, list):
+        follow_up_commands = []
+    return {
+        "schema_version": "forge.report_stale_repair_plan.v1",
+        "reports_dir": payload.get("reports_dir", str(Path(reports_dir))),
+        "execution_policy": "plan_only_no_commands_executed",
+        "total_count": int(action.get("total_count", 0)) if action else 0,
+        "sample_limit": (
+            int(action.get("sample_limit", sample_limit)) if action else sample_limit
+        ),
+        "sample_count": int(action.get("sample_count", 0)) if action else 0,
+        "omitted_count": int(action.get("omitted_count", 0)) if action else 0,
+        "commands": commands,
+        "follow_up_commands": follow_up_commands,
+        "latest_fallback_reason_counts": payload.get("latest_fallback_reason_counts", {}),
+        "status": str(action.get("status", "empty")) if action else "empty",
+        "summary": (
+            str(action.get("summary", "no stale latest reports require repair"))
+            if action
+            else "no stale latest reports require repair"
+        ),
+    }
+
+
 def _operator_action_plan(
     *,
     latest_fallback_reports: list[dict[str, Any]],
@@ -301,6 +342,16 @@ def _operator_action_plan(
             }
         )
     return actions
+
+
+def _action_by_id(payload: Mapping[str, Any], action_id: str) -> dict[str, Any] | None:
+    actions = payload.get("operator_action_plan")
+    if not isinstance(actions, list):
+        return None
+    for action in actions:
+        if isinstance(action, dict) and _text(action.get("id")) == action_id:
+            return action
+    return None
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:

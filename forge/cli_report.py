@@ -20,6 +20,7 @@ from forge.reporting.quality_audit import (
     DEFAULT_LONG_RUN_SECONDS,
     DEFAULT_TOP_LIMIT,
     collect_report_quality_audit,
+    collect_stale_report_repair_plan,
 )
 
 
@@ -210,3 +211,49 @@ def report_quality_audit(
                             "      follow_up="
                             f"{' '.join(str(part) for part in command)}"
                         )
+
+
+@report_app.command("stale-plan")
+def report_stale_plan(
+    reports_dir: Path = typer.Option(
+        Path("reports"),
+        "--reports-dir",
+        help="Reports directory containing dashboard/data/engagements.json.",
+    ),
+    limit: int = typer.Option(
+        DEFAULT_TOP_LIMIT,
+        "--limit",
+        help="Maximum stale-report repair commands to include.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable JSON.",
+    ),
+) -> None:
+    """Plan stale latest-report regeneration without mutating reports."""
+    payload = collect_stale_report_repair_plan(
+        reports_dir=reports_dir,
+        limit=limit,
+    )
+    if json_output:
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+
+    console.print(
+        "[green]Stale report repair plan:[/green] "
+        f"{payload['total_count']} stale latest report(s), "
+        f"{payload['sample_count']} command(s), "
+        f"{payload['omitted_count']} omitted"
+    )
+    console.print(f"  execution_policy={payload['execution_policy']}")
+    commands = payload.get("commands")
+    if isinstance(commands, list):
+        for command in commands[:5]:
+            if isinstance(command, list):
+                console.print(f"  command={' '.join(str(part) for part in command)}")
+    follow_up_commands = payload.get("follow_up_commands")
+    if isinstance(follow_up_commands, list):
+        for command in follow_up_commands[:3]:
+            if isinstance(command, list):
+                console.print(f"  follow_up={' '.join(str(part) for part in command)}")
