@@ -81,3 +81,4 @@
 - 2026-08-21: Added bounded sequential `forge report stale-run` so stale latest reports can be regenerated from the stale-plan backlog without manual command copying.
 - 2026-08-21: Surfaced `forge report stale-run --dry-run` from quality-audit stale-report actions so the new bounded runner is discoverable.
 - 2026-08-21: Fixed stale-run output placement to write regenerated report families under the selected reports directory and report dashboard refresh follow-ups.
+- 2026-08-21: Completed local template-only stale latest-report repair and dashboard refresh; current stale-plan is empty while generated artifacts remain ignored local data.
