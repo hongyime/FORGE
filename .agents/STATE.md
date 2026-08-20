@@ -219,9 +219,10 @@ Progress:
 - Pushed B575 as `7cc7b77 feat: report latest fallback repair samples`.
 - Clarified Safe Mode doctor and env/docs wording so full mode is described as intentional ROE-backed legacy-offensive posture instead of broken setup; behavior and default status are unchanged.
 - Verified B576 with focused doctor tests (`44 passed`), Ruff, py_compile, `git diff --check`, and a real local doctor smoke. No safe-mode default change, live run, provider call, scheduled-task change, monitoring apply, report regeneration, engagement mutation, or credential persistence was started.
+- Pushed B576 as `d60a343 fix: clarify safe mode doctor warning`.
 
 Next steps:
-- Commit/push B576, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining queues include Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, Connector Secret Store process-env reload guidance, optional deliberate report regeneration using the new quality-audit repair sample commands, and historical failed/long run review only if deliberately resumed.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining queues include Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, Connector Secret Store process-env reload guidance, optional deliberate report regeneration using the new quality-audit repair sample commands, and historical failed/long run review only if deliberately resumed.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
