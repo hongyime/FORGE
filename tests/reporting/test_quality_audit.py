@@ -336,7 +336,7 @@ def test_collect_report_quality_audit_shows_omitted_stale_report_commands(
     assert action["omitted_count"] == 1
     assert len(action["commands"]) == 2
     assert action["follow_up_commands"] == [
-        ["forge", "report", "quality-audit", "--json", "--top-limit", "3"]
+        ["forge", "report", "stale-plan", "--json", "--limit", "3"]
     ]
 
 
@@ -475,7 +475,7 @@ def test_report_quality_audit_cli_prints_follow_up_commands(
     )
 
     assert result.exit_code == 0, result.output
-    assert "follow_up=forge report quality-audit --json --top-limit 2" in result.output
+    assert "follow_up=forge report stale-plan --json --limit 2" in result.output
 
 
 def test_report_stale_plan_cli_outputs_json(tmp_path: Path, monkeypatch) -> None:

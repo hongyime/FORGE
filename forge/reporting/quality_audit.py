@@ -319,9 +319,9 @@ def _operator_action_plan(
                         [
                             "forge",
                             "report",
-                            "quality-audit",
+                            "stale-plan",
                             "--json",
-                            "--top-limit",
+                            "--limit",
                             str(len(stale_reports)),
                         ]
                     ]
