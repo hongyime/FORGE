@@ -175,6 +175,10 @@ def report_quality_audit(
     )
     if payload["fallback_reason_counts"]:
         console.print(f"  fallback reasons: {payload['fallback_reason_counts']}")
+    if payload.get("latest_fallback_reason_counts"):
+        console.print(
+            f"  latest fallback reasons: {payload['latest_fallback_reason_counts']}"
+        )
     if payload["run_status_counts"]:
         console.print(f"  run statuses: {payload['run_status_counts']}")
     if payload["top_long_runs"]:

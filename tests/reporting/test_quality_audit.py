@@ -142,6 +142,46 @@ def test_collect_report_quality_audit_separates_stale_dashboard_failures(
     )
 
 
+def test_collect_report_quality_audit_reports_latest_fallbacks_separately(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    detail_path = (
+        reports_dir
+        / "dashboard"
+        / "data"
+        / "engagements"
+        / "engagement-1001-acme.json"
+    )
+    detail_payload = json.loads(detail_path.read_text(encoding="utf-8"))
+    detail_payload["report_history"] = [
+        {
+            "rendered_provider": "template",
+            "generated_at": "2026-08-20 11:00:00",
+            "fallback_reason": "quota exceeded",
+        },
+        {
+            "rendered_provider": "template",
+            "generated_at": "2026-08-19 11:00:00",
+            "fallback_reason": "GGUF model not found: C:/model.gguf",
+        },
+    ]
+    detail_path.write_text(json.dumps(detail_payload), encoding="utf-8")
+
+    payload = collect_report_quality_audit(reports_dir=reports_dir, top_limit=5)
+
+    assert payload["fallback_reason_counts"] == {
+        "gguf_model_missing": 1,
+        "provider_quota_or_rate_limit": 1,
+    }
+    assert payload["latest_fallback_reason_counts"] == {
+        "provider_quota_or_rate_limit": 1
+    }
+    assert payload["report_backend_counts"] == {"template": 2}
+    assert payload["latest_report_backend_counts"] == {"template": 1}
+
+
 def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:
     from forge.cli import app  # noqa: PLC0415
 
@@ -162,6 +202,7 @@ def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:
     payload = json.loads(result.output)
     assert payload["engagement_count"] == 1
     assert payload["fallback_reason_counts"]["gguf_model_missing"] == 1
+    assert payload["latest_fallback_reason_counts"]["gguf_model_missing"] == 1
 
 
 def test_report_quality_audit_cli_accepts_top_limit_alias(tmp_path: Path) -> None:

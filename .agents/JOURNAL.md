@@ -42,3 +42,4 @@
 - 2026-08-20 15:31:25 +08:00 [PRAWN-E14/claude/session-start] branch=main head=0e89ae7 dirty=8
 - 2026-08-20: Accepted `forge report quality-audit --top-limit` as an alias for `--top` so audit automation can use the explicit internal option name.
 - 2026-08-20: Split report quality-audit dashboard refresh failures into current unresolved failures and historical pre-refresh evidence so old audit rows do not imply current dashboard breakage.
+- 2026-08-20: Added latest-report-only fallback/backend/write-error counts to report quality-audit so historical GGUF fallbacks do not masquerade as current latest-report degradation.

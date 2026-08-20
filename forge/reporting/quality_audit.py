@@ -32,8 +32,11 @@ def collect_report_quality_audit(
 
     run_status_counts: Counter[str] = Counter()
     report_backend_counts: Counter[str] = Counter()
+    latest_report_backend_counts: Counter[str] = Counter()
     fallback_counts: Counter[str] = Counter()
+    latest_fallback_counts: Counter[str] = Counter()
     report_write_error_counts: Counter[str] = Counter()
+    latest_report_write_error_counts: Counter[str] = Counter()
     policy_counts: Counter[str] = Counter()
     dashboard_refresh_failures: list[dict[str, Any]] = []
     historical_dashboard_refresh_failures: list[dict[str, Any]] = []
@@ -69,7 +72,7 @@ def collect_report_quality_audit(
             policy_counts["post_ex_no"] += 1
 
         report_entries = _report_entries(detail_payload, report_summary)
-        for report_entry in report_entries:
+        for index, report_entry in enumerate(report_entries):
             backend = _text(
                 report_entry.get("rendered_provider")
                 or report_entry.get("render_backend")
@@ -77,13 +80,21 @@ def collect_report_quality_audit(
                 or "none"
             )
             report_backend_counts[backend] += 1
+            if index == 0:
+                latest_report_backend_counts[backend] += 1
 
             fallback_reason = _text(report_entry.get("fallback_reason"))
             if fallback_reason:
-                fallback_counts[_classify_fallback_reason(fallback_reason)] += 1
+                fallback_class = _classify_fallback_reason(fallback_reason)
+                fallback_counts[fallback_class] += 1
+                if index == 0:
+                    latest_fallback_counts[fallback_class] += 1
             write_error = _text(report_entry.get("report_write_error"))
             if write_error:
-                report_write_error_counts[_classify_fallback_reason(write_error)] += 1
+                write_error_class = _classify_fallback_reason(write_error)
+                report_write_error_counts[write_error_class] += 1
+                if index == 0:
+                    latest_report_write_error_counts[write_error_class] += 1
 
         elapsed = _elapsed_seconds(run_summary)
         if elapsed is not None and elapsed >= float(long_run_seconds):
@@ -115,8 +126,13 @@ def collect_report_quality_audit(
         "report_family_count": _report_family_count(root_report_files),
         "run_status_counts": dict(sorted(run_status_counts.items())),
         "report_backend_counts": dict(sorted(report_backend_counts.items())),
+        "latest_report_backend_counts": dict(sorted(latest_report_backend_counts.items())),
         "fallback_reason_counts": dict(sorted(fallback_counts.items())),
+        "latest_fallback_reason_counts": dict(sorted(latest_fallback_counts.items())),
         "report_write_error_counts": dict(sorted(report_write_error_counts.items())),
+        "latest_report_write_error_counts": dict(
+            sorted(latest_report_write_error_counts.items())
+        ),
         "policy_counts": dict(sorted(policy_counts.items())),
         "resume_review_count": resume_review_count,
         "long_run_threshold_seconds": float(long_run_seconds),
