@@ -29,6 +29,7 @@ from forge.utils.intel.observations import (
     normalize_observation,
     observation_to_target_feed_item,
     provider_catalog,
+    provider_catalog_policy_summary,
 )
 
 
@@ -87,6 +88,36 @@ def test_provider_catalog_defaults_skip_sensitive_social_sources() -> None:
     assert "github_code_search_public" not in default_ids
     assert "social_search_curated" not in default_ids
     assert {"github_code_search_public", "social_search_curated"} <= all_ids
+
+
+def test_provider_catalog_policy_summary_maps_default_and_opt_in_sources() -> None:
+    summary = provider_catalog_policy_summary()
+
+    assert summary["total_count"] == len(provider_catalog(include_sensitive=True))
+    assert summary["default_enabled_count"] == len(provider_catalog())
+    assert summary["opt_in_provider_ids"] == [
+        "github_code_search_public",
+        "social_search_curated",
+    ]
+    assert "social_search_curated" not in summary["default_provider_ids"]
+    assert {
+        "misp_event_import",
+        "stix_taxii_import",
+        "supabase_table_import",
+    } <= set(summary["offline_import_provider_ids"])
+    assert {
+        "abusech_threatfox",
+        "abusech_urlhaus",
+        "crtsh_certificate_transparency",
+        "github_code_search_public",
+        "social_search_curated",
+    } <= set(summary["live_or_api_provider_ids"])
+    assert summary["manual_opt_in_provider_ids"] == [
+        "github_code_search_public",
+        "social_search_curated",
+    ]
+    assert summary["required_gate_counts"]["operator_opt_in"] == 2
+    assert summary["required_gate_counts"]["provider_rate_limit"] >= 4
 
 
 def test_observation_normalizes_to_target_feed_without_raw_provider_body() -> None:

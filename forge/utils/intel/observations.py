@@ -10,6 +10,7 @@ import hashlib
 import ipaddress
 import json
 import re
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping
@@ -195,6 +196,36 @@ def provider_catalog(*, include_sensitive: bool = False) -> tuple[OsintProviderC
     if include_sensitive:
         return CTI_OSINT_PROVIDER_CATALOG
     return tuple(entry for entry in CTI_OSINT_PROVIDER_CATALOG if entry.default_enabled)
+
+
+def provider_catalog_policy_summary() -> dict[str, Any]:
+    entries = CTI_OSINT_PROVIDER_CATALOG
+    safety_tiers = Counter(entry.safety_tier for entry in entries)
+    collection_methods = Counter(entry.collection_method for entry in entries)
+    categories = Counter(entry.category for entry in entries)
+    required_gates = Counter(gate for entry in entries for gate in entry.required_gates)
+    default_entries = [entry for entry in entries if entry.default_enabled]
+    opt_in_entries = [entry for entry in entries if not entry.default_enabled]
+    return {
+        "total_count": len(entries),
+        "default_enabled_count": len(default_entries),
+        "opt_in_count": len(opt_in_entries),
+        "default_provider_ids": sorted(entry.id for entry in default_entries),
+        "opt_in_provider_ids": sorted(entry.id for entry in opt_in_entries),
+        "safety_tier_counts": dict(sorted(safety_tiers.items())),
+        "collection_method_counts": dict(sorted(collection_methods.items())),
+        "category_counts": dict(sorted(categories.items())),
+        "required_gate_counts": dict(sorted(required_gates.items())),
+        "offline_import_provider_ids": sorted(
+            entry.id for entry in entries if entry.collection_method == "offline_import"
+        ),
+        "live_or_api_provider_ids": sorted(
+            entry.id for entry in entries if entry.collection_method != "offline_import"
+        ),
+        "manual_opt_in_provider_ids": sorted(
+            entry.id for entry in entries if "operator_opt_in" in entry.required_gates
+        ),
+    }
 
 
 def normalize_observation(

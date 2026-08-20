@@ -316,6 +316,13 @@ normalization and filters; duplicate-only re-imports still count as accepted
 because the file matched known observations. Use `--since ISO` and
 `--until ISO` to bound imports by observation time.
 
+The internal CTI/OSINT provider catalog exposes `provider_catalog_policy_summary()`
+for operator review and tests. It reports only aggregate counts and provider IDs:
+default-enabled sources, opt-in sources, offline import sources, live/API-style
+sources, categories, safety tiers, collection methods, and required gate counts.
+Use it as the source-selection map for CTI/OSINT lists; do not treat public tool
+lists or provider notes as runnable commands.
+
 `forge monitoring status --json` is the read-only operator check for scheduled
 monitoring: it reports stale DB schemas, enabled/idle policy counts,
 due/overdue policies, open alerts, unrouted open alerts, failed alert-delivery

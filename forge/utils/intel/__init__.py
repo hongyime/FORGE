@@ -68,6 +68,7 @@ __all__ = [
     "normalize_observation",
     "observation_to_target_feed_item",
     "provider_catalog",
+    "provider_catalog_policy_summary",
     # Shared
     "PasteMonitor",
 ]
@@ -108,6 +109,10 @@ def __getattr__(name: str):  # lazy imports
             "observation_to_target_feed_item",
         ),
         "provider_catalog": ("forge.utils.intel.observations", "provider_catalog"),
+        "provider_catalog_policy_summary": (
+            "forge.utils.intel.observations",
+            "provider_catalog_policy_summary",
+        ),
         "PasteMonitor": ("forge.utils.intel.paste_monitor", "PasteMonitor"),
     }
     if name in _MAP:
