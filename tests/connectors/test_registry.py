@@ -484,15 +484,47 @@ def test_connector_run_plan_reports_free_runnable_commands_without_execution() -
             "runner_supported": True,
             "execution_paths": ["forge connectors run"],
         },
+        {
+            "id": "abusech_threatfox",
+            "domain": "threat_intelligence",
+            "cost_profile": "free_no_key",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors import-cti"],
+        },
+        {
+            "id": "urlscan_search",
+            "domain": "discovery",
+            "cost_profile": "free_no_key",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors import-discovery"],
+        },
+        {
+            "id": "gitleaks_local",
+            "domain": "secrets",
+            "cost_profile": "free_local",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors run-secrets"],
+        },
+        {
+            "id": "hibp_pwned_passwords",
+            "domain": "identity_exposure",
+            "cost_profile": "free_no_key",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors run-identity"],
+        },
     ]
 
     plan = connector_run_plan(statuses)
 
     assert plan["schema_version"] == "forge.connector_run_plan.v1"
     assert plan["execution_policy"] == "plan_only_no_commands_executed"
-    assert plan["runnable_count"] == 1
-    assert plan["items"][0]["connector_id"] == "projectdiscovery_subfinder"
-    assert plan["items"][0]["command_template"] == [
+    assert plan["runnable_count"] == 5
+    by_id = {item["connector_id"]: item for item in plan["items"]}
+    assert by_id["projectdiscovery_subfinder"]["command_template"] == [
         "forge",
         "connectors",
         "run",
@@ -504,8 +536,63 @@ def test_connector_run_plan_reports_free_runnable_commands_without_execution() -
         "DOMAIN_OR_URL",
         "--dry-run",
     ]
-    assert plan["items"][0]["requires_engagement"] is True
-    assert plan["items"][0]["requires_target"] is True
+    assert by_id["projectdiscovery_subfinder"]["requires_engagement"] is True
+    assert by_id["projectdiscovery_subfinder"]["requires_target"] is True
+    assert by_id["abusech_threatfox"]["command_template"] == [
+        "forge",
+        "connectors",
+        "import-cti",
+        "--engagement",
+        "N",
+        "--connector",
+        "abusech_threatfox",
+        "--report-file",
+        "PATH_TO_OFFLINE_EXPORT",
+        "--dry-run",
+        "--json",
+    ]
+    assert by_id["urlscan_search"]["command_template"] == [
+        "forge",
+        "connectors",
+        "import-discovery",
+        "--engagement",
+        "N",
+        "--connector",
+        "urlscan_search",
+        "--report-file",
+        "PATH_TO_DISCOVERY_EXPORT",
+        "--target",
+        "DOMAIN_OR_URL",
+        "--json",
+    ]
+    assert by_id["gitleaks_local"]["command_template"] == [
+        "forge",
+        "connectors",
+        "run-secrets",
+        "--engagement",
+        "N",
+        "--connector",
+        "gitleaks_local",
+        "--source-path",
+        "PATH_TO_REPOSITORY",
+        "--domain",
+        "DOMAIN",
+        "--dry-run",
+        "--json",
+    ]
+    assert by_id["hibp_pwned_passwords"]["command_template"] == [
+        "forge",
+        "connectors",
+        "run-identity",
+        "--engagement",
+        "N",
+        "--connector",
+        "hibp_pwned_passwords",
+        "--domain",
+        "DOMAIN",
+        "--dry-run",
+        "--json",
+    ]
 
 
 def test_connector_run_plan_cli_outputs_json_without_running_connectors() -> None:

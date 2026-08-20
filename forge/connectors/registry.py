@@ -858,7 +858,7 @@ def _connector_run_command_template(row: Mapping[str, Any]) -> list[str]:
     ]
     primary = execution_paths[0] if execution_paths else "forge connectors run"
     command = primary.split()
-    if command[:2] == ["forge", "connectors"] and "run" in command:
+    if primary == "forge connectors run":
         command.extend(
             [
                 "--engagement",
@@ -870,6 +870,76 @@ def _connector_run_command_template(row: Mapping[str, Any]) -> list[str]:
                 "--dry-run",
             ]
         )
+    elif primary == "forge connectors import-cti":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--connector",
+                connector_id,
+                "--report-file",
+                "PATH_TO_OFFLINE_EXPORT",
+                "--dry-run",
+                "--json",
+            ]
+        )
+    elif primary == "forge connectors import-discovery":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--connector",
+                connector_id,
+                "--report-file",
+                "PATH_TO_DISCOVERY_EXPORT",
+                "--target",
+                "DOMAIN_OR_URL",
+                "--json",
+            ]
+        )
+    elif primary == "forge connectors run-secrets":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--connector",
+                connector_id,
+                "--source-path",
+                "PATH_TO_REPOSITORY",
+                "--domain",
+                "DOMAIN",
+                "--dry-run",
+                "--json",
+            ]
+        )
+    elif primary == "forge connectors run-identity":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--connector",
+                connector_id,
+                "--domain",
+                "DOMAIN",
+                "--dry-run",
+                "--json",
+            ]
+        )
+    elif primary == "forge remediation sync-tickets":
+        command.extend(["--data-dir", "FORGE_DATA_DIR", "--json"])
+    elif primary == "forge standards import-stix":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--bundle-file",
+                "PATH_TO_STIX_BUNDLE",
+                "--dry-run",
+                "--json",
+            ]
+        )
+    elif primary == "forge kill-chain artifact intake":
+        command.extend(["--connector", connector_id, "PATH_TO_ARTIFACT"])
     else:
         command.extend(["--connector", connector_id])
     return command
