@@ -3,6 +3,7 @@
 Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
 
 Progress:
+- Pushed B638 as `02ae30e fix: count stale report dry runs`: stale report repair run JSON now reports `dry_run_count` and no longer counts dry-run preview items as skipped. Focused stale-run tests, Ruff, py_compile, git diff check, and a synthetic dry-run smoke passed.
 - Pushed B637 as `d9db719 fix: surface stale report dry runs`: quality-audit stale-report actions now always expose `batch_dry_run_command` and a `stale-run --dry-run --json --limit N` follow-up before the live batch regeneration command. Focused quality-audit tests, Ruff, py_compile, git diff check, and a synthetic quality-audit smoke passed.
 - Pushed B636 as `0c97c59 fix: collapse empty dashboard sections`: dashboard evidence sections now render populated tables first and group no-row sections into one collapsible empty-section summary. Focused page-composition/dashboard/style tests, Ruff, py_compile, git diff check, and a direct render smoke passed.
 - Pushed B635 as `6623e73 fix: tighten dashboard report rendering`: static and React dashboards now handle long seed/scope lists, mobile table labels, bounded report previews, shortened GGUF/malformed CLI diagnostics, and latest-run policy source labels. Focused reporting/dashboard tests, Ruff, py_compile, git diff check, Vite build, and a renderer smoke passed.
