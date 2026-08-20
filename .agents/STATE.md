@@ -152,9 +152,13 @@ Progress:
 - Aligned Connector Catalog doctor remediation with the new read-only install-plan command so the row now tells operators to run `forge connectors install-plan --json` instead of showing stale raw missing-binary installer prose.
 - Verified B559 with focused doctor/connector/CLI registry tests (`102 passed`), Ruff, py_compile, `git diff --check`, and a real local `forge doctor --json` smoke confirming the Connector Catalog remediation and `install_free_binaries` action both point to `forge connectors install-plan --json`.
 - Pushed B559 as `78a7bc3 fix: point connector catalog to install plan`.
+- Added resume readiness/blocker fields to `forge targets resume-candidates` and dry-run-first `forge targets backfill-scope-manifests [--apply]`.
+- Real local dry-run found 49 historical candidates all recoverable from `scope_manifest_missing`; applied the backfill locally, writing recovered narrow scope manifests under `.forge_data/target_imports/` and updating latest-run metadata only.
+- Follow-up real local `forge targets resume-candidates --limit 200 --json` smoke reports 49 candidates, 49 `resume_ready`, empty `resume_blocker_counts`, and suggested `forge kill-chain ... --resume --max-iter 3` command arrays. No kill-chain run was started.
+- Verified B560 with focused target-import/CLI-registry/quality-audit tests (`50 passed` in the broad slice, `45 passed` in the final target/registry slice), Ruff, py_compile, `git diff --check`, and local resume-candidate/backfill smokes.
 
 Next steps:
-- Continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Commit and push B560, then continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

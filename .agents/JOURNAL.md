@@ -47,3 +47,4 @@
 - 2026-08-20: Aligned doctor Workspace Access with dashboard/resume legacy DB visibility while leaving scheduled-job checks scoped to the configured data dir.
 - 2026-08-20: Added a read-only connector install-plan command so doctor setup can point to safe missing-binary guidance without executing installers.
 - 2026-08-20: Aligned Connector Catalog doctor remediation with the read-only connector install-plan command instead of raw missing-binary installer prose.
+- 2026-08-20: Added resume readiness/blocker reporting plus dry-run-first scope-manifest backfill; locally recovered missing scope manifests for 49 historical failed target-import candidates without launching runs.

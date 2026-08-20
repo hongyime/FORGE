@@ -242,6 +242,7 @@ forge audit manifest-export --engagement N [--sign] [--remote-store]
 forge audit manifest-bundle-verify --bundle PATH
 forge targets import --feed-url URL|--feed-file PATH
 forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--json]  # Default also scans repo-local legacy dashboard DBs
+forge targets backfill-scope-manifests [--apply] [--limit N] [--reason REASON] [--data-dir PATH] [--json]
 forge monitoring status|run-due|deliver-alerts|worker
 forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-retest|apply-retest-run|handoff-plan|integration-runbook|import-ticket-statuses|sync-tickets
 forge active-validation preview|create|approve|run|list|methods|coverage
@@ -289,9 +290,15 @@ still required before any live launch.
 `kill_chain` row in each local engagement DB, classifies failed or cancelled
 runs such as `pending_recursive_work`, `watchdog_timeout`, `abandoned`, and
 `stale_run_recovery`, and emits JSON for operator review without resuming,
-starting, or mutating any engagement. Static dashboards also surface these
-latest-run candidates as a compact `Resume Review` overview column and detail
-section without exposing raw scope-manifest paths.
+starting, or mutating any engagement. The payload includes `resume_ready`,
+`resume_blockers`, aggregate blocker counts, and a `resume_command` array only
+when ROE, scope manifest, and resume gates are present. Static dashboards also
+surface these latest-run candidates as a compact `Resume Review` overview
+column and detail section without exposing raw scope-manifest paths.
+`forge targets backfill-scope-manifests` is also dry-run by default; with
+`--apply`, it only writes recovered narrow scope manifests and updates the
+latest-run metadata for blocked resume candidates. It does not start or resume
+kill-chain runs.
 
 `forge connectors import-cti` is offline-only. It accepts FORGE's neutral
 observation JSON plus common downloaded/exported JSON or CSV shapes from

@@ -12,7 +12,10 @@ from typer.testing import CliRunner
 from forge.db.session import get_engagement_db
 from forge.targets_import_cli import register_target_import_commands
 from forge.targets_import import import_targets, load_target_feed
-from forge.targets_resume_candidates import collect_target_resume_candidates
+from forge.targets_resume_candidates import (
+    backfill_target_resume_scope_manifests,
+    collect_target_resume_candidates,
+)
 
 
 class _FakeConfig:
@@ -457,6 +460,11 @@ def test_resume_candidates_reports_latest_failed_runs_without_sensitive_metadata
 
     assert payload["schema_version"] == "forge.targets.resume_candidates.v1"
     assert payload["candidate_count"] == 2
+    assert payload["resume_ready_count"] == 1
+    assert payload["resume_blocker_counts"] == {
+        "roe_id_missing": 1,
+        "scope_manifest_missing": 1,
+    }
     assert payload["reason_counts"] == {
         "pending_recursive_work": 1,
         "watchdog_timeout": 1,
@@ -464,7 +472,27 @@ def test_resume_candidates_reports_latest_failed_runs_without_sensitive_metadata
     first = payload["items"][0]
     assert first["engagement_id"] == 1
     assert first["scope_manifest_exists"] is True
+    assert first["resume_ready"] is True
+    assert first["resume_blockers"] == []
+    assert first["resume_command"] == [
+        "forge",
+        "kill-chain",
+        "example.com",
+        "--engagement",
+        "1",
+        "--roe-id",
+        "ROE-ACME-2026",
+        "--scope-manifest",
+        str(scope_path),
+        "--resume",
+        "--max-iter",
+        "3",
+    ]
     assert first["pending_work_total"] == 12
+    second = payload["items"][1]
+    assert second["resume_ready"] is False
+    assert second["resume_blockers"] == ["roe_id_missing", "scope_manifest_missing"]
+    assert second["resume_command"] == []
     serialized = json.dumps(payload)
     assert "must-not-appear" not in serialized
 
@@ -555,6 +583,102 @@ def test_resume_candidates_explicit_data_dir_stays_narrow(
     assert payload["scanned_engagements"] == 1
     assert payload["candidate_count"] == 1
     assert payload["items"][0]["engagement_id"] == 1
+
+
+def test_backfill_scope_manifests_dry_run_reports_recoverable_candidate(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={"roe_id": "ROE-ACME-2026"},
+        seed_value="https://app.example.com/login",
+    )
+
+    payload = backfill_target_resume_scope_manifests(data_dir=data_dir, apply=False)
+
+    assert payload["schema_version"] == "forge.targets.scope_manifest_backfill.v1"
+    assert payload["dry_run"] is True
+    assert payload["action_counts"] == {"would_update": 1}
+    item = payload["items"][0]
+    assert item["status"] == "would_update"
+    assert item["blockers"] == []
+    manifest_path = Path(item["planned_scope_manifest"])
+    assert manifest_path.name == "scope_1_recovered.json"
+    assert not manifest_path.exists()
+
+
+def test_backfill_scope_manifests_apply_updates_latest_run_metadata(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1.db"
+    _write_candidate_run(
+        db_path,
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={"roe_id": "ROE-ACME-2026"},
+        seed_value="https://app.example.com/login",
+    )
+
+    payload = backfill_target_resume_scope_manifests(data_dir=data_dir, apply=True)
+
+    assert payload["action_counts"] == {"updated": 1}
+    manifest_path = Path(payload["items"][0]["planned_scope_manifest"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["roe_id"] == "ROE-ACME-2026"
+    assert manifest["domains"] == ["app.example.com"]
+    assert manifest["urls"] == ["https://app.example.com/login"]
+    candidates = collect_target_resume_candidates(data_dir=data_dir)
+    assert candidates["resume_ready_count"] == 1
+    item = candidates["items"][0]
+    assert item["scope_manifest"] == str(manifest_path)
+    assert item["scope_manifest_exists"] is True
+    assert item["resume_ready"] is True
+    assert item["resume_command"][:6] == [
+        "forge",
+        "kill-chain",
+        "https://app.example.com/login",
+        "--engagement",
+        "1",
+        "--roe-id",
+    ]
+
+
+def test_targets_backfill_scope_manifests_cli_outputs_json(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={"roe_id": "ROE-ACME-2026"},
+    )
+
+    app = typer.Typer()
+    targets_app = typer.Typer()
+    register_target_import_commands(targets_app)
+    app.add_typer(targets_app, name="targets")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "targets",
+            "backfill-scope-manifests",
+            "--data-dir",
+            str(data_dir),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["dry_run"] is True
+    assert payload["action_counts"] == {"would_update": 1}
 
 
 def test_start_launches_scoped_kill_chain_with_scope_and_roe(
@@ -1031,7 +1155,14 @@ def test_targets_resume_candidates_cli_outputs_json(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["candidate_count"] == 1
+    assert payload["resume_ready_count"] == 0
+    assert payload["resume_blocker_counts"] == {
+        "roe_id_missing": 1,
+        "scope_manifest_missing": 1,
+    }
     assert payload["items"][0]["reason"] == "pending_recursive_work"
+    assert payload["items"][0]["resume_ready"] is False
+    assert payload["items"][0]["resume_command"] == []
 
 
 def test_targets_resume_candidates_cli_accepts_json_flag(tmp_path: Path) -> None:

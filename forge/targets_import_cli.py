@@ -10,6 +10,7 @@ from rich.console import Console
 from forge.targets_import import import_targets
 from forge.targets_resume_candidates import (
     DEFAULT_RESUME_CANDIDATE_LIMIT,
+    backfill_target_resume_scope_manifests,
     collect_target_resume_candidates,
 )
 
@@ -139,3 +140,56 @@ def register_target_import_commands(app: typer.Typer) -> None:
             include_completed=include_completed,
         )
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+    @app.command("backfill-scope-manifests")
+    def targets_backfill_scope_manifests(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help=(
+                "FORGE data directory to scan. Defaults to the configured data dir "
+                "plus repo-local legacy dashboard DBs."
+            ),
+        ),
+        limit: Optional[int] = typer.Option(
+            DEFAULT_RESUME_CANDIDATE_LIMIT,
+            "--limit",
+            help="Maximum candidate rows to inspect. Use 0 for none.",
+        ),
+        reason: Optional[str] = typer.Option(
+            None,
+            "--reason",
+            help="Only inspect a specific resume reason such as pending_recursive_work.",
+        ),
+        roe_id: Optional[str] = typer.Option(
+            None,
+            "--roe-id",
+            help="ROE id to use only when a candidate is missing one.",
+        ),
+        apply: bool = typer.Option(
+            False,
+            "--apply",
+            help="Write recovered scope manifests and update latest-run metadata.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON.",
+        ),
+    ) -> None:
+        """Plan or recover missing scope manifests for resume candidates."""
+        payload = backfill_target_resume_scope_manifests(
+            data_dir=data_dir,
+            limit=limit,
+            reason=reason,
+            apply=apply,
+            roe_id=roe_id,
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+            return
+        mode = "APPLIED" if apply else "DRY RUN"
+        console.print(
+            f"[green]{mode}:[/green] inspected={payload['planned_count']} "
+            f"actions={payload['action_counts']}"
+        )

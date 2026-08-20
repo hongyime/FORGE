@@ -4,13 +4,17 @@ import json
 import sqlite3
 from collections import Counter
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from forge.config import ForgeConfig
 from forge.engagement_ids import numeric_engagement_db_files
 
 RESUME_CANDIDATE_SCHEMA_VERSION = "forge.targets.resume_candidates.v1"
+SCOPE_BACKFILL_SCHEMA_VERSION = "forge.targets.scope_manifest_backfill.v1"
 DEFAULT_RESUME_CANDIDATE_LIMIT = 100
 TERMINAL_NON_SUCCESS_STATUSES = {"failed", "cancelled"}
 _SENSITIVE_METADATA_KEYS = {
@@ -49,6 +53,9 @@ class TargetResumeCandidate:
     report_path_exists: bool
     pending_work_total: int
     error_summary: str
+    resume_ready: bool
+    resume_blockers: list[str]
+    resume_command: list[str]
 
 
 def target_resume_candidate_for_db(
@@ -105,11 +112,20 @@ def collect_target_resume_candidates(
 
     reason_counts = Counter(item.reason for item in candidates)
     status_counts = Counter(item.status for item in candidates)
+    blocker_counts: Counter[str] = Counter()
+    ready_count = 0
+    for item in candidates:
+        if item.resume_ready:
+            ready_count += 1
+        for blocker in item.resume_blockers:
+            blocker_counts[blocker] += 1
     return {
         "schema_version": RESUME_CANDIDATE_SCHEMA_VERSION,
         "data_dir": str(base_dir),
         "include_legacy": scan_legacy,
         "candidate_count": len(candidates),
+        "resume_ready_count": ready_count,
+        "resume_blocker_counts": dict(sorted(blocker_counts.items())),
         "scanned_engagements": scanned,
         "limit": candidate_limit,
         "reason_filter": reason_filter or None,
@@ -118,6 +134,46 @@ def collect_target_resume_candidates(
         "status_counts": dict(sorted(status_counts.items())),
         "skipped_counts": dict(sorted(skipped.items())),
         "items": [asdict(item) for item in candidates],
+    }
+
+
+def backfill_target_resume_scope_manifests(
+    *,
+    data_dir: Path | None = None,
+    limit: int | None = DEFAULT_RESUME_CANDIDATE_LIMIT,
+    reason: str | None = None,
+    include_legacy: bool | None = None,
+    apply: bool = False,
+    roe_id: str | None = None,
+) -> dict[str, Any]:
+    """Plan or recover missing scope manifests for failed target resume candidates."""
+
+    payload = collect_target_resume_candidates(
+        data_dir=data_dir,
+        limit=limit,
+        reason=reason,
+        include_completed=False,
+        include_legacy=include_legacy,
+    )
+    override_roe = str(roe_id or "").strip()
+    items: list[dict[str, Any]] = []
+    action_counts: Counter[str] = Counter()
+    for raw_item in payload["items"]:
+        item = dict(raw_item)
+        action = _scope_backfill_action(item, override_roe=override_roe, apply=apply)
+        action_counts[str(action["status"])] += 1
+        items.append(action)
+    return {
+        "schema_version": SCOPE_BACKFILL_SCHEMA_VERSION,
+        "dry_run": not apply,
+        "data_dir": payload["data_dir"],
+        "include_legacy": payload["include_legacy"],
+        "candidate_count": payload["candidate_count"],
+        "planned_count": len(items),
+        "action_counts": dict(sorted(action_counts.items())),
+        "reason_counts": payload["reason_counts"],
+        "resume_blocker_counts": payload.get("resume_blocker_counts", {}),
+        "items": items,
     }
 
 
@@ -182,29 +238,54 @@ def _latest_run_candidate(
         return None
     if status == "completed" and not include_completed:
         return None
+    roe_id = _safe_metadata_string(metadata, "roe_id")
+    scope_manifest = _safe_path_string(metadata, "scope_manifest")
+    scope_manifest_exists = _path_exists(metadata.get("scope_manifest"))
+    resume_enabled = _safe_bool(row["resume_enabled"])
+    dry_run = _safe_bool(row["dry_run"])
+    seed_value = str(row["seed_value"] or "")
+    blockers = _resume_blockers(
+        resume_enabled=resume_enabled,
+        dry_run=dry_run,
+        roe_id=roe_id,
+        scope_manifest=scope_manifest,
+        scope_manifest_exists=scope_manifest_exists,
+        seed_value=seed_value,
+    )
+    resume_command = _resume_command(
+        engagement_id=engagement_id,
+        seed_value=seed_value,
+        roe_id=roe_id,
+        scope_manifest=scope_manifest,
+        max_iterations=_safe_int(row["max_iterations"]),
+        blockers=blockers,
+    )
     return TargetResumeCandidate(
         engagement_id=engagement_id,
         run_id=_safe_int(row["id"]),
         db_path=str(db_path),
         status=status or "unknown",
         reason=reason,
-        seed_value=str(row["seed_value"] or ""),
+        seed_value=seed_value,
         seed_type=str(row["seed_type"] or ""),
         current_iteration=_safe_int(row["current_iteration"]),
         max_iterations=_safe_int(row["max_iterations"]),
-        resume_enabled=_safe_bool(row["resume_enabled"]),
-        dry_run=_safe_bool(row["dry_run"]),
+        resume_enabled=resume_enabled,
+        dry_run=dry_run,
         attack_mode=_safe_bool(row["attack_mode"]),
         started_at=str(row["started_at"] or ""),
         completed_at=str(row["completed_at"] or ""),
         updated_at=str(row["updated_at"] or ""),
-        roe_id=_safe_metadata_string(metadata, "roe_id"),
-        scope_manifest=_safe_path_string(metadata, "scope_manifest"),
-        scope_manifest_exists=_path_exists(metadata.get("scope_manifest")),
+        roe_id=roe_id,
+        scope_manifest=scope_manifest,
+        scope_manifest_exists=scope_manifest_exists,
         report_path=_safe_path_string(metadata, "report_path"),
         report_path_exists=_path_exists(metadata.get("report_path")),
         pending_work_total=_pending_work_total(metadata),
         error_summary=_summarize_error(str(row["error"] or "")),
+        resume_ready=not blockers,
+        resume_blockers=blockers,
+        resume_command=resume_command,
     )
 
 
@@ -285,6 +366,241 @@ def _safe_metadata_string(metadata: dict[str, Any], key: str) -> str:
     if value is None:
         return ""
     return str(value)
+
+
+def _scope_backfill_action(
+    item: dict[str, Any],
+    *,
+    override_roe: str,
+    apply: bool,
+) -> dict[str, Any]:
+    engagement_id = _safe_int(item.get("engagement_id"))
+    run_id = _safe_int(item.get("run_id"))
+    db_path = Path(str(item.get("db_path") or ""))
+    seed_value = str(item.get("seed_value") or "")
+    seed_type = str(item.get("seed_type") or "")
+    roe_id = override_roe or str(item.get("roe_id") or "").strip()
+    base = {
+        "engagement_id": engagement_id,
+        "run_id": run_id,
+        "db_path": str(db_path),
+        "reason": str(item.get("reason") or ""),
+        "seed_value": seed_value,
+        "roe_id": roe_id,
+        "scope_manifest": str(item.get("scope_manifest") or ""),
+    }
+    if not db_path.exists():
+        return {**base, "status": "blocked", "blockers": ["db_missing"]}
+    if str(item.get("scope_manifest") or "").strip() and bool(item.get("scope_manifest_exists")):
+        return {**base, "status": "skipped", "blockers": ["scope_manifest_present"]}
+    blockers = []
+    if not run_id:
+        blockers.append("run_id_missing")
+    if not seed_value.strip():
+        blockers.append("seed_missing")
+    if not roe_id:
+        blockers.append("roe_id_missing")
+    scope_payload = _recovered_scope_manifest_payload(
+        db_path,
+        engagement_id=engagement_id,
+        seed_value=seed_value,
+        seed_type=seed_type,
+        roe_id=roe_id,
+    )
+    if not _scope_manifest_has_narrow_scope(scope_payload):
+        blockers.append("narrow_scope_unavailable")
+    manifest_path = _recovered_scope_manifest_path(db_path, engagement_id=engagement_id)
+    if blockers:
+        return {
+            **base,
+            "status": "blocked",
+            "blockers": blockers,
+            "planned_scope_manifest": str(manifest_path),
+        }
+    if apply:
+        _write_recovered_scope_manifest(
+            db_path,
+            run_id=run_id,
+            manifest_path=manifest_path,
+            payload=scope_payload,
+        )
+    return {
+        **base,
+        "status": "updated" if apply else "would_update",
+        "blockers": [],
+        "planned_scope_manifest": str(manifest_path),
+    }
+
+
+def _recovered_scope_manifest_path(db_path: Path, *, engagement_id: int) -> Path:
+    data_root = db_path.parent.parent if db_path.parent.name == "engagements" else db_path.parent
+    return data_root / "target_imports" / f"scope_{engagement_id}_recovered.json"
+
+
+def _recovered_scope_manifest_payload(
+    db_path: Path,
+    *,
+    engagement_id: int,
+    seed_value: str,
+    seed_type: str,
+    roe_id: str,
+) -> dict[str, Any]:
+    scope = _engagement_scope_json(db_path)
+    if not _scope_manifest_has_narrow_scope(scope):
+        scope = _scope_from_seed(seed_value, seed_type)
+    authorized = list(dict.fromkeys([*scope.get("authorized_seeds", []), seed_value]))
+    return {
+        "roe_id": roe_id,
+        "domains": scope.get("domains", []),
+        "ip_ranges": scope.get("ip_ranges", []),
+        "urls": scope.get("urls", []),
+        "authorized_seeds": [value for value in authorized if str(value).strip()],
+        "metadata": {
+            "engagement_id": engagement_id,
+            "recovered_from": "target_resume_candidate",
+            "seed_type": seed_type,
+        },
+    }
+
+
+def _engagement_scope_json(db_path: Path) -> dict[str, list[str]]:
+    try:
+        conn = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return {}
+    try:
+        row = conn.execute("SELECT scope_json FROM engagements ORDER BY id LIMIT 1").fetchone()
+    except sqlite3.Error:
+        return {}
+    finally:
+        conn.close()
+    if not row:
+        return {}
+    try:
+        parsed = json.loads(str(row[0] or "{}"))
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    result: dict[str, list[str]] = {}
+    for key in ("domains", "ip_ranges", "urls", "authorized_seeds"):
+        value = parsed.get(key)
+        if isinstance(value, list):
+            result[key] = [str(item) for item in value if str(item).strip()]
+    return result
+
+
+def _scope_from_seed(seed_value: str, seed_type: str) -> dict[str, list[str]]:
+    seed = str(seed_value or "").strip()
+    kind = str(seed_type or "").strip().lower()
+    if not seed:
+        return {}
+    parsed = urlsplit(seed)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        host = str(parsed.hostname or "").lower().strip(".")
+        return {
+            "domains": [host] if host else [],
+            "urls": [seed],
+            "authorized_seeds": [seed],
+        }
+    if kind in {"ipv4", "ipv6", "ip", "ip_address"}:
+        try:
+            parsed_ip = ip_address(seed)
+        except ValueError:
+            return {"authorized_seeds": [seed]}
+        prefix = 32 if parsed_ip.version == 4 else 128
+        return {"ip_ranges": [f"{parsed_ip}/{prefix}"], "authorized_seeds": [seed]}
+    if kind in {"domain", "subdomain", "hostname", "host"}:
+        return {"domains": [seed.lower().strip(".")], "authorized_seeds": [seed]}
+    return {"authorized_seeds": [seed]}
+
+
+def _scope_manifest_has_narrow_scope(payload: dict[str, Any]) -> bool:
+    return any(
+        payload.get(key)
+        for key in ("domains", "ip_ranges", "urls", "authorized_seeds")
+    )
+
+
+def _write_recovered_scope_manifest(
+    db_path: Path,
+    *,
+    run_id: int,
+    manifest_path: Path,
+    payload: dict[str, Any],
+) -> None:
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT metadata_json FROM engagement_runs WHERE id=? LIMIT 1",
+            (run_id,),
+        ).fetchone()
+        metadata = _safe_metadata(row["metadata_json"] if row else None)
+        metadata["scope_manifest"] = str(manifest_path)
+        metadata["scope_manifest_recovered_at"] = datetime.now(timezone.utc).isoformat()
+        metadata["scope_manifest_recovered_from"] = "targets_backfill_scope_manifests"
+        conn.execute(
+            "UPDATE engagement_runs SET metadata_json=? WHERE id=?",
+            (json.dumps(metadata, sort_keys=True), run_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _resume_blockers(
+    *,
+    resume_enabled: bool,
+    dry_run: bool,
+    roe_id: str,
+    scope_manifest: str,
+    scope_manifest_exists: bool,
+    seed_value: str,
+) -> list[str]:
+    blockers: list[str] = []
+    if not seed_value.strip():
+        blockers.append("seed_missing")
+    if not resume_enabled:
+        blockers.append("resume_disabled")
+    if dry_run:
+        blockers.append("dry_run")
+    if not roe_id.strip():
+        blockers.append("roe_id_missing")
+    if not scope_manifest.strip():
+        blockers.append("scope_manifest_missing")
+    elif not scope_manifest_exists:
+        blockers.append("scope_manifest_file_missing")
+    return blockers
+
+
+def _resume_command(
+    *,
+    engagement_id: int,
+    seed_value: str,
+    roe_id: str,
+    scope_manifest: str,
+    max_iterations: int,
+    blockers: list[str],
+) -> list[str]:
+    if blockers:
+        return []
+    return [
+        "forge",
+        "kill-chain",
+        seed_value,
+        "--engagement",
+        str(engagement_id),
+        "--roe-id",
+        roe_id,
+        "--scope-manifest",
+        scope_manifest,
+        "--resume",
+        "--max-iter",
+        str(max(3, max_iterations)),
+    ]
 
 
 def _safe_path_string(metadata: dict[str, Any], key: str) -> str:
