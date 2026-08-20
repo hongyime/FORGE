@@ -175,9 +175,10 @@ Progress:
 - Added read-only `forge monitoring due-plan [--limit N] [--json]` so due monitoring policies can be reviewed before `run-due`/worker mutates engagement DBs.
 - Doctor's Monitoring Schedules due-policy warning now points first to `forge monitoring due-plan --json` and includes a `review_due_monitoring` action item.
 - Verified B564 with focused monitoring/doctor/CLI-registry tests, broader monitoring/doctor/CLI-registry tests (`97 passed`), Ruff, py_compile, `git diff --check`, a local `monitoring due-plan --limit 5 --json` smoke, and a doctor smoke confirming the Monitoring Schedules remediation points to `due-plan` first.
+- Pushed B564 as `3bc0c34 feat: add monitoring due plan`.
 
 Next steps:
-- Commit and push B564 to `main`. Continue old product hardening from the next concrete quality-audit/doctor failure class after push.
+- Continue old product hardening from the next concrete quality-audit/doctor failure class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog, and Connector Action Plan, plus Monitoring Schedules due work that should now be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
