@@ -3449,7 +3449,10 @@ def resolve_ownership_conflict(
             """,
             (int(engagement_id), *superseded_ids),
         )
+    considered_count = len(selected_ids) + len(superseded_ids)
     return {
+        "schema_version": "forge.asset_graph.ownership_resolve.v1",
+        "execution_policy": "writes_asset_graph_ownership_resolution",
         "engagement_id": int(engagement_id),
         "entity_id": entity_id,
         "entity_key": selected["entity_key"],
@@ -3458,6 +3461,9 @@ def resolve_ownership_conflict(
         "selected_claim_ids": selected_ids,
         "superseded_claim_ids": superseded_ids,
         "superseded_status": superseded_status,
+        "total_count": considered_count,
+        "selected_count": len(selected_ids),
+        "omitted_count": len(superseded_ids),
         "owner": resolve_asset_owner(con, int(engagement_id), entity_key=str(selected["entity_key"])),
         "claims": ownership_claims_for_entity(
             con,

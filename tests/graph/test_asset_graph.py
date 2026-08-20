@@ -1575,7 +1575,24 @@ def test_graph_ownership_resolve_cli_outputs_json(tmp_path: Path, monkeypatch) -
     assert first.exit_code == 0, first.output
     assert second.exit_code == 0, second.output
     assert resolved.exit_code == 0, resolved.output
+    first_payload = json.loads(first.output)
+    assert first_payload["schema_version"] == "forge.asset_graph.ownership_set.v1"
+    assert first_payload["execution_policy"] == "writes_asset_graph_ownership_claim"
+    assert first_payload["total_count"] == 1
+    assert first_payload["selected_count"] == 1
+    assert first_payload["omitted_count"] == 0
+    second_payload = json.loads(second.output)
+    assert second_payload["schema_version"] == "forge.asset_graph.ownership_set.v1"
+    assert second_payload["execution_policy"] == "writes_asset_graph_ownership_claim"
+    assert second_payload["total_count"] == 1
+    assert second_payload["selected_count"] == 1
+    assert second_payload["omitted_count"] == 0
     payload = json.loads(resolved.output)
+    assert payload["schema_version"] == "forge.asset_graph.ownership_resolve.v1"
+    assert payload["execution_policy"] == "writes_asset_graph_ownership_resolution"
+    assert payload["total_count"] == 2
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 1
     assert payload["selected_owner"] == "app-team"
     assert payload["owner"]["owner_ref"] == "app-team"
     assert payload["owner"]["conflict"] is False
