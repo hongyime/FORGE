@@ -1803,11 +1803,7 @@ def _connector_catalog_check(
         if missing_connectors
         else ""
     )
-    remediation_suffix = (
-        f" Install missing local binaries: {missing_binaries}."
-        if missing_binaries
-        else ""
-    )
+    remediation_suffix = " Run `forge connectors install-plan --json` for safe local binary install guidance." if missing_binaries else ""
     return DoctorCheck(
         "Connector Catalog",
         "WARN" if missing else "OK",

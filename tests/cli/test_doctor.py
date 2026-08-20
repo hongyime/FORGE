@@ -124,7 +124,7 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert "planned fail-closed" in rows["Connector Catalog"].details
     assert "missing free-first binaries" in rows["Connector Catalog"].details
     assert "forge connectors list --json" in rows["Connector Catalog"].remediation
-    assert "Install missing local binaries" in rows["Connector Catalog"].remediation
+    assert "forge connectors install-plan --json" in rows["Connector Catalog"].remediation
     assert rows["Connector Action Plan"].status == "WARN"
     assert "free runnable:" in rows["Connector Action Plan"].details
     assert "missing binaries:" in rows["Connector Action Plan"].details
@@ -208,8 +208,9 @@ def test_collect_doctor_checks_warns_when_free_first_connectors_are_not_executab
     assert "wired operator paths" in row.details
     assert "catalog-only" in row.details
     assert "projectdiscovery_subfinder" in row.details
-    assert "gitleaks" in row.remediation
+    assert "gitleaks_local" in row.details
     assert "forge connectors list --json" in row.remediation
+    assert "forge connectors install-plan --json" in row.remediation
 
 
 def test_collect_doctor_checks_reports_active_validation_plugin_manifests(

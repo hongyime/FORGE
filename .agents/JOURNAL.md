@@ -46,3 +46,4 @@
 - 2026-08-20: Aligned default target resume-candidate scanning with dashboard legacy DB inclusion while preserving narrow explicit `--data-dir` scans.
 - 2026-08-20: Aligned doctor Workspace Access with dashboard/resume legacy DB visibility while leaving scheduled-job checks scoped to the configured data dir.
 - 2026-08-20: Added a read-only connector install-plan command so doctor setup can point to safe missing-binary guidance without executing installers.
+- 2026-08-20: Aligned Connector Catalog doctor remediation with the read-only connector install-plan command instead of raw missing-binary installer prose.

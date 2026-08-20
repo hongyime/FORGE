@@ -148,9 +148,12 @@ Progress:
 - Added read-only `forge connectors install-plan [--json]` so doctor can point operators at a safe missing-local-binary plan rather than vague manual installation text. The command groups missing binaries by connector, emits suggested install commands, and declares `plan_only_no_commands_executed`.
 - Verified B558 with focused connector/doctor/CLI registry tests (`102 passed`), Ruff, py_compile, `git diff --check`, and a real local `forge connectors install-plan --json` smoke. The smoke reports six missing local tools: detect-secrets, gitleaks, katana, nuclei, subfinder, and trufflehog.
 - Pushed B558 as `1e39c5d feat: add connector install plan`.
+- Subagent spawn was retried for a read-only next-backlog audit, but the harness still returned `agent thread limit reached`; continue locally until an existing agent slot is freed.
+- Aligned Connector Catalog doctor remediation with the new read-only install-plan command so the row now tells operators to run `forge connectors install-plan --json` instead of showing stale raw missing-binary installer prose.
+- Verified B559 with focused doctor/connector/CLI registry tests (`102 passed`), Ruff, py_compile, `git diff --check`, and a real local `forge doctor --json` smoke confirming the Connector Catalog remediation and `install_free_binaries` action both point to `forge connectors install-plan --json`.
 
 Next steps:
-- Continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Commit and push B559, then continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
