@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -9,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from forge.audit.manifest import summarize_run_audit_manifest
+
+_ENGAGEMENT_STATS_SIDECAR_RE = re.compile(r"^engagement_\d+_stats$")
 
 
 @dataclass(frozen=True)
@@ -66,13 +69,21 @@ def engagement_prefixed_artifact_files(
     )
 
 
+def is_report_metadata_sidecar(path: Path) -> bool:
+    return bool(_ENGAGEMENT_STATS_SIDECAR_RE.fullmatch(path.stem))
+
+
 def report_files(engagement_id: str, reports_dir: Path) -> list[Path]:
-    return engagement_prefixed_artifact_files(
-        reports_dir,
-        prefix="engagement",
-        engagement_id=engagement_id,
-        suffixes=(".md", ".pdf", ".json", ".csv", ".html"),
-    )
+    return [
+        path
+        for path in engagement_prefixed_artifact_files(
+            reports_dir,
+            prefix="engagement",
+            engagement_id=engagement_id,
+            suffixes=(".md", ".pdf", ".json", ".csv", ".html"),
+        )
+        if not is_report_metadata_sidecar(path)
+    ]
 
 
 def audit_files(engagement_id: str, reports_dir: Path) -> list[Path]:
@@ -146,6 +157,7 @@ __all__ = [
     "audit_files",
     "default_audit_manifest_artifact_callbacks",
     "engagement_prefixed_artifact_files",
+    "is_report_metadata_sidecar",
     "materialize_audit_manifest_artifacts",
     "report_files",
 ]

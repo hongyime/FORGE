@@ -29,6 +29,9 @@ def _write_dashboard_fixture(reports_dir: Path) -> None:
     (reports_dir / "engagement_1001_report_20260820T010101.json").write_text(
         "{}", encoding="utf-8"
     )
+    (reports_dir / "engagement_1001_stats.json").write_text(
+        "{}", encoding="utf-8"
+    )
     (detail_dir / "engagement-1001-acme.json").write_text(
         json.dumps(
             {
@@ -156,6 +159,10 @@ def test_collect_report_quality_audit_reports_latest_fallbacks_separately(
     )
     detail_payload = json.loads(detail_path.read_text(encoding="utf-8"))
     detail_payload["report_history"] = [
+        {
+            "family_stem": "engagement_1001_stats",
+            "artifact_name": "engagement_1001_stats.json",
+        },
         {
             "rendered_provider": "template",
             "generated_at": "2026-08-20 11:00:00",

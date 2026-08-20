@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from forge.reporting.audit_manifest_artifacts import is_report_metadata_sidecar
+
 _REPORT_EXPORT_ORDER = {
     ".md": 0,
     ".html": 1,
@@ -71,6 +73,8 @@ def report_family_groups(report_files: list[Path]) -> list[tuple[str, list[Path]
     family_mtimes: dict[str, float] = {}
     family_has_json: dict[str, bool] = {}
     for artifact in report_files:
+        if is_report_metadata_sidecar(artifact):
+            continue
         try:
             stat = artifact.stat()
         except OSError:

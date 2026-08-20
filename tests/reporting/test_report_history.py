@@ -122,6 +122,34 @@ def test_report_history_payload_is_public_report_artifact_contract(tmp_path: Pat
     ]
 
 
+def test_report_history_ignores_stats_sidecar_as_latest_family(tmp_path: Path) -> None:
+    report_stem = "engagement_1001_kill_chain_20260709T014412"
+    report_payload = {
+        "provider": "template",
+        "rendered_provider": "template",
+        "generated_at": "2026-07-09T09:44:12+00:00",
+    }
+    report_artifacts = _write_report_family(
+        tmp_path,
+        report_stem,
+        report_payload,
+        timestamp=1_783_590_252,
+        suffixes=(".md", ".json"),
+    )
+    stats_sidecar = tmp_path / "engagement_1001_stats.json"
+    stats_sidecar.write_text(json.dumps({"engagement_id": 1001}), encoding="utf-8")
+    os.utime(stats_sidecar, (1_783_600_000, 1_783_600_000))
+
+    history = report_history_payload([stats_sidecar, *report_artifacts])
+
+    assert [item["family_stem"] for item in history] == [report_stem]
+    assert report_summary_payload([stats_sidecar, *report_artifacts]) == history[0]
+    assert [path.name for path in latest_report_family_files([stats_sidecar, *report_artifacts])] == [
+        f"{report_stem}.md",
+        f"{report_stem}.json",
+    ]
+
+
 def test_report_preview_payload_preserves_href_and_bounds_preview(tmp_path: Path) -> None:
     report = tmp_path / "engagement_1001_report.md"
     report.write_text("abcdef", encoding="utf-8")

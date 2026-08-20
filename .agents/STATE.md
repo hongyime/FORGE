@@ -210,9 +210,12 @@ Progress:
 - Verified B573 with focused monitoring/doctor tests (`84 passed`), Ruff, py_compile, `git diff --check`, non-mutating `run-due --help` / `worker --help` smokes, a doctor JSON smoke showing capped monitoring remediation, and a read-only `monitoring due-plan --limit 0 --json` smoke showing 101 due policies. No monitoring `run-due`, worker execution, alert delivery, provider call, scheduled-task enablement, engagement mutation, live run, report regeneration, or credential persistence was started.
 - Pushed B573 as `5fc3550 fix: bound monitoring due execution`.
 - Read-only report-quality audit subagent found the next concrete backlog item: root `reports/engagement_<id>_stats.json` sidecars are counted as report families/latest backends, inflating `latest_report_backend_counts.none`.
+- Reclassified `engagement_<id>_stats.json` files as report metadata sidecars rather than report families across report artifact discovery, report-family grouping, quality-audit file inventory, and old dashboard `report_history` interpretation.
+- Verified B574 with focused reporting tests (`14 passed`), Ruff, py_compile, `git diff --check`, and a real local `report quality-audit --json --top-limit 5` smoke. Local latest backend counts changed from stats-sidecar `none:58, template:3` to actual `template:61`; no dashboard regeneration, report regeneration, engagement mutation, live run, provider call, scheduled-task change, or credential persistence was started.
+- The B574 quality-audit smoke surfaced the next real report-health backlog: `latest_fallback_reason_counts` now shows `gguf_model_missing:57`, previously hidden by stats sidecars.
 
 Next steps:
-- Fix the report-quality stats-sidecar classification bug. Remaining doctor attention is Safe Mode, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, and Connector Secret Store process-env reload guidance.
+- Commit/push B574, then investigate the latest GGUF-missing report-history backlog without regenerating reports unless explicitly intended. Remaining doctor attention is Safe Mode, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, and Connector Secret Store process-env reload guidance.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

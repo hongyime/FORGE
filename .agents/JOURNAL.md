@@ -61,3 +61,4 @@
 - 2026-08-20: Classified intentionally disabled TPH target-import scheduled tasks as paused/OFF in doctor unless the bridge is explicitly enabled by env.
 - 2026-08-20: Aligned ProjectDiscovery doctor rows and connector install-plan missing-binary guidance with env-aware connector binary resolution.
 - 2026-08-20: Added bounded monitoring run-due/worker apply limits with explicit --all overrides so due backlog execution is capped by default.
+- 2026-08-20: Reclassified engagement stats sidecars as report metadata so quality-audit latest backend counts reflect actual report families.

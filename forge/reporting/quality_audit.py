@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from forge.reporting.audit_manifest_artifacts import is_report_metadata_sidecar
 from forge.reporting.report_history import report_family_groups
 
 DEFAULT_LONG_RUN_SECONDS = 2700.0
@@ -178,10 +179,23 @@ def _report_entries(
 ) -> list[dict[str, Any]]:
     history = detail_payload.get("report_history")
     if isinstance(history, list):
-        entries = [item for item in history if isinstance(item, dict)]
+        entries = [
+            item
+            for item in history
+            if isinstance(item, dict) and not _is_report_metadata_entry(item)
+        ]
         if entries:
             return entries
     return [overview_report_summary] if overview_report_summary else []
+
+
+def _is_report_metadata_entry(entry: dict[str, Any]) -> bool:
+    family_stem = _text(entry.get("family_stem"))
+    artifact_name = _text(entry.get("artifact_name"))
+    return (
+        bool(family_stem)
+        and is_report_metadata_sidecar(Path(f"{family_stem}.json"))
+    ) or (bool(artifact_name) and is_report_metadata_sidecar(Path(artifact_name)))
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -195,7 +209,11 @@ def _text(value: Any) -> str:
 def _report_files(reports_dir: Path) -> list[Path]:
     if not reports_dir.exists():
         return []
-    return [path for path in reports_dir.rglob("*") if path.is_file()]
+    return [
+        path
+        for path in reports_dir.rglob("*")
+        if path.is_file() and not is_report_metadata_sidecar(path)
+    ]
 
 
 def _report_family_count(root_report_files: list[Path]) -> int:
