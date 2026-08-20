@@ -57,6 +57,9 @@ Progress:
 - Added passive offline `misp_event_import` support for local MISP event JSON through the sanitized CTI observation pipeline.
 - Verified B533 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B533 as `44b3986 feat: import offline misp events`.
+- Normalized MISP Unix timestamps to UTC ISO strings so offline MISP imports work with CTI `--since/--until` filters.
+- Verified B534 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`; commit/push pending.
 
 Next steps:
+- Commit and push B534.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.

@@ -283,7 +283,8 @@ rows or CSV columns), MISP event JSON (`Event.Attribute` rows), and STIX
 indicator bundles (`objects`). Imported CTI rows are stored as analyst
 inventory with
 sanitized source/provenance and are not reportable findings unless a later
-independent scoped workflow validates promoted seeds. Local `.gz` report files
+independent scoped workflow validates promoted seeds. MISP Unix timestamps are
+normalized to UTC ISO timestamps before time-window filters. Local `.gz` report files
 are decompressed before the same JSON/CSV parsing path; local `.zip` files use
 the first supported JSON, CSV, or GZ member by sorted archive name and reject
 archives without a supported report member. Local report files and decompressed

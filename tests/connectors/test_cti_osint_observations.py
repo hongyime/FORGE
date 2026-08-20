@@ -622,6 +622,57 @@ def test_cti_import_accepts_misp_event_attribute_shape(tmp_path: Path) -> None:
     assert json.loads(rows[0]["tags_json"]) == ["campaign-x", "phishing", "tlp:amber"]
 
 
+def test_cti_import_misp_unix_timestamps_work_with_observed_window(
+    tmp_path: Path,
+) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    report = {
+        "Event": {
+            "uuid": "event-2222",
+            "info": "MISP timestamp window",
+            "Attribute": [
+                {
+                    "uuid": "attribute-old",
+                    "type": "domain",
+                    "value": "old.acme.example",
+                    "timestamp": "1797724740",
+                },
+                {
+                    "uuid": "attribute-kept",
+                    "type": "domain",
+                    "value": "kept.acme.example",
+                    "timestamp": "1797724800",
+                },
+            ],
+        }
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="misp_event_import",
+                engagement_id=1001,
+                since="2026-12-20T00:00:00Z",
+                until="2026-12-20T00:01:00Z",
+            ),
+            report_text=json.dumps(report),
+        )
+        rows = con.execute(
+            "SELECT indicator_value, observed_at FROM cti_observations"
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert result["parsed_count"] == 2
+    assert result["filtered_count"] == 1
+    assert result["persisted_count"] == 1
+    assert result["skipped"][0]["reason"] == "before_since"
+    assert [(row["indicator_value"], row["observed_at"]) for row in rows] == [
+        ("kept.acme.example", "2026-12-20T00:00:00Z")
+    ]
+
+
 def test_cti_import_dry_run_does_not_write_observations_seeds_or_audit(
     tmp_path: Path,
 ) -> None:

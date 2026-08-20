@@ -914,7 +914,7 @@ def _misp_observation_item(raw: Mapping[str, Any], *, provider: str) -> dict[str
         "type": mapped_type,
         "value": mapped_value,
         "confidence": _misp_confidence(raw.get("to_ids"), raw.get("confidence")),
-        "observed_at": raw.get("timestamp") or raw.get("misp_event_timestamp") or raw.get("misp_event_date"),
+        "observed_at": _misp_observed_at(raw),
         "source_url": raw.get("reference") or raw.get("source_url") or "",
         "tags": _misp_tags(raw),
         "tlp": _misp_tlp(raw),
@@ -1053,6 +1053,25 @@ def _misp_confidence(to_ids: Any, explicit: Any) -> float:
     if text in {"0", "false", "no"}:
         return 0.4
     return 0.5
+
+
+def _misp_observed_at(raw: Mapping[str, Any]) -> str:
+    for key in ("timestamp", "misp_event_timestamp"):
+        value = _misp_unix_timestamp(raw.get(key))
+        if value:
+            return value
+    return str(raw.get("misp_event_date") or raw.get("date") or "")
+
+
+def _misp_unix_timestamp(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text or not re.fullmatch(r"\d{1,12}", text):
+        return ""
+    try:
+        parsed = datetime.fromtimestamp(int(text), tz=timezone.utc)
+    except (OSError, OverflowError, ValueError):
+        return ""
+    return parsed.isoformat().replace("+00:00", "Z")
 
 
 def _misp_tags(raw: Mapping[str, Any]) -> list[str]:
