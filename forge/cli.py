@@ -71,6 +71,7 @@ from forge.utils.kill_chain_runtime import (
     load_kill_chain_scope_manifest_metadata,
     normalize_kill_chain_runtime_options,
     prime_kill_chain_attack_mode_env,
+    scope_manifest_policy_flag,
 )
 from forge.orchestration.seed_promotion import (
     promote_cloud_asset_seed_refs as _promote_cloud_asset_seed_refs_for_engagement,
@@ -980,8 +981,25 @@ def kill_chain(
             "credential_validation_allowed": bool(credential_validate and live_allowed),
             "auto_run_detected_allowed": bool(auto_run_detected and live_allowed),
             "offensive_prereq_hints_included": bool(include_offensive_prereqs),
-            "destructive_actions_allowed": False,
-            "post_exploitation_allowed": False,
+            "destructive_actions_allowed": bool(
+                live_allowed
+                and scope_manifest_policy_flag(
+                    scope_manifest_metadata,
+                    "destructive_actions_allowed",
+                    "allow_destructive_actions",
+                    "destructive_actions",
+                )
+            ),
+            "post_exploitation_allowed": bool(
+                live_allowed
+                and scope_manifest_policy_flag(
+                    scope_manifest_metadata,
+                    "post_exploitation_allowed",
+                    "allow_post_exploitation",
+                    "post_exploitation",
+                    "post_ex",
+                )
+            ),
             "requires_explicit_roe": requires_roe,
             "roe_missing": bool(requires_roe and not roe_id),
         }

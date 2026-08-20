@@ -294,7 +294,10 @@ step.
 With `--start`, the importer launches the normal scoped `forge kill-chain`
 defaults for each new target, including attack mode, resume, and detected
 follow-on execution; `--roe-id` and the generated narrow scope manifest are
-still required before any live launch.
+still required before any live launch. Generated target-import scope manifests
+also include an explicit policy block for destructive and post-exploitation
+permission metadata, so dashboard/report policy flags are sourced from the
+target-specific ROE manifest rather than a global process default.
 
 `forge targets resume-candidates` is read-only. It scans the latest
 `kill_chain` row in each local engagement DB, classifies failed or cancelled

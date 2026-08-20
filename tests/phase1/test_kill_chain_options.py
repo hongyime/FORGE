@@ -13,6 +13,7 @@ from forge.utils.kill_chain_runtime import (
     normalize_kill_chain_runtime_options,
     normalize_roe_id,
     prime_kill_chain_attack_mode_env,
+    scope_manifest_policy_flag,
 )
 
 
@@ -142,6 +143,49 @@ def test_kill_chain_runtime_attack_env_is_explicitly_primed_after_validation() -
 def test_kill_chain_runtime_rejects_negative_report_loop_budget() -> None:
     with pytest.raises(ValueError, match="--report-max-loops must be zero or greater"):
         _runtime_options(report_max_loops=-1)
+
+
+def test_scope_manifest_policy_flag_reads_explicit_policy_block() -> None:
+    metadata = {
+        "raw": {
+            "policy": {
+                "destructive_actions_allowed": True,
+                "post_exploitation_allowed": True,
+            }
+        }
+    }
+
+    assert scope_manifest_policy_flag(
+        metadata,
+        "destructive_actions_allowed",
+        "allow_destructive_actions",
+    ) is True
+    assert scope_manifest_policy_flag(
+        metadata,
+        "post_exploitation_allowed",
+        "allow_post_exploitation",
+    ) is True
+    assert scope_manifest_policy_flag(metadata, "unknown_flag") is False
+
+
+def test_scope_manifest_policy_flag_accepts_top_level_aliases() -> None:
+    metadata = {
+        "raw": {
+            "allow_destructive_actions": True,
+            "allow_post_exploitation": True,
+        }
+    }
+
+    assert scope_manifest_policy_flag(
+        metadata,
+        "destructive_actions_allowed",
+        "allow_destructive_actions",
+    ) is True
+    assert scope_manifest_policy_flag(
+        metadata,
+        "post_exploitation_allowed",
+        "allow_post_exploitation",
+    ) is True
 
 
 def test_normalize_roe_id_collapses_whitespace_and_bounds_length() -> None:

@@ -192,9 +192,11 @@ Progress:
 - Aligned the Monitoring Schedules doctor warning with the read-only due-plan total so the row keeps sampled alert/delivery details but summarizes the full due backlog.
 - Verified B568 with focused doctor tests (`43 passed`), Ruff, py_compile, `git diff --check`, and real local `.venv\Scripts\forge.exe doctor --json` / `monitoring due-plan --limit 5 --json` smokes. Local doctor now reports 101 due/overdue monitoring policies while labeling the first-50 readiness sample separately.
 - Pushed B568 as `fca5ac6 fix: show total monitoring due backlog`.
+- Changed kill-chain live policy metadata to read destructive/post-ex permission flags from explicit scope-manifest policy fields instead of hard-coded false defaults, and generated target-import manifests now include those target-specific policy flags.
+- Verified B569 with focused target-import/runtime tests (`46 passed`), Ruff, py_compile, and `git diff --check`. No live kill-chain, resume-run, monitoring execution, scheduled-task enablement, provider call, report regeneration, engagement mutation, or credential persistence was started.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
+- Commit and push B569, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

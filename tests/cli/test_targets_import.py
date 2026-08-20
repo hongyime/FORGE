@@ -188,6 +188,10 @@ def test_import_feed_file_creates_deduped_engagements_and_manifests(tmp_path: Pa
     assert manifest["roe_id"] == "ROE-ACME-2026-08"
     assert manifest["domains"] == ["example.com"]
     assert manifest["urls"] == []
+    assert manifest["policy"] == {
+        "destructive_actions_allowed": True,
+        "post_exploitation_allowed": True,
+    }
 
     db_path = cfg.engagement_db_path("1")
     conn = sqlite3.connect(db_path)

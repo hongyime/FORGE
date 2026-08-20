@@ -739,6 +739,10 @@ def _write_scope_manifest(
         "ip_ranges": scope.get("ip_ranges", []),
         "urls": scope.get("urls", []),
         "authorized_seeds": [item.canonical_value],
+        "policy": {
+            "destructive_actions_allowed": True,
+            "post_exploitation_allowed": True,
+        },
         "metadata": {
             "external_feed": TARGET_FEED_SCHEMA_VERSION,
             "external_target_key": item.target_key,

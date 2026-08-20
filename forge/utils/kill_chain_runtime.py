@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -219,6 +219,25 @@ def prime_kill_chain_attack_mode_env(
     env_map.setdefault("FORGE_POST_LATERAL_ASSUME_YES", "1")
 
 
+def scope_manifest_policy_flag(
+    scope_manifest_metadata: Mapping[str, Any] | None,
+    *keys: str,
+    default: bool = False,
+) -> bool:
+    """Return an explicit boolean policy flag from loaded scope-manifest metadata."""
+    if not isinstance(scope_manifest_metadata, Mapping):
+        return default
+    raw_manifest = scope_manifest_metadata.get("raw")
+    raw_manifest_dict = raw_manifest if isinstance(raw_manifest, Mapping) else {}
+    raw_policy = raw_manifest_dict.get("policy")
+    raw_policy_dict = raw_policy if isinstance(raw_policy, Mapping) else {}
+    for source in (raw_policy_dict, raw_manifest_dict, scope_manifest_metadata):
+        for key in keys:
+            if key in source:
+                return bool(source.get(key))
+    return default
+
+
 def load_kill_chain_scope_manifest_metadata(
     options: KillChainRuntimeOptions,
     *,
@@ -262,4 +281,5 @@ __all__ = [
     "normalize_kill_chain_runtime_options",
     "normalize_roe_id",
     "prime_kill_chain_attack_mode_env",
+    "scope_manifest_policy_flag",
 ]
