@@ -131,9 +131,10 @@ Progress:
 - Fixed the next public CLI contract drift found during continuation: `forge report quality-audit --top-limit N` is now accepted as a compatibility alias for `--top N`.
 - Documented the alias in README, added SPEC checkpoint B553, and added a focused CLI regression proving the alias bounds sample rows.
 - Verified B553 with focused quality-audit/CLI registry tests (`23 passed`), Ruff, py_compile, `git diff --check`, and a real local `forge report quality-audit --json --top-limit 50` smoke. The smoke returned the current historical quality backlog: 829 dashboard engagements, 3,139 report files, 49 failed runs, 3 long runs, 4 dashboard refresh failures, and 149 GGUF-missing fallback generations.
+- Pushed B553 as `0e77bbf fix: accept quality audit top limit alias`.
 
 Next steps:
-- Commit and push B553; then continue old product hardening from the next concrete quality-audit failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Continue old product hardening from the next concrete quality-audit failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
