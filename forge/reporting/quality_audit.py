@@ -566,6 +566,26 @@ def _operator_action_plan(
         sample_limit = max(0, int(top_limit))
         sampled_stale_reports = stale_reports[:sample_limit]
         omitted_count = max(0, len(stale_reports) - len(sampled_stale_reports))
+        stale_plan_command = [
+            "forge",
+            "report",
+            "stale-plan",
+            "--json",
+            "--limit",
+            str(len(stale_reports)),
+        ]
+        stale_dry_run_command = [
+            "forge",
+            "report",
+            "stale-run",
+            "--dry-run",
+            "--json",
+            "--limit",
+            str(len(stale_reports)),
+        ]
+        follow_up_commands = [stale_dry_run_command]
+        if omitted_count:
+            follow_up_commands.insert(0, stale_plan_command)
         actions.append(
             {
                 "id": "regenerate_stale_reports",
@@ -585,29 +605,8 @@ def _operator_action_plan(
                     for row in sampled_stale_reports
                     if isinstance(row.get("report_generate_command"), list)
                 ],
-                "follow_up_commands": (
-                    [
-                        [
-                            "forge",
-                            "report",
-                            "stale-plan",
-                            "--json",
-                            "--limit",
-                            str(len(stale_reports)),
-                        ],
-                        [
-                            "forge",
-                            "report",
-                            "stale-run",
-                            "--dry-run",
-                            "--json",
-                            "--limit",
-                            str(len(stale_reports)),
-                        ]
-                    ]
-                    if omitted_count
-                    else []
-                ),
+                "follow_up_commands": follow_up_commands,
+                "batch_dry_run_command": stale_dry_run_command,
                 "batch_run_command": [
                     "forge",
                     "report",

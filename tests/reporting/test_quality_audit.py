@@ -324,6 +324,18 @@ def test_collect_report_quality_audit_marks_stale_gguf_fallbacks_when_model_exis
     assert action_by_id["regenerate_stale_reports"]["execution_policy"] == (
         "plan_only_no_commands_executed"
     )
+    assert action_by_id["regenerate_stale_reports"]["follow_up_commands"] == [
+        ["forge", "report", "stale-run", "--dry-run", "--json", "--limit", "1"]
+    ]
+    assert action_by_id["regenerate_stale_reports"]["batch_dry_run_command"] == [
+        "forge",
+        "report",
+        "stale-run",
+        "--dry-run",
+        "--json",
+        "--limit",
+        "1",
+    ]
     assert action_by_id["regenerate_stale_reports"]["batch_run_command"] == [
         "forge",
         "report",
@@ -392,6 +404,15 @@ def test_collect_report_quality_audit_shows_omitted_stale_report_commands(
     assert action["follow_up_commands"] == [
         ["forge", "report", "stale-plan", "--json", "--limit", "3"],
         ["forge", "report", "stale-run", "--dry-run", "--json", "--limit", "3"],
+    ]
+    assert action["batch_dry_run_command"] == [
+        "forge",
+        "report",
+        "stale-run",
+        "--dry-run",
+        "--json",
+        "--limit",
+        "3",
     ]
 
 
