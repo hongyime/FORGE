@@ -245,9 +245,10 @@ Progress:
 - Pushed B582 as `360be48 fix: make audit action plans complete`.
 - Added read-only `forge report stale-plan [--reports-dir reports] [--limit N] [--json]`, backed by `collect_stale_report_repair_plan()`, so stale latest-report regeneration commands can be reviewed as a dedicated plan without running report generation.
 - Verified B583 with focused reporting tests (`12 passed`), focused CLI registry tests (`2 passed`), Ruff, py_compile, `git diff --check`, and real local read-only stale-plan JSON/human smokes. Local `stale-plan --json --limit 5` reports schema `forge.report_stale_repair_plan.v1`, 57 stale reports, 5 sampled commands, 52 omitted commands, and execution policy `plan_only_no_commands_executed`. No report regeneration, resume-run, kill-chain, provider call, scheduled-task change, monitoring apply, engagement mutation, or credential persistence was started.
+- Pushed B583 as `7fe5c9b feat: add report stale repair plan`.
 
 Next steps:
-- Commit and push B583, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
