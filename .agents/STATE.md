@@ -48,6 +48,9 @@ Progress:
 - Added a shared decoded-size cap for offline CTI report-file reads across plain, `.gz`, `.zip`, and nested gzip-in-ZIP inputs.
 - Verified B530 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B530 as `11c350a feat: bound cti report reads`.
+- Added sanitized CTI report-read metadata in import JSON: `report_container_format` and ZIP `report_member`.
+- Verified B531 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`; commit/push pending.
 
 Next steps:
+- Commit and push B531.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.

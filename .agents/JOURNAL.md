@@ -16,3 +16,4 @@
 - 2026-08-20: Added local `.gz` CTI report-file support so compressed offline exports are decompressed before the same sanitized JSON/CSV import path.
 - 2026-08-20: Added constrained local `.zip` CTI report-file support with deterministic supported-member selection and no archive extraction to disk.
 - 2026-08-20: Added a shared decoded-size cap for local CTI report files, including plain, gzip, ZIP member, and nested gzip-in-ZIP inputs.
+- 2026-08-20: Added sanitized CTI report-read metadata so import JSON identifies plain/gzip/zip inputs and the selected ZIP member without storing report bodies.

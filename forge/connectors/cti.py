@@ -71,10 +71,11 @@ def import_cti_observations(
     engagement_id = int(config.engagement_id)
     scope = _scope_for_engagement(con, engagement_id)
     text = report_text
+    report_read_metadata = {"report_container_format": "inline", "report_member": ""}
     if text is None:
         if config.report_path is None:
             raise ValueError("report_path is required")
-        text = _read_report_text(config.report_path)
+        text, report_read_metadata = _read_report_text(config.report_path)
     raw_items, source_format = _report_items(text)
     limit = _normalize_limit(config.limit)
     min_confidence = _normalize_min_confidence(config.min_confidence)
@@ -245,6 +246,8 @@ def import_cti_observations(
         "processed_item_count": len(raw_items),
         "limited_item_count": limited_item_count,
         "source_format": source_format,
+        "report_container_format": report_read_metadata["report_container_format"],
+        "report_member": report_read_metadata["report_member"],
         "parsed_count": parsed_count,
         "persisted_count": persisted_count,
         "duplicate_count": duplicate_count,
@@ -552,17 +555,23 @@ def _payload_items(payload: Any) -> list[Any]:
     raise ValueError("CTI observation report does not contain observations/items/data")
 
 
-def _read_report_text(path: Path) -> str:
+def _read_report_text(path: Path) -> tuple[str, dict[str, str]]:
     if path.suffix.lower() == ".zip":
         return _read_zipped_report_text(path)
     if path.suffix.lower() == ".gz":
-        return _decode_report_bytes(_read_gzip_bytes_capped(path))
+        return _decode_report_bytes(_read_gzip_bytes_capped(path)), {
+            "report_container_format": "gzip",
+            "report_member": "",
+        }
     if path.stat().st_size > MAX_CTI_REPORT_TEXT_BYTES:
         raise ValueError("CTI observation report file is too large")
-    return _decode_report_bytes(path.read_bytes())
+    return _decode_report_bytes(path.read_bytes()), {
+        "report_container_format": "plain",
+        "report_member": "",
+    }
 
 
-def _read_zipped_report_text(path: Path) -> str:
+def _read_zipped_report_text(path: Path) -> tuple[str, dict[str, str]]:
     try:
         with zipfile.ZipFile(path) as archive:
             candidates = [
@@ -580,7 +589,10 @@ def _read_zipped_report_text(path: Path) -> str:
         raise ValueError("CTI observation report is not a valid ZIP file") from exc
     if selected.filename.lower().endswith(".gz"):
         data = _decompress_gzip_bytes_capped(data)
-    return _decode_report_bytes(data)
+    return _decode_report_bytes(data), {
+        "report_container_format": "zip",
+        "report_member": _safe_report_member_name(selected.filename),
+    }
 
 
 def _read_gzip_bytes_capped(path: Path) -> bytes:
@@ -608,6 +620,16 @@ def _decode_report_bytes(data: bytes) -> str:
         return data.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise ValueError("CTI observation report is not valid UTF-8 text") from exc
+
+
+def _safe_report_member_name(value: str) -> str:
+    return (
+        str(value or "")
+        .replace("\x00", "")
+        .replace("\r", " ")
+        .replace("\n", " ")
+        .strip()[:240]
+    )
 
 
 def _zip_report_member_supported(filename: str) -> bool:

@@ -1065,6 +1065,8 @@ def test_connector_cli_import_cti_invokes_offline_importer(
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["connector_id"] == "stix_taxii_import"
+    assert payload["report_container_format"] == "plain"
+    assert payload["report_member"] == ""
     assert payload["persisted_count"] == 1
     assert payload["promoted_seed_count"] == 1
 
@@ -1111,6 +1113,8 @@ def test_connector_cli_import_cti_reads_gzipped_csv_export(
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["source_format"] == "csv"
+    assert payload["report_container_format"] == "gzip"
+    assert payload["report_member"] == ""
     assert payload["parsed_count"] == 1
     assert payload["persisted_count"] == 1
     assert payload["parsed_indicator_type_counts"] == {"domain": 1}
@@ -1165,6 +1169,8 @@ def test_connector_cli_import_cti_reads_zipped_csv_export(
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["source_format"] == "csv"
+    assert payload["report_container_format"] == "zip"
+    assert payload["report_member"] == "exports/urlhaus.csv"
     assert payload["parsed_count"] == 1
     assert payload["persisted_count"] == 1
     assert payload["parsed_indicator_type_counts"] == {"url": 1}
