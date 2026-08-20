@@ -147,13 +147,33 @@ def collect_report_quality_audit(
         policy_flag_rows=policy_flag_rows,
         top_limit=max(0, int(top_limit)),
     )
+    selected_review_count = (
+        len(latest_fallback_reports[: max(0, int(top_limit))])
+        + len(policy_flag_rows[: max(0, int(top_limit))])
+        + len(long_runs[: max(0, int(top_limit))])
+        + len(failed_runs[: max(0, int(top_limit))])
+        + len(dashboard_refresh_failures[: max(0, int(top_limit))])
+        + len(historical_dashboard_refresh_failures[: max(0, int(top_limit))])
+    )
+    total_review_count = (
+        len(latest_fallback_reports)
+        + len(policy_flag_rows)
+        + len(long_runs)
+        + len(failed_runs)
+        + len(dashboard_refresh_failures)
+        + len(historical_dashboard_refresh_failures)
+    )
 
     return {
         "schema_version": "forge.report_quality_audit.v1",
+        "execution_policy": "read_only_report_inventory_no_commands_executed",
         "reports_dir": str(reports_root),
         "dashboard_generated_at": dashboard_generated_at,
         "engagement_count": len(engagements),
         "report_file_count": len(report_files),
+        "total_count": total_review_count,
+        "selected_count": selected_review_count,
+        "omitted_count": max(0, total_review_count - selected_review_count),
         "root_report_file_count": len(root_report_files),
         "dashboard_html_count": len(dashboard_html_files),
         "report_family_count": _report_family_count(root_report_files),
@@ -216,6 +236,7 @@ def collect_stale_report_repair_plan(
             int(action.get("sample_limit", sample_limit)) if action else sample_limit
         ),
         "sample_count": int(action.get("sample_count", 0)) if action else 0,
+        "selected_count": int(action.get("sample_count", 0)) if action else 0,
         "omitted_count": int(action.get("omitted_count", 0)) if action else 0,
         "commands": commands,
         "follow_up_commands": follow_up_commands,

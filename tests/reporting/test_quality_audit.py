@@ -105,6 +105,10 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
     )
 
     assert payload["schema_version"] == "forge.report_quality_audit.v1"
+    assert payload["execution_policy"] == "read_only_report_inventory_no_commands_executed"
+    assert payload["total_count"] == 5
+    assert payload["selected_count"] == 5
+    assert payload["omitted_count"] == 0
     assert payload["engagement_count"] == 1
     assert payload["report_file_count"] == 6
     assert payload["root_report_file_count"] == 2
@@ -408,6 +412,7 @@ def test_collect_stale_report_repair_plan_is_read_only_command_plan(
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
     assert payload["status"] == "ready"
     assert payload["total_count"] == 1
+    assert payload["selected_count"] == 1
     assert payload["sample_limit"] == 1
     assert payload["sample_count"] == 1
     assert payload["omitted_count"] == 0
@@ -595,6 +600,7 @@ def test_report_stale_plan_cli_outputs_json(tmp_path: Path, monkeypatch) -> None
     payload = json.loads(result.output)
     assert payload["schema_version"] == "forge.report_stale_repair_plan.v1"
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["selected_count"] == 1
     assert payload["commands"][0] == [
         "forge",
         "report",
