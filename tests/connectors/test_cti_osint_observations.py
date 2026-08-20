@@ -349,6 +349,11 @@ def test_cti_observation_import_persists_normalized_rows_and_promotes_scoped_see
     )
     assert result["status"] == "completed"
     assert result["result_schema_version"] == "forge.cti_observation_import.v1"
+    assert result["schema_version"] == "forge.cti_observation_import.v1"
+    assert result["execution_policy"] == "writes_normalized_cti_observations_and_audit"
+    assert result["total_count"] == result["total_item_count"]
+    assert result["selected_count"] == result["processed_item_count"]
+    assert result["omitted_count"] == result["limited_item_count"]
     assert result["parsed_count"] == 3
     assert result["persisted_count"] == 2
     assert result["duplicate_count"] == 1
@@ -1180,6 +1185,9 @@ def test_cti_import_limit_bounds_processed_items(tmp_path: Path) -> None:
     assert result["total_item_count"] == 3
     assert result["processed_item_count"] == 2
     assert result["limited_item_count"] == 1
+    assert result["total_count"] == 3
+    assert result["selected_count"] == 2
+    assert result["omitted_count"] == 1
     assert result["parsed_count"] == 2
     assert result["persisted_count"] == 2
     assert values == ["one.acme.example", "two.acme.example"]
@@ -1783,6 +1791,7 @@ def test_connector_cli_import_cti_dry_run_writes_nothing(
     finally:
         con.close()
     assert payload["status"] == "dry_run"
+    assert payload["execution_policy"] == "dry_run_no_rows_seeds_or_audit_written"
     assert payload["persisted_count"] == 0
     assert payload["would_persist_count"] == 1
     assert payload["promoted_seed_count"] == 0
@@ -1961,6 +1970,9 @@ def test_connector_cli_import_cti_limit_is_passed_to_importer(
     assert payload["total_item_count"] == 2
     assert payload["processed_item_count"] == 1
     assert payload["limited_item_count"] == 1
+    assert payload["total_count"] == 2
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 1
     assert payload["persisted_count"] == 1
 
 

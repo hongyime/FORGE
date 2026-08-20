@@ -247,6 +247,12 @@ def import_cti_observations(
 
     result = {
         "result_schema_version": CTI_IMPORT_RESULT_SCHEMA_VERSION,
+        "schema_version": CTI_IMPORT_RESULT_SCHEMA_VERSION,
+        "execution_policy": (
+            "dry_run_no_rows_seeds_or_audit_written"
+            if config.dry_run
+            else "writes_normalized_cti_observations_and_audit"
+        ),
         "connector_id": connector_id,
         "engagement_id": engagement_id,
         "status": "completed",
@@ -260,6 +266,9 @@ def import_cti_observations(
         "total_item_count": total_item_count,
         "processed_item_count": len(raw_items),
         "limited_item_count": limited_item_count,
+        "total_count": total_item_count,
+        "selected_count": len(raw_items),
+        "omitted_count": limited_item_count,
         "source_format": source_format,
         "report_container_format": report_read_metadata["report_container_format"],
         "report_member": report_read_metadata["report_member"],
