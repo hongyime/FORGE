@@ -3,6 +3,7 @@
 Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
 
 Progress:
+- Verified B600 locally: quality-audit resume review follow-up now points to `forge targets resume-run --dry-run --redact-paths --json` and long-run guidance names the redacted dry-run rehearsal. Push is pending.
 - Pushed B599 as `962cd94 fix: redact resume review rehearsals`: `targets resume-candidates --redact-paths` now hides local candidate paths, `targets resume-run --dry-run --redact-paths` rehearses without ledger/lock/child launch and hides local paths, live redacted resume-run blocks, and `report policy-plan` labels `*_no` counts as generated latest-run metadata with per-sample reasons.
 - `FORGE Import theprawnhunter Targets` scheduled task was disabled; no active FORGE/telegramhunter/theprawnhunter process was found.
 - Three subagents completed read-only research. No commands from external links were run, cloned, or installed.

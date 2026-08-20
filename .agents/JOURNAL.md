@@ -88,3 +88,4 @@
 - 2026-08-21: Added `monitoring run-due --dry-run` and surfaced it from due-plan/doctor so due monitoring can be rehearsed with the exact run command before any snapshot/alert/schedule writes.
 - 2026-08-21: Corrected Connector Action Plan optional-key guidance to the actual `forge connectors secret-set --value-env` command so doctor emits executable setup steps without secret values.
 - 2026-08-21: Added path-neutral resume review rehearsals and policy-plan source/reason metadata so operators can share dry-run review output and understand `*_no` counts without changing live defaults.
+- 2026-08-21: Quality-audit resume review now recommends the path-redacted dry-run rehearsal by default, keeping review output non-mutating and shareable.

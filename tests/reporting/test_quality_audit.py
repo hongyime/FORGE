@@ -127,7 +127,16 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
         ["forge", "targets", "resume-plan", "--json", "--redact-paths", "--limit", "1"]
     ]
     assert action_by_id["review_resume_plan"]["follow_up_commands"] == [
-        ["forge", "targets", "resume-run", "--dry-run", "--json", "--limit", "1"]
+        [
+            "forge",
+            "targets",
+            "resume-run",
+            "--dry-run",
+            "--redact-paths",
+            "--json",
+            "--limit",
+            "1",
+        ]
     ]
     assert action_by_id["review_long_runs"]["total_count"] == 1
     assert action_by_id["review_long_runs"]["follow_up_commands"] == [
@@ -427,7 +436,7 @@ def test_collect_long_run_review_plan_is_read_only_review_plan(tmp_path: Path) -
     assert payload["commands"] == []
     assert payload["samples"][0]["id"] == "1001"
     assert payload["samples"][0]["elapsed_seconds"] == 3100.5
-    assert "resume-run --dry-run" in payload["review_guidance"]
+    assert "resume-run --dry-run --redact-paths" in payload["review_guidance"]
     assert "live resume" in payload["review_guidance"]
 
 
@@ -505,7 +514,11 @@ def test_report_quality_audit_cli_prints_operator_action_plan(tmp_path: Path) ->
     assert "operator action plan" in result.output
     assert "review_resume_plan" in result.output
     assert "forge targets resume-plan --json --redact-paths --limit 1" in result.output
-    assert "forge targets resume-run --dry-run --json --limit 1" in result.output
+    normalized_output = " ".join(result.output.split())
+    assert (
+        "forge targets resume-run --dry-run --redact-paths --json --limit 1"
+        in normalized_output
+    )
 
 
 def test_report_quality_audit_cli_prints_follow_up_commands(
