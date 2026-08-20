@@ -189,9 +189,11 @@ Progress:
 - Added Windows persistent `FORGE_ENGAGEMENT_KEY` detection to `forge connectors secret-key-plan --json` as a non-secret `persistent_key_hint` and changed doctor to report a restart/process-env warning when the key exists at user/machine scope but this shell has not inherited it.
 - Verified B567 with focused key-plan/doctor tests, full doctor tests (`45 passed`), Ruff, py_compile, `git diff --check`, and local secret-key-plan/doctor smokes. Local smoke reports user-level key length/fingerprint only and no secret material.
 - Pushed B567 as `40e9ba3 fix: detect persistent connector secret key`.
+- Aligned the Monitoring Schedules doctor warning with the read-only due-plan total so the row keeps sampled alert/delivery details but summarizes the full due backlog.
+- Verified B568 with focused doctor tests (`43 passed`), Ruff, py_compile, `git diff --check`, and real local `.venv\Scripts\forge.exe doctor --json` / `monitoring due-plan --limit 5 --json` smokes. Local doctor now reports 101 due/overdue monitoring policies while labeling the first-50 readiness sample separately.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, and Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply.
+- Commit and push B568, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

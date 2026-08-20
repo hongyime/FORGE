@@ -1388,6 +1388,69 @@ def test_collect_doctor_checks_warns_on_due_monitoring_schedules(tmp_path) -> No
     )
 
 
+def test_collect_doctor_checks_uses_due_plan_total_for_monitoring_summary(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    db_root = tmp_path / "engagements"
+    db_root.mkdir()
+    con = sqlite3.connect(db_root / "1001.db")
+    try:
+        apply_schema(con)
+        run_migrations(con)
+        con.executescript(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (1001, 'Acme Monitoring', '["acme.example"]', 'ACTIVE', 'doctor-test');
+
+            INSERT INTO monitoring_snapshots
+                (id, engagement_id, policy_id, snapshot_kind, state_hash, state_json, summary_json)
+            VALUES
+                (11, 1001, 7, 'manual', 'sha256:baseline', '{}', '{}');
+
+            INSERT INTO monitoring_policies
+                (id, engagement_id, name, enabled, schedule_interval_minutes, mode,
+                 last_snapshot_id, last_run_at, next_run_at)
+            VALUES
+                (7, 1001, 'Hourly passive', 1, 60, 'passive',
+                 11, '2026-07-09T09:00:00Z', '2000-01-01T00:00:00Z');
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    def _fake_due_plan(_data_dir, *, now=None, limit=None):
+        assert now
+        assert limit == 0
+        return {
+            "db_count": 101,
+            "engagement_count": 101,
+            "due_policy_count": 101,
+            "planned_policy_count": 0,
+            "limited_policy_count": 101,
+            "errors": [],
+        }
+
+    monkeypatch.setattr("forge.doctor.monitoring_due_plan_for_data_dir", _fake_due_plan)
+
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        which=lambda _name: None,
+        provider_discovery=_provider_discovery,
+    )
+
+    row = _rows(checks)["Monitoring Schedules"]
+    assert row.status == "WARN"
+    assert "1/1 enabled policy" in row.details
+    assert "1 due/overdue" in row.details
+    assert "due-plan total 101 due/overdue across 101 engagement(s) in 101 DB(s)" in row.details
+    action_by_id = {item["id"]: item for item in row.action_items}
+    assert action_by_id["review_due_monitoring"]["summary"] == (
+        "101 due/overdue monitoring policy(ies)"
+    )
+
+
 def test_collect_doctor_checks_warns_on_unrouted_monitoring_alerts(tmp_path) -> None:
     db_root = tmp_path / "engagements"
     db_root.mkdir()

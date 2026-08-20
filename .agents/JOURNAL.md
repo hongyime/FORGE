@@ -55,3 +55,4 @@
 - 2026-08-20: Aligned connector binary discovery across runtime, install-plan, and doctor; full bootstrap now best-effort installs bounded free/local connector tools while leaving TruffleHog as manual guidance.
 - 2026-08-20: Added target resume-plan/resume-run so historical failed target-import candidates can be planned read-only or resumed strictly sequentially with a ledger and lock.
 - 2026-08-20: Added non-secret Windows persistent FORGE_ENGAGEMENT_KEY detection so doctor distinguishes stale process env from missing connector secret-store setup.
+- 2026-08-20: Aligned Monitoring Schedules doctor output with the read-only due-plan total so bounded readiness sampling no longer understates the due monitoring backlog.

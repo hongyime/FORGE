@@ -34,6 +34,7 @@ from forge.db.schema import SCHEMA_VERSION
 from forge.engagement_ids import numeric_engagement_db_files
 from forge.graph.assets import list_asset_graph
 from forge.monitoring.delivery import count_unrouted_monitoring_alerts
+from forge.monitoring.runner import monitoring_due_plan_for_data_dir
 from forge.remediation.workflow import remediation_review_queue
 from forge.utils.intel import provider_catalog_policy_summary
 
@@ -869,7 +870,18 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
             _clip(f"{checked - len(stale)}/{len(db_paths)} ready; " + "; ".join(stale), limit=260),
             "Open stale engagement DBs with Forge so migrations add monitoring schedule tables.",
         )
-    if policy_count == 0 and engagement_count > 0:
+
+    due_plan: dict[str, Any] | None = None
+    due_plan_error = ""
+    try:
+        due_plan = monitoring_due_plan_for_data_dir(data_dir, now=now, limit=0)
+    except Exception as exc:  # noqa: BLE001 - doctor must keep reporting sampled readiness.
+        due_plan_error = _clip(str(exc), limit=80)
+    total_due_count = due_count
+    if due_plan:
+        total_due_count = int(due_plan.get("due_policy_count") or 0)
+
+    if policy_count == 0 and engagement_count > 0 and not total_due_count:
         return DoctorCheck(
             "Monitoring Schedules",
             "OPTIONAL",
@@ -883,6 +895,21 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
             ),
         )
 
+    due_plan_details: list[str] = []
+    if due_plan:
+        due_plan_db_count = int(due_plan.get("db_count") or 0)
+        due_plan_engagement_count = int(due_plan.get("engagement_count") or 0)
+        due_plan_errors = due_plan.get("errors") if isinstance(due_plan.get("errors"), list) else []
+        if len(db_paths) > 50 or total_due_count != due_count:
+            due_plan_details.append(
+                f"due-plan total {total_due_count} due/overdue across "
+                f"{due_plan_engagement_count} engagement(s) in {due_plan_db_count} DB(s)"
+            )
+        if due_plan_errors:
+            due_plan_details.append(f"{len(due_plan_errors)} due-plan error(s)")
+    elif due_plan_error:
+        due_plan_details.append(f"due-plan total unavailable: {due_plan_error}")
+
     details = (
         f"{enabled_count}/{policy_count} enabled policy(ies); {due_count} due/overdue; "
         f"{open_alert_count} open alert(s); {failed_delivery_count} failed delivery row(s); "
@@ -891,6 +918,8 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
         f"{active_suppression_count} active suppression(s); "
         f"{no_baseline_count} enabled policy(ies) without a baseline{suffix}"
     )
+    if due_plan_details:
+        details = f"{details}; " + "; ".join(due_plan_details)
     if unrouted_alert_count:
         return DoctorCheck(
             "Monitoring Schedules",
@@ -905,7 +934,7 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
             details,
             "Run `forge monitoring deliver-alerts --json` and inspect failed delivery rows.",
         )
-    if due_count:
+    if total_due_count:
         return DoctorCheck(
             "Monitoring Schedules",
             "WARN",
@@ -919,7 +948,7 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
                     "id": "review_due_monitoring",
                     "priority": "45",
                     "status": "attention",
-                    "summary": f"{due_count} due/overdue monitoring policy(ies)",
+                    "summary": f"{total_due_count} due/overdue monitoring policy(ies)",
                     "command": "forge monitoring due-plan --json",
                 },
             ),
