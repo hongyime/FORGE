@@ -2693,12 +2693,13 @@ def _base_styles() -> str:
     .subtle,.muted{color:var(--muted)}
     .hero-meta{text-align:right;min-width:180px}
     .hero-meta .stamp{font-size:12px;color:var(--muted)}
-    .chips{display:flex;flex-wrap:wrap;gap:8px}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;min-width:0;max-width:100%}
     .chip{
       display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;
+      max-width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;word-break:break-word;
       border:1px solid var(--border);background:rgba(255,255,255,.03);color:var(--text)
     }
-    .chip code{background:none;padding:0;color:var(--accent-strong)}
+    .chip code{background:none;padding:0;color:var(--accent-strong);white-space:normal;overflow-wrap:anywhere}
     .stats{
       display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
       gap:12px;margin:18px 0 24px;
@@ -2712,7 +2713,7 @@ def _base_styles() -> str:
     .stat .value{margin-top:6px;font-size:28px;font-weight:700;letter-spacing:-.03em}
     .panel{
       border:1px solid var(--border);border-radius:18px;background:rgba(17,23,42,.92);
-      box-shadow:var(--shadow);overflow:hidden;
+      box-shadow:var(--shadow);min-width:0;
     }
     .panel-head{
       display:flex;justify-content:space-between;gap:12px;align-items:center;
@@ -2720,12 +2721,14 @@ def _base_styles() -> str:
     }
     .panel-head h2,.panel-head h3{margin:0;font-size:15px;letter-spacing:.02em}
     .panel-body{padding:18px}
+    .table-scroll{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden}
     table{width:100%;border-collapse:collapse}
     th{
       color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
       text-align:left;padding:12px 12px 10px;border-bottom:1px solid var(--border);
       background:rgba(255,255,255,.02);position:sticky;top:0;
     }
+    th,td{overflow-wrap:anywhere;word-break:break-word;min-width:0}
     td{padding:11px 12px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
     tbody tr:hover{background:rgba(255,255,255,.025)}
     .right{text-align:right}
@@ -2733,6 +2736,7 @@ def _base_styles() -> str:
     .tiny{font-size:12px}
     .pill{
       display:inline-block;padding:3px 8px;border-radius:999px;border:1px solid var(--border);
+      max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word;
       background:rgba(255,255,255,.04);font-size:11px;color:var(--text)
     }
     .pill.ok{color:var(--good);border-color:rgba(119,214,138,.35)}
@@ -2756,14 +2760,14 @@ def _base_styles() -> str:
       padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid var(--border)
     }
     .meta .k{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
-    .meta .v{font-size:14px;word-break:break-word}
+    .meta .v{display:block;font-size:14px;overflow-wrap:anywhere;word-break:break-word}
     .section-stack{display:flex;flex-direction:column;gap:16px}
     .artifact-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
     .artifact{
       padding:14px;border-radius:14px;border:1px solid var(--border);
-      background:rgba(255,255,255,.03)
+      background:rgba(255,255,255,.03);min-width:0
     }
-    .artifact strong{display:block;margin-bottom:6px}
+    .artifact strong,.artifact a{display:block;margin-bottom:6px;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
     .artifact-kind{
       display:inline-flex;align-items:center;padding:3px 8px;margin-bottom:8px;border-radius:999px;
       border:1px solid var(--border);background:rgba(255,255,255,.05);font-size:11px;text-transform:uppercase;
@@ -2774,14 +2778,16 @@ def _base_styles() -> str:
     }
     .route-card{
       padding:18px;border-radius:16px;border:1px solid var(--border);
-      background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015))
+      background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015));
+      min-width:0;overflow-wrap:anywhere;word-break:break-word
     }
     .route-card h3{margin:0 0 10px;font-size:14px;letter-spacing:.03em}
     .route-card p{margin:0}
     .timeline{display:flex;flex-direction:column;gap:12px}
     .timeline-item{
       display:grid;grid-template-columns:120px 1fr;gap:14px;padding:14px;border-radius:14px;
-      border:1px solid var(--border);background:rgba(255,255,255,.03)
+      border:1px solid var(--border);background:rgba(255,255,255,.03);
+      min-width:0;overflow-wrap:anywhere;word-break:break-word
     }
     .timeline-item .time{color:var(--muted);font-size:12px}
     .timeline-item strong{display:block;margin-bottom:4px}
@@ -2820,6 +2826,11 @@ def _base_styles() -> str:
     }
     .lane .eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
     .lane .figure{margin-top:8px;font-size:26px;font-weight:700;letter-spacing:-.03em}
+    .input-chip-details{margin-top:10px}
+    .input-chip-details summary{
+      cursor:pointer;color:var(--accent-strong);font-weight:600;overflow-wrap:anywhere
+    }
+    .input-chip-details .chips{margin-top:10px;max-height:280px;overflow:auto;padding-right:4px}
     pre{
       margin:10px 0 0;padding:14px;border-radius:12px;background:#09101f;border:1px solid var(--border);
       color:#dfe8f8;overflow:auto;white-space:pre-wrap;word-break:break-word;font:12px/1.45 "Cascadia Code","JetBrains Mono",Consolas,monospace;
@@ -2838,6 +2849,13 @@ def _base_styles() -> str:
       .hero-meta{text-align:left}
       .shell{padding:18px 14px 32px}
       .timeline-item{grid-template-columns:1fr}
+    }
+    @media (max-width: 640px){
+      .hero{padding:18px}
+      .hero h1{font-size:28px}
+      .grid,.route-grid{grid-template-columns:minmax(0,1fr)}
+      .artifact-list,.meta-list{grid-template-columns:minmax(0,1fr)}
+      th,td{padding:9px 10px}
     }
     """
 

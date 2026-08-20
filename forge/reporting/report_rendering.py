@@ -49,9 +49,10 @@ def render_table(title: str, rows: list[dict[str, str]]) -> str:
         '<section class="panel">'
         f'<div class="panel-head"><h3>{html.escape(title)}</h3></div>'
         '<div class="panel-body" style="padding:0">'
+        '<div class="table-scroll">'
         f"<table><thead><tr>{header_html}</tr></thead>"
         f"<tbody>{''.join(body_html)}</tbody></table>"
-        "</div></section>"
+        "</div></div></section>"
     )
 
 

@@ -78,7 +78,12 @@ Progress:
 - Pushed B539 as `9a3ec3e feat: summarize osint catalog policy`.
 - Expanded the CTI/OSINT provider catalog with default-visible backlog entries from the CTI, awesome-osint, and `ukr.pw` source-list/snippet research.
 - Verified B540 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
+- Pushed B540 as `33bf82e feat: expand osint source catalog`.
+- Hardened generated dashboard/report wrapping for long chips, tables, metadata, artifact links, route cards, and timelines; seed/scope chips now use a bounded preview with expandable remainder.
+- Verified B541 with reporting helper tests, Ruff, py_compile, and `git diff --check`; commit and push are pending.
 
 Next steps:
-- Commit and push B540.
+- Commit and push B541.
+- Regenerate or patch the existing dashboard output safely if needed.
+- Audit failed/abandoned engagements, ROE display, and GGUF fallback before any resume/live action.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.

@@ -140,6 +140,7 @@ def test_table_renderer_handles_empty_rows_and_escapes_cells() -> None:
     )
 
     assert "<th>Title</th>" in html
+    assert '<div class="table-scroll">' in html
     assert "<td>XSS &lt;script&gt;</td>" in html
     assert "<td>LOW &amp; informational</td>" in html
 
@@ -348,3 +349,15 @@ def test_dashboard_report_rendering_wrappers_preserve_compatibility(tmp_path: Pa
         size_label=_format_size(stat.st_size),
         modified_label=_format_dt(datetime.fromtimestamp(stat.st_mtime).isoformat()),
     )
+
+
+def test_dashboard_base_styles_wrap_long_report_values() -> None:
+    from forge.reporting.dashboard import _base_styles
+
+    styles = _base_styles()
+
+    assert ".table-scroll" in styles
+    assert "overflow-x:auto" in styles
+    assert "overflow-wrap:anywhere" in styles
+    assert ".input-chip-details" in styles
+    assert "@media (max-width: 640px)" in styles

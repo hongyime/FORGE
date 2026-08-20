@@ -23,6 +23,7 @@ EMPTY_SCOPE_BLOCK = (
     "metadata.</div>"
 )
 EMPTY_SEED_BLOCK = '<div class="empty">No seed history found for this engagement.</div>'
+INPUT_CHIP_PREVIEW_LIMIT = 80
 
 
 @dataclass(frozen=True)
@@ -70,17 +71,34 @@ def render_engagement_chip_block(
     *,
     empty_html: str,
     code: bool = True,
+    preview_limit: int = INPUT_CHIP_PREVIEW_LIMIT,
 ) -> str:
     """Render a chips block for engagement seeds or scope entries."""
     if not values:
         return empty_html
-    chips = []
-    for value in values:
+    visible_values = values[:preview_limit]
+    hidden_values = values[preview_limit:]
+
+    def _chip(value: Any) -> str:
         escaped = html.escape(str(value))
         if code:
             escaped = f"<code>{escaped}</code>"
-        chips.append(f'<span class="chip">{escaped}</span>')
-    return '<div class="chips">' + "".join(chips) + "</div>"
+        return f'<span class="chip">{escaped}</span>'
+
+    chips = [_chip(value) for value in visible_values]
+    if not hidden_values:
+        return '<div class="chips">' + "".join(chips) + "</div>"
+
+    hidden_chips = "".join(_chip(value) for value in hidden_values)
+    return (
+        '<div class="chips input-chip-preview">'
+        + "".join(chips)
+        + "</div>"
+        '<details class="input-chip-details">'
+        f"<summary>Show {len(hidden_values)} more</summary>"
+        f'<div class="chips">{hidden_chips}</div>'
+        "</details>"
+    )
 
 
 def engagement_input_blocks(
