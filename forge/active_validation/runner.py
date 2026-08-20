@@ -1586,6 +1586,30 @@ def list_active_validation_jobs(
     return [_job_payload(row) for row in rows]
 
 
+def count_active_validation_jobs(
+    con: sqlite3.Connection,
+    *,
+    engagement_id: int,
+    status: str = "",
+) -> int:
+    _ensure_rows(con)
+    where = "WHERE engagement_id=?"
+    params: list[Any] = [engagement_id]
+    normalized_status = str(status or "").strip()
+    if normalized_status:
+        where += " AND status=?"
+        params.append(normalized_status)
+    row = con.execute(
+        f"""
+        SELECT COUNT(*) AS count
+        FROM active_validation_jobs
+        {where}
+        """,
+        tuple(params),
+    ).fetchone()
+    return int(row["count"] if row is not None else 0)
+
+
 def list_active_validation_runs(
     con: sqlite3.Connection,
     *,

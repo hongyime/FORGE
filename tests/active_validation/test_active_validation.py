@@ -764,6 +764,59 @@ def test_active_validation_coverage_cli_outputs_json(tmp_path: Path, monkeypatch
     assert payload["attack_mappings"][0]["methods"] == ["fixture_replay"]
 
 
+def test_active_validation_list_cli_reports_bounded_job_counts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    con = _build_db(data_dir / "engagements" / "1001.db")
+    try:
+        create_active_validation_job(
+            con,
+            engagement_id=1001,
+            target_ref="fixture://list/one",
+            target_kind="fixture",
+            method="fixture_replay",
+            mode="lab",
+            approved=True,
+            requested_by="delta-one",
+            approved_by="lead",
+        )
+        create_active_validation_job(
+            con,
+            engagement_id=1001,
+            target_ref="fixture://list/two",
+            target_kind="fixture",
+            method="fixture_replay",
+            mode="lab",
+            approved=True,
+            requested_by="delta-one",
+            approved_by="lead",
+        )
+    finally:
+        con.close()
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+    app = typer.Typer()
+    active_validation_app = typer.Typer()
+    register_active_validation_commands(active_validation_app)
+    app.add_typer(active_validation_app, name="active-validation")
+
+    result = CliRunner().invoke(
+        app,
+        ["active-validation", "list", "--engagement", "1001", "--limit", "1", "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.active_validation.jobs.v1"
+    assert payload["execution_policy"] == "read_only_active_validation_jobs_no_commands_executed"
+    assert payload["total_count"] == 2
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 1
+    assert payload["status_filter"] == "all"
+    assert len(payload["jobs"]) == 1
+
+
 def test_remediation_retest_request_links_active_validation_job_and_safe_lab_pass(
     tmp_path: Path,
 ) -> None:

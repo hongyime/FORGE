@@ -11,6 +11,7 @@ from forge.active_validation.methods import list_active_validation_methods
 from forge.active_validation.runner import (
     active_validation_control_coverage,
     approve_active_validation_job,
+    count_active_validation_jobs,
     create_active_validation_job,
     list_active_validation_jobs,
     preview_active_validation_job,
@@ -226,18 +227,38 @@ def register_active_validation_commands(app: typer.Typer) -> None:
         limit: int = typer.Option(100, "--limit", min=1, max=500),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
+        normalized_status = status or ""
         con = _open_db(engagement)
         try:
+            total_count = count_active_validation_jobs(
+                con,
+                engagement_id=int(engagement),
+                status=normalized_status,
+            )
             jobs = list_active_validation_jobs(
                 con,
                 engagement_id=int(engagement),
-                status=status or "",
+                status=normalized_status,
                 limit=limit,
             )
         finally:
             con.close()
         if json_output:
-            typer.echo(json.dumps({"jobs": jobs}, sort_keys=True))
+            typer.echo(
+                json.dumps(
+                    {
+                        "schema_version": "forge.active_validation.jobs.v1",
+                        "execution_policy": "read_only_active_validation_jobs_no_commands_executed",
+                        "total_count": total_count,
+                        "selected_count": len(jobs),
+                        "omitted_count": max(0, total_count - len(jobs)),
+                        "engagement_id": int(engagement),
+                        "status_filter": str(normalized_status or "").strip() or "all",
+                        "jobs": jobs,
+                    },
+                    sort_keys=True,
+                )
+            )
             return
         console.print(f"[bold]Active validation jobs[/bold] count={len(jobs)}")
         for job in jobs[:10]:
