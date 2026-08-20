@@ -400,6 +400,37 @@ def test_collect_doctor_checks_reports_stored_connector_rows_without_key(
     assert raw_secret not in row.details
 
 
+def test_collect_doctor_checks_reports_persistent_connector_secret_key_hint(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "forge.doctor.connector_secret_key_plan",
+        lambda **_kwargs: {
+            "persistent_key_hint": {
+                "source": "user",
+                "key_configured": True,
+                "key_length": 44,
+                "key_fingerprint": "sha256:abc123",
+            }
+        },
+    )
+
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        env={},
+        which=lambda _name: None,
+        provider_discovery=_provider_discovery,
+    )
+
+    row = _rows(checks)["Connector Secret Store"]
+    assert row.status == "WARN"
+    assert "missing from this process" in row.details
+    assert "user-level Windows environment key appears configured" in row.details
+    assert "sha256:abc123" in row.details
+    assert "Restart this shell/service" in row.remediation
+
+
 def test_doctor_payload_json_is_machine_readable_and_actionable() -> None:
     payload = doctor_payload_json(
         [

@@ -4,8 +4,10 @@ import base64
 import hashlib
 import json
 import os
+import platform
 import re
 import sqlite3
+import subprocess
 from collections.abc import Mapping
 from typing import Any
 
@@ -127,11 +129,17 @@ def connector_secret_key_plan(
     env = environ if environ is not None else os.environ
     key_material = str(env.get("FORGE_ENGAGEMENT_KEY", "")).strip()
     configured = len(key_material) >= 32
+    persistent_hint = (
+        _persistent_key_hint()
+        if not configured and environ is None
+        else {"source": "", "key_configured": False, "key_length": 0, "key_fingerprint": ""}
+    )
     return {
         "schema_version": SECRET_KEY_PLAN_SCHEMA_VERSION,
         "key_configured": configured,
         "key_length": len(key_material),
         "key_fingerprint": _key_fingerprint(key_material) if configured else "",
+        "persistent_key_hint": persistent_hint,
         "minimum_length": 32,
         "secret_material_printed": False,
         "commands": {
@@ -154,6 +162,45 @@ def connector_secret_key_plan(
             "Restart shells or services after setting a persistent user/service environment variable.",
         ],
     }
+
+
+def _persistent_key_hint() -> dict[str, Any]:
+    if platform.system().lower() != "windows":
+        return {"source": "", "key_configured": False, "key_length": 0, "key_fingerprint": ""}
+    for source in ("User", "Machine"):
+        value = _windows_persistent_env_value(source)
+        if len(value) >= 32:
+            return {
+                "source": source.lower(),
+                "key_configured": True,
+                "key_length": len(value),
+                "key_fingerprint": _key_fingerprint(value),
+            }
+    return {"source": "", "key_configured": False, "key_length": 0, "key_fingerprint": ""}
+
+
+def _windows_persistent_env_value(scope: str) -> str:
+    try:
+        completed = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                (
+                    "[Environment]::GetEnvironmentVariable("
+                    "'FORGE_ENGAGEMENT_KEY','" + scope + "')"
+                ),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    if completed.returncode != 0:
+        return ""
+    return str(completed.stdout or "").strip()
 
 
 def list_connector_secrets(

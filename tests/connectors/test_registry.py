@@ -451,6 +451,10 @@ def test_connector_install_plan_cli_outputs_json_without_running_installers() ->
 
 def test_connector_secret_key_plan_outputs_no_secret_material(monkeypatch) -> None:
     monkeypatch.delenv("FORGE_ENGAGEMENT_KEY", raising=False)
+    monkeypatch.setattr(
+        "forge.connectors.secrets._persistent_key_hint",
+        lambda: {"source": "", "key_configured": False, "key_length": 0, "key_fingerprint": ""},
+    )
     app = typer.Typer()
     connectors_app = typer.Typer()
     register_connector_commands(connectors_app)
@@ -464,12 +468,22 @@ def test_connector_secret_key_plan_outputs_no_secret_material(monkeypatch) -> No
     assert payload["key_configured"] is False
     assert payload["secret_material_printed"] is False
     assert payload["key_fingerprint"] == ""
+    assert payload["persistent_key_hint"]["key_configured"] is False
     assert "FORGE_ENGAGEMENT_KEY" in payload["commands"]["powershell_user_env"]
     assert "0123456789abcdef" not in result.output
 
 
 def test_connector_secret_key_plan_reports_existing_key_fingerprint(monkeypatch) -> None:
     monkeypatch.setenv("FORGE_ENGAGEMENT_KEY", "k" * 48)
+    monkeypatch.setattr(
+        "forge.connectors.secrets._persistent_key_hint",
+        lambda: {
+            "source": "user",
+            "key_configured": True,
+            "key_length": 44,
+            "key_fingerprint": "sha256:persistent",
+        },
+    )
     app = typer.Typer()
     connectors_app = typer.Typer()
     register_connector_commands(connectors_app)
@@ -482,7 +496,37 @@ def test_connector_secret_key_plan_reports_existing_key_fingerprint(monkeypatch)
     assert payload["key_configured"] is True
     assert payload["key_length"] == 48
     assert payload["key_fingerprint"].startswith("sha256:")
+    assert payload["persistent_key_hint"]["key_configured"] is False
     assert "k" * 32 not in result.output
+
+
+def test_connector_secret_key_plan_reports_persistent_key_hint(monkeypatch) -> None:
+    monkeypatch.delenv("FORGE_ENGAGEMENT_KEY", raising=False)
+    monkeypatch.setattr(
+        "forge.connectors.secrets._persistent_key_hint",
+        lambda: {
+            "source": "user",
+            "key_configured": True,
+            "key_length": 44,
+            "key_fingerprint": "sha256:abc123",
+        },
+    )
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+
+    result = CliRunner().invoke(app, ["connectors", "secret-key-plan", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["key_configured"] is False
+    assert payload["persistent_key_hint"] == {
+        "source": "user",
+        "key_configured": True,
+        "key_length": 44,
+        "key_fingerprint": "sha256:abc123",
+    }
 
 
 def test_connector_cli_loads_default_data_dir_plugin_manifests(

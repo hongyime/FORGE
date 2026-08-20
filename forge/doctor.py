@@ -27,7 +27,7 @@ from forge.connectors.registry import (
     connector_statuses,
     connector_summary,
 )
-from forge.connectors.secrets import connector_secret_readiness
+from forge.connectors.secrets import connector_secret_key_plan, connector_secret_readiness
 from forge.db.control import connect_control_db, verify_control_audit_chain
 from forge.db.direct_connect import direct_connect
 from forge.db.schema import SCHEMA_VERSION
@@ -312,7 +312,13 @@ def collect_doctor_checks(
             cfg.data_dir if cfg is not None else None,
         )
     )
-    checks.append(_connector_secret_store_check(environ, cfg.data_dir if cfg is not None else None))
+    checks.append(
+        _connector_secret_store_check(
+            environ,
+            cfg.data_dir if cfg is not None else None,
+            detect_persistent_key=env is None,
+        )
+    )
     checks.extend(_external_provider_checks(environ))
     checks.append(_paid_backend_check(environ))
     checks.append(_active_validation_check(environ))
@@ -2123,6 +2129,8 @@ def _connector_action_plan_check(
 def _connector_secret_store_check(
     env: Mapping[str, str],
     data_dir: Path | None = None,
+    *,
+    detect_persistent_key: bool = True,
 ) -> DoctorCheck:
     key_len = len(str(env.get("FORGE_ENGAGEMENT_KEY", "")).strip())
     inventory = (
@@ -2178,6 +2186,26 @@ def _connector_secret_store_check(
             (
                 "FORGE_ENGAGEMENT_KEY configured; encrypted connector secrets enabled; "
                 f"value not printed{suffix}"
+            ),
+        )
+    key_plan = connector_secret_key_plan() if detect_persistent_key else connector_secret_key_plan(environ=env)
+    persistent_hint = key_plan.get("persistent_key_hint", {})
+    if persistent_hint.get("key_configured"):
+        source = str(persistent_hint.get("source") or "persistent")
+        length = int(persistent_hint.get("key_length") or 0)
+        fingerprint = str(persistent_hint.get("key_fingerprint") or "")
+        return DoctorCheck(
+            "Connector Secret Store",
+            "WARN",
+            (
+                "FORGE_ENGAGEMENT_KEY is missing from this process, but a "
+                f"{source}-level Windows environment key appears configured "
+                f"(length={length}, fingerprint={fingerprint}); encrypted connector "
+                f"store is unavailable until this shell/service reloads env{suffix}"
+            ),
+            (
+                "Restart this shell/service or set the process env from "
+                "`forge connectors secret-key-plan --json`; secret material is not printed."
             ),
         )
     return DoctorCheck(
