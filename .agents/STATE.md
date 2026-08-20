@@ -252,9 +252,10 @@ Progress:
 - Added read-only `forge report long-run-plan [--reports-dir reports] [--long-run-seconds N] [--limit N] [--json]`, backed by `collect_long_run_review_plan()`, so long-running failed runs have a dedicated review plan without starting resume-run or kill-chain.
 - Quality-audit `review_long_runs` now includes sample counts, omitted counts, and a follow-up command to `forge report long-run-plan --json --limit N`.
 - Verified B585 with focused reporting and CLI registry tests (`17 passed`), Ruff, py_compile, `git diff --check`, and real local read-only long-run-plan JSON/human smokes. Local `long-run-plan --json --limit 2` reports schema `forge.report_long_run_review_plan.v1`, 3 long runs, 2 samples, 1 omitted, 0 execution commands, and execution policy `plan_only_no_commands_executed`. No resume-run, kill-chain, report regeneration, provider call, scheduled-task change, monitoring apply, engagement mutation, or credential persistence was started.
+- Pushed B585 as `ab81ba0 feat: add report long run plan`.
 
 Next steps:
-- Commit and push B585, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
