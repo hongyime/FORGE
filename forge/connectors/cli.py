@@ -17,6 +17,7 @@ from forge.connectors.registry import (
     connector_install_plan,
     connector_plugin_dirs,
     connector_plugin_manifest_statuses,
+    connector_run_plan,
     connector_statuses,
     connector_summary,
 )
@@ -160,6 +161,36 @@ def register_connector_commands(app: typer.Typer) -> None:
         console.print(
             "[dim]Install plan only; no command was executed. Rerun "
             "`forge doctor --json` after installing tools.[/dim]"
+        )
+
+    @app.command("run-plan")
+    def run_plan(
+        domain: str = typer.Option("", "--domain", help="Filter by connector domain."),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Print free-first connector run guidance without executing connectors."""
+        rows = connector_statuses(domain=domain, include_paid=False, env=os.environ)
+        plan = connector_run_plan(rows, env=os.environ)
+        if json_output:
+            typer.echo(json.dumps(plan, sort_keys=True))
+            return
+
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Connector", width=30)
+        table.add_column("Domain", width=18)
+        table.add_column("Readiness", width=16)
+        table.add_column("Command template")
+        for item in plan["items"]:
+            table.add_row(
+                str(item["connector_id"]),
+                str(item["domain"]),
+                str(item["readiness"]),
+                " ".join(str(part) for part in item["command_template"]),
+            )
+        console.print(table)
+        console.print(
+            "[dim]Run plan only; no connector was executed. Replace placeholders "
+            "before running any command.[/dim]"
         )
 
     @app.command("secret-key-plan")

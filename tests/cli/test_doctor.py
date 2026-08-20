@@ -158,6 +158,9 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     )
     assert action_by_id["run_free_connectors"]["status"] == "ready"
     assert "projectdiscovery_subfinder" in action_by_id["run_free_connectors"]["summary"]
+    assert action_by_id["run_free_connectors"]["command"] == (
+        "forge connectors run-plan --json"
+    )
     assert action_by_id["configure_optional_keys"]["status"] == "optional"
     assert "FORGE_SHODAN_API_KEY" in action_by_id["configure_optional_keys"]["summary"]
     assert action_by_id["review_cti_osint_policy"]["status"] == "review"
@@ -215,6 +218,9 @@ def test_collect_doctor_checks_omits_free_binary_install_action_when_none_missin
     }
     assert "install_free_binaries" not in action_by_id
     assert action_by_id["run_free_connectors"]["status"] == "ready"
+    assert action_by_id["run_free_connectors"]["command"] == (
+        "forge connectors run-plan --json"
+    )
 
 
 def test_collect_doctor_checks_warns_when_free_first_connectors_are_not_executable(

@@ -2081,7 +2081,7 @@ def _connector_action_items(
             "priority": "20",
             "status": "ready" if free_runnable else "attention",
             "summary": _connector_bucket_label(free_runnable),
-            "command": "forge connectors list --json",
+            "command": "forge connectors run-plan --json",
         }
     )
     items.append(

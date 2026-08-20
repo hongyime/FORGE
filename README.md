@@ -260,6 +260,7 @@ forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-r
 forge active-validation preview|create|approve|run|list|methods|coverage
 forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-first connector/plugin catalog
 forge connectors install-plan [--json]       # Print missing local binary install guidance; does not execute commands
+forge connectors run-plan [--domain NAME] [--json]  # Print free-first connector run guidance; does not execute commands
 forge connectors run --engagement N --connector projectdiscovery_subfinder|projectdiscovery_httpx|projectdiscovery_katana|projectdiscovery_nuclei --target DOMAIN_OR_URL [--dry-run] [--max-results N]
 forge connectors import-discovery --engagement N --connector shodan_host_lookup|censys_lookup|urlscan_search --report-file REPORT.json [--target DOMAIN]
 forge connectors import-cti --engagement N --connector abusech_threatfox|abusech_urlhaus|misp_event_import|supabase_table_import|stix_taxii_import --report-file OBSERVATIONS.json|csv|gz|zip [--dry-run] [--limit N] [--since ISO] [--until ISO] [--min-confidence 0.0-1.0] [--max-tlp clear|green|amber|red] [--fail-on-empty] [--promote-targets]

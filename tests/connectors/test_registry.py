@@ -14,6 +14,7 @@ from forge.connectors.binaries import resolve_connector_binary
 from forge.connectors.registry import (
     connector_install_plan,
     connector_plugin_manifest_statuses,
+    connector_run_plan,
     connector_statuses,
     connector_summary,
 )
@@ -455,6 +456,72 @@ def test_connector_install_plan_cli_outputs_json_without_running_installers() ->
     assert payload["schema_version"] == "forge.connector_install_plan.v1"
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
     assert isinstance(payload["items"], list)
+
+
+def test_connector_run_plan_reports_free_runnable_commands_without_execution() -> None:
+    statuses = [
+        {
+            "id": "projectdiscovery_subfinder",
+            "domain": "asset_discovery",
+            "cost_profile": "free_local",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors run"],
+        },
+        {
+            "id": "paid_hidden",
+            "domain": "identity",
+            "cost_profile": "optional_paid",
+            "readiness": "configured",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors run"],
+        },
+        {
+            "id": "missing_local",
+            "domain": "asset_discovery",
+            "cost_profile": "free_local",
+            "readiness": "missing_binary",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors run"],
+        },
+    ]
+
+    plan = connector_run_plan(statuses)
+
+    assert plan["schema_version"] == "forge.connector_run_plan.v1"
+    assert plan["execution_policy"] == "plan_only_no_commands_executed"
+    assert plan["runnable_count"] == 1
+    assert plan["items"][0]["connector_id"] == "projectdiscovery_subfinder"
+    assert plan["items"][0]["command_template"] == [
+        "forge",
+        "connectors",
+        "run",
+        "--engagement",
+        "N",
+        "--connector",
+        "projectdiscovery_subfinder",
+        "--target",
+        "DOMAIN_OR_URL",
+        "--dry-run",
+    ]
+    assert plan["items"][0]["requires_engagement"] is True
+    assert plan["items"][0]["requires_target"] is True
+
+
+def test_connector_run_plan_cli_outputs_json_without_running_connectors() -> None:
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+
+    result = CliRunner().invoke(app, ["connectors", "run-plan", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.connector_run_plan.v1"
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert isinstance(payload["items"], list)
+    assert "DOMAIN_OR_URL" in result.output
 
 
 def test_connector_secret_key_plan_outputs_no_secret_material(monkeypatch) -> None:

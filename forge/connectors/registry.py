@@ -803,6 +803,78 @@ def connector_install_plan(
     }
 
 
+def connector_run_plan(
+    statuses: list[dict[str, Any]] | None = None,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Return a read-only free-first connector run plan; commands are not executed."""
+    environ = env if env is not None else os.environ
+    rows = statuses if statuses is not None else connector_statuses(env=environ)
+    runnable = [
+        row
+        for row in rows
+        if str(row.get("cost_profile") or "") in {"free_local", "free_no_key", "free_tier_key"}
+        and str(row.get("readiness") or "") in {"available", "configured"}
+        and bool(row.get("runner_supported"))
+    ]
+    items: list[dict[str, Any]] = []
+    for row in sorted(runnable, key=lambda item: str(item.get("id") or "")):
+        connector_id = str(row.get("id") or "").strip()
+        execution_paths = [
+            str(path).strip()
+            for path in row.get("execution_paths", [])
+            if str(path).strip()
+        ]
+        command_template = _connector_run_command_template(row)
+        items.append(
+            {
+                "connector_id": connector_id,
+                "domain": str(row.get("domain") or ""),
+                "cost_profile": str(row.get("cost_profile") or ""),
+                "readiness": str(row.get("readiness") or ""),
+                "execution_paths": execution_paths,
+                "command_template": command_template,
+                "requires_engagement": "--engagement" in command_template,
+                "requires_target": "--target" in command_template,
+                "notes": "Replace placeholders before running; this plan does not execute connectors.",
+            }
+        )
+    return {
+        "schema_version": "forge.connector_run_plan.v1",
+        "execution_policy": "plan_only_no_commands_executed",
+        "runnable_count": len(items),
+        "items": items,
+        "secret_material_policy": "Connector run plans report connector IDs and placeholders only; secret values are never returned.",
+    }
+
+
+def _connector_run_command_template(row: Mapping[str, Any]) -> list[str]:
+    connector_id = str(row.get("id") or "ID").strip() or "ID"
+    execution_paths = [
+        str(path).strip()
+        for path in row.get("execution_paths", [])
+        if str(path).strip()
+    ]
+    primary = execution_paths[0] if execution_paths else "forge connectors run"
+    command = primary.split()
+    if command[:2] == ["forge", "connectors"] and "run" in command:
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--connector",
+                connector_id,
+                "--target",
+                "DOMAIN_OR_URL",
+                "--dry-run",
+            ]
+        )
+    else:
+        command.extend(["--connector", connector_id])
+    return command
+
+
 def _load_connector_plugin_manifest(
     manifest_path: Path,
     *,
