@@ -129,3 +129,4 @@
 - 2026-08-21: B638 stale report repair run JSON now distinguishes dry-run previewed items from genuinely skipped items with `dry_run_count`.
 - 2026-08-21: B639 stale report repair dry-runs now support redacted path-neutral rehearsal output and block redacted live regeneration.
 - 2026-08-21: B640 stale report repair plans now support redacted path-neutral JSON output while remaining plan-only.
+- 2026-08-21: B641 report quality-audit now supports redacted path-neutral JSON output while remaining read-only.
