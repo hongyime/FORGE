@@ -483,6 +483,9 @@ def collect_policy_flag_review_plan(
         "schema_version": "forge.report_policy_flag_review_plan.v1",
         "reports_dir": payload.get("reports_dir", str(Path(reports_dir))),
         "execution_policy": "plan_only_no_commands_executed",
+        "dashboard_generated_at": _text(payload.get("dashboard_generated_at")),
+        "source": "generated_dashboard_run_summary",
+        "meaning": "latest run metadata, not current global defaults",
         "status": "explain" if counts else "empty",
         "summary": (
             "policy *_no counts describe latest run metadata, not current global operator intent"
@@ -679,6 +682,8 @@ def _operator_action_plan(
                 "id": "review_policy_flags",
                 "status": "explain",
                 "execution_policy": "plan_only_no_commands_executed",
+                "source": "generated_dashboard_run_summary",
+                "meaning": "latest run metadata, not current global defaults",
                 "summary": "policy *_no counts describe latest run metadata, not current global operator intent",
                 "counts": policy_no_counts,
                 "sample_limit": sample_limit,
@@ -804,12 +809,16 @@ def _policy_flag_row(item: dict[str, Any], run_summary: dict[str, Any]) -> dict[
     if not run_summary:
         return {}
     flags: list[str] = []
+    reasons: dict[str, str] = {}
     if run_summary.get("attack_mode") is not True:
         flags.append("attack_no")
+        reasons["attack_no"] = "attack_mode_not_true"
     if run_summary.get("destructive_actions_allowed") is not True:
         flags.append("destructive_no")
+        reasons["destructive_no"] = "latest_run_policy_not_true_or_missing"
     if run_summary.get("post_exploitation_allowed") is not True:
         flags.append("post_ex_no")
+        reasons["post_ex_no"] = "latest_run_policy_not_true_or_missing"
     if not flags:
         return {}
     return {
@@ -820,6 +829,8 @@ def _policy_flag_row(item: dict[str, Any], run_summary: dict[str, Any]) -> dict[
         "status": _text(run_summary.get("status")),
         "run_kind": _text(run_summary.get("run_kind")),
         "flags": flags,
+        "flag_reasons": reasons,
+        "source": "generated_dashboard_run_summary",
         "error": _clip(_text(run_summary.get("error")), limit=160),
     }
 

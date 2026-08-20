@@ -17,6 +17,7 @@ from forge.targets_resume_candidates import (
     collect_target_resume_candidates,
     collect_target_resume_plan,
     execute_target_resume_plan,
+    redact_target_resume_candidate_payload,
 )
 
 
@@ -503,6 +504,44 @@ def test_resume_candidates_reports_latest_failed_runs_without_sensitive_metadata
     assert "must-not-appear" not in serialized
 
 
+def test_resume_candidates_redaction_hides_local_paths(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    report_path = tmp_path / "reports" / "engagement_1_report.md"
+    scope_path.write_text("{}", encoding="utf-8")
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text("# report", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={
+            "roe_id": "ROE-ACME-2026",
+            "scope_manifest": str(scope_path),
+            "report_path": str(report_path),
+        },
+    )
+
+    payload = collect_target_resume_candidates(data_dir=data_dir)
+    redacted = redact_target_resume_candidate_payload(payload)
+
+    serialized = json.dumps(redacted)
+    assert redacted["data_dir"] == "<redacted>"
+    assert redacted["path_redaction"] == "local_paths_redacted"
+    item = redacted["items"][0]
+    assert item["db_path"] == ""
+    assert item["db_ref"] == "1.db"
+    assert item["scope_manifest"] == ""
+    assert item["scope_manifest_ref"] == "scope.json"
+    assert item["report_path"] == ""
+    assert item["report_path_ref"] == "engagement_1_report.md"
+    assert "<scope-manifest:scope.json>" in item["resume_command"]
+    assert str(data_dir) not in serialized
+    assert str(scope_path) not in serialized
+    assert str(report_path) not in serialized
+
+
 def test_resume_candidates_reason_filter_and_limit(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     _write_candidate_run(
@@ -872,6 +911,7 @@ def test_targets_resume_run_cli_outputs_executor_payload(monkeypatch: pytest.Mon
             "--batch-id",
             "cli-test",
             "--dry-run",
+            "--redact-paths",
             "--json",
         ],
     )
@@ -881,6 +921,7 @@ def test_targets_resume_run_cli_outputs_executor_payload(monkeypatch: pytest.Mon
     assert payload["schema_version"] == "forge.targets.resume_run.v1"
     assert payload["batch_id"] == "cli-test"
     assert captured_kwargs["dry_run"] is True
+    assert captured_kwargs["redact_paths"] is True
 
 
 def test_resume_run_executes_sequentially_and_writes_ledger(tmp_path: Path) -> None:
@@ -959,6 +1000,67 @@ def test_resume_run_dry_run_does_not_call_runner_or_write_ledger(tmp_path: Path)
     assert payload["items"][0]["returncode"] is None
     assert payload["items"][0]["command"][-2:] == ["--max-runtime-minutes", "13"]
     assert calls == []
+    assert not (data_dir / "target_imports" / "resume_batches").exists()
+
+
+def test_resume_run_dry_run_can_redact_local_paths(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+    )
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="dry-run-redacted",
+        dry_run=True,
+        redact_paths=True,
+    )
+
+    serialized = json.dumps(payload)
+    assert payload["execution_policy"] == "dry_run_no_commands_executed"
+    assert payload["path_redaction"] == "local_paths_redacted"
+    assert payload["ledger_path"] == ""
+    assert payload["ledger_ref"] == "dry-run-redacted.jsonl"
+    assert payload["lock_path"] == ""
+    assert payload["lock_ref"] == "resume_batch.lock"
+    item = payload["items"][0]
+    assert item["status"] == "dry_run"
+    assert item["db_path"] == ""
+    assert item["db_ref"] == "1.db"
+    assert "<scope-manifest:scope.json>" in item["command"]
+    assert str(data_dir) not in serialized
+    assert str(scope_path) not in serialized
+    assert not (data_dir / "target_imports" / "resume_batches").exists()
+
+
+def test_resume_run_redact_paths_blocks_live_execution(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+    )
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="blocked-redacted-live",
+        dry_run=False,
+        redact_paths=True,
+    )
+
+    assert payload["status"] == "blocked"
+    assert payload["execution_policy"] == "blocked_redacted_live_resume_output"
+    assert payload["result_counts"] == {"blocked": 1}
     assert not (data_dir / "target_imports" / "resume_batches").exists()
 
 

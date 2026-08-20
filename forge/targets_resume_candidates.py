@@ -142,6 +142,31 @@ def collect_target_resume_candidates(
     }
 
 
+def redact_target_resume_candidate_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return a review-safe copy of a resume-candidate payload."""
+
+    redacted = dict(payload)
+    redacted["data_dir"] = "<redacted>"
+    redacted["path_redaction"] = "local_paths_redacted"
+    redacted_items: list[dict[str, Any]] = []
+    for raw_item in payload.get("items", []):
+        if not isinstance(raw_item, dict):
+            continue
+        item = dict(raw_item)
+        item["db_ref"] = _path_ref(item.get("db_path"))
+        item["db_path"] = ""
+        item["scope_manifest_ref"] = _path_ref(item.get("scope_manifest"))
+        item["scope_manifest"] = ""
+        item["report_path_ref"] = _path_ref(item.get("report_path"))
+        item["report_path"] = ""
+        item["resume_command"] = _redact_resume_command_paths(
+            [str(part) for part in item.get("resume_command", [])]
+        )
+        redacted_items.append(item)
+    redacted["items"] = redacted_items
+    return redacted
+
+
 def collect_target_resume_plan(
     *,
     data_dir: Path | None = None,
@@ -252,9 +277,23 @@ def execute_target_resume_plan(
     batch_id: str | None = None,
     stop_on_failure: bool = True,
     dry_run: bool = False,
+    redact_paths: bool = False,
     runner: ResumeRunner | None = None,
 ) -> dict[str, Any]:
     """Execute ready resume candidates strictly one child process at a time."""
+
+    if redact_paths and not dry_run:
+        return {
+            "schema_version": RESUME_RUN_SCHEMA_VERSION,
+            "execution_policy": "blocked_redacted_live_resume_output",
+            "dry_run": False,
+            "path_redaction": "blocked",
+            "batch_id": _safe_batch_id(batch_id),
+            "status": "blocked",
+            "result_counts": {"blocked": 1},
+            "items": [],
+            "operator_note": "--redact-paths is only supported with --dry-run.",
+        }
 
     plan = collect_target_resume_plan(
         data_dir=data_dir,
@@ -273,6 +312,8 @@ def execute_target_resume_plan(
     if dry_run:
         for item in plan["items"]:
             checked = _refresh_plan_item(item)
+            if redact_paths:
+                checked = _redact_resume_run_item(checked)
             if checked["status"] == "skipped":
                 counts["skipped"] += 1
                 results.append(checked)
@@ -293,9 +334,12 @@ def execute_target_resume_plan(
             "schema_version": RESUME_RUN_SCHEMA_VERSION,
             "execution_policy": "dry_run_no_commands_executed",
             "dry_run": True,
+            "path_redaction": "local_paths_redacted" if redact_paths else "none",
             "batch_id": batch,
-            "ledger_path": str(ledger_path),
-            "lock_path": str(lock_path),
+            "ledger_path": "" if redact_paths else str(ledger_path),
+            "ledger_ref": _path_ref(ledger_path),
+            "lock_path": "" if redact_paths else str(lock_path),
+            "lock_ref": _path_ref(lock_path),
             "status": "dry_run",
             "concurrency": "sequential",
             "stop_on_failure": stop_on_failure,
@@ -925,6 +969,20 @@ def _redact_resume_command_paths(command: list[str]) -> list[str]:
         if index + 1 < len(redacted):
             ref = _path_ref(redacted[index + 1])
             redacted[index + 1] = f"<scope-manifest:{ref or 'redacted'}>"
+    return redacted
+
+
+def _redact_resume_run_item(item: dict[str, Any]) -> dict[str, Any]:
+    redacted = dict(item)
+    redacted["db_ref"] = _path_ref(redacted.get("db_path"))
+    redacted["db_path"] = ""
+    if "scope_manifest_ref" not in redacted or not redacted.get("scope_manifest_ref"):
+        redacted["scope_manifest_ref"] = _scope_manifest_ref_from_command(
+            [str(part) for part in redacted.get("command", [])]
+        )
+    redacted["command"] = _redact_resume_command_paths(
+        [str(part) for part in redacted.get("command", [])]
+    )
     return redacted
 
 

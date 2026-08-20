@@ -15,6 +15,7 @@ from forge.targets_resume_candidates import (
     collect_target_resume_candidates,
     collect_target_resume_plan,
     execute_target_resume_plan,
+    redact_target_resume_candidate_payload,
 )
 
 console = Console(stderr=True)
@@ -147,6 +148,8 @@ def register_target_import_commands(app: typer.Typer) -> None:
             reason=reason,
             include_completed=include_completed,
         )
+        if redact_paths:
+            payload = redact_target_resume_candidate_payload(payload)
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
     @app.command("backfill-scope-manifests")
@@ -300,6 +303,11 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "--dry-run",
             help="Re-check and report the batch without writing a ledger or launching child processes.",
         ),
+        redact_paths: bool = typer.Option(
+            False,
+            "--redact-paths",
+            help="Redact local paths in dry-run JSON output. Live resume-run blocks when set.",
+        ),
         json_output: bool = typer.Option(
             False,
             "--json",
@@ -317,5 +325,6 @@ def register_target_import_commands(app: typer.Typer) -> None:
             batch_id=batch_id,
             stop_on_failure=stop_on_failure,
             dry_run=dry_run,
+            redact_paths=redact_paths,
         )
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))

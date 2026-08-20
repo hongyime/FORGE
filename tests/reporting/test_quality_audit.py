@@ -137,11 +137,21 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
         "destructive_no": 1,
         "post_ex_no": 1,
     }
+    assert action_by_id["review_policy_flags"]["source"] == (
+        "generated_dashboard_run_summary"
+    )
+    assert action_by_id["review_policy_flags"]["meaning"] == (
+        "latest run metadata, not current global defaults"
+    )
     assert action_by_id["review_policy_flags"]["sample_count"] == 1
     assert action_by_id["review_policy_flags"]["samples"][0]["flags"] == [
         "destructive_no",
         "post_ex_no",
     ]
+    assert action_by_id["review_policy_flags"]["samples"][0]["flag_reasons"] == {
+        "destructive_no": "latest_run_policy_not_true_or_missing",
+        "post_ex_no": "latest_run_policy_not_true_or_missing",
+    }
     assert action_by_id["review_policy_flags"]["follow_up_commands"] == [
         ["forge", "report", "policy-plan", "--json", "--limit", "1"]
     ]
@@ -434,11 +444,18 @@ def test_collect_policy_flag_review_plan_explains_latest_run_metadata(
     assert payload["status"] == "explain"
     assert payload["counts"] == {"destructive_no": 1, "post_ex_no": 1}
     assert payload["total_count"] == 2
+    assert payload["dashboard_generated_at"] == "2026-08-20 10:00:00"
+    assert payload["source"] == "generated_dashboard_run_summary"
+    assert payload["meaning"] == "latest run metadata, not current global defaults"
     assert payload["sample_count"] == 1
     assert payload["omitted_count"] == 0
     assert payload["commands"] == []
     assert payload["samples"][0]["id"] == "1001"
     assert payload["samples"][0]["flags"] == ["destructive_no", "post_ex_no"]
+    assert payload["samples"][0]["flag_reasons"] == {
+        "destructive_no": "latest_run_policy_not_true_or_missing",
+        "post_ex_no": "latest_run_policy_not_true_or_missing",
+    }
     assert "latest run summaries" in payload["explanation"]
 
 
@@ -798,7 +815,12 @@ def test_report_policy_plan_cli_outputs_json(tmp_path: Path) -> None:
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
     assert payload["counts"] == {"destructive_no": 1, "post_ex_no": 1}
     assert payload["commands"] == []
+    assert payload["source"] == "generated_dashboard_run_summary"
+    assert payload["meaning"] == "latest run metadata, not current global defaults"
     assert payload["samples"][0]["flags"] == ["destructive_no", "post_ex_no"]
+    assert payload["samples"][0]["flag_reasons"]["destructive_no"] == (
+        "latest_run_policy_not_true_or_missing"
+    )
 
 
 def test_report_policy_plan_cli_prints_human_plan(tmp_path: Path) -> None:

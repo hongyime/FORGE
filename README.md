@@ -252,9 +252,9 @@ forge audit manifest-verify --engagement N
 forge audit manifest-export --engagement N [--sign] [--remote-store]
 forge audit manifest-bundle-verify --bundle PATH
 forge targets import --feed-url URL|--feed-file PATH
-forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--json]  # Default also scans repo-local legacy dashboard DBs
+forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--redact-paths] [--json]  # Default also scans repo-local legacy dashboard DBs
 forge targets resume-plan [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--data-dir PATH] [--redact-paths] [--json]
-forge targets resume-run [--dry-run] [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--batch-id ID] [--continue-on-failure] [--data-dir PATH] [--json]
+forge targets resume-run [--dry-run] [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--batch-id ID] [--continue-on-failure] [--data-dir PATH] [--redact-paths] [--json]
 forge targets backfill-scope-manifests [--apply] [--limit N] [--reason REASON] [--data-dir PATH] [--json]
 forge monitoring status|due-plan [--include-empty-db-results]|run-due|deliver-alerts|worker
 forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-retest|apply-retest-run|handoff-plan|integration-runbook|import-ticket-statuses|sync-tickets
@@ -303,6 +303,10 @@ still required before any live launch. Generated target-import scope manifests
 also include an explicit policy block for destructive and post-exploitation
 permission metadata, so dashboard/report policy flags are sourced from the
 target-specific ROE manifest rather than a global process default.
+`forge report policy-plan` explains historical dashboard `*_no` policy counts
+as generated latest-run metadata. Its JSON includes the dashboard timestamp,
+source, meaning, and per-sample reasons so old/dry/non-live summaries are not
+confused with current operator defaults.
 
 `forge targets resume-candidates` is read-only. It scans the latest
 `kill_chain` row in each local engagement DB, classifies failed or cancelled
@@ -312,7 +316,9 @@ starting, or mutating any engagement. The payload includes `resume_ready`,
 `resume_blockers`, aggregate blocker counts, and a `resume_command` array only
 when ROE, scope manifest, and resume gates are present. Static dashboards also
 surface these latest-run candidates as a compact `Resume Review` overview
-column and detail section without exposing raw scope-manifest paths.
+column and detail section without exposing raw scope-manifest paths. Use
+`--redact-paths` when exporting candidate JSON for review outside the local
+operator shell.
 `forge targets resume-plan` is read-only and turns ready candidates into a
 sequential manual command plan with an explicit per-run
 `--max-runtime-minutes` budget. It does not execute, enqueue, or parallelize
@@ -323,7 +329,9 @@ manually on the same machine.
 `forge targets resume-run` is the explicit executor for that plan. With
 `--dry-run`, it re-checks the same candidates and reports the would-run batch
 without creating the batch lock, writing the ledger, or launching child
-processes. Without `--dry-run`, it re-checks each latest run before launching,
+processes. `--dry-run --redact-paths` also hides local DB, scope-manifest,
+ledger, and lock paths in the JSON output. Without `--dry-run`, it re-checks
+each latest run before launching,
 holds a batch lock, writes a JSONL ledger under
 `target_imports/resume_batches`, and starts at most one child
 `forge kill-chain ... --resume` process at a time. Re-running after a candidate
