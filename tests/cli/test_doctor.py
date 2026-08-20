@@ -1320,7 +1320,13 @@ def test_collect_doctor_checks_warns_on_due_monitoring_schedules(tmp_path) -> No
     assert "1/1 enabled policy" in row.details
     assert "1 due/overdue" in row.details
     assert "1 open alert" in row.details
+    assert "forge monitoring due-plan --json" in row.remediation
     assert "forge monitoring run-due --json" in row.remediation
+    action_by_id = {item["id"]: item for item in row.action_items}
+    assert action_by_id["review_due_monitoring"]["status"] == "attention"
+    assert action_by_id["review_due_monitoring"]["command"] == (
+        "forge monitoring due-plan --json"
+    )
 
 
 def test_collect_doctor_checks_warns_on_unrouted_monitoring_alerts(tmp_path) -> None:

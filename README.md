@@ -243,7 +243,7 @@ forge audit manifest-bundle-verify --bundle PATH
 forge targets import --feed-url URL|--feed-file PATH
 forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--json]  # Default also scans repo-local legacy dashboard DBs
 forge targets backfill-scope-manifests [--apply] [--limit N] [--reason REASON] [--data-dir PATH] [--json]
-forge monitoring status|run-due|deliver-alerts|worker
+forge monitoring status|due-plan|run-due|deliver-alerts|worker
 forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-retest|apply-retest-run|handoff-plan|integration-runbook|import-ticket-statuses|sync-tickets
 forge active-validation preview|create|approve|run|list|methods|coverage
 forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-first connector/plugin catalog
@@ -366,8 +366,11 @@ commands.
 monitoring: it reports stale DB schemas, enabled/idle policy counts,
 due/overdue policies, open alerts, unrouted open alerts, failed alert-delivery
 rows, suppressed delivery rows, and active alert suppressions without running
-jobs or delivering alerts. `forge monitoring run-due` and
-`forge monitoring worker` create scheduled snapshots and diff exposure state.
+jobs or delivering alerts. `forge monitoring due-plan --json` is the bounded
+read-only apply preview for due policies; it reports policy IDs, modes, timing,
+and sanitized refresh shape with `plan_only_no_commands_executed`. `forge
+monitoring run-due` and `forge monitoring worker` create scheduled snapshots
+and diff exposure state.
 Policies can opt into the built-in no-network refresh path with metadata
 `{"refresh": {"type": "seed_exposure"}}`;
 the runner then promotes non-failed seeds into monitored exposure state before

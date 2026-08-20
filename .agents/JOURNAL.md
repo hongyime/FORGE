@@ -51,3 +51,4 @@
 - 2026-08-20: Surfaced resume readiness in static dashboards and recursively sanitized scope-manifest metadata paths from dashboard run summaries.
 - 2026-08-20: Added dry-run-first workspace membership/control-index backfill and locally repaired legacy workspace access drift so doctor reports Workspace Access OK.
 - 2026-08-20: Added non-secret connector secret-key setup planning and configured a local user-level FORGE_ENGAGEMENT_KEY without printing the key value.
+- 2026-08-20: Added a read-only monitoring due-plan before run-due so operators can inspect due scheduled work without creating snapshots, running refresh callbacks, or delivering alerts.

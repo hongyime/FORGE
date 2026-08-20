@@ -13,7 +13,9 @@ from forge.db.validation import validate_canonical_schema
 from forge.engagement_ids import numeric_engagement_db_files
 from forge.monitoring.continuous import (
     MonitoringRefreshFn,
+    due_monitoring_policy_rows,
     monitoring_refresh_from_policy,
+    monitoring_policy_payload,
     run_due_monitoring_policies,
 )
 from forge.monitoring.delivery import (
@@ -325,6 +327,225 @@ def monitoring_status_for_data_dir(data_dir: Path, *, now: str | None = None) ->
         **totals,
         "db_results": db_results,
         "errors": errors,
+    }
+
+
+def _monitoring_refresh_plan(metadata: dict[str, Any]) -> dict[str, Any]:
+    refresh = metadata.get("refresh") if isinstance(metadata, dict) else None
+    if not isinstance(refresh, dict):
+        return {"configured": False, "type": ""}
+
+    connector_value = (
+        refresh.get("connector_ids")
+        or refresh.get("connectors")
+        or refresh.get("connector_id")
+        or refresh.get("connector")
+    )
+    target_value = (
+        refresh.get("targets")
+        or refresh.get("target")
+        or refresh.get("domains")
+        or refresh.get("domain")
+    )
+    source_path_value = (
+        refresh.get("source_paths")
+        or refresh.get("source_path")
+        or refresh.get("paths")
+        or refresh.get("path")
+    )
+    template_value = (
+        refresh.get("template_paths")
+        or refresh.get("templates")
+        or refresh.get("template")
+        or refresh.get("nuclei_templates")
+    )
+    report_files = (
+        refresh.get("report_files")
+        or refresh.get("report_paths")
+        or refresh.get("provider_reports")
+        or refresh.get("import_files")
+    )
+    has_single_report_file = bool(
+        str(
+            refresh.get("report_file")
+            or refresh.get("report_path")
+            or refresh.get("provider_report")
+            or refresh.get("import_file")
+            or ""
+        ).strip()
+    )
+    return {
+        "configured": True,
+        "type": str(refresh.get("type") or refresh.get("kind") or "").strip().lower(),
+        "connector_ids": _monitoring_plan_string_list(connector_value),
+        "target_count": len(_monitoring_plan_string_list(target_value)),
+        "source_path_count": len(_monitoring_plan_string_list(source_path_value)),
+        "template_count": len(_monitoring_plan_string_list(template_value)),
+        "report_file_configured": has_single_report_file
+        or bool(report_files if isinstance(report_files, dict) else False),
+        "dry_run": bool(refresh.get("dry_run") or refresh.get("preview")),
+        "allow_live": bool(refresh.get("allow_live")),
+    }
+
+
+def _monitoring_plan_string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item).strip()[:120] for item in value if str(item).strip()]
+    if isinstance(value, str):
+        return [value.strip()[:120]] if value.strip() else []
+    return [str(value).strip()[:120]] if str(value).strip() else []
+
+
+def _due_plan_policy_payload(
+    row: sqlite3.Row,
+    *,
+    engagement_name: str,
+    now: str,
+) -> dict[str, Any]:
+    policy = monitoring_policy_payload(row)
+    metadata = policy.get("metadata") if isinstance(policy.get("metadata"), dict) else {}
+    return {
+        "engagement_id": int(policy["engagement_id"]),
+        "engagement_name": engagement_name,
+        "policy_id": int(policy["id"]),
+        "policy_name": str(policy["name"]),
+        "mode": str(policy["mode"]),
+        "schedule_interval_minutes": int(policy["schedule_interval_minutes"]),
+        "last_snapshot_id": policy["last_snapshot_id"],
+        "missing_baseline": policy["last_snapshot_id"] is None,
+        "last_run_at": str(policy["last_run_at"]),
+        "next_run_at": str(policy["next_run_at"]),
+        "due_at": now,
+        "refresh": _monitoring_refresh_plan(metadata),
+        "execution_policy": "plan_only_no_commands_executed",
+    }
+
+
+def monitoring_due_plan_for_db(
+    db_path: Path,
+    *,
+    now: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Return due monitoring policies for one engagement DB without mutating it."""
+    observed_at = str(now or _utc_timestamp())
+    max_items = max(0, int(limit)) if limit is not None else None
+    con = _open_engagement_db_read_only(db_path)
+    try:
+        tables = _table_names(con)
+        missing_tables = sorted(_MONITORING_STATUS_TABLES - tables)
+        if missing_tables:
+            return {
+                "db_path": str(db_path.resolve()),
+                "schema_ready": False,
+                "missing_tables": missing_tables,
+                "engagement_count": _count_rows(con, "engagements") if "engagements" in tables else 0,
+                "due_policy_count": 0,
+                "planned_policy_count": 0,
+                "limited_policy_count": 0,
+                "policies": [],
+                "errors": [],
+                "execution_policy": "plan_only_no_commands_executed",
+            }
+
+        engagement_rows = con.execute(
+            """
+            SELECT id, name
+            FROM engagements
+            ORDER BY id
+            """
+        ).fetchall()
+        policies: list[dict[str, Any]] = []
+        due_policy_count = 0
+        for engagement in engagement_rows:
+            due_rows = due_monitoring_policy_rows(
+                con,
+                int(engagement["id"]),
+                now=observed_at,
+            )
+            due_policy_count += len(due_rows)
+            if max_items is not None and len(policies) >= max_items:
+                continue
+            remaining = None if max_items is None else max_items - len(policies)
+            selected_rows = due_rows if remaining is None else due_rows[:remaining]
+            policies.extend(
+                _due_plan_policy_payload(
+                    row,
+                    engagement_name=str(engagement["name"] or ""),
+                    now=observed_at,
+                )
+                for row in selected_rows
+            )
+        return {
+            "db_path": str(db_path.resolve()),
+            "schema_ready": True,
+            "missing_tables": [],
+            "engagement_count": len(engagement_rows),
+            "due_policy_count": due_policy_count,
+            "planned_policy_count": len(policies),
+            "limited_policy_count": max(0, due_policy_count - len(policies)),
+            "policies": policies,
+            "errors": [],
+            "execution_policy": "plan_only_no_commands_executed",
+        }
+    finally:
+        con.close()
+
+
+def monitoring_due_plan_for_data_dir(
+    data_dir: Path,
+    *,
+    now: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Return a read-only plan of due monitoring work across engagement DBs."""
+    observed_at = str(now or _utc_timestamp())
+    max_items = max(0, int(limit)) if limit is not None else None
+    db_results: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    totals = {
+        "db_count": 0,
+        "schema_ready_db_count": 0,
+        "stale_db_count": 0,
+        "engagement_count": 0,
+        "due_policy_count": 0,
+        "planned_policy_count": 0,
+        "limited_policy_count": 0,
+    }
+    for db_path in numeric_engagement_db_files(data_dir):
+        totals["db_count"] += 1
+        remaining = None
+        if max_items is not None:
+            remaining = max(0, max_items - totals["planned_policy_count"])
+        try:
+            result = monitoring_due_plan_for_db(
+                db_path,
+                now=observed_at,
+                limit=remaining,
+            )
+        except (OSError, sqlite3.Error, RuntimeError) as exc:
+            errors.append({"db_path": str(db_path.resolve()), "error": str(exc)})
+            continue
+        db_results.append(result)
+        if result["schema_ready"]:
+            totals["schema_ready_db_count"] += 1
+        else:
+            totals["stale_db_count"] += 1
+        for key in ("engagement_count", "due_policy_count", "planned_policy_count"):
+            totals[key] += int(result[key])
+    totals["limited_policy_count"] = max(
+        0,
+        int(totals["due_policy_count"]) - int(totals["planned_policy_count"]),
+    )
+    return {
+        "data_dir": str(data_dir.resolve()),
+        "observed_at": observed_at,
+        **totals,
+        "db_results": db_results,
+        "errors": errors,
+        "execution_policy": "plan_only_no_commands_executed",
     }
 
 

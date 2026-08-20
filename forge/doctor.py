@@ -895,7 +895,19 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
             "Monitoring Schedules",
             "WARN",
             details,
-            "Run `forge monitoring run-due --json` from cron or start `forge monitoring worker`.",
+            (
+                "Review due work first with `forge monitoring due-plan --json`, then run "
+                "`forge monitoring run-due --json` from cron or start `forge monitoring worker`."
+            ),
+            (
+                {
+                    "id": "review_due_monitoring",
+                    "priority": "45",
+                    "status": "attention",
+                    "summary": f"{due_count} due/overdue monitoring policy(ies)",
+                    "command": "forge monitoring due-plan --json",
+                },
+            ),
         )
     return DoctorCheck("Monitoring Schedules", "OK", details)
 

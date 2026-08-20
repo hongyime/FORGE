@@ -172,9 +172,12 @@ Progress:
 - Real local `forge doctor --json` with the user env key loaded now reports Connector Secret Store `OK`; remaining doctor attention is Safe Mode, Monitoring Schedules, TPH Target Import Bridge, Connector Catalog, and Connector Action Plan.
 - Verified B563 with focused connector/doctor/CLI-registry tests (`63 passed`), Ruff, py_compile, `git diff --check`, and local secret-key/doctor smokes.
 - Pushed B563 as `45ba1ae feat: add connector secret key plan`.
+- Added read-only `forge monitoring due-plan [--limit N] [--json]` so due monitoring policies can be reviewed before `run-due`/worker mutates engagement DBs.
+- Doctor's Monitoring Schedules due-policy warning now points first to `forge monitoring due-plan --json` and includes a `review_due_monitoring` action item.
+- Verified B564 with focused monitoring/doctor/CLI-registry tests, broader monitoring/doctor/CLI-registry tests (`97 passed`), Ruff, py_compile, `git diff --check`, a local `monitoring due-plan --limit 5 --json` smoke, and a doctor smoke confirming the Monitoring Schedules remediation points to `due-plan` first.
 
 Next steps:
-- Continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Commit and push B564 to `main`. Continue old product hardening from the next concrete quality-audit/doctor failure class after push.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

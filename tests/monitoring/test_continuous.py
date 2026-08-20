@@ -32,6 +32,7 @@ from forge.monitoring.delivery import (
 )
 from forge.monitoring.runner import (
     deliver_monitoring_alerts_for_data_dir,
+    monitoring_due_plan_for_data_dir,
     monitoring_status_for_data_dir,
     run_due_monitoring_for_data_dir,
     run_monitoring_worker,
@@ -2413,6 +2414,122 @@ def test_monitoring_status_for_data_dir_reports_stale_schema_without_migrating(
     assert tables == {"engagements"}
 
 
+def test_monitoring_due_plan_for_data_dir_is_read_only_and_bounded(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    due_db = _build_runner_db(data_dir, 1001, "app.acme.example")
+    future_db = _build_runner_db(data_dir, 1002, "api.acme.example")
+    _seed_due_policy(due_db, 1001, due=True)
+    _seed_due_policy(future_db, 1002, due=False)
+    _seed_due_connector_policy(
+        due_db,
+        metadata={
+            "refresh": {
+                "type": "connector",
+                "connector": "projectdiscovery_subfinder",
+                "targets": ["app.acme.example", "api.acme.example"],
+                "report_file": "C:/secret/provider-token-never-render.json",
+                "dry_run": True,
+            }
+        },
+    )
+
+    con = direct_connect(due_db)
+    try:
+        before_snapshots = con.execute("SELECT COUNT(*) FROM monitoring_snapshots").fetchone()[0]
+        before_due_audit = con.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE action='monitoring_policy_due_run'"
+        ).fetchone()[0]
+        before_next_runs = [
+            row[0]
+            for row in con.execute(
+                "SELECT next_run_at FROM monitoring_policies ORDER BY id"
+            ).fetchall()
+        ]
+    finally:
+        con.close()
+
+    result = monitoring_due_plan_for_data_dir(
+        data_dir,
+        now="2026-07-09T10:00:00Z",
+        limit=2,
+    )
+
+    assert result["execution_policy"] == "plan_only_no_commands_executed"
+    assert result["db_count"] == 2
+    assert result["due_policy_count"] == 2
+    assert result["planned_policy_count"] == 2
+    assert result["limited_policy_count"] == 0
+    planned = [
+        policy
+        for db_result in result["db_results"]
+        for policy in db_result["policies"]
+    ]
+    assert len(planned) == 2
+    assert planned[0]["execution_policy"] == "plan_only_no_commands_executed"
+    assert planned[0]["engagement_id"] == 1001
+    assert planned[0]["missing_baseline"] is False
+    assert "metadata" not in planned[0]
+    blob = json.dumps(result, sort_keys=True)
+    assert "provider-token-never-render" not in blob
+    assert "target_count" in blob
+
+    con = direct_connect(due_db)
+    try:
+        after_snapshots = con.execute("SELECT COUNT(*) FROM monitoring_snapshots").fetchone()[0]
+        after_due_audit = con.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE action='monitoring_policy_due_run'"
+        ).fetchone()[0]
+        after_next_runs = [
+            row[0]
+            for row in con.execute(
+                "SELECT next_run_at FROM monitoring_policies ORDER BY id"
+            ).fetchall()
+        ]
+    finally:
+        con.close()
+    assert after_snapshots == before_snapshots
+    assert after_due_audit == before_due_audit
+    assert after_next_runs == before_next_runs
+
+
+def test_monitoring_due_plan_reports_stale_schema_without_migrating(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True)
+    con = sqlite3.connect(db_path)
+    try:
+        con.executescript(
+            """
+            CREATE TABLE engagements (id INTEGER PRIMARY KEY, name TEXT);
+            INSERT INTO engagements (id, name) VALUES (1001, 'Legacy Monitoring');
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    result = monitoring_due_plan_for_data_dir(data_dir, now="2026-07-09T10:00:00Z")
+
+    assert result["db_count"] == 1
+    assert result["schema_ready_db_count"] == 0
+    assert result["stale_db_count"] == 1
+    assert result["due_policy_count"] == 0
+    assert result["db_results"][0]["schema_ready"] is False
+    assert "monitoring_policies" in result["db_results"][0]["missing_tables"]
+
+    con = sqlite3.connect(db_path)
+    try:
+        tables = {
+            row[0]
+            for row in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+    finally:
+        con.close()
+    assert tables == {"engagements"}
+
+
 def test_monitoring_cli_run_due_outputs_json(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     db_path = _build_runner_db(data_dir, 1001, "app.acme.example")
@@ -2440,6 +2557,47 @@ def test_monitoring_cli_run_due_outputs_json(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert '"run_count": 1' in result.output
     assert '"alert_count": 1' in result.output
+
+
+def test_monitoring_cli_due_plan_outputs_json_without_running_due(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    db_path = _build_runner_db(data_dir, 1001, "app.acme.example")
+    _seed_due_policy(db_path, 1001, due=True)
+
+    app = typer.Typer()
+    monitoring_app = typer.Typer()
+    register_monitoring_commands(monitoring_app)
+    app.add_typer(monitoring_app, name="monitoring")
+    result = CliRunner().invoke(
+        app,
+        [
+            "monitoring",
+            "due-plan",
+            "--data-dir",
+            str(data_dir),
+            "--now",
+            "2026-07-09T10:00:00Z",
+            "--limit",
+            "5",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["due_policy_count"] == 1
+    assert payload["planned_policy_count"] == 1
+    assert payload["db_results"][0]["policies"][0]["policy_name"] == "Hourly passive"
+
+    con = direct_connect(db_path)
+    try:
+        audit_count = con.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE action='monitoring_policy_due_run'"
+        ).fetchone()[0]
+    finally:
+        con.close()
+    assert audit_count == 0
 
 
 def test_monitoring_cli_status_outputs_json(tmp_path: Path) -> None:

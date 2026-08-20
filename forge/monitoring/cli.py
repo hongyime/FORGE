@@ -10,6 +10,7 @@ from rich.console import Console
 from forge.config import ForgeConfig
 from forge.monitoring.runner import (
     deliver_monitoring_alerts_for_data_dir,
+    monitoring_due_plan_for_data_dir,
     monitoring_status_for_data_dir,
     run_due_monitoring_for_data_dir,
     run_monitoring_worker,
@@ -53,6 +54,45 @@ def register_monitoring_commands(app: typer.Typer) -> None:
             f"failed_deliveries={result['failed_delivery_count']} "
             f"suppressed_deliveries={result['suppressed_delivery_count']} "
             f"active_suppressions={result['active_suppression_count']} "
+            f"errors={len(result['errors'])}"
+        )
+
+    @app.command("due-plan")
+    def due_plan(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help="FORGE data directory. Defaults to FORGE_DATA_DIR.",
+        ),
+        now: Optional[str] = typer.Option(
+            None,
+            "--now",
+            help="Override scheduler clock for deterministic plan checks/tests.",
+        ),
+        limit: int = typer.Option(
+            50,
+            "--limit",
+            min=0,
+            help="Maximum due policy rows to include in the plan.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON.",
+        ),
+    ) -> None:
+        cfg = ForgeConfig.load()
+        root = data_dir or cfg.data_dir
+        result = monitoring_due_plan_for_data_dir(root, now=now, limit=limit)
+        if json_output:
+            typer.echo(json.dumps(result, sort_keys=True))
+            return
+        console.print(
+            "[bold]Monitoring due plan[/bold] "
+            f"dbs={result['db_count']} ready_dbs={result['schema_ready_db_count']} "
+            f"engagements={result['engagement_count']} due={result['due_policy_count']} "
+            f"planned={result['planned_policy_count']} "
+            f"limited={result['limited_policy_count']} "
             f"errors={len(result['errors'])}"
         )
 
