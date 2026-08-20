@@ -212,6 +212,7 @@ def collect_stale_report_repair_plan(
     *,
     reports_dir: Path,
     limit: int = DEFAULT_TOP_LIMIT,
+    redact_paths: bool = False,
 ) -> dict[str, Any]:
     """Return a read-only command plan for stale latest-report repair."""
 
@@ -229,8 +230,11 @@ def collect_stale_report_repair_plan(
         follow_up_commands = []
     return {
         "schema_version": "forge.report_stale_repair_plan.v1",
-        "reports_dir": payload.get("reports_dir", str(Path(reports_dir))),
+        "reports_dir": (
+            "<redacted>" if redact_paths else payload.get("reports_dir", str(Path(reports_dir)))
+        ),
         "execution_policy": "plan_only_no_commands_executed",
+        "redact_paths": bool(redact_paths),
         "total_count": int(action.get("total_count", 0)) if action else 0,
         "sample_limit": (
             int(action.get("sample_limit", sample_limit)) if action else sample_limit

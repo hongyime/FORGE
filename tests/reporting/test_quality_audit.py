@@ -431,6 +431,7 @@ def test_collect_stale_report_repair_plan_is_read_only_command_plan(
 
     assert payload["schema_version"] == "forge.report_stale_repair_plan.v1"
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["redact_paths"] is False
     assert payload["status"] == "ready"
     assert payload["total_count"] == 1
     assert payload["selected_count"] == 1
@@ -449,6 +450,28 @@ def test_collect_stale_report_repair_plan_is_read_only_command_plan(
             "--yes",
         ]
     ]
+
+
+def test_collect_stale_report_repair_plan_redacts_reports_dir(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    monkeypatch.setattr(
+        "forge.reporting.quality_audit._default_gguf_model_available",
+        lambda: True,
+    )
+
+    payload = collect_stale_report_repair_plan(
+        reports_dir=reports_dir,
+        limit=1,
+        redact_paths=True,
+    )
+
+    assert payload["redact_paths"] is True
+    assert payload["reports_dir"] == "<redacted>"
+    assert str(tmp_path) not in json.dumps(payload)
 
 
 def test_collect_long_run_review_plan_is_read_only_review_plan(tmp_path: Path) -> None:
@@ -632,6 +655,36 @@ def test_report_stale_plan_cli_outputs_json(tmp_path: Path, monkeypatch) -> None
         "auto",
         "--yes",
     ]
+
+
+def test_report_stale_plan_cli_redacts_json_paths(tmp_path: Path, monkeypatch) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    monkeypatch.setattr(
+        "forge.reporting.quality_audit._default_gguf_model_available",
+        lambda: True,
+    )
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "stale-plan",
+            "--reports-dir",
+            str(reports_dir),
+            "--limit",
+            "1",
+            "--redact-paths",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["redact_paths"] is True
+    assert payload["reports_dir"] == "<redacted>"
+    assert str(tmp_path) not in json.dumps(payload)
 
 
 def test_report_stale_plan_cli_prints_human_plan(tmp_path: Path, monkeypatch) -> None:

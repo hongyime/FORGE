@@ -228,6 +228,11 @@ def report_stale_plan(
         "--limit",
         help="Maximum stale-report repair commands to include.",
     ),
+    redact_paths: bool = typer.Option(
+        False,
+        "--redact-paths",
+        help="Hide local paths in JSON output.",
+    ),
     json_output: bool = typer.Option(
         False,
         "--json",
@@ -238,6 +243,7 @@ def report_stale_plan(
     payload = collect_stale_report_repair_plan(
         reports_dir=reports_dir,
         limit=limit,
+        redact_paths=redact_paths,
     )
     if json_output:
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
