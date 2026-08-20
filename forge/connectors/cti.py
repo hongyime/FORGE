@@ -40,6 +40,7 @@ class CtiObservationImportConfig:
     operator: str = "connector-import"
     dry_run: bool = False
     limit: int | None = None
+    min_confidence: float | None = None
 
 
 def import_cti_observations(
@@ -66,6 +67,7 @@ def import_cti_observations(
     payload = _json_document(text)
     raw_items = _payload_items(payload)
     limit = _normalize_limit(config.limit)
+    min_confidence = _normalize_min_confidence(config.min_confidence)
     total_item_count = len(raw_items)
     limited_item_count = 0
     if limit is not None and total_item_count > limit:
@@ -78,6 +80,7 @@ def import_cti_observations(
     persisted_count = 0
     duplicate_count = 0
     promoted_seed_count = 0
+    filtered_count = 0
     would_persist_count = 0
     would_duplicate_count = 0
     would_promote_seed_count = 0
@@ -107,6 +110,16 @@ def import_cti_observations(
             skipped.append({"index": str(index), "reason": "observation_rejected"})
             continue
         parsed_count += 1
+        if min_confidence is not None and observation.confidence < min_confidence:
+            filtered_count += 1
+            skipped.append(
+                {
+                    "index": str(index),
+                    "reason": "below_min_confidence",
+                    "confidence": f"{observation.confidence:.3f}",
+                }
+            )
+            continue
         persisted = False
         eligible_for_promotion = False
         if not config.dry_run:
@@ -169,6 +182,7 @@ def import_cti_observations(
         "status": "completed",
         "dry_run": bool(config.dry_run),
         "limit": limit,
+        "min_confidence": min_confidence,
         "total_item_count": total_item_count,
         "processed_item_count": len(raw_items),
         "limited_item_count": limited_item_count,
@@ -176,6 +190,7 @@ def import_cti_observations(
         "persisted_count": persisted_count,
         "duplicate_count": duplicate_count,
         "promoted_seed_count": promoted_seed_count,
+        "filtered_count": filtered_count,
         "would_persist_count": would_persist_count,
         "would_duplicate_count": would_duplicate_count,
         "would_promote_seed_count": would_promote_seed_count,
@@ -485,6 +500,18 @@ def _normalize_limit(value: int | None) -> int | None:
     if parsed < 1:
         raise ValueError("CTI import limit must be at least 1")
     return min(parsed, 100_000)
+
+
+def _normalize_min_confidence(value: float | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("CTI import min confidence must be a number between 0 and 1") from exc
+    if parsed < 0.0 or parsed > 1.0:
+        raise ValueError("CTI import min confidence must be between 0 and 1")
+    return parsed
 
 
 def _provider_observation_item(

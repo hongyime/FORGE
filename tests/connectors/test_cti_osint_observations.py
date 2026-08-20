@@ -608,6 +608,45 @@ def test_cti_import_limit_bounds_processed_items(tmp_path: Path) -> None:
     assert values == ["one.acme.example", "two.acme.example"]
 
 
+def test_cti_import_min_confidence_filters_low_confidence_observations(
+    tmp_path: Path,
+) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    report = {
+        "items": [
+            {"type": "domain", "value": "low.acme.example", "confidence": 0.2},
+            {"type": "domain", "value": "high.acme.example", "confidence": 0.9},
+        ]
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="stix_taxii_import",
+                engagement_id=1001,
+                min_confidence=0.5,
+            ),
+            report_text=json.dumps(report),
+        )
+        values = [
+            row["indicator_value"]
+            for row in con.execute(
+                "SELECT indicator_value FROM cti_observations"
+            ).fetchall()
+        ]
+    finally:
+        con.close()
+
+    assert result["min_confidence"] == 0.5
+    assert result["parsed_count"] == 2
+    assert result["filtered_count"] == 1
+    assert result["persisted_count"] == 1
+    assert result["skipped_count"] == 1
+    assert result["skipped"][0]["reason"] == "below_min_confidence"
+    assert values == ["high.acme.example"]
+
+
 def test_cti_observations_surface_as_non_reportable_inventory(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     db_path = data_dir / "engagements" / "1001.db"
@@ -853,3 +892,57 @@ def test_connector_cli_import_cti_limit_is_passed_to_importer(
     assert payload["processed_item_count"] == 1
     assert payload["limited_item_count"] == 1
     assert payload["persisted_count"] == 1
+
+
+def test_connector_cli_import_cti_min_confidence_dry_run(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "cti.json"
+    report_file.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {"type": "domain", "value": "low.acme.example", "confidence": 0.2},
+                    {"type": "domain", "value": "high.acme.example", "confidence": 0.9},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "stix_taxii_import",
+            "--report-file",
+            str(report_file),
+            "--min-confidence",
+            "0.5",
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "dry_run"
+    assert payload["min_confidence"] == 0.5
+    assert payload["parsed_count"] == 2
+    assert payload["filtered_count"] == 1
+    assert payload["would_persist_count"] == 1
+    assert payload["skipped"][0]["reason"] == "below_min_confidence"

@@ -461,6 +461,13 @@ def register_connector_commands(app: typer.Typer) -> None:
             max=100000,
             help="Maximum number of CTI items to process from the offline file.",
         ),
+        min_confidence: float | None = typer.Option(
+            None,
+            "--min-confidence",
+            min=0.0,
+            max=1.0,
+            help="Skip normalized observations below this confidence threshold.",
+        ),
         operator: str = typer.Option("connector-import", "--operator"),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
@@ -484,6 +491,7 @@ def register_connector_commands(app: typer.Typer) -> None:
                     operator=operator,
                     dry_run=dry_run,
                     limit=limit,
+                    min_confidence=min_confidence,
                 ),
             )
         except (FileNotFoundError, LookupError, ValueError) as exc:
@@ -503,6 +511,7 @@ def register_connector_commands(app: typer.Typer) -> None:
             f"promoted={result['promoted_seed_count']} "
             f"would_promote={result.get('would_promote_seed_count', 0)} "
             f"skipped={result['skipped_count']} "
+            f"filtered={result.get('filtered_count', 0)} "
             f"limited={result.get('limited_item_count', 0)}"
         )
 
