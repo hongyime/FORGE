@@ -2697,6 +2697,11 @@ def test_connector_cli_exports_secret_prevention_plan_without_values(
     commands = payload["workflows"][0]["commands"]
     tools = {command["tool"] for command in commands}
     assert payload["schema"] == "forge.secret_prevention.v1"
+    assert payload["schema_version"] == "forge.secret_prevention.v1"
+    assert payload["execution_policy"] == "plan_only_secret_prevention_no_commands_executed"
+    assert payload["total_count"] == payload["summary"]["command_count"]
+    assert payload["selected_count"] == payload["summary"]["command_count"]
+    assert payload["omitted_count"] == 0
     assert payload["workflow_filter"] == "push"
     assert payload["summary"]["finding_count"] == 1
     assert "trufflehog" in tools

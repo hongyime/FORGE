@@ -90,6 +90,11 @@ def test_secret_prevention_workflow_plan_groups_value_free_commands(tmp_path: Pa
         for command in workflows["push"]["commands"]
     }
     assert plan["schema"] == "forge.secret_prevention.v1"
+    assert plan["schema_version"] == "forge.secret_prevention.v1"
+    assert plan["execution_policy"] == "plan_only_secret_prevention_no_commands_executed"
+    assert plan["total_count"] == plan["summary"]["command_count"]
+    assert plan["selected_count"] == plan["summary"]["command_count"]
+    assert plan["omitted_count"] == 0
     assert plan["summary"]["finding_count"] == 2
     assert plan["summary"]["workflow_count"] == 3
     assert workflows["pre-commit"]["target"]["artifact"] == ".pre-commit-config.yaml"
@@ -109,6 +114,8 @@ def test_secret_prevention_workflow_plan_groups_value_free_commands(tmp_path: Pa
     assert any(command["tool"] == "gitleaks" for command in workflows["pull_request"]["commands"])
     assert push_commands["trufflehog"]["affected_finding_ids"] == [30, 31]
     assert push_plan["workflow_filter"] == "push"
+    assert push_plan["selected_count"] == push_plan["summary"]["command_count"]
+    assert push_plan["omitted_count"] == 0
     assert [item["workflow"] for item in push_plan["workflows"]] == ["push"]
     assert "age1secret" not in blob
     assert "age1secret2" not in blob
