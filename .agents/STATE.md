@@ -213,9 +213,10 @@ Progress:
 - Reclassified `engagement_<id>_stats.json` files as report metadata sidecars rather than report families across report artifact discovery, report-family grouping, quality-audit file inventory, and old dashboard `report_history` interpretation.
 - Verified B574 with focused reporting tests (`14 passed`), Ruff, py_compile, `git diff --check`, and a real local `report quality-audit --json --top-limit 5` smoke. Local latest backend counts changed from stats-sidecar `none:58, template:3` to actual `template:61`; no dashboard regeneration, report regeneration, engagement mutation, live run, provider call, scheduled-task change, or credential persistence was started.
 - The B574 quality-audit smoke surfaced the next real report-health backlog: `latest_fallback_reason_counts` now shows `gguf_model_missing:57`, previously hidden by stats sidecars.
+- Pushed B574 as `2c7eedb fix: ignore report stats sidecars`.
 
 Next steps:
-- Commit/push B574, then investigate the latest GGUF-missing report-history backlog without regenerating reports unless explicitly intended. Remaining doctor attention is Safe Mode, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, and Connector Secret Store process-env reload guidance.
+- Investigate the latest GGUF-missing report-history backlog without regenerating reports unless explicitly intended. Remaining doctor attention is Safe Mode, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, and Connector Secret Store process-env reload guidance.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
