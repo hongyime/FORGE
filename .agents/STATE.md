@@ -19,6 +19,7 @@ Progress:
 - Documented offline CTI import support in README next to the public command list.
 - Pushed README checkpoint as `bfbda54 docs: document offline cti imports`.
 - Added `forge connectors import-cti --dry-run` to parse/sanitize offline CTI files and scope-check promotion candidates without writing observations, seeds, or audit rows.
+- Pushed B519 as `b6314f0 feat: add cti import dry run`.
 
 Next steps:
-- Commit and push the CTI dry-run checkpoint.
+- Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
