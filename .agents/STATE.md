@@ -43,8 +43,8 @@ Progress:
 - Verified B528 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B528 as `06c5fb0 feat: read compressed cti imports`.
 - Added constrained local `.zip` report-file support for offline `forge connectors import-cti` with deterministic supported-member selection and no extraction to disk.
-- Verified B529 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`; commit/push pending.
+- Verified B529 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
+- Pushed B529 as `3890a87 feat: read zipped cti imports`.
 
 Next steps:
-- Commit and push B529.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
