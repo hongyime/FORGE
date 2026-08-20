@@ -59,6 +59,26 @@ def test_report_backend_summary_renders_lineage_counts_and_escapes() -> None:
     assert ("a" * 140) not in html
 
 
+def test_report_backend_summary_shortens_long_diagnostics() -> None:
+    html = render_report_backend_summary(
+        {
+            "fallback_reason": (
+                "GGUF model not found: C:/Users/bryan/.cache/forge/models/"
+                "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+            ),
+            "report_write_error": (
+                "Usage: forge recon subdomains [OPTIONS]\n"
+                "Try 'forge recon subdomains --help' for help. ┌─ Error"
+            ),
+        }
+    )
+
+    assert "GGUF model not found; configure an LLM provider/model" in html
+    assert "C:/Users/bryan" not in html
+    assert "Command failed before completion" in html
+    assert "--help&#x27; for help" not in html
+
+
 def test_report_callout_renders_preview_or_empty_state() -> None:
     empty = render_report_callout([], {"provider": "raw_export"})
     assert "No markdown executive report is available yet" in empty
@@ -90,6 +110,13 @@ def test_report_preview_renderer_escapes_link_and_body() -> None:
     assert "report&lt;script&gt;.md" in html
     assert "../report.md?x=&lt;1&gt;" in html
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+
+
+def test_report_preview_renderer_bounds_large_inline_preview() -> None:
+    html = render_report_preview(name="report.md", href="../report.md", preview="x" * 3000)
+
+    assert "Preview truncated in the dashboard" in html
+    assert "x" * 3000 not in html
 
 
 def test_report_history_renders_prior_families_and_escapes() -> None:
@@ -141,8 +168,10 @@ def test_table_renderer_handles_empty_rows_and_escapes_cells() -> None:
 
     assert "<th>Title</th>" in html
     assert '<div class="table-scroll">' in html
-    assert "<td>XSS &lt;script&gt;</td>" in html
-    assert "<td>LOW &amp; informational</td>" in html
+    assert "<table class='responsive-table'>" in html
+    assert '<td data-label="Title">XSS &lt;script&gt;</td>' in html
+    assert ">XSS &lt;script&gt;</td>" in html
+    assert ">LOW &amp; informational</td>" in html
 
 
 def test_artifact_card_renderer_escapes_artifact_metadata() -> None:
@@ -382,4 +411,6 @@ def test_dashboard_base_styles_wrap_long_report_values() -> None:
     assert ".panel-body li" in styles
     assert ".summary-line,.summary-line *" in styles
     assert ".input-chip-details" in styles
+    assert ".fallback-note" in styles
+    assert "table.responsive-table td::before" in styles
     assert "@media (max-width: 640px)" in styles

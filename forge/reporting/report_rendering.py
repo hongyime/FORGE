@@ -12,6 +12,42 @@ def _truncate_text(value: Any, limit: int = 140) -> str:
     return f"{text[:limit - 3]}..."
 
 
+def _render_bounded_note(label: str, value: Any, *, limit: int = 220) -> str:
+    text = _safe_dashboard_note_text(str(value or "").strip())
+    if not text:
+        return ""
+    escaped_label = html.escape(label)
+    escaped_short = html.escape(_truncate_text(text, limit))
+    if len(text) <= limit:
+        return f"<p class='tiny muted fallback-note'>{escaped_label}: {escaped_short}</p>"
+    return (
+        "<details class='tiny muted fallback-note'>"
+        f"<summary>{escaped_label}: {escaped_short}</summary>"
+        f"<pre>{html.escape(text)}</pre>"
+        "</details>"
+    )
+
+
+def _render_bounded_preview(preview: Any, *, limit: int = 2400) -> str:
+    text = str(preview or "")
+    if len(text) <= limit:
+        return f"<pre>{html.escape(text)}</pre>"
+    return (
+        f"<pre>{html.escape(_truncate_text(text, limit))}</pre>"
+        "<div class='tiny muted'>Preview truncated in the dashboard. "
+        "Open the artifact for the full report.</div>"
+    )
+
+
+def _safe_dashboard_note_text(text: str) -> str:
+    normalized = text.lower()
+    if "gguf model not found" in normalized:
+        return "GGUF model not found; configure an LLM provider/model or regenerate after local model setup."
+    if "--help' for help" in text and ("┌─ Error" in text or "Error" in text):
+        return "Command failed before completion; review the raw run log for the full CLI diagnostic."
+    return text
+
+
 def render_meta_block(label: str, value: str, mono: bool = False) -> str:
     class_name = "v mono" if mono else "v"
     return (
@@ -40,7 +76,8 @@ def render_table(title: str, rows: list[dict[str, str]]) -> str:
         body_html.append(
             "<tr>"
             + "".join(
-                f"<td>{html.escape(str(row.get(head, '')))}</td>"
+                f"<td data-label=\"{html.escape(head)}\">"
+                f"{html.escape(str(row.get(head, '')))}</td>"
                 for head in headers
             )
             + "</tr>"
@@ -50,7 +87,7 @@ def render_table(title: str, rows: list[dict[str, str]]) -> str:
         f'<div class="panel-head"><h3>{html.escape(title)}</h3></div>'
         '<div class="panel-body" style="padding:0">'
         '<div class="table-scroll">'
-        f"<table><thead><tr>{header_html}</tr></thead>"
+        f"<table class='responsive-table'><thead><tr>{header_html}</tr></thead>"
         f"<tbody>{''.join(body_html)}</tbody></table>"
         "</div></div></section>"
     )
@@ -147,13 +184,9 @@ def render_report_backend_summary(summary: dict[str, Any] | None) -> str:
                 "</div>"
             )
     if summary.get("fallback_reason"):
-        lines.append(
-            f"<p class='tiny muted'>Fallback reason: {html.escape(str(summary['fallback_reason']))}</p>"
-        )
+        lines.append(_render_bounded_note("Fallback reason", summary["fallback_reason"]))
     if summary.get("report_write_error"):
-        lines.append(
-            f"<p class='tiny muted'>Write degradation: {html.escape(str(summary['report_write_error']))}</p>"
-        )
+        lines.append(_render_bounded_note("Write degradation", summary["report_write_error"]))
     if summary.get("findings_checksum"):
         lines.append(
             f"<p class='tiny mono'>Checksum {html.escape(_truncate_text(str(summary['findings_checksum']), 96))}</p>"
@@ -181,7 +214,7 @@ def render_report_callout(
         "</div>"
         f"{backend_summary}"
         "<p class='tiny muted'>Executive narrative preview</p>"
-        f"<pre>{html.escape(preview['preview'])}</pre>"
+        f"{_render_bounded_preview(preview['preview'])}"
         "</div>"
     )
 
@@ -192,7 +225,7 @@ def render_report_preview(*, name: str, href: str, preview: str) -> str:
         f'<div class="panel-head"><h3><a href="{html.escape(href)}">'
         f"{html.escape(name)}"
         "</a></h3></div>"
-        f'<div class="panel-body"><pre>{html.escape(preview)}</pre></div>'
+        f'<div class="panel-body">{_render_bounded_preview(preview)}</div>'
         "</section>"
     )
 
@@ -339,13 +372,9 @@ def render_report_history(report_history: list[dict[str, Any]]) -> str:
         )
         detail_lines = []
         if family.get("fallback_reason"):
-            detail_lines.append(
-                f"<div class='tiny muted'>Fallback reason: {html.escape(str(family['fallback_reason']))}</div>"
-            )
+            detail_lines.append(_render_bounded_note("Fallback reason", family["fallback_reason"]))
         if family.get("report_write_error"):
-            detail_lines.append(
-                f"<div class='tiny muted'>Write degradation: {html.escape(str(family['report_write_error']))}</div>"
-            )
+            detail_lines.append(_render_bounded_note("Write degradation", family["report_write_error"]))
         if family.get("findings_checksum"):
             detail_lines.append(
                 f"<div class='tiny mono'>Checksum {html.escape(_truncate_text(str(family['findings_checksum']), 96))}</div>"

@@ -1073,12 +1073,20 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert detail_payload["sections"]["engagement_runs"][0]["Manifest"] == manifest_hash[:12]
     assert detail_payload["sections"]["engagement_runs"][0]["Manifest OK"] == "yes"
     assert detail_payload["sections"]["engagement_runs"][0]["ROE"] == "ROE-ACME-2026-07"
+    assert (
+        detail_payload["sections"]["engagement_runs"][0]["ROE Source"]
+        == "latest run metadata / scope manifest"
+    )
     assert detail_payload["sections"]["engagement_runs"][0]["ROE Missing"] == "no"
     assert detail_payload["sections"]["engagement_runs"][0]["Live"] == (
         "probe=yes tools=yes active=no creds=no"
     )
     assert detail_payload["sections"]["engagement_runs"][0]["Destructive"] == "no"
     assert detail_payload["sections"]["engagement_runs"][0]["Post-Ex"] == "no"
+    assert (
+        detail_payload["sections"]["engagement_runs"][0]["Policy Source"]
+        == "latest run metadata"
+    )
     assert not any(
         row["Action"] == "scheduled_task_scope_denied"
         for row in detail_payload["sections"]["audit_log"]

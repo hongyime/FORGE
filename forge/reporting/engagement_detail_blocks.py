@@ -23,7 +23,8 @@ EMPTY_SCOPE_BLOCK = (
     "metadata.</div>"
 )
 EMPTY_SEED_BLOCK = '<div class="empty">No seed history found for this engagement.</div>'
-INPUT_CHIP_PREVIEW_LIMIT = 80
+INPUT_CHIP_PREVIEW_LIMIT = 24
+INPUT_CHIP_HIDDEN_RENDER_LIMIT = 120
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ def render_engagement_chip_block(
     empty_html: str,
     code: bool = True,
     preview_limit: int = INPUT_CHIP_PREVIEW_LIMIT,
+    hidden_render_limit: int = INPUT_CHIP_HIDDEN_RENDER_LIMIT,
 ) -> str:
     """Render a chips block for engagement seeds or scope entries."""
     if not values:
@@ -89,7 +91,16 @@ def render_engagement_chip_block(
     if not hidden_values:
         return '<div class="chips">' + "".join(chips) + "</div>"
 
-    hidden_chips = "".join(_chip(value) for value in hidden_values)
+    rendered_hidden_values = hidden_values[: max(0, int(hidden_render_limit))]
+    omitted_hidden_count = max(0, len(hidden_values) - len(rendered_hidden_values))
+    hidden_chips = "".join(_chip(value) for value in rendered_hidden_values)
+    omitted_html = (
+        f'<div class="tiny muted input-chip-omitted">'
+        f"{omitted_hidden_count} additional entries omitted from this static page. "
+        "Use the JSON detail payload for the complete list.</div>"
+        if omitted_hidden_count
+        else ""
+    )
     return (
         '<div class="chips input-chip-preview">'
         + "".join(chips)
@@ -97,6 +108,7 @@ def render_engagement_chip_block(
         '<details class="input-chip-details">'
         f"<summary>Show {len(hidden_values)} more</summary>"
         f'<div class="chips">{hidden_chips}</div>'
+        f"{omitted_html}"
         "</details>"
     )
 

@@ -2802,6 +2802,9 @@ def _base_styles() -> str:
       background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015));
       min-width:0;overflow-wrap:anywhere;word-break:break-word
     }
+    .route-card strong,.route-card a,.route-card p{
+      max-width:100%;min-width:0;overflow-wrap:anywhere;word-break:break-word
+    }
     .route-card h3{margin:0 0 10px;font-size:14px;letter-spacing:.03em}
     .route-card p{margin:0}
     .timeline{display:flex;flex-direction:column;gap:12px}
@@ -2838,8 +2841,8 @@ def _base_styles() -> str:
     }
     .graph-node span{display:block;font-size:12px;line-height:1.4;min-width:0;overflow-wrap:anywhere;word-break:break-word}
     .report-callout{display:flex;flex-direction:column;gap:10px}
-    .report-callout .title{display:flex;justify-content:space-between;gap:12px;align-items:center}
-    .report-callout .title strong{font-size:14px}
+    .report-callout .title{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;min-width:0}
+    .report-callout .title strong,.report-callout .title a{font-size:14px;min-width:0;overflow-wrap:anywhere;word-break:break-word}
     .lane-grid{
       display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px
     }
@@ -2853,6 +2856,9 @@ def _base_styles() -> str:
       cursor:pointer;color:var(--accent-strong);font-weight:600;overflow-wrap:anywhere
     }
     .input-chip-details .chips{margin-top:10px;max-height:280px;overflow:auto;padding-right:4px}
+    .input-chip-omitted{margin-top:10px}
+    .fallback-note{min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+    .fallback-note summary{cursor:pointer;color:var(--muted);overflow-wrap:anywhere;word-break:break-word}
     pre{
       margin:10px 0 0;padding:14px;border-radius:12px;background:#09101f;border:1px solid var(--border);
       color:#dfe8f8;overflow:auto;white-space:pre-wrap;word-break:break-word;font:12px/1.45 "Cascadia Code","JetBrains Mono",Consolas,monospace;
@@ -2872,6 +2878,13 @@ def _base_styles() -> str:
       .hero-meta{text-align:left}
       .shell{padding:18px 14px 32px}
       .timeline-item{grid-template-columns:1fr}
+      .table-scroll{overflow:visible}
+      table.responsive-table,table.responsive-table thead,table.responsive-table tbody,table.responsive-table tr,table.responsive-table th,table.responsive-table td{display:block}
+      table.responsive-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+      table.responsive-table tr{margin:0 0 12px;padding:12px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.025)}
+      table.responsive-table td{display:grid;grid-template-columns:minmax(92px,34%) minmax(0,1fr);gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+      table.responsive-table td:last-child{border-bottom:0}
+      table.responsive-table td::before{content:attr(data-label);color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;overflow-wrap:anywhere}
     }
     @media (max-width: 640px){
       .hero{padding:18px}

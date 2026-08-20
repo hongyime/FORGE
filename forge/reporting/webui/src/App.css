@@ -135,6 +135,11 @@
   border: 1px solid var(--panel-border);
   background: rgba(255, 255, 255, 0.06);
   font-size: 0.82rem;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .mono-tag {
@@ -834,6 +839,8 @@
 
 .table-shell {
   min-height: 240px;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .mini-table {
@@ -845,8 +852,16 @@
 .mini-table-head,
 .mini-table-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 12px;
+  min-width: 0;
+}
+
+.mini-table-head > *,
+.mini-table-row > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .mini-table-head {
@@ -887,6 +902,9 @@
   border-radius: 18px;
   border: 1px solid rgba(111, 146, 196, 0.18);
   background: rgba(255, 255, 255, 0.03);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .artifact-card strong {
