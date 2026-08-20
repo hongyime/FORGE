@@ -18,6 +18,9 @@ _KEY_VALIDATION_DEFAULT_MAX_RETRY_AFTER_SECONDS = 300.0
 _WEB_FETCH_DEFAULT_REQUEST_DELAY_SECONDS = 0.0
 _WEB_FETCH_DEFAULT_RATE_LIMIT_BACKOFF_SECONDS = 30.0
 _WEB_FETCH_DEFAULT_MAX_RETRY_AFTER_SECONDS = 300.0
+_CTI_DEFAULT_REQUEST_DELAY_SECONDS = 0.25
+_CTI_DEFAULT_RATE_LIMIT_BACKOFF_SECONDS = 60.0
+_CTI_DEFAULT_MAX_RETRY_AFTER_SECONDS = 300.0
 _RATE_LIMIT_COOLDOWNS: dict[tuple[str, str], float] = {}
 _RATE_LIMIT_COOLDOWN_LOCK = threading.Lock()
 
@@ -197,6 +200,50 @@ def web_fetch_retry_after_seconds(response: Any) -> float:
         response,
         fallback_seconds=web_fetch_rate_limit_backoff_seconds(),
         max_seconds=web_fetch_max_retry_after_seconds(),
+    )
+
+
+def cti_request_delay_seconds() -> float:
+    return _float_env(
+        "FORGE_CTI_REQUEST_DELAY_SECONDS",
+        _CTI_DEFAULT_REQUEST_DELAY_SECONDS,
+        minimum=0.0,
+        maximum=60.0,
+    )
+
+
+def cti_rate_limit_backoff_seconds() -> float:
+    return _float_env(
+        "FORGE_CTI_RATE_LIMIT_BACKOFF_SECONDS",
+        _CTI_DEFAULT_RATE_LIMIT_BACKOFF_SECONDS,
+        minimum=1.0,
+        maximum=900.0,
+    )
+
+
+def cti_max_retry_after_seconds() -> float:
+    return _float_env(
+        "FORGE_CTI_MAX_RETRY_AFTER_SECONDS",
+        _CTI_DEFAULT_MAX_RETRY_AFTER_SECONDS,
+        minimum=1.0,
+        maximum=1800.0,
+    )
+
+
+def cti_rate_limit_retries() -> int:
+    return _int_env(
+        "FORGE_CTI_RATE_LIMIT_RETRIES",
+        1,
+        minimum=0,
+        maximum=3,
+    )
+
+
+def cti_retry_after_seconds(response: Any) -> float:
+    return _retry_after_seconds(
+        response,
+        fallback_seconds=cti_rate_limit_backoff_seconds(),
+        max_seconds=cti_max_retry_after_seconds(),
     )
 
 
