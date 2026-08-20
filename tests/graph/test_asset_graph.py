@@ -1392,6 +1392,11 @@ def test_asset_attribution_import_maps_subsidiary_third_party_and_cloud_org(
         for edge in graph["edges"]
     }
 
+    assert result["schema_version"] == "forge.asset_graph.attribution_import.v1"
+    assert result["execution_policy"] == "writes_asset_graph_attribution_records"
+    assert result["total_count"] == 3
+    assert result["selected_count"] == 3
+    assert result["omitted_count"] == 0
     assert result["processed_count"] == 3
     assert result["imported_count"] == 3
     assert result["error_count"] == 0
@@ -1496,6 +1501,11 @@ def test_graph_attribution_import_cli_outputs_json(tmp_path: Path, monkeypatch) 
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.asset_graph.attribution_import.v1"
+    assert payload["execution_policy"] == "writes_asset_graph_attribution_records"
+    assert payload["total_count"] == 1
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 0
     assert payload["processed_count"] == 1
     assert payload["imported_count"] == 1
     assert payload["ownership_claim_count"] == 1
