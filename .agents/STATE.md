@@ -63,6 +63,7 @@ Progress:
 - Added offline MISP attribute-search export support for top-level `Attribute`, `response.Attribute`, and response-list `Attribute` wrappers.
 - Verified B535 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B535 as `1297a06 feat: import misp attribute exports`.
+- Final local checks after push: git clean/synced with `origin/main`, scheduled task `FORGE Import theprawnhunter Targets` is Disabled, no non-check FORGE/telegramhunter/theprawnhunter process was observed, 830 local engagement DBs, 1,432 local `reports/` files, and 0 persisted `cti_observations` rows across local engagement DBs.
 
 Next steps:
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
