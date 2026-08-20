@@ -248,9 +248,10 @@ Progress:
 - Pushed B583 as `7fe5c9b feat: add report stale repair plan`.
 - Suppressed Connector Action Plan's no-op `install_free_binaries` doctor action when `missing binaries: 0 (none)`; missing-binary environments still emit the install-plan action.
 - Verified B584 with focused doctor tests (`3 passed`), Ruff, py_compile, `git diff --check`, and a real local doctor smoke showing Connector Action Plan `OK` and no `install_free_binaries` action. No installer execution, provider call, report regeneration, resume-run, kill-chain, scheduled-task change, monitoring apply, engagement mutation, or credential persistence was started.
+- Pushed B584 as `de5b1b1 fix: omit empty connector install action`.
 
 Next steps:
-- Commit and push B584, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
