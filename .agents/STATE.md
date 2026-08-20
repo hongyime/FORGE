@@ -52,8 +52,8 @@ Progress:
 - Verified B531 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B531 as `51ce283 feat: report cti import source metadata`.
 - Added stable `result_schema_version="forge.cti_observation_import.v1"` to CTI import JSON results.
-- Verified B532 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`; commit/push pending.
+- Verified B532 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
+- Pushed B532 as `4b3a3d2 feat: version cti import results`.
 
 Next steps:
-- Commit and push B532.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
