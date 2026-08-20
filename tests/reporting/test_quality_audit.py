@@ -126,7 +126,9 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
     assert action_by_id["review_resume_plan"]["commands"] == [
         ["forge", "targets", "resume-plan", "--json", "--redact-paths", "--limit", "1"]
     ]
-    assert "resume-run" not in json.dumps(action_by_id["review_resume_plan"])
+    assert action_by_id["review_resume_plan"]["follow_up_commands"] == [
+        ["forge", "targets", "resume-run", "--dry-run", "--json", "--limit", "1"]
+    ]
     assert action_by_id["review_long_runs"]["total_count"] == 1
     assert action_by_id["review_long_runs"]["follow_up_commands"] == [
         ["forge", "report", "long-run-plan", "--json", "--limit", "1"]
@@ -415,7 +417,8 @@ def test_collect_long_run_review_plan_is_read_only_review_plan(tmp_path: Path) -
     assert payload["commands"] == []
     assert payload["samples"][0]["id"] == "1001"
     assert payload["samples"][0]["elapsed_seconds"] == 3100.5
-    assert "never starts runs" in payload["review_guidance"]
+    assert "resume-run --dry-run" in payload["review_guidance"]
+    assert "live resume" in payload["review_guidance"]
 
 
 def test_collect_policy_flag_review_plan_explains_latest_run_metadata(
@@ -485,7 +488,7 @@ def test_report_quality_audit_cli_prints_operator_action_plan(tmp_path: Path) ->
     assert "operator action plan" in result.output
     assert "review_resume_plan" in result.output
     assert "forge targets resume-plan --json --redact-paths --limit 1" in result.output
-    assert "resume-run" not in result.output
+    assert "forge targets resume-run --dry-run --json --limit 1" in result.output
 
 
 def test_report_quality_audit_cli_prints_follow_up_commands(

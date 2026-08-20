@@ -84,3 +84,4 @@
 - 2026-08-21: Completed local template-only stale latest-report repair and dashboard refresh; current stale-plan is empty while generated artifacts remain ignored local data.
 - 2026-08-21: Added explicit total/selected/omitted metadata to limited target resume plans so review pages cannot be mistaken for the full backlog.
 - 2026-08-21: Added non-mutating `targets resume-run --dry-run` and centralized dashboard error cleanup so resume batches and generated reports can be reviewed without launching child processes or rendering raw terminal noise.
+- 2026-08-21: Quality-audit resume review now points operators from redacted `resume-plan` to `resume-run --dry-run`, keeping the default action path non-mutating until a deliberate live resume.

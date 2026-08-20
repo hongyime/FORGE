@@ -414,7 +414,8 @@ def collect_long_run_review_plan(
         ),
         "review_guidance": (
             "Review elapsed_seconds, pending-work errors, and matching resume-plan "
-            "items before any deliberate resume-run. This command never starts runs."
+            "items, then rehearse with `forge targets resume-run --dry-run` before "
+            "any deliberate live resume."
         ),
     }
 
@@ -617,6 +618,17 @@ def _operator_action_plan(
                         "resume-plan",
                         "--json",
                         "--redact-paths",
+                        "--limit",
+                        str(failed_run_count),
+                    ]
+                ],
+                "follow_up_commands": [
+                    [
+                        "forge",
+                        "targets",
+                        "resume-run",
+                        "--dry-run",
+                        "--json",
                         "--limit",
                         str(failed_run_count),
                     ]
