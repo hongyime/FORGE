@@ -473,6 +473,16 @@ def register_connector_commands(app: typer.Typer) -> None:
             "--max-tlp",
             help="Skip observations above this TLP level: clear, green, amber, or red.",
         ),
+        since: str = typer.Option(
+            "",
+            "--since",
+            help="Skip observations observed before this ISO timestamp.",
+        ),
+        until: str = typer.Option(
+            "",
+            "--until",
+            help="Skip observations observed after this ISO timestamp.",
+        ),
         operator: str = typer.Option("connector-import", "--operator"),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
@@ -498,6 +508,8 @@ def register_connector_commands(app: typer.Typer) -> None:
                     limit=limit,
                     min_confidence=min_confidence,
                     max_tlp=max_tlp,
+                    since=since,
+                    until=until,
                 ),
             )
         except (FileNotFoundError, LookupError, ValueError) as exc:
@@ -519,6 +531,8 @@ def register_connector_commands(app: typer.Typer) -> None:
             f"skipped={result['skipped_count']} "
             f"filtered={result.get('filtered_count', 0)} "
             f"max_tlp={result.get('max_tlp') or ''} "
+            f"since={result.get('since') or ''} "
+            f"until={result.get('until') or ''} "
             f"limited={result.get('limited_item_count', 0)}"
         )
 

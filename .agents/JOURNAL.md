@@ -9,3 +9,4 @@
 - 2026-08-20: Added explicit CTI import item limits for large offline exports; result metadata reports total, processed, and limited item counts.
 - 2026-08-20: Added CTI min-confidence filtering as an operator noise-control gate before persistence or dry-run would-persist accounting; it does not change reportability.
 - 2026-08-20: Added CTI max-TLP filtering as an operator data-handling gate before persistence or dry-run preview accounting; it does not change validation/reportability.
+- 2026-08-20: Added CTI observed-time window filtering for offline imports and dry-runs; out-of-window rows are filtered before persistence or promotion preview.

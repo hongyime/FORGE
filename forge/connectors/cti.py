@@ -5,6 +5,7 @@ import re
 import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,8 @@ class CtiObservationImportConfig:
     limit: int | None = None
     min_confidence: float | None = None
     max_tlp: str = ""
+    since: str = ""
+    until: str = ""
 
 
 def import_cti_observations(
@@ -70,6 +73,10 @@ def import_cti_observations(
     limit = _normalize_limit(config.limit)
     min_confidence = _normalize_min_confidence(config.min_confidence)
     max_tlp = _normalize_max_tlp(config.max_tlp)
+    since = _normalize_time_bound(config.since, name="since")
+    until = _normalize_time_bound(config.until, name="until")
+    if since is not None and until is not None and since > until:
+        raise ValueError("CTI import since must be before or equal to until")
     total_item_count = len(raw_items)
     limited_item_count = 0
     if limit is not None and total_item_count > limit:
@@ -129,6 +136,31 @@ def import_cti_observations(
                     "index": str(index),
                     "reason": "above_max_tlp",
                     "tlp": observation.tlp,
+                }
+            )
+            continue
+        observed_at = _parse_observed_at(observation.observed_at)
+        if (since is not None or until is not None) and observed_at is None:
+            filtered_count += 1
+            skipped.append({"index": str(index), "reason": "observed_at_unparseable"})
+            continue
+        if since is not None and observed_at is not None and observed_at < since:
+            filtered_count += 1
+            skipped.append(
+                {
+                    "index": str(index),
+                    "reason": "before_since",
+                    "observed_at": observation.observed_at,
+                }
+            )
+            continue
+        if until is not None and observed_at is not None and observed_at > until:
+            filtered_count += 1
+            skipped.append(
+                {
+                    "index": str(index),
+                    "reason": "after_until",
+                    "observed_at": observation.observed_at,
                 }
             )
             continue
@@ -196,6 +228,8 @@ def import_cti_observations(
         "limit": limit,
         "min_confidence": min_confidence,
         "max_tlp": max_tlp,
+        "since": since.isoformat().replace("+00:00", "Z") if since is not None else "",
+        "until": until.isoformat().replace("+00:00", "Z") if until is not None else "",
         "total_item_count": total_item_count,
         "processed_item_count": len(raw_items),
         "limited_item_count": limited_item_count,
@@ -553,6 +587,34 @@ def _tlp_rank(value: str) -> int:
         "TLP:AMBER": 2,
         "TLP:RED": 3,
     }[normalized]
+
+
+def _normalize_time_bound(value: str, *, name: str) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    parsed = _parse_observed_at(text)
+    if parsed is None:
+        raise ValueError(f"CTI import {name} must be an ISO timestamp")
+    return parsed
+
+
+def _parse_observed_at(value: str) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    normalized = text
+    if normalized.upper().endswith(" UTC"):
+        normalized = normalized[:-4] + "+00:00"
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _provider_observation_item(

@@ -685,6 +685,57 @@ def test_cti_import_max_tlp_filters_restricted_observations(tmp_path: Path) -> N
     ]
 
 
+def test_cti_import_observed_window_filters_out_of_range_rows(tmp_path: Path) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    report = {
+        "items": [
+            {
+                "type": "domain",
+                "value": "old.acme.example",
+                "observed_at": "2026-08-19T23:59:00Z",
+            },
+            {
+                "type": "domain",
+                "value": "kept.acme.example",
+                "observed_at": "2026-08-20 10:00:00 UTC",
+            },
+            {
+                "type": "domain",
+                "value": "future.acme.example",
+                "observed_at": "2026-08-21T00:01:00Z",
+            },
+        ]
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="stix_taxii_import",
+                engagement_id=1001,
+                since="2026-08-20T00:00:00Z",
+                until="2026-08-21T00:00:00Z",
+            ),
+            report_text=json.dumps(report),
+        )
+        values = [
+            row["indicator_value"]
+            for row in con.execute(
+                "SELECT indicator_value FROM cti_observations"
+            ).fetchall()
+        ]
+    finally:
+        con.close()
+
+    assert result["since"] == "2026-08-20T00:00:00Z"
+    assert result["until"] == "2026-08-21T00:00:00Z"
+    assert result["parsed_count"] == 3
+    assert result["filtered_count"] == 2
+    assert result["persisted_count"] == 1
+    assert {row["reason"] for row in result["skipped"]} == {"before_since", "after_until"}
+    assert values == ["kept.acme.example"]
+
+
 def test_cti_observations_surface_as_non_reportable_inventory(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     db_path = data_dir / "engagements" / "1001.db"
@@ -1038,3 +1089,65 @@ def test_connector_cli_import_cti_max_tlp_dry_run(
     assert payload["filtered_count"] == 1
     assert payload["would_persist_count"] == 1
     assert payload["skipped"][0]["reason"] == "above_max_tlp"
+
+
+def test_connector_cli_import_cti_observed_window_dry_run(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "cti.json"
+    report_file.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "type": "domain",
+                        "value": "old.acme.example",
+                        "observed_at": "2026-08-19T23:59:00Z",
+                    },
+                    {
+                        "type": "domain",
+                        "value": "kept.acme.example",
+                        "observed_at": "2026-08-20T12:00:00Z",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "stix_taxii_import",
+            "--report-file",
+            str(report_file),
+            "--since",
+            "2026-08-20T00:00:00Z",
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "dry_run"
+    assert payload["since"] == "2026-08-20T00:00:00Z"
+    assert payload["parsed_count"] == 2
+    assert payload["filtered_count"] == 1
+    assert payload["would_persist_count"] == 1
+    assert payload["skipped"][0]["reason"] == "before_since"
