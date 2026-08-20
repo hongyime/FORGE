@@ -3,6 +3,7 @@
 Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
 
 Progress:
+- Pushed B617 as `e4aca55 fix: mark connector policy summary`: connector policy-summary now exposes `execution_policy`, `selected_count`, and `omitted_count`, and a connector plan-contract smoke reports no missing schema/execution/count fields across run-plan, install-plan, policy-summary, and secret-key-plan. Focused policy-summary tests, Ruff, py_compile, and `git diff --check` passed.
 - Pushed B616 as `f3c5736 fix: mark doctor action policies`: remaining doctor monitoring/connector/catalog/gated action rows now expose explicit execution-policy metadata, and a real local non-live `doctor --json` smoke reports zero action rows missing execution/count fields. Focused doctor tests, Ruff, py_compile, and `git diff --check` passed.
 - Pushed B615 as `8f7464f fix: mark gated doctor actions`: paid-backend, active-validation, and provider-probe doctor actions now expose explicit execution policy and count metadata; focused doctor tests, Ruff, py_compile, `git diff --check`, and a real local non-live `doctor --json` smoke passed.
 - Pushed B614 as `74e50a6 fix: mark config doctor decisions`: Offline Strict and Safe Mode doctor actions now expose explicit non-executing operator-decision metadata with one omitted decision and empty `command_args`; focused doctor tests, Ruff, py_compile, `git diff --check`, and a real local doctor JSON smoke passed.

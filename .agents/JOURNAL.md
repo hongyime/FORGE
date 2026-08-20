@@ -105,3 +105,4 @@
 - 2026-08-21: Offline Strict and Safe Mode doctor actions now declare non-executing operator-decision metadata instead of leaving count fields absent.
 - 2026-08-21: Paid backend, active-validation, and provider-probe doctor actions now declare execution/count semantics so automation can distinguish dry-run review from operator-gated live probes.
 - 2026-08-21: Doctor monitoring and connector action rows now declare execution policies across plan-only, dry-run, live apply, catalog-only, gated, and operator secret setup paths.
+- 2026-08-21: Connector policy-summary now carries the same plan-compatible execution/count metadata as the other connector review commands.
