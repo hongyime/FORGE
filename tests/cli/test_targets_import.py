@@ -687,8 +687,12 @@ def test_resume_plan_reports_sequential_ready_commands_without_execution(tmp_pat
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
     assert payload["path_redaction"] == "none"
     assert payload["concurrency"] == "sequential"
+    assert payload["total_count"] == 2
+    assert payload["selected_count"] == 2
+    assert payload["omitted_count"] == 0
     assert payload["candidate_count"] == 2
     assert payload["resume_ready_count"] == 1
+    assert payload["total_resume_ready_count"] == 1
     assert payload["planned_count"] == 1
     assert payload["skipped_count"] == 1
     assert payload["skipped_blocker_counts"] == {
@@ -733,6 +737,37 @@ def test_resume_plan_reports_sequential_ready_commands_without_execution(tmp_pat
     assert str(scope_path) not in json.dumps(redacted)
     assert str(data_dir) not in json.dumps(redacted)
     assert "<scope-manifest:scope.json>" in redacted_item["command"]
+
+
+def test_resume_plan_reports_total_and_omitted_counts_when_limited(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    for engagement_id in range(1, 4):
+        _write_candidate_run(
+            data_dir / "engagements" / f"{engagement_id}.db",
+            engagement_id=engagement_id,
+            status="failed",
+            error="max iterations exhausted with pending recursive work: 1",
+            metadata={
+                "roe_id": "ROE-ACME-2026",
+                "scope_manifest": str(scope_path),
+                "pending_counts": {"artifact_queue": 1},
+            },
+        )
+
+    payload = collect_target_resume_plan(data_dir=data_dir, limit=2)
+
+    assert payload["total_count"] == 3
+    assert payload["selected_count"] == 2
+    assert payload["omitted_count"] == 1
+    assert payload["candidate_count"] == 2
+    assert payload["resume_ready_count"] == 2
+    assert payload["total_resume_ready_count"] == 3
+    assert payload["planned_count"] == 2
+    assert len(payload["items"]) == 2
 
 
 def test_targets_backfill_scope_manifests_cli_outputs_json(tmp_path: Path) -> None:

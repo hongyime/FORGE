@@ -281,9 +281,11 @@ Progress:
 - Verified B593 with focused stale-run tests (`3 passed`), Ruff, py_compile, and `git diff --check`. The generated report family remains ignored local artifact data and is not committed. No provider call, resume-run, kill-chain, monitoring, scheduled-task, engagement mutation, or credential action was executed.
 - Pushed B593 as `5f63e55 fix: keep stale reports under reports dir`.
 - Completed the local stale latest-report repair backlog with template-only report generation: `forge report stale-run --limit 57 --provider template --max-loops 0 --json` attempted 57, completed 57, failed 0, then `forge dashboard -o reports\dashboard.html` refreshed the ignored local dashboard. Follow-up `report quality-audit --json --top-limit 5` reports `latest_fallback_reason_counts={}`, and `report stale-plan --json --limit 5` reports `total_count=0`. Historical fallback lineage still reports old GGUF-missing artifacts, but no latest report remains stale. No provider call, resume-run, kill-chain, monitoring execution, scheduled-task change, engagement mutation, or credential action was executed.
+- Fixed limited target resume-plan metadata: `forge targets resume-plan --limit N` now keeps existing selected-slice fields and adds `total_count`, `selected_count`, `omitted_count`, `total_resume_ready_count`, and `total_reason_counts`.
+- Verified B594 with focused target resume tests (`3 passed`), Ruff, py_compile, `git diff --check`, and a real local read-only `resume-plan --json --redact-paths --limit 10` smoke. The smoke reports 49 total candidates, 10 selected, 39 omitted, 10 planned, and 49 total ready. No resume-run, kill-chain, provider call, monitoring execution, scheduled-task change, engagement mutation, report regeneration, or credential action was executed.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class: current quality-audit still reports 49 failed/cancelled latest runs, 49 resume-review rows, 3 long-run reviews, and policy flag explanation rows; doctor still reports WARN for Safe Mode, Monitoring Schedules, and Connector Secret Store.
+- Commit and push B594, then continue old product hardening from the next concrete doctor/quality-audit class: current quality-audit still reports 49 failed/cancelled latest runs, 49 resume-review rows, 3 long-run reviews, and policy flag explanation rows; doctor still reports WARN for Safe Mode, Monitoring Schedules, and Connector Secret Store.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

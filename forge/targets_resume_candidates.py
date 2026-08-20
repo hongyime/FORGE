@@ -156,10 +156,15 @@ def collect_target_resume_plan(
 
     payload = collect_target_resume_candidates(
         data_dir=data_dir,
-        limit=limit,
+        limit=None,
         reason=reason,
         include_completed=False,
         include_legacy=include_legacy,
+    )
+    plan_limit = _normalize_limit(limit)
+    candidate_items = list(payload["items"])
+    selected_items = (
+        candidate_items[:plan_limit] if plan_limit is not None else candidate_items
     )
     runtime_minutes = _normalize_positive_int(
         max_runtime_minutes,
@@ -168,7 +173,7 @@ def collect_target_resume_plan(
     iter_override = _normalize_optional_positive_int(max_iter)
     planned_items: list[dict[str, Any]] = []
     skipped: Counter[str] = Counter()
-    for item in payload["items"]:
+    for item in selected_items:
         blockers = [str(blocker) for blocker in item.get("resume_blockers", [])]
         if blockers or not bool(item.get("resume_ready")):
             for blocker in blockers or ["not_resume_ready"]:
@@ -199,19 +204,32 @@ def collect_target_resume_plan(
                 "expected_execution": "manual_sequential",
             }
         )
+    selected_reason_counts = Counter(
+        str(item.get("reason") or "") for item in selected_items
+    )
+    selected_ready_count = sum(
+        1 for item in selected_items if bool(item.get("resume_ready"))
+    )
+    selected_count = len(selected_items)
+    total_count = int(payload["candidate_count"])
     return {
         "schema_version": RESUME_PLAN_SCHEMA_VERSION,
         "execution_policy": "plan_only_no_commands_executed",
         "data_dir": "<redacted>" if redact_paths else payload["data_dir"],
         "path_redaction": "local_paths_redacted" if redact_paths else "none",
         "include_legacy": payload["include_legacy"],
-        "candidate_count": payload["candidate_count"],
-        "resume_ready_count": payload["resume_ready_count"],
+        "total_count": total_count,
+        "selected_count": selected_count,
+        "omitted_count": max(0, total_count - selected_count),
+        "candidate_count": selected_count,
+        "resume_ready_count": selected_ready_count,
+        "total_resume_ready_count": payload["resume_ready_count"],
         "planned_count": len(planned_items),
-        "skipped_count": payload["candidate_count"] - len(planned_items),
+        "skipped_count": selected_count - len(planned_items),
         "skipped_blocker_counts": dict(sorted(skipped.items())),
-        "reason_counts": payload["reason_counts"],
-        "limit": payload["limit"],
+        "reason_counts": dict(sorted(selected_reason_counts.items())),
+        "total_reason_counts": payload["reason_counts"],
+        "limit": plan_limit,
         "reason_filter": payload["reason_filter"],
         "concurrency": "sequential",
         "operator_note": (
