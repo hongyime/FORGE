@@ -494,6 +494,19 @@ def _config_checks(cfg: ForgeConfig) -> list[DoctorCheck]:
                     "intentionally in scope with written ROE."
                 )
             ),
+            ()
+            if cfg.safe_mode
+            else (
+                {
+                    "id": "review_safe_mode",
+                    "priority": "21",
+                    "status": "attention",
+                    "summary": (
+                        "decide whether legacy high-risk modules should remain importable"
+                    ),
+                    "command": "set FORGE_SAFE_MODE=1",
+                },
+            ),
         ),
     ]
     if cfg.shodan_key:

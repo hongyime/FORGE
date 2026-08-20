@@ -596,6 +596,7 @@ def test_collect_doctor_checks_flags_paid_live_and_weak_web_auth(tmp_path) -> No
     assert "full mode active" in rows["Safe Mode"].details
     assert "FORGE_SAFE_MODE=1" in rows["Safe Mode"].details
     assert "written ROE" in rows["Safe Mode"].remediation
+    assert rows["Safe Mode"].action_items
     assert rows["Web UI Auth"].status == "ERROR"
     assert rows["Paid LLM Backends"].status == "WARN"
     assert rows["Active Validation"].status == "WARN"
@@ -607,6 +608,9 @@ def test_collect_doctor_checks_flags_paid_live_and_weak_web_auth(tmp_path) -> No
     assert action_by_id["review_offline_strict"]["command"] == (
         "set FORGE_OFFLINE_STRICT=1"
     )
+    assert action_by_id["review_safe_mode"]["status"] == "attention"
+    assert action_by_id["review_safe_mode"]["command"] == "set FORGE_SAFE_MODE=1"
+    assert action_by_id["review_safe_mode"]["command_args"] == []
     assert "FORGE_ALLOW_PAID_BACKENDS enabled" in action_by_id[
         "review_paid_llm_backends"
     ]["summary"]
