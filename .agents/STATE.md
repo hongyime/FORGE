@@ -194,9 +194,10 @@ Progress:
 - Pushed B568 as `fca5ac6 fix: show total monitoring due backlog`.
 - Changed kill-chain live policy metadata to read destructive/post-ex permission flags from explicit scope-manifest policy fields instead of hard-coded false defaults, and generated target-import manifests now include those target-specific policy flags.
 - Verified B569 with focused target-import/runtime tests (`46 passed`), Ruff, py_compile, and `git diff --check`. No live kill-chain, resume-run, monitoring execution, scheduled-task enablement, provider call, report regeneration, engagement mutation, or credential persistence was started.
+- Pushed B569 as `6c23626 fix: honor target import policy flags`.
 
 Next steps:
-- Commit and push B569, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply, and Connector Secret Store process-env reload guidance.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
