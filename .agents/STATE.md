@@ -166,9 +166,10 @@ Progress:
 - Applied the workspace backfill locally across 930 DBs. It updated 101 local membership rows, 2 control memberships, and 827 control index rows; follow-up dry-run reports 929 skipped items and zero remaining membership/index/schema actions.
 - Real local `forge doctor --json` now reports Workspace Access `OK`: 50 engagement(s) across 50/930 DB(s), 50 usable control index rows, operator workspace memberships ready.
 - Verified B562 with focused workspace/doctor/CLI-registry tests (`65 passed`), Ruff, py_compile, and real local workspace/doctor smokes.
+- Pushed B562 as `09f9b2f feat: backfill workspace memberships`.
 
 Next steps:
-- Commit and push B562, then continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
