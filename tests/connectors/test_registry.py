@@ -469,6 +469,14 @@ def test_connector_run_plan_reports_free_runnable_commands_without_execution() -
             "execution_paths": ["forge connectors run"],
         },
         {
+            "id": "artifact_passive_parsers",
+            "domain": "passive_parser",
+            "cost_profile": "free_local",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge kill-chain artifact intake"],
+        },
+        {
             "id": "paid_hidden",
             "domain": "identity",
             "cost_profile": "optional_paid",
@@ -522,8 +530,19 @@ def test_connector_run_plan_reports_free_runnable_commands_without_execution() -
 
     assert plan["schema_version"] == "forge.connector_run_plan.v1"
     assert plan["execution_policy"] == "plan_only_no_commands_executed"
-    assert plan["runnable_count"] == 5
+    assert plan["runnable_count"] == 6
     by_id = {item["connector_id"]: item for item in plan["items"]}
+    assert by_id["artifact_passive_parsers"]["command_template"] == [
+        "forge",
+        "kill-chain",
+        "SEED",
+        "--engagement",
+        "N",
+        "--dry-run",
+    ]
+    assert by_id["artifact_passive_parsers"]["requires_engagement"] is True
+    assert by_id["artifact_passive_parsers"]["requires_target"] is True
+    assert "data/artifacts" in by_id["artifact_passive_parsers"]["notes"]
     assert by_id["projectdiscovery_subfinder"]["command_template"] == [
         "forge",
         "connectors",

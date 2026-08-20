@@ -2214,7 +2214,7 @@ def _connector_action_plan_check(
             f"paid hidden: {len(paid_hidden)} ({_connector_bucket_label(paid_hidden)})"
         ),
         (
-            "Run free runnable connectors first with `forge connectors run --connector ID`; "
+            "Review free runnable connector templates first with `forge connectors run-plan --json`; "
             "install missing binaries before expecting local execution; configure optional keys "
             "through env vars or `forge connectors secrets set` only when the free tier is intended; "
             "treat catalog-only rows as import/review guidance, not executable adapters; keep "

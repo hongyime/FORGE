@@ -77,3 +77,4 @@
 - 2026-08-20: Added read-only `forge report policy-plan` so latest-run policy flag counts include sampled evidence without mutating engagements.
 - 2026-08-20: Added read-only `forge connectors run-plan` and pointed doctor's `run_free_connectors` action to plan-only command templates.
 - 2026-08-20: Expanded connector run-plan templates for non-generic operator paths so plan-only guidance includes required placeholders.
+- 2026-08-21: Corrected connector operator guidance so artifact passive parsers use a valid dry-run kill-chain template and doctor points to run-plan first.

@@ -827,6 +827,12 @@ def connector_run_plan(
             if str(path).strip()
         ]
         command_template = _connector_run_command_template(row)
+        notes = "Replace placeholders before running; this plan does not execute connectors."
+        if str(row.get("id") or "") == "artifact_passive_parsers":
+            notes = (
+                "Place local artifacts under data/artifacts, data/evidence, data/mobile, "
+                "or data/uploads before running; this plan does not execute connectors."
+            )
         items.append(
             {
                 "connector_id": connector_id,
@@ -836,8 +842,8 @@ def connector_run_plan(
                 "execution_paths": execution_paths,
                 "command_template": command_template,
                 "requires_engagement": "--engagement" in command_template,
-                "requires_target": "--target" in command_template,
-                "notes": "Replace placeholders before running; this plan does not execute connectors.",
+                "requires_target": "--target" in command_template or "SEED" in command_template,
+                "notes": notes,
             }
         )
     return {
@@ -939,7 +945,14 @@ def _connector_run_command_template(row: Mapping[str, Any]) -> list[str]:
             ]
         )
     elif primary == "forge kill-chain artifact intake":
-        command.extend(["--connector", connector_id, "PATH_TO_ARTIFACT"])
+        command = [
+            "forge",
+            "kill-chain",
+            "SEED",
+            "--engagement",
+            "N",
+            "--dry-run",
+        ]
     else:
         command.extend(["--connector", connector_id])
     return command

@@ -134,7 +134,7 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert "catalog-only:" in rows["Connector Action Plan"].details
     assert "active-validation gated:" in rows["Connector Action Plan"].details
     assert "paid hidden:" in rows["Connector Action Plan"].details
-    assert "forge connectors run --connector ID" in rows["Connector Action Plan"].remediation
+    assert "forge connectors run-plan --json" in rows["Connector Action Plan"].remediation
     assert rows["CTI/OSINT Policy"].status == "OK"
     assert "offline-import" in rows["CTI/OSINT Policy"].details
     assert "live/API-style" in rows["CTI/OSINT Policy"].details
