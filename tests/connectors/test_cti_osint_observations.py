@@ -3,6 +3,7 @@ from __future__ import annotations
 import gzip
 import json
 import sqlite3
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -1112,6 +1113,106 @@ def test_connector_cli_import_cti_reads_gzipped_csv_export(
     assert payload["parsed_count"] == 1
     assert payload["persisted_count"] == 1
     assert payload["parsed_indicator_type_counts"] == {"domain": 1}
+
+
+def test_connector_cli_import_cti_reads_zipped_csv_export(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "urlhaus.zip"
+    secret_value = "zipped-urlhaus-token"
+    with zipfile.ZipFile(report_file, "w") as archive:
+        archive.writestr(
+            "exports/urlhaus.csv",
+            "\n".join(
+                [
+                    "id,url,url_status,threat,dateadded,urlhaus_reference",
+                    (
+                        "9001,"
+                        f"https://portal.acme.example/download?token={secret_value}&ok=1,"
+                        "online,malware_download,2026-08-20 10:00:00 UTC,"
+                        f"https://urlhaus.abuse.ch/url/9001/?api_key={secret_value}&ok=1"
+                    ),
+                ]
+            ),
+        )
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "abusech_urlhaus",
+            "--report-file",
+            str(report_file),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["source_format"] == "csv"
+    assert payload["parsed_count"] == 1
+    assert payload["persisted_count"] == 1
+    assert payload["parsed_indicator_type_counts"] == {"url": 1}
+    assert secret_value not in result.output
+
+
+def test_connector_cli_import_cti_rejects_zip_without_report_member(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "unsupported.zip"
+    with zipfile.ZipFile(report_file, "w") as archive:
+        archive.writestr("readme.txt", "not a CTI report")
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "stix_taxii_import",
+            "--report-file",
+            str(report_file),
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    con = sqlite3.connect(db_path)
+    try:
+        cti_table = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cti_observations'"
+        ).fetchone()
+    finally:
+        con.close()
+    assert result.exit_code != 0
+    assert "does not contain JSON, CSV, or GZ" in result.output
+    assert cti_table is None
 
 
 def test_connector_cli_import_cti_dry_run_writes_nothing(

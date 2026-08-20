@@ -5,6 +5,7 @@ import gzip
 import json
 import re
 import sqlite3
+import zipfile
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -31,6 +32,7 @@ SUPPORTED_CTI_IMPORT_CONNECTORS = (
     "abusech_urlhaus",
     "stix_taxii_import",
 )
+MAX_ZIPPED_CTI_REPORT_BYTES = 100 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -551,10 +553,40 @@ def _payload_items(payload: Any) -> list[Any]:
 
 
 def _read_report_text(path: Path) -> str:
+    if path.suffix.lower() == ".zip":
+        return _read_zipped_report_text(path)
     if path.suffix.lower() == ".gz":
         with gzip.open(path, "rt", encoding="utf-8") as handle:
             return handle.read()
     return path.read_text(encoding="utf-8")
+
+
+def _read_zipped_report_text(path: Path) -> str:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            candidates = [
+                info
+                for info in archive.infolist()
+                if not info.is_dir() and _zip_report_member_supported(info.filename)
+            ]
+            if not candidates:
+                raise ValueError("CTI observation ZIP report does not contain JSON, CSV, or GZ data")
+            selected = sorted(candidates, key=lambda info: info.filename.lower())[0]
+            if selected.file_size > MAX_ZIPPED_CTI_REPORT_BYTES:
+                raise ValueError("CTI observation ZIP member is too large")
+            data = archive.read(selected)
+    except zipfile.BadZipFile as exc:
+        raise ValueError("CTI observation report is not a valid ZIP file") from exc
+    if selected.filename.lower().endswith(".gz"):
+        data = gzip.decompress(data)
+        if len(data) > MAX_ZIPPED_CTI_REPORT_BYTES:
+            raise ValueError("CTI observation gzipped ZIP member is too large")
+    return data.decode("utf-8")
+
+
+def _zip_report_member_supported(filename: str) -> bool:
+    name = str(filename or "").lower()
+    return name.endswith((".json", ".csv", ".gz"))
 
 
 def _report_items(text: str) -> tuple[list[Any], str]:
