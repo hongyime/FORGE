@@ -310,7 +310,11 @@ def register_connector_commands(app: typer.Typer) -> None:
             "invalid_count": sum(1 for row in rows if row["status"] == "invalid"),
             "plugin_dirs": [str(path) for path in resolved_plugin_dirs],
             "schema": "forge.connector.plugin.v1",
+            "schema_version": "forge.connector.plugin_validation.v1",
             "execution_policy": "data_only_catalog; no plugin code is imported or executed",
+            "total_count": len(rows),
+            "selected_count": len(rows),
+            "omitted_count": 0,
         }
         if json_output:
             typer.echo(json.dumps({"items": rows, "summary": summary}, sort_keys=True))

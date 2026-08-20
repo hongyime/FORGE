@@ -858,9 +858,13 @@ def test_connector_cli_plugin_validate_reports_invalid_json(
 
     assert result.exit_code == 1
     payload = json.loads(result.output)
+    assert payload["summary"]["schema_version"] == "forge.connector.plugin_validation.v1"
     assert payload["summary"]["valid_count"] == 1
     assert payload["summary"]["invalid_count"] == 1
     assert payload["summary"]["execution_policy"].startswith("data_only_catalog")
+    assert payload["summary"]["total_count"] == 2
+    assert payload["summary"]["selected_count"] == 2
+    assert payload["summary"]["omitted_count"] == 0
     invalid = next(row for row in payload["items"] if row["status"] == "invalid")
     assert "paid_opt_in" in invalid["error"]
     assert "write_permission" in invalid["error"]
@@ -903,7 +907,11 @@ def test_connector_cli_plugin_validate_accepts_active_validation_catalog_manifes
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["summary"]["schema_version"] == "forge.connector.plugin_validation.v1"
     assert payload["summary"]["valid_count"] == 1
+    assert payload["summary"]["total_count"] == 1
+    assert payload["summary"]["selected_count"] == 1
+    assert payload["summary"]["omitted_count"] == 0
     item = payload["items"][0]
     assert item["domain"] == "active_validation"
     assert item["required_gates"] == ["approval", "roe_id", "scope_manifest", "live_gate"]
