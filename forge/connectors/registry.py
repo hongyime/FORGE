@@ -243,6 +243,7 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         capabilities=("ioc_enrichment", "malware_family_enrichment", "provider_provenance"),
         outputs=("cti_observations", "indicator_confidence", "asset_graph"),
         required_gates=("provider_rate_limit", "scope_manifest_seed_promotion"),
+        execution_paths=("forge connectors import-cti",),
     ),
     ConnectorDefinition(
         id="abusech_urlhaus",
@@ -254,6 +255,7 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         capabilities=("malicious_url_enrichment", "domain_enrichment", "provider_provenance"),
         outputs=("cti_observations", "indicator_confidence", "reports"),
         required_gates=("provider_rate_limit", "scope_manifest_seed_promotion"),
+        execution_paths=("forge connectors import-cti",),
     ),
     ConnectorDefinition(
         id="stix_taxii_import",
@@ -265,6 +267,7 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         capabilities=("stix_import", "tlp_preservation", "source_reliability", "provider_provenance"),
         outputs=("cti_observations", "stix_bundle", "taxii_manifest"),
         input_formats=("stix_bundle", "taxii_manifest"),
+        execution_paths=("forge connectors import-cti",),
     ),
     ConnectorDefinition(
         id="hibp_pwned_passwords",

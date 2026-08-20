@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from forge.config import ForgeConfig
+from forge.connectors.cti import CtiObservationImportConfig, import_cti_observations
 from forge.connectors.discovery import DiscoveryReportImportConfig, import_discovery_report
 from forge.connectors.identity import IdentityExposureRunConfig, run_identity_exposure_connector
 from forge.connectors.registry import (
@@ -432,6 +433,58 @@ def register_connector_commands(app: typer.Typer) -> None:
             f"seeds={result['persisted_seed_count']} "
             f"urls={result.get('persisted_url_seed_count', 0)} "
             f"crawl={result.get('persisted_crawl_result_count', 0)} "
+            f"skipped={result['skipped_count']}"
+        )
+
+    @app.command("import-cti")
+    def import_cti(
+        engagement: int = typer.Option(..., "--engagement", "-e"),
+        connector: str = typer.Option("stix_taxii_import", "--connector"),
+        report_file: Path = typer.Option(..., "--report-file", exists=True, dir_okay=False),
+        provider: str = typer.Option("", "--provider", help="Override provider label."),
+        source_url: str = typer.Option("", "--source-url", help="Safe provenance URL or feed ID."),
+        collection_method: str = typer.Option("offline_import", "--collection-method"),
+        promote_targets: bool = typer.Option(
+            False,
+            "--promote-targets",
+            help="Promote target-feed-compatible observations into scoped engagement seeds.",
+        ),
+        operator: str = typer.Option("connector-import", "--operator"),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        cfg = ForgeConfig.load()
+        db_path = cfg.engagement_db_path(str(engagement))
+        con = direct_connect(db_path)
+        con.row_factory = sqlite3.Row
+        try:
+            run_migrations(con)
+            validate_canonical_schema(con)
+            result = import_cti_observations(
+                con,
+                CtiObservationImportConfig(
+                    connector_id=connector,
+                    engagement_id=int(engagement),
+                    report_path=report_file,
+                    provider=provider,
+                    source_url=source_url,
+                    collection_method=collection_method,
+                    promote_targets=promote_targets,
+                    operator=operator,
+                ),
+            )
+        except (FileNotFoundError, LookupError, ValueError) as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        finally:
+            con.close()
+        if json_output:
+            typer.echo(json.dumps(result, sort_keys=True))
+            return
+        console.print(
+            "[bold]CTI observation import[/bold] "
+            f"{result['connector_id']} status={result['status']} "
+            f"persisted={result['persisted_count']} "
+            f"duplicates={result['duplicate_count']} "
+            f"promoted={result['promoted_seed_count']} "
             f"skipped={result['skipped_count']}"
         )
 

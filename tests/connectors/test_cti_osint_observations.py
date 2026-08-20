@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+from pathlib import Path
 
+import typer
+from typer.testing import CliRunner
+
+from forge.connectors.cli import register_connector_commands
+from forge.connectors.cti import CtiObservationImportConfig, import_cti_observations
 from forge.connectors.registry import connector_statuses
+from forge.db.migrations import run_migrations
+from forge.db.schema import apply_schema
+from forge.db.validation import validate_canonical_schema
 from forge.utils.intel.http_pacing import (
     cti_rate_limit_backoff_seconds,
     cti_rate_limit_retries,
@@ -16,14 +26,38 @@ from forge.utils.intel.observations import (
 )
 
 
+def _build_cti_db(path: Path) -> sqlite3.Connection:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(path)
+    con.row_factory = sqlite3.Row
+    apply_schema(con)
+    run_migrations(con)
+    validate_canonical_schema(con)
+    con.execute(
+        """
+        INSERT INTO engagements (id, name, scope_json, status, operator)
+        VALUES (
+            1001,
+            'Acme CTI',
+            '["acme.example","*.acme.example","198.51.100.0/24"]',
+            'ACTIVE',
+            'connector-test'
+        )
+        """
+    )
+    con.commit()
+    return con
+
+
 def test_cti_connectors_are_catalog_only_and_free_first() -> None:
     statuses = connector_statuses(env={}, which=lambda _name: None)
     by_id = {row["id"]: row for row in statuses}
 
     assert by_id["abusech_threatfox"]["domain"] == "threat_intelligence"
     assert by_id["abusech_threatfox"]["safety"] == "passive_api"
-    assert by_id["abusech_threatfox"]["execution_status"] == "catalog_only"
-    assert by_id["abusech_threatfox"]["runner_supported"] is False
+    assert by_id["abusech_threatfox"]["execution_status"] == "wired_operator_path"
+    assert by_id["abusech_threatfox"]["runner_supported"] is True
+    assert by_id["abusech_threatfox"]["execution_paths"] == ["forge connectors import-cti"]
     assert by_id["abusech_urlhaus"]["cost_profile"] == "free_no_key"
     assert by_id["stix_taxii_import"]["safety"] == "passive_offline"
     assert "scope_manifest_seed_promotion" in by_id["abusech_urlhaus"]["required_gates"]
@@ -118,3 +152,150 @@ def test_cti_pacing_env_values_are_bounded(monkeypatch) -> None:
     assert cti_request_delay_seconds() == 60.0
     assert cti_rate_limit_backoff_seconds() == 1.0
     assert cti_rate_limit_retries() == 3
+
+
+def test_cti_observation_import_persists_normalized_rows_and_promotes_scoped_seeds(
+    tmp_path: Path,
+) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    secret_value = "secret-token-should-not-persist"
+    report = {
+        "observations": [
+            {
+                "type": "domain",
+                "value": "Portal.Acme.Example",
+                "confidence": 0.9,
+                "tlp": "clear",
+                "provenance": "ThreatFox IOC 1",
+                "raw_body": f"token={secret_value}",
+            },
+            {
+                "type": "url",
+                "value": "https://outside.example/login?token=drop",
+                "confidence": 0.8,
+                "provenance": "URLHaus IOC 2",
+            },
+            {"type": "phone", "value": "+1 555 123 4567", "confidence": 0.7},
+            {
+                "type": "domain",
+                "value": "Portal.Acme.Example",
+                "confidence": 0.9,
+                "tlp": "clear",
+                "provenance": "ThreatFox IOC 1",
+                "raw_body": f"token={secret_value}",
+            },
+        ]
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="abusech_threatfox",
+                engagement_id=1001,
+                provider="threatfox",
+                source_url="https://threatfox.abuse.ch/export/json/recent/",
+                promote_targets=True,
+                operator="cti-test",
+            ),
+            report_text=json.dumps(report),
+        )
+        observations = con.execute(
+            """
+            SELECT provider, indicator_type, indicator_value, source_url,
+                   raw_artifact_hash, metadata_json
+            FROM cti_observations
+            ORDER BY indicator_type, indicator_value
+            """
+        ).fetchall()
+        seeds = {
+            (row["seed_value"], row["seed_type"])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        audit = con.execute(
+            """
+            SELECT module, action, target, result, operator
+            FROM audit_log
+            WHERE engagement_id=1001 AND action='cti_observation_import'
+            """
+        ).fetchone()
+    finally:
+        con.close()
+
+    blob = json.dumps(
+        {
+            "result": result,
+            "observations": [dict(row) for row in observations],
+            "audit": dict(audit),
+        },
+        sort_keys=True,
+    )
+    assert result["status"] == "completed"
+    assert result["parsed_count"] == 3
+    assert result["persisted_count"] == 2
+    assert result["duplicate_count"] == 1
+    assert result["promoted_seed_count"] == 1
+    assert result["skipped_count"] == 2
+    assert {row["reason"] for row in result["skipped"]} == {
+        "observation_rejected",
+        "out_of_scope",
+    }
+    assert len(observations) == 2
+    assert observations[0]["indicator_value"] == "portal.acme.example"
+    assert observations[1]["indicator_value"] == "https://outside.example/login"
+    assert ("portal.acme.example", "domain") in seeds
+    assert audit["module"] == "abusech_threatfox"
+    assert audit["action"] == "cti_observation_import"
+    assert "persisted=2" in audit["result"]
+    assert "promoted=1" in audit["result"]
+    assert secret_value not in blob
+
+
+def test_connector_cli_import_cti_invokes_offline_importer(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "cti.json"
+    report_file.write_text(
+        json.dumps({"items": [{"type": "domain", "value": "portal.acme.example"}]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "stix_taxii_import",
+            "--report-file",
+            str(report_file),
+            "--source-url",
+            "local-stix-fixture",
+            "--promote-targets",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["connector_id"] == "stix_taxii_import"
+    assert payload["persisted_count"] == 1
+    assert payload["promoted_seed_count"] == 1

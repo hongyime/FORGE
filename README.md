@@ -245,6 +245,7 @@ forge active-validation preview|create|approve|run|list|methods|coverage
 forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-first connector/plugin catalog
 forge connectors run --engagement N --connector projectdiscovery_subfinder|projectdiscovery_httpx|projectdiscovery_katana|projectdiscovery_nuclei --target DOMAIN_OR_URL [--dry-run] [--max-results N]
 forge connectors import-discovery --engagement N --connector shodan_host_lookup|censys_lookup|urlscan_search --report-file REPORT.json [--target DOMAIN]
+forge connectors import-cti --engagement N --connector abusech_threatfox|abusech_urlhaus|stix_taxii_import --report-file OBSERVATIONS.json [--promote-targets]
 forge connectors run-identity --engagement N --connector hibp_pwned_passwords [--domain DOMAIN] [--offline-corpus PATH]
 forge connectors run-secrets --engagement N --connector gitleaks_local|trufflehog_local --source-path PATH --domain DOMAIN
 forge connectors import-secrets --engagement N --connector gitleaks_local|trufflehog_local --report-file REPORT.json --domain DOMAIN
