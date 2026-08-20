@@ -166,7 +166,7 @@ Useful advanced flags:
 - `--related-seed VALUE` can be repeated for multi-seed runs.
 - `--resume/--no-resume` defaults on and skips completed fan-outs for the engagement.
 - `--parallel-fanout N` defaults to `4` and is capped at `8`.
-- `--report-provider {llama_cpp,auto,template,...}` forces the Phase 6 backend; omitted uses `llama_cpp`.
+- `--report-provider {auto,template,llama_cpp,...}` forces the Phase 6 backend; omitted uses `auto`.
 - `--report-max-loops N` defaults to Phase 6's `5`; set `0` to disable retries.
 - `--auto-run-detected/--no-auto-run-detected` defaults on; live execution still requires `--roe-id`/`FORGE_ROE_ID` and `--scope-manifest`/`FORGE_SCOPE_MANIFEST`.
 - `--go-hard` overrides normal launch budget with `max-iter=20`, `parallel-fanout=8`, larger Common Crawl limits, identity workers, and deep subdomain enumeration.
@@ -217,7 +217,7 @@ Final phase (once, after loop stabilises):
 - vuln passive (offline CVE fingerprint)
 - exploit-reference correlation (offline NVD + Exploit-DB metadata join; no exploitation)
 - graph build (Networkx attack-path) + Maltego workspace/GraphML export
-- report generate (Phase 6 defaults to local `llama_cpp`; `auto` is opt-in for provider cascade; deterministic template fallback is forced if no report artifact is produced)
+- report generate (Phase 6 defaults to `auto` provider cascade; local `llama_cpp` remains an explicit/offline fallback; deterministic template fallback is forced if no report artifact is produced)
 - prereq detection (prompts operator for extras when TTY, auto-runs when `--auto-run-detected` was set)
 
 ---
@@ -228,7 +228,7 @@ Final phase (once, after loop stabilises):
 forge kill-chain <seed> --engagement N     # THE spider workflow
 forge menu                                  # Interactive TUI engagement browser
 forge kb {sync,status,fetch-breach}         # Phase 0 knowledge-base ETL
-forge report generate --engagement N [--provider auto|template|llama_cpp]  # Phase 6 defaults to local `llama_cpp`; `auto` is opt-in
+forge report generate --engagement N [--provider auto|template|llama_cpp]  # Phase 6 defaults to `auto`; use `llama_cpp` for explicit local GGUF
 forge graph build --engagement N            # Attack-path export; default --format json
 forge graph sync-assets --engagement N      # Rebuild canonical asset/ownership graph tables
 forge graph ownership list --engagement N   # List asset ownership claims
@@ -838,7 +838,7 @@ the root CLI entry point focused on command handlers while preserving
 | `FORGE_CONNECTOR_PLUGIN_DIRS` | Optional semicolon/comma-separated directories of data-only `forge.connector.plugin.v1` connector manifests; default local path is `FORGE_DATA_DIR/connector_plugins` |
 | `FORGE_ACTIVE_VALIDATION_ENABLE_LIVE` | Optional CLI live gate for approved, scope-bound active-validation methods; API live runs still require the `active_validation:live` permission and explicit `allow_live` request |
 | `FORGE_OFFLINE_STRICT` | `1` disables all outbound sockets process-wide |
-| `FORGE_LLM_PROVIDER` | Optional Phase 6 provider override. Unset defaults to `llama_cpp`; set `auto` to cascade through configured LLM CLI/API backends, then local/template fallbacks; set `template` for deterministic no-LLM reporting |
+| `FORGE_LLM_PROVIDER` | Optional Phase 6 provider override. Unset defaults to `auto`, cascading through configured LLM CLI/API backends, then local/template fallbacks; set `llama_cpp` for explicit local GGUF; set `template` for deterministic no-LLM reporting |
 | `FORGE_ENGAGEMENT_KEY` | At-rest encryption master secret for engagement credentials and connector secrets; set at least 32 characters before storing encrypted values |
 | `FORGE_AUDIT_BUNDLE_REMOTE_URI` | Optional absolute mounted path or `file://` URI for append-only remote audit manifest bundle storage |
 | `FORGE_AUDIT_BUNDLE_REMOTE_SCOPE` | Required customer/workspace scope label when `FORGE_AUDIT_BUNDLE_REMOTE_URI` is set |

@@ -82,8 +82,25 @@ Progress:
 - Hardened generated dashboard/report wrapping for long chips, tables, metadata, artifact links, route cards, and timelines; seed/scope chips now use a bounded preview with expandable remainder.
 - Verified B541 with reporting helper tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B541 as `5ffa8aa fix: wrap generated dashboard reports`.
+- Changed Phase 6 report defaults from local-only `llama_cpp` to `auto` so configured Codex/CLI/API providers are tried before local GGUF and template fallback.
+- Focused B542 checks passed for Phase 6 default fallback, CLI README docs, platform config defaults, py_compile, and current `recon subdomains --help` shape.
+- Broader B542 checks passed for targeted Phase 6 auto-provider fallbacks, CLI README docs, platform config defaults, report finalization provider plumbing, Ruff, py_compile, and `git diff --check`; the full combined pytest command exceeded 5 minutes and its orphaned pytest process was stopped.
+- Read-only latest-run resume audit found 49 failed/cancelled candidates: pending_recursive_work=31, watchdog_timeout=7, abandoned=6, stale_run_recovery=5. No resume/live action was started.
 
 Next steps:
-- Regenerate or patch the existing dashboard output safely if needed.
-- Audit failed/abandoned engagements, ROE display, and GGUF fallback before any resume/live action.
+- Commit and push B542.
+- Before any live resume, fix or explicitly accept the remaining pending-recursive-work/watchdog/abandoned/stale-run candidate groups.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
+
+<!-- MOLT_AUTO_START -->
+## Auto State
+
+- Updated: 2026-08-20 15:31:25 +08:00
+- Machine: PRAWN-E14
+- Harness: claude
+- Event: session-start
+- Branch: main
+- HEAD: 0e89ae7
+- Dirty files: 8
+- Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
+<!-- MOLT_AUTO_END -->

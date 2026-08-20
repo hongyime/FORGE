@@ -20,7 +20,7 @@ Test categories:
  13. Validator V-10      — Exec Summary references monitoring when Section 8 present
  14. Strict mode         — WARNINGs promoted to ERRORs in --strict
  15. ValidationResult    — passed / summary() contract
- 16. ReportSynthesizer   — dry_run skips LLM; ModelNotFoundError on missing GGUF
+ 16. ReportSynthesizer   — dry_run skips LLM; missing GGUF falls back cleanly
  17. ReportSynthesizer   — operator cancel raises RuntimeError; no file written
  18. ReportSynthesizer   — report file written; content includes mandatory sections
 """
@@ -1612,10 +1612,10 @@ def test_validation_result_summary_failed():
 # ── 16. ReportSynthesizer: model not found ────────────────────────────────────
 
 
-def test_synthesizer_falls_back_to_template_when_gguf_absent(
-    tmp_eng_db, tmp_path, patch_confirm_approve
+def test_synthesizer_default_auto_falls_back_to_template_when_gguf_absent(
+    tmp_eng_db, tmp_path, patch_confirm_approve, monkeypatch
 ):
-    """When llama_cpp GGUF is missing and no cloud provider is set,
+    """When auto finds no configured provider and the GGUF is missing,
     the synthesizer falls through to deterministic template mode
     (2026-07-06: was previously ModelNotFoundError; now the pipeline
     never fails silently, so operators without any LLM still get a
@@ -1626,13 +1626,21 @@ def test_synthesizer_falls_back_to_template_when_gguf_absent(
         model_path=tmp_path / "nonexistent.gguf",
         output_dir=tmp_path,
     )
+    monkeypatch.setattr(
+        synth,
+        "_ensure_provider_loaded",
+        lambda: (_ for _ in ()).throw(ValueError("no configured cloud providers detected")),
+    )
     out = synth.generate(ENGAGEMENT_ID)
     assert out.exists()
     content = out.read_text(encoding="utf-8")
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
     # Template report identifies itself and has the mandatory section headers.
     assert "template mode, no LLM" in content
     assert "Executive Summary" in content
     assert "Risk Ratings" in content
+    assert payload["provider"] == "template"
+    assert payload["requested_provider"] == "auto"
 
 
 def test_synthesizer_template_mode_no_llm_needed(tmp_eng_db, tmp_path, patch_confirm_approve):

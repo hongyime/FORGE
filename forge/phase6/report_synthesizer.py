@@ -2106,7 +2106,7 @@ class ReportSynthesizer:
         self._temperature = temperature
         self._clean_text = clean_text
         self._assume_yes = assume_yes
-        self._requested_provider = (provider or "llama_cpp").lower()
+        self._requested_provider = (provider or "auto").lower()
         self._provider_name = self._requested_provider
         self._max_loops = (
             max_correction_loops if max_correction_loops is not None else MAX_CORRECTION_LOOPS
@@ -3953,8 +3953,10 @@ class ReportSynthesizer:
     def _infer(self, prompt: str) -> str:
         """Dispatch inference to the configured LLM backend.
 
-        - ``provider == "llama_cpp"`` (or unset): local llama-cpp-python via
-          ``_infer_via_llama_cpp`` (existing behaviour).
+        - ``provider == "llama_cpp"``: local llama-cpp-python via
+          ``_infer_via_llama_cpp``.
+        - unset provider defaults to ``auto`` and reaches this method through
+          the configured provider cascade.
         - Any other provider: ``_infer_via_provider`` shells out through the
           registered ``LLMProvider`` implementation.
         """

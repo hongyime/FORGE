@@ -700,7 +700,7 @@ class PlatformSettings(BaseSettings):
     plugin_dir: str = "./plugins"
 
     # -- Provider Abstraction -------------------------------------------------
-    llm_provider: str = "llama_cpp"
+    llm_provider: str = "auto"
     llm_model_path: str | None = None  # Required when llm_provider == "llama_cpp"
     provider_timeout: int = 5  # seconds
 

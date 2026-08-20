@@ -299,8 +299,8 @@ def test_readme_public_commands_document_operator_defaults_from_cli_help() -> No
     assert "llama_cpp" in report_help.output
     assert "local Qwen" in report_help.output
     assert "forge report generate --engagement N [--provider auto|template|llama_cpp]" in public_block
-    assert "Phase 6 defaults to local `llama_cpp`; `auto` is opt-in" in public_block
-    assert "--report-provider {llama_cpp,auto,template,...}" in readme
+    assert "Phase 6 defaults to `auto`; use `llama_cpp` for explicit local GGUF" in public_block
+    assert "--report-provider {auto,template,llama_cpp,...}" in readme
 
     demo_help = runner.invoke(forge_app, ["demo", "proof-pack", "--help"])
     assert demo_help.exit_code == 0, demo_help.output

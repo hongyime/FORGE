@@ -54,8 +54,8 @@ def report_generate(
             "2.5-1.5B), kiro_cli, claude_code, codex_cli, gemini_cli, "
             "bedrock_anthropic, openai_compatible. "
             "openai_compatible additionally requires FORGE_OPENAI_BASE_URL "
-            "and FORGE_OPENAI_MODEL. Set FORGE_LLM_PROVIDER=auto in .env "
-            "to make every report route through the best available backend."
+            "and FORGE_OPENAI_MODEL. Unset FORGE_LLM_PROVIDER defaults to "
+            "auto so reports route through the best available backend."
         ),
     ),
     max_loops: Optional[int] = typer.Option(
@@ -84,7 +84,7 @@ def report_generate(
         "report_synthesizer",
         "report_generate_start",
         target=output,
-        result=f"assume_yes={yes} provider={provider or 'llama_cpp'} max_loops={max_loops if max_loops is not None else '<default>'}",
+        result=f"assume_yes={yes} provider={provider or 'auto'} max_loops={max_loops if max_loops is not None else '<default>'}",
     )
     try:
         result_path = synthesise(
@@ -112,5 +112,5 @@ def report_generate(
         "report_synthesizer",
         "report_generate_complete",
         target=str(result_path) if result_path else None,
-        result=f"success provider={provider or 'llama_cpp'}",
+        result=f"success provider={provider or 'auto'}",
     )
