@@ -13,6 +13,7 @@ Progress:
 - Pushed B516 as `6b3bd9f feat: import offline cti observations`.
 - Exposed CTI observations as non-reportable inventory in Phase 6 context/export/template reports and dashboard detail JSON.
 - Hardened CTI source/provenance redaction and changed fallback raw-artifact hashes to sanitized canonical observation fields only.
+- Pushed B517 as `3755cd8 feat: surface cti observation inventory`.
 
 Next steps:
-- Commit and push the CTI observation inventory/reporting checkpoint after final diff checks.
+- Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
