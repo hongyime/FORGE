@@ -133,6 +133,11 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert "active-validation gated:" in rows["Connector Action Plan"].details
     assert "paid hidden:" in rows["Connector Action Plan"].details
     assert "forge connectors run --connector ID" in rows["Connector Action Plan"].remediation
+    assert rows["CTI/OSINT Policy"].status == "OK"
+    assert "offline-import" in rows["CTI/OSINT Policy"].details
+    assert "live/API-style" in rows["CTI/OSINT Policy"].details
+    assert "operator-opt-in gated" in rows["CTI/OSINT Policy"].details
+    assert "forge connectors policy-summary --json" in rows["CTI/OSINT Policy"].remediation
     action_payload = json.loads(doctor_payload_json(checks))
     action_by_id = {item["id"]: item for item in action_payload["action_plan"]}
     assert {
@@ -140,6 +145,7 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
         "run_free_connectors",
         "configure_optional_keys",
         "review_catalog_only",
+        "review_cti_osint_policy",
         "keep_active_validation_fail_closed",
         "review_paid_adapters",
     } <= set(action_by_id)
@@ -149,6 +155,10 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert "projectdiscovery_subfinder" in action_by_id["run_free_connectors"]["summary"]
     assert action_by_id["configure_optional_keys"]["status"] == "optional"
     assert "FORGE_SHODAN_API_KEY" in action_by_id["configure_optional_keys"]["summary"]
+    assert action_by_id["review_cti_osint_policy"]["status"] == "review"
+    assert action_by_id["review_cti_osint_policy"]["command"] == (
+        "forge connectors policy-summary --json"
+    )
     assert action_by_id["keep_active_validation_fail_closed"]["status"] == "gated"
     assert "approval, roe_id, scope_manifest, and live_gate" in action_by_id[
         "keep_active_validation_fail_closed"

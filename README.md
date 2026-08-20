@@ -578,7 +578,7 @@ Use `forge doctor --json` for automation; the payload includes per-check
 status, details, remediation hints, and a top-level `action_plan` that groups
 connector and provider setup into exact machine-readable IDs:
 `install_free_binaries`, `run_free_connectors`, `configure_optional_keys`,
-`review_catalog_only`, `keep_active_validation_fail_closed`,
+`review_catalog_only`, `review_cti_osint_policy`, `keep_active_validation_fail_closed`,
 `review_paid_adapters`, `run_live_provider_probes_if_intended`,
 `review_paid_llm_backends`, and `enable_live_validation_only_after_roe`,
 without printing secret values.

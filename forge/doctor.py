@@ -34,6 +34,7 @@ from forge.engagement_ids import numeric_engagement_db_files
 from forge.graph.assets import list_asset_graph
 from forge.monitoring.delivery import count_unrouted_monitoring_alerts
 from forge.remediation.workflow import remediation_review_queue
+from forge.utils.intel import provider_catalog_policy_summary
 
 
 @dataclass(frozen=True)
@@ -294,6 +295,7 @@ def collect_doctor_checks(
     checks.extend(_binary_checks("Secrets", _SECRET_BINARIES, which))
     checks.extend(_binary_checks("LLM CLI", _LLM_BINARIES, which))
     checks.append(_connector_catalog_check(environ, which, cfg.data_dir if cfg is not None else None))
+    checks.append(_cti_osint_policy_check())
     checks.append(
         _connector_action_plan_check(
             environ,
@@ -1813,6 +1815,46 @@ def _connector_catalog_check(
             "approval, roe_id, scope_manifest, and live_gate; "
             "add `--include-paid` only when licensed adapters are intentionally in scope."
             f"{remediation_suffix}"
+        ),
+    )
+
+
+def _cti_osint_policy_check() -> DoctorCheck:
+    summary = provider_catalog_policy_summary()
+    offline = len(summary.get("offline_import_provider_ids", []))
+    live_or_api = len(summary.get("live_or_api_provider_ids", []))
+    manual = len(summary.get("manual_opt_in_provider_ids", []))
+    unsafe_text = int(summary.get("safety_tier_counts", {}).get("catalog_unsafe_text", 0) or 0)
+    blocked_sensitive = int(summary.get("safety_tier_counts", {}).get("blocked_sensitive", 0) or 0)
+    operator_opt_in = int(
+        summary.get("required_gate_counts", {}).get("operator_opt_in", 0) or 0
+    )
+    return DoctorCheck(
+        "CTI/OSINT Policy",
+        "OK",
+        (
+            f"{int(summary.get('total_count') or 0)} provider/source families; "
+            f"{int(summary.get('default_enabled_count') or 0)} default-visible; "
+            f"{offline} offline-import; {live_or_api} live/API-style; "
+            f"{manual} manual opt-in; {operator_opt_in} operator-opt-in gated; "
+            f"{unsafe_text} unsafe-text catalog; {blocked_sensitive} blocked-sensitive"
+        ),
+        (
+            "Run `forge connectors policy-summary --json` before wiring live fetchers; "
+            "keep CTI/OSINT ingestion on offline import unless explicit provider approval, "
+            "rate limits, terms review, and scope gates are in place."
+        ),
+        (
+            {
+                "id": "review_cti_osint_policy",
+                "priority": "42",
+                "status": "review",
+                "summary": (
+                    f"{offline} offline import source(s), {live_or_api} live/API-style source(s), "
+                    f"{operator_opt_in} operator-opt-in gated source(s)"
+                ),
+                "command": "forge connectors policy-summary --json",
+            },
         ),
     )
 

@@ -96,9 +96,12 @@ Progress:
 - Added read-only `forge connectors policy-summary [--json]` so operators can inspect CTI/OSINT provider policy counts and provider IDs without running providers or importing Python.
 - Verified B545 with focused policy-summary CLI tests, connector registry/docs tests, Ruff, py_compile, `git diff --check`, and a JSON smoke reporting 48 providers, 23 offline imports, 25 live/API-style, and 21 operator-opt-in-gated entries.
 - Pushed B545 as `b99bf2d feat: expose cti policy summary`.
+- Added read-only `CTI/OSINT Policy` output to `forge doctor` plus the `review_cti_osint_policy` action-plan item backed by aggregate provider policy counts.
+- Subagent spawn for the report/UI side audit failed because the current harness reported the agent thread limit was reached; continue old report/product audit locally when B546 is committed.
+- Verified B546 with full doctor tests plus focused CTI policy-summary tests (`42 passed`), Ruff, py_compile, `git diff --check`, and a `forge doctor --json` smoke confirming the CTI check/action are present.
 
 Next steps:
-- Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
+- Commit and push B546 doctor CTI/OSINT policy visibility.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
