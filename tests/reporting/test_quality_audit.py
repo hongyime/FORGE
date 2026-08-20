@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 
 from forge.reporting.quality_audit import (
     collect_long_run_review_plan,
+    collect_policy_flag_review_plan,
     collect_report_quality_audit,
     collect_stale_report_repair_plan,
 )
@@ -133,6 +134,14 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
         "destructive_no": 1,
         "post_ex_no": 1,
     }
+    assert action_by_id["review_policy_flags"]["sample_count"] == 1
+    assert action_by_id["review_policy_flags"]["samples"][0]["flags"] == [
+        "destructive_no",
+        "post_ex_no",
+    ]
+    assert action_by_id["review_policy_flags"]["follow_up_commands"] == [
+        ["forge", "report", "policy-plan", "--json", "--limit", "1"]
+    ]
     assert "latest run metadata" in action_by_id["review_policy_flags"]["summary"]
 
 
@@ -397,6 +406,27 @@ def test_collect_long_run_review_plan_is_read_only_review_plan(tmp_path: Path) -
     assert "never starts runs" in payload["review_guidance"]
 
 
+def test_collect_policy_flag_review_plan_explains_latest_run_metadata(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+
+    payload = collect_policy_flag_review_plan(reports_dir=reports_dir, limit=1)
+
+    assert payload["schema_version"] == "forge.report_policy_flag_review_plan.v1"
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["status"] == "explain"
+    assert payload["counts"] == {"destructive_no": 1, "post_ex_no": 1}
+    assert payload["total_count"] == 2
+    assert payload["sample_count"] == 1
+    assert payload["omitted_count"] == 0
+    assert payload["commands"] == []
+    assert payload["samples"][0]["id"] == "1001"
+    assert payload["samples"][0]["flags"] == ["destructive_no", "post_ex_no"]
+    assert "latest run summaries" in payload["explanation"]
+
+
 def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:
     from forge.cli import app  # noqa: PLC0415
 
@@ -595,6 +625,57 @@ def test_report_long_run_plan_cli_prints_human_plan(tmp_path: Path) -> None:
     assert "Long-run review plan:" in result.output
     assert "execution_policy=plan_only_no_commands_executed" in result.output
     assert "sample=engagement=1001 status=failed elapsed=3100.5" in result.output
+    assert "resume-run" not in result.output
+
+
+def test_report_policy_plan_cli_outputs_json(tmp_path: Path) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "policy-plan",
+            "--reports-dir",
+            str(reports_dir),
+            "--limit",
+            "1",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.report_policy_flag_review_plan.v1"
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["counts"] == {"destructive_no": 1, "post_ex_no": 1}
+    assert payload["commands"] == []
+    assert payload["samples"][0]["flags"] == ["destructive_no", "post_ex_no"]
+
+
+def test_report_policy_plan_cli_prints_human_plan(tmp_path: Path) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "policy-plan",
+            "--reports-dir",
+            str(reports_dir),
+            "--limit",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Policy flag review plan:" in result.output
+    assert "execution_policy=plan_only_no_commands_executed" in result.output
+    assert "flags=destructive_no,post_ex_no" in result.output
     assert "resume-run" not in result.output
 
 

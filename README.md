@@ -240,6 +240,7 @@ forge report generate --engagement N [--provider auto|template|llama_cpp]  # Pha
 forge report quality-audit [--reports-dir reports] [--top N|--top-limit N] [--json]  # Read-only report health and operator action plan
 forge report stale-plan [--reports-dir reports] [--limit N] [--json]  # Read-only stale latest-report regeneration command plan
 forge report long-run-plan [--reports-dir reports] [--long-run-seconds N] [--limit N] [--json]  # Read-only long-run review plan
+forge report policy-plan [--reports-dir reports] [--limit N] [--json]  # Read-only latest-run policy flag explanation plan
 forge graph build --engagement N            # Attack-path export; default --format json
 forge graph sync-assets --engagement N      # Rebuild canonical asset/ownership graph tables
 forge graph ownership list --engagement N   # List asset ownership claims

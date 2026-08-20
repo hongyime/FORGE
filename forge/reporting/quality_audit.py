@@ -41,6 +41,7 @@ def collect_report_quality_audit(
     report_write_error_counts: Counter[str] = Counter()
     latest_report_write_error_counts: Counter[str] = Counter()
     policy_counts: Counter[str] = Counter()
+    policy_flag_rows: list[dict[str, Any]] = []
     dashboard_refresh_failures: list[dict[str, Any]] = []
     historical_dashboard_refresh_failures: list[dict[str, Any]] = []
     failed_runs: list[dict[str, Any]] = []
@@ -74,6 +75,9 @@ def collect_report_quality_audit(
             policy_counts["post_ex_yes"] += 1
         elif run_summary:
             policy_counts["post_ex_no"] += 1
+        policy_row = _policy_flag_row(item, run_summary)
+        if policy_row:
+            policy_flag_rows.append(policy_row)
 
         report_entries = _report_entries(detail_payload, report_summary)
         for index, report_entry in enumerate(report_entries):
@@ -132,12 +136,14 @@ def collect_report_quality_audit(
             str(row.get("id") or ""),
         )
     )
+    policy_flag_rows.sort(key=lambda row: str(row.get("id") or ""))
     operator_action_plan = _operator_action_plan(
         latest_fallback_reports=latest_fallback_reports,
         latest_fallback_counts=latest_fallback_counts,
         failed_run_count=len(failed_runs),
         long_runs=long_runs,
         policy_counts=policy_counts,
+        policy_flag_rows=policy_flag_rows,
         top_limit=max(0, int(top_limit)),
     )
 
@@ -161,6 +167,8 @@ def collect_report_quality_audit(
             sorted(latest_report_write_error_counts.items())
         ),
         "policy_counts": dict(sorted(policy_counts.items())),
+        "policy_flag_sample_total": len(policy_flag_rows),
+        "policy_flag_samples": policy_flag_rows[: max(0, int(top_limit))],
         "resume_review_count": resume_review_count,
         "long_run_threshold_seconds": float(long_run_seconds),
         "long_run_count": len(long_runs),
@@ -277,6 +285,70 @@ def collect_long_run_review_plan(
     }
 
 
+def collect_policy_flag_review_plan(
+    *,
+    reports_dir: Path,
+    limit: int = DEFAULT_TOP_LIMIT,
+) -> dict[str, Any]:
+    """Return a read-only review plan for latest-run policy flag counts."""
+
+    sample_limit = max(0, int(limit))
+    payload = collect_report_quality_audit(
+        reports_dir=reports_dir,
+        top_limit=sample_limit,
+    )
+    samples = payload.get("policy_flag_samples")
+    if not isinstance(samples, list):
+        samples = []
+    counts = {
+        key: int(value)
+        for key, value in _mapping(payload.get("policy_counts")).items()
+        if key in {"attack_no", "destructive_no", "post_ex_no"}
+        and int(value or 0)
+    }
+    total_count = sum(counts.values())
+    omitted_count = max(
+        0,
+        int(payload.get("policy_flag_sample_total", len(samples)) or 0) - len(samples),
+    )
+    return {
+        "schema_version": "forge.report_policy_flag_review_plan.v1",
+        "reports_dir": payload.get("reports_dir", str(Path(reports_dir))),
+        "execution_policy": "plan_only_no_commands_executed",
+        "status": "explain" if counts else "empty",
+        "summary": (
+            "policy *_no counts describe latest run metadata, not current global operator intent"
+            if counts
+            else "no policy *_no latest-run metadata counts were found"
+        ),
+        "counts": dict(sorted(counts.items())),
+        "total_count": total_count,
+        "sample_limit": sample_limit,
+        "sample_count": len(samples),
+        "omitted_count": omitted_count,
+        "samples": samples,
+        "commands": [],
+        "follow_up_commands": (
+            [
+                [
+                    "forge",
+                    "report",
+                    "policy-plan",
+                    "--json",
+                    "--limit",
+                    str(len(samples) + omitted_count),
+                ]
+            ]
+            if omitted_count
+            else []
+        ),
+        "explanation": (
+            "`attack_no`, `destructive_no`, and `post_ex_no` are read from generated "
+            "latest run summaries or scope-manifest policy fields."
+        ),
+    }
+
+
 def _operator_action_plan(
     *,
     latest_fallback_reports: list[dict[str, Any]],
@@ -284,6 +356,7 @@ def _operator_action_plan(
     failed_run_count: int,
     long_runs: list[dict[str, Any]],
     policy_counts: Counter[str],
+    policy_flag_rows: list[dict[str, Any]],
     top_limit: int,
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
@@ -400,6 +473,9 @@ def _operator_action_plan(
         if int(policy_counts.get(key, 0))
     }
     if policy_no_counts:
+        sample_limit = max(0, int(top_limit))
+        sampled_policy_rows = policy_flag_rows[:sample_limit]
+        omitted_count = max(0, len(policy_flag_rows) - len(sampled_policy_rows))
         actions.append(
             {
                 "id": "review_policy_flags",
@@ -407,11 +483,25 @@ def _operator_action_plan(
                 "execution_policy": "plan_only_no_commands_executed",
                 "summary": "policy *_no counts describe latest run metadata, not current global operator intent",
                 "counts": policy_no_counts,
+                "sample_limit": sample_limit,
+                "sample_count": len(sampled_policy_rows),
+                "omitted_count": omitted_count,
+                "samples": sampled_policy_rows,
                 "explanation": (
                     "`attack_no`, `destructive_no`, and `post_ex_no` are read from "
                     "generated latest run summaries or scope-manifest policy fields."
                 ),
                 "commands": [],
+                "follow_up_commands": [
+                    [
+                        "forge",
+                        "report",
+                        "policy-plan",
+                        "--json",
+                        "--limit",
+                        str(len(policy_flag_rows)),
+                    ]
+                ],
             }
         )
     return actions
@@ -512,6 +602,30 @@ def _latest_fallback_report_row(
     }
 
 
+def _policy_flag_row(item: dict[str, Any], run_summary: dict[str, Any]) -> dict[str, Any]:
+    if not run_summary:
+        return {}
+    flags: list[str] = []
+    if run_summary.get("attack_mode") is not True:
+        flags.append("attack_no")
+    if run_summary.get("destructive_actions_allowed") is not True:
+        flags.append("destructive_no")
+    if run_summary.get("post_exploitation_allowed") is not True:
+        flags.append("post_ex_no")
+    if not flags:
+        return {}
+    return {
+        "id": _text(item.get("id")),
+        "slug": _text(item.get("slug")),
+        "name": _text(item.get("name")),
+        "seed": _text(run_summary.get("seed_value") or item.get("primary_seed")),
+        "status": _text(run_summary.get("status")),
+        "run_kind": _text(run_summary.get("run_kind")),
+        "flags": flags,
+        "error": _clip(_text(run_summary.get("error")), limit=160),
+    }
+
+
 def _safe_fallback_reason(reason: str, *, fallback_class: str) -> str:
     if fallback_class == "gguf_model_missing":
         return "GGUF model not found; configure an LLM provider/model or regenerate after local model setup."
@@ -537,6 +651,12 @@ def _default_gguf_model_available() -> bool:
 
 def _mapping(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _clip(text: str, *, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)] + "..."
 
 
 def _text(value: Any) -> str:

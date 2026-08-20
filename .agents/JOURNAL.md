@@ -74,3 +74,4 @@
 - 2026-08-20: Suppressed the no-op Connector Action Plan `install_free_binaries` doctor action when no connector binaries are missing.
 - 2026-08-20: Added read-only `forge report long-run-plan` so long-running failed runs have a dedicated review plan without resuming runs.
 - 2026-08-20: Pointed stale-report follow-up commands at `forge report stale-plan` instead of broad `quality-audit`.
+- 2026-08-20: Added read-only `forge report policy-plan` so latest-run policy flag counts include sampled evidence without mutating engagements.

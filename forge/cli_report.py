@@ -20,6 +20,7 @@ from forge.reporting.quality_audit import (
     DEFAULT_LONG_RUN_SECONDS,
     DEFAULT_TOP_LIMIT,
     collect_long_run_review_plan,
+    collect_policy_flag_review_plan,
     collect_report_quality_audit,
     collect_stale_report_repair_plan,
 )
@@ -310,6 +311,61 @@ def report_long_run_plan(
                     f"engagement={sample.get('id')} "
                     f"status={sample.get('status')} "
                     f"elapsed={sample.get('elapsed_seconds')} "
+                    f"seed={sample.get('seed')}"
+                )
+    follow_up_commands = payload.get("follow_up_commands")
+    if isinstance(follow_up_commands, list):
+        for command in follow_up_commands[:3]:
+            if isinstance(command, list):
+                console.print(f"  follow_up={' '.join(str(part) for part in command)}")
+
+
+@report_app.command("policy-plan")
+def report_policy_plan(
+    reports_dir: Path = typer.Option(
+        Path("reports"),
+        "--reports-dir",
+        help="Reports directory containing dashboard/data/engagements.json.",
+    ),
+    limit: int = typer.Option(
+        DEFAULT_TOP_LIMIT,
+        "--limit",
+        help="Maximum policy-flag review samples to include.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable JSON.",
+    ),
+) -> None:
+    """Explain latest-run policy flag counts without mutating engagements."""
+    payload = collect_policy_flag_review_plan(
+        reports_dir=reports_dir,
+        limit=limit,
+    )
+    if json_output:
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+
+    console.print(
+        "[green]Policy flag review plan:[/green] "
+        f"{payload['total_count']} aggregate flag count(s), "
+        f"{payload['sample_count']} sample(s), "
+        f"{payload['omitted_count']} omitted"
+    )
+    console.print(f"  execution_policy={payload['execution_policy']}")
+    if payload.get("counts"):
+        console.print(f"  counts={payload['counts']}")
+    samples = payload.get("samples")
+    if isinstance(samples, list):
+        for sample in samples[:5]:
+            if isinstance(sample, dict):
+                flags = sample.get("flags") if isinstance(sample.get("flags"), list) else []
+                console.print(
+                    "  sample="
+                    f"engagement={sample.get('id')} "
+                    f"status={sample.get('status')} "
+                    f"flags={','.join(str(flag) for flag in flags)} "
                     f"seed={sample.get('seed')}"
                 )
     follow_up_commands = payload.get("follow_up_commands")
