@@ -317,6 +317,10 @@ def test_readme_public_commands_document_operator_defaults_from_cli_help() -> No
         "forge report stale-plan [--reports-dir reports] [--limit N] [--json]"
     ) in public_block
     assert (
+        "forge report stale-run [--reports-dir reports] [--limit N] "
+        "[--provider auto|template] [--dry-run] [--json]"
+    ) in public_block
+    assert (
         "forge report long-run-plan [--reports-dir reports] "
         "[--long-run-seconds N] [--limit N] [--json]"
     ) in public_block

@@ -10,6 +10,7 @@ from forge.reporting.quality_audit import (
     collect_policy_flag_review_plan,
     collect_report_quality_audit,
     collect_stale_report_repair_plan,
+    run_stale_report_repair_plan,
 )
 
 
@@ -572,6 +573,122 @@ def test_report_stale_plan_cli_prints_human_plan(tmp_path: Path, monkeypatch) ->
     assert "execution_policy=plan_only_no_commands_executed" in result.output
     assert "forge report generate --engagement 1001 --provider auto --yes" in result.output
     assert "quality-audit" not in result.output
+
+
+def test_run_stale_report_repair_plan_dry_run_is_bounded(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    monkeypatch.setattr(
+        "forge.reporting.quality_audit._default_gguf_model_available",
+        lambda: True,
+    )
+
+    payload = run_stale_report_repair_plan(
+        reports_dir=reports_dir,
+        limit=1,
+        provider="template",
+        max_loops=0,
+        dry_run=True,
+    )
+
+    assert payload["schema_version"] == "forge.report_stale_repair_run.v1"
+    assert payload["execution_policy"] == "dry_run_no_commands_executed"
+    assert payload["selected_count"] == 1
+    assert payload["attempted_count"] == 0
+    assert payload["skipped_count"] == 1
+    assert payload["items"][0]["status"] == "dry_run"
+    assert payload["items"][0]["command"] == [
+        "forge",
+        "report",
+        "generate",
+        "--engagement",
+        "1001",
+        "--provider",
+        "template",
+        "--yes",
+        "--max-loops",
+        "0",
+    ]
+
+
+def test_run_stale_report_repair_plan_executes_with_injected_generator(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    monkeypatch.setattr(
+        "forge.reporting.quality_audit._default_gguf_model_available",
+        lambda: True,
+    )
+    calls: list[dict[str, object]] = []
+
+    def fake_generate_report(**kwargs):
+        calls.append(dict(kwargs))
+        return tmp_path / "reports" / "regenerated.md"
+
+    payload = run_stale_report_repair_plan(
+        reports_dir=reports_dir,
+        limit=1,
+        provider="auto",
+        max_loops=None,
+        generate_report=fake_generate_report,
+    )
+
+    assert payload["execution_policy"] == "bounded_sequential_report_generation"
+    assert payload["attempted_count"] == 1
+    assert payload["succeeded_count"] == 1
+    assert payload["failed_count"] == 0
+    assert calls == [
+        {
+            "engagement_id": "1001",
+            "provider": "auto",
+            "max_loops": None,
+            "assume_yes": True,
+        }
+    ]
+    assert payload["items"][0]["report_path"].endswith("regenerated.md")
+
+
+def test_report_stale_run_cli_outputs_dry_run_json(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    monkeypatch.setattr(
+        "forge.reporting.quality_audit._default_gguf_model_available",
+        lambda: True,
+    )
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "stale-run",
+            "--reports-dir",
+            str(reports_dir),
+            "--limit",
+            "1",
+            "--provider",
+            "template",
+            "--max-loops",
+            "0",
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.report_stale_repair_run.v1"
+    assert payload["execution_policy"] == "dry_run_no_commands_executed"
+    assert payload["items"][0]["status"] == "dry_run"
+    assert payload["items"][0]["command"][-2:] == ["--max-loops", "0"]
 
 
 def test_report_long_run_plan_cli_outputs_json(tmp_path: Path) -> None:

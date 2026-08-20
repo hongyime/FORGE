@@ -270,9 +270,11 @@ Progress:
 - Corrected connector operator guidance drift: artifact passive parsers now show a valid `forge kill-chain SEED --engagement N --dry-run` template with local artifact folder notes, and doctor's Connector Action Plan remediation points operators to `forge connectors run-plan --json` first instead of the generic connector run shape.
 - Verified B590 with focused connector/doctor tests (`4 passed`), Ruff, py_compile, `git diff --check`, and real local read-only connector run-plan/doctor smokes. No connector, provider, installer, report, resume-run, kill-chain, monitoring, scheduled-task, engagement, or credential action was executed.
 - Pushed B590 as `91666dd fix: correct connector plan guidance`.
+- Added bounded sequential `forge report stale-run [--limit N] [--provider NAME] [--max-loops N] [--dry-run] [--json]`, backed by `run_stale_report_repair_plan()`, so stale latest reports can be regenerated from the existing stale-plan backlog without copying many commands by hand.
+- Verified B591 with focused reporting/CLI registry tests (`5 passed`), Ruff, py_compile, `git diff --check`, stale-run help smoke, and a real local `stale-run --dry-run --limit 3 --provider template --max-loops 0 --json` smoke. The dry-run selected 3 of 57 stale reports and attempted 0 generations. No report regeneration, provider call, resume-run, kill-chain, monitoring, scheduled-task, engagement mutation, or credential action was executed during verification.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Commit and push B591, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

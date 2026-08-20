@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
@@ -228,6 +229,123 @@ def collect_stale_report_repair_plan(
     }
 
 
+ReportGenerator = Callable[..., str | Path | None]
+
+
+def run_stale_report_repair_plan(
+    *,
+    reports_dir: Path,
+    limit: int = DEFAULT_TOP_LIMIT,
+    provider: str = "auto",
+    max_loops: int | None = None,
+    dry_run: bool = False,
+    generate_report: ReportGenerator | None = None,
+) -> dict[str, Any]:
+    """Regenerate stale latest reports sequentially from the read-only stale plan."""
+
+    sample_limit = max(0, int(limit))
+    plan = collect_stale_report_repair_plan(reports_dir=reports_dir, limit=sample_limit)
+    commands = plan.get("commands") if isinstance(plan.get("commands"), list) else []
+    items: list[dict[str, Any]] = []
+    succeeded_count = 0
+    failed_count = 0
+    skipped_count = 0
+    attempted_count = 0
+
+    for command in commands[:sample_limit]:
+        if not isinstance(command, list):
+            skipped_count += 1
+            items.append(
+                {
+                    "status": "skipped",
+                    "reason": "invalid_command_template",
+                    "command": command,
+                }
+            )
+            continue
+        parsed = _parse_report_generate_command(command)
+        engagement_id = parsed.get("engagement")
+        if not engagement_id:
+            skipped_count += 1
+            items.append(
+                {
+                    "status": "skipped",
+                    "reason": "missing_engagement",
+                    "command": command,
+                }
+            )
+            continue
+        effective_command = _stale_report_run_command(
+            engagement_id=str(engagement_id),
+            provider=provider,
+            max_loops=max_loops,
+        )
+        if dry_run:
+            skipped_count += 1
+            items.append(
+                {
+                    "engagement_id": str(engagement_id),
+                    "status": "dry_run",
+                    "command": effective_command,
+                }
+            )
+            continue
+        if generate_report is None:
+            raise ValueError("generate_report is required when dry_run is false")
+        attempted_count += 1
+        try:
+            result_path = generate_report(
+                engagement_id=str(engagement_id),
+                provider=provider,
+                max_loops=max_loops,
+                assume_yes=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            failed_count += 1
+            items.append(
+                {
+                    "engagement_id": str(engagement_id),
+                    "status": "failed",
+                    "command": effective_command,
+                    "error": f"{type(exc).__name__}: {_text(str(exc))[:180]}",
+                }
+            )
+            continue
+        succeeded_count += 1
+        items.append(
+            {
+                "engagement_id": str(engagement_id),
+                "status": "completed",
+                "command": effective_command,
+                "report_path": str(result_path) if result_path else "",
+            }
+        )
+
+    return {
+        "schema_version": "forge.report_stale_repair_run.v1",
+        "reports_dir": plan.get("reports_dir", str(Path(reports_dir))),
+        "execution_policy": (
+            "dry_run_no_commands_executed"
+            if dry_run
+            else "bounded_sequential_report_generation"
+        ),
+        "dry_run": bool(dry_run),
+        "provider": provider,
+        "max_loops": max_loops,
+        "total_count": int(plan.get("total_count", 0) or 0),
+        "limit": sample_limit,
+        "selected_count": len(commands[:sample_limit]),
+        "attempted_count": attempted_count,
+        "succeeded_count": succeeded_count,
+        "failed_count": failed_count,
+        "skipped_count": skipped_count,
+        "omitted_count": max(0, int(plan.get("total_count", 0) or 0) - len(commands[:sample_limit])),
+        "items": items,
+        "follow_up_commands": plan.get("follow_up_commands", []),
+        "latest_fallback_reason_counts": plan.get("latest_fallback_reason_counts", {}),
+    }
+
+
 def collect_long_run_review_plan(
     *,
     reports_dir: Path,
@@ -283,6 +401,36 @@ def collect_long_run_review_plan(
             "items before any deliberate resume-run. This command never starts runs."
         ),
     }
+
+
+def _parse_report_generate_command(command: list[Any]) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    parts = [str(part) for part in command]
+    for index, part in enumerate(parts):
+        if part in {"--engagement", "-e"} and index + 1 < len(parts):
+            parsed["engagement"] = parts[index + 1]
+    return parsed
+
+
+def _stale_report_run_command(
+    *,
+    engagement_id: str,
+    provider: str,
+    max_loops: int | None,
+) -> list[str]:
+    command = [
+        "forge",
+        "report",
+        "generate",
+        "--engagement",
+        engagement_id,
+        "--provider",
+        provider,
+        "--yes",
+    ]
+    if max_loops is not None:
+        command.extend(["--max-loops", str(max_loops)])
+    return command
 
 
 def collect_policy_flag_review_plan(

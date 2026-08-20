@@ -23,6 +23,7 @@ from forge.reporting.quality_audit import (
     collect_policy_flag_review_plan,
     collect_report_quality_audit,
     collect_stale_report_repair_plan,
+    run_stale_report_repair_plan,
 )
 
 
@@ -259,6 +260,94 @@ def report_stale_plan(
         for command in follow_up_commands[:3]:
             if isinstance(command, list):
                 console.print(f"  follow_up={' '.join(str(part) for part in command)}")
+
+
+@report_app.command("stale-run")
+def report_stale_run(
+    reports_dir: Path = typer.Option(
+        Path("reports"),
+        "--reports-dir",
+        help="Reports directory containing dashboard/data/engagements.json.",
+    ),
+    limit: int = typer.Option(
+        DEFAULT_TOP_LIMIT,
+        "--limit",
+        help="Maximum stale reports to regenerate in this sequential batch.",
+    ),
+    provider: str = typer.Option(
+        "auto",
+        "--provider",
+        help="Report provider to use for regenerated reports.",
+    ),
+    max_loops: Optional[int] = typer.Option(
+        None,
+        "--max-loops",
+        help="Override report correction-loop budget for regenerated reports.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Preview selected stale report regeneration commands without writing reports.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable JSON.",
+    ),
+) -> None:
+    """Regenerate stale latest reports sequentially in a bounded batch."""
+
+    from forge.phase6.report_synthesizer import synthesise  # noqa: PLC0415
+
+    def _generate_report(
+        *,
+        engagement_id: str,
+        provider: str,
+        max_loops: int | None,
+        assume_yes: bool,
+    ) -> str | Path | None:
+        return synthesise(
+            engagement_id=engagement_id,
+            output_path=None,
+            assume_yes=assume_yes,
+            provider=provider,
+            max_correction_loops=max_loops,
+        )
+
+    payload = run_stale_report_repair_plan(
+        reports_dir=reports_dir,
+        limit=limit,
+        provider=provider,
+        max_loops=max_loops,
+        dry_run=dry_run,
+        generate_report=None if dry_run else _generate_report,
+    )
+    if json_output:
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        raise typer.Exit(code=1 if payload.get("failed_count") else 0)
+
+    console.print(
+        "[green]Stale report repair run:[/green] "
+        f"{payload['selected_count']} selected, "
+        f"{payload['attempted_count']} attempted, "
+        f"{payload['succeeded_count']} completed, "
+        f"{payload['failed_count']} failed, "
+        f"{payload['skipped_count']} skipped"
+    )
+    console.print(f"  execution_policy={payload['execution_policy']}")
+    items = payload.get("items")
+    if isinstance(items, list):
+        for item in items[:5]:
+            if isinstance(item, dict):
+                command = item.get("command") if isinstance(item.get("command"), list) else []
+                console.print(
+                    "  item="
+                    f"engagement={item.get('engagement_id', '')} "
+                    f"status={item.get('status', '')} "
+                    f"command={' '.join(str(part) for part in command)}"
+                )
+    if payload.get("failed_count"):
+        raise typer.Exit(code=1)
 
 
 @report_app.command("long-run-plan")
