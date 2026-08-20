@@ -33,6 +33,9 @@ Progress:
 - Added local CSV fallback parsing for offline `forge connectors import-cti --report-file` inputs so ThreatFox and URLHaus CSV exports flow through the same sanitized import path.
 - Verified B525 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B525 as `fb5aa26 feat: import offline cti csv`.
+- Added CTI import JSON summary counts for normalized indicator types, TLP levels, target-feed-compatible types, and skipped reasons.
+- Verified B526 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`; commit/push pending.
 
 Next steps:
+- Commit and push B526.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.

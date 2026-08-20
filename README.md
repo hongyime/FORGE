@@ -291,8 +291,10 @@ offline exports; results include `total_item_count`, `processed_item_count`,
 and `limited_item_count`. Use `--min-confidence F` to skip normalized
 observations below a chosen confidence threshold; skipped low-confidence rows
 are counted with `filtered_count`. Use `--max-tlp LEVEL` to skip observations
-above the TLP level an operator is allowed to retain or preview. Use
-`--since ISO` and `--until ISO` to bound imports by observation time.
+above the TLP level an operator is allowed to retain or preview. JSON output
+also includes summary dictionaries for parsed indicator types, parsed TLP
+levels, target-feed-compatible types, and skipped reasons. Use `--since ISO`
+and `--until ISO` to bound imports by observation time.
 
 `forge monitoring status --json` is the read-only operator check for scheduled
 monitoring: it reports stale DB schemas, enabled/idle policy counts,

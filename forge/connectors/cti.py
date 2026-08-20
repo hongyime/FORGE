@@ -4,10 +4,11 @@ import csv
 import json
 import re
 import sqlite3
-from io import StringIO
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -97,6 +98,8 @@ def import_cti_observations(
     skipped: list[dict[str, str]] = []
     feed_items: list[dict[str, Any]] = []
     dry_run_seen_keys: set[tuple[str, str, str, str, str]] = set()
+    parsed_indicator_type_counts: Counter[str] = Counter()
+    parsed_tlp_counts: Counter[str] = Counter()
     provider = config.provider.strip() or connector_id
     for index, raw_item in enumerate(raw_items):
         if not isinstance(raw_item, Mapping):
@@ -120,6 +123,8 @@ def import_cti_observations(
             skipped.append({"index": str(index), "reason": "observation_rejected"})
             continue
         parsed_count += 1
+        parsed_indicator_type_counts[observation.indicator_type] += 1
+        parsed_tlp_counts[observation.tlp] += 1
         if min_confidence is not None and observation.confidence < min_confidence:
             filtered_count += 1
             skipped.append(
@@ -244,6 +249,10 @@ def import_cti_observations(
         "would_duplicate_count": would_duplicate_count,
         "would_promote_seed_count": would_promote_seed_count,
         "skipped_count": len(skipped),
+        "parsed_indicator_type_counts": dict(sorted(parsed_indicator_type_counts.items())),
+        "parsed_tlp_counts": dict(sorted(parsed_tlp_counts.items())),
+        "target_feed_type_counts": _target_feed_type_counts(feed_items),
+        "skipped_reason_counts": _skipped_reason_counts(skipped),
         "skipped": skipped[:25],
         "target_feed_items": feed_items[:100],
         "source": "cti_observation_import",
@@ -572,6 +581,24 @@ def _csv_items(text: str) -> list[dict[str, str]]:
         if any(cleaned.values()):
             rows.append(cleaned)
     return rows
+
+
+def _target_feed_type_counts(feed_items: list[dict[str, Any]]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for item in feed_items:
+        target_type = str(item.get("target_type") or "").strip()
+        if target_type:
+            counts[target_type] += 1
+    return dict(sorted(counts.items()))
+
+
+def _skipped_reason_counts(skipped: list[dict[str, str]]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for item in skipped:
+        reason = str(item.get("reason") or "").strip()
+        if reason:
+            counts[reason] += 1
+    return dict(sorted(counts.items()))
 
 
 def _normalize_limit(value: int | None) -> int | None:

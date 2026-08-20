@@ -247,6 +247,13 @@ def test_cti_observation_import_persists_normalized_rows_and_promotes_scoped_see
     assert result["duplicate_count"] == 1
     assert result["promoted_seed_count"] == 1
     assert result["skipped_count"] == 2
+    assert result["parsed_indicator_type_counts"] == {"domain": 2, "url": 1}
+    assert result["parsed_tlp_counts"] == {"TLP:CLEAR": 3}
+    assert result["target_feed_type_counts"] == {"domain": 2, "url": 1}
+    assert result["skipped_reason_counts"] == {
+        "observation_rejected": 1,
+        "out_of_scope": 1,
+    }
     assert {row["reason"] for row in result["skipped"]} == {
         "observation_rejected",
         "out_of_scope",
@@ -410,6 +417,8 @@ def test_cti_import_accepts_threatfox_csv_export_shape(tmp_path: Path) -> None:
     assert result["parsed_count"] == 2
     assert result["persisted_count"] == 2
     assert result["promoted_seed_count"] == 2
+    assert result["parsed_indicator_type_counts"] == {"domain": 1, "ipv4": 1}
+    assert result["target_feed_type_counts"] == {"domain": 1, "ip": 1}
     assert [(row["indicator_type"], row["indicator_value"]) for row in rows] == [
         ("domain", "portal.acme.example"),
         ("ipv4", "198.51.100.10"),
@@ -1205,6 +1214,8 @@ def test_connector_cli_import_cti_max_tlp_dry_run(
     assert payload["parsed_count"] == 2
     assert payload["filtered_count"] == 1
     assert payload["would_persist_count"] == 1
+    assert payload["parsed_tlp_counts"] == {"TLP:GREEN": 1, "TLP:RED": 1}
+    assert payload["skipped_reason_counts"] == {"above_max_tlp": 1}
     assert payload["skipped"][0]["reason"] == "above_max_tlp"
 
 
