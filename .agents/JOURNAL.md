@@ -117,3 +117,4 @@
 - 2026-08-21: B626 secret prevention workflow plans now expose schema_version, plan-only execution_policy, and total/selected/omitted command counts while preserving the value-free payload contract; verified with focused tests, Ruff, py_compile, diff check, and a temp-DB smoke with no raw secret leakage.
 - 2026-08-21: B627 active-validation methods, preview, and coverage JSON now expose common schema/execution/count aliases while keeping create/approve/run behavior unchanged and live validation unexecuted.
 - 2026-08-21: B628 active-validation list CLI/API payloads now report read-only schema/execution/count aliases with bounded job total/selected/omitted counts.
+- 2026-08-21: B629 audit manifest verification JSON now reports read-only schema/execution/count aliases for manifest and signed-bundle verification.

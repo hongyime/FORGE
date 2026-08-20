@@ -3,6 +3,7 @@
 Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
 
 Progress:
+- Pushed B629 as `ca08050 fix: mark audit verification payloads`: audit manifest-verify and manifest-bundle-verify JSON now expose read-only schema/execution/count aliases. Focused audit manifest CLI tests, Ruff, py_compile, git diff check, and a temp signed-bundle verifier smoke passed.
 - Pushed B628 as `fc11e16 fix: count active validation list payloads`: active-validation list CLI/API payloads now expose read-only execution metadata and bounded job total/selected/omitted counts. Focused active-validation CLI/API/web-route tests, Ruff, py_compile, git diff check, and a temp-DB CLI smoke passed.
 - Pushed B627 as `84a70b8 fix: mark active validation read payloads`: active-validation methods, preview, and coverage JSON now expose schema_version, execution_policy, and total/selected/omitted aliases. Focused active-validation CLI/runner/API tests, Ruff, py_compile, git diff check, and a direct method-catalog smoke passed.
 - Pushed B626 as `cea01f5 fix: mark secret prevention plan`: secret-prevention-plan JSON now exposes schema_version, plan-only execution_policy, and total/selected/omitted command counts while preserving value-free secret-prevention payloads. Focused secret lifecycle and connector CLI tests, Ruff, py_compile, git diff check, and a synthetic temp-DB smoke passed with no raw secret leakage.
