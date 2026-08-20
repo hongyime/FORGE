@@ -113,3 +113,4 @@
 - 2026-08-21: Connector catalog JSON now carries top-level schema/execution/count aliases while preserving the existing nested summary.
 - 2026-08-21: Doctor JSON now carries top-level read-only schema/execution/count aliases while preserving the legacy payload shape.
 - 2026-08-21: Monitoring status now carries read-only schema/execution/count aliases so it aligns with monitoring due-plan and run-due payloads.
+- 2026-08-21: Standards STIX import/export JSON now carries common schema/count aliases and explicitly labels dry-run imports as no-write.
