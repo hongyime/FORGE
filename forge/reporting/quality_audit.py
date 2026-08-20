@@ -260,6 +260,7 @@ def run_stale_report_repair_plan(
     provider: str = "auto",
     max_loops: int | None = None,
     dry_run: bool = False,
+    redact_paths: bool = False,
     generate_report: ReportGenerator | None = None,
 ) -> dict[str, Any]:
     """Regenerate stale latest reports sequentially from the read-only stale plan."""
@@ -303,13 +304,16 @@ def run_stale_report_repair_plan(
             max_loops=max_loops,
             output_path=str(Path(reports_dir)),
         )
+        output_command = (
+            _redact_command_paths(effective_command) if redact_paths else effective_command
+        )
         if dry_run:
             dry_run_count += 1
             items.append(
                 {
                     "engagement_id": str(engagement_id),
                     "status": "dry_run",
-                    "command": effective_command,
+                    "command": output_command,
                 }
             )
             continue
@@ -330,7 +334,7 @@ def run_stale_report_repair_plan(
                 {
                     "engagement_id": str(engagement_id),
                     "status": "failed",
-                    "command": effective_command,
+                    "command": output_command,
                     "error": f"{type(exc).__name__}: {_text(str(exc))[:180]}",
                 }
             )
@@ -340,20 +344,29 @@ def run_stale_report_repair_plan(
             {
                 "engagement_id": str(engagement_id),
                 "status": "completed",
-                "command": effective_command,
-                "report_path": str(result_path) if result_path else "",
+                "command": output_command,
+                "report_path": (
+                    "<redacted>"
+                    if redact_paths and result_path
+                    else str(result_path)
+                    if result_path
+                    else ""
+                ),
             }
         )
 
     return {
         "schema_version": "forge.report_stale_repair_run.v1",
-        "reports_dir": plan.get("reports_dir", str(Path(reports_dir))),
+        "reports_dir": (
+            "<redacted>" if redact_paths else plan.get("reports_dir", str(Path(reports_dir)))
+        ),
         "execution_policy": (
             "dry_run_no_commands_executed"
             if dry_run
             else "bounded_sequential_report_generation"
         ),
         "dry_run": bool(dry_run),
+        "redact_paths": bool(redact_paths),
         "provider": provider,
         "max_loops": max_loops,
         "total_count": int(plan.get("total_count", 0) or 0),
@@ -383,6 +396,20 @@ def run_stale_report_repair_plan(
         ),
         "latest_fallback_reason_counts": plan.get("latest_fallback_reason_counts", {}),
     }
+
+
+def _redact_command_paths(command: list[Any]) -> list[Any]:
+    redacted: list[Any] = []
+    redact_next = False
+    for part in command:
+        if redact_next:
+            redacted.append("<redacted>")
+            redact_next = False
+            continue
+        redacted.append(part)
+        if str(part) in {"--output", "-o", "--reports-dir"}:
+            redact_next = True
+    return redacted
 
 
 def collect_long_run_review_plan(

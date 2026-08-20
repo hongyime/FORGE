@@ -791,6 +791,63 @@ def test_report_stale_run_cli_outputs_dry_run_json(
     assert payload["items"][0]["command"][-2:] == ["--max-loops", "0"]
 
 
+def test_report_stale_run_cli_redacts_dry_run_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    monkeypatch.setattr(
+        "forge.reporting.quality_audit._default_gguf_model_available",
+        lambda: True,
+    )
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "stale-run",
+            "--reports-dir",
+            str(reports_dir),
+            "--limit",
+            "1",
+            "--dry-run",
+            "--redact-paths",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    payload_text = json.dumps(payload)
+    assert payload["redact_paths"] is True
+    assert payload["reports_dir"] == "<redacted>"
+    assert payload["items"][0]["command"][-2:] == ["--output", "<redacted>"]
+    assert str(tmp_path) not in payload_text
+
+
+def test_report_stale_run_cli_blocks_live_redacted_paths(tmp_path: Path) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "stale-run",
+            "--reports-dir",
+            str(reports_dir),
+            "--redact-paths",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--redact-paths is only supported with --dry-run" in result.output
+
+
 def test_report_long_run_plan_cli_outputs_json(tmp_path: Path) -> None:
     from forge.cli import app  # noqa: PLC0415
 

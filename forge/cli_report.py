@@ -289,6 +289,11 @@ def report_stale_run(
         "--dry-run",
         help="Preview selected stale report regeneration commands without writing reports.",
     ),
+    redact_paths: bool = typer.Option(
+        False,
+        "--redact-paths",
+        help="Hide local paths in dry-run JSON output.",
+    ),
     json_output: bool = typer.Option(
         False,
         "--json",
@@ -296,6 +301,8 @@ def report_stale_run(
     ),
 ) -> None:
     """Regenerate stale latest reports sequentially in a bounded batch."""
+    if redact_paths and not dry_run:
+        raise typer.BadParameter("--redact-paths is only supported with --dry-run")
 
     from forge.phase6.report_synthesizer import synthesise  # noqa: PLC0415
 
@@ -321,6 +328,7 @@ def report_stale_run(
         provider=provider,
         max_loops=max_loops,
         dry_run=dry_run,
+        redact_paths=redact_paths,
         generate_report=None if dry_run else _generate_report,
     )
     if json_output:
