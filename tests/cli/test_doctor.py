@@ -156,24 +156,48 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert action_by_id["install_free_binaries"]["command"] == (
         "forge connectors install-plan --json"
     )
+    assert int(action_by_id["install_free_binaries"]["total_count"]) >= 1
+    assert action_by_id["install_free_binaries"]["selected_count"] == action_by_id[
+        "install_free_binaries"
+    ]["total_count"]
+    assert action_by_id["install_free_binaries"]["omitted_count"] == "0"
     assert action_by_id["run_free_connectors"]["status"] == "ready"
     assert "projectdiscovery_subfinder" in action_by_id["run_free_connectors"]["summary"]
     assert action_by_id["run_free_connectors"]["command"] == (
         "forge connectors run-plan --json"
     )
+    assert int(action_by_id["run_free_connectors"]["total_count"]) >= int(
+        action_by_id["run_free_connectors"]["selected_count"]
+    )
+    assert int(action_by_id["run_free_connectors"]["omitted_count"]) >= 1
     assert action_by_id["configure_optional_keys"]["status"] == "optional"
     assert "FORGE_SHODAN_API_KEY" in action_by_id["configure_optional_keys"]["summary"]
     assert action_by_id["configure_optional_keys"]["command"] == (
         "forge connectors secret-set --engagement N --connector ID --name ENV_NAME --value-env ENV"
     )
+    assert int(action_by_id["configure_optional_keys"]["total_count"]) >= 1
+    assert action_by_id["configure_optional_keys"]["selected_count"] == action_by_id[
+        "configure_optional_keys"
+    ]["total_count"]
     assert action_by_id["review_cti_osint_policy"]["status"] == "review"
     assert action_by_id["review_cti_osint_policy"]["command"] == (
         "forge connectors policy-summary --json"
     )
+    assert action_by_id["review_cti_osint_policy"]["total_count"] == "48"
+    assert action_by_id["review_cti_osint_policy"]["selected_count"] == "48"
+    assert action_by_id["review_cti_osint_policy"]["offline_import_count"] == "23"
+    assert action_by_id["review_cti_osint_policy"]["live_or_api_count"] == "25"
+    assert action_by_id["review_cti_osint_policy"][
+        "operator_opt_in_gated_count"
+    ] == "21"
     assert action_by_id["keep_active_validation_fail_closed"]["status"] == "gated"
+    assert int(action_by_id["keep_active_validation_fail_closed"]["total_count"]) >= 1
+    assert action_by_id["keep_active_validation_fail_closed"]["selected_count"] == "0"
     assert "approval, roe_id, scope_manifest, and live_gate" in action_by_id[
         "keep_active_validation_fail_closed"
     ]["command"]
+    assert int(action_by_id["review_paid_adapters"]["total_count"]) >= 1
+    assert action_by_id["review_paid_adapters"]["selected_count"] == "0"
     assert action_payload["summary"]["action_count"] >= 6
     connector_plan_check = next(
         check for check in action_payload["checks"] if check["component"] == "Connector Action Plan"

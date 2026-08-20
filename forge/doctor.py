@@ -25,6 +25,7 @@ from forge.connectors.binaries import resolve_connector_binary
 from forge.connectors.registry import (
     connector_plugin_dirs,
     connector_plugin_manifest_statuses,
+    connector_run_plan,
     connector_statuses,
     connector_summary,
 )
@@ -2060,6 +2061,12 @@ def _cti_osint_policy_check() -> DoctorCheck:
                     f"{operator_opt_in} operator-opt-in gated source(s)"
                 ),
                 "command": "forge connectors policy-summary --json",
+                "total_count": str(int(summary.get("total_count") or 0)),
+                "selected_count": str(int(summary.get("default_enabled_count") or 0)),
+                "omitted_count": str(int(summary.get("opt_in_count") or 0)),
+                "offline_import_count": str(offline),
+                "live_or_api_count": str(live_or_api),
+                "operator_opt_in_gated_count": str(operator_opt_in),
             },
         ),
     )
@@ -2115,6 +2122,7 @@ def _connector_action_items(
     catalog_only: Sequence[Mapping[str, Any]],
     active_validation_gated: Sequence[Mapping[str, Any]],
     paid_hidden: Sequence[Mapping[str, Any]],
+    run_plan: Mapping[str, Any] | None = None,
     invalid_plugin_count: int = 0,
 ) -> tuple[dict[str, str], ...]:
     items: list[dict[str, str]] = []
@@ -2126,6 +2134,9 @@ def _connector_action_items(
                 "status": "blocked",
                 "summary": f"{invalid_plugin_count} invalid connector plugin manifest(s)",
                 "command": "forge connectors plugin-validate --json",
+                "total_count": str(invalid_plugin_count),
+                "selected_count": "0",
+                "omitted_count": str(invalid_plugin_count),
             }
         )
         return tuple(items)
@@ -2137,8 +2148,22 @@ def _connector_action_items(
                 "status": "attention",
                 "summary": _connector_missing_binary_label(missing_binary),
                 "command": "forge connectors install-plan --json",
+                "total_count": str(len(missing_binary)),
+                "selected_count": str(len(missing_binary)),
+                "omitted_count": "0",
             }
         )
+    run_total_count = int(
+        (run_plan or {}).get(
+            "total_count",
+            len(free_runnable) + len(missing_binary) + len(paid_hidden),
+        )
+        or 0
+    )
+    run_selected_count = int((run_plan or {}).get("selected_count", len(free_runnable)) or 0)
+    run_omitted_count = int(
+        (run_plan or {}).get("omitted_count", len(missing_binary) + len(paid_hidden)) or 0
+    )
     items.append(
         {
             "id": "run_free_connectors",
@@ -2146,6 +2171,9 @@ def _connector_action_items(
             "status": "ready" if free_runnable else "attention",
             "summary": _connector_bucket_label(free_runnable),
             "command": "forge connectors run-plan --json",
+            "total_count": str(run_total_count),
+            "selected_count": str(run_selected_count),
+            "omitted_count": str(run_omitted_count),
         }
     )
     items.append(
@@ -2158,6 +2186,9 @@ def _connector_action_items(
                 "forge connectors secret-set --engagement N --connector ID "
                 "--name ENV_NAME --value-env ENV"
             ),
+            "total_count": str(len(optional_key)),
+            "selected_count": str(len(optional_key)),
+            "omitted_count": "0",
         }
     )
     items.append(
@@ -2167,6 +2198,9 @@ def _connector_action_items(
             "status": "review" if catalog_only else "ready",
             "summary": _connector_bucket_label(catalog_only),
             "command": "forge connectors list --json",
+            "total_count": str(len(catalog_only)),
+            "selected_count": str(len(catalog_only)),
+            "omitted_count": "0",
         }
     )
     items.append(
@@ -2176,6 +2210,9 @@ def _connector_action_items(
             "status": "gated",
             "summary": _connector_bucket_label(active_validation_gated),
             "command": "require approval, roe_id, scope_manifest, and live_gate before live validation",
+            "total_count": str(len(active_validation_gated)),
+            "selected_count": "0",
+            "omitted_count": str(len(active_validation_gated)),
         }
     )
     items.append(
@@ -2185,6 +2222,9 @@ def _connector_action_items(
             "status": "hidden" if paid_hidden else "none",
             "summary": _connector_bucket_label(paid_hidden),
             "command": "forge connectors list --include-paid --json",
+            "total_count": str(len(paid_hidden)),
+            "selected_count": "0",
+            "omitted_count": str(len(paid_hidden)),
         }
     )
     return tuple(items)
@@ -2220,6 +2260,7 @@ def _connector_action_plan_check(
                 catalog_only=(),
                 active_validation_gated=(),
                 paid_hidden=(),
+                run_plan=None,
                 invalid_plugin_count=len(invalid_plugin_rows),
             ),
         )
@@ -2267,6 +2308,7 @@ def _connector_action_plan_check(
         for row in paid_statuses
         if str(row.get("cost_profile") or "") == "optional_paid"
     ]
+    run_plan = connector_run_plan(statuses, env=env)
     status = "WARN" if missing_binary else "OK"
     return DoctorCheck(
         "Connector Action Plan",
@@ -2295,6 +2337,7 @@ def _connector_action_plan_check(
             catalog_only=catalog_only,
             active_validation_gated=active_validation_gated,
             paid_hidden=paid_hidden,
+            run_plan=run_plan,
         ),
     )
 
