@@ -202,6 +202,15 @@ def _manifest_export(
             raise typer.Exit(1) from exc
 
     payload = {
+        "schema_version": "forge.audit.manifest_export.v1",
+        "execution_policy": (
+            "writes_local_audit_manifest_bundle"
+            if not remote_store
+            else "writes_local_and_configured_remote_audit_manifest_bundle"
+        ),
+        "total_count": 1,
+        "selected_count": 1,
+        "omitted_count": 0,
         "engagement_id": engagement_id,
         "run_id": selected_run_id,
         "path": str(bundle.path),
