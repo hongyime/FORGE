@@ -214,9 +214,11 @@ Progress:
 - Verified B574 with focused reporting tests (`14 passed`), Ruff, py_compile, `git diff --check`, and a real local `report quality-audit --json --top-limit 5` smoke. Local latest backend counts changed from stats-sidecar `none:58, template:3` to actual `template:61`; no dashboard regeneration, report regeneration, engagement mutation, live run, provider call, scheduled-task change, or credential persistence was started.
 - The B574 quality-audit smoke surfaced the next real report-health backlog: `latest_fallback_reason_counts` now shows `gguf_model_missing:57`, previously hidden by stats sidecars.
 - Pushed B574 as `2c7eedb fix: ignore report stats sidecars`.
+- Added read-only `latest_fallback_reports` samples to `report quality-audit` with sanitized fallback reasons, `repair_status`, and non-executing `forge report generate --engagement <id> --provider auto --yes` command arrays. GGUF-missing latest reports are marked `stale_after_model_available` when the default local GGUF model is now present.
+- Verified B575 with focused quality-audit tests (`6 passed`), Ruff, py_compile, `git diff --check`, and a real local `report quality-audit --json --top-limit 2` smoke showing path-neutral stale-after-model repair rows. No report regeneration, dashboard regeneration, engagement mutation, live run, provider call, scheduled-task change, or credential persistence was started.
 
 Next steps:
-- Investigate the latest GGUF-missing report-history backlog without regenerating reports unless explicitly intended. Remaining doctor attention is Safe Mode, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, and Connector Secret Store process-env reload guidance.
+- Commit/push B575, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining queues include Safe Mode wording, Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, Connector Secret Store process-env reload guidance, and optional deliberate report regeneration using the new quality-audit repair sample commands.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

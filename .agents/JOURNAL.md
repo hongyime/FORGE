@@ -62,3 +62,4 @@
 - 2026-08-20: Aligned ProjectDiscovery doctor rows and connector install-plan missing-binary guidance with env-aware connector binary resolution.
 - 2026-08-20: Added bounded monitoring run-due/worker apply limits with explicit --all overrides so due backlog execution is capped by default.
 - 2026-08-20: Reclassified engagement stats sidecars as report metadata so quality-audit latest backend counts reflect actual report families.
+- 2026-08-20: Added path-neutral latest fallback report repair samples to quality-audit so stale GGUF-missing reports can be regenerated deliberately.

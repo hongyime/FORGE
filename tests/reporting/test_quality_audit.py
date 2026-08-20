@@ -147,9 +147,14 @@ def test_collect_report_quality_audit_separates_stale_dashboard_failures(
 
 def test_collect_report_quality_audit_reports_latest_fallbacks_separately(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     reports_dir = tmp_path / "reports"
     _write_dashboard_fixture(reports_dir)
+    monkeypatch.setattr(
+        "forge.reporting.quality_audit._default_gguf_model_available",
+        lambda: False,
+    )
     detail_path = (
         reports_dir
         / "dashboard"
@@ -185,8 +190,62 @@ def test_collect_report_quality_audit_reports_latest_fallbacks_separately(
     assert payload["latest_fallback_reason_counts"] == {
         "provider_quota_or_rate_limit": 1
     }
+    assert payload["latest_fallback_reports"] == [
+        {
+            "id": "1001",
+            "slug": "engagement-1001-acme",
+            "name": "acme",
+            "seed": "acme.example",
+            "family_stem": "",
+            "artifact_name": "",
+            "generated_at": "2026-08-20 11:00:00",
+            "render_backend": "template",
+            "fallback_class": "provider_quota_or_rate_limit",
+            "repair_status": "regenerate_latest_report",
+            "fallback_reason": "quota exceeded",
+            "report_generate_command": [
+                "forge",
+                "report",
+                "generate",
+                "--engagement",
+                "1001",
+                "--provider",
+                "auto",
+                "--yes",
+            ],
+        }
+    ]
     assert payload["report_backend_counts"] == {"template": 2}
     assert payload["latest_report_backend_counts"] == {"template": 1}
+
+
+def test_collect_report_quality_audit_marks_stale_gguf_fallbacks_when_model_exists(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    monkeypatch.setattr(
+        "forge.reporting.quality_audit._default_gguf_model_available",
+        lambda: True,
+    )
+
+    payload = collect_report_quality_audit(reports_dir=reports_dir, top_limit=5)
+
+    assert payload["latest_fallback_reports"][0]["fallback_class"] == "gguf_model_missing"
+    assert payload["latest_fallback_reports"][0]["repair_status"] == (
+        "stale_after_model_available"
+    )
+    assert payload["latest_fallback_reports"][0]["report_generate_command"] == [
+        "forge",
+        "report",
+        "generate",
+        "--engagement",
+        "1001",
+        "--provider",
+        "auto",
+        "--yes",
+    ]
 
 
 def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:
@@ -210,6 +269,10 @@ def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:
     assert payload["engagement_count"] == 1
     assert payload["fallback_reason_counts"]["gguf_model_missing"] == 1
     assert payload["latest_fallback_reason_counts"]["gguf_model_missing"] == 1
+    assert payload["latest_fallback_reports"][0]["fallback_reason"] == (
+        "GGUF model not found; configure an LLM provider/model or regenerate after local model setup."
+    )
+    assert "C:/model.gguf" not in json.dumps(payload["latest_fallback_reports"])
 
 
 def test_report_quality_audit_cli_accepts_top_limit_alias(tmp_path: Path) -> None:

@@ -10,6 +10,7 @@ from typing import Any
 
 from forge.reporting.audit_manifest_artifacts import is_report_metadata_sidecar
 from forge.reporting.report_history import report_family_groups
+from forge.phase6.report_synthesizer import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
 DEFAULT_LONG_RUN_SECONDS = 2700.0
 DEFAULT_TOP_LIMIT = 10
@@ -36,6 +37,7 @@ def collect_report_quality_audit(
     latest_report_backend_counts: Counter[str] = Counter()
     fallback_counts: Counter[str] = Counter()
     latest_fallback_counts: Counter[str] = Counter()
+    latest_fallback_reports: list[dict[str, Any]] = []
     report_write_error_counts: Counter[str] = Counter()
     latest_report_write_error_counts: Counter[str] = Counter()
     policy_counts: Counter[str] = Counter()
@@ -46,6 +48,7 @@ def collect_report_quality_audit(
     resume_review_count = 0
     dashboard_generated_at = _text(payload.get("generated_at"))
     dashboard_generated_dt = _parse_datetime(dashboard_generated_at)
+    default_gguf_model_available = _default_gguf_model_available()
 
     for item in engagements:
         run_summary = _mapping(item.get("run_summary"))
@@ -90,6 +93,14 @@ def collect_report_quality_audit(
                 fallback_counts[fallback_class] += 1
                 if index == 0:
                     latest_fallback_counts[fallback_class] += 1
+                    latest_fallback_reports.append(
+                        _latest_fallback_report_row(
+                            item,
+                            report_entry,
+                            fallback_class=fallback_class,
+                            default_gguf_model_available=default_gguf_model_available,
+                        )
+                    )
             write_error = _text(report_entry.get("report_write_error"))
             if write_error:
                 write_error_class = _classify_fallback_reason(write_error)
@@ -115,6 +126,12 @@ def collect_report_quality_audit(
     failed_runs.sort(key=lambda row: (str(row.get("status") or ""), str(row.get("id") or "")))
     dashboard_refresh_failures.sort(key=lambda row: str(row.get("id") or ""))
     historical_dashboard_refresh_failures.sort(key=lambda row: str(row.get("id") or ""))
+    latest_fallback_reports.sort(
+        key=lambda row: (
+            str(row.get("fallback_class") or ""),
+            str(row.get("id") or ""),
+        )
+    )
 
     return {
         "schema_version": "forge.report_quality_audit.v1",
@@ -130,6 +147,7 @@ def collect_report_quality_audit(
         "latest_report_backend_counts": dict(sorted(latest_report_backend_counts.items())),
         "fallback_reason_counts": dict(sorted(fallback_counts.items())),
         "latest_fallback_reason_counts": dict(sorted(latest_fallback_counts.items())),
+        "latest_fallback_reports": latest_fallback_reports[: max(0, int(top_limit))],
         "report_write_error_counts": dict(sorted(report_write_error_counts.items())),
         "latest_report_write_error_counts": dict(
             sorted(latest_report_write_error_counts.items())
@@ -196,6 +214,68 @@ def _is_report_metadata_entry(entry: dict[str, Any]) -> bool:
         bool(family_stem)
         and is_report_metadata_sidecar(Path(f"{family_stem}.json"))
     ) or (bool(artifact_name) and is_report_metadata_sidecar(Path(artifact_name)))
+
+
+def _latest_fallback_report_row(
+    item: dict[str, Any],
+    report_entry: dict[str, Any],
+    *,
+    fallback_class: str,
+    default_gguf_model_available: bool,
+) -> dict[str, Any]:
+    engagement_id = _text(item.get("id"))
+    family = _text(report_entry.get("family_stem"))
+    command = ["forge", "report", "generate"]
+    if engagement_id:
+        command.extend(["--engagement", engagement_id])
+    command.extend(["--provider", "auto", "--yes"])
+    return {
+        "id": engagement_id,
+        "slug": _text(item.get("slug")),
+        "name": _text(item.get("name")),
+        "seed": _text(item.get("primary_seed")),
+        "family_stem": family,
+        "artifact_name": _text(report_entry.get("artifact_name")),
+        "generated_at": _text(report_entry.get("generated_at")),
+        "render_backend": _text(
+            report_entry.get("rendered_provider")
+            or report_entry.get("render_backend")
+            or report_entry.get("provider")
+        ),
+        "fallback_class": fallback_class,
+        "repair_status": _latest_fallback_repair_status(
+            fallback_class,
+            default_gguf_model_available=default_gguf_model_available,
+        ),
+        "fallback_reason": _safe_fallback_reason(
+            _text(report_entry.get("fallback_reason")),
+            fallback_class=fallback_class,
+        ),
+        "report_generate_command": command,
+    }
+
+
+def _safe_fallback_reason(reason: str, *, fallback_class: str) -> str:
+    if fallback_class == "gguf_model_missing":
+        return "GGUF model not found; configure an LLM provider/model or regenerate after local model setup."
+    return reason
+
+
+def _latest_fallback_repair_status(
+    fallback_class: str,
+    *,
+    default_gguf_model_available: bool,
+) -> str:
+    if fallback_class == "gguf_model_missing" and default_gguf_model_available:
+        return "stale_after_model_available"
+    return "regenerate_latest_report"
+
+
+def _default_gguf_model_available() -> bool:
+    try:
+        return (DEFAULT_MODEL_DIR / MODEL_FILENAME).is_file()
+    except OSError:
+        return False
 
 
 def _mapping(value: Any) -> dict[str, Any]:
