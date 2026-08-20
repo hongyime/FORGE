@@ -162,9 +162,13 @@ Progress:
 - Regenerated the ignored local static dashboard with current code. Generated dashboard JSON now has 49 resume items, 49 ready, 0 blocked, empty blocker set, and no `.forge_data/target_imports`, `scope_10001_recovered.json`, or `C:/secret/scope.json` path hits.
 - Verified B561 with focused dashboard/run-summary/target-import/quality-audit/CLI-registry tests (`33 passed` plus `25 passed`), Ruff, py_compile, `git diff --check`, and local dashboard/quality smokes.
 - Pushed B561 as `e6ea8ca fix: show resume readiness in dashboard`.
+- Added dry-run-first `forge workspaces backfill-memberships [--apply] [--json]` to seed missing legacy local/control workspace memberships and refresh control index rows with operator-role permissions only.
+- Applied the workspace backfill locally across 930 DBs. It updated 101 local membership rows, 2 control memberships, and 827 control index rows; follow-up dry-run reports 929 skipped items and zero remaining membership/index/schema actions.
+- Real local `forge doctor --json` now reports Workspace Access `OK`: 50 engagement(s) across 50/930 DB(s), 50 usable control index rows, operator workspace memberships ready.
+- Verified B562 with focused workspace/doctor/CLI-registry tests (`65 passed`), Ruff, py_compile, and real local workspace/doctor smokes.
 
 Next steps:
-- Continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Commit and push B562, then continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

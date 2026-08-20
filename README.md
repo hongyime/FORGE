@@ -260,7 +260,7 @@ forge connectors secret-list --engagement N [--connector ID]
 forge connectors policy-summary [--json]
 forge connectors plugin-validate [--plugin-dir PATH] [--json]
 forge standards import-stix|export-stix --engagement N --bundle-file bundle.json [--json]
-forge workspaces list|upsert|members|member-set|member-delete|audit
+forge workspaces list|upsert|members|member-set|member-delete|audit|backfill-memberships
 forge demo proof-pack [--engagement 9901]
 forge retention preview|apply --engagement N
 forge dashboard                             # Generate the static local operator dashboard
@@ -299,6 +299,11 @@ column and detail section without exposing raw scope-manifest paths.
 `--apply`, it only writes recovered narrow scope manifests and updates the
 latest-run metadata for blocked resume candidates. It does not start or resume
 kill-chain runs.
+
+`forge workspaces backfill-memberships` is dry-run by default. With `--apply`,
+it seeds missing operator memberships in legacy engagement DBs and the control
+DB, refreshes control index rows, and appends a redacted control-audit event;
+it does not launch scans or change engagement findings.
 
 `forge connectors import-cti` is offline-only. It accepts FORGE's neutral
 observation JSON plus common downloaded/exported JSON or CSV shapes from

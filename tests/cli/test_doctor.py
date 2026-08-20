@@ -646,7 +646,7 @@ def test_collect_doctor_checks_warns_on_workspace_access_drift(
     assert "local membership missing=1" in row.details
     assert "control membership missing=1" in row.details
     assert "missing index=1" in row.details
-    assert "workspace_memberships" in row.remediation
+    assert "forge workspaces backfill-memberships --json" in row.remediation
 
 
 def test_collect_doctor_checks_workspace_access_includes_legacy_dashboard_dbs(

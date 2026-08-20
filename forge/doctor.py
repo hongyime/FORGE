@@ -642,9 +642,9 @@ def _workspace_access_check(data_dir: Path) -> DoctorCheck:
             "WARN",
             _clip(f"{base}; " + "; ".join(problems), limit=420),
             (
-                "Backfill intended operator rows in workspace_memberships for both the "
-                "engagement DB and control DB, then run a web engagement list or the next "
-                "Forge engagement command to refresh engagement_index."
+                "Run `forge workspaces backfill-memberships --json` to plan missing "
+                "operator workspace rows and control index repairs, then rerun with "
+                "`--apply` when the plan matches the intended operator access."
             ),
         )
     return DoctorCheck(

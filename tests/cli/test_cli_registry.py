@@ -109,7 +109,7 @@ def test_cli_registry_registers_modular_command_groups() -> None:
         "apply-retest-run",
         "sync-tickets",
     }.issubset(_command_names(apps.remediation_app))
-    assert {"list", "upsert", "members", "member-set", "member-delete"}.issubset(
+    assert {"list", "upsert", "members", "member-set", "member-delete", "backfill-memberships"}.issubset(
         _command_names(apps.workspaces_app)
     )
     assert {"import", "resume-candidates"}.issubset(_command_names(apps.targets_app))
