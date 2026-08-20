@@ -19,6 +19,7 @@ from forge.db.direct_connect import direct_connect
 from forge.reporting.quality_audit import (
     DEFAULT_LONG_RUN_SECONDS,
     DEFAULT_TOP_LIMIT,
+    collect_long_run_review_plan,
     collect_report_quality_audit,
     collect_stale_report_repair_plan,
 )
@@ -252,6 +253,65 @@ def report_stale_plan(
         for command in commands[:5]:
             if isinstance(command, list):
                 console.print(f"  command={' '.join(str(part) for part in command)}")
+    follow_up_commands = payload.get("follow_up_commands")
+    if isinstance(follow_up_commands, list):
+        for command in follow_up_commands[:3]:
+            if isinstance(command, list):
+                console.print(f"  follow_up={' '.join(str(part) for part in command)}")
+
+
+@report_app.command("long-run-plan")
+def report_long_run_plan(
+    reports_dir: Path = typer.Option(
+        Path("reports"),
+        "--reports-dir",
+        help="Reports directory containing dashboard/data/engagements.json.",
+    ),
+    long_run_seconds: float = typer.Option(
+        DEFAULT_LONG_RUN_SECONDS,
+        "--long-run-seconds",
+        help="Threshold for flagging long kill-chain/report runs.",
+    ),
+    limit: int = typer.Option(
+        DEFAULT_TOP_LIMIT,
+        "--limit",
+        help="Maximum long-run review samples to include.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable JSON.",
+    ),
+) -> None:
+    """Plan long-run review without resuming or mutating engagements."""
+    payload = collect_long_run_review_plan(
+        reports_dir=reports_dir,
+        long_run_seconds=long_run_seconds,
+        limit=limit,
+    )
+    if json_output:
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+
+    console.print(
+        "[green]Long-run review plan:[/green] "
+        f"{payload['total_count']} long run(s), "
+        f"{payload['sample_count']} sample(s), "
+        f"{payload['omitted_count']} omitted"
+    )
+    console.print(f"  execution_policy={payload['execution_policy']}")
+    console.print(f"  threshold_seconds={payload['long_run_threshold_seconds']}")
+    samples = payload.get("samples")
+    if isinstance(samples, list):
+        for sample in samples[:5]:
+            if isinstance(sample, dict):
+                console.print(
+                    "  sample="
+                    f"engagement={sample.get('id')} "
+                    f"status={sample.get('status')} "
+                    f"elapsed={sample.get('elapsed_seconds')} "
+                    f"seed={sample.get('seed')}"
+                )
     follow_up_commands = payload.get("follow_up_commands")
     if isinstance(follow_up_commands, list):
         for command in follow_up_commands[:3]:

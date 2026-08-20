@@ -220,6 +220,63 @@ def collect_stale_report_repair_plan(
     }
 
 
+def collect_long_run_review_plan(
+    *,
+    reports_dir: Path,
+    long_run_seconds: float = DEFAULT_LONG_RUN_SECONDS,
+    limit: int = DEFAULT_TOP_LIMIT,
+) -> dict[str, Any]:
+    """Return a read-only review plan for unusually long latest runs."""
+
+    sample_limit = max(0, int(limit))
+    payload = collect_report_quality_audit(
+        reports_dir=reports_dir,
+        long_run_seconds=long_run_seconds,
+        top_limit=sample_limit,
+    )
+    samples = payload.get("top_long_runs")
+    if not isinstance(samples, list):
+        samples = []
+    total_count = int(payload.get("long_run_count", 0) or 0)
+    omitted_count = max(0, total_count - len(samples))
+    return {
+        "schema_version": "forge.report_long_run_review_plan.v1",
+        "reports_dir": payload.get("reports_dir", str(Path(reports_dir))),
+        "execution_policy": "plan_only_no_commands_executed",
+        "long_run_threshold_seconds": float(long_run_seconds),
+        "total_count": total_count,
+        "sample_limit": sample_limit,
+        "sample_count": len(samples),
+        "omitted_count": omitted_count,
+        "samples": samples,
+        "commands": [],
+        "follow_up_commands": (
+            [
+                [
+                    "forge",
+                    "report",
+                    "long-run-plan",
+                    "--json",
+                    "--limit",
+                    str(total_count),
+                ]
+            ]
+            if omitted_count
+            else []
+        ),
+        "status": "review" if total_count else "empty",
+        "summary": (
+            f"{total_count} run(s) exceeded the long-run threshold"
+            if total_count
+            else "no runs exceeded the long-run threshold"
+        ),
+        "review_guidance": (
+            "Review elapsed_seconds, pending-work errors, and matching resume-plan "
+            "items before any deliberate resume-run. This command never starts runs."
+        ),
+    }
+
+
 def _operator_action_plan(
     *,
     latest_fallback_reports: list[dict[str, Any]],
@@ -309,6 +366,9 @@ def _operator_action_plan(
         )
 
     if long_runs:
+        sample_limit = max(0, int(top_limit))
+        sampled_long_runs = long_runs[:sample_limit]
+        omitted_count = max(0, len(long_runs) - len(sampled_long_runs))
         actions.append(
             {
                 "id": "review_long_runs",
@@ -316,8 +376,21 @@ def _operator_action_plan(
                 "execution_policy": "plan_only_no_commands_executed",
                 "summary": f"{len(long_runs)} run(s) exceeded the long-run threshold",
                 "total_count": len(long_runs),
-                "samples": long_runs[:top_limit],
+                "sample_limit": sample_limit,
+                "sample_count": len(sampled_long_runs),
+                "omitted_count": omitted_count,
+                "samples": sampled_long_runs,
                 "commands": [],
+                "follow_up_commands": [
+                    [
+                        "forge",
+                        "report",
+                        "long-run-plan",
+                        "--json",
+                        "--limit",
+                        str(len(long_runs)),
+                    ]
+                ],
             }
         )
 

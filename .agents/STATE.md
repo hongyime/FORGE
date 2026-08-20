@@ -249,9 +249,12 @@ Progress:
 - Suppressed Connector Action Plan's no-op `install_free_binaries` doctor action when `missing binaries: 0 (none)`; missing-binary environments still emit the install-plan action.
 - Verified B584 with focused doctor tests (`3 passed`), Ruff, py_compile, `git diff --check`, and a real local doctor smoke showing Connector Action Plan `OK` and no `install_free_binaries` action. No installer execution, provider call, report regeneration, resume-run, kill-chain, scheduled-task change, monitoring apply, engagement mutation, or credential persistence was started.
 - Pushed B584 as `de5b1b1 fix: omit empty connector install action`.
+- Added read-only `forge report long-run-plan [--reports-dir reports] [--long-run-seconds N] [--limit N] [--json]`, backed by `collect_long_run_review_plan()`, so long-running failed runs have a dedicated review plan without starting resume-run or kill-chain.
+- Quality-audit `review_long_runs` now includes sample counts, omitted counts, and a follow-up command to `forge report long-run-plan --json --limit N`.
+- Verified B585 with focused reporting and CLI registry tests (`17 passed`), Ruff, py_compile, `git diff --check`, and real local read-only long-run-plan JSON/human smokes. Local `long-run-plan --json --limit 2` reports schema `forge.report_long_run_review_plan.v1`, 3 long runs, 2 samples, 1 omitted, 0 execution commands, and execution policy `plan_only_no_commands_executed`. No resume-run, kill-chain, report regeneration, provider call, scheduled-task change, monitoring apply, engagement mutation, or credential persistence was started.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Commit and push B585, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

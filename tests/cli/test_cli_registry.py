@@ -316,6 +316,10 @@ def test_readme_public_commands_document_operator_defaults_from_cli_help() -> No
     assert (
         "forge report stale-plan [--reports-dir reports] [--limit N] [--json]"
     ) in public_block
+    assert (
+        "forge report long-run-plan [--reports-dir reports] "
+        "[--long-run-seconds N] [--limit N] [--json]"
+    ) in public_block
     assert "Phase 6 defaults to `auto`; use `llama_cpp` for explicit local GGUF" in public_block
     assert "--report-provider {auto,template,llama_cpp,...}" in readme
 

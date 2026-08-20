@@ -72,3 +72,4 @@
 - 2026-08-20: Made quality-audit stale-report samples explicit with omitted counts/follow-up commands, made Offline Strict doctor actionable, and raised scheduled-task query timeout to reduce transient doctor noise.
 - 2026-08-20: Added read-only `forge report stale-plan` so stale latest-report repair commands have a dedicated plan command without regenerating reports.
 - 2026-08-20: Suppressed the no-op Connector Action Plan `install_free_binaries` doctor action when no connector binaries are missing.
+- 2026-08-20: Added read-only `forge report long-run-plan` so long-running failed runs have a dedicated review plan without resuming runs.

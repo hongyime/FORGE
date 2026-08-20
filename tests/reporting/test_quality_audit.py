@@ -6,6 +6,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from forge.reporting.quality_audit import (
+    collect_long_run_review_plan,
     collect_report_quality_audit,
     collect_stale_report_repair_plan,
 )
@@ -125,6 +126,9 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
     ]
     assert "resume-run" not in json.dumps(action_by_id["review_resume_plan"])
     assert action_by_id["review_long_runs"]["total_count"] == 1
+    assert action_by_id["review_long_runs"]["follow_up_commands"] == [
+        ["forge", "report", "long-run-plan", "--json", "--limit", "1"]
+    ]
     assert action_by_id["review_policy_flags"]["counts"] == {
         "destructive_no": 1,
         "post_ex_no": 1,
@@ -370,6 +374,29 @@ def test_collect_stale_report_repair_plan_is_read_only_command_plan(
     ]
 
 
+def test_collect_long_run_review_plan_is_read_only_review_plan(tmp_path: Path) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+
+    payload = collect_long_run_review_plan(
+        reports_dir=reports_dir,
+        long_run_seconds=2700,
+        limit=1,
+    )
+
+    assert payload["schema_version"] == "forge.report_long_run_review_plan.v1"
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["status"] == "review"
+    assert payload["total_count"] == 1
+    assert payload["sample_limit"] == 1
+    assert payload["sample_count"] == 1
+    assert payload["omitted_count"] == 0
+    assert payload["commands"] == []
+    assert payload["samples"][0]["id"] == "1001"
+    assert payload["samples"][0]["elapsed_seconds"] == 3100.5
+    assert "never starts runs" in payload["review_guidance"]
+
+
 def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:
     from forge.cli import app  # noqa: PLC0415
 
@@ -515,6 +542,60 @@ def test_report_stale_plan_cli_prints_human_plan(tmp_path: Path, monkeypatch) ->
     assert "execution_policy=plan_only_no_commands_executed" in result.output
     assert "forge report generate --engagement 1001 --provider auto --yes" in result.output
     assert "quality-audit" not in result.output
+
+
+def test_report_long_run_plan_cli_outputs_json(tmp_path: Path) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "long-run-plan",
+            "--reports-dir",
+            str(reports_dir),
+            "--long-run-seconds",
+            "2700",
+            "--limit",
+            "1",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.report_long_run_review_plan.v1"
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["commands"] == []
+    assert payload["samples"][0]["id"] == "1001"
+
+
+def test_report_long_run_plan_cli_prints_human_plan(tmp_path: Path) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "long-run-plan",
+            "--reports-dir",
+            str(reports_dir),
+            "--long-run-seconds",
+            "2700",
+            "--limit",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Long-run review plan:" in result.output
+    assert "execution_policy=plan_only_no_commands_executed" in result.output
+    assert "sample=engagement=1001 status=failed elapsed=3100.5" in result.output
+    assert "resume-run" not in result.output
 
 
 def test_report_quality_audit_cli_accepts_top_limit_alias(tmp_path: Path) -> None:
