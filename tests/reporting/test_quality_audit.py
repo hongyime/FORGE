@@ -150,6 +150,7 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
     ]
     assert action_by_id["review_policy_flags"]["total_count"] == 1
     assert action_by_id["review_policy_flags"]["selected_count"] == 1
+    assert action_by_id["review_policy_flags"]["flag_total_count"] == 2
     assert action_by_id["review_policy_flags"]["counts"] == {
         "destructive_no": 1,
         "post_ex_no": 1,

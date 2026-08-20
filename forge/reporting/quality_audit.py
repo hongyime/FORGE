@@ -701,6 +701,7 @@ def _operator_action_plan(
                 "summary": "policy *_no counts describe latest run metadata, not current global operator intent",
                 "total_count": len(policy_flag_rows),
                 "selected_count": len(sampled_policy_rows),
+                "flag_total_count": sum(policy_no_counts.values()),
                 "counts": policy_no_counts,
                 "sample_limit": sample_limit,
                 "sample_count": len(sampled_policy_rows),
