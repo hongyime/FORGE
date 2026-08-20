@@ -649,9 +649,21 @@ def test_collect_doctor_checks_flags_paid_live_and_weak_web_auth(tmp_path) -> No
     assert action_by_id["review_offline_strict"]["command"] == (
         "set FORGE_OFFLINE_STRICT=1"
     )
+    assert action_by_id["review_offline_strict"]["execution_policy"] == (
+        "operator_decision_no_commands_executed"
+    )
+    assert action_by_id["review_offline_strict"]["total_count"] == "1"
+    assert action_by_id["review_offline_strict"]["selected_count"] == "0"
+    assert action_by_id["review_offline_strict"]["omitted_count"] == "1"
     assert action_by_id["review_safe_mode"]["status"] == "attention"
     assert action_by_id["review_safe_mode"]["command"] == "set FORGE_SAFE_MODE=1"
     assert action_by_id["review_safe_mode"]["command_args"] == []
+    assert action_by_id["review_safe_mode"]["execution_policy"] == (
+        "operator_decision_no_commands_executed"
+    )
+    assert action_by_id["review_safe_mode"]["total_count"] == "1"
+    assert action_by_id["review_safe_mode"]["selected_count"] == "0"
+    assert action_by_id["review_safe_mode"]["omitted_count"] == "1"
     assert "FORGE_ALLOW_PAID_BACKENDS enabled" in action_by_id[
         "review_paid_llm_backends"
     ]["summary"]
