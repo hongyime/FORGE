@@ -18,6 +18,7 @@ from forge.monitoring.cli import register_monitoring_commands
 from forge.monitoring.continuous import (
     collect_exposure_state,
     create_monitoring_snapshot,
+    due_monitoring_policy_rows,
     monitoring_refresh_from_policy,
     monitoring_overview,
     run_due_monitoring_policies,
@@ -775,6 +776,57 @@ def test_run_due_monitoring_for_data_dir_scans_numeric_engagement_dbs(tmp_path: 
     assert due_result["runs"][0]["changes"][0]["entity_key"] == "host:new-1001.acme.example"
 
 
+def test_run_due_monitoring_for_data_dir_limits_mutating_backlog(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    db_paths = [
+        _build_runner_db(data_dir, engagement_id, f"host-{engagement_id}.acme.example")
+        for engagement_id in (1001, 1002, 1003)
+    ]
+    for db_path, engagement_id in zip(db_paths, (1001, 1002, 1003), strict=True):
+        _seed_due_policy(db_path, engagement_id, due=True)
+
+    result = run_due_monitoring_for_data_dir(
+        data_dir,
+        now="2026-07-09T10:00:00Z",
+        operator="scheduler",
+        limit=2,
+    )
+
+    assert result["db_count"] == 3
+    assert result["due_count"] == 3
+    assert result["run_count"] == 2
+    assert result["limited_policy_count"] == 1
+    assert result["execution_limit"] == 2
+    snapshot_counts: list[int] = []
+    due_counts: list[int] = []
+    audit_counts: list[int] = []
+    for db_path in db_paths:
+        con = direct_connect(db_path)
+        try:
+            snapshot_counts.append(
+                con.execute("SELECT COUNT(*) FROM monitoring_snapshots").fetchone()[0]
+            )
+            due_counts.append(
+                len(
+                    due_monitoring_policy_rows(
+                        con,
+                        int(db_path.stem),
+                        now="2026-07-09T10:00:00Z",
+                    )
+                )
+            )
+            audit_counts.append(
+                con.execute(
+                    "SELECT COUNT(*) FROM audit_log WHERE action='monitoring_policy_due_run'"
+                ).fetchone()[0]
+            )
+        finally:
+            con.close()
+    assert snapshot_counts == [2, 2, 1]
+    assert audit_counts == [1, 1, 0]
+    assert due_counts == [0, 0, 1]
+
+
 def test_run_due_monitoring_for_data_dir_passes_refresh_callback_before_diff(
     tmp_path: Path,
 ) -> None:
@@ -1420,7 +1472,7 @@ def test_run_due_monitoring_for_data_dir_connector_dry_run_needs_no_binary(
             }
         },
     )
-    monkeypatch.setattr("forge.connectors.runner.shutil.which", lambda _name: None)
+    monkeypatch.setattr("forge.connectors.runner.resolve_connector_binary", lambda _name: None)
 
     result = run_due_monitoring_for_data_dir(
         data_dir,
@@ -1470,7 +1522,7 @@ def test_run_due_monitoring_for_data_dir_connector_missing_binary_is_evidence(
             }
         },
     )
-    monkeypatch.setattr("forge.connectors.runner.shutil.which", lambda _name: None)
+    monkeypatch.setattr("forge.connectors.runner.resolve_connector_binary", lambda _name: None)
 
     result = run_due_monitoring_for_data_dir(
         data_dir,
@@ -1524,7 +1576,7 @@ def test_run_due_monitoring_for_data_dir_secret_connector_dry_run_needs_no_binar
             }
         },
     )
-    monkeypatch.setattr("forge.connectors.runner.shutil.which", lambda _name: None)
+    monkeypatch.setattr("forge.connectors.runner.resolve_connector_binary", lambda _name: None)
 
     result = run_due_monitoring_for_data_dir(
         data_dir,
@@ -2242,6 +2294,7 @@ def test_monitoring_worker_runs_due_scans_until_iteration_limit(tmp_path: Path) 
     assert result["db_scan_count"] == 2
     assert result["engagement_scan_count"] == 2
     assert result["run_count"] == 1
+    assert result["limited_policy_count"] == 0
     assert result["change_count"] == 1
     assert result["alert_count"] == 1
     assert result["delivery_count"] == 1
@@ -2267,6 +2320,33 @@ def test_monitoring_worker_runs_due_scans_until_iteration_limit(tmp_path: Path) 
     finally:
         con.close()
     assert operator == "worker-test"
+
+
+def test_monitoring_worker_run_limit_bounds_each_tick(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    for engagement_id in (1001, 1002):
+        db_path = _build_runner_db(data_dir, engagement_id, f"host-{engagement_id}.acme.example")
+        _seed_due_policy(db_path, engagement_id, due=True)
+
+    result = run_monitoring_worker(
+        data_dir,
+        now="2026-07-09T10:00:00Z",
+        operator="worker-test",
+        poll_seconds=5,
+        iterations=1,
+        run_limit=1,
+        sleep_fn=lambda _seconds: None,
+    )
+
+    assert result["stopped_reason"] == "max_iterations"
+    assert result["tick_count"] == 1
+    assert result["due_count"] == 2
+    assert result["run_count"] == 1
+    assert result["limited_policy_count"] == 1
+    assert result["run_limit"] == 1
+    assert result["ticks"][0]["due_count"] == 2
+    assert result["ticks"][0]["run_count"] == 1
+    assert result["ticks"][0]["limited_policy_count"] == 1
 
 
 def test_monitoring_status_for_data_dir_reports_due_and_delivery_attention(
@@ -2556,7 +2636,41 @@ def test_monitoring_cli_run_due_outputs_json(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     assert '"run_count": 1' in result.output
+    assert '"limited_policy_count": 0' in result.output
     assert '"alert_count": 1' in result.output
+
+
+def test_monitoring_cli_run_due_limit_bounds_mutating_work(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    for engagement_id in (1001, 1002):
+        db_path = _build_runner_db(data_dir, engagement_id, f"host-{engagement_id}.acme.example")
+        _seed_due_policy(db_path, engagement_id, due=True)
+
+    app = typer.Typer()
+    monitoring_app = typer.Typer()
+    register_monitoring_commands(monitoring_app)
+    app.add_typer(monitoring_app, name="monitoring")
+    result = CliRunner().invoke(
+        app,
+        [
+            "monitoring",
+            "run-due",
+            "--data-dir",
+            str(data_dir),
+            "--now",
+            "2026-07-09T10:00:00Z",
+            "--limit",
+            "1",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["due_count"] == 2
+    assert payload["run_count"] == 1
+    assert payload["limited_policy_count"] == 1
+    assert payload["execution_limit"] == 1
 
 
 def test_monitoring_cli_due_plan_outputs_json_without_running_due(tmp_path: Path) -> None:

@@ -555,8 +555,10 @@ def run_due_monitoring_for_db(
     now: str | None = None,
     operator: str = "monitoring-scheduler",
     refresh_fn: MonitoringRefreshFn | None = None,
+    limit: int | None = None,
 ) -> dict[str, Any]:
     resolved_refresh_fn = refresh_fn or monitoring_refresh_from_policy
+    max_items = max(0, int(limit)) if limit is not None else None
     con = _open_engagement_db(db_path)
     try:
         engagement_rows = con.execute(
@@ -569,18 +571,24 @@ def run_due_monitoring_for_db(
         engagement_results: list[dict[str, Any]] = []
         run_count = 0
         due_count = 0
+        limited_count = 0
         alert_count = 0
         change_count = 0
         for engagement in engagement_rows:
+            remaining = None
+            if max_items is not None:
+                remaining = max(0, max_items - run_count)
             result = run_due_monitoring_policies(
                 con,
                 engagement_id=int(engagement["id"]),
                 now=now,
                 operator=operator,
                 refresh_fn=resolved_refresh_fn,
+                max_policies=remaining,
             )
             run_count += int(result["run_count"])
             due_count += int(result["due_count"])
+            limited_count += int(result.get("limited_policy_count") or 0)
             for run in result["runs"]:
                 alert_count += len(run["alerts"])
                 change_count += len(run["changes"])
@@ -596,6 +604,7 @@ def run_due_monitoring_for_db(
             "engagement_count": len(engagement_rows),
             "due_count": due_count,
             "run_count": run_count,
+            "limited_policy_count": limited_count,
             "change_count": change_count,
             "alert_count": alert_count,
             "engagements": engagement_results,
@@ -611,7 +620,9 @@ def run_due_monitoring_for_data_dir(
     now: str | None = None,
     operator: str = "monitoring-scheduler",
     refresh_fn: MonitoringRefreshFn | None = None,
+    limit: int | None = None,
 ) -> dict[str, Any]:
+    max_items = max(0, int(limit)) if limit is not None else None
     db_results: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     totals = {
@@ -619,26 +630,39 @@ def run_due_monitoring_for_data_dir(
         "engagement_count": 0,
         "due_count": 0,
         "run_count": 0,
+        "limited_policy_count": 0,
         "change_count": 0,
         "alert_count": 0,
     }
     for db_path in numeric_engagement_db_files(data_dir):
         totals["db_count"] += 1
+        remaining = None
+        if max_items is not None:
+            remaining = max(0, max_items - totals["run_count"])
         try:
             result = run_due_monitoring_for_db(
                 db_path,
                 now=now,
                 operator=operator,
                 refresh_fn=refresh_fn,
+                limit=remaining,
             )
         except (OSError, sqlite3.Error, RuntimeError) as exc:
             errors.append({"db_path": str(db_path.resolve()), "error": str(exc)})
             continue
         db_results.append(result)
-        for key in ("engagement_count", "due_count", "run_count", "change_count", "alert_count"):
+        for key in (
+            "engagement_count",
+            "due_count",
+            "run_count",
+            "limited_policy_count",
+            "change_count",
+            "alert_count",
+        ):
             totals[key] += int(result[key])
     return {
         **totals,
+        "execution_limit": max_items,
         "db_results": db_results,
         "errors": errors,
     }
@@ -774,6 +798,7 @@ def run_monitoring_worker(
     stdout: TextIO | None = None,
     sleep_fn: SleepFn = time.sleep,
     refresh_fn: MonitoringRefreshFn | None = None,
+    run_limit: int | None = None,
 ) -> dict[str, Any]:
     """Run due continuous-monitoring policies repeatedly for local service use."""
     interval = int(poll_seconds)
@@ -789,6 +814,7 @@ def run_monitoring_worker(
         "engagement_scan_count": 0,
         "due_count": 0,
         "run_count": 0,
+        "limited_policy_count": 0,
         "change_count": 0,
         "alert_count": 0,
         "delivery_count": 0,
@@ -807,6 +833,7 @@ def run_monitoring_worker(
                 now=now,
                 operator=operator,
                 refresh_fn=refresh_fn,
+                limit=run_limit,
             )
             tick_payload = {
                 "tick": tick_number,
@@ -832,7 +859,13 @@ def run_monitoring_worker(
             totals["tick_count"] += 1
             totals["db_scan_count"] += int(result["db_count"])
             totals["engagement_scan_count"] += int(result["engagement_count"])
-            for key in ("due_count", "run_count", "change_count", "alert_count"):
+            for key in (
+                "due_count",
+                "run_count",
+                "limited_policy_count",
+                "change_count",
+                "alert_count",
+            ):
                 totals[key] += int(result[key])
             totals["error_count"] += len(result["errors"])
 
@@ -847,6 +880,7 @@ def run_monitoring_worker(
         "data_dir": str(data_dir.resolve()),
         "poll_seconds": interval,
         "operator": operator,
+        "run_limit": max(0, int(run_limit)) if run_limit is not None else None,
         "stopped_reason": stopped_reason,
         **totals,
         "ticks": tick_results,

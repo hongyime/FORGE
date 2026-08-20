@@ -60,3 +60,4 @@
 - 2026-08-20: Added checksum-verified TruffleHog release installation to bootstrap and installed TruffleHog 3.97.0 locally so connector install-plan has no missing binaries.
 - 2026-08-20: Classified intentionally disabled TPH target-import scheduled tasks as paused/OFF in doctor unless the bridge is explicitly enabled by env.
 - 2026-08-20: Aligned ProjectDiscovery doctor rows and connector install-plan missing-binary guidance with env-aware connector binary resolution.
+- 2026-08-20: Added bounded monitoring run-due/worker apply limits with explicit --all overrides so due backlog execution is capped by default.

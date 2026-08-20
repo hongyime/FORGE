@@ -391,8 +391,10 @@ rows, suppressed delivery rows, and active alert suppressions without running
 jobs or delivering alerts. `forge monitoring due-plan --json` is the bounded
 read-only apply preview for due policies; it reports policy IDs, modes, timing,
 and sanitized refresh shape with `plan_only_no_commands_executed`. `forge
-monitoring run-due` and `forge monitoring worker` create scheduled snapshots
-and diff exposure state.
+monitoring run-due --limit 50` and `forge monitoring worker --run-limit 50`
+create scheduled snapshots and diff exposure state in bounded batches; pass
+`--all` only when intentionally applying the full due backlog in one invocation
+or worker tick.
 Policies can opt into the built-in no-network refresh path with metadata
 `{"refresh": {"type": "seed_exposure"}}`;
 the runner then promotes non-failed seeds into monitored exposure state before

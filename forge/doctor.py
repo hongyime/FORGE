@@ -893,7 +893,8 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
             ),
             (
                 "Create a monitoring policy through the API/UI, then run "
-                "`forge monitoring run-due` from cron or `forge monitoring worker`."
+                "`forge monitoring run-due --limit 50` from cron or "
+                "`forge monitoring worker --run-limit 50`."
             ),
         )
 
@@ -943,7 +944,8 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
             details,
             (
                 "Review due work first with `forge monitoring due-plan --json`, then run "
-                "`forge monitoring run-due --json` from cron or start `forge monitoring worker`."
+                "`forge monitoring run-due --limit 50 --json` from cron or start "
+                "`forge monitoring worker --run-limit 50`; use `--all` only for an intentional full-backlog apply."
             ),
             (
                 {
@@ -952,6 +954,13 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
                     "status": "attention",
                     "summary": f"{total_due_count} due/overdue monitoring policy(ies)",
                     "command": "forge monitoring due-plan --json",
+                },
+                {
+                    "id": "run_capped_due_monitoring",
+                    "priority": "46",
+                    "status": "ready",
+                    "summary": "apply reviewed due monitoring work in bounded batches",
+                    "command": "forge monitoring run-due --limit 50 --json",
                 },
             ),
         )
