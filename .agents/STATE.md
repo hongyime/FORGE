@@ -3,6 +3,7 @@
 Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
 
 Progress:
+- Pushed B632 as `d48392f fix: mark asset graph sync payloads`: asset graph sync CLI/helper JSON now exposes explicit graph-table write policy and node total/selected/omitted counts. Focused graph sync helper/CLI tests, Ruff, py_compile, git diff check, and a temp helper smoke passed.
 - Pushed B631 as `6254c74 fix: count asset graph list payloads`: asset graph list/API JSON now exposes read-only execution metadata and bounded node total/selected/omitted counts. Focused asset graph helper/API tests, Ruff, py_compile, git diff check, and a temp helper smoke passed.
 - Pushed B630 as `5e62506 fix: mark audit manifest exports`: audit manifest-export JSON now exposes schema/execution/count aliases that distinguish local bundle export from explicit remote-store export. Focused audit manifest CLI tests, Ruff, py_compile, git diff check, and a temp local export smoke passed.
 - Pushed B629 as `ca08050 fix: mark audit verification payloads`: audit manifest-verify and manifest-bundle-verify JSON now expose read-only schema/execution/count aliases. Focused audit manifest CLI tests, Ruff, py_compile, git diff check, and a temp signed-bundle verifier smoke passed.
