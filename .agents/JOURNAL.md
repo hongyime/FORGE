@@ -95,3 +95,4 @@
 - 2026-08-21: Doctor JSON now adds command_args arrays for executable Forge action commands while leaving env/prose guidance as non-executable command text.
 - 2026-08-21: Connector review plans now expose plan-compatible counts and policy-summary schema metadata for easier automation consumption.
 - 2026-08-21: Connector setup plans now expose plan-compatible execution/count metadata without executing installers or printing secret material.
+- 2026-08-21: Quality-audit action plans now distinguish total backlog, selected rows, samples, and omitted rows consistently for operator automation.

@@ -551,6 +551,7 @@ def _operator_action_plan(
                     "latest report(s) are stale after local/provider model availability changed"
                 ),
                 "total_count": len(stale_reports),
+                "selected_count": len(sampled_stale_reports),
                 "sample_limit": sample_limit,
                 "sample_count": len(sampled_stale_reports),
                 "omitted_count": omitted_count,
@@ -602,6 +603,9 @@ def _operator_action_plan(
                 "execution_policy": "plan_only_no_commands_executed",
                 "summary": "latest reports still have fallback reasons; review provider/model setup before regeneration",
                 "total_count": sum(int(value) for value in latest_fallback_counts.values()),
+                "selected_count": 0,
+                "sample_count": 0,
+                "omitted_count": sum(int(value) for value in latest_fallback_counts.values()),
                 "fallback_reason_counts": dict(sorted(latest_fallback_counts.items())),
                 "commands": [],
             }
@@ -615,6 +619,9 @@ def _operator_action_plan(
                 "execution_policy": "plan_only_no_commands_executed",
                 "summary": f"{failed_run_count} failed/cancelled/latest run(s) need resume review",
                 "total_count": failed_run_count,
+                "selected_count": failed_run_count,
+                "sample_count": 0,
+                "omitted_count": 0,
                 "commands": [
                     [
                         "forge",
@@ -652,6 +659,7 @@ def _operator_action_plan(
                 "execution_policy": "plan_only_no_commands_executed",
                 "summary": f"{len(long_runs)} run(s) exceeded the long-run threshold",
                 "total_count": len(long_runs),
+                "selected_count": len(sampled_long_runs),
                 "sample_limit": sample_limit,
                 "sample_count": len(sampled_long_runs),
                 "omitted_count": omitted_count,
@@ -687,6 +695,8 @@ def _operator_action_plan(
                 "source": "generated_dashboard_run_summary",
                 "meaning": "latest run metadata, not current global defaults",
                 "summary": "policy *_no counts describe latest run metadata, not current global operator intent",
+                "total_count": len(policy_flag_rows),
+                "selected_count": len(sampled_policy_rows),
                 "counts": policy_no_counts,
                 "sample_limit": sample_limit,
                 "sample_count": len(sampled_policy_rows),

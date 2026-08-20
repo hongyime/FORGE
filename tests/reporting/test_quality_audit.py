@@ -126,6 +126,10 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
     assert action_by_id["review_resume_plan"]["commands"] == [
         ["forge", "targets", "resume-plan", "--json", "--redact-paths", "--limit", "1"]
     ]
+    assert action_by_id["review_resume_plan"]["total_count"] == 1
+    assert action_by_id["review_resume_plan"]["selected_count"] == 1
+    assert action_by_id["review_resume_plan"]["sample_count"] == 0
+    assert action_by_id["review_resume_plan"]["omitted_count"] == 0
     assert action_by_id["review_resume_plan"]["follow_up_commands"] == [
         [
             "forge",
@@ -139,9 +143,13 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
         ]
     ]
     assert action_by_id["review_long_runs"]["total_count"] == 1
+    assert action_by_id["review_long_runs"]["selected_count"] == 1
+    assert action_by_id["review_long_runs"]["omitted_count"] == 0
     assert action_by_id["review_long_runs"]["follow_up_commands"] == [
         ["forge", "report", "long-run-plan", "--json", "--limit", "1"]
     ]
+    assert action_by_id["review_policy_flags"]["total_count"] == 1
+    assert action_by_id["review_policy_flags"]["selected_count"] == 1
     assert action_by_id["review_policy_flags"]["counts"] == {
         "destructive_no": 1,
         "post_ex_no": 1,

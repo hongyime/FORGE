@@ -3,6 +3,7 @@
 Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
 
 Progress:
+- Verified B607 locally: quality-audit operator action rows now expose consistent total/selected/sample/omitted count metadata across resume, long-run, stale/fallback, and policy review actions; focused tests, Ruff, py_compile, `git diff --check`, and a real local JSON smoke passed. Commit/push pending.
 - Pushed B606 as `7238a72 fix: add connector setup plan metadata`: connector install-plan and secret-key-plan now expose plan-compatible execution/count metadata without executing installers, printing secrets, or changing setup behavior; focused connector tests, Ruff, py_compile, `git diff --check`, and real local JSON smokes passed.
 - Pushed B605 as `6ddcf91 fix: add connector plan metadata`: connector run-plan now adds total/selected/omitted count aliases, and connector policy-summary now has `schema_version="forge.connector_policy_summary.v1"`.
 - Pushed B604 as `4849ea3 fix: add doctor command args`: doctor payload action items now add `command_args` arrays for executable `forge ...` commands while preserving existing command strings and leaving env/prose actions as empty arrays.
