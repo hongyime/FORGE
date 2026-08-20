@@ -200,9 +200,9 @@ def import_targets(
         if (
             start
             and starts_remaining != 0
-            and not _has_passive_kill_chain_run(cfg, engagement_id, item.canonical_value)
+            and not _has_kill_chain_run(cfg, engagement_id, item.canonical_value)
         ):
-            _start_passive_kill_chain(
+            _start_kill_chain(
                 engagement_id=engagement_id,
                 seed=item.canonical_value,
                 roe_id=str(roe_id or "").strip(),
@@ -749,7 +749,7 @@ def _write_scope_manifest(
     return manifest_path
 
 
-def _has_passive_kill_chain_run(cfg: ForgeConfig, engagement_id: int, seed: str) -> bool:
+def _has_kill_chain_run(cfg: ForgeConfig, engagement_id: int, seed: str) -> bool:
     db_path = cfg.engagement_db_path(str(engagement_id))
     if not db_path.exists():
         return False
@@ -774,7 +774,7 @@ def _has_passive_kill_chain_run(cfg: ForgeConfig, engagement_id: int, seed: str)
     return row is not None
 
 
-def _start_passive_kill_chain(
+def _start_kill_chain(
     *,
     engagement_id: int,
     seed: str,
@@ -797,8 +797,6 @@ def _start_passive_kill_chain(
         str(scope_manifest),
         "--max-iter",
         str(max(1, int(max_iter))),
-        "--no-attack-mode",
-        "--no-auto-run-detected",
     ]
     proc = subprocess.run(command, check=False, capture_output=True, text=True)
     if proc.stdout:
@@ -812,7 +810,7 @@ def _start_passive_kill_chain(
     combined_output = f"{proc.stdout or ''}\n{proc.stderr or ''}"
     if proc.returncode == 2 and "Kill-chain complete" in combined_output and "Report:" in combined_output:
         return
-    if proc.returncode == 2 and _completed_passive_kill_chain_run(
+    if proc.returncode == 2 and _completed_kill_chain_run(
         engagement_db_path,
         engagement_id=engagement_id,
         seed=seed,
@@ -826,7 +824,7 @@ def _start_passive_kill_chain(
     )
 
 
-def _completed_passive_kill_chain_run(
+def _completed_kill_chain_run(
     db_path: Path,
     *,
     engagement_id: int,

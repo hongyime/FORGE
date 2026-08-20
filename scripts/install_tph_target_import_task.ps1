@@ -79,7 +79,7 @@ if ($interval -ne $EveryMinutes) {
     Write-Host "Requested interval $EveryMinutes minute(s) was raised to $interval minute(s) to fit the watchdog execution budget."
 }
 Write-Host "Runs every $interval minute(s) while Windows is running."
-Write-Host "Start enabled: $Start; max new passive runs per import: $StartLimit; max iterations per run: $MaxIter"
+Write-Host "Start enabled: $Start; max new kill-chain runs per import: $StartLimit; max iterations per run: $MaxIter"
 Write-Host "Watchdog timeout: $TimeoutMinutes minute(s)"
 Write-Host "Graceful stop window: $StopGraceSeconds second(s); watchdog helper timeout: $WatchdogHelperTimeoutSeconds second(s); timeout recovery helper: $TimeoutRecoveryHelperSeconds second(s); stale helper cleanup: $StaleHelperFileMinutes minute(s); module timeout: $ModuleTimeoutSeconds second(s)"
 Write-Host "Launcher: $launcher"

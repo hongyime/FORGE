@@ -100,9 +100,12 @@ Progress:
 - Subagent spawn for the report/UI side audit failed because the current harness reported the agent thread limit was reached; continue old report/product audit locally when B546 is committed.
 - Verified B546 with full doctor tests plus focused CTI policy-summary tests (`42 passed`), Ruff, py_compile, `git diff --check`, and a `forge doctor --json` smoke confirming the CTI check/action are present.
 - Pushed B546 as `6780226 feat: surface cti policy in doctor`.
+- Hardened dashboard graph/list wrapping for long labels and backfilled 844 ignored local `reports/dashboard` HTML files; browser smoke on the flagged 10441 page now shows no desktop/tablet overflow and only intentional mobile table-scroll overflow.
+- Changed `targets import --start` to use normal scoped kill-chain defaults instead of passing `--no-attack-mode` and `--no-auto-run-detected`; ROE/scope-manifest and start-limit protections remain.
+- Verified B547 with focused target-import/reporting/Windows launcher tests (`46 passed`), Ruff, py_compile, `git diff --check`, suppressor-flag scan, and Playwright static overflow smoke.
 
 Next steps:
-- Continue the old report/product hardening audit locally because subagent spawn is currently blocked by the harness thread limit.
+- Commit and push B547 dashboard/import-start hardening.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

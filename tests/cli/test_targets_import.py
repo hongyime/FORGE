@@ -495,7 +495,7 @@ def test_resume_candidates_reason_filter_and_limit(tmp_path: Path) -> None:
     assert payload["items"][0]["reason"] == "stale_run_recovery"
 
 
-def test_start_launches_passive_kill_chain_with_scope_and_roe(
+def test_start_launches_scoped_kill_chain_with_scope_and_roe(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -537,8 +537,8 @@ def test_start_launches_passive_kill_chain_with_scope_and_roe(
     assert "--roe-id" in command
     assert "--scope-manifest" in command
     assert "--max-iter" in command
-    assert "--no-attack-mode" in command
-    assert "--no-auto-run-detected" in command
+    assert "--no-attack-mode" not in command
+    assert "--no-auto-run-detected" not in command
     assert "--attack-mode" not in command
     assert "--auto-run-detected" not in command
 
@@ -657,7 +657,7 @@ def test_start_keeps_real_kill_chain_cli_exit_two_as_failure(
         )
 
 
-def test_start_limit_caps_passive_kill_chain_launches(
+def test_start_limit_caps_scoped_kill_chain_launches(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

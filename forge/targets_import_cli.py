@@ -43,7 +43,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
         start: bool = typer.Option(
             False,
             "--start",
-            help="Start the passive kill-chain for each imported target.",
+            help="Start the scoped kill-chain for each imported target.",
         ),
         dry_run: bool = typer.Option(
             False,
@@ -58,12 +58,12 @@ def register_target_import_commands(app: typer.Typer) -> None:
         max_iter: int = typer.Option(
             3,
             "--max-iter",
-            help="Passive kill-chain max iterations when --start is used.",
+            help="Kill-chain max iterations when --start is used.",
         ),
         start_limit: Optional[int] = typer.Option(
             None,
             "--start-limit",
-            help="Maximum new passive kill-chain runs to launch during this import.",
+            help="Maximum new kill-chain runs to launch during this import.",
         ),
     ) -> None:
         """Import generic sanitized target feeds into one engagement per target."""

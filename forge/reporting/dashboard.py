@@ -2725,6 +2725,8 @@ def _base_styles() -> str:
     }
     .panel-head h2,.panel-head h3{margin:0;font-size:15px;letter-spacing:.02em}
     .panel-body{padding:18px}
+    .panel-body ul{padding-left:18px;min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+    .panel-body li{min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
     .table-scroll{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden}
     table{width:100%;border-collapse:collapse}
     th{
@@ -2814,11 +2816,12 @@ def _base_styles() -> str:
       position:relative;z-index:1;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start
     }
     .graph-node{
-      max-width:180px;padding:10px 12px;border-radius:14px;
+      max-width:180px;min-width:0;padding:10px 12px;border-radius:14px;
       border:1px solid rgba(102,217,194,.26);background:rgba(102,217,194,.10);
-      box-shadow:0 14px 34px rgba(0,0,0,.18)
+      box-shadow:0 14px 34px rgba(0,0,0,.18);
+      overflow-wrap:anywhere;word-break:break-word
     }
-    .graph-node span{display:block;font-size:12px;line-height:1.4}
+    .graph-node span{display:block;font-size:12px;line-height:1.4;min-width:0;overflow-wrap:anywhere;word-break:break-word}
     .report-callout{display:flex;flex-direction:column;gap:10px}
     .report-callout .title{display:flex;justify-content:space-between;gap:12px;align-items:center}
     .report-callout .title strong{font-size:14px}
@@ -2847,6 +2850,7 @@ def _base_styles() -> str:
     .toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
     .backlink{display:inline-flex;align-items:center;gap:8px;color:var(--accent-strong);font-weight:600}
     .summary-line{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .summary-line,.summary-line *{min-width:0;overflow-wrap:anywhere;word-break:break-word}
     .hide{display:none}
     @media (max-width: 820px){
       .hero{flex-direction:column;align-items:flex-start}

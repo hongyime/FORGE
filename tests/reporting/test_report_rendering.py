@@ -359,5 +359,11 @@ def test_dashboard_base_styles_wrap_long_report_values() -> None:
     assert ".table-scroll" in styles
     assert "overflow-x:auto" in styles
     assert "overflow-wrap:anywhere" in styles
+    assert ".graph-node{" in styles
+    assert ".graph-node span" in styles
+    assert "max-width:180px;min-width:0" in styles
+    assert ".panel-body ul" in styles
+    assert ".panel-body li" in styles
+    assert ".summary-line,.summary-line *" in styles
     assert ".input-chip-details" in styles
     assert "@media (max-width: 640px)" in styles

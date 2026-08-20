@@ -277,6 +277,10 @@ plain web URLs. Each imported engagement is also enrolled into the default
 `Target import seed exposure` passive monitoring policy with a baseline snapshot
 so scheduled monitoring can diff future exposure state without a separate setup
 step.
+With `--start`, the importer launches the normal scoped `forge kill-chain`
+defaults for each new target, including attack mode, resume, and detected
+follow-on execution; `--roe-id` and the generated narrow scope manifest are
+still required before any live launch.
 
 `forge targets resume-candidates` is read-only. It scans the latest
 `kill_chain` row in each local engagement DB, classifies failed or cancelled

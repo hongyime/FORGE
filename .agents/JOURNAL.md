@@ -33,4 +33,5 @@
 - 2026-08-20: Surfaced sanitized target resume candidates in static dashboards and sanitized run-summary metadata to remove scope-manifest paths and token-like keys.
 - 2026-08-20: Exposed CTI/OSINT provider policy summary through a read-only connector CLI command; it reports aggregate counts/provider IDs only and does not contact providers.
 - 2026-08-20: Added CTI/OSINT policy summary to doctor readiness/action-plan output so source policy review is visible before live fetcher work.
+- 2026-08-20: Hardened generated dashboard graph/list wrapping and changed target-import starts to use normal scoped kill-chain defaults instead of passive-only suppressor flags.
 - 2026-08-20 15:31:25 +08:00 [PRAWN-E14/claude/session-start] branch=main head=0e89ae7 dirty=8
