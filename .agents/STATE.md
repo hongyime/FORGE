@@ -55,8 +55,8 @@ Progress:
 - Verified B532 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B532 as `4b3a3d2 feat: version cti import results`.
 - Added passive offline `misp_event_import` support for local MISP event JSON through the sanitized CTI observation pipeline.
-- Verified B533 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`; commit/push pending.
+- Verified B533 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
+- Pushed B533 as `44b3986 feat: import offline misp events`.
 
 Next steps:
-- Commit and push B533.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
