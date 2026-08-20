@@ -351,6 +351,22 @@ def test_dashboard_report_rendering_wrappers_preserve_compatibility(tmp_path: Pa
     )
 
 
+def test_dashboard_artifact_card_wrapper_handles_missing_artifact(tmp_path: Path) -> None:
+    from forge.reporting.dashboard import _render_artifact_card
+
+    page_path = tmp_path / "reports" / "dashboard" / "engagements" / "index.html"
+    artifact = tmp_path / "reports" / "missing.md"
+    page_path.parent.mkdir(parents=True)
+
+    assert _render_artifact_card(page_path, artifact, "report") == render_artifact_card(
+        kind="report",
+        name="missing.md",
+        href="../../missing.md",
+        size_label="0 B",
+        modified_label="",
+    )
+
+
 def test_dashboard_base_styles_wrap_long_report_values() -> None:
     from forge.reporting.dashboard import _base_styles
 

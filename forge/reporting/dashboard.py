@@ -2895,13 +2895,19 @@ def _render_table(title: str, rows: list[dict[str, str]]) -> str:
 
 def _render_artifact_card(page_path: Path, artifact: Path, kind: str) -> str:
     href = _relative_href(page_path, artifact)
-    stat = artifact.stat()
+    try:
+        stat = artifact.stat()
+        size_bytes = int(stat.st_size)
+        modified_label = _format_dt(datetime.fromtimestamp(stat.st_mtime).isoformat())
+    except OSError:
+        size_bytes = 0
+        modified_label = ""
     return render_artifact_card(
         kind=kind,
         name=artifact.name,
         href=href,
-        size_label=_format_size(stat.st_size),
-        modified_label=_format_dt(datetime.fromtimestamp(stat.st_mtime).isoformat()),
+        size_label=_format_size(size_bytes),
+        modified_label=modified_label,
     )
 
 

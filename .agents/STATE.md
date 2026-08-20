@@ -119,9 +119,13 @@ Progress:
 - Terminal run errors now distinguish `runtime budget exhausted with pending recursive work` from max-iteration exhaustion when the soft budget caused the stop.
 - Documented the option in README and added SPEC checkpoint B550.
 - Verified B550 with focused runtime-option/CLI help/env validation/run-tracking/CLI registry tests (`36 passed`), Ruff, py_compile, `git diff --check`, direct-call search for `normalize_kill_chain_runtime_options`, and a read-only `forge report quality-audit --json` smoke. The smoke still reports historical long-run/dashboard-failure artifacts until future runs/reports are regenerated.
+- Pushed B550 as `dc7221a fix: add kill-chain runtime budget`.
+- Fixed the next dashboard-refresh robustness class from the quality audit: artifact payloads, report-history mtime reads, and static artifact cards now tolerate missing/disappearing/OS-invalid report, graph, or audit paths instead of aborting dashboard generation.
+- Added SPEC checkpoint B551 and missing-artifact regressions for both JSON payloads and HTML card wrappers.
+- Verified B551 with focused artifact/report rendering tests (`7 passed`), broader reporting payload/history/detail/rendering slice (`43 passed`), Ruff, py_compile, `git diff --check`, and a read-only `forge report quality-audit --json` smoke returning the baseline 3,139 report files. A full local `forge dashboard` smoke exceeded four minutes on the large ignored local corpus; its spawned Python process was stopped and generated `reports/dashboard-smoke/` output was removed.
 
 Next steps:
-- Commit and push B550, then continue old product hardening from the next concrete quality-audit failure class; current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Commit and push B551, then continue old product hardening from the next concrete quality-audit failure class; current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
