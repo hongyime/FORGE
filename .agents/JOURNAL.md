@@ -85,3 +85,4 @@
 - 2026-08-21: Added explicit total/selected/omitted metadata to limited target resume plans so review pages cannot be mistaken for the full backlog.
 - 2026-08-21: Added non-mutating `targets resume-run --dry-run` and centralized dashboard error cleanup so resume batches and generated reports can be reviewed without launching child processes or rendering raw terminal noise.
 - 2026-08-21: Quality-audit resume review now points operators from redacted `resume-plan` to `resume-run --dry-run`, keeping the default action path non-mutating until a deliberate live resume.
+- 2026-08-21: Added `monitoring run-due --dry-run` and surfaced it from due-plan/doctor so due monitoring can be rehearsed with the exact run command before any snapshot/alert/schedule writes.

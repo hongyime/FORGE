@@ -997,7 +997,8 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
             "WARN",
             details,
             (
-                "Review due work first with `forge monitoring due-plan --json`, then run "
+                "Review due work first with `forge monitoring due-plan --json`, rehearse with "
+                "`forge monitoring run-due --dry-run --limit 50 --json`, then run "
                 "`forge monitoring run-due --limit 50 --json` from cron or start "
                 "`forge monitoring worker --run-limit 50`; use `--all` only for an intentional full-backlog apply."
             ),
@@ -1010,8 +1011,15 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
                     "command": "forge monitoring due-plan --json",
                 },
                 {
-                    "id": "run_capped_due_monitoring",
+                    "id": "dry_run_capped_due_monitoring",
                     "priority": "46",
+                    "status": "ready",
+                    "summary": "rehearse bounded due monitoring work without writes",
+                    "command": "forge monitoring run-due --dry-run --limit 50 --json",
+                },
+                {
+                    "id": "run_capped_due_monitoring",
+                    "priority": "47",
                     "status": "ready",
                     "summary": "apply reviewed due monitoring work in bounded batches",
                     "command": "forge monitoring run-due --limit 50 --json",

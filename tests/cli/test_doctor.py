@@ -1482,6 +1482,7 @@ def test_collect_doctor_checks_warns_on_due_monitoring_schedules(tmp_path) -> No
     assert "1 due/overdue" in row.details
     assert "1 open alert" in row.details
     assert "forge monitoring due-plan --json" in row.remediation
+    assert "forge monitoring run-due --dry-run --limit 50 --json" in row.remediation
     assert "forge monitoring run-due --limit 50 --json" in row.remediation
     assert "forge monitoring worker --run-limit 50" in row.remediation
     assert "--all" in row.remediation
@@ -1489,6 +1490,10 @@ def test_collect_doctor_checks_warns_on_due_monitoring_schedules(tmp_path) -> No
     assert action_by_id["review_due_monitoring"]["status"] == "attention"
     assert action_by_id["review_due_monitoring"]["command"] == (
         "forge monitoring due-plan --json"
+    )
+    assert action_by_id["dry_run_capped_due_monitoring"]["status"] == "ready"
+    assert action_by_id["dry_run_capped_due_monitoring"]["command"] == (
+        "forge monitoring run-due --dry-run --limit 50 --json"
     )
     assert action_by_id["run_capped_due_monitoring"]["status"] == "ready"
     assert action_by_id["run_capped_due_monitoring"]["command"] == (
@@ -1561,9 +1566,13 @@ def test_collect_doctor_checks_uses_due_plan_total_for_monitoring_summary(
     assert "due-plan total 101 due/overdue across 101 engagement(s) in 101 DB(s)" in row.details
     assert "oldest due backlog 4.96 day(s) overdue" in row.details
     assert "estimated capped run-due batch(es): 3" in row.details
+    assert "forge monitoring run-due --dry-run --limit 50 --json" in row.remediation
     action_by_id = {item["id"]: item for item in row.action_items}
     assert action_by_id["review_due_monitoring"]["summary"] == (
         "101 due/overdue monitoring policy(ies)"
+    )
+    assert action_by_id["dry_run_capped_due_monitoring"]["command"] == (
+        "forge monitoring run-due --dry-run --limit 50 --json"
     )
     assert action_by_id["run_capped_due_monitoring"]["command"] == (
         "forge monitoring run-due --limit 50 --json"

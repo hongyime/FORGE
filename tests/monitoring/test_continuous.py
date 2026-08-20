@@ -827,6 +827,57 @@ def test_run_due_monitoring_for_data_dir_limits_mutating_backlog(tmp_path: Path)
     assert due_counts == [0, 0, 1]
 
 
+def test_run_due_monitoring_for_data_dir_dry_run_is_read_only(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    db_path = _build_runner_db(data_dir, 1001, "app.acme.example")
+    _seed_due_policy(db_path, 1001, due=True)
+
+    con = direct_connect(db_path)
+    try:
+        before_snapshots = con.execute("SELECT COUNT(*) FROM monitoring_snapshots").fetchone()[0]
+        before_due_audit = con.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE action='monitoring_policy_due_run'"
+        ).fetchone()[0]
+        before_next_run = con.execute(
+            "SELECT next_run_at FROM monitoring_policies ORDER BY id LIMIT 1"
+        ).fetchone()[0]
+    finally:
+        con.close()
+
+    result = run_due_monitoring_for_data_dir(
+        data_dir,
+        now="2026-07-09T10:00:00Z",
+        operator="scheduler",
+        limit=1,
+        dry_run=True,
+    )
+
+    assert result["result_schema_version"] == "forge.monitoring.run_due.v1"
+    assert result["execution_policy"] == "dry_run_no_monitoring_executed"
+    assert result["dry_run"] is True
+    assert result["due_count"] == 1
+    assert result["planned_policy_count"] == 1
+    assert result["run_count"] == 0
+    assert result["change_count"] == 0
+    assert result["alert_count"] == 0
+    assert result["execution_limit"] == 1
+
+    con = direct_connect(db_path)
+    try:
+        after_snapshots = con.execute("SELECT COUNT(*) FROM monitoring_snapshots").fetchone()[0]
+        after_due_audit = con.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE action='monitoring_policy_due_run'"
+        ).fetchone()[0]
+        after_next_run = con.execute(
+            "SELECT next_run_at FROM monitoring_policies ORDER BY id LIMIT 1"
+        ).fetchone()[0]
+    finally:
+        con.close()
+    assert after_snapshots == before_snapshots
+    assert after_due_audit == before_due_audit
+    assert after_next_run == before_next_run
+
+
 def test_run_due_monitoring_for_data_dir_passes_refresh_callback_before_diff(
     tmp_path: Path,
 ) -> None:
@@ -2553,6 +2604,7 @@ def test_monitoring_due_plan_for_data_dir_is_read_only_and_bounded(tmp_path: Pat
     assert result["policy_summary"]["schedule_interval_minutes_counts"] == {"60": 2}
     assert [item["id"] for item in result["action_plan"]] == [
         "review_due_monitoring",
+        "dry_run_capped_due_monitoring",
         "run_capped_due_monitoring",
     ]
     assert result["include_empty_db_results"] is False
@@ -2698,6 +2750,50 @@ def test_monitoring_cli_run_due_limit_bounds_mutating_work(tmp_path: Path) -> No
     assert payload["run_count"] == 1
     assert payload["limited_policy_count"] == 1
     assert payload["execution_limit"] == 1
+
+
+def test_monitoring_cli_run_due_dry_run_outputs_json_without_writes(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    db_path = _build_runner_db(data_dir, 1001, "app.acme.example")
+    _seed_due_policy(db_path, 1001, due=True)
+
+    app = typer.Typer()
+    monitoring_app = typer.Typer()
+    register_monitoring_commands(monitoring_app)
+    app.add_typer(monitoring_app, name="monitoring")
+    result = CliRunner().invoke(
+        app,
+        [
+            "monitoring",
+            "run-due",
+            "--data-dir",
+            str(data_dir),
+            "--now",
+            "2026-07-09T10:00:00Z",
+            "--dry-run",
+            "--limit",
+            "1",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["execution_policy"] == "dry_run_no_monitoring_executed"
+    assert payload["dry_run"] is True
+    assert payload["due_count"] == 1
+    assert payload["run_count"] == 0
+
+    con = direct_connect(db_path)
+    try:
+        assert (
+            con.execute(
+                "SELECT COUNT(*) FROM audit_log WHERE action='monitoring_policy_due_run'"
+            ).fetchone()[0]
+            == 0
+        )
+    finally:
+        con.close()
 
 
 def test_monitoring_cli_due_plan_outputs_json_without_running_due(tmp_path: Path) -> None:

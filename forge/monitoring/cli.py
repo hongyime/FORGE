@@ -137,6 +137,11 @@ def register_monitoring_commands(app: typer.Typer) -> None:
             "--all",
             help="Execute every currently due policy instead of applying --limit.",
         ),
+        dry_run: bool = typer.Option(
+            False,
+            "--dry-run",
+            help="Report the bounded due run without writing snapshots, alerts, audit rows, or schedules.",
+        ),
         json_output: bool = typer.Option(
             False,
             "--json",
@@ -151,6 +156,7 @@ def register_monitoring_commands(app: typer.Typer) -> None:
             now=now,
             operator=operator,
             limit=execution_limit,
+            dry_run=dry_run,
         )
         if json_output:
             typer.echo(json.dumps(result, sort_keys=True))

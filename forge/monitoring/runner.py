@@ -533,6 +533,22 @@ def _due_plan_action_plan(
     if due_policy_count:
         actions.append(
             {
+                "id": "dry_run_capped_due_monitoring",
+                "status": "ready",
+                "command": [
+                    "forge",
+                    "monitoring",
+                    "run-due",
+                    "--dry-run",
+                    "--limit",
+                    str(default_execution_limit),
+                    "--json",
+                ],
+                "summary": "rehearse the bounded due run without writing snapshots, alerts, or schedules",
+            }
+        )
+        actions.append(
+            {
                 "id": "run_capped_due_monitoring",
                 "status": "ready",
                 "command": [
@@ -795,8 +811,29 @@ def run_due_monitoring_for_data_dir(
     operator: str = "monitoring-scheduler",
     refresh_fn: MonitoringRefreshFn | None = None,
     limit: int | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     max_items = max(0, int(limit)) if limit is not None else None
+    if dry_run:
+        plan = monitoring_due_plan_for_data_dir(data_dir, now=now, limit=max_items)
+        return {
+            "result_schema_version": "forge.monitoring.run_due.v1",
+            "execution_policy": "dry_run_no_monitoring_executed",
+            "dry_run": True,
+            "data_dir": str(data_dir.resolve()),
+            "observed_at": plan.get("observed_at"),
+            "db_count": int(plan.get("db_count") or 0),
+            "engagement_count": int(plan.get("engagement_count") or 0),
+            "due_count": int(plan.get("due_policy_count") or 0),
+            "run_count": 0,
+            "planned_policy_count": int(plan.get("planned_policy_count") or 0),
+            "limited_policy_count": int(plan.get("limited_policy_count") or 0),
+            "change_count": 0,
+            "alert_count": 0,
+            "execution_limit": max_items,
+            "db_results": plan.get("db_results") or [],
+            "errors": plan.get("errors") or [],
+        }
     db_results: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     totals = {
@@ -835,6 +872,9 @@ def run_due_monitoring_for_data_dir(
         ):
             totals[key] += int(result[key])
     return {
+        "result_schema_version": "forge.monitoring.run_due.v1",
+        "execution_policy": "executes_due_monitoring_policies",
+        "dry_run": False,
         **totals,
         "execution_limit": max_items,
         "db_results": db_results,
