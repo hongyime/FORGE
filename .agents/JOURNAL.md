@@ -20,3 +20,4 @@
 - 2026-08-20: Added a stable CTI import result schema marker for automation consuming `forge connectors import-cti --json`.
 - 2026-08-20: Added passive offline MISP event JSON import support through the existing sanitized CTI observation pipeline, with no MISP API polling.
 - 2026-08-20: Normalized MISP Unix timestamps to UTC ISO strings so offline MISP imports work with CTI observed-time filters.
+- 2026-08-20: Extended offline MISP import to accept common attribute-search exports such as response.Attribute through the existing sanitized CTI observation path.

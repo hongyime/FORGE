@@ -279,9 +279,9 @@ step.
 `forge connectors import-cti` is offline-only. It accepts FORGE's neutral
 observation JSON plus common downloaded/exported JSON or CSV shapes from
 abuse.ch ThreatFox (`data` IOC rows or CSV columns), abuse.ch URLHaus (`url`
-rows or CSV columns), MISP event JSON (`Event.Attribute` rows), and STIX
-indicator bundles (`objects`). Imported CTI rows are stored as analyst
-inventory with
+rows or CSV columns), MISP event/attribute JSON (`Event.Attribute` or
+`response.Attribute` rows), and STIX indicator bundles (`objects`). Imported
+CTI rows are stored as analyst inventory with
 sanitized source/provenance and are not reportable findings unless a later
 independent scoped workflow validates promoted seeds. MISP Unix timestamps are
 normalized to UTC ISO timestamps before time-window filters. Local `.gz` report files

@@ -565,14 +565,23 @@ def _payload_items(payload: Any) -> list[Any]:
 
 def _misp_payload_items(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
     events: list[Mapping[str, Any]] = []
+    standalone_attributes: list[Mapping[str, Any]] = []
     if isinstance(payload.get("Event"), Mapping):
         events.append(payload["Event"])
     response = payload.get("response")
     if isinstance(response, list):
         for item in response:
-            if isinstance(item, Mapping) and isinstance(item.get("Event"), Mapping):
+            if not isinstance(item, Mapping):
+                continue
+            if isinstance(item.get("Event"), Mapping):
                 events.append(item["Event"])
-    if not events and isinstance(payload.get("Attribute"), list):
+            if isinstance(item.get("Attribute"), Mapping):
+                standalone_attributes.append(item["Attribute"])
+    if isinstance(response, Mapping) and isinstance(response.get("Attribute"), list):
+        standalone_attributes.extend(
+            item for item in response["Attribute"] if isinstance(item, Mapping)
+        )
+    if isinstance(payload.get("Attribute"), list):
         events.append(payload)
     items: list[dict[str, Any]] = []
     for event in events:
@@ -589,6 +598,8 @@ def _misp_payload_items(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
         for attribute in attributes:
             if isinstance(attribute, Mapping):
                 items.append({**event_context, **attribute})
+    for attribute in standalone_attributes:
+        items.append(dict(attribute))
     return items
 
 

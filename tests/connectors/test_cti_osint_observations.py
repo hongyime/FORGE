@@ -673,6 +673,56 @@ def test_cti_import_misp_unix_timestamps_work_with_observed_window(
     ]
 
 
+def test_cti_import_accepts_misp_attribute_search_shape(tmp_path: Path) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    secret_value = "misp-attribute-token"
+    report = {
+        "response": {
+            "Attribute": [
+                {
+                    "uuid": "attribute-url",
+                    "type": "url",
+                    "value": f"https://portal.acme.example/path?token={secret_value}&ok=1",
+                    "timestamp": "1797724800",
+                    "to_ids": "1",
+                    "Tag": [{"name": "tlp:green"}],
+                }
+            ]
+        }
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="misp_event_import",
+                engagement_id=1001,
+                promote_targets=True,
+            ),
+            report_text=json.dumps(report),
+        )
+        row = con.execute(
+            """
+            SELECT indicator_type, indicator_value, confidence, observed_at, tlp, tags_json
+            FROM cti_observations
+            """
+        ).fetchone()
+    finally:
+        con.close()
+
+    blob = json.dumps({"result": result, "row": dict(row)}, sort_keys=True)
+    assert result["parsed_count"] == 1
+    assert result["persisted_count"] == 1
+    assert result["promoted_seed_count"] == 1
+    assert row["indicator_type"] == "url"
+    assert row["indicator_value"] == "https://portal.acme.example/path?ok=1"
+    assert row["confidence"] == 0.75
+    assert row["observed_at"] == "2026-12-20T00:00:00Z"
+    assert row["tlp"] == "TLP:GREEN"
+    assert json.loads(row["tags_json"]) == ["tlp:green"]
+    assert secret_value not in blob
+
+
 def test_cti_import_dry_run_does_not_write_observations_seeds_or_audit(
     tmp_path: Path,
 ) -> None:
