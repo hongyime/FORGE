@@ -718,11 +718,27 @@ def monitoring_due_plan_for_data_dir(
         else 0
     )
     time_summary = _due_plan_time_summary(all_due_policies, observed_at=observed_at)
+    due_policy_count = int(totals["due_policy_count"])
+    planned_policy_count = int(totals["planned_policy_count"])
+    limited_policy_count = int(totals["limited_policy_count"])
+    stale_backlog = (
+        time_summary.get("stale_backlog")
+        if isinstance(time_summary.get("stale_backlog"), dict)
+        else {}
+    )
     return {
         "result_schema_version": MONITORING_DUE_PLAN_SCHEMA_VERSION,
+        "schema_version": MONITORING_DUE_PLAN_SCHEMA_VERSION,
         "data_dir": str(data_dir.resolve()),
         "observed_at": observed_at,
         **totals,
+        "total_count": due_policy_count,
+        "total_due_count": due_policy_count,
+        "selected_count": planned_policy_count,
+        "omitted_count": limited_policy_count,
+        "oldest_due_age_seconds": int(
+            stale_backlog.get("oldest_overdue_seconds") or 0
+        ),
         "default_execution_limit": default_execution_limit,
         "estimated_capped_invocations": estimated_capped_invocations,
         "policy_summary": _due_plan_policy_summary(all_due_policies),

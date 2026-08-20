@@ -2587,14 +2587,20 @@ def test_monitoring_due_plan_for_data_dir_is_read_only_and_bounded(tmp_path: Pat
 
     assert result["execution_policy"] == "plan_only_no_commands_executed"
     assert result["result_schema_version"] == "forge.monitoring.due_plan.v1"
+    assert result["schema_version"] == "forge.monitoring.due_plan.v1"
     assert result["db_count"] == 2
     assert result["due_policy_count"] == 2
+    assert result["total_due_count"] == 2
+    assert result["total_count"] == 2
     assert result["planned_policy_count"] == 2
+    assert result["selected_count"] == 2
     assert result["limited_policy_count"] == 0
+    assert result["omitted_count"] == 0
     assert result["default_execution_limit"] == 50
     assert result["estimated_capped_invocations"] == 1
     assert result["oldest_due_at"] == "2026-07-09T10:00:00Z"
     assert result["newest_due_at"] == "2026-07-09T10:00:00Z"
+    assert result["oldest_due_age_seconds"] == 0
     assert result["stale_backlog"]["enabled"] is False
     assert result["policy_summary"]["refresh_type_counts"] == {
         "connector": 1,
@@ -2824,8 +2830,13 @@ def test_monitoring_cli_due_plan_outputs_json_without_running_due(tmp_path: Path
     payload = json.loads(result.output)
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
     assert payload["result_schema_version"] == "forge.monitoring.due_plan.v1"
+    assert payload["schema_version"] == "forge.monitoring.due_plan.v1"
     assert payload["due_policy_count"] == 1
+    assert payload["total_due_count"] == 1
+    assert payload["total_count"] == 1
     assert payload["planned_policy_count"] == 1
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 0
     assert payload["estimated_capped_invocations"] == 1
     assert payload["action_plan"][0]["id"] == "review_due_monitoring"
     assert payload["db_results"][0]["policies"][0]["policy_name"] == "Hourly passive"

@@ -90,3 +90,4 @@
 - 2026-08-21: Added path-neutral resume review rehearsals and policy-plan source/reason metadata so operators can share dry-run review output and understand `*_no` counts without changing live defaults.
 - 2026-08-21: Quality-audit resume review now recommends the path-redacted dry-run rehearsal by default, keeping review output non-mutating and shareable.
 - 2026-08-21: Resume-run results now preserve resume-plan total/selected/omitted metadata so bounded dry-run/live batches cannot be mistaken for the full backlog.
+- 2026-08-21: Monitoring due-plan now exposes plan-compatible schema/count aliases so bounded due-monitoring reviews are easier for automation to consume without changing execution behavior.
