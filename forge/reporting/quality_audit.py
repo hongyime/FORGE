@@ -132,6 +132,14 @@ def collect_report_quality_audit(
             str(row.get("id") or ""),
         )
     )
+    operator_action_plan = _operator_action_plan(
+        latest_fallback_reports=latest_fallback_reports,
+        latest_fallback_counts=latest_fallback_counts,
+        failed_run_count=len(failed_runs),
+        long_runs=long_runs,
+        policy_counts=policy_counts,
+        top_limit=max(0, int(top_limit)),
+    )
 
     return {
         "schema_version": "forge.report_quality_audit.v1",
@@ -167,7 +175,112 @@ def collect_report_quality_audit(
         "historical_dashboard_refresh_failures": historical_dashboard_refresh_failures[
             : max(0, int(top_limit))
         ],
+        "operator_action_plan": operator_action_plan,
     }
+
+
+def _operator_action_plan(
+    *,
+    latest_fallback_reports: list[dict[str, Any]],
+    latest_fallback_counts: Counter[str],
+    failed_run_count: int,
+    long_runs: list[dict[str, Any]],
+    policy_counts: Counter[str],
+    top_limit: int,
+) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    stale_reports = [
+        row
+        for row in latest_fallback_reports
+        if _text(row.get("repair_status")) == "stale_after_model_available"
+    ]
+    if stale_reports:
+        actions.append(
+            {
+                "id": "regenerate_stale_reports",
+                "status": "ready",
+                "execution_policy": "plan_only_no_commands_executed",
+                "summary": (
+                    f"{sum(int(value) for value in latest_fallback_counts.values())} "
+                    "latest report(s) are stale after local/provider model availability changed"
+                ),
+                "total_count": sum(int(value) for value in latest_fallback_counts.values()),
+                "sample_count": len(stale_reports[:top_limit]),
+                "commands": [
+                    row.get("report_generate_command")
+                    for row in stale_reports[:top_limit]
+                    if isinstance(row.get("report_generate_command"), list)
+                ],
+            }
+        )
+    elif latest_fallback_counts:
+        actions.append(
+            {
+                "id": "review_latest_report_fallbacks",
+                "status": "review",
+                "execution_policy": "plan_only_no_commands_executed",
+                "summary": "latest reports still have fallback reasons; review provider/model setup before regeneration",
+                "total_count": sum(int(value) for value in latest_fallback_counts.values()),
+                "fallback_reason_counts": dict(sorted(latest_fallback_counts.items())),
+                "commands": [],
+            }
+        )
+
+    if failed_run_count:
+        actions.append(
+            {
+                "id": "review_resume_plan",
+                "status": "review",
+                "execution_policy": "plan_only_no_commands_executed",
+                "summary": f"{failed_run_count} failed/cancelled/latest run(s) need resume review",
+                "total_count": failed_run_count,
+                "commands": [
+                    [
+                        "forge",
+                        "targets",
+                        "resume-plan",
+                        "--json",
+                        "--limit",
+                        str(failed_run_count),
+                    ]
+                ],
+            }
+        )
+
+    if long_runs:
+        actions.append(
+            {
+                "id": "review_long_runs",
+                "status": "review",
+                "execution_policy": "plan_only_no_commands_executed",
+                "summary": f"{len(long_runs)} run(s) exceeded the long-run threshold",
+                "total_count": len(long_runs),
+                "samples": long_runs[:top_limit],
+                "commands": [],
+            }
+        )
+
+    policy_no_counts = {
+        key: int(policy_counts.get(key, 0))
+        for key in ("attack_no", "destructive_no", "post_ex_no")
+        if int(policy_counts.get(key, 0))
+    }
+    if policy_no_counts:
+        actions.append(
+            {
+                "id": "review_policy_flags",
+                "status": "explain",
+                "execution_policy": "plan_only_no_commands_executed",
+                "summary": "policy *_no counts describe latest run metadata, not current global operator intent",
+                "counts": policy_no_counts,
+                "explanation": (
+                    "`attack_no`, `destructive_no`, and `post_ex_no` are read from "
+                    "generated latest run summaries or scope-manifest policy fields."
+                ),
+                "commands": [],
+            }
+        )
+    return actions
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:

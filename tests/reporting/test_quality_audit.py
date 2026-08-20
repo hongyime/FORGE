@@ -116,6 +116,17 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
     assert payload["dashboard_refresh_failure_count"] == 1
     assert payload["historical_dashboard_refresh_failure_count"] == 0
     assert payload["top_long_runs"][0]["elapsed_seconds"] == 3100.5
+    action_by_id = {item["id"]: item for item in payload["operator_action_plan"]}
+    assert action_by_id["review_resume_plan"]["commands"] == [
+        ["forge", "targets", "resume-plan", "--json", "--limit", "1"]
+    ]
+    assert "resume-run" not in json.dumps(action_by_id["review_resume_plan"])
+    assert action_by_id["review_long_runs"]["total_count"] == 1
+    assert action_by_id["review_policy_flags"]["counts"] == {
+        "destructive_no": 1,
+        "post_ex_no": 1,
+    }
+    assert "latest run metadata" in action_by_id["review_policy_flags"]["summary"]
 
 
 def test_collect_report_quality_audit_separates_stale_dashboard_failures(
@@ -246,6 +257,22 @@ def test_collect_report_quality_audit_marks_stale_gguf_fallbacks_when_model_exis
         "auto",
         "--yes",
     ]
+    action_by_id = {item["id"]: item for item in payload["operator_action_plan"]}
+    assert action_by_id["regenerate_stale_reports"]["commands"] == [
+        [
+            "forge",
+            "report",
+            "generate",
+            "--engagement",
+            "1001",
+            "--provider",
+            "auto",
+            "--yes",
+        ]
+    ]
+    assert action_by_id["regenerate_stale_reports"]["execution_policy"] == (
+        "plan_only_no_commands_executed"
+    )
 
 
 def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:
@@ -273,6 +300,28 @@ def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:
         "GGUF model not found; configure an LLM provider/model or regenerate after local model setup."
     )
     assert "C:/model.gguf" not in json.dumps(payload["latest_fallback_reports"])
+
+
+def test_report_quality_audit_cli_prints_operator_action_plan(tmp_path: Path) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "quality-audit",
+            "--reports-dir",
+            str(reports_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "operator action plan" in result.output
+    assert "review_resume_plan" in result.output
+    assert "forge targets resume-plan --json --limit 1" in result.output
+    assert "resume-run" not in result.output
 
 
 def test_report_quality_audit_cli_accepts_top_limit_alias(tmp_path: Path) -> None:

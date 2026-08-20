@@ -188,3 +188,15 @@ def report_quality_audit(
                 f"    engagement={row['id']} status={row['status']} "
                 f"elapsed={row['elapsed_seconds']} seed={row['seed']}"
             )
+    if payload.get("operator_action_plan"):
+        console.print("  operator action plan:")
+        for action in payload["operator_action_plan"]:
+            console.print(
+                f"    {action['id']} status={action['status']} "
+                f"summary={action['summary']}"
+            )
+            commands = action.get("commands") if isinstance(action, dict) else []
+            if isinstance(commands, list):
+                for command in commands[:3]:
+                    if isinstance(command, list):
+                        console.print(f"      command={' '.join(str(part) for part in command)}")

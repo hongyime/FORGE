@@ -237,7 +237,7 @@ forge kill-chain <seed> --engagement N     # THE spider workflow
 forge menu                                  # Interactive TUI engagement browser
 forge kb {sync,status,fetch-breach}         # Phase 0 knowledge-base ETL
 forge report generate --engagement N [--provider auto|template|llama_cpp]  # Phase 6 defaults to `auto`; use `llama_cpp` for explicit local GGUF
-forge report quality-audit [--reports-dir reports] [--top N|--top-limit N] [--json]
+forge report quality-audit [--reports-dir reports] [--top N|--top-limit N] [--json]  # Read-only report health and operator action plan
 forge graph build --engagement N            # Attack-path export; default --format json
 forge graph sync-assets --engagement N      # Rebuild canonical asset/ownership graph tables
 forge graph ownership list --engagement N   # List asset ownership claims
