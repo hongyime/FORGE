@@ -110,3 +110,4 @@
 - 2026-08-21: Resume-candidates now reports read-only execution policy and total/selected/omitted counts so bounded candidate pages are not mistaken for the whole backlog.
 - 2026-08-21: CTI import results now carry common schema/execution/count aliases for both dry-run review and write/audit paths.
 - 2026-08-21: Connector plugin validation summaries now carry schema/count aliases while remaining data-only manifest validation.
+- 2026-08-21: Connector catalog JSON now carries top-level schema/execution/count aliases while preserving the existing nested summary.
