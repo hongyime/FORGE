@@ -110,16 +110,22 @@ def import_cti_observations(
     parsed_indicator_type_counts: Counter[str] = Counter()
     parsed_tlp_counts: Counter[str] = Counter()
     rejected_sensitive_type_counts: Counter[str] = Counter()
+    unsafe_text_item_count = 0
     provider = config.provider.strip() or connector_id
     for index, raw_item in enumerate(raw_items):
         if not isinstance(raw_item, Mapping):
             skipped.append({"index": str(index), "reason": "item_not_object"})
             continue
+        has_unsafe_text = _raw_item_has_unsafe_text(raw_item)
+        if has_unsafe_text:
+            unsafe_text_item_count += 1
         normalized_item = _provider_observation_item(
             raw_item,
             connector_id=connector_id,
             provider=provider,
         )
+        if has_unsafe_text:
+            normalized_item = _sanitize_unsafe_text_item(normalized_item)
         source_url = config.source_url
         if any(normalized_item.get(key) for key in ("source_url", "reference")):
             source_url = ""
@@ -269,6 +275,7 @@ def import_cti_observations(
         "parsed_indicator_type_counts": dict(sorted(parsed_indicator_type_counts.items())),
         "parsed_tlp_counts": dict(sorted(parsed_tlp_counts.items())),
         "rejected_sensitive_type_counts": dict(sorted(rejected_sensitive_type_counts.items())),
+        "unsafe_text_item_count": unsafe_text_item_count,
         "target_feed_type_counts": _target_feed_type_counts(feed_items),
         "skipped_reason_counts": _skipped_reason_counts(skipped),
         "skipped": skipped[:25],
@@ -876,6 +883,63 @@ def _raw_sensitive_indicator_type(raw: Mapping[str, Any]) -> str:
     if normalized in SENSITIVE_TARGET_TYPES:
         return normalized
     return ""
+
+
+_UNSAFE_TEXT_KEYS = frozenset(
+    {
+        "cmd",
+        "command",
+        "commands",
+        "curl",
+        "docker_run",
+        "install",
+        "install_command",
+        "powershell",
+        "script",
+        "shell",
+    }
+)
+_UNSAFE_TEXT_PATTERN = re.compile(
+    r"(?i)\b("
+    r"bash\s+-c|cmd(?:\.exe)?\s+/c|curl\s+|docker\s+run|git\s+clone|"
+    r"iex\s*\(|invoke-webrequest|powershell(?:\.exe)?\s+|pwsh\s+|wget\s+"
+    r")"
+)
+
+
+def _raw_item_has_unsafe_text(raw: Mapping[str, Any]) -> bool:
+    for key, value in raw.items():
+        normalized_key = str(key or "").strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized_key in _UNSAFE_TEXT_KEYS and str(value or "").strip():
+            return True
+        if isinstance(value, str) and _UNSAFE_TEXT_PATTERN.search(value):
+            return True
+        if isinstance(value, list) and any(
+            isinstance(item, str) and _UNSAFE_TEXT_PATTERN.search(item) for item in value
+        ):
+            return True
+    return False
+
+
+def _sanitize_unsafe_text_item(raw: Mapping[str, Any]) -> dict[str, Any]:
+    cleaned: dict[str, Any] = {}
+    for key, value in raw.items():
+        normalized_key = str(key or "").strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized_key in _UNSAFE_TEXT_KEYS:
+            continue
+        if isinstance(value, str) and _UNSAFE_TEXT_PATTERN.search(value):
+            cleaned[key] = "[UNSAFE_TEXT_REDACTED]"
+            continue
+        if isinstance(value, list):
+            cleaned[key] = [
+                "[UNSAFE_TEXT_REDACTED]"
+                if isinstance(item, str) and _UNSAFE_TEXT_PATTERN.search(item)
+                else item
+                for item in value
+            ]
+            continue
+        cleaned[key] = value
+    return cleaned
 
 
 def _threatfox_observation_item(raw: Mapping[str, Any], *, provider: str) -> dict[str, Any]:

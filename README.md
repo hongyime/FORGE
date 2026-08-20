@@ -308,7 +308,9 @@ also includes summary dictionaries for parsed indicator types, parsed TLP
 levels, rejected sensitive observation types, target-feed-compatible types, and
 skipped reasons. Sensitive rows such as phone, person, private-message, and
 breach-record observations are rejected by default and are reported only as
-bounded type counts, not values. Use
+bounded type counts, not values. Rows containing command/script/install-like
+text are also surfaced only through `unsafe_text_item_count`; FORGE treats those
+snippets as unsafe text, never as commands to execute or persist. Use
 `--fail-on-empty` in automation to exit non-zero when no observations survive
 normalization and filters; duplicate-only re-imports still count as accepted
 because the file matched known observations. Use `--since ISO` and

