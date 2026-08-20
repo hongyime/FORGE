@@ -2256,6 +2256,14 @@ def _connector_secret_store_check(
         source = str(persistent_hint.get("source") or "persistent")
         length = int(persistent_hint.get("key_length") or 0)
         fingerprint = str(persistent_hint.get("key_fingerprint") or "")
+        reload_command = str(
+            (key_plan.get("commands") or {}).get("powershell_reload_persistent_env") or ""
+        )
+        reload_guidance = (
+            f"run `{reload_command}` in this PowerShell process"
+            if reload_command
+            else "set this process env from `forge connectors secret-key-plan --json`"
+        )
         return DoctorCheck(
             "Connector Secret Store",
             "WARN",
@@ -2266,8 +2274,8 @@ def _connector_secret_store_check(
                 f"store is unavailable until this shell/service reloads env{suffix}"
             ),
             (
-                "Restart this shell/service or set the process env from "
-                "`forge connectors secret-key-plan --json`; secret material is not printed."
+                "Restart this shell/service or "
+                f"{reload_guidance}; secret material is not printed."
             ),
         )
     return DoctorCheck(

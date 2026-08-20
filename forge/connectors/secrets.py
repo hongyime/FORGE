@@ -134,6 +134,7 @@ def connector_secret_key_plan(
         if not configured and environ is None
         else {"source": "", "key_configured": False, "key_length": 0, "key_fingerprint": ""}
     )
+    persistent_reload_command = _persistent_key_reload_command(persistent_hint)
     return {
         "schema_version": SECRET_KEY_PLAN_SCHEMA_VERSION,
         "key_configured": configured,
@@ -156,9 +157,11 @@ def connector_secret_key_plan(
                 "export FORGE_ENGAGEMENT_KEY=$(python -c "
                 "\"import secrets; print(secrets.token_urlsafe(48))\")"
             ),
+            "powershell_reload_persistent_env": persistent_reload_command,
         },
         "notes": [
             "Commands generate the key inside the target shell and do not echo the value.",
+            "The reload command copies an existing Windows User/Machine key into only the current PowerShell process.",
             "Restart shells or services after setting a persistent user/service environment variable.",
         ],
     }
@@ -177,6 +180,19 @@ def _persistent_key_hint() -> dict[str, Any]:
                 "key_fingerprint": _key_fingerprint(value),
             }
     return {"source": "", "key_configured": False, "key_length": 0, "key_fingerprint": ""}
+
+
+def _persistent_key_reload_command(persistent_hint: Mapping[str, Any]) -> str:
+    if not persistent_hint.get("key_configured"):
+        return ""
+    source = str(persistent_hint.get("source") or "").strip().lower()
+    if source not in {"user", "machine"}:
+        return ""
+    scope = "User" if source == "user" else "Machine"
+    return (
+        "$env:FORGE_ENGAGEMENT_KEY=[Environment]::GetEnvironmentVariable("
+        f"'FORGE_ENGAGEMENT_KEY','{scope}')"
+    )
 
 
 def _windows_persistent_env_value(scope: str) -> str:

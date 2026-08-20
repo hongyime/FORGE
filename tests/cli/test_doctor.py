@@ -417,7 +417,13 @@ def test_collect_doctor_checks_reports_persistent_connector_secret_key_hint(
                 "key_configured": True,
                 "key_length": 44,
                 "key_fingerprint": "sha256:abc123",
-            }
+            },
+            "commands": {
+                "powershell_reload_persistent_env": (
+                    "$env:FORGE_ENGAGEMENT_KEY=[Environment]::GetEnvironmentVariable("
+                    "'FORGE_ENGAGEMENT_KEY','User')"
+                )
+            },
         },
     )
 
@@ -434,6 +440,8 @@ def test_collect_doctor_checks_reports_persistent_connector_secret_key_hint(
     assert "user-level Windows environment key appears configured" in row.details
     assert "sha256:abc123" in row.details
     assert "Restart this shell/service" in row.remediation
+    assert "powershell_reload_persistent_env" not in row.remediation
+    assert "$env:FORGE_ENGAGEMENT_KEY=" in row.remediation
 
 
 def test_doctor_payload_json_is_machine_readable_and_actionable() -> None:

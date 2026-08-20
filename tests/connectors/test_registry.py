@@ -535,6 +535,42 @@ def test_connector_secret_key_plan_reports_persistent_key_hint(monkeypatch) -> N
         "key_length": 44,
         "key_fingerprint": "sha256:abc123",
     }
+    assert payload["commands"]["powershell_reload_persistent_env"] == (
+        "$env:FORGE_ENGAGEMENT_KEY=[Environment]::GetEnvironmentVariable("
+        "'FORGE_ENGAGEMENT_KEY','User')"
+    )
+    assert "abc123" not in payload["commands"]["powershell_reload_persistent_env"]
+
+
+def test_connector_secret_key_plan_plain_output_reports_persistent_reload(monkeypatch) -> None:
+    monkeypatch.delenv("FORGE_ENGAGEMENT_KEY", raising=False)
+    monkeypatch.setattr(
+        "forge.connectors.secrets._persistent_key_hint",
+        lambda: {
+            "source": "user",
+            "key_configured": True,
+            "key_length": 44,
+            "key_fingerprint": "sha256:abc123",
+        },
+    )
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+
+    result = CliRunner().invoke(app, ["connectors", "secret-key-plan"])
+
+    assert result.exit_code == 0, result.output
+    assert "Persistent Windows key detected" in result.output
+    assert "source=user" in result.output
+    assert "length=44" in result.output
+    assert "sha256:abc123" in result.output
+    assert "$env:FORGE_ENGAGEMENT_KEY=" in result.output
+    assert "GetEnvironmentVariable('FORGE_ENGAGEMENT_KEY','User')" in "".join(
+        result.output.split()
+    )
+    assert "secret material is printed" in result.output
+    assert "0123456789abcdef" not in result.output
 
 
 def test_connector_cli_loads_default_data_dir_plugin_manifests(

@@ -220,9 +220,12 @@ Progress:
 - Clarified Safe Mode doctor and env/docs wording so full mode is described as intentional ROE-backed legacy-offensive posture instead of broken setup; behavior and default status are unchanged.
 - Verified B576 with focused doctor tests (`44 passed`), Ruff, py_compile, `git diff --check`, and a real local doctor smoke. No safe-mode default change, live run, provider call, scheduled-task change, monitoring apply, report regeneration, engagement mutation, or credential persistence was started.
 - Pushed B576 as `d60a343 fix: clarify safe mode doctor warning`.
+- Added value-safe Windows persistent `FORGE_ENGAGEMENT_KEY` reload guidance: `forge connectors secret-key-plan --json` now emits `commands.powershell_reload_persistent_env` when a User/Machine key exists, plain output shows persistent source/length/fingerprint plus the current-process reload command, and doctor remediation shows the exact reload command instead of only generic restart guidance.
+- Verified B577 with focused connector/doctor tests (`5 passed`), Ruff, py_compile, `git diff --check`, and real local secret-key-plan/doctor smokes. No secret material was printed, persisted, or committed; no engagement mutation, provider call, live run, monitoring apply, scheduled-task change, report regeneration, or credential persistence was started.
+- Closed three completed subagents. Their read-only audits recommended: improve monitoring due-plan summary/action-plan/stale-backlog fields next, and add report quality-audit operator action-plan buckets after that.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining queues include Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before capped apply, Connector Secret Store process-env reload guidance, optional deliberate report regeneration using the new quality-audit repair sample commands, and historical failed/long run review only if deliberately resumed.
+- Commit/push B577, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining queues include Monitoring Schedules due-plan operator-plan/stale-backlog clarity, optional quality-audit operator action-plan buckets for stale reports/resume/long-runs/policy flags, deliberate report regeneration only by explicit operator action, and historical failed/long run review only if deliberately resumed.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

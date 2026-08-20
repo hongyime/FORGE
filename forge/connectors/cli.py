@@ -177,6 +177,19 @@ def register_connector_commands(app: typer.Typer) -> None:
             f"status={status} length={plan['key_length']} "
             f"fingerprint={plan['key_fingerprint'] or '-'}"
         )
+        persistent_hint = plan.get("persistent_key_hint") or {}
+        if persistent_hint.get("key_configured"):
+            console.print(
+                "[yellow]Persistent Windows key detected[/yellow] "
+                f"source={persistent_hint.get('source') or 'persistent'} "
+                f"length={persistent_hint.get('key_length') or 0} "
+                f"fingerprint={persistent_hint.get('key_fingerprint') or '-'}"
+            )
+            reload_command = str(
+                (plan.get("commands") or {}).get("powershell_reload_persistent_env") or ""
+            )
+            if reload_command:
+                console.print(f"[dim]Current PowerShell reload:[/dim] {reload_command}")
         console.print(
             "[dim]No secret material is printed. Use the JSON output for "
             "platform-specific setup commands.[/dim]"

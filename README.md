@@ -264,7 +264,7 @@ forge connectors run-identity --engagement N --connector hibp_pwned_passwords [-
 forge connectors run-secrets --engagement N --connector gitleaks_local|trufflehog_local --source-path PATH --domain DOMAIN
 forge connectors import-secrets --engagement N --connector gitleaks_local|trufflehog_local --report-file REPORT.json --domain DOMAIN
 forge connectors secret-prevention-plan --engagement N [--workflow pre-commit|pull_request|push] [--json]
-forge connectors secret-key-plan [--json]   # Non-secret FORGE_ENGAGEMENT_KEY setup guidance
+forge connectors secret-key-plan [--json]   # Non-secret FORGE_ENGAGEMENT_KEY setup/reload guidance
 forge connectors secret-set --engagement N --connector ID --name NAME --value-env ENV
 forge connectors secret-list --engagement N [--connector ID]
 forge connectors policy-summary [--json]
@@ -537,7 +537,10 @@ Keyed connector setup can use `forge connectors secret-set --value-env ENV` or
 under `FORGE_ENGAGEMENT_KEY`; `forge connectors secret-list --json` returns only
 secret names, source refs, metadata, timestamps, and a key fingerprint. Secret
 values are never accepted as command-line literals, printed, or written to
-audit rows. The same redacted contract is exposed in live mode through
+audit rows. If Windows has a persistent user/machine key but the current shell
+has not inherited it, `forge connectors secret-key-plan --json` includes a
+process-only PowerShell reload command that copies the existing key into the
+current process without printing it. The same redacted contract is exposed in live mode through
 `GET|POST /api/engagements/{engagement}/connector-secrets` behind
 `connectors:read`/`connectors:write`, and the React engagement detail route
 includes connector-secret controls for operator setup. Live readiness is also
