@@ -353,6 +353,11 @@ def test_sync_engagement_asset_graph_projects_existing_evidence_idempotently(tmp
     assert first["source_counts"]["active_validation"] == 1
     assert first["node_count"] >= 15
     assert first["edge_count"] >= 12
+    assert graph["schema_version"] == "forge.asset_graph.list.v1"
+    assert graph["execution_policy"] == "read_only_asset_graph_inventory_no_commands_executed"
+    assert graph["total_count"] >= first["node_count"]
+    assert graph["selected_count"] == len(graph["nodes"])
+    assert graph["omitted_count"] == max(0, graph["total_count"] - len(graph["nodes"]))
     assert {
         "seed:domain:acme.example",
         "seed:subdomain:app.acme.example",
@@ -738,6 +743,22 @@ def test_sync_engagement_asset_graph_projects_existing_evidence_idempotently(tmp
     assert "user:pass" not in graph_blob
     assert "token=never" not in graph_blob
     assert "[REDACTED]" in graph_blob
+
+
+def test_asset_graph_list_reports_limited_node_counts(tmp_path: Path) -> None:
+    con = _build_db(tmp_path / "engagement.db")
+    try:
+        sync_engagement_asset_graph(con, 1001)
+        graph = list_asset_graph(con, 1001, limit=2)
+    finally:
+        con.close()
+
+    assert graph["schema_version"] == "forge.asset_graph.list.v1"
+    assert graph["execution_policy"] == "read_only_asset_graph_inventory_no_commands_executed"
+    assert graph["total_count"] > 2
+    assert graph["selected_count"] == 2
+    assert graph["omitted_count"] == graph["total_count"] - 2
+    assert len(graph["nodes"]) == 2
 
 
 def test_asset_graph_promotes_aws_sts_validation_to_account_context(tmp_path: Path) -> None:

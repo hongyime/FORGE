@@ -4585,6 +4585,16 @@ def list_asset_graph(
     if entity_key:
         where += " AND entity_key=?"
         params.append(entity_key)
+    total_node_count = int(
+        con.execute(
+            f"""
+            SELECT COUNT(*) AS count
+            FROM asset_entities
+            {where}
+            """,
+            tuple(params),
+        ).fetchone()["count"]
+    )
     params.append(max(1, int(limit)))
     nodes = [
         {
@@ -4671,6 +4681,11 @@ def list_asset_graph(
         limit=max(1, int(limit)),
     )
     return {
+        "schema_version": "forge.asset_graph.list.v1",
+        "execution_policy": "read_only_asset_graph_inventory_no_commands_executed",
+        "total_count": total_node_count,
+        "selected_count": len(nodes),
+        "omitted_count": max(0, total_node_count - len(nodes)),
         "engagement_id": int(engagement_id),
         "nodes": nodes,
         "edges": edges,
