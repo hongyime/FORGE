@@ -107,9 +107,11 @@ Progress:
 - Downloaded the expected local fallback model to `C:\Users\bryan\.cache\forge\models\qwen2.5-1.5b-instruct-q4_k_m.gguf` (1,117,320,736 bytes); `llama_cpp` imports and doctor still detects Codex/Claude/Gemini CLI providers.
 - Inspected `ROE-BRYAN-PERMANENT-2026` in local target-import scope manifests: engagement 10441 authorizes only `https://vector.strategy360.live/` / `vector.strategy360.live`, and 824 local target-import manifests reference that ROE id.
 - Confirmed the `FORGE Import theprawnhunter Targets` scheduled task is Disabled and no Python process was listed by `Get-Process python`.
+- Current read-only `forge targets resume-candidates --limit 200` scan returned 0 candidates.
+- Current local report inventory: 3,139 files under `reports/`, 1,432 root report files, 581 grouped report families, 844 dashboard HTML pages, and 843 engagement dashboard detail folders.
 
 Next steps:
-- Continue old product audit: failed-engagement resume strategy and broader report-quality failure classification.
+- Continue broader report-quality failure classification only if needed; current resume-candidate helper has no candidates to safely resume.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
