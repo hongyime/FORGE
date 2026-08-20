@@ -134,3 +134,27 @@ def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:
     payload = json.loads(result.output)
     assert payload["engagement_count"] == 1
     assert payload["fallback_reason_counts"]["gguf_model_missing"] == 1
+
+
+def test_report_quality_audit_cli_accepts_top_limit_alias(tmp_path: Path) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "quality-audit",
+            "--reports-dir",
+            str(reports_dir),
+            "--top-limit",
+            "0",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["long_run_count"] == 1
+    assert payload["top_long_runs"] == []

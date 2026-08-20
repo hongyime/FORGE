@@ -137,6 +137,7 @@ def report_quality_audit(
     top: int = typer.Option(
         DEFAULT_TOP_LIMIT,
         "--top",
+        "--top-limit",
         help="Maximum sample rows per finding category.",
     ),
     json_output: bool = typer.Option(

@@ -40,3 +40,4 @@
 - 2026-08-20: Hardened dashboard artifact payload/card rendering so missing or OS-invalid report artifact paths no longer abort static dashboard refresh.
 - 2026-08-20: Restored `forge targets resume-candidates --json` compatibility for the read-only resume-candidate workflow while keeping JSON as the default output.
 - 2026-08-20 15:31:25 +08:00 [PRAWN-E14/claude/session-start] branch=main head=0e89ae7 dirty=8
+- 2026-08-20: Accepted `forge report quality-audit --top-limit` as an alias for `--top` so audit automation can use the explicit internal option name.
