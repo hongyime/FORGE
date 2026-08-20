@@ -3,6 +3,7 @@
 Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
 
 Progress:
+- Pushed B615 as `8f7464f fix: mark gated doctor actions`: paid-backend, active-validation, and provider-probe doctor actions now expose explicit execution policy and count metadata; focused doctor tests, Ruff, py_compile, `git diff --check`, and a real local non-live `doctor --json` smoke passed.
 - Pushed B614 as `74e50a6 fix: mark config doctor decisions`: Offline Strict and Safe Mode doctor actions now expose explicit non-executing operator-decision metadata with one omitted decision and empty `command_args`; focused doctor tests, Ruff, py_compile, `git diff --check`, and a real local doctor JSON smoke passed.
 - Pushed B613 as `e0c9044 fix: add secret key doctor action counts`: Connector Secret Store doctor setup/reload actions now copy plan-only execution/count metadata from `connector_secret_key_plan()` without printing secret material; focused tests, Ruff, py_compile, `git diff --check`, and real local doctor/secret-key-plan smokes passed.
 - Pushed B612 as `d69d380 fix: add connector doctor action counts`: connector-related doctor actions now expose count metadata, and `run_free_connectors` derives total/selected/omitted counts from `connector_run_plan()` so it matches `forge connectors run-plan --json`; focused doctor tests, Ruff, py_compile, `git diff --check`, and real local doctor/run-plan smokes passed.
