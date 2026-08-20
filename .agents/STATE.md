@@ -3,7 +3,7 @@
 Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
 
 Progress:
-- Verified B603 locally: monitoring run-due dry-run/live payloads now add plan-compatible aliases (`schema_version`, `total_count`, `total_due_count`, `selected_count`, `omitted_count`) while preserving existing fields. Push is pending.
+- Pushed B603 as `d3a83a0 fix: add run due count aliases`: monitoring run-due dry-run/live payloads now add plan-compatible aliases (`schema_version`, `total_count`, `total_due_count`, `selected_count`, `omitted_count`) while preserving existing fields.
 - Pushed B602 as `5722b28 fix: add due plan count aliases`: monitoring due-plan now adds compatibility aliases (`schema_version`, `total_count`, `total_due_count`, `selected_count`, `omitted_count`, `oldest_due_age_seconds`) while preserving existing result fields.
 - Pushed B601 as `3193952 fix: report resume run batch totals`: resume-run result payloads now carry resume-plan total/selected/omitted and reason/blocker count metadata so limited dry-run batches cannot be mistaken for the full backlog.
 - Pushed B600 as `931f80d fix: redact audit resume rehearsal`: quality-audit resume review follow-up now points to `forge targets resume-run --dry-run --redact-paths --json` and long-run guidance names the redacted dry-run rehearsal.
