@@ -35,4 +35,5 @@
 - 2026-08-20: Added CTI/OSINT policy summary to doctor readiness/action-plan output so source policy review is visible before live fetcher work.
 - 2026-08-20: Hardened generated dashboard graph/list wrapping and changed target-import starts to use normal scoped kill-chain defaults instead of passive-only suppressor flags.
 - 2026-08-20: Added a read-only report quality audit command so report inventory, fallback lineage, long runs, failed runs, and dashboard refresh failures are repeatable instead of ad hoc searches.
+- 2026-08-20: Made remediation review queue reads schema-compatible with legacy engagement DBs missing risk acceptance expiry fields so future dashboard refreshes do not fail on that column.
 - 2026-08-20 15:31:25 +08:00 [PRAWN-E14/claude/session-start] branch=main head=0e89ae7 dirty=8

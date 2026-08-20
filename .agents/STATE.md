@@ -112,9 +112,11 @@ Progress:
 - Added read-only `forge report quality-audit [--json]` to classify report/dashboard quality breakpoints from generated dashboard JSON and report artifacts without mutating engagements.
 - Verified B548 with focused quality-audit/CLI-doc tests (`3 passed`), Ruff, py_compile, `git diff --check`, and a real local smoke reporting 829 dashboard engagements, 3,139 report files, 581 report families, 49 failed runs, 3 long runs, 4 dashboard refresh failures, 0 resume reviews, and 149 GGUF-missing fallback generations.
 - Pushed B548 as `7c723d4 feat: audit report quality breakpoints`.
+- Fixed the next concrete report-quality failure class: `remediation_review_queue()` now tolerates legacy engagement DBs missing `risk_acceptance_expires_at` by selecting stable payload aliases with NULL/default values.
+- Verified the legacy schema fix with focused remediation/reporting regression tests, the full remediation connector test file (`33 passed`), Ruff, py_compile, `git diff --check`, and a read-only `forge report quality-audit --json` smoke. The smoke still reports four historical dashboard refresh-failure artifacts until those dashboards are regenerated; future queue reads should not hit the missing-column crash.
 
 Next steps:
-- Continue old product hardening only if a new concrete failure class appears; current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Commit and push the B549 legacy remediation schema compatibility fix, then continue old product hardening only if a new concrete failure class appears; current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

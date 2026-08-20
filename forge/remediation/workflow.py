@@ -66,11 +66,67 @@ _GRAPH_DRAFT_SLA_DAYS = {
     "MEDIUM": 30,
     "LOW": 60,
 }
+_REMEDIATION_ITEM_PAYLOAD_COLUMNS = (
+    "id",
+    "engagement_id",
+    "finding_table",
+    "finding_id",
+    "finding_ref",
+    "title",
+    "severity",
+    "owner",
+    "sla_due_at",
+    "status",
+    "risk_acceptance_reason",
+    "risk_accepted_by",
+    "risk_accepted_at",
+    "risk_acceptance_expires_at",
+    "retest_status",
+    "retest_requested_at",
+    "retested_at",
+    "ticket_system",
+    "ticket_ref",
+    "ticket_url",
+    "metadata_json",
+    "created_at",
+    "updated_at",
+)
 
 
 def _ensure_rows(con: sqlite3.Connection) -> None:
     if con.row_factory is None:
         con.row_factory = sqlite3.Row
+
+
+def _table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:
+    rows = con.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {str(row["name"] if isinstance(row, sqlite3.Row) else row[1]) for row in rows}
+
+
+def _legacy_remediation_item_select_list(columns: set[str]) -> str:
+    defaults = {
+        "finding_id": "NULL",
+        "risk_acceptance_reason": "NULL",
+        "risk_accepted_by": "NULL",
+        "risk_accepted_at": "NULL",
+        "risk_acceptance_expires_at": "NULL",
+        "retest_status": "NULL",
+        "retest_requested_at": "NULL",
+        "retested_at": "NULL",
+        "ticket_system": "NULL",
+        "ticket_ref": "NULL",
+        "ticket_url": "NULL",
+        "metadata_json": "'{}'",
+        "created_at": "NULL",
+        "updated_at": "NULL",
+    }
+    fields: list[str] = []
+    for column in _REMEDIATION_ITEM_PAYLOAD_COLUMNS:
+        if column in columns:
+            fields.append(column)
+        else:
+            fields.append(f"{defaults.get(column, 'NULL')} AS {column}")
+    return ", ".join(fields)
 
 
 def _safe_json_loads(value: str | None) -> Any:
@@ -411,18 +467,24 @@ def remediation_review_queue(
         "retest_blocked": 0,
         "ticket_sync_failed": 0,
     }
+    columns = _table_columns(con, "remediation_items")
+    if "engagement_id" not in columns:
+        return {
+            "engagement_id": int(engagement_id),
+            "generated_at": base.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "summary": summary,
+            "items": [],
+            "returned_count": 0,
+            "truncated": False,
+        }
+    select_list = _legacy_remediation_item_select_list(columns)
+    order_column = "id" if "id" in columns else "rowid"
     rows = con.execute(
-        """
-        SELECT id, engagement_id, finding_table, finding_id, finding_ref,
-               title, severity, owner, sla_due_at, status,
-               risk_acceptance_reason, risk_accepted_by, risk_accepted_at,
-               risk_acceptance_expires_at,
-               retest_status, retest_requested_at, retested_at,
-               ticket_system, ticket_ref, ticket_url, metadata_json,
-               created_at, updated_at
+        f"""
+        SELECT {select_list}
         FROM remediation_items
         WHERE engagement_id=?
-        ORDER BY id ASC
+        ORDER BY {order_column} ASC
         """,
         (int(engagement_id),),
     ).fetchall()
