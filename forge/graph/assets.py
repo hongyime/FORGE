@@ -3096,9 +3096,15 @@ def sync_engagement_asset_graph(
         """,
         (int(engagement_id), int(engagement_id), int(engagement_id)),
     ).fetchone()
+    node_count = int(totals["nodes"] or 0)
     return {
+        "schema_version": "forge.asset_graph.sync.v1",
+        "execution_policy": "writes_canonical_asset_graph_tables",
+        "total_count": node_count,
+        "selected_count": node_count,
+        "omitted_count": 0,
         "engagement_id": int(engagement_id),
-        "node_count": int(totals["nodes"] or 0),
+        "node_count": node_count,
         "edge_count": int(totals["edges"] or 0),
         "ownership_claim_count": int(totals["ownership_claims"] or 0),
         "source_counts": source_counts,

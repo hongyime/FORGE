@@ -350,6 +350,11 @@ def test_sync_engagement_asset_graph_projects_existing_evidence_idempotently(tmp
         con.close()
 
     assert first == second
+    assert first["schema_version"] == "forge.asset_graph.sync.v1"
+    assert first["execution_policy"] == "writes_canonical_asset_graph_tables"
+    assert first["total_count"] == first["node_count"]
+    assert first["selected_count"] == first["node_count"]
+    assert first["omitted_count"] == 0
     assert first["source_counts"]["active_validation"] == 1
     assert first["node_count"] >= 15
     assert first["edge_count"] >= 12
@@ -1439,6 +1444,11 @@ def test_graph_sync_assets_cli_outputs_json(tmp_path: Path, monkeypatch) -> None
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.asset_graph.sync.v1"
+    assert payload["execution_policy"] == "writes_canonical_asset_graph_tables"
+    assert payload["total_count"] == payload["node_count"]
+    assert payload["selected_count"] == payload["node_count"]
+    assert payload["omitted_count"] == 0
     assert payload["node_count"] == 1
     assert payload["source_counts"]["cloud"] == 1
     assert payload["source_counts"]["active_validation"] == 0
