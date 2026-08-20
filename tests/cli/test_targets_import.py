@@ -970,3 +970,34 @@ def test_targets_resume_candidates_cli_outputs_json(tmp_path: Path) -> None:
     payload = json.loads(result.output)
     assert payload["candidate_count"] == 1
     assert payload["items"][0]["reason"] == "pending_recursive_work"
+
+
+def test_targets_resume_candidates_cli_accepts_json_flag(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+    )
+
+    app = typer.Typer()
+    targets_app = typer.Typer()
+    register_target_import_commands(targets_app)
+    app.add_typer(targets_app, name="targets")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "targets",
+            "resume-candidates",
+            "--data-dir",
+            str(data_dir),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["candidate_count"] == 1
+    assert payload["items"][0]["reason"] == "pending_recursive_work"

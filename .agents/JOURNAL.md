@@ -38,4 +38,5 @@
 - 2026-08-20: Made remediation review queue reads schema-compatible with legacy engagement DBs missing risk acceptance expiry fields so future dashboard refreshes do not fail on that column.
 - 2026-08-20: Added a kill-chain soft runtime budget that exits the spider loop at iteration boundaries and preserves graceful finalization/report closeout before external watchdog termination.
 - 2026-08-20: Hardened dashboard artifact payload/card rendering so missing or OS-invalid report artifact paths no longer abort static dashboard refresh.
+- 2026-08-20: Restored `forge targets resume-candidates --json` compatibility for the read-only resume-candidate workflow while keeping JSON as the default output.
 - 2026-08-20 15:31:25 +08:00 [PRAWN-E14/claude/session-start] branch=main head=0e89ae7 dirty=8

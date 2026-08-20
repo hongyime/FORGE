@@ -121,8 +121,14 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "--include-completed",
             help="Include completed latest runs only when classification is non-standard.",
         ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON. Accepted for parity; output is JSON by default.",
+        ),
     ) -> None:
         """Report failed/cancelled latest-run candidates without starting work."""
+        _ = json_output
         payload = collect_target_resume_candidates(
             data_dir=data_dir,
             limit=limit,

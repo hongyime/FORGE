@@ -241,7 +241,7 @@ forge audit manifest-verify --engagement N
 forge audit manifest-export --engagement N [--sign] [--remote-store]
 forge audit manifest-bundle-verify --bundle PATH
 forge targets import --feed-url URL|--feed-file PATH
-forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH]
+forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--json]
 forge monitoring status|run-due|deliver-alerts|worker
 forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-retest|apply-retest-run|handoff-plan|integration-runbook|import-ticket-statuses|sync-tickets
 forge active-validation preview|create|approve|run|list|methods|coverage

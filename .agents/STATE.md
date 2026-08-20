@@ -123,9 +123,13 @@ Progress:
 - Fixed the next dashboard-refresh robustness class from the quality audit: artifact payloads, report-history mtime reads, and static artifact cards now tolerate missing/disappearing/OS-invalid report, graph, or audit paths instead of aborting dashboard generation.
 - Added SPEC checkpoint B551 and missing-artifact regressions for both JSON payloads and HTML card wrappers.
 - Verified B551 with focused artifact/report rendering tests (`7 passed`), broader reporting payload/history/detail/rendering slice (`43 passed`), Ruff, py_compile, `git diff --check`, and a read-only `forge report quality-audit --json` smoke returning the baseline 3,139 report files. A full local `forge dashboard` smoke exceeded four minutes on the large ignored local corpus; its spawned Python process was stopped and generated `reports/dashboard-smoke/` output was removed.
+- Pushed B551 as `f7b40b1 fix: tolerate dashboard artifact path errors`.
+- Fixed a public CLI contract drift found during continuation: `forge targets resume-candidates --json` is now accepted as a compatibility flag while the command still emits JSON by default.
+- Documented the flag in README and added SPEC checkpoint B552.
+- Verified B552 with focused target resume-candidate/CLI registry tests (`22 passed`), Ruff, py_compile, `git diff --check`, and a real local `forge targets resume-candidates --limit 200 --json` smoke returning zero current candidates.
 
 Next steps:
-- Commit and push B551, then continue old product hardening from the next concrete quality-audit failure class; current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Commit and push B552, then continue old product hardening from the next concrete quality-audit failure class; current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
