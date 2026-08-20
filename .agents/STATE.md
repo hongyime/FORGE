@@ -139,9 +139,11 @@ Progress:
 - Fixed quality-audit fallback signal noise: report backend/fallback/write-error counters are now split into all-history lineage counts and latest-report-only counts.
 - Verified B555 with focused quality-audit/CLI registry tests (`25 passed`), Ruff, py_compile, `git diff --check`, and a real local `forge report quality-audit --json --top-limit 5` smoke. The refreshed local audit still reports 149 historical GGUF-missing fallback generations, but `latest_fallback_reason_counts` is empty, so latest report summaries are not currently GGUF-missing.
 - Pushed B555 as `cf54e94 fix: report latest quality fallback counts`.
+- Fixed a dashboard/CLI mismatch: default `targets resume-candidates` now includes repo-local legacy `.forge_data` DBs like the dashboard does, while explicit `--data-dir` scans remain narrow.
+- Verified B556 with focused target-import/resume, quality-audit, and CLI registry tests (`47 passed`), Ruff, py_compile, `git diff --check`, and a real local `forge targets resume-candidates --limit 200 --json` smoke. The smoke now scans 930 engagements and returns the same 49 resume candidates visible in the dashboard: pending_recursive_work=31, watchdog_timeout=7, abandoned=6, stale_run_recovery=5.
 
 Next steps:
-- Continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
+- Commit and push B556, then continue old product hardening from the next concrete quality-audit/doctor failure class. Current repeatable audits cover resume candidates and report/dashboard quality breakpoints.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

@@ -495,6 +495,68 @@ def test_resume_candidates_reason_filter_and_limit(tmp_path: Path) -> None:
     assert payload["items"][0]["reason"] == "stale_run_recovery"
 
 
+def test_resume_candidates_default_includes_legacy_dashboard_dbs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured_data_dir = tmp_path / "configured"
+    legacy_data_dir = tmp_path / ".forge_data"
+    _write_candidate_run(
+        configured_data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="completed",
+        error="",
+    )
+    _write_candidate_run(
+        legacy_data_dir / "engagements" / "2.db",
+        engagement_id=2,
+        status="failed",
+        error="abandoned before explicit completion",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(configured_data_dir))
+
+    payload = collect_target_resume_candidates()
+
+    assert payload["data_dir"] == str(configured_data_dir)
+    assert payload["include_legacy"] is True
+    assert payload["scanned_engagements"] == 2
+    assert payload["candidate_count"] == 1
+    assert payload["items"][0]["engagement_id"] == 2
+    assert payload["items"][0]["reason"] == "abandoned"
+
+
+def test_resume_candidates_explicit_data_dir_stays_narrow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured_data_dir = tmp_path / "configured"
+    explicit_data_dir = tmp_path / "explicit"
+    legacy_data_dir = tmp_path / ".forge_data"
+    _write_candidate_run(
+        explicit_data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+    )
+    _write_candidate_run(
+        legacy_data_dir / "engagements" / "2.db",
+        engagement_id=2,
+        status="failed",
+        error="abandoned before explicit completion",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(configured_data_dir))
+
+    payload = collect_target_resume_candidates(data_dir=explicit_data_dir)
+
+    assert payload["data_dir"] == str(explicit_data_dir)
+    assert payload["include_legacy"] is False
+    assert payload["scanned_engagements"] == 1
+    assert payload["candidate_count"] == 1
+    assert payload["items"][0]["engagement_id"] == 1
+
+
 def test_start_launches_scoped_kill_chain_with_scope_and_roe(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -72,17 +72,19 @@ def collect_target_resume_candidates(
     limit: int | None = DEFAULT_RESUME_CANDIDATE_LIMIT,
     reason: str | None = None,
     include_completed: bool = False,
+    include_legacy: bool | None = None,
 ) -> dict[str, Any]:
     """Return read-only latest-run candidates that may need operator review."""
 
     cfg = ForgeConfig.load()
     base_dir = Path(data_dir) if data_dir is not None else cfg.data_dir
+    scan_legacy = bool(include_legacy) if include_legacy is not None else data_dir is None
     candidate_limit = _normalize_limit(limit)
     reason_filter = str(reason or "").strip().lower()
     candidates: list[TargetResumeCandidate] = []
     scanned = 0
     skipped: Counter[str] = Counter()
-    for db_path in numeric_engagement_db_files(base_dir):
+    for db_path in numeric_engagement_db_files(base_dir, include_legacy=scan_legacy):
         engagement_id = _engagement_id_from_db_path(db_path)
         if engagement_id is None:
             skipped["non_numeric_db"] += 1
@@ -106,6 +108,7 @@ def collect_target_resume_candidates(
     return {
         "schema_version": RESUME_CANDIDATE_SCHEMA_VERSION,
         "data_dir": str(base_dir),
+        "include_legacy": scan_legacy,
         "candidate_count": len(candidates),
         "scanned_engagements": scanned,
         "limit": candidate_limit,

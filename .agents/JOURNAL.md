@@ -43,3 +43,4 @@
 - 2026-08-20: Accepted `forge report quality-audit --top-limit` as an alias for `--top` so audit automation can use the explicit internal option name.
 - 2026-08-20: Split report quality-audit dashboard refresh failures into current unresolved failures and historical pre-refresh evidence so old audit rows do not imply current dashboard breakage.
 - 2026-08-20: Added latest-report-only fallback/backend/write-error counts to report quality-audit so historical GGUF fallbacks do not masquerade as current latest-report degradation.
+- 2026-08-20: Aligned default target resume-candidate scanning with dashboard legacy DB inclusion while preserving narrow explicit `--data-dir` scans.

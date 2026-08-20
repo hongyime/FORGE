@@ -104,7 +104,10 @@ def register_target_import_commands(app: typer.Typer) -> None:
         data_dir: Optional[Path] = typer.Option(
             None,
             "--data-dir",
-            help="FORGE data directory to scan. Defaults to the configured data dir.",
+            help=(
+                "FORGE data directory to scan. Defaults to the configured data dir "
+                "plus repo-local legacy dashboard DBs."
+            ),
         ),
         limit: Optional[int] = typer.Option(
             DEFAULT_RESUME_CANDIDATE_LIMIT,

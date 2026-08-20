@@ -12,19 +12,30 @@ def engagement_db_root(data_dir: str | Path) -> Path:
     return db_root
 
 
-def numeric_engagement_db_files(data_dir: str | Path) -> list[Path]:
+def numeric_engagement_db_files(
+    data_dir: str | Path,
+    *,
+    include_legacy: bool = False,
+) -> list[Path]:
     """List numeric engagement DB files, excluding sequence/control DBs."""
-    db_root = Path(data_dir) / "engagements"
-    if not db_root.exists():
-        return []
-    files: list[tuple[int, Path]] = []
-    for db_file in db_root.glob("*.db"):
-        try:
-            engagement_id = int(db_file.stem)
-        except ValueError:
+    roots = [Path(data_dir) / "engagements"]
+    legacy_root = Path.cwd() / ".forge_data" / "engagements"
+    if include_legacy and legacy_root not in roots:
+        roots.append(legacy_root)
+
+    selected: dict[int, Path] = {}
+    for db_root in roots:
+        if not db_root.exists():
             continue
-        files.append((engagement_id, db_file))
-    return [path for _engagement_id, path in sorted(files)]
+        for db_file in db_root.glob("*.db"):
+            try:
+                engagement_id = int(db_file.stem)
+            except ValueError:
+                continue
+            existing = selected.get(engagement_id)
+            if existing is None or db_file.stat().st_mtime >= existing.stat().st_mtime:
+                selected[engagement_id] = db_file
+    return [path for _engagement_id, path in sorted(selected.items())]
 
 
 def allocate_engagement_id(data_dir: str | Path) -> int:
