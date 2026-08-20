@@ -110,6 +110,27 @@ def test_active_validation_method_registry_documents_safe_modes() -> None:
     assert "read_only_live" in methods["fix_verification"]["supported_modes"]
 
 
+def test_active_validation_methods_cli_outputs_catalog_contract() -> None:
+    app = typer.Typer()
+    active_validation_app = typer.Typer()
+    register_active_validation_commands(active_validation_app)
+    app.add_typer(active_validation_app, name="active-validation")
+
+    result = CliRunner().invoke(app, ["active-validation", "methods", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.active_validation.methods.v1"
+    assert payload["execution_policy"] == "data_only_method_catalog_no_validation_executed"
+    assert payload["total_count"] == len(payload["methods"])
+    assert payload["selected_count"] == len(payload["methods"])
+    assert payload["omitted_count"] == 0
+    assert {item["id"] for item in payload["methods"]} >= {
+        "fixture_replay",
+        "http_reachability",
+    }
+
+
 def test_active_validation_migration_adds_v39_tables(tmp_path: Path) -> None:
     con = sqlite3.connect(tmp_path / "legacy.db")
     try:
@@ -451,6 +472,11 @@ def test_active_validation_preview_is_state_free_and_scope_gated(tmp_path: Path)
         con.close()
 
     assert dry_preview["schema"] == "forge.active_validation.preview.v1"
+    assert dry_preview["schema_version"] == "forge.active_validation.preview.v1"
+    assert dry_preview["execution_policy"] == "preview_only_no_state_or_network_execution"
+    assert dry_preview["total_count"] == 1
+    assert dry_preview["selected_count"] == 1
+    assert dry_preview["omitted_count"] == 0
     assert dry_preview["status"] == "planned"
     assert dry_preview["plan"] == {
         "will_create_job": False,
@@ -669,6 +695,11 @@ def test_active_validation_control_coverage_groups_methods_and_states(
     assert lab_run["result"] == "simulated_pass"
     assert blocked_run["status"] == "blocked"
     assert coverage["schema"] == "forge.active_validation.coverage.v1"
+    assert coverage["schema_version"] == "forge.active_validation.coverage.v1"
+    assert coverage["execution_policy"] == "read_only_active_validation_coverage_no_commands_executed"
+    assert coverage["total_count"] == 4
+    assert coverage["selected_count"] == 4
+    assert coverage["omitted_count"] == 0
     assert coverage["summary"]["job_count"] == 4
     assert coverage["summary"]["run_count"] == 3
     assert coverage["summary"]["states"] == {
@@ -723,6 +754,11 @@ def test_active_validation_coverage_cli_outputs_json(tmp_path: Path, monkeypatch
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.active_validation.coverage.v1"
+    assert payload["execution_policy"] == "read_only_active_validation_coverage_no_commands_executed"
+    assert payload["total_count"] == 1
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 0
     assert payload["summary"]["job_count"] == 1
     assert payload["summary"]["states"] == {"passed": 1}
     assert payload["attack_mappings"][0]["methods"] == ["fixture_replay"]

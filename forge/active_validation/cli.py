@@ -51,7 +51,19 @@ def register_active_validation_commands(app: typer.Typer) -> None:
     ) -> None:
         available = list_active_validation_methods()
         if json_output:
-            typer.echo(json.dumps({"methods": available}, sort_keys=True))
+            typer.echo(
+                json.dumps(
+                    {
+                        "schema_version": "forge.active_validation.methods.v1",
+                        "execution_policy": "data_only_method_catalog_no_validation_executed",
+                        "total_count": len(available),
+                        "selected_count": len(available),
+                        "omitted_count": 0,
+                        "methods": available,
+                    },
+                    sort_keys=True,
+                )
+            )
             return
         console.print(f"[bold]Active validation methods[/bold] count={len(available)}")
         for method in available:

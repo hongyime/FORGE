@@ -1025,6 +1025,11 @@ def preview_active_validation_job(
     evidence["proof_summary"] = active_validation_proof_summary(evidence)
     return {
         "schema": "forge.active_validation.preview.v1",
+        "schema_version": "forge.active_validation.preview.v1",
+        "execution_policy": "preview_only_no_state_or_network_execution",
+        "total_count": 1,
+        "selected_count": 1,
+        "omitted_count": 0,
         "engagement_id": int(engagement_id),
         "status": status,
         "result": result,
@@ -1519,6 +1524,11 @@ def active_validation_control_coverage(
 
     return {
         "schema": "forge.active_validation.coverage.v1",
+        "schema_version": "forge.active_validation.coverage.v1",
+        "execution_policy": "read_only_active_validation_coverage_no_commands_executed",
+        "total_count": len(jobs),
+        "selected_count": len(jobs),
+        "omitted_count": 0,
         "engagement_id": int(engagement_id),
         "summary": {
             "job_count": len(jobs),
