@@ -92,9 +92,9 @@ Progress:
 - Pushed B543 as `65c9d68 feat: report target resume candidates`.
 - Added sanitized static dashboard visibility for target resume candidates: overview `Resume Review` column/filter/stat, detail candidate table, and run-summary metadata redaction for scope-manifest paths and token-like keys.
 - Verified B544 with focused dashboard contract/resume-review tests, reporting/CLI slice tests, Ruff, py_compile, and `git diff --check`; full local `.forge_data` dashboard smoke exceeded 4 minutes and the spawned dashboard process was stopped.
+- Pushed B544 as `dd25905 feat: surface resume candidates in dashboard`.
 
 Next steps:
-- Commit and push B544.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
 
 <!-- MOLT_AUTO_START -->
