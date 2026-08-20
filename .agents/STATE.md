@@ -259,9 +259,10 @@ Progress:
 - Added read-only `forge report policy-plan [--reports-dir reports] [--limit N] [--json]`, backed by `collect_policy_flag_review_plan()`, so latest-run policy `*_no` counts include sampled evidence rows without mutating engagements.
 - Quality-audit `review_policy_flags` now includes sample counts, omitted counts, policy samples, and a follow-up command to `forge report policy-plan --json --limit N`.
 - Verified B587 with focused reporting and CLI registry tests (`20 passed`), Ruff, py_compile, `git diff --check`, and real local read-only policy-plan/quality-audit smokes. Local `policy-plan --json --limit 5` reports counts `attack_no=72`, `destructive_no=76`, `post_ex_no=76`, 5 sampled rows, 71 omitted rows, 0 execution commands, and execution policy `plan_only_no_commands_executed`. No resume-run, kill-chain, report regeneration, provider call, scheduled-task change, monitoring apply, engagement mutation, or credential persistence was started.
+- Pushed B587 as `21107e3 feat: add report policy flag plan`.
 
 Next steps:
-- Commit and push B587, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
