@@ -61,6 +61,7 @@ class DetailSectionQueryCallbacks:
     vulnerability_row_is_reportable: Callable[[Any, dict[tuple[str, str], bool]], bool]
     reportable_cloud_validation_index: Callable[[Any, int], dict[tuple[str, str], bool]]
     artifact_queue_row: RowBuilder
+    cti_observation_row: RowBuilder
     cloud_asset_row: RowBuilder
     cloud_validation_row: RowBuilder
     normalized_cloud_asset_type_sql: Callable[[str], str]
@@ -397,6 +398,12 @@ def inventory_sections(
             callbacks=callbacks,
         ),
         "emails": email_section_rows(
+            con,
+            engagement_id,
+            limit=limit,
+            callbacks=callbacks,
+        ),
+        "cti_observations": cti_observation_section_rows(
             con,
             engagement_id,
             limit=limit,
@@ -2080,6 +2087,70 @@ def artifact_queue_section_rows(
     ]
 
 
+def cti_observation_section_rows(
+    con: Any,
+    engagement_id: int,
+    *,
+    limit: int,
+    callbacks: DetailSectionQueryCallbacks,
+) -> list[dict[str, str]]:
+    if not callbacks.table_exists(con, "cti_observations"):
+        return []
+    columns = callbacks.table_columns(con, "cti_observations")
+    required = {
+        "engagement_id",
+        "provider",
+        "indicator_type",
+        "indicator_value",
+        "confidence",
+        "tlp",
+        "raw_artifact_hash",
+    }
+    if not required.issubset(columns):
+        return []
+    source_url_expr = "source_url" if "source_url" in columns else "'' AS source_url"
+    observed_at_expr = "observed_at" if "observed_at" in columns else "'' AS observed_at"
+    collection_expr = (
+        "collection_method" if "collection_method" in columns else "'' AS collection_method"
+    )
+    reliability_expr = (
+        "source_reliability" if "source_reliability" in columns else "'' AS source_reliability"
+    )
+    tags_expr = "tags_json" if "tags_json" in columns else "'[]' AS tags_json"
+    provenance_expr = "provenance" if "provenance" in columns else "'' AS provenance"
+    created_at_expr = "created_at" if "created_at" in columns else "'' AS created_at"
+    order_terms = []
+    if "created_at" in columns:
+        order_terms.append("created_at DESC")
+    order_terms.append("rowid DESC")
+    return [
+        callbacks.cti_observation_row(row)
+        for row in callbacks.fetch_rows(
+            con,
+            f"""
+            SELECT provider,
+                   indicator_type,
+                   indicator_value,
+                   {source_url_expr},
+                   {observed_at_expr},
+                   confidence,
+                   tlp,
+                   {collection_expr},
+                   {reliability_expr},
+                   raw_artifact_hash,
+                   {tags_expr},
+                   {provenance_expr},
+                   {created_at_expr}
+            FROM cti_observations
+            WHERE engagement_id=?
+            ORDER BY {", ".join(order_terms)}
+            LIMIT ?
+            """,
+            (engagement_id, limit),
+        )
+    ]
+
+
 def cloud_asset_section_rows(
     con: Any,
     engagement_id: int,
@@ -2377,6 +2448,7 @@ __all__ = [
     "cloud_asset_section_rows",
     "cloud_sections",
     "cloud_validation_result_section_rows",
+    "cti_observation_section_rows",
     "crawl_result_section_rows",
     "distributed_task_section_rows",
     "email_intelligence_section_rows",

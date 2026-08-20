@@ -13,6 +13,7 @@ ENGAGEMENT_SECTION_TITLES = {
     "emails": "Recent Emails",
     "email_intelligence": "Email Intelligence",
     "account_existence": "Account Existence",
+    "cti_observations": "CTI / OSINT Observations",
     "engagement_seeds": "Engagement Seeds",
     "seed_runs": "Recent Seed Runs",
     "engagement_runs": "Recent Engagement Runs",

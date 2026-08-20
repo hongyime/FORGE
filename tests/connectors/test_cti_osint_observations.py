@@ -13,6 +13,8 @@ from forge.connectors.registry import connector_statuses
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.db.validation import validate_canonical_schema
+from forge.phase6.report_synthesizer import ContextBuilder, ReportSynthesizer
+from forge.reporting.dashboard import generate_dashboard
 from forge.utils.intel.http_pacing import (
     cti_rate_limit_backoff_seconds,
     cti_rate_limit_retries,
@@ -81,14 +83,16 @@ def test_observation_normalizes_to_target_feed_without_raw_provider_body() -> No
             "confidence": 1.7,
             "tlp": "green",
             "raw": "provider body with token=secret",
-            "provenance": "ThreatFox IOC #123",
+            "provenance": "ThreatFox IOC #123 password=secret",
         },
         provider="abusech_threatfox",
-        source_url="https://threatfox.abuse.ch/ioc/123",
+        source_url="https://user:pass@threatfox.abuse.ch/ioc/123?token=secret&ok=1",
     )
 
     assert observation is not None
     assert observation.indicator_value == "https://example.com/login?ok=1"
+    assert observation.source_url == "https://threatfox.abuse.ch/ioc/123?ok=1"
+    assert observation.provenance == "ThreatFox IOC #123 password=[REDACTED]"
     assert observation.confidence == 1.0
     assert observation.tlp == "TLP:GREEN"
     assert len(observation.raw_artifact_hash) == 64
@@ -101,7 +105,7 @@ def test_observation_normalizes_to_target_feed_without_raw_provider_body() -> No
         "source_kind": "cti_osint:abusech_threatfox",
         "confidence": 1.0,
         "first_seen_at": observation.observed_at,
-        "provenance": "ThreatFox IOC #123",
+        "provenance": "ThreatFox IOC #123 password=[REDACTED]",
     }
 
 
@@ -254,6 +258,92 @@ def test_cti_observation_import_persists_normalized_rows_and_promotes_scoped_see
     assert audit["action"] == "cti_observation_import"
     assert "persisted=2" in audit["result"]
     assert "promoted=1" in audit["result"]
+    assert secret_value not in blob
+
+
+def test_cti_observations_surface_as_non_reportable_inventory(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    secret_value = "secret-token-should-not-persist"
+    report = {
+        "items": [
+            {
+                "type": "domain",
+                "value": "Portal.Acme.Example",
+                "confidence": 0.8,
+                "tlp": "clear",
+                "provenance": f"URLHaus import password={secret_value}",
+                "raw_body": f"token={secret_value}",
+            }
+        ]
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="abusech_urlhaus",
+                engagement_id=1001,
+                provider="urlhaus",
+                source_url=f"https://urlhaus.example/export?api_key={secret_value}&ok=1",
+                promote_targets=False,
+                operator="cti-test",
+            ),
+            report_text=json.dumps(report),
+        )
+    finally:
+        con.close()
+
+    reports_dir = tmp_path / "reports"
+    ctx = ContextBuilder(db_path, 1001).build()
+    rendered = ReportSynthesizer(
+        db_path,
+        output_dir=reports_dir,
+        provider="template",
+        assume_yes=True,
+    )._render_skeleton(ctx)
+    csv_rows = ReportSynthesizer._raw_export_csv_rows(ctx)
+    generate_dashboard(
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
+    overview = json.loads(
+        (reports_dir / "dashboard" / "data" / "engagements.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    slug = next(item["slug"] for item in overview["items"] if item["id"] == "1001")
+    detail_payload = json.loads(
+        (reports_dir / "dashboard" / "data" / "engagements" / f"{slug}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    cti_csv_rows = [row for row in csv_rows if row["record_type"] == "cti_observation"]
+    detail_rows = detail_payload["sections"]["cti_observations"]
+    blob = json.dumps(
+        {
+            "result": result,
+            "context": ctx.cti_observation_inventory,
+            "rendered": rendered,
+            "csv_rows": cti_csv_rows,
+            "detail_rows": detail_rows,
+        },
+        sort_keys=True,
+    )
+
+    assert result["persisted_count"] == 1
+    assert len(ctx.cti_observation_inventory) == 1
+    assert ctx.exploits.finding_count == 0
+    assert not any(row["record_type"] == "finding" for row in cti_csv_rows)
+    assert cti_csv_rows[0]["cti_reportable"] == "False"
+    assert "### 4.0 CTI Observation Inventory (Not Findings)" in rendered
+    assert "`portal.acme.example`" in rendered
+    assert detail_rows[0]["Indicator"] == "portal.acme.example"
+    assert detail_rows[0]["Reportable"] == "no"
+    assert "api_key=" not in blob
     assert secret_value not in blob
 
 

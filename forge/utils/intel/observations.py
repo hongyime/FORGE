@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
+import json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -197,13 +198,25 @@ def normalize_observation(
     if not canonical_value:
         return None
 
-    raw_hash = _raw_artifact_hash(raw)
+    safe_source_url = _sanitize_reference_url(source_url or _field(raw, "source_url", "reference"))
+    safe_provenance = _bounded_text(
+        redact_unsafe_text(_field(raw, "provenance", "description")),
+        240,
+    )
+    raw_hash = _raw_artifact_hash(
+        raw,
+        provider=provider,
+        indicator_type=indicator_type,
+        indicator_value=canonical_value,
+        source_url=safe_source_url,
+        provenance=safe_provenance,
+    )
     tags = _normalize_tags(raw.get("tags"))
     return OsintObservation(
         provider=_bounded_text(provider, 64),
         indicator_type=indicator_type,
         indicator_value=canonical_value,
-        source_url=_bounded_text(source_url or _field(raw, "source_url", "reference"), 240),
+        source_url=safe_source_url,
         observed_at=_observed_at(raw),
         confidence=_confidence(raw.get("confidence")),
         tlp=_normalize_tlp(_field(raw, "tlp", "marking")),
@@ -214,7 +227,7 @@ def normalize_observation(
         ),
         raw_artifact_hash=raw_hash,
         tags=tags,
-        provenance=_bounded_text(_field(raw, "provenance", "description"), 240),
+        provenance=safe_provenance,
     )
 
 
@@ -359,12 +372,57 @@ def _redact_url_secrets(value: str) -> str:
     return _URL_CREDENTIAL_RE.sub(r"\1[REDACTED]@", value)
 
 
-def _raw_artifact_hash(raw: Mapping[str, Any]) -> str:
+def _sanitize_reference_url(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = urlsplit(text)
+    except ValueError:
+        return _bounded_text(redact_unsafe_text(text), 240)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        return _bounded_text(redact_unsafe_text(text), 240)
+    netloc = parsed.netloc.rsplit("@", 1)[-1].lower()
+    query_parts = []
+    for part in parsed.query.split("&"):
+        key = part.split("=", 1)[0].lower()
+        if key in {"token", "api_key", "apikey", "password", "secret", "signature", "key"}:
+            continue
+        if part:
+            query_parts.append(part)
+    sanitized = urlunsplit(
+        (parsed.scheme.lower(), netloc, parsed.path or "/", "&".join(query_parts), "")
+    )
+    return _bounded_text(
+        redact_unsafe_text(sanitized),
+        240,
+    )
+
+
+def _raw_artifact_hash(
+    raw: Mapping[str, Any],
+    *,
+    provider: str,
+    indicator_type: str,
+    indicator_value: str,
+    source_url: str,
+    provenance: str,
+) -> str:
     for name in ("raw_artifact_hash", "body_hash", "response_hash"):
         value = str(raw.get(name) or "").strip().lower()
         if re.fullmatch(r"[a-f0-9]{32,128}", value):
             return value
-    stable = repr(sorted((str(k), _bounded_text(v, 120)) for k, v in raw.items()))
+    stable = json.dumps(
+        {
+            "schema": "cti-observation-artifact.v1",
+            "provider": _bounded_text(provider, 64),
+            "indicator_type": indicator_type,
+            "indicator_value": indicator_value,
+            "source_url": source_url,
+            "provenance": provenance,
+        },
+        sort_keys=True,
+    )
     return hashlib.sha256(stable.encode("utf-8")).hexdigest()
 
 

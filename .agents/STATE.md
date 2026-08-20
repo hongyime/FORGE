@@ -10,7 +10,9 @@ Progress:
 - Pushed B515 as `7b14720 feat: add safe cti osint observations`.
 - Implemented offline `forge connectors import-cti` for normalized CTI/OSINT observation JSON, durable `cti_observations` storage, audit logging, duplicate handling, and explicit scope-gated seed promotion.
 - Updated README public connector command list for `forge connectors import-cti`.
+- Pushed B516 as `6b3bd9f feat: import offline cti observations`.
+- Exposed CTI observations as non-reportable inventory in Phase 6 context/export/template reports and dashboard detail JSON.
+- Hardened CTI source/provenance redaction and changed fallback raw-artifact hashes to sanitized canonical observation fields only.
 
 Next steps:
-- Final focused tests, CLI registry guard, Ruff, and py_compile passed.
-- Run final diff/status checks, commit, and push.
+- Commit and push the CTI observation inventory/reporting checkpoint after final diff checks.

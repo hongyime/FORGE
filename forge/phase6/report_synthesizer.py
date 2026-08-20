@@ -297,6 +297,7 @@ class ReportContext:
     artifact_inventory: list[dict[str, Any]] = field(default_factory=list)
     cloud_asset_inventory: list[dict[str, Any]] = field(default_factory=list)
     cloud_validation_inventory: list[dict[str, Any]] = field(default_factory=list)
+    cti_observation_inventory: list[dict[str, Any]] = field(default_factory=list)
     key_findings: list[dict[str, Any]] = field(default_factory=list)
     seed_summary: SeedSummaryContext = field(default_factory=SeedSummaryContext)
     ongoing_intelligence: OngoingIntelligenceContext = field(
@@ -365,6 +366,7 @@ class ContextBuilder:
                 artifact_inventory=load_artifact_inventory(con, self._eid),
                 cloud_asset_inventory=self._cloud_asset_inventory(con),
                 cloud_validation_inventory=self._cloud_validation_inventory(con),
+                cti_observation_inventory=self._cti_observation_inventory(con),
                 key_findings=self._load_key_findings(con),
                 seed_summary=self._load_seed_summary(con),
                 ongoing_intelligence=self._load_ongoing_intel(con),
@@ -884,6 +886,84 @@ class ContextBuilder:
                 }
             )
         inventory.sort(key=lambda item: (str(item["asset_type"]), str(item["identifier"])))
+        return inventory
+
+    def _cti_observation_inventory(self, con: sqlite3.Connection) -> list[dict[str, Any]]:
+        columns = self._table_columns(con, "cti_observations")
+        required = {
+            "provider",
+            "indicator_type",
+            "indicator_value",
+            "confidence",
+            "tlp",
+            "raw_artifact_hash",
+        }
+        if not required.issubset(columns):
+            return []
+        optional_exprs = {
+            "source_url": "source_url" if "source_url" in columns else "'' AS source_url",
+            "observed_at": "observed_at" if "observed_at" in columns else "'' AS observed_at",
+            "collection_method": (
+                "collection_method" if "collection_method" in columns else "'' AS collection_method"
+            ),
+            "source_reliability": (
+                "source_reliability"
+                if "source_reliability" in columns
+                else "'' AS source_reliability"
+            ),
+            "tags_json": "tags_json" if "tags_json" in columns else "'[]' AS tags_json",
+            "provenance": "provenance" if "provenance" in columns else "'' AS provenance",
+            "created_at": "created_at" if "created_at" in columns else "'' AS created_at",
+        }
+        try:
+            rows = con.execute(
+                f"""
+                SELECT provider,
+                       indicator_type,
+                       indicator_value,
+                       confidence,
+                       tlp,
+                       raw_artifact_hash,
+                       {optional_exprs["source_url"]},
+                       {optional_exprs["observed_at"]},
+                       {optional_exprs["collection_method"]},
+                       {optional_exprs["source_reliability"]},
+                       {optional_exprs["tags_json"]},
+                       {optional_exprs["provenance"]},
+                       {optional_exprs["created_at"]}
+                FROM cti_observations
+                WHERE engagement_id=?
+                ORDER BY created_at DESC, id DESC
+                LIMIT 100
+                """,
+                (self._eid,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+
+        inventory: list[dict[str, Any]] = []
+        for row in rows:
+            tags = self._safe_json_loads(str(row["tags_json"] or "[]"))
+            if not isinstance(tags, list):
+                tags = []
+            inventory.append(
+                {
+                    "provider": str(row["provider"] or "").strip(),
+                    "indicator_type": str(row["indicator_type"] or "").strip(),
+                    "indicator_value": str(row["indicator_value"] or "").strip(),
+                    "confidence": float(row["confidence"] or 0.0),
+                    "tlp": str(row["tlp"] or "").strip(),
+                    "source_url": str(row["source_url"] or "").strip(),
+                    "observed_at": str(row["observed_at"] or "").strip(),
+                    "collection_method": str(row["collection_method"] or "").strip(),
+                    "source_reliability": str(row["source_reliability"] or "").strip(),
+                    "raw_artifact_hash": str(row["raw_artifact_hash"] or "").strip(),
+                    "tags": [str(tag) for tag in tags if str(tag).strip()],
+                    "provenance": str(row["provenance"] or "").strip(),
+                    "created_at": str(row["created_at"] or "").strip(),
+                    "reportable": False,
+                }
+            )
         return inventory
 
     def _finding_validation_candidates(self, row: sqlite3.Row) -> list[tuple[str, str]]:
@@ -3071,6 +3151,39 @@ class ReportSynthesizer:
                     "key_findings_count": ctx.osint.key_findings_count,
                 }
             )
+        for observation in ctx.cti_observation_inventory:
+            rows.append(
+                {
+                    "record_type": "cti_observation",
+                    "engagement_id": ctx.engagement_id,
+                    "engagement_name": ctx.engagement_name,
+                    "overall_risk": ctx.overall_risk,
+                    "cti_provider": str(observation.get("provider") or ""),
+                    "cti_indicator_type": str(observation.get("indicator_type") or ""),
+                    "cti_indicator_value": str(observation.get("indicator_value") or ""),
+                    "cti_confidence": str(observation.get("confidence") or ""),
+                    "cti_tlp": str(observation.get("tlp") or ""),
+                    "cti_source_url": str(observation.get("source_url") or ""),
+                    "cti_observed_at": str(observation.get("observed_at") or ""),
+                    "cti_collection_method": str(observation.get("collection_method") or ""),
+                    "cti_source_reliability": str(
+                        observation.get("source_reliability") or ""
+                    ),
+                    "cti_raw_artifact_hash": str(observation.get("raw_artifact_hash") or ""),
+                    "cti_tags": ", ".join(
+                        str(tag)
+                        for tag in observation.get("tags", [])
+                        if str(tag).strip()
+                    ),
+                    "cti_provenance": str(observation.get("provenance") or ""),
+                    "cti_reportable": "False",
+                    "emails_found": ctx.osint.emails_found,
+                    "hosts_found": len(ctx.recon.hosts),
+                    "subdomains_found": len(ctx.recon.subdomains),
+                    "open_ports_found": len(ctx.recon.open_ports),
+                    "key_findings_count": ctx.osint.key_findings_count,
+                }
+            )
         for key_finding in ctx.key_findings:
             rows.append(
                 {
@@ -4077,6 +4190,29 @@ class ReportSynthesizer:
             if cloud_asset_rows
             else "_No cloud asset inventory was recorded in this reporting window._"
         )
+        cti_observation_rows = []
+        for observation in ctx.cti_observation_inventory[:25]:
+            cti_observation_rows.append(
+                "| "
+                + " | ".join(
+                    [
+                        _md_cell(observation.get("provider")),
+                        _md_cell(observation.get("indicator_type")),
+                        f"`{_md_cell(observation.get('indicator_value'))}`",
+                        _md_cell(observation.get("confidence")),
+                        _md_cell(observation.get("tlp")),
+                        _md_cell(observation.get("provenance")),
+                        "no",
+                    ]
+                )
+                + " |"
+            )
+        cti_observation_table = (
+            "| Provider | Indicator type | Indicator | Confidence | TLP | Provenance | Reportable |\n"
+            "|---|---|---|---|---|---|---|\n" + "\n".join(cti_observation_rows)
+            if cti_observation_rows
+            else "_No CTI observation inventory was recorded in this reporting window._"
+        )
 
         # Deterministic fallback should enumerate every validated finding so
         # the last-resort report does not silently drop confirmed exposures.
@@ -4246,7 +4382,12 @@ class ReportSynthesizer:
                 f"**Paste alerts:** {ctx.osint.paste_alert_count}  \n"
                 f"**Breach corpora referenced:** "
                 f"{len(ctx.osint.breach_sources)}  \n"
-                f"**Exposed-key findings:** {ctx.osint.key_findings_count}",
+                f"**Exposed-key findings:** {ctx.osint.key_findings_count}  \n"
+                f"**CTI observations:** {len(ctx.cti_observation_inventory)}",
+                "",
+                "### 4.0 CTI Observation Inventory (Not Findings)",
+                "",
+                cti_observation_table,
                 "",
                 "### 4.1 Engagement Seeds & Entity Summary",
                 "",

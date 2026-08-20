@@ -1514,6 +1514,28 @@ def _account_existence_section_row(row: sqlite3.Row) -> dict[str, str]:
     }
 
 
+def _cti_observation_section_row(row: sqlite3.Row) -> dict[str, str]:
+    tags = _safe_json_loads(str(row["tags_json"] or "[]"))
+    if not isinstance(tags, list):
+        tags = []
+    return {
+        "Provider": str(row["provider"] or ""),
+        "Type": str(row["indicator_type"] or ""),
+        "Indicator": str(row["indicator_value"] or ""),
+        "Confidence": str(row["confidence"] or ""),
+        "TLP": str(row["tlp"] or ""),
+        "Method": str(row["collection_method"] or ""),
+        "Reliability": str(row["source_reliability"] or ""),
+        "Provenance": _truncate(row["provenance"], 120),
+        "Source": _truncate(row["source_url"], 120),
+        "Artifact Hash": _truncate(row["raw_artifact_hash"], 24),
+        "Tags": _truncate(", ".join(str(tag) for tag in tags if str(tag).strip()), 120),
+        "Reportable": "no",
+        "Observed": _format_dt(str(row["observed_at"] or "")),
+        "Imported": _format_dt(str(row["created_at"] or "")),
+    }
+
+
 def _engagement_seed_section_row(row: sqlite3.Row) -> dict[str, str]:
     metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
     synthesis = metadata.get("synthesis") if isinstance(metadata, dict) else {}
@@ -1766,6 +1788,7 @@ def _detail_section_query_callbacks() -> DetailSectionQueryCallbacks:
         vulnerability_row_is_reportable=_vulnerability_row_is_reportable,
         reportable_cloud_validation_index=_reportable_cloud_validation_index,
         artifact_queue_row=_artifact_queue_section_row,
+        cti_observation_row=_cti_observation_section_row,
         cloud_asset_row=_cloud_asset_section_row,
         cloud_validation_row=_cloud_validation_section_row,
         normalized_cloud_asset_type_sql=_normalized_cloud_asset_type_sql,
