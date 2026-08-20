@@ -127,3 +127,4 @@
 - 2026-08-21: B636 engagement detail dashboards now group no-row evidence sections behind one collapsible summary after populated tables, reducing sparse-page noise without regenerating reports.
 - 2026-08-21: B637 quality-audit stale-report actions now always surface a stale-run dry-run batch rehearsal before the live regeneration command.
 - 2026-08-21: B638 stale report repair run JSON now distinguishes dry-run previewed items from genuinely skipped items with `dry_run_count`.
+- 2026-08-21: B639 stale report repair dry-runs now support redacted path-neutral rehearsal output and block redacted live regeneration.
