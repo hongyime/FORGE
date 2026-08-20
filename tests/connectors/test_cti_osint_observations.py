@@ -567,6 +567,47 @@ def test_cti_import_dry_run_reports_existing_and_in_file_duplicates(
     assert seed_count == 0
 
 
+def test_cti_import_limit_bounds_processed_items(tmp_path: Path) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    report = {
+        "items": [
+            {"type": "domain", "value": "one.acme.example"},
+            {"type": "domain", "value": "two.acme.example"},
+            {"type": "domain", "value": "three.acme.example"},
+        ]
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="stix_taxii_import",
+                engagement_id=1001,
+                limit=2,
+            ),
+            report_text=json.dumps(report),
+        )
+        values = [
+            row["indicator_value"]
+            for row in con.execute(
+                """
+                SELECT indicator_value
+                FROM cti_observations
+                ORDER BY indicator_value
+                """
+            ).fetchall()
+        ]
+    finally:
+        con.close()
+
+    assert result["total_item_count"] == 3
+    assert result["processed_item_count"] == 2
+    assert result["limited_item_count"] == 1
+    assert result["parsed_count"] == 2
+    assert result["persisted_count"] == 2
+    assert values == ["one.acme.example", "two.acme.example"]
+
+
 def test_cti_observations_surface_as_non_reportable_inventory(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     db_path = data_dir / "engagements" / "1001.db"
@@ -760,3 +801,55 @@ def test_connector_cli_import_cti_dry_run_writes_nothing(
     assert payload["would_promote_seed_count"] == 1
     assert cti_table is None
     assert secret_value not in result.output
+
+
+def test_connector_cli_import_cti_limit_is_passed_to_importer(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "cti.json"
+    report_file.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {"type": "domain", "value": "one.acme.example"},
+                    {"type": "domain", "value": "two.acme.example"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "stix_taxii_import",
+            "--report-file",
+            str(report_file),
+            "--limit",
+            "1",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["limit"] == 1
+    assert payload["total_item_count"] == 2
+    assert payload["processed_item_count"] == 1
+    assert payload["limited_item_count"] == 1
+    assert payload["persisted_count"] == 1

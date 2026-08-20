@@ -39,6 +39,7 @@ class CtiObservationImportConfig:
     promote_targets: bool = False
     operator: str = "connector-import"
     dry_run: bool = False
+    limit: int | None = None
 
 
 def import_cti_observations(
@@ -64,6 +65,12 @@ def import_cti_observations(
         text = config.report_path.read_text(encoding="utf-8")
     payload = _json_document(text)
     raw_items = _payload_items(payload)
+    limit = _normalize_limit(config.limit)
+    total_item_count = len(raw_items)
+    limited_item_count = 0
+    if limit is not None and total_item_count > limit:
+        raw_items = raw_items[:limit]
+        limited_item_count = total_item_count - limit
     if not config.dry_run:
         _ensure_cti_observation_table(con)
 
@@ -161,6 +168,10 @@ def import_cti_observations(
         "engagement_id": engagement_id,
         "status": "completed",
         "dry_run": bool(config.dry_run),
+        "limit": limit,
+        "total_item_count": total_item_count,
+        "processed_item_count": len(raw_items),
+        "limited_item_count": limited_item_count,
         "parsed_count": parsed_count,
         "persisted_count": persisted_count,
         "duplicate_count": duplicate_count,
@@ -462,6 +473,18 @@ def _json_document(text: str) -> Any:
         return json.loads(str(text or ""))
     except json.JSONDecodeError as exc:
         raise ValueError("CTI observation report is not valid JSON") from exc
+
+
+def _normalize_limit(value: int | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("CTI import limit must be an integer") from exc
+    if parsed < 1:
+        raise ValueError("CTI import limit must be at least 1")
+    return min(parsed, 100_000)
 
 
 def _provider_observation_item(

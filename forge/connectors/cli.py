@@ -454,6 +454,13 @@ def register_connector_commands(app: typer.Typer) -> None:
             "--dry-run",
             help="Parse and normalize the CTI file without writing observations, seeds, or audit rows.",
         ),
+        limit: int | None = typer.Option(
+            None,
+            "--limit",
+            min=1,
+            max=100000,
+            help="Maximum number of CTI items to process from the offline file.",
+        ),
         operator: str = typer.Option("connector-import", "--operator"),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
@@ -476,6 +483,7 @@ def register_connector_commands(app: typer.Typer) -> None:
                     promote_targets=promote_targets,
                     operator=operator,
                     dry_run=dry_run,
+                    limit=limit,
                 ),
             )
         except (FileNotFoundError, LookupError, ValueError) as exc:
@@ -494,7 +502,8 @@ def register_connector_commands(app: typer.Typer) -> None:
             f"would_duplicate={result.get('would_duplicate_count', 0)} "
             f"promoted={result['promoted_seed_count']} "
             f"would_promote={result.get('would_promote_seed_count', 0)} "
-            f"skipped={result['skipped_count']}"
+            f"skipped={result['skipped_count']} "
+            f"limited={result.get('limited_item_count', 0)}"
         )
 
     @app.command("run-secrets")

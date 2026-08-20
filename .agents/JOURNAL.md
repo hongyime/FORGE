@@ -6,3 +6,4 @@
 - 2026-08-20: Extended CTI offline import to normalize common ThreatFox, URLHaus, and STIX indicator export shapes locally; live provider fetching remains out of scope until explicitly approved.
 - 2026-08-20: Added CTI import dry-run preview semantics with no observation, seed, or audit writes; real write counters stay zero and preview counts use `would_*` fields.
 - 2026-08-20: CTI dry-run previews now read existing observation keys and track in-file repeats so `would_persist_count` excludes duplicates without creating tables or writing audit rows.
+- 2026-08-20: Added explicit CTI import item limits for large offline exports; result metadata reports total, processed, and limited item counts.
