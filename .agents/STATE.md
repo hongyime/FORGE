@@ -188,9 +188,10 @@ Progress:
 - Pushed B566 as `bf3d13a feat: add target resume batch runner`.
 - Added Windows persistent `FORGE_ENGAGEMENT_KEY` detection to `forge connectors secret-key-plan --json` as a non-secret `persistent_key_hint` and changed doctor to report a restart/process-env warning when the key exists at user/machine scope but this shell has not inherited it.
 - Verified B567 with focused key-plan/doctor tests, full doctor tests (`45 passed`), Ruff, py_compile, `git diff --check`, and local secret-key-plan/doctor smokes. Local smoke reports user-level key length/fingerprint only and no secret material.
+- Pushed B567 as `40e9ba3 fix: detect persistent connector secret key`.
 
 Next steps:
-- Commit and push B567, then continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, and Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Remaining doctor attention is Safe Mode, TPH Target Import Bridge, Connector Catalog/Action Plan for manual TruffleHog, and Monitoring Schedules due work that should be reviewed with `forge monitoring due-plan --json` before any `run-due`/worker apply.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
