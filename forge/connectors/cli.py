@@ -440,7 +440,13 @@ def register_connector_commands(app: typer.Typer) -> None:
     def import_cti(
         engagement: int = typer.Option(..., "--engagement", "-e"),
         connector: str = typer.Option("stix_taxii_import", "--connector"),
-        report_file: Path = typer.Option(..., "--report-file", exists=True, dir_okay=False),
+        report_file: Path = typer.Option(
+            ...,
+            "--report-file",
+            exists=True,
+            dir_okay=False,
+            help="Offline CTI export file in JSON or CSV format.",
+        ),
         provider: str = typer.Option("", "--provider", help="Override provider label."),
         source_url: str = typer.Option("", "--source-url", help="Safe provenance URL or feed ID."),
         collection_method: str = typer.Option("offline_import", "--collection-method"),

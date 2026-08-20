@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import csv
 import json
 import re
 import sqlite3
+from io import StringIO
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -68,8 +70,7 @@ def import_cti_observations(
         if config.report_path is None:
             raise ValueError("report_path is required")
         text = config.report_path.read_text(encoding="utf-8")
-    payload = _json_document(text)
-    raw_items = _payload_items(payload)
+    raw_items, source_format = _report_items(text)
     limit = _normalize_limit(config.limit)
     min_confidence = _normalize_min_confidence(config.min_confidence)
     max_tlp = _normalize_max_tlp(config.max_tlp)
@@ -233,6 +234,7 @@ def import_cti_observations(
         "total_item_count": total_item_count,
         "processed_item_count": len(raw_items),
         "limited_item_count": limited_item_count,
+        "source_format": source_format,
         "parsed_count": parsed_count,
         "persisted_count": persisted_count,
         "duplicate_count": duplicate_count,
@@ -530,11 +532,46 @@ def _payload_items(payload: Any) -> list[Any]:
     raise ValueError("CTI observation report does not contain observations/items/data")
 
 
+def _report_items(text: str) -> tuple[list[Any], str]:
+    value = str(text or "")
+    stripped = value.lstrip("\ufeff\r\n\t ")
+    if not stripped:
+        raise ValueError("CTI observation report is empty")
+    if stripped.startswith(("{", "[")):
+        return _payload_items(_json_document(value)), "json"
+    return _csv_items(value), "csv"
+
+
 def _json_document(text: str) -> Any:
     try:
         return json.loads(str(text or ""))
     except json.JSONDecodeError as exc:
         raise ValueError("CTI observation report is not valid JSON") from exc
+
+
+def _csv_items(text: str) -> list[dict[str, str]]:
+    sample = str(text or "").lstrip("\ufeff")
+    try:
+        dialect = csv.Sniffer().sniff(sample[:4096])
+    except csv.Error:
+        dialect = csv.excel
+    reader = csv.DictReader(StringIO(sample), dialect=dialect)
+    if not reader.fieldnames:
+        raise ValueError("CTI observation CSV report must include a header row")
+    fieldnames = [str(name or "").strip() for name in reader.fieldnames]
+    if not any(fieldnames):
+        raise ValueError("CTI observation CSV report must include named columns")
+    rows: list[dict[str, str]] = []
+    for row in reader:
+        cleaned: dict[str, str] = {}
+        for key, value in row.items():
+            normalized_key = str(key or "").strip()
+            if not normalized_key:
+                continue
+            cleaned[normalized_key] = str(value or "").strip()
+        if any(cleaned.values()):
+            rows.append(cleaned)
+    return rows
 
 
 def _normalize_limit(value: int | None) -> int | None:
