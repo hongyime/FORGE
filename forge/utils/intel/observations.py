@@ -146,6 +146,16 @@ CTI_OSINT_PROVIDER_CATALOG: tuple[OsintProviderCatalogEntry, ...] = (
         notes="Offline MISP event/attribute normalization; no MISP API polling.",
     ),
     OsintProviderCatalogEntry(
+        id="supabase_table_import",
+        label="Supabase Table Export Import",
+        category="threat_intelligence",
+        default_enabled=True,
+        safety_tier="passive_offline",
+        collection_method="offline_import",
+        outputs=("table_export", "target_normalization", "provenance"),
+        notes="Offline Supabase JSON/CSV table export normalization; no live Supabase API polling.",
+    ),
+    OsintProviderCatalogEntry(
         id="crtsh_certificate_transparency",
         label="crt.sh Certificate Transparency",
         category="discovery",

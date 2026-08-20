@@ -31,6 +31,7 @@ SUPPORTED_CTI_IMPORT_CONNECTORS = (
     "abusech_threatfox",
     "abusech_urlhaus",
     "misp_event_import",
+    "supabase_table_import",
     "stix_taxii_import",
 )
 CTI_IMPORT_RESULT_SCHEMA_VERSION = "forge.cti_observation_import.v1"
@@ -554,7 +555,7 @@ def _payload_items(payload: Any) -> list[Any]:
     misp_items = _misp_payload_items(payload)
     if misp_items:
         return misp_items
-    for key in ("observations", "items", "data", "indicators", "objects"):
+    for key in ("observations", "items", "data", "rows", "indicators", "objects"):
         value = payload.get(key)
         if isinstance(value, list):
             return list(value)
@@ -846,6 +847,8 @@ def _provider_observation_item(
     item = dict(raw)
     if connector_id == "misp_event_import":
         return _misp_observation_item(item, provider=provider)
+    if connector_id == "supabase_table_import":
+        return _supabase_observation_item(item, provider=provider)
     if _has_neutral_observation_fields(item):
         return item
     if connector_id == "abusech_threatfox":
@@ -951,6 +954,77 @@ def _stix_observation_item(raw: Mapping[str, Any], *, provider: str) -> dict[str
         "tags": labels,
         "provenance": str(raw.get("name") or raw.get("description") or raw.get("id") or ""),
     }
+
+
+def _supabase_observation_item(raw: Mapping[str, Any], *, provider: str) -> dict[str, Any]:
+    if _has_neutral_observation_fields(raw):
+        return {**raw, "provider": str(raw.get("provider") or provider)}
+    indicator_type, value = _supabase_indicator(raw)
+    row_id = _first_text(raw, "id", "uuid", "target_id", "record_id")
+    table_name = _first_text(raw, "table", "table_name", "source_table")
+    provenance_parts = [
+        f"Supabase table export {table_name}" if table_name else "Supabase table export",
+        f"row {row_id}" if row_id else "",
+        _first_text(raw, "source_kind", "provenance_summary", "provenance", "description"),
+    ]
+    return {
+        **raw,
+        "provider": str(raw.get("provider") or provider),
+        "type": indicator_type,
+        "value": value,
+        "confidence": _percent_confidence(_first_text(raw, "confidence"), fallback=0.5),
+        "observed_at": _first_text(
+            raw,
+            "first_seen_at",
+            "observed_at",
+            "first_seen",
+            "created_at",
+            "inserted_at",
+            "updated_at",
+        ),
+        "source_url": _first_text(raw, "source_url", "reference", "row_url"),
+        "tags": raw.get("tags"),
+        "tlp": _first_text(raw, "tlp", "marking"),
+        "provenance": " ".join(part for part in provenance_parts if part).strip(),
+    }
+
+
+def _supabase_indicator(raw: Mapping[str, Any]) -> tuple[str, str]:
+    explicit_type = _first_text(raw, "target_type", "indicator_type", "type")
+    explicit_value = _first_text(raw, "target_value", "indicator_value", "value", "ioc")
+    if explicit_type and explicit_value:
+        mapped = _provider_indicator_type(explicit_type, explicit_value)
+        return mapped, _provider_indicator_value(mapped, explicit_value)
+    candidates = (
+        ("url", ("canonical_url", "url", "supabase_url", "endpoint", "website", "link")),
+        ("domain", ("network_domain", "domain", "hostname", "host")),
+        ("ip", ("ip", "ip_address", "address")),
+        ("email", ("email", "email_address", "owner_email")),
+        ("username", ("username", "handle", "account")),
+    )
+    for indicator_type, keys in candidates:
+        value = _first_text(raw, *keys)
+        if value:
+            return indicator_type, _provider_indicator_value(indicator_type, value)
+    return "", ""
+
+
+def _first_text(raw: Mapping[str, Any], *keys: str) -> str:
+    lowered: dict[str, Any] = {}
+    for raw_key, raw_value in raw.items():
+        normalized_key = str(raw_key or "").strip().lower()
+        if normalized_key and normalized_key not in lowered:
+            lowered[normalized_key] = raw_value
+    for key in keys:
+        value = raw.get(key)
+        if value in (None, ""):
+            value = lowered.get(str(key or "").strip().lower())
+        if value in (None, ""):
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
 
 
 def _provider_indicator_type(indicator_type: str, value: str) -> str:

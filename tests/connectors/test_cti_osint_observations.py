@@ -68,6 +68,8 @@ def test_cti_connectors_are_catalog_only_and_free_first() -> None:
     assert by_id["stix_taxii_import"]["safety"] == "passive_offline"
     assert by_id["misp_event_import"]["safety"] == "passive_offline"
     assert by_id["misp_event_import"]["execution_paths"] == ["forge connectors import-cti"]
+    assert by_id["supabase_table_import"]["safety"] == "passive_offline"
+    assert by_id["supabase_table_import"]["execution_paths"] == ["forge connectors import-cti"]
     assert "scope_manifest_seed_promotion" in by_id["abusech_urlhaus"]["required_gates"]
 
 
@@ -75,7 +77,13 @@ def test_provider_catalog_defaults_skip_sensitive_social_sources() -> None:
     default_ids = {entry.id for entry in provider_catalog()}
     all_ids = {entry.id for entry in provider_catalog(include_sensitive=True)}
 
-    assert {"abusech_threatfox", "abusech_urlhaus", "stix_taxii_import", "misp_event_import"} <= default_ids
+    assert {
+        "abusech_threatfox",
+        "abusech_urlhaus",
+        "stix_taxii_import",
+        "misp_event_import",
+        "supabase_table_import",
+    } <= default_ids
     assert "github_code_search_public" not in default_ids
     assert "social_search_curated" not in default_ids
     assert {"github_code_search_public", "social_search_curated"} <= all_ids
@@ -723,6 +731,67 @@ def test_cti_import_accepts_misp_attribute_search_shape(tmp_path: Path) -> None:
     assert secret_value not in blob
 
 
+def test_cti_import_accepts_supabase_table_export_rows(tmp_path: Path) -> None:
+    con = _build_cti_db(tmp_path / "engagement.db")
+    secret_value = "supabase-table-token"
+    report = {
+        "rows": [
+            {
+                "id": "row-url",
+                "table_name": "candidate_targets",
+                "Supabase_URL": f"https://portal.acme.example/login?apikey={secret_value}&ok=1",
+                "First_Seen_At": "2026-08-20T10:00:00Z",
+                "Confidence": "0.81",
+                "Provenance_Summary": f"telegram scrape token={secret_value}",
+            },
+            {
+                "id": "row-domain",
+                "table_name": "candidate_targets",
+                "Network_Domain": "API.Acme.Example",
+                "Created_At": "2026-08-20T11:00:00Z",
+            },
+        ]
+    }
+
+    try:
+        result = import_cti_observations(
+            con,
+            CtiObservationImportConfig(
+                connector_id="supabase_table_import",
+                engagement_id=1001,
+                promote_targets=True,
+            ),
+            report_text=json.dumps(report),
+        )
+        rows = con.execute(
+            """
+            SELECT indicator_type, indicator_value, confidence, observed_at, provenance
+            FROM cti_observations
+            ORDER BY indicator_type DESC
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    blob = json.dumps(
+        {"result": result, "rows": [dict(row) for row in rows]},
+        sort_keys=True,
+    )
+    assert result["connector_id"] == "supabase_table_import"
+    assert result["parsed_count"] == 2
+    assert result["persisted_count"] == 2
+    assert result["promoted_seed_count"] == 2
+    assert result["parsed_indicator_type_counts"] == {"domain": 1, "url": 1}
+    assert result["target_feed_type_counts"] == {"domain": 1, "url": 1}
+    assert rows[0]["indicator_type"] == "url"
+    assert rows[0]["indicator_value"] == "https://portal.acme.example/login?ok=1"
+    assert rows[0]["confidence"] == 0.81
+    assert rows[0]["observed_at"] == "2026-08-20T10:00:00Z"
+    assert rows[1]["indicator_type"] == "domain"
+    assert rows[1]["indicator_value"] == "api.acme.example"
+    assert secret_value not in blob
+
+
 def test_cti_import_dry_run_does_not_write_observations_seeds_or_audit(
     tmp_path: Path,
 ) -> None:
@@ -1286,6 +1355,56 @@ def test_connector_cli_import_cti_reads_gzipped_csv_export(
     assert payload["parsed_count"] == 1
     assert payload["persisted_count"] == 1
     assert payload["parsed_indicator_type_counts"] == {"domain": 1}
+
+
+def test_connector_cli_import_cti_reads_supabase_csv_export(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "engagements" / "1001.db"
+    con = _build_cti_db(db_path)
+    con.close()
+    report_file = tmp_path / "supabase-targets.csv"
+    report_file.write_text(
+        "\n".join(
+            [
+                "ID,Table_Name,Target_Type,Target_Value,First_Seen_At,Confidence",
+                "row-1,candidate_targets,domain,Portal.Acme.Example,2026-08-20T10:00:00Z,0.9",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+    result = CliRunner().invoke(
+        app,
+        [
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "supabase_table_import",
+            "--report-file",
+            str(report_file),
+            "--promote-targets",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["source_format"] == "csv"
+    assert payload["connector_id"] == "supabase_table_import"
+    assert payload["parsed_count"] == 1
+    assert payload["persisted_count"] == 1
+    assert payload["promoted_seed_count"] == 1
+    assert payload["target_feed_type_counts"] == {"domain": 1}
 
 
 def test_connector_cli_import_cti_reads_zipped_csv_export(

@@ -282,6 +282,18 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         execution_paths=("forge connectors import-cti",),
     ),
     ConnectorDefinition(
+        id="supabase_table_import",
+        label="Supabase Table Export Import",
+        domain="threat_intelligence",
+        cost_profile="free_local",
+        safety="passive_offline",
+        description="Offline Supabase table export normalization for generic target/indicator rows.",
+        capabilities=("table_export_import", "target_normalization", "provider_provenance"),
+        outputs=("cti_observations", "indicator_confidence", "engagement_seeds"),
+        input_formats=("supabase_table_json", "supabase_table_csv"),
+        execution_paths=("forge connectors import-cti",),
+    ),
+    ConnectorDefinition(
         id="hibp_pwned_passwords",
         label="HIBP Pwned Passwords",
         domain="identity_exposure",
