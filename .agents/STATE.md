@@ -61,8 +61,8 @@ Progress:
 - Verified B534 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
 - Pushed B534 as `30186f2 feat: normalize misp import timestamps`.
 - Added offline MISP attribute-search export support for top-level `Attribute`, `response.Attribute`, and response-list `Attribute` wrappers.
-- Verified B535 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`; commit and push are pending.
+- Verified B535 with focused CTI tests, broader connector sanity tests, Ruff, py_compile, and `git diff --check`.
+- Pushed B535 as `1297a06 feat: import misp attribute exports`.
 
 Next steps:
-- Commit and push B535.
 - Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
