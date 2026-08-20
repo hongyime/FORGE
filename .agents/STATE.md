@@ -3,7 +3,7 @@
 Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
 
 Progress:
-- Verified B610 locally: Safe Mode doctor WARN now has a structured non-executing `review_safe_mode` action item with empty `command_args`; focused doctor tests, Ruff, py_compile, `git diff --check`, and a real local doctor JSON smoke passed. Commit/push pending.
+- Pushed B610 as `5502af5 fix: add safe mode doctor action`: Safe Mode doctor WARN now has a structured non-executing `review_safe_mode` action item with empty `command_args`; focused doctor tests, Ruff, py_compile, `git diff --check`, and a real local doctor JSON smoke passed.
 - Pushed B609 as `31659ef fix: report policy flag totals`: quality-audit `review_policy_flags` now exposes `flag_total_count` alongside row-based total/selected/sample/omitted counts so it matches `policy-plan`; focused tests, Ruff, py_compile, `git diff --check`, and a real local smoke passed.
 - Pushed B608 as `99bfef5 fix: normalize report plan counts`: long-run-plan and policy-plan now match the normalized review-plan count contract; policy-plan uses row-based total/selected/omitted counts and preserves aggregate flag occurrences as `flag_total_count`. Focused tests, Ruff, py_compile, `git diff --check`, and real local plan smokes passed.
 - Pushed B607 as `8644943 fix: report audit action counts`: quality-audit operator action rows now expose consistent total/selected/sample/omitted count metadata across resume, long-run, stale/fallback, and policy review actions; focused tests, Ruff, py_compile, `git diff --check`, and a real local JSON smoke passed.
