@@ -495,6 +495,18 @@ def test_doctor_payload_json_is_machine_readable_and_actionable() -> None:
                 "OPTIONAL",
                 "not in PATH",
                 "Install with go install.",
+                (
+                    {
+                        "id": "review_connectors",
+                        "status": "review",
+                        "command": "forge connectors run-plan --json",
+                    },
+                    {
+                        "id": "set_env",
+                        "status": "manual",
+                        "command": "set FORGE_OFFLINE_STRICT=1",
+                    },
+                ),
             ),
             DoctorCheck("Paid LLM Backends", "OK", "disabled"),
         ]
@@ -504,6 +516,24 @@ def test_doctor_payload_json_is_machine_readable_and_actionable() -> None:
     assert data["schema"] == "forge.doctor.v1"
     assert data["summary"]["check_count"] == 2
     assert data["summary"]["attention_count"] == 1
+    assert data["summary"]["action_count"] == 2
+    action_by_id = {item["id"]: item for item in data["action_plan"]}
+    assert action_by_id["review_connectors"]["command_args"] == [
+        "forge",
+        "connectors",
+        "run-plan",
+        "--json",
+    ]
+    assert action_by_id["set_env"]["command_args"] == []
+    check_action_by_id = {
+        item["id"]: item for item in data["checks"][0]["action_items"]
+    }
+    assert check_action_by_id["review_connectors"]["command_args"] == [
+        "forge",
+        "connectors",
+        "run-plan",
+        "--json",
+    ]
     assert data["checks"][0]["remediation"] == "Install with go install."
     assert "secret values are never printed" in data["secret_material_policy"]
 
@@ -1494,10 +1524,28 @@ def test_collect_doctor_checks_warns_on_due_monitoring_schedules(tmp_path) -> No
     assert action_by_id["review_due_monitoring"]["command"] == (
         "forge monitoring due-plan --json"
     )
+    payload_action_by_id = {
+        item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]
+    }
+    assert payload_action_by_id["review_due_monitoring"]["command_args"] == [
+        "forge",
+        "monitoring",
+        "due-plan",
+        "--json",
+    ]
     assert action_by_id["dry_run_capped_due_monitoring"]["status"] == "ready"
     assert action_by_id["dry_run_capped_due_monitoring"]["command"] == (
         "forge monitoring run-due --dry-run --limit 50 --json"
     )
+    assert payload_action_by_id["dry_run_capped_due_monitoring"]["command_args"] == [
+        "forge",
+        "monitoring",
+        "run-due",
+        "--dry-run",
+        "--limit",
+        "50",
+        "--json",
+    ]
     assert action_by_id["run_capped_due_monitoring"]["status"] == "ready"
     assert action_by_id["run_capped_due_monitoring"]["command"] == (
         "forge monitoring run-due --limit 50 --json"

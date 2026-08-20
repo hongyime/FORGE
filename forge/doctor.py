@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import platform
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -360,7 +361,7 @@ def doctor_payload(checks: Sequence[DoctorCheck]) -> dict[str, Any]:
     for check in checks:
         status_counts[check.status] = status_counts.get(check.status, 0) + 1
     action_plan = [
-        dict(item)
+        _doctor_action_payload(item)
         for check in checks
         for item in check.action_items
         if isinstance(item, Mapping)
@@ -382,7 +383,11 @@ def doctor_payload(checks: Sequence[DoctorCheck]) -> dict[str, Any]:
                 "status": check.status,
                 "details": check.details,
                 "remediation": check.remediation,
-                "action_items": [dict(item) for item in check.action_items],
+                "action_items": [
+                    _doctor_action_payload(item)
+                    for item in check.action_items
+                    if isinstance(item, Mapping)
+                ],
             }
             for check in checks
         ],
@@ -392,6 +397,25 @@ def doctor_payload(checks: Sequence[DoctorCheck]) -> dict[str, Any]:
 
 def doctor_payload_json(checks: Sequence[DoctorCheck]) -> str:
     return json.dumps(doctor_payload(checks), sort_keys=True)
+
+
+def _doctor_action_payload(item: Mapping[str, Any]) -> dict[str, Any]:
+    payload = dict(item)
+    if "command_args" not in payload:
+        payload["command_args"] = _doctor_command_args(payload.get("command"))
+    return payload
+
+
+def _doctor_command_args(command: Any) -> list[str]:
+    text = str(command or "").strip()
+    if not text or text.startswith("$") or text.lower().startswith("set "):
+        return []
+    if not text.startswith("forge "):
+        return []
+    try:
+        return shlex.split(text, posix=False)
+    except ValueError:
+        return []
 
 
 def run_doctor(
