@@ -25,6 +25,7 @@ Progress:
 - Added `forge connectors import-cti --limit N` and result item-count metadata so large offline CTI exports can be processed in bounded batches.
 - Pushed B521 as `c90fbeb feat: bound cti import items`.
 - Added `forge connectors import-cti --min-confidence F` to skip low-confidence offline CTI observations before persistence or dry-run would-persist counts.
+- Pushed B522 as `af505aa feat: filter cti import confidence`.
 
 Next steps:
-- Commit and push the CTI min-confidence filter checkpoint.
+- Continue CTI/OSINT production-readiness planning for live provider fetchers only after explicit approval; current path remains offline import plus non-reportable inventory.
