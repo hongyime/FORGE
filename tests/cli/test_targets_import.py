@@ -466,6 +466,12 @@ def test_resume_candidates_reports_latest_failed_runs_without_sensitive_metadata
     payload = collect_target_resume_candidates(data_dir=data_dir)
 
     assert payload["schema_version"] == "forge.targets.resume_candidates.v1"
+    assert payload["execution_policy"] == (
+        "read_only_resume_candidate_inventory_no_commands_executed"
+    )
+    assert payload["total_count"] == 2
+    assert payload["selected_count"] == 2
+    assert payload["omitted_count"] == 0
     assert payload["candidate_count"] == 2
     assert payload["resume_ready_count"] == 1
     assert payload["resume_blocker_counts"] == {
@@ -564,8 +570,32 @@ def test_resume_candidates_reason_filter_and_limit(tmp_path: Path) -> None:
     )
 
     assert payload["candidate_count"] == 1
+    assert payload["total_count"] == 1
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 0
     assert payload["items"][0]["engagement_id"] == 2
     assert payload["items"][0]["reason"] == "stale_run_recovery"
+
+
+def test_resume_candidates_reports_total_and_omitted_counts_when_limited(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    for engagement_id in (1, 2, 3):
+        _write_candidate_run(
+            data_dir / "engagements" / f"{engagement_id}.db",
+            engagement_id=engagement_id,
+            status="failed",
+            error="abandoned before explicit completion",
+        )
+
+    payload = collect_target_resume_candidates(data_dir=data_dir, limit=2)
+
+    assert payload["total_count"] == 3
+    assert payload["selected_count"] == 2
+    assert payload["omitted_count"] == 1
+    assert payload["candidate_count"] == 2
+    assert payload["skipped_counts"]["limited_candidates"] == 1
 
 
 def test_resume_candidates_default_includes_legacy_dashboard_dbs(

@@ -111,9 +111,10 @@ def collect_target_resume_candidates(
             continue
         if reason_filter and candidate.reason != reason_filter:
             continue
-        candidates.append(candidate)
-        if candidate_limit is not None and len(candidates) >= candidate_limit:
-            break
+        if candidate_limit is None or len(candidates) < candidate_limit:
+            candidates.append(candidate)
+        else:
+            skipped["limited_candidates"] += 1
 
     reason_counts = Counter(item.reason for item in candidates)
     status_counts = Counter(item.status for item in candidates)
@@ -124,10 +125,16 @@ def collect_target_resume_candidates(
             ready_count += 1
         for blocker in item.resume_blockers:
             blocker_counts[blocker] += 1
+    omitted_count = int(skipped.get("limited_candidates", 0))
+    total_count = len(candidates) + omitted_count
     return {
         "schema_version": RESUME_CANDIDATE_SCHEMA_VERSION,
+        "execution_policy": "read_only_resume_candidate_inventory_no_commands_executed",
         "data_dir": str(base_dir),
         "include_legacy": scan_legacy,
+        "total_count": total_count,
+        "selected_count": len(candidates),
+        "omitted_count": omitted_count,
         "candidate_count": len(candidates),
         "resume_ready_count": ready_count,
         "resume_blocker_counts": dict(sorted(blocker_counts.items())),
