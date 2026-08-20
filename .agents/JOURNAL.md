@@ -111,3 +111,4 @@
 - 2026-08-21: CTI import results now carry common schema/execution/count aliases for both dry-run review and write/audit paths.
 - 2026-08-21: Connector plugin validation summaries now carry schema/count aliases while remaining data-only manifest validation.
 - 2026-08-21: Connector catalog JSON now carries top-level schema/execution/count aliases while preserving the existing nested summary.
+- 2026-08-21: Doctor JSON now carries top-level read-only schema/execution/count aliases while preserving the legacy payload shape.
