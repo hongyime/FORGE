@@ -255,9 +255,10 @@ Progress:
 - Pushed B585 as `ab81ba0 feat: add report long run plan`.
 - Changed stale-report follow-up commands from broad `forge report quality-audit --json --top-limit N` to dedicated `forge report stale-plan --json --limit N`.
 - Verified B586 with focused reporting tests (`15 passed`), Ruff, py_compile, `git diff --check`, and real local read-only quality-audit/stale-plan smokes. Local action plan now reports 57 stale reports, 5 sampled, 52 omitted, and follow-up `forge report stale-plan --json --limit 57`. No report regeneration, resume-run, kill-chain, provider call, scheduled-task change, monitoring apply, engagement mutation, or credential persistence was started.
+- Pushed B586 as `5ff7eb1 fix: point stale audit to stale plan`.
 
 Next steps:
-- Commit and push B586, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
