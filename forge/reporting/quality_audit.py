@@ -195,22 +195,41 @@ def _operator_action_plan(
         if _text(row.get("repair_status")) == "stale_after_model_available"
     ]
     if stale_reports:
+        sample_limit = max(0, int(top_limit))
+        sampled_stale_reports = stale_reports[:sample_limit]
+        omitted_count = max(0, len(stale_reports) - len(sampled_stale_reports))
         actions.append(
             {
                 "id": "regenerate_stale_reports",
                 "status": "ready",
                 "execution_policy": "plan_only_no_commands_executed",
                 "summary": (
-                    f"{sum(int(value) for value in latest_fallback_counts.values())} "
+                    f"{len(stale_reports)} "
                     "latest report(s) are stale after local/provider model availability changed"
                 ),
-                "total_count": sum(int(value) for value in latest_fallback_counts.values()),
-                "sample_count": len(stale_reports[:top_limit]),
+                "total_count": len(stale_reports),
+                "sample_limit": sample_limit,
+                "sample_count": len(sampled_stale_reports),
+                "omitted_count": omitted_count,
                 "commands": [
                     row.get("report_generate_command")
-                    for row in stale_reports[:top_limit]
+                    for row in sampled_stale_reports
                     if isinstance(row.get("report_generate_command"), list)
                 ],
+                "follow_up_commands": (
+                    [
+                        [
+                            "forge",
+                            "report",
+                            "quality-audit",
+                            "--json",
+                            "--top-limit",
+                            str(len(stale_reports)),
+                        ]
+                    ]
+                    if omitted_count
+                    else []
+                ),
             }
         )
     elif latest_fallback_counts:

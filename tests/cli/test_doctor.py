@@ -531,6 +531,8 @@ def test_collect_doctor_checks_flags_paid_live_and_weak_web_auth(tmp_path) -> No
     )
 
     rows = _rows(checks)
+    assert rows["Offline Strict"].status == "OFF"
+    assert "FORGE_OFFLINE_STRICT=1" in rows["Offline Strict"].remediation
     assert rows["Safe Mode"].status == "WARN"
     assert "full mode active" in rows["Safe Mode"].details
     assert "FORGE_SAFE_MODE=1" in rows["Safe Mode"].details
@@ -542,6 +544,10 @@ def test_collect_doctor_checks_flags_paid_live_and_weak_web_auth(tmp_path) -> No
     assert rows["LLM Providers"].status == "MISSING"
     action_by_id = {item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]}
     assert action_by_id["review_paid_llm_backends"]["status"] == "attention"
+    assert action_by_id["review_offline_strict"]["status"] == "review"
+    assert action_by_id["review_offline_strict"]["command"] == (
+        "set FORGE_OFFLINE_STRICT=1"
+    )
     assert "FORGE_ALLOW_PAID_BACKENDS enabled" in action_by_id[
         "review_paid_llm_backends"
     ]["summary"]
@@ -1154,7 +1160,7 @@ def test_collect_doctor_checks_reports_ready_tph_target_import_bridge(tmp_path) 
 
     def fake_task_query(task_name: str, timeout_s: float) -> dict[str, str]:
         assert task_name == r"\FORGE Import theprawnhunter Targets"
-        assert timeout_s == 1.5
+        assert timeout_s == 3.0
         return {
             "status": "running",
             "last_result": "0x41301",
@@ -1279,7 +1285,7 @@ def test_collect_doctor_checks_reports_ready_remediation_status_import_task(
     )
 
     def fake_task_query(task_name: str, timeout_s: float) -> dict[str, str]:
-        assert timeout_s == 1.5
+        assert timeout_s == 3.0
         if task_name != r"\FORGE Import Remediation Ticket Statuses":
             return {"status": "missing", "task_name": task_name}
         return {

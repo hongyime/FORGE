@@ -54,6 +54,8 @@ WhichResolver = Callable[[str], str | None]
 DiscoveryRunner = Callable[[float], Any]
 ScheduledTaskQuery = Callable[[str, float], dict[str, str]]
 
+_SCHEDULED_TASK_QUERY_TIMEOUT_S = 3.0
+
 
 _STATUS_STYLE = {
     "OK": "green",
@@ -427,6 +429,26 @@ def _config_checks(cfg: ForgeConfig) -> list[DoctorCheck]:
                 "outbound sockets disabled by FORGE_OFFLINE_STRICT=1"
                 if cfg.offline_strict
                 else "disabled; passive providers may use network when commands run"
+            ),
+            (
+                ""
+                if cfg.offline_strict
+                else (
+                    "Set FORGE_OFFLINE_STRICT=1 for lab/offline runs that must fail "
+                    "closed on outbound sockets; leave it unset only when passive "
+                    "network providers are intentionally allowed."
+                )
+            ),
+            ()
+            if cfg.offline_strict
+            else (
+                {
+                    "id": "review_offline_strict",
+                    "priority": "20",
+                    "status": "review",
+                    "summary": "decide whether passive provider network access should be fail-closed",
+                    "command": "set FORGE_OFFLINE_STRICT=1",
+                },
             ),
         ),
         DoctorCheck(
@@ -1031,7 +1053,7 @@ def _target_import_bridge_check(
     scripts_ready = all(script_status.values())
 
     task_query = scheduled_task_query or _default_scheduled_task_query
-    task_info = task_query(task_name, 1.5)
+    task_info = task_query(task_name, _SCHEDULED_TASK_QUERY_TIMEOUT_S)
     task_status = str(task_info.get("status") or "unavailable").lower()
     task_found = task_status in {"ready", "running", "queued", "disabled"}
     bridge_configured = (
@@ -1186,7 +1208,7 @@ def _remediation_ticket_status_import_check(
         )
 
     task_query = scheduled_task_query or _default_scheduled_task_query
-    task_info = task_query(task_name, 1.5)
+    task_info = task_query(task_name, _SCHEDULED_TASK_QUERY_TIMEOUT_S)
     task_status = str(task_info.get("status") or "unavailable").lower()
     details = (
         f"scripts task_runner={script_status['task_runner']} installer={script_status['installer']}; "

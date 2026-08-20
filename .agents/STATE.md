@@ -238,9 +238,13 @@ Progress:
 - Added Connector Secret Store doctor action items: `setup_connector_secret_key` for missing keys and `reload_connector_secret_key_env` for persistent Windows keys missing from the current process. The reload action uses only the literal process-env reload command and never prints secret material.
 - Verified B581 with focused Connector Secret Store doctor tests (`2 passed`), Ruff, py_compile, `git diff --check`, and a real local filtered doctor smoke showing Connector Secret Store `WARN` plus `reload_connector_secret_key_env` action status `ready`. No secret material was printed; no engagement mutation, provider call, live run, scheduled-task change, monitoring apply, report regeneration, or credential persistence was started.
 - Pushed B581 as `fa24209 fix: add connector key doctor action`.
+- Added report quality-audit sample metadata for stale latest reports: `sample_limit`, `omitted_count`, and read-only `follow_up_commands`; human output prints the follow-up command when the repair sample is truncated.
+- Added Offline Strict doctor remediation plus `review_offline_strict` action item without changing the default OFF behavior.
+- Raised Windows scheduled-task doctor query timeout from 1.5s to a named 3.0s constant for TPH/remediation task checks to reduce transient `task=error` noise.
+- Verified B582 with focused reporting/doctor tests (`13 passed` plus prior quality slice `9 passed`), Ruff, py_compile, `git diff --check`, and real local read-only doctor/quality smokes. Local quality-audit reports 57 stale latest reports, 10 sampled repair commands, 47 omitted commands, and follow-up `forge report quality-audit --json --top-limit 57`; doctor reports Offline Strict `OFF` with `review_offline_strict`, and TPH bridge `OFF task=disabled`. No report regeneration, resume-run, kill-chain, provider call, scheduled-task change, monitoring apply, engagement mutation, or credential persistence was started.
 
 Next steps:
-- Continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
+- Commit and push B582, then continue old product hardening from the next concrete doctor/quality-audit class. Deliberate report regeneration and historical failed/long run review remain explicit operator actions only.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State

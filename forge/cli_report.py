@@ -200,3 +200,13 @@ def report_quality_audit(
                 for command in commands[:3]:
                     if isinstance(command, list):
                         console.print(f"      command={' '.join(str(part) for part in command)}")
+            follow_up_commands = (
+                action.get("follow_up_commands") if isinstance(action, dict) else []
+            )
+            if isinstance(follow_up_commands, list):
+                for command in follow_up_commands[:3]:
+                    if isinstance(command, list):
+                        console.print(
+                            "      follow_up="
+                            f"{' '.join(str(part) for part in command)}"
+                        )

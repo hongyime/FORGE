@@ -275,6 +275,64 @@ def test_collect_report_quality_audit_marks_stale_gguf_fallbacks_when_model_exis
     )
 
 
+def test_collect_report_quality_audit_shows_omitted_stale_report_commands(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    monkeypatch.setattr(
+        "forge.reporting.quality_audit._default_gguf_model_available",
+        lambda: True,
+    )
+    overview_path = reports_dir / "dashboard" / "data" / "engagements.json"
+    overview = json.loads(overview_path.read_text(encoding="utf-8"))
+    template_item = overview["items"][0]
+    overview["items"] = [
+        {
+            **template_item,
+            "id": str(1001 + index),
+            "slug": f"engagement-{1001 + index}-acme-{index}",
+            "name": f"acme-{index}",
+            "primary_seed": f"acme-{index}.example",
+            "detail_data": f"data/engagements/engagement-{1001 + index}-acme-{index}.json",
+        }
+        for index in range(3)
+    ]
+    overview_path.write_text(json.dumps(overview), encoding="utf-8")
+    detail_template = json.loads(
+        (
+            reports_dir
+            / "dashboard"
+            / "data"
+            / "engagements"
+            / "engagement-1001-acme.json"
+        ).read_text(encoding="utf-8")
+    )
+    for index in range(3):
+        detail_path = (
+            reports_dir
+            / "dashboard"
+            / "data"
+            / "engagements"
+            / f"engagement-{1001 + index}-acme-{index}.json"
+        )
+        detail_path.write_text(json.dumps(detail_template), encoding="utf-8")
+
+    payload = collect_report_quality_audit(reports_dir=reports_dir, top_limit=2)
+
+    action_by_id = {item["id"]: item for item in payload["operator_action_plan"]}
+    action = action_by_id["regenerate_stale_reports"]
+    assert action["total_count"] == 3
+    assert action["sample_limit"] == 2
+    assert action["sample_count"] == 2
+    assert action["omitted_count"] == 1
+    assert len(action["commands"]) == 2
+    assert action["follow_up_commands"] == [
+        ["forge", "report", "quality-audit", "--json", "--top-limit", "3"]
+    ]
+
+
 def test_report_quality_audit_cli_outputs_json(tmp_path: Path) -> None:
     from forge.cli import app  # noqa: PLC0415
 
@@ -322,6 +380,38 @@ def test_report_quality_audit_cli_prints_operator_action_plan(tmp_path: Path) ->
     assert "review_resume_plan" in result.output
     assert "forge targets resume-plan --json --redact-paths --limit 1" in result.output
     assert "resume-run" not in result.output
+
+
+def test_report_quality_audit_cli_prints_follow_up_commands(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    monkeypatch.setattr(
+        "forge.reporting.quality_audit._default_gguf_model_available",
+        lambda: True,
+    )
+    overview_path = reports_dir / "dashboard" / "data" / "engagements.json"
+    overview = json.loads(overview_path.read_text(encoding="utf-8"))
+    overview["items"].append({**overview["items"][0], "id": "1002"})
+    overview_path.write_text(json.dumps(overview), encoding="utf-8")
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "quality-audit",
+            "--reports-dir",
+            str(reports_dir),
+            "--top",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "follow_up=forge report quality-audit --json --top-limit 2" in result.output
 
 
 def test_report_quality_audit_cli_accepts_top_limit_alias(tmp_path: Path) -> None:
