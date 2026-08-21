@@ -141,3 +141,4 @@
 - 2026-08-21 17:04:15 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
 - 2026-08-21: Recovery sessions should resume from repo state and handoffs instead of the oversized Codex thread; resume-run stale-lock breaking remains explicit and refuses active locks.
 - 2026-08-21: B647 pushed stale resume-lock recovery as ba0bf43; next sessions should continue product hardening from doctor/quality-audit backlog without resuming the oversized Codex thread.
+- 2026-08-21: B648 resume-lock hardening treats live PIDs as authoritative, protects lock ownership with per-run tokens, redacts lock metadata by allowlist, and documents the operator lock workflow.

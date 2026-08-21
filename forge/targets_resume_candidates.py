@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import secrets
 import sqlite3
 import subprocess
 from collections import Counter
@@ -280,6 +282,7 @@ def collect_target_resume_lock_status(
     *,
     data_dir: Path | None = None,
     stale_lock_minutes: int = DEFAULT_RESUME_LOCK_STALE_MINUTES,
+    redact_paths: bool = False,
 ) -> dict[str, Any]:
     """Return read-only status for the resume-run batch lock."""
 
@@ -290,8 +293,10 @@ def collect_target_resume_lock_status(
     return {
         "schema_version": "forge.targets.resume_lock_status.v1",
         "execution_policy": "read_only_resume_lock_status_no_commands_executed",
-        "data_dir": str(base_dir),
-        "lock_path": str(lock_path),
+        "data_dir": "<redacted>" if redact_paths else str(base_dir),
+        "lock_path": "" if redact_paths else str(lock_path),
+        "lock_ref": _path_ref(lock_path),
+        "path_redaction": "local_paths_redacted" if redact_paths else "none",
         **status,
     }
 
@@ -343,6 +348,11 @@ def execute_target_resume_plan(
     results: list[dict[str, Any]] = []
     counts: Counter[str] = Counter()
     if dry_run:
+        lock_status = (
+            _resume_lock_status(lock_path, stale_lock_minutes=stale_lock_minutes)
+            if break_stale_lock
+            else None
+        )
         for item in plan["items"]:
             checked = _refresh_plan_item(item)
             if redact_paths:
@@ -373,6 +383,8 @@ def execute_target_resume_plan(
             "ledger_ref": _path_ref(ledger_path),
             "lock_path": "" if redact_paths else str(lock_path),
             "lock_ref": _path_ref(lock_path),
+            "lock_status": lock_status,
+            "would_break_stale_lock": bool(lock_status and lock_status["breakable"]),
             "status": "dry_run",
             "concurrency": "sequential",
             "stop_on_failure": stop_on_failure,
@@ -382,10 +394,12 @@ def execute_target_resume_plan(
             "items": results,
         }
     lock_acquired = False
+    owner_token = secrets.token_hex(16)
     ledger_dir.mkdir(parents=True, exist_ok=True)
     try:
         broken_lock_status: dict[str, Any] | None = None
         if break_stale_lock and lock_path.exists():
+            inspected_fingerprint = _resume_lock_fingerprint(lock_path)
             lock_status = _resume_lock_status(
                 lock_path,
                 stale_lock_minutes=stale_lock_minutes,
@@ -405,14 +419,38 @@ def execute_target_resume_plan(
                     "result_counts": {"blocked": 1},
                     "items": [],
                 }
-            lock_path.unlink()
-            broken_lock_status = lock_status
+            if _resume_lock_fingerprint(lock_path) != inspected_fingerprint:
+                current_status = _resume_lock_status(
+                    lock_path,
+                    stale_lock_minutes=stale_lock_minutes,
+                )
+                return {
+                    "schema_version": RESUME_RUN_SCHEMA_VERSION,
+                    "execution_policy": "blocked_existing_resume_batch_lock_changed",
+                    "dry_run": False,
+                    "batch_id": batch,
+                    "ledger_path": str(ledger_path),
+                    "lock_path": str(lock_path),
+                    "lock_status": current_status,
+                    "previous_lock_status": lock_status,
+                    "status": "blocked",
+                    **plan_count_fields,
+                    "planned_count": plan["planned_count"],
+                    "result_counts": {"blocked": 1},
+                    "items": [],
+                }
+            try:
+                lock_path.unlink()
+            except FileNotFoundError:
+                pass
+            broken_lock_status = _resume_lock_replacement_summary(lock_status)
         with lock_path.open("x", encoding="utf-8") as lock_file:
             lock_file.write(
                 json.dumps(
                     {
                         "batch_id": batch,
                         "created_at": _utc_now(),
+                        "owner_token": owner_token,
                         "pid": _current_pid(),
                         "stale_lock_replaced": broken_lock_status,
                     },
@@ -495,7 +533,7 @@ def execute_target_resume_plan(
     finally:
         try:
             if lock_acquired and lock_path.exists():
-                lock_path.unlink()
+                _remove_owned_resume_lock(lock_path, owner_token=owner_token)
         except OSError:
             pass
     return {
@@ -1149,7 +1187,11 @@ def _resume_lock_status(lock_path: Path, *, stale_lock_minutes: int) -> dict[str
     pid_alive = _pid_alive(pid) if pid > 0 else None
     created_at = str(metadata.get("created_at") or "").strip()
     age_seconds = _lock_age_seconds(lock_path, created_at=created_at)
-    stale_by_age = age_seconds is not None and age_seconds >= stale_minutes * 60
+    stale_by_age = (
+        pid_alive is not True
+        and age_seconds is not None
+        and age_seconds >= stale_minutes * 60
+    )
     stale_by_dead_pid = pid > 0 and pid_alive is False
     stale = bool(stale_by_age or stale_by_dead_pid)
     reason = "active_lock"
@@ -1168,7 +1210,7 @@ def _resume_lock_status(lock_path: Path, *, stale_lock_minutes: int) -> dict[str
         "pid_alive": pid_alive,
         "age_seconds": age_seconds,
         "stale_lock_minutes": stale_minutes,
-        "metadata": metadata,
+        "metadata": _public_resume_lock_metadata(metadata),
     }
 
 
@@ -1182,6 +1224,65 @@ def _read_resume_lock_metadata(lock_path: Path) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _public_resume_lock_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    public: dict[str, Any] = {}
+    for key in ("batch_id", "created_at", "pid"):
+        if key in metadata:
+            public[key] = metadata[key]
+    owner_token = str(metadata.get("owner_token") or "").strip()
+    if owner_token:
+        public["owner_token_hash"] = _short_hash(owner_token)
+    replaced = metadata.get("stale_lock_replaced")
+    if isinstance(replaced, dict):
+        public["stale_lock_replaced"] = _resume_lock_replacement_summary(replaced)
+    return public
+
+
+def _resume_lock_replacement_summary(status: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    for key in (
+        "exists",
+        "breakable",
+        "stale",
+        "reason",
+        "pid",
+        "pid_alive",
+        "age_seconds",
+        "stale_lock_minutes",
+    ):
+        if key in status:
+            summary[key] = status[key]
+    metadata = status.get("metadata")
+    if isinstance(metadata, dict):
+        summary["metadata"] = _public_resume_lock_metadata(metadata)
+    return summary
+
+
+def _short_hash(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()[:12]
+
+
+def _resume_lock_fingerprint(lock_path: Path) -> dict[str, Any]:
+    try:
+        stat = lock_path.stat()
+        content = lock_path.read_bytes()
+    except OSError:
+        return {"exists": False}
+    return {
+        "exists": True,
+        "size": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+        "sha256": hashlib.sha256(content).hexdigest(),
+    }
+
+
+def _remove_owned_resume_lock(lock_path: Path, *, owner_token: str) -> None:
+    metadata = _read_resume_lock_metadata(lock_path)
+    if metadata.get("owner_token") != owner_token:
+        return
+    lock_path.unlink()
 
 
 def _lock_age_seconds(lock_path: Path, *, created_at: str) -> float | None:

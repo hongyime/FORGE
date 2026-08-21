@@ -254,7 +254,8 @@ forge audit manifest-bundle-verify --bundle PATH
 forge targets import --feed-url URL|--feed-file PATH
 forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--redact-paths] [--json]  # Default also scans repo-local legacy dashboard DBs
 forge targets resume-plan [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--data-dir PATH] [--redact-paths] [--json]
-forge targets resume-run [--dry-run] [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--batch-id ID] [--continue-on-failure] [--data-dir PATH] [--redact-paths] [--json]
+forge targets resume-lock-status [--data-dir PATH] [--stale-lock-minutes N] [--redact-paths] [--json]
+forge targets resume-run [--dry-run] [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--batch-id ID] [--continue-on-failure] [--data-dir PATH] [--break-stale-lock] [--stale-lock-minutes N] [--redact-paths] [--json]
 forge targets backfill-scope-manifests [--apply] [--limit N] [--reason REASON] [--data-dir PATH] [--json]
 forge monitoring status|due-plan [--include-empty-db-results]|run-due|deliver-alerts|worker
 forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-retest|apply-retest-run|handoff-plan|integration-runbook|import-ticket-statuses|sync-tickets
@@ -326,16 +327,24 @@ resumes; blocked candidates are summarized by blocker so operators can backfill
 or fix gates first. Use `--redact-paths` for report/review output that should
 hide local DB and scope-manifest paths; omit it when copying commands to run
 manually on the same machine.
+`forge targets resume-lock-status` is read-only and reports whether an existing
+resume batch lock is missing, active, stale by age, or stale because its owner
+PID is dead. Use `--redact-paths` before sharing output outside the local
+operator shell.
 `forge targets resume-run` is the explicit executor for that plan. With
 `--dry-run`, it re-checks the same candidates and reports the would-run batch
 without creating the batch lock, writing the ledger, or launching child
-processes. `--dry-run --redact-paths` also hides local DB, scope-manifest,
-ledger, and lock paths in the JSON output. Without `--dry-run`, it re-checks
+processes. `--dry-run --break-stale-lock` also reports whether the current lock
+would be breakable, but still does not remove it. `--dry-run --redact-paths`
+also hides local DB, scope-manifest, ledger, and lock paths in the JSON output.
+Without `--dry-run`, it re-checks
 each latest run before launching,
 holds a batch lock, writes a JSONL ledger under
 `target_imports/resume_batches`, and starts at most one child
 `forge kill-chain ... --resume` process at a time. Re-running after a candidate
 is already completed skips it instead of launching duplicate work. Resume-run
+only removes a stale lock when `--break-stale-lock` is explicit, and active
+owner PIDs are not breakable by age alone.
 JSON includes `total_count`, `selected_count`, and `omitted_count`, matching
 resume-plan, so bounded rehearsals cannot be mistaken for the full backlog.
 `forge targets backfill-scope-manifests` is also dry-run by default; with
@@ -875,7 +884,7 @@ the root CLI entry point focused on command handlers while preserving
 | wayback_cdx | archive.org CDX API with domain-wide match | F | historical URLs → subdomains, old pages, static asset URLs |
 | commoncrawl_cdx | Common Crawl CDXJ latest-index lookup | F | recent crawl URLs → subdomains, static assets, artifact URLs |
 | crawler | Playwright (SPA-aware) + httpx | F | rendered HTML + tech-stack |
-| cloud_scan | httpx probes on 7 service families | F | Supabase/Firebase/Amplify/GCP/Vercel/Netlify posture |
+| cloud_scan | httpx probes on 6 service families | F | Supabase/Firebase/Amplify/GCP/Vercel/Netlify posture |
 | key_scanner | GitHub Code Search API | F/K | leaked secrets (needs `FORGE_GITHUB_TOKEN`) |
 | xposed | XposedOrNot | F | breach names per email |
 | hibp | Have-I-Been-Pwned public API | F | domain-level breach names |

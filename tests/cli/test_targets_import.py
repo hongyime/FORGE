@@ -12,8 +12,9 @@ import typer
 from typer.testing import CliRunner
 
 from forge.db.session import get_engagement_db
-from forge.targets_import_cli import register_target_import_commands
+import forge.targets_resume_candidates as resume_candidates
 from forge.targets_import import import_targets, load_target_feed
+from forge.targets_import_cli import register_target_import_commands
 from forge.targets_resume_candidates import (
     _run_resume_child,
     backfill_target_resume_scope_manifests,
@@ -949,6 +950,7 @@ def test_targets_resume_run_cli_outputs_executor_payload(monkeypatch: pytest.Mon
             "--break-stale-lock",
             "--stale-lock-minutes",
             "7",
+            "--redact-paths",
             "--json",
         ],
     )
@@ -979,6 +981,7 @@ def test_targets_resume_lock_status_cli_outputs_json(tmp_path: Path) -> None:
             str(data_dir),
             "--stale-lock-minutes",
             "7",
+            "--redact-paths",
             "--json",
         ],
     )
@@ -989,6 +992,10 @@ def test_targets_resume_lock_status_cli_outputs_json(tmp_path: Path) -> None:
     assert payload["execution_policy"] == "read_only_resume_lock_status_no_commands_executed"
     assert payload["exists"] is False
     assert payload["stale_lock_minutes"] == 7
+    assert payload["path_redaction"] == "local_paths_redacted"
+    assert payload["data_dir"] == "<redacted>"
+    assert payload["lock_path"] == ""
+    assert payload["lock_ref"] == "resume_batch.lock"
 
 
 def test_resume_run_executes_sequentially_and_writes_ledger(tmp_path: Path) -> None:
@@ -1257,6 +1264,8 @@ def test_resume_lock_status_reports_missing_lock(tmp_path: Path) -> None:
     assert payload["exists"] is False
     assert payload["breakable"] is False
     assert payload["reason"] == "lock_missing"
+    assert payload["path_redaction"] == "none"
+    assert payload["lock_ref"] == "resume_batch.lock"
 
 
 def test_resume_lock_status_marks_old_unparsed_lock_stale(tmp_path: Path) -> None:
@@ -1277,6 +1286,22 @@ def test_resume_lock_status_marks_old_unparsed_lock_stale(tmp_path: Path) -> Non
     assert payload["age_seconds"] >= 60
 
 
+def test_resume_lock_status_keeps_recent_unparsed_lock_active(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    lock_path.write_text("active", encoding="utf-8")
+
+    payload = collect_target_resume_lock_status(data_dir=data_dir, stale_lock_minutes=120)
+
+    assert payload["exists"] is True
+    assert payload["metadata"] == {}
+    assert payload["stale"] is False
+    assert payload["breakable"] is False
+    assert payload["reason"] == "unparsed_lock"
+
+
 def test_resume_lock_status_keeps_current_pid_lock_active(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     lock_dir = data_dir / "target_imports" / "resume_batches"
@@ -1295,6 +1320,115 @@ def test_resume_lock_status_keeps_current_pid_lock_active(tmp_path: Path) -> Non
     assert payload["stale"] is False
     assert payload["breakable"] is False
     assert payload["reason"] == "active_lock"
+
+
+def test_resume_lock_status_keeps_old_live_pid_lock_active(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    lock_path.write_text(
+        json.dumps(
+            {
+                "pid": os.getpid(),
+                "created_at": "2000-01-01T00:00:00+00:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    old = time.time() - 3600
+    os.utime(lock_path, (old, old))
+
+    payload = collect_target_resume_lock_status(data_dir=data_dir, stale_lock_minutes=1)
+
+    assert payload["exists"] is True
+    assert payload["pid"] == os.getpid()
+    assert payload["pid_alive"] is True
+    assert payload["stale"] is False
+    assert payload["breakable"] is False
+    assert payload["reason"] == "active_lock"
+
+
+def test_resume_lock_status_redacts_untrusted_metadata(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    secret_value = "super-secret-token"
+    local_path = str(tmp_path / "private" / "scope.json")
+    lock_path.write_text(
+        json.dumps(
+            {
+                "batch_id": "batch-1",
+                "created_at": "2999-01-01T00:00:00+00:00",
+                "owner_token": "owner-secret",
+                "pid": os.getpid(),
+                "api_token": secret_value,
+                "scope_manifest": local_path,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = collect_target_resume_lock_status(
+        data_dir=data_dir,
+        redact_paths=True,
+    )
+    serialized = json.dumps(payload)
+
+    assert payload["data_dir"] == "<redacted>"
+    assert payload["lock_path"] == ""
+    assert payload["metadata"]["batch_id"] == "batch-1"
+    assert payload["metadata"]["pid"] == os.getpid()
+    assert "owner_token_hash" in payload["metadata"]
+    assert "owner_token" not in payload["metadata"]
+    assert secret_value not in serialized
+    assert local_path not in serialized
+
+
+def test_resume_lock_status_marks_dead_pid_stale(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    lock_path.write_text(
+        json.dumps({"pid": 999999, "created_at": "2999-01-01T00:00:00+00:00"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(resume_candidates, "_pid_alive", lambda pid: False)
+
+    payload = collect_target_resume_lock_status(data_dir=data_dir, stale_lock_minutes=120)
+
+    assert payload["exists"] is True
+    assert payload["pid"] == 999999
+    assert payload["pid_alive"] is False
+    assert payload["stale"] is True
+    assert payload["breakable"] is True
+    assert payload["reason"] == "dead_pid"
+
+
+def test_resume_lock_status_uses_file_mtime_for_malformed_created_at(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    lock_path.write_text(
+        json.dumps({"pid": 0, "created_at": "not-a-timestamp"}),
+        encoding="utf-8",
+    )
+    old = time.time() - 3600
+    os.utime(lock_path, (old, old))
+
+    payload = collect_target_resume_lock_status(data_dir=data_dir, stale_lock_minutes=1)
+
+    assert payload["exists"] is True
+    assert payload["stale"] is True
+    assert payload["breakable"] is True
+    assert payload["reason"] == "stale_age"
+    assert payload["age_seconds"] >= 60
 
 
 def test_resume_run_breaks_only_stale_lock_before_execution(tmp_path: Path) -> None:
@@ -1332,6 +1466,161 @@ def test_resume_run_breaks_only_stale_lock_before_execution(tmp_path: Path) -> N
     assert payload["result_counts"] == {"completed": 1}
     assert calls
     assert not lock_path.exists()
+
+
+def test_resume_run_dry_run_reports_stale_lock_decision(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    lock_path.write_text("active", encoding="utf-8")
+    old = time.time() - 3600
+    os.utime(lock_path, (old, old))
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="dry-run-stale-lock",
+        dry_run=True,
+        break_stale_lock=True,
+        stale_lock_minutes=1,
+    )
+
+    assert payload["status"] == "dry_run"
+    assert payload["would_break_stale_lock"] is True
+    assert payload["lock_status"]["breakable"] is True
+    assert payload["lock_status"]["reason"] == "stale_age"
+    assert lock_path.exists()
+
+
+def test_resume_run_blocks_when_stale_lock_changes_before_break(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    lock_path.write_text("active", encoding="utf-8")
+    old = time.time() - 3600
+    os.utime(lock_path, (old, old))
+    calls = 0
+    original_fingerprint = resume_candidates._resume_lock_fingerprint
+
+    def changing_fingerprint(path: Path) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            path.write_text(
+                json.dumps(
+                    {
+                        "batch_id": "other",
+                        "created_at": "2999-01-01T00:00:00+00:00",
+                        "pid": os.getpid(),
+                    }
+                ),
+                encoding="utf-8",
+            )
+        return original_fingerprint(path)
+
+    monkeypatch.setattr(resume_candidates, "_resume_lock_fingerprint", changing_fingerprint)
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="break-changed-lock",
+        break_stale_lock=True,
+        stale_lock_minutes=1,
+    )
+
+    assert payload["status"] == "blocked"
+    assert payload["execution_policy"] == "blocked_existing_resume_batch_lock_changed"
+    assert payload["lock_status"]["breakable"] is False
+    assert json.loads(lock_path.read_text(encoding="utf-8"))["batch_id"] == "other"
+
+
+def test_resume_run_break_stale_lock_tolerates_lock_removed_during_race(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+    )
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    lock_path.write_text("active", encoding="utf-8")
+    old = time.time() - 3600
+    os.utime(lock_path, (old, old))
+    original_unlink = Path.unlink
+
+    def racing_unlink(path: Path, *args: object, **kwargs: object) -> None:
+        if path == lock_path and path.exists():
+            original_unlink(path)
+            raise FileNotFoundError(str(path))
+        original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", racing_unlink)
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="break-stale-race",
+        break_stale_lock=True,
+        stale_lock_minutes=1,
+        runner=fake_runner,
+    )
+
+    assert payload["status"] == "completed"
+    assert payload["result_counts"] == {"completed": 1}
+    assert calls
+    assert not lock_path.exists()
+
+
+def test_resume_run_cleanup_preserves_replacement_lock(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+    )
+    lock_path = data_dir / "target_imports" / "resume_batches" / "resume_batch.lock"
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> subprocess.CompletedProcess[str]:
+        lock_path.write_text(
+            json.dumps(
+                {
+                    "batch_id": "other",
+                    "created_at": "2999-01-01T00:00:00+00:00",
+                    "pid": os.getpid(),
+                    "owner_token": "other-owner",
+                }
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0)
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="replacement-lock",
+        runner=fake_runner,
+    )
+
+    assert payload["status"] == "completed"
+    assert json.loads(lock_path.read_text(encoding="utf-8"))["batch_id"] == "other"
 
 
 def test_resume_run_refuses_to_break_active_lock(tmp_path: Path) -> None:

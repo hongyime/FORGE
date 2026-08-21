@@ -21,7 +21,7 @@ All launcher files set `FORGE_NO_TOR=1` (skips Tor bootstrap — 10× speedup).
 ## The one command
 
 ```text
-forge kill-chain <seed> --engagement <N>
+forge kill-chain <seed> [--engagement <N>]
 ```
 
 `<seed>` can be **anything**:
@@ -39,18 +39,18 @@ kill-chain auto-detects the type and routes to the right initial fan-out.
 
 ---
 
-## The 6 flags
+## Core flags
 
 ```text
 forge kill-chain <seed>
-  --engagement N        # required
+  --engagement N        # optional for kill-chain; auto-derived when omitted
   --max-iter 7          # loop cap, default 7, breaks early on stable
   --tor                 # route every subcommand through Tor
   --dry-run             # log intended actions, no outbound calls
   --attack-mode         # ACTIVE: port scan + cred validate (requires ROE live)
   --roe-id ROE-123      # ROE / written-authorization reference
   --scope-manifest ./roe-scope.json  # required for sensitive live execution
-  --skip-cloud          # skip 7-service cloud discovery
+  --skip-cloud          # skip 6-service cloud discovery
   --skip-keyscan        # skip GitHub keyscan (protects token quota)
 ```
 

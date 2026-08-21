@@ -282,6 +282,11 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "--stale-lock-minutes",
             help="Age threshold used to classify an existing resume lock as stale.",
         ),
+        redact_paths: bool = typer.Option(
+            False,
+            "--redact-paths",
+            help="Redact local data and lock paths from JSON output.",
+        ),
         json_output: bool = typer.Option(
             False,
             "--json",
@@ -293,6 +298,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
         payload = collect_target_resume_lock_status(
             data_dir=data_dir,
             stale_lock_minutes=stale_lock_minutes,
+            redact_paths=redact_paths,
         )
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
