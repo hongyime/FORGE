@@ -1190,11 +1190,13 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
         check: bool,
         capture_output: bool,
         text: bool,
+        timeout: int,
     ) -> object:
         calls.append(command)
         assert check is False
         assert capture_output is True
         assert text is True
+        assert timeout == 25 * 60 + 120
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
@@ -1217,10 +1219,44 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
     assert "--roe-id" in command
     assert "--scope-manifest" in command
     assert "--max-iter" in command
+    assert command[-2:] == ["--max-runtime-minutes", "25"]
     assert "--no-attack-mode" not in command
     assert "--no-auto-run-detected" not in command
     assert "--attack-mode" not in command
     assert "--auto-run-detected" not in command
+
+
+def test_start_uses_configured_kill_chain_runtime_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+    calls: list[tuple[list[str], int]] = []
+
+    def _fake_run(command: list[str], **kwargs: object) -> object:
+        calls.append((command, int(kwargs["timeout"])))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        max_runtime_minutes=13,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert results[0].started is True
+    assert calls[0][0][-2:] == ["--max-runtime-minutes", "13"]
+    assert calls[0][1] == 13 * 60 + 120
 
 
 def test_start_treats_completed_kill_chain_exit_two_as_success(
@@ -1352,11 +1388,13 @@ def test_start_limit_caps_scoped_kill_chain_launches(
         check: bool,
         capture_output: bool,
         text: bool,
+        timeout: int,
     ) -> object:
         calls.append(command)
         assert check is False
         assert capture_output is True
         assert text is True
+        assert timeout == 25 * 60 + 120
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
@@ -1586,6 +1624,44 @@ def test_targets_import_cli_registration_supports_dry_run(tmp_path: Path) -> Non
     assert result.exit_code == 0, result.output
     assert "DRY RUN" in result.output
     assert "2 target(s) parsed and deduped" in result.output
+
+
+def test_targets_import_cli_passes_max_runtime_minutes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    captured_kwargs: dict[str, object] = {}
+
+    def fake_import_targets(**kwargs: object) -> list[object]:
+        captured_kwargs.update(kwargs)
+        return []
+
+    monkeypatch.setattr("forge.targets_import_cli.import_targets", fake_import_targets)
+
+    app = typer.Typer()
+    targets_app = typer.Typer()
+    register_target_import_commands(targets_app)
+    app.add_typer(targets_app, name="targets")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "targets",
+            "import",
+            "--feed-file",
+            str(feed_path),
+            "--start",
+            "--roe-id",
+            "ROE-ACME-2026-08",
+            "--max-runtime-minutes",
+            "13",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured_kwargs["max_runtime_minutes"] == 13
 
 
 def test_targets_import_cli_dry_run_skips_item_level_unpack_value_error(

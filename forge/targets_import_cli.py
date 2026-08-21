@@ -7,7 +7,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from forge.targets_import import import_targets
+from forge.targets_import import DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES, import_targets
 from forge.targets_resume_candidates import (
     DEFAULT_RESUME_CANDIDATE_LIMIT,
     DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
@@ -65,6 +65,15 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "--max-iter",
             help="Kill-chain max iterations when --start is used.",
         ),
+        max_runtime_minutes: int = typer.Option(
+            DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES,
+            "--max-runtime-minutes",
+            envvar="FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES",
+            help=(
+                "Soft kill-chain runtime budget per started target. The import "
+                "parent also enforces this budget plus a short shutdown grace."
+            ),
+        ),
         start_limit: Optional[int] = typer.Option(
             None,
             "--start-limit",
@@ -82,6 +91,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
                 dry_run=dry_run,
                 limit=limit,
                 max_iter=max_iter,
+                max_runtime_minutes=max_runtime_minutes,
                 start_limit=start_limit,
             )
         except Exception as exc:

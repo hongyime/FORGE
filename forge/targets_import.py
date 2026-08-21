@@ -24,6 +24,8 @@ from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_f
 TARGET_FEED_SCHEMA_VERSION = "target-feed.v1"
 TARGET_IMPORT_MONITORING_POLICY_NAME = "Target import seed exposure"
 TARGET_IMPORT_MONITORING_INTERVAL_MINUTES = 60
+DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES = 25
+TARGET_IMPORT_CHILD_TIMEOUT_GRACE_SECONDS = 120
 SUPPORTED_TARGET_TYPES = {
     "apk_url",
     "artifact_url",
@@ -155,6 +157,7 @@ def import_targets(
     dry_run: bool,
     limit: int | None,
     max_iter: int,
+    max_runtime_minutes: int = DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES,
     start_limit: int | None = None,
     config: ForgeConfig | None = None,
 ) -> list[TargetImportResult]:
@@ -208,6 +211,7 @@ def import_targets(
                 roe_id=str(roe_id or "").strip(),
                 scope_manifest=manifest_path,
                 max_iter=max_iter,
+                max_runtime_minutes=max_runtime_minutes,
                 engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
             )
             started = True
@@ -785,8 +789,10 @@ def _start_kill_chain(
     roe_id: str,
     scope_manifest: Path,
     max_iter: int,
+    max_runtime_minutes: int,
     engagement_db_path: Path,
 ) -> None:
+    runtime_minutes = _normalize_max_runtime_minutes(max_runtime_minutes)
     command = [
         sys.executable,
         "-m",
@@ -801,8 +807,17 @@ def _start_kill_chain(
         str(scope_manifest),
         "--max-iter",
         str(max(1, int(max_iter))),
+        "--max-runtime-minutes",
+        str(runtime_minutes),
     ]
-    proc = subprocess.run(command, check=False, capture_output=True, text=True)
+    timeout_seconds = runtime_minutes * 60 + TARGET_IMPORT_CHILD_TIMEOUT_GRACE_SECONDS
+    proc = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+    )
     if proc.stdout:
         sys.stdout.write(proc.stdout)
         sys.stdout.flush()
@@ -826,6 +841,12 @@ def _start_kill_chain(
         output=proc.stdout,
         stderr=proc.stderr,
     )
+
+
+def _normalize_max_runtime_minutes(value: int | None) -> int:
+    if value is None:
+        return DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES
+    return max(1, min(1440, int(value)))
 
 
 def _completed_kill_chain_run(
