@@ -9,6 +9,7 @@ Single-page operator cheatsheet.
 | Windows | macOS/Linux | Action |
 |---|---|---|
 | `start_toolkit.bat` | `./start_toolkit.sh` | Top menu (recommended) |
+| `forge-autopilot.bat` | `./forge-autopilot.sh` | Import target feed, start new targets, resume backlog, run monitoring, refresh dashboard |
 | `forge-kill-chain.bat` | `./forge-kill-chain.sh` | Interactive kill-chain (prompts for every option) |
 | `forge-menu.bat` | `./forge-menu.sh` | Direct TUI |
 | `forge-status.bat` | `./forge-status.sh` | Health check |

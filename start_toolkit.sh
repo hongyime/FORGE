@@ -31,8 +31,9 @@ printf '  1. Kill-Chain      (any seed: domain/IP/email/phone/handle/name)\n'
 printf '  2. Interactive Menu (TUI engagement browser)\n'
 printf '  3. Health check     (versions, engagements, LLM providers)\n'
 printf '  4. Regenerate report on existing engagement\n'
+printf '  5. Autopilot       (import feed, resume backlog, monitor, dashboard)\n'
 printf '  Q. Quit\n\n'
-printf 'Select [1-4 / Q]: '
+printf 'Select [1-5 / Q]: '
 IFS= read -r CHOICE || CHOICE=
 
 case "$CHOICE" in
@@ -50,6 +51,10 @@ case "$CHOICE" in
         ;;
     4)
         sh "$ROOT/forge-report.sh"
+        exit 0
+        ;;
+    5)
+        sh "$ROOT/forge-autopilot.sh"
         exit 0
         ;;
     [Qq])

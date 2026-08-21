@@ -74,6 +74,7 @@ Continuation order for future agents:
 git clone <repo> forge-toolkit
 cd forge-toolkit
 setup.bat        # picks safe/default or scoped active-assessment mode
+forge-autopilot.bat --dry-run  # optional all-in-one feed/resume/monitor/dashboard rehearsal
 ```
 
 ```bash

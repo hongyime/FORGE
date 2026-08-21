@@ -6,6 +6,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 POSIX_LAUNCHERS = (
     "setup.sh",
     "start_toolkit.sh",
+    "forge-autopilot.sh",
     "forge-menu.sh",
     "forge-kill-chain.sh",
     "forge-status.sh",
@@ -82,3 +83,14 @@ def test_report_and_status_launchers_use_python_for_native_listing() -> None:
     assert 'Path(".forge_data/engagements").glob("*.db")' in report
     assert 'Path(".forge_data/engagements").glob("*.db")' in status
     assert "reports[:3]" in report
+
+
+def test_autopilot_posix_launcher_runs_start_resume_monitor_dashboard() -> None:
+    text = _read_launcher("forge-autopilot.sh")
+    assert "targets import" in text
+    assert "--start-limit" in text
+    assert "targets resume-run" in text
+    assert "--max-parallel" in text
+    assert "monitoring run-due" in text
+    assert "dashboard" in text
+    assert "--dry-run" in text

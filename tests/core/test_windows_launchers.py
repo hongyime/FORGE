@@ -16,6 +16,7 @@ def _read_launcher(name: str) -> str:
 
 def test_windows_launchers_use_project_virtualenv() -> None:
     launchers = (
+        "forge-autopilot.bat",
         "forge-kill-chain.bat",
         "forge-menu.bat",
         "forge-report.bat",
@@ -32,6 +33,17 @@ def test_report_launcher_uses_windows_native_latest_report_listing() -> None:
     assert "| head" not in text
     assert ".venv\\scripts\\python.exe -c" in text
     assert "reports[:3]" in text
+
+
+def test_autopilot_launcher_runs_start_resume_monitor_dashboard() -> None:
+    text = _read_launcher("forge-autopilot.bat")
+    assert "targets import" in text
+    assert "--start-limit" in text
+    assert "targets resume-run" in text
+    assert "--max-parallel" in text
+    assert "monitoring run-due" in text
+    assert "dashboard" in text
+    assert "--dry-run" in text
 
 
 def test_powershell_stack_helper_uses_docker_compose_dev_file() -> None:

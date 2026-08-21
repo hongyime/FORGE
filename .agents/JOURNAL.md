@@ -146,4 +146,5 @@
 - 2026-08-21: B650 expands the automation wildcard scope template to include `*.net`, `*.org`, and `http://*.*.*/`; report freshness is currently artifact-clean, with stale-plan empty and remaining gaps tied to failed/long latest runs.
 - 2026-08-21: B651 makes test taxonomy enforceable in pytest config: importlib mode prevents duplicate basename collection failures, pythonpath is explicit, directory-based markers expose unit/functional/integration/e2e slices, and the real-target E2E harness now has a pytest-visible contract test.
 - 2026-08-21: B652 keeps resume-run sequential by default but adds bounded `--max-parallel` execution with one batch lock and serialized ledger writes; public third-party resume candidates remain dry-run/planned from this chat.
+- 2026-08-21: B653 adds `forge-autopilot` launchers as the daily all-in-one operator path: optional target-feed import/start, parallel resume, due monitoring, and dashboard refresh with a dry-run rehearsal mode.
 - 2026-08-21 22:36:37 +08:00 [PRAWN-E14/codex/session-start] branch=main head=efec6db dirty=0
