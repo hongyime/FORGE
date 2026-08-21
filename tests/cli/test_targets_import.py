@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -1118,6 +1119,125 @@ def test_resume_run_dry_run_does_not_call_runner_or_write_ledger(tmp_path: Path)
     assert payload["items"][0]["command"][-2:] == ["--max-runtime-minutes", "13"]
     assert calls == []
     assert not (data_dir / "target_imports" / "resume_batches").exists()
+
+
+def test_resume_run_dry_run_reports_parallelism_without_execution(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+    )
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="dry-run-parallel",
+        dry_run=True,
+        max_parallel=4,
+        runner=fake_runner,
+    )
+
+    assert payload["execution_policy"] == "dry_run_no_commands_executed"
+    assert payload["concurrency"] == "parallel"
+    assert payload["max_parallel"] == 4
+    assert payload["result_counts"] == {"dry_run": 1}
+    assert calls == []
+    assert not (data_dir / "target_imports" / "resume_batches").exists()
+
+
+def test_resume_run_can_execute_in_parallel_with_threadsafe_ledger(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    for engagement_id in range(1, 4):
+        _write_candidate_run(
+            data_dir / "engagements" / f"{engagement_id}.db",
+            engagement_id=engagement_id,
+            status="failed",
+            error="max iterations exhausted with pending recursive work: 1",
+            metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+        )
+    active = 0
+    max_seen = 0
+    guard = threading.Lock()
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> subprocess.CompletedProcess[str]:
+        nonlocal active, max_seen
+        with guard:
+            active += 1
+            max_seen = max(max_seen, active)
+        time.sleep(0.05)
+        with guard:
+            active -= 1
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="parallel-test",
+        max_parallel=3,
+        runner=fake_runner,
+    )
+
+    assert payload["execution_policy"] == "executes_child_processes_in_parallel"
+    assert payload["concurrency"] == "parallel"
+    assert payload["max_parallel"] == 3
+    assert payload["status"] == "completed"
+    assert payload["result_counts"] == {"completed": 3}
+    assert max_seen > 1
+    assert [item["sequence"] for item in payload["items"]] == [1, 2, 3]
+    lines = [
+        json.loads(line)
+        for line in Path(payload["ledger_path"]).read_text(encoding="utf-8").splitlines()
+    ]
+    assert lines[0]["event"] == "batch_started"
+    assert lines[0]["concurrency"] == "parallel"
+    assert lines[0]["max_parallel"] == 3
+    assert lines[-1]["event"] == "batch_completed"
+    assert not Path(payload["lock_path"]).exists()
+
+
+def test_resume_run_parallel_stops_scheduling_after_failure(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    for engagement_id in range(1, 5):
+        _write_candidate_run(
+            data_dir / "engagements" / f"{engagement_id}.db",
+            engagement_id=engagement_id,
+            status="failed",
+            error="max iterations exhausted with pending recursive work: 1",
+            metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+        )
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="failed")
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="parallel-stop-test",
+        max_parallel=2,
+        stop_on_failure=True,
+        runner=fake_runner,
+    )
+
+    assert payload["status"] == "failed"
+    assert payload["concurrency"] == "parallel"
+    assert payload["result_counts"] == {"failed": 2}
+    assert len(calls) == 2
+    assert payload["selected_count"] == 4
+    assert len(payload["items"]) == 2
+    assert not Path(payload["lock_path"]).exists()
 
 
 def test_resume_run_dry_run_can_redact_local_paths(tmp_path: Path) -> None:

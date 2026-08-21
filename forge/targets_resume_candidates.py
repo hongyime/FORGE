@@ -7,10 +7,12 @@ import secrets
 import sqlite3
 import subprocess
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from ipaddress import ip_address
 from pathlib import Path
+from threading import Lock
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
@@ -311,13 +313,14 @@ def execute_target_resume_plan(
     max_runtime_minutes: int = DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
     batch_id: str | None = None,
     stop_on_failure: bool = True,
+    max_parallel: int = 1,
     dry_run: bool = False,
     redact_paths: bool = False,
     break_stale_lock: bool = False,
     stale_lock_minutes: int = DEFAULT_RESUME_LOCK_STALE_MINUTES,
     runner: ResumeRunner | None = None,
 ) -> dict[str, Any]:
-    """Execute ready resume candidates strictly one child process at a time."""
+    """Execute ready resume candidates with a durable batch lock and ledger."""
 
     if redact_paths and not dry_run:
         return {
@@ -327,6 +330,8 @@ def execute_target_resume_plan(
             "path_redaction": "blocked",
             "batch_id": _safe_batch_id(batch_id),
             "status": "blocked",
+            "concurrency": "sequential",
+            "max_parallel": 1,
             "result_counts": {"blocked": 1},
             "items": [],
             "operator_note": "--redact-paths is only supported with --dry-run.",
@@ -342,6 +347,8 @@ def execute_target_resume_plan(
     )
     plan_count_fields = _resume_plan_count_fields(plan)
     batch = _safe_batch_id(batch_id)
+    parallelism = max(1, _normalize_positive_int(max_parallel, default=1))
+    concurrency = "parallel" if parallelism > 1 else "sequential"
     ledger_dir = Path(plan["data_dir"]) / "target_imports" / "resume_batches"
     ledger_path = ledger_dir / f"{batch}.jsonl"
     lock_path = _resume_lock_path(Path(plan["data_dir"]))
@@ -386,7 +393,8 @@ def execute_target_resume_plan(
             "lock_status": lock_status,
             "would_break_stale_lock": bool(lock_status and lock_status["breakable"]),
             "status": "dry_run",
-            "concurrency": "sequential",
+            "concurrency": concurrency,
+            "max_parallel": parallelism,
             "stop_on_failure": stop_on_failure,
             **plan_count_fields,
             "planned_count": plan["planned_count"],
@@ -414,6 +422,8 @@ def execute_target_resume_plan(
                     "lock_path": str(lock_path),
                     "lock_status": lock_status,
                     "status": "blocked",
+                    "concurrency": concurrency,
+                    "max_parallel": parallelism,
                     **plan_count_fields,
                     "planned_count": plan["planned_count"],
                     "result_counts": {"blocked": 1},
@@ -434,6 +444,8 @@ def execute_target_resume_plan(
                     "lock_status": current_status,
                     "previous_lock_status": lock_status,
                     "status": "blocked",
+                    "concurrency": concurrency,
+                    "max_parallel": parallelism,
                     **plan_count_fields,
                     "planned_count": plan["planned_count"],
                     "result_counts": {"blocked": 1},
@@ -464,47 +476,69 @@ def execute_target_resume_plan(
                 "event": "batch_started",
                 "batch_id": batch,
                 "planned_count": plan["planned_count"],
+                "concurrency": concurrency,
+                "max_parallel": parallelism,
                 "created_at": _utc_now(),
             },
         )
-        for item in plan["items"]:
-            checked = _refresh_plan_item(item)
-            if checked["status"] == "skipped":
-                counts["skipped"] += 1
-                results.append(checked)
-                _append_ledger_event(ledger_path, {"event": "item_skipped", **checked})
-                continue
-            command = [str(part) for part in checked["command"]]
-            timeout_seconds = _child_timeout_seconds(_safe_int(checked.get("max_runtime_minutes")))
-            started_at = _utc_now()
-            _append_ledger_event(
-                ledger_path,
-                {
-                    "event": "item_started",
-                    "batch_id": batch,
-                    "sequence": checked["sequence"],
-                    "engagement_id": checked["engagement_id"],
-                    "run_id": checked["run_id"],
-                    "started_at": started_at,
-                    "command": command,
-                },
-            )
-            completed = _run_resume_child(command, timeout_seconds=timeout_seconds, runner=runner)
-            status = "completed" if completed.returncode == 0 else "failed"
-            counts[status] += 1
-            result = {
-                **checked,
-                "status": status,
-                "returncode": completed.returncode,
-                "started_at": started_at,
-                "completed_at": _utc_now(),
-                "stdout_tail": _tail_text(completed.stdout),
-                "stderr_tail": _tail_text(completed.stderr),
-            }
-            results.append(result)
-            _append_ledger_event(ledger_path, {"event": f"item_{status}", **result})
-            if status == "failed" and stop_on_failure:
-                break
+        ledger_lock = Lock()
+        if parallelism == 1:
+            for item in plan["items"]:
+                result = _execute_resume_item(
+                    item,
+                    batch=batch,
+                    ledger_path=ledger_path,
+                    ledger_lock=ledger_lock,
+                    runner=runner,
+                )
+                counts[str(result["status"])] += 1
+                results.append(result)
+                if result["status"] == "failed" and stop_on_failure:
+                    break
+        else:
+            with ThreadPoolExecutor(max_workers=parallelism) as executor:
+                item_iter = iter(plan["items"])
+                future_map = {}
+                for _ in range(parallelism):
+                    try:
+                        item = next(item_iter)
+                    except StopIteration:
+                        break
+                    future_map[
+                        executor.submit(
+                            _execute_resume_item,
+                            item,
+                            batch=batch,
+                            ledger_path=ledger_path,
+                            ledger_lock=ledger_lock,
+                            runner=runner,
+                        )
+                    ] = item
+                stop_scheduling = False
+                while future_map:
+                    finished = next(as_completed(future_map))
+                    future_map.pop(finished)
+                    result = finished.result()
+                    counts[str(result["status"])] += 1
+                    results.append(result)
+                    if result["status"] == "failed" and stop_on_failure:
+                        stop_scheduling = True
+                    if stop_scheduling:
+                        continue
+                    try:
+                        item = next(item_iter)
+                    except StopIteration:
+                        continue
+                    future_map[
+                        executor.submit(
+                            _execute_resume_item,
+                            item,
+                            batch=batch,
+                            ledger_path=ledger_path,
+                            ledger_lock=ledger_lock,
+                            runner=runner,
+                        )
+                    ] = item
         _append_ledger_event(
             ledger_path,
             {
@@ -525,6 +559,8 @@ def execute_target_resume_plan(
             "lock_path": str(lock_path),
             "lock_status": lock_status,
             "status": "blocked",
+            "concurrency": concurrency,
+            "max_parallel": parallelism,
             **plan_count_fields,
             "planned_count": plan["planned_count"],
             "result_counts": {"blocked": 1},
@@ -536,21 +572,70 @@ def execute_target_resume_plan(
                 _remove_owned_resume_lock(lock_path, owner_token=owner_token)
         except OSError:
             pass
+    results.sort(key=lambda item: _safe_int(item.get("sequence")))
     return {
         "schema_version": RESUME_RUN_SCHEMA_VERSION,
-        "execution_policy": "executes_child_processes_sequentially",
+        "execution_policy": (
+            "executes_child_processes_in_parallel"
+            if parallelism > 1
+            else "executes_child_processes_sequentially"
+        ),
         "dry_run": False,
         "batch_id": batch,
         "ledger_path": str(ledger_path),
         "lock_path": str(lock_path),
         "status": "completed" if not counts.get("failed") else "failed",
-        "concurrency": "sequential",
+        "concurrency": concurrency,
+        "max_parallel": parallelism,
         "stop_on_failure": stop_on_failure,
         **plan_count_fields,
         "planned_count": plan["planned_count"],
         "result_counts": dict(sorted(counts.items())),
         "items": results,
     }
+
+
+def _execute_resume_item(
+    item: dict[str, Any],
+    *,
+    batch: str,
+    ledger_path: Path,
+    ledger_lock: Lock,
+    runner: ResumeRunner | None,
+) -> dict[str, Any]:
+    checked = _refresh_plan_item(item)
+    if checked["status"] == "skipped":
+        _append_resume_ledger_event(ledger_path, ledger_lock, {"event": "item_skipped", **checked})
+        return checked
+    command = [str(part) for part in checked["command"]]
+    timeout_seconds = _child_timeout_seconds(_safe_int(checked.get("max_runtime_minutes")))
+    started_at = _utc_now()
+    _append_resume_ledger_event(
+        ledger_path,
+        ledger_lock,
+        {
+            "event": "item_started",
+            "batch_id": batch,
+            "sequence": checked["sequence"],
+            "engagement_id": checked["engagement_id"],
+            "run_id": checked["run_id"],
+            "started_at": started_at,
+            "command": command,
+        },
+    )
+    completed = _run_resume_child(command, timeout_seconds=timeout_seconds, runner=runner)
+    status = "completed" if completed.returncode == 0 else "failed"
+    result = {
+        **checked,
+        "status": status,
+        "returncode": completed.returncode,
+        "started_at": started_at,
+        "completed_at": _utc_now(),
+        "stdout_tail": _tail_text(completed.stdout),
+        "stderr_tail": _tail_text(completed.stderr),
+    }
+    _append_resume_ledger_event(ledger_path, ledger_lock, {"event": f"item_{status}", **result})
+    return result
 
 
 def backfill_target_resume_scope_manifests(
@@ -1151,6 +1236,11 @@ def _append_ledger_event(path: Path, event: dict[str, Any]) -> None:
     payload = {**event, "recorded_at": _utc_now()}
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _append_resume_ledger_event(path: Path, lock: Lock, event: dict[str, Any]) -> None:
+    with lock:
+        _append_ledger_event(path, event)
 
 
 def _child_timeout_seconds(max_runtime_minutes: int) -> int:

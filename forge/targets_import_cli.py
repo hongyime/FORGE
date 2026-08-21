@@ -342,6 +342,11 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "--stop-on-failure/--continue-on-failure",
             help="Stop after the first failed child process by default.",
         ),
+        max_parallel: int = typer.Option(
+            1,
+            "--max-parallel",
+            help="Maximum child resume processes to run at once. Default 1 preserves sequential execution.",
+        ),
         dry_run: bool = typer.Option(
             False,
             "--dry-run",
@@ -368,7 +373,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
             help="Print machine-readable JSON. Accepted for parity; output is JSON by default.",
         ),
     ) -> None:
-        """Execute ready resume candidates sequentially with a durable ledger."""
+        """Execute ready resume candidates with a durable ledger."""
         _ = json_output
         payload = execute_target_resume_plan(
             data_dir=data_dir,
@@ -378,6 +383,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
             max_runtime_minutes=max_runtime_minutes,
             batch_id=batch_id,
             stop_on_failure=stop_on_failure,
+            max_parallel=max_parallel,
             dry_run=dry_run,
             redact_paths=redact_paths,
             break_stale_lock=break_stale_lock,

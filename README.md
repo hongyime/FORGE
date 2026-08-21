@@ -255,7 +255,7 @@ forge targets import --feed-url URL|--feed-file PATH
 forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--redact-paths] [--json]  # Default also scans repo-local legacy dashboard DBs
 forge targets resume-plan [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--data-dir PATH] [--redact-paths] [--json]
 forge targets resume-lock-status [--data-dir PATH] [--stale-lock-minutes N] [--redact-paths] [--json]
-forge targets resume-run [--dry-run] [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--batch-id ID] [--continue-on-failure] [--data-dir PATH] [--break-stale-lock] [--stale-lock-minutes N] [--redact-paths] [--json]
+forge targets resume-run [--dry-run] [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--max-parallel N] [--batch-id ID] [--continue-on-failure] [--data-dir PATH] [--break-stale-lock] [--stale-lock-minutes N] [--redact-paths] [--json]
 forge targets backfill-scope-manifests [--apply] [--limit N] [--reason REASON] [--data-dir PATH] [--json]
 forge monitoring status|due-plan [--include-empty-db-results]|run-due|deliver-alerts|worker
 forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-retest|apply-retest-run|handoff-plan|integration-runbook|import-ticket-statuses|sync-tickets
@@ -324,7 +324,7 @@ column and detail section without exposing raw scope-manifest paths. Use
 `--redact-paths` when exporting candidate JSON for review outside the local
 operator shell.
 `forge targets resume-plan` is read-only and turns ready candidates into a
-sequential manual command plan with an explicit per-run
+manual command plan with an explicit per-run
 `--max-runtime-minutes` budget. It does not execute, enqueue, or parallelize
 resumes; blocked candidates are summarized by blocker so operators can backfill
 or fix gates first. Use `--redact-paths` for report/review output that should
@@ -343,11 +343,13 @@ also hides local DB, scope-manifest, ledger, and lock paths in the JSON output.
 Without `--dry-run`, it re-checks
 each latest run before launching,
 holds a batch lock, writes a JSONL ledger under
-`target_imports/resume_batches`, and starts at most one child
-`forge kill-chain ... --resume` process at a time. Re-running after a candidate
-is already completed skips it instead of launching duplicate work. Resume-run
-only removes a stale lock when `--break-stale-lock` is explicit, and active
-owner PIDs are not breakable by age alone.
+`target_imports/resume_batches`, and starts one child
+`forge kill-chain ... --resume` process at a time by default. Use
+`--max-parallel N` for a bounded parallel batch; the same batch lock is held and
+ledger writes remain serialized. Re-running after a candidate is already
+completed skips it instead of launching duplicate work. Resume-run only removes
+a stale lock when `--break-stale-lock` is explicit, and active owner PIDs are
+not breakable by age alone.
 JSON includes `total_count`, `selected_count`, and `omitted_count`, matching
 resume-plan, so bounded rehearsals cannot be mistaken for the full backlog.
 `forge targets backfill-scope-manifests` is also dry-run by default; with
