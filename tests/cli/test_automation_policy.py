@@ -22,8 +22,8 @@ def test_operator_automation_policy_captures_requested_defaults() -> None:
     assert payload["validation"]["status"] == "valid"
     assert payload["validation"]["allow_wildcard_execution"] is True
     assert payload["validation"]["broad_scope_allowed"] is True
-    assert payload["scope_template"]["domains"] == ["*.com", "*.*"]
-    assert payload["scope_template"]["url_prefixes"] == ["https://*.*.*/"]
+    assert payload["scope_template"]["domains"] == ["*.com", "*.net", "*.org", "*.*"]
+    assert payload["scope_template"]["url_prefixes"] == ["https://*.*.*/", "http://*.*.*/"]
     defaults = payload["automation_defaults"]
     assert defaults["active_mode_default"] is True
     assert defaults["destructive_default"] is True

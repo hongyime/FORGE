@@ -56,8 +56,8 @@ AUTOMATION_DEFAULTS: dict[str, Any] = {
 }
 
 WILDCARD_SCOPE_TEMPLATE: dict[str, Any] = {
-    "domains": ["*.com", "*.*"],
-    "url_prefixes": ["https://*.*.*/"],
+    "domains": ["*.com", "*.net", "*.org", "*.*"],
+    "url_prefixes": ["https://*.*.*/", "http://*.*.*/"],
     "automation_policy": {
         "approved_local_path_regex": [
             r"^C:\\Users\\bryan\\OneDrive\\01 REPOSITORIES\\[^\\]+$",

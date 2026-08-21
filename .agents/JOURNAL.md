@@ -143,3 +143,4 @@
 - 2026-08-21: B647 pushed stale resume-lock recovery as ba0bf43; next sessions should continue product hardening from doctor/quality-audit backlog without resuming the oversized Codex thread.
 - 2026-08-21: B648 resume-lock hardening treats live PIDs as authoritative, protects lock ownership with per-run tokens, redacts lock metadata by allowlist, and documents the operator lock workflow.
 - 2026-08-21 20:30 +08: B649 records operator-approved wildcard/broad automation defaults as an explicit Forge policy surface and adds a read-only command-surface review so future automation growth is routed through presets/workflows instead of more memorized leaf commands.
+- 2026-08-21: B650 expands the automation wildcard scope template to include `*.net`, `*.org`, and `http://*.*.*/`; report freshness is currently artifact-clean, with stale-plan empty and remaining gaps tied to failed/long latest runs.
