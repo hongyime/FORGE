@@ -131,3 +131,4 @@
 - 2026-08-21: B640 stale report repair plans now support redacted path-neutral JSON output while remaining plan-only.
 - 2026-08-21: B641 report quality-audit now supports redacted path-neutral JSON output while remaining read-only.
 - 2026-08-21: B642 long-run-plan and policy-plan now support redacted path-neutral JSON output while remaining plan-only.
+- 2026-08-21: B643 target import start now exposes a runtime budget and enforces a parent-side child timeout while keeping full start capability available by default.
