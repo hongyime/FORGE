@@ -4,6 +4,8 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from forge.reporting.display_sanitization import sanitize_report_display_text
+
 
 def _truncate_text(value: Any, limit: int = 140) -> str:
     text = str(value or "").strip()
@@ -13,7 +15,7 @@ def _truncate_text(value: Any, limit: int = 140) -> str:
 
 
 def _render_bounded_note(label: str, value: Any, *, limit: int = 220) -> str:
-    text = _safe_dashboard_note_text(str(value or "").strip())
+    text = sanitize_report_display_text(value)
     if not text:
         return ""
     escaped_label = html.escape(label)
@@ -37,15 +39,6 @@ def _render_bounded_preview(preview: Any, *, limit: int = 2400) -> str:
         "<div class='tiny muted'>Preview truncated in the dashboard. "
         "Open the artifact for the full report.</div>"
     )
-
-
-def _safe_dashboard_note_text(text: str) -> str:
-    normalized = text.lower()
-    if "gguf model not found" in normalized:
-        return "GGUF model not found; configure an LLM provider/model or regenerate after local model setup."
-    if "--help' for help" in text and ("┌─ Error" in text or "Error" in text):
-        return "Command failed before completion; review the raw run log for the full CLI diagnostic."
-    return text
 
 
 def render_meta_block(label: str, value: str, mono: bool = False) -> str:

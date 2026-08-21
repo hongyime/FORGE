@@ -63,11 +63,35 @@ def test_dashboard_error_redaction_removes_terminal_help_noise() -> None:
 
     cleaned = _redact_dashboard_error(raw, 200)
 
-    assert "CLI invocation rejected" in cleaned
+    assert "Command failed before completion" in cleaned
     assert "--help" not in cleaned
     assert "\u250c" not in cleaned
+    assert "DO-NOT-LEAK" not in cleaned
+    assert "SECRET" not in cleaned
+
+
+def test_dashboard_error_redaction_removes_scope_manifest_paths_with_spaces() -> None:
+    raw = (
+        "failed scope_manifest=C:/Users/bryan/OneDrive/01 TOOLKITS/forgetoolkit/"
+        "target_imports/scope.json url=https://app.acme.example/admin"
+    )
+
+    cleaned = _redact_dashboard_error(raw, 240)
+
     assert "scope_manifest=[redacted]" in cleaned
-    assert "token=[redacted]" in cleaned
+    assert "TOOLKITS" not in cleaned
+    assert "scope.json" not in cleaned
+    assert "url=[redacted-url]" in cleaned
+
+
+def test_dashboard_error_redaction_handles_malformed_subdomain_help_text() -> None:
+    cleaned = _redact_dashboard_error(
+        "option on subdomains --help' for help. \u250c\u2500 Error invalid option",
+        200,
+    )
+
+    assert "Command failed before completion" in cleaned
+    assert "on subdomains --help" not in cleaned
 
 
 def test_dashboard_error_redaction_renames_abandoned_runs() -> None:

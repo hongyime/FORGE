@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from forge.reporting.display_sanitization import sanitize_report_display_text
+
 
 def _truncate_text(value: Any, limit: int = 140) -> str:
     text = str(value or "").strip()
@@ -71,16 +73,16 @@ def _timeline_event(
     severity: str = "",
 ) -> dict[str, str]:
     return {
-        "id": _truncate_text(event_id, 96),
-        "category": _truncate_text(category, 48),
-        "time": _truncate_text(time, 32),
-        "title": _truncate_text(title or category, 140),
-        "summary": _truncate_text(summary, 260),
-        "method": _truncate_text(method, 120),
-        "provenance": _truncate_text(provenance, 120),
-        "reportability": _truncate_text(reportability, 120),
-        "status": _truncate_text(status, 120),
-        "severity": _truncate_text(severity, 32),
+        "id": _truncate_text(sanitize_report_display_text(event_id), 96),
+        "category": _truncate_text(sanitize_report_display_text(category), 48),
+        "time": _truncate_text(sanitize_report_display_text(time), 32),
+        "title": _truncate_text(sanitize_report_display_text(title or category), 140),
+        "summary": _truncate_text(sanitize_report_display_text(summary), 260),
+        "method": _truncate_text(sanitize_report_display_text(method), 120),
+        "provenance": _truncate_text(sanitize_report_display_text(provenance), 120),
+        "reportability": _truncate_text(sanitize_report_display_text(reportability), 120),
+        "status": _truncate_text(sanitize_report_display_text(status), 120),
+        "severity": _truncate_text(sanitize_report_display_text(severity), 32),
     }
 
 

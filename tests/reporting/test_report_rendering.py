@@ -153,6 +153,25 @@ def test_report_history_renders_prior_families_and_escapes() -> None:
     assert ("b" * 140) not in html
 
 
+def test_report_history_sanitizes_gguf_fallback_paths() -> None:
+    html = render_report_history(
+        [
+            {"artifact_name": "latest.md"},
+            {
+                "artifact_name": "older.json",
+                "fallback_reason": (
+                    "GGUF model not found: C:/Users/bryan/.cache/forge/models/"
+                    "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+                ),
+            },
+        ]
+    )
+
+    assert "GGUF model not found; configure an LLM provider/model" in html
+    assert "C:/Users/bryan" not in html
+    assert "qwen2.5-1.5b-instruct-q4_k_m.gguf" not in html
+
+
 def test_table_renderer_handles_empty_rows_and_escapes_cells() -> None:
     empty = render_table("Scope <Rows>", [])
     assert "Scope &lt;Rows&gt;" in empty

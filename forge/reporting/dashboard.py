@@ -180,6 +180,7 @@ from forge.reporting.run_summaries import (
     run_policy_summary as build_run_policy_summary,
 )
 from forge.reporting.evidence_provenance import evidence_provenance_section_rows
+from forge.reporting.display_sanitization import sanitize_report_display_text
 from forge.reporting.page_composition import (
     render_engagement_detail_page,
     render_engagement_evidence_sections,
@@ -319,30 +320,11 @@ _DASHBOARD_SECRET_ASSIGNMENT_RE = re.compile(
     r"private[_-]?key|raw[_-]?(?:secret|token)|refresh[_-]?token|secret|"
     r"scope_manifest(?:_json|_payload)?|token)\b\s*[:=]\s*[^,\s;]+"
 )
-_DASHBOARD_SCOPE_MANIFEST_ASSIGNMENT_RE = re.compile(
-    r"(?i)\b(scope_manifest(?:_json|_payload)?)\b\s*[:=]\s*"
-    r"(?:\{[^;]*\}|\[[^;]*\]|\"[^\"]*\"|'[^']*'|[^,\s;]+)"
-)
 _DASHBOARD_URL_RE = re.compile(r"https?://[^\s,;]+", re.IGNORECASE)
-_DASHBOARD_CLI_HELP_RE = re.compile(
-    r"(?is)(?:try\s+['\"]?[^'\"]*--help['\"]?\s+for\s+help\.?|"
-    r"(?:[\w.-]+\s+){0,4}--help['\"]?\s+for\s+help\.?)"
-)
-_DASHBOARD_RICH_BORDER_RE = re.compile(r"[\u2500-\u257f\u2580-\u259f]+")
-_DASHBOARD_TERMINAL_CONTROL_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 def _redact_dashboard_error(value: Any, limit: int = 140) -> str:
-    text = str(value or "").strip()
-    if text.lower() == "abandoned before explicit completion":
-        text = "interrupted before finalization"
-    text = _DASHBOARD_TERMINAL_CONTROL_RE.sub("", text)
-    text = _DASHBOARD_RICH_BORDER_RE.sub(" ", text)
-    text = _DASHBOARD_CLI_HELP_RE.sub("CLI invocation rejected", text)
-    text = _DASHBOARD_SCOPE_MANIFEST_ASSIGNMENT_RE.sub(
-        lambda match: f"{match.group(1)}=[redacted]",
-        text,
-    )
+    text = sanitize_report_display_text(value)
     text = _DASHBOARD_SECRET_ASSIGNMENT_RE.sub(
         lambda match: f"{match.group(1)}=[redacted]",
         text,
