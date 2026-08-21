@@ -233,6 +233,7 @@ testpaths       = ["tests"]
 python_files    = ["test_*.py"]
 python_classes  = ["Test*"]
 python_functions= ["test_*"]
+pythonpath      = ["."]
 asyncio_mode    = "auto"
 required_plugins = ["pytest-recording"]
 addopts         = [
@@ -240,11 +241,15 @@ addopts         = [
     "--strict-markers",
     "--strict-config",
     "--record-mode=none",
+    "--import-mode=importlib",
     "-ra",
     "-m",
     "not chaos and not slow",
 ]
 markers = [
+    "unit: default isolated unit/component tests",
+    "functional: CLI or web UI behavior tests that exercise user-facing flows",
+    "e2e: end-to-end workflow tests that run full operator paths",
     "opsec: evasion and OPSEC invariant tests",
     "integration: tests requiring Docker services or real network (skipped in strict offline)",
     "slow: tests taking > 10 s (LLM inference, full ETL pipeline)",
