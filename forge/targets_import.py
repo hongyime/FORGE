@@ -20,6 +20,7 @@ from forge.config import ForgeConfig
 from forge.db.control import index_engagement_db_file
 from forge.db.session import get_engagement_db
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
+from forge.subprocess_tree import run_contained_subprocess
 
 TARGET_FEED_SCHEMA_VERSION = "target-feed.v1"
 TARGET_IMPORT_MONITORING_POLICY_NAME = "Target import seed exposure"
@@ -811,12 +812,10 @@ def _start_kill_chain(
         str(runtime_minutes),
     ]
     timeout_seconds = runtime_minutes * 60 + TARGET_IMPORT_CHILD_TIMEOUT_GRACE_SECONDS
-    proc = subprocess.run(
+    proc = run_contained_subprocess(
         command,
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=timeout_seconds,
+        timeout_seconds=timeout_seconds,
+        timeout_stderr=f"target import child exceeded timeout_seconds={timeout_seconds}",
     )
     if proc.stdout:
         sys.stdout.write(proc.stdout)

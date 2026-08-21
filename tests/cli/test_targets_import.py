@@ -13,6 +13,7 @@ from forge.db.session import get_engagement_db
 from forge.targets_import_cli import register_target_import_commands
 from forge.targets_import import import_targets, load_target_feed
 from forge.targets_resume_candidates import (
+    _run_resume_child,
     backfill_target_resume_scope_manifests,
     collect_target_resume_candidates,
     collect_target_resume_plan,
@@ -1000,6 +1001,41 @@ def test_resume_run_executes_sequentially_and_writes_ledger(tmp_path: Path) -> N
     assert not Path(payload["lock_path"]).exists()
 
 
+def test_resume_child_uses_contained_subprocess_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[list[str], int, str]] = []
+
+    def fake_contained_runner(
+        command: list[str],
+        *,
+        timeout_seconds: int,
+        timeout_stderr: str,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((command, timeout_seconds, timeout_stderr))
+        return subprocess.CompletedProcess(command, 124, stdout="", stderr=timeout_stderr)
+
+    monkeypatch.setattr(
+        "forge.targets_resume_candidates.run_contained_subprocess",
+        fake_contained_runner,
+    )
+
+    result = _run_resume_child(
+        ["forge", "kill-chain", "example.com"],
+        timeout_seconds=42,
+        runner=None,
+    )
+
+    assert result.returncode == 124
+    assert calls == [
+        (
+            ["forge", "kill-chain", "example.com"],
+            42,
+            "resume child exceeded timeout_seconds=42",
+        )
+    ]
+
+
 def test_resume_run_dry_run_does_not_call_runner_or_write_ledger(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     scope_path = tmp_path / "scope.json"
@@ -1187,19 +1223,15 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
     def _fake_run(
         command: list[str],
         *,
-        check: bool,
-        capture_output: bool,
-        text: bool,
-        timeout: int,
+        timeout_seconds: int,
+        timeout_stderr: str,
     ) -> object:
         calls.append(command)
-        assert check is False
-        assert capture_output is True
-        assert text is True
-        assert timeout == 25 * 60 + 120
+        assert timeout_seconds == 25 * 60 + 120
+        assert timeout_stderr == "target import child exceeded timeout_seconds=1620"
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
 
     results = import_targets(
         feed_url=None,
@@ -1236,10 +1268,10 @@ def test_start_uses_configured_kill_chain_runtime_timeout(
     calls: list[tuple[list[str], int]] = []
 
     def _fake_run(command: list[str], **kwargs: object) -> object:
-        calls.append((command, int(kwargs["timeout"])))
+        calls.append((command, int(kwargs["timeout_seconds"])))
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
 
     results = import_targets(
         feed_url=None,
@@ -1275,7 +1307,7 @@ def test_start_treats_completed_kill_chain_exit_two_as_success(
             stderr="Non-TTY invocation - not prompting.\n",
         )
 
-    monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
 
     results = import_targets(
         feed_url=None,
@@ -1324,7 +1356,7 @@ def test_start_treats_exit_two_with_completed_db_run_as_success(
             ),
         )
 
-    monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
 
     results = import_targets(
         feed_url=None,
@@ -1357,7 +1389,7 @@ def test_start_keeps_real_kill_chain_cli_exit_two_as_failure(
             stderr="Usage: python -m forge.cli kill-chain [OPTIONS]\nInvalid value\n",
         )
 
-    monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
 
     with pytest.raises(subprocess.CalledProcessError):
         import_targets(
@@ -1385,19 +1417,15 @@ def test_start_limit_caps_scoped_kill_chain_launches(
     def _fake_run(
         command: list[str],
         *,
-        check: bool,
-        capture_output: bool,
-        text: bool,
-        timeout: int,
+        timeout_seconds: int,
+        timeout_stderr: str,
     ) -> object:
         calls.append(command)
-        assert check is False
-        assert capture_output is True
-        assert text is True
-        assert timeout == 25 * 60 + 120
+        assert timeout_seconds == 25 * 60 + 120
+        assert timeout_stderr == "target import child exceeded timeout_seconds=1620"
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
 
     results = import_targets(
         feed_url=None,
@@ -1437,7 +1465,7 @@ def test_monitoring_seed_failure_does_not_block_start(
         "forge.targets_import._ensure_target_import_monitoring",
         _fake_monitoring_seed,
     )
-    monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
 
     results = import_targets(
         feed_url=None,
@@ -1492,7 +1520,7 @@ def test_start_skips_engagement_with_existing_kill_chain_run(
 
     calls: list[list[str]] = []
     monkeypatch.setattr(
-        "forge.targets_import.subprocess.run",
+        "forge.targets_import.run_contained_subprocess",
         lambda command, **_kwargs: calls.append(command),
     )
 

@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 
 from forge.config import ForgeConfig
 from forge.engagement_ids import numeric_engagement_db_files
+from forge.subprocess_tree import run_contained_subprocess
 
 RESUME_CANDIDATE_SCHEMA_VERSION = "forge.targets.resume_candidates.v1"
 RESUME_PLAN_SCHEMA_VERSION = "forge.targets.resume_plan.v1"
@@ -1050,21 +1051,11 @@ def _run_resume_child(
 ) -> subprocess.CompletedProcess[str]:
     if runner is not None:
         return runner(command, timeout_seconds)
-    try:
-        return subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-        )
-    except subprocess.TimeoutExpired as exc:
-        return subprocess.CompletedProcess(
-            command,
-            124,
-            stdout=_coerce_text(exc.stdout),
-            stderr=f"resume child exceeded timeout_seconds={timeout_seconds}",
-        )
+    return run_contained_subprocess(
+        command,
+        timeout_seconds=timeout_seconds,
+        timeout_stderr=f"resume child exceeded timeout_seconds={timeout_seconds}",
+    )
 
 
 def _append_ledger_event(path: Path, event: dict[str, Any]) -> None:
