@@ -6,6 +6,7 @@ param(
     [int]$EveryMinutes = 60,
     [int]$Limit = 100,
     [int]$MaxIter = 1,
+    [int]$MaxRuntimeMinutes = 25,
     [int]$StartLimit = 1,
     [int]$WaitSeconds = 60,
     [int]$TimeoutMinutes = 45,
@@ -39,12 +40,29 @@ if (-not (Test-Path $taskRunner)) {
 
 $launcherDir = Join-Path $PSScriptRoot "scheduled"
 $launcher = Join-Path $launcherDir "forge_tph_import.cmd"
+$childTimeoutGraceSeconds = 120
+$timeoutCleanupReserveSeconds = [Math]::Max(
+    45,
+    [Math]::Max(1, $StopGraceSeconds) + [Math]::Max(1, $TimeoutRecoveryHelperSeconds) + 30
+)
+$effectiveStartLimit = if ($Start) { [Math]::Max(1, $StartLimit) } else { 0 }
+$effectiveMaxRuntimeMinutes = [Math]::Max(1, $MaxRuntimeMinutes)
+if ($effectiveStartLimit -gt 0) {
+    $availableSeconds = ([Math]::Max(1, $TimeoutMinutes) * 60) - $timeoutCleanupReserveSeconds
+    $perStartSeconds = [Math]::Floor($availableSeconds / $effectiveStartLimit)
+    $runtimeSeconds = $perStartSeconds - $childTimeoutGraceSeconds
+    $budgetedRuntimeMinutes = [int][Math]::Floor($runtimeSeconds / 60)
+    if ($budgetedRuntimeMinutes -lt 1) {
+        throw "scheduled import budget cannot fit StartLimit=$StartLimit within TimeoutMinutes=$TimeoutMinutes; lower StartLimit or increase TimeoutMinutes"
+    }
+    $effectiveMaxRuntimeMinutes = [Math]::Min($effectiveMaxRuntimeMinutes, $budgetedRuntimeMinutes)
+}
 $dryRunArg = if ($DryRun) { " -DryRun" } else { "" }
 $startArg = if ($Start) { " -Start" } else { "" }
 $launcherBody = @"
 @echo off
 setlocal
-call powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "$taskRunner" -ApiUrl "$ApiUrl" -TphEnvPath "$TphEnvPath" -Limit $Limit -MaxIter $MaxIter -StartLimit $StartLimit -WaitSeconds $WaitSeconds -TimeoutMinutes $TimeoutMinutes -StopGraceSeconds $StopGraceSeconds -WatchdogHelperTimeoutSeconds $WatchdogHelperTimeoutSeconds -TimeoutRecoveryHelperSeconds $TimeoutRecoveryHelperSeconds -StaleHelperFileMinutes $StaleHelperFileMinutes -ModuleTimeoutSeconds $ModuleTimeoutSeconds -StaleRunMinutes $StaleRunMinutes$startArg$dryRunArg
+call powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "$taskRunner" -ApiUrl "$ApiUrl" -TphEnvPath "$TphEnvPath" -Limit $Limit -MaxIter $MaxIter -MaxRuntimeMinutes $effectiveMaxRuntimeMinutes -StartLimit $StartLimit -WaitSeconds $WaitSeconds -TimeoutMinutes $TimeoutMinutes -StopGraceSeconds $StopGraceSeconds -WatchdogHelperTimeoutSeconds $WatchdogHelperTimeoutSeconds -TimeoutRecoveryHelperSeconds $TimeoutRecoveryHelperSeconds -StaleHelperFileMinutes $StaleHelperFileMinutes -ModuleTimeoutSeconds $ModuleTimeoutSeconds -StaleRunMinutes $StaleRunMinutes$startArg$dryRunArg
 set "RESULT=%ERRORLEVEL%"
 exit /b %RESULT%
 "@
@@ -59,7 +77,7 @@ $trigger = New-ScheduledTaskTrigger `
     -RepetitionDuration (New-TimeSpan -Days 3650)
 $action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$taskRunner`" -ApiUrl `"$ApiUrl`" -TphEnvPath `"$TphEnvPath`" -Limit $Limit -MaxIter $MaxIter -StartLimit $StartLimit -WaitSeconds $WaitSeconds -TimeoutMinutes $TimeoutMinutes -StopGraceSeconds $StopGraceSeconds -WatchdogHelperTimeoutSeconds $WatchdogHelperTimeoutSeconds -TimeoutRecoveryHelperSeconds $TimeoutRecoveryHelperSeconds -StaleHelperFileMinutes $StaleHelperFileMinutes -ModuleTimeoutSeconds $ModuleTimeoutSeconds -StaleRunMinutes $StaleRunMinutes$startArg$dryRunArg" `
+    -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$taskRunner`" -ApiUrl `"$ApiUrl`" -TphEnvPath `"$TphEnvPath`" -Limit $Limit -MaxIter $MaxIter -MaxRuntimeMinutes $effectiveMaxRuntimeMinutes -StartLimit $StartLimit -WaitSeconds $WaitSeconds -TimeoutMinutes $TimeoutMinutes -StopGraceSeconds $StopGraceSeconds -WatchdogHelperTimeoutSeconds $WatchdogHelperTimeoutSeconds -TimeoutRecoveryHelperSeconds $TimeoutRecoveryHelperSeconds -StaleHelperFileMinutes $StaleHelperFileMinutes -ModuleTimeoutSeconds $ModuleTimeoutSeconds -StaleRunMinutes $StaleRunMinutes$startArg$dryRunArg" `
     -WorkingDirectory $launcherDir
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
@@ -80,6 +98,10 @@ if ($interval -ne $EveryMinutes) {
 }
 Write-Host "Runs every $interval minute(s) while Windows is running."
 Write-Host "Start enabled: $Start; max new kill-chain runs per import: $StartLimit; max iterations per run: $MaxIter"
+if ($effectiveMaxRuntimeMinutes -ne $MaxRuntimeMinutes) {
+    Write-Host "Requested max runtime $MaxRuntimeMinutes minute(s) was lowered to $effectiveMaxRuntimeMinutes minute(s) so StartLimit $StartLimit fits the watchdog execution budget."
+}
+Write-Host "Max runtime per started target: $effectiveMaxRuntimeMinutes minute(s)"
 Write-Host "Watchdog timeout: $TimeoutMinutes minute(s)"
 Write-Host "Graceful stop window: $StopGraceSeconds second(s); watchdog helper timeout: $WatchdogHelperTimeoutSeconds second(s); timeout recovery helper: $TimeoutRecoveryHelperSeconds second(s); stale helper cleanup: $StaleHelperFileMinutes minute(s); module timeout: $ModuleTimeoutSeconds second(s)"
 Write-Host "Launcher: $launcher"

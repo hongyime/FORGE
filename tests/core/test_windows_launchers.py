@@ -228,6 +228,8 @@ def test_tph_import_runner_reports_feed_reachability_diagnostics() -> None:
         "wait-targetfeed -url $feedurl -headers $headers -timeoutseconds "
         "$waitseconds -tphenvpath $tphenvpath"
     ) in text
+    assert "[int]$maxruntimeminutes = 25" in text
+    assert '"--max-runtime-minutes", [string]$maxruntimeminutes' in text
 
 
 def test_tph_import_task_parallelizes_watchdog_db_scans() -> None:
@@ -251,9 +253,15 @@ def test_tph_task_installer_uses_timeout_as_whole_task_budget() -> None:
         REPO_ROOT / "scripts" / "install_tph_target_import_task.ps1"
     ).read_text(encoding="utf-8").lower()
     assert "[int]$everyminutes = 60" in text
+    assert "[int]$maxruntimeminutes = 25" in text
     assert "[int]$watchdoghelpertimeoutseconds = 120" in text
     assert "[int]$timeoutrecoveryhelperseconds = 10" in text
     assert "[int]$stalehelperfileminutes = 360" in text
+    assert "$childtimeoutgraceseconds = 120" in text
+    assert "$effectivestartlimit = if ($start) { [math]::max(1, $startlimit) } else { 0 }" in text
+    assert "$budgetedruntimeminutes = [int][math]::floor($runtimeseconds / 60)" in text
+    assert "scheduled import budget cannot fit startlimit=$startlimit within timeoutminutes=$timeoutminutes" in text
+    assert "-maxruntimeminutes $effectivemaxruntimeminutes" in text
     assert "-watchdoghelpertimeoutseconds $watchdoghelpertimeoutseconds" in text
     assert "-timeoutrecoveryhelperseconds $timeoutrecoveryhelperseconds" in text
     assert "-stalehelperfileminutes $stalehelperfileminutes" in text
@@ -262,7 +270,25 @@ def test_tph_task_installer_uses_timeout_as_whole_task_budget() -> None:
     assert "$interval = [math]::max([math]::max(5, $everyminutes), $executionlimitminutes)" in text
     assert "requested interval $everyminutes minute(s) was raised to $interval minute(s)" in text
     assert "-executiontimelimit (new-timespan -minutes $executionlimitminutes)" in text
+    assert "requested max runtime $maxruntimeminutes minute(s) was lowered to $effectivemaxruntimeminutes minute(s)" in text
+    assert "max runtime per started target: $effectivemaxruntimeminutes minute(s)" in text
     assert "timeout recovery helper: $timeoutrecoveryhelperseconds second(s)" in text
+
+
+def test_tph_import_task_runner_fits_child_runtime_to_task_budget() -> None:
+    text = (
+        REPO_ROOT / "scripts" / "run_tph_target_import_task.ps1"
+    ).read_text(encoding="utf-8").lower()
+    assert "[int]$maxruntimeminutes = 25" in text
+    assert "$childtimeoutgraceseconds = 120" in text
+    assert "function get-effectivechildruntimeminutes" in text
+    assert "scheduled import budget cannot fit startlimit=$starts within timeoutminutes=$timeoutminutes" in text
+    assert '"-maxruntimeminutes", [string]$maxruntimeminutes' in text
+    assert "$effectivestartlimit = if ($start) { [math]::max(1, $startlimit) } else { 0 }" in text
+    assert "$effectivemaxruntimeminutes = get-effectivechildruntimeminutes `" in text
+    assert "$args[$maxruntimeindex + 1] = [string]$effectivemaxruntimeminutes" in text
+    assert "requested_max_runtime_minutes=$maxruntimeminutes" in text
+    assert "effective_max_runtime_minutes=$effectivemaxruntimeminutes" in text
 
 
 def test_remediation_ticket_status_import_task_defaults_to_dry_run() -> None:
