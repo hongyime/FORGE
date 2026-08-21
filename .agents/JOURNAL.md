@@ -134,3 +134,4 @@
 - 2026-08-21: B643 target import start now exposes a runtime budget and enforces a parent-side child timeout while keeping full start capability available by default.
 - 2026-08-21: B644 scheduled target imports now fit started child runtime budgets to the watchdog task window instead of disabling start by default.
 - 2026-08-21: B645 report/dashboard display paths now share render-time sanitization for GGUF fallbacks, malformed CLI help, abandoned-run wording, and scope manifest assignments with spaces.
+- 2026-08-21: B646 target import and resume-run child kill-chain launches now use contained subprocess cleanup to terminate child process trees on timeout.
