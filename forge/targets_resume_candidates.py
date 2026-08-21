@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import subprocess
 from collections import Counter
@@ -21,6 +22,7 @@ RESUME_RUN_SCHEMA_VERSION = "forge.targets.resume_run.v1"
 SCOPE_BACKFILL_SCHEMA_VERSION = "forge.targets.scope_manifest_backfill.v1"
 DEFAULT_RESUME_CANDIDATE_LIMIT = 100
 DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES = 25
+DEFAULT_RESUME_LOCK_STALE_MINUTES = 120
 TERMINAL_NON_SUCCESS_STATUSES = {"failed", "cancelled"}
 ResumeRunner = Callable[[list[str], int], subprocess.CompletedProcess[str]]
 _SENSITIVE_METADATA_KEYS = {
@@ -274,6 +276,26 @@ def collect_target_resume_plan(
     }
 
 
+def collect_target_resume_lock_status(
+    *,
+    data_dir: Path | None = None,
+    stale_lock_minutes: int = DEFAULT_RESUME_LOCK_STALE_MINUTES,
+) -> dict[str, Any]:
+    """Return read-only status for the resume-run batch lock."""
+
+    cfg = ForgeConfig.load()
+    base_dir = Path(data_dir) if data_dir is not None else cfg.data_dir
+    lock_path = _resume_lock_path(base_dir)
+    status = _resume_lock_status(lock_path, stale_lock_minutes=stale_lock_minutes)
+    return {
+        "schema_version": "forge.targets.resume_lock_status.v1",
+        "execution_policy": "read_only_resume_lock_status_no_commands_executed",
+        "data_dir": str(base_dir),
+        "lock_path": str(lock_path),
+        **status,
+    }
+
+
 def execute_target_resume_plan(
     *,
     data_dir: Path | None = None,
@@ -286,6 +308,8 @@ def execute_target_resume_plan(
     stop_on_failure: bool = True,
     dry_run: bool = False,
     redact_paths: bool = False,
+    break_stale_lock: bool = False,
+    stale_lock_minutes: int = DEFAULT_RESUME_LOCK_STALE_MINUTES,
     runner: ResumeRunner | None = None,
 ) -> dict[str, Any]:
     """Execute ready resume candidates strictly one child process at a time."""
@@ -315,7 +339,7 @@ def execute_target_resume_plan(
     batch = _safe_batch_id(batch_id)
     ledger_dir = Path(plan["data_dir"]) / "target_imports" / "resume_batches"
     ledger_path = ledger_dir / f"{batch}.jsonl"
-    lock_path = ledger_dir / "resume_batch.lock"
+    lock_path = _resume_lock_path(Path(plan["data_dir"]))
     results: list[dict[str, Any]] = []
     counts: Counter[str] = Counter()
     if dry_run:
@@ -360,6 +384,29 @@ def execute_target_resume_plan(
     lock_acquired = False
     ledger_dir.mkdir(parents=True, exist_ok=True)
     try:
+        broken_lock_status: dict[str, Any] | None = None
+        if break_stale_lock and lock_path.exists():
+            lock_status = _resume_lock_status(
+                lock_path,
+                stale_lock_minutes=stale_lock_minutes,
+            )
+            if not lock_status["breakable"]:
+                return {
+                    "schema_version": RESUME_RUN_SCHEMA_VERSION,
+                    "execution_policy": "blocked_existing_resume_batch_lock_not_stale",
+                    "dry_run": False,
+                    "batch_id": batch,
+                    "ledger_path": str(ledger_path),
+                    "lock_path": str(lock_path),
+                    "lock_status": lock_status,
+                    "status": "blocked",
+                    **plan_count_fields,
+                    "planned_count": plan["planned_count"],
+                    "result_counts": {"blocked": 1},
+                    "items": [],
+                }
+            lock_path.unlink()
+            broken_lock_status = lock_status
         with lock_path.open("x", encoding="utf-8") as lock_file:
             lock_file.write(
                 json.dumps(
@@ -367,6 +414,7 @@ def execute_target_resume_plan(
                         "batch_id": batch,
                         "created_at": _utc_now(),
                         "pid": _current_pid(),
+                        "stale_lock_replaced": broken_lock_status,
                     },
                     sort_keys=True,
                 )
@@ -429,6 +477,7 @@ def execute_target_resume_plan(
             },
         )
     except FileExistsError:
+        lock_status = _resume_lock_status(lock_path, stale_lock_minutes=stale_lock_minutes)
         return {
             "schema_version": RESUME_RUN_SCHEMA_VERSION,
             "execution_policy": "blocked_existing_resume_batch_lock",
@@ -436,6 +485,7 @@ def execute_target_resume_plan(
             "batch_id": batch,
             "ledger_path": str(ledger_path),
             "lock_path": str(lock_path),
+            "lock_status": lock_status,
             "status": "blocked",
             **plan_count_fields,
             "planned_count": plan["planned_count"],
@@ -1071,6 +1121,120 @@ def _child_timeout_seconds(max_runtime_minutes: int) -> int:
         default=DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
     )
     return minutes * 60 + 120
+
+
+def _resume_lock_path(data_dir: Path) -> Path:
+    return Path(data_dir) / "target_imports" / "resume_batches" / "resume_batch.lock"
+
+
+def _resume_lock_status(lock_path: Path, *, stale_lock_minutes: int) -> dict[str, Any]:
+    stale_minutes = _normalize_positive_int(
+        stale_lock_minutes,
+        default=DEFAULT_RESUME_LOCK_STALE_MINUTES,
+    )
+    if not lock_path.exists():
+        return {
+            "exists": False,
+            "breakable": False,
+            "stale": False,
+            "reason": "lock_missing",
+            "pid": None,
+            "pid_alive": None,
+            "age_seconds": None,
+            "stale_lock_minutes": stale_minutes,
+            "metadata": {},
+        }
+    metadata = _read_resume_lock_metadata(lock_path)
+    pid = _safe_int(metadata.get("pid"))
+    pid_alive = _pid_alive(pid) if pid > 0 else None
+    created_at = str(metadata.get("created_at") or "").strip()
+    age_seconds = _lock_age_seconds(lock_path, created_at=created_at)
+    stale_by_age = age_seconds is not None and age_seconds >= stale_minutes * 60
+    stale_by_dead_pid = pid > 0 and pid_alive is False
+    stale = bool(stale_by_age or stale_by_dead_pid)
+    reason = "active_lock"
+    if stale_by_dead_pid:
+        reason = "dead_pid"
+    elif stale_by_age:
+        reason = "stale_age"
+    elif not metadata:
+        reason = "unparsed_lock"
+    return {
+        "exists": True,
+        "breakable": stale,
+        "stale": stale,
+        "reason": reason,
+        "pid": pid or None,
+        "pid_alive": pid_alive,
+        "age_seconds": age_seconds,
+        "stale_lock_minutes": stale_minutes,
+        "metadata": metadata,
+    }
+
+
+def _read_resume_lock_metadata(lock_path: Path) -> dict[str, Any]:
+    try:
+        text = lock_path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _lock_age_seconds(lock_path: Path, *, created_at: str) -> float | None:
+    created_epoch = _iso_epoch_seconds(created_at)
+    if created_epoch is None:
+        try:
+            created_epoch = lock_path.stat().st_mtime
+        except OSError:
+            return None
+    return max(0.0, datetime.now(timezone.utc).timestamp() - created_epoch)
+
+
+def _iso_epoch_seconds(value: str) -> float | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        return _windows_pid_alive(pid)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _windows_pid_alive(pid: int) -> bool:
+    try:
+        import ctypes
+    except ImportError:  # pragma: no cover - ctypes is part of CPython on Windows.
+        return True
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    process_query_limited_information = 0x1000
+    handle = kernel32.OpenProcess(process_query_limited_information, False, int(pid))
+    if handle:
+        kernel32.CloseHandle(handle)
+        return True
+    error = ctypes.get_last_error()
+    if error == 87:  # ERROR_INVALID_PARAMETER: no such process.
+        return False
+    return True
 
 
 def _safe_batch_id(value: str | None) -> str:

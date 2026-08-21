@@ -10,9 +10,11 @@ from rich.console import Console
 from forge.targets_import import DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES, import_targets
 from forge.targets_resume_candidates import (
     DEFAULT_RESUME_CANDIDATE_LIMIT,
+    DEFAULT_RESUME_LOCK_STALE_MINUTES,
     DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
     backfill_target_resume_scope_manifests,
     collect_target_resume_candidates,
+    collect_target_resume_lock_status,
     collect_target_resume_plan,
     execute_target_resume_plan,
     redact_target_resume_candidate_payload,
@@ -268,6 +270,32 @@ def register_target_import_commands(app: typer.Typer) -> None:
         )
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
+    @app.command("resume-lock-status")
+    def targets_resume_lock_status(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help="FORGE data directory containing target_imports/resume_batches.",
+        ),
+        stale_lock_minutes: int = typer.Option(
+            DEFAULT_RESUME_LOCK_STALE_MINUTES,
+            "--stale-lock-minutes",
+            help="Age threshold used to classify an existing resume lock as stale.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON. Accepted for parity; output is JSON by default.",
+        ),
+    ) -> None:
+        """Inspect the resume-run batch lock without modifying it."""
+        _ = json_output
+        payload = collect_target_resume_lock_status(
+            data_dir=data_dir,
+            stale_lock_minutes=stale_lock_minutes,
+        )
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
     @app.command("resume-run")
     def targets_resume_run(
         data_dir: Optional[Path] = typer.Option(
@@ -318,6 +346,16 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "--redact-paths",
             help="Redact local paths in dry-run JSON output. Live resume-run blocks when set.",
         ),
+        break_stale_lock: bool = typer.Option(
+            False,
+            "--break-stale-lock",
+            help="Remove an existing resume lock only when age/dead-PID checks classify it stale.",
+        ),
+        stale_lock_minutes: int = typer.Option(
+            DEFAULT_RESUME_LOCK_STALE_MINUTES,
+            "--stale-lock-minutes",
+            help="Age threshold used with --break-stale-lock.",
+        ),
         json_output: bool = typer.Option(
             False,
             "--json",
@@ -336,5 +374,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
             stop_on_failure=stop_on_failure,
             dry_run=dry_run,
             redact_paths=redact_paths,
+            break_stale_lock=break_stale_lock,
+            stale_lock_minutes=stale_lock_minutes,
         )
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))

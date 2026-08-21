@@ -1,8 +1,9 @@
 # Agent State
 
-Current task: stop local FORGE scheduled execution, research `ukr.pw`/CTI/OSINT sources as unsafe text, and integrate a safe production-ready CTI/OSINT observation slice into FORGE.
+Current task: recover the interrupted Codex session through repo state, finish the stale resume-lock recovery slice, verify it, update handoff/state/journal, commit, and push to main.
 
 Progress:
+- Implemented B647 stale resume-lock recovery: added read-only `forge targets resume-lock-status`, explicit `forge targets resume-run --break-stale-lock`, stale/dead-PID lock classification, active-lock refusal, Windows-safe PID liveness checks, focused tests, and `.agents/handoffs/2026-08-21-171500-session-recovery.md` so future sessions/subagents resume from repo state instead of the 241 MB Codex thread. Verification passed: focused resume-lock CLI/helper tests (`7 passed in 28.72s`), full `tests/cli/test_targets_import.py` (`46 passed, 132 existing sqlite timestamp deprecation warnings in 23.24s`), Ruff on touched Python files, py_compile on touched Python files, `git diff --check`, `targets resume-lock-status --json` smoke, and `targets resume-run --help` smoke. No live resume-run, kill-chain, provider call, scheduled-task change, engagement mutation, report regeneration, or credential persistence was executed.
 - Pushed B646 as `f591d9d fix: contain target child processes`: target import and resume-run child kill-chain launches now use a shared contained subprocess runner that starts a process group/session and terminates the child tree on timeout. Focused subprocess-tree, target-import, and resume-run tests, Ruff, py_compile, diff check, and a tiny contained-runner smoke passed. No live kill-chain, resume-run, scheduled task registration, provider call, report regeneration, or engagement mutation was executed.
 - Pushed B645 as `2648611 fix: sanitize report display text`: dashboard/report-history/timeline display sanitization now shares a render-time cleanup path for GGUF fallback diagnostics, malformed CLI help text, abandoned-run wording, and full `scope_manifest` assignments with spaces. Focused and broader reporting tests, Ruff, py_compile, and diff check passed. No report regeneration, live kill-chain, provider call, scheduled task registration, or engagement mutation was executed.
 - Pushed B644 as `f7ba70c fix: budget scheduled target imports`: scheduled theprawnhunter import wrappers now pass `--max-runtime-minutes` end to end and dynamically lower the per-child runtime when needed so `StartLimit` fits the watchdog task budget. Focused launcher tests, Ruff, PowerShell parser checks, and git diff check passed. No scheduled task registration, live kill-chain, provider call, report regeneration, or engagement mutation was executed.
@@ -350,12 +351,12 @@ Next steps:
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-08-20 15:31:25 +08:00
+- Updated: 2026-08-21 17:04:15 +08:00
 - Machine: PRAWN-E14
-- Harness: claude
+- Harness: codex
 - Event: session-start
 - Branch: main
-- HEAD: 0e89ae7
-- Dirty files: 8
+- HEAD: 398a9db
+- Dirty files: 3
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->

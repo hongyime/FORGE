@@ -135,3 +135,8 @@
 - 2026-08-21: B644 scheduled target imports now fit started child runtime budgets to the watchdog task window instead of disabling start by default.
 - 2026-08-21: B645 report/dashboard display paths now share render-time sanitization for GGUF fallbacks, malformed CLI help, abandoned-run wording, and scope manifest assignments with spaces.
 - 2026-08-21: B646 target import and resume-run child kill-chain launches now use contained subprocess cleanup to terminate child process trees on timeout.
+- 2026-08-21 16:34:50 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
+- 2026-08-21 16:48:09 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
+- 2026-08-21 16:54:07 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
+- 2026-08-21 17:04:15 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
+- 2026-08-21: Recovery sessions should resume from repo state and handoffs instead of the oversized Codex thread; resume-run stale-lock breaking remains explicit and refuses active locks.

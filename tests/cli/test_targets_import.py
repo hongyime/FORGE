@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -16,6 +18,7 @@ from forge.targets_resume_candidates import (
     _run_resume_child,
     backfill_target_resume_scope_manifests,
     collect_target_resume_candidates,
+    collect_target_resume_lock_status,
     collect_target_resume_plan,
     execute_target_resume_plan,
     redact_target_resume_candidate_payload,
@@ -943,6 +946,9 @@ def test_targets_resume_run_cli_outputs_executor_payload(monkeypatch: pytest.Mon
             "cli-test",
             "--dry-run",
             "--redact-paths",
+            "--break-stale-lock",
+            "--stale-lock-minutes",
+            "7",
             "--json",
         ],
     )
@@ -953,6 +959,36 @@ def test_targets_resume_run_cli_outputs_executor_payload(monkeypatch: pytest.Mon
     assert payload["batch_id"] == "cli-test"
     assert captured_kwargs["dry_run"] is True
     assert captured_kwargs["redact_paths"] is True
+    assert captured_kwargs["break_stale_lock"] is True
+    assert captured_kwargs["stale_lock_minutes"] == 7
+
+
+def test_targets_resume_lock_status_cli_outputs_json(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    app = typer.Typer()
+    targets_app = typer.Typer()
+    register_target_import_commands(targets_app)
+    app.add_typer(targets_app, name="targets")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "targets",
+            "resume-lock-status",
+            "--data-dir",
+            str(data_dir),
+            "--stale-lock-minutes",
+            "7",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.targets.resume_lock_status.v1"
+    assert payload["execution_policy"] == "read_only_resume_lock_status_no_commands_executed"
+    assert payload["exists"] is False
+    assert payload["stale_lock_minutes"] == 7
 
 
 def test_resume_run_executes_sequentially_and_writes_ledger(tmp_path: Path) -> None:
@@ -1209,6 +1245,116 @@ def test_resume_run_existing_lock_blocks_without_removing_lock(tmp_path: Path) -
     assert payload["selected_count"] == 0
     assert payload["omitted_count"] == 0
     assert lock_path.read_text(encoding="utf-8") == "active"
+
+
+def test_resume_lock_status_reports_missing_lock(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+
+    payload = collect_target_resume_lock_status(data_dir=data_dir)
+
+    assert payload["schema_version"] == "forge.targets.resume_lock_status.v1"
+    assert payload["execution_policy"] == "read_only_resume_lock_status_no_commands_executed"
+    assert payload["exists"] is False
+    assert payload["breakable"] is False
+    assert payload["reason"] == "lock_missing"
+
+
+def test_resume_lock_status_marks_old_unparsed_lock_stale(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    lock_path.write_text("active", encoding="utf-8")
+    old = time.time() - 3600
+    os.utime(lock_path, (old, old))
+
+    payload = collect_target_resume_lock_status(data_dir=data_dir, stale_lock_minutes=1)
+
+    assert payload["exists"] is True
+    assert payload["stale"] is True
+    assert payload["breakable"] is True
+    assert payload["reason"] == "stale_age"
+    assert payload["age_seconds"] >= 60
+
+
+def test_resume_lock_status_keeps_current_pid_lock_active(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    lock_path.write_text(
+        json.dumps({"pid": os.getpid(), "created_at": "2999-01-01T00:00:00+00:00"}),
+        encoding="utf-8",
+    )
+
+    payload = collect_target_resume_lock_status(data_dir=data_dir, stale_lock_minutes=120)
+
+    assert payload["exists"] is True
+    assert payload["pid"] == os.getpid()
+    assert payload["pid_alive"] is True
+    assert payload["stale"] is False
+    assert payload["breakable"] is False
+    assert payload["reason"] == "active_lock"
+
+
+def test_resume_run_breaks_only_stale_lock_before_execution(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+    )
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    lock_path.write_text("active", encoding="utf-8")
+    old = time.time() - 3600
+    os.utime(lock_path, (old, old))
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="break-stale",
+        break_stale_lock=True,
+        stale_lock_minutes=1,
+        runner=fake_runner,
+    )
+
+    assert payload["status"] == "completed"
+    assert payload["result_counts"] == {"completed": 1}
+    assert calls
+    assert not lock_path.exists()
+
+
+def test_resume_run_refuses_to_break_active_lock(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    lock_dir = data_dir / "target_imports" / "resume_batches"
+    lock_dir.mkdir(parents=True)
+    lock_path = lock_dir / "resume_batch.lock"
+    lock_path.write_text(
+        json.dumps({"pid": os.getpid(), "created_at": "2999-01-01T00:00:00+00:00"}),
+        encoding="utf-8",
+    )
+
+    payload = execute_target_resume_plan(
+        data_dir=data_dir,
+        batch_id="active-lock",
+        break_stale_lock=True,
+        stale_lock_minutes=120,
+    )
+
+    assert payload["status"] == "blocked"
+    assert payload["execution_policy"] == "blocked_existing_resume_batch_lock_not_stale"
+    assert payload["lock_status"]["breakable"] is False
+    assert lock_path.exists()
 
 
 def test_start_launches_scoped_kill_chain_with_scope_and_roe(
