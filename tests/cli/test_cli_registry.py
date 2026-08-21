@@ -72,6 +72,7 @@ def test_cli_registry_preserves_public_and_hidden_groups() -> None:
         "monitoring",
         "remediation",
         "active-validation",
+        "automation",
         "connectors",
         "standards",
         "workspaces",
@@ -117,6 +118,7 @@ def test_cli_registry_registers_modular_command_groups() -> None:
     assert {"list", "upsert", "members", "member-set", "member-delete", "backfill-memberships"}.issubset(
         _command_names(apps.workspaces_app)
     )
+    assert {"policy", "run", "command-review"}.issubset(_command_names(apps.automation_app))
     assert {"import", "resume-candidates", "resume-plan", "resume-run"}.issubset(
         _command_names(apps.targets_app)
     )
@@ -281,6 +283,7 @@ def test_readme_public_commands_include_all_public_modular_subcommands() -> None
         "active-validation": apps.active_validation_app,
         "connectors": apps.connectors_app,
         "standards": apps.standards_app,
+        "automation": apps.automation_app,
         "workspaces": apps.workspaces_app,
         "retention": apps.retention_app,
     }

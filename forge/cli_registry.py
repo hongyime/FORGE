@@ -32,6 +32,7 @@ class ForgeCliApps:
     monitoring_app: typer.Typer
     remediation_app: typer.Typer
     active_validation_app: typer.Typer
+    automation_app: typer.Typer
     connectors_app: typer.Typer
     standards_app: typer.Typer
     workspaces_app: typer.Typer
@@ -45,6 +46,7 @@ def _make_sub(name: str, help_text: str) -> typer.Typer:
 
 def _register_modular_commands(apps: ForgeCliApps) -> None:
     from forge.active_validation.cli import register_active_validation_commands
+    from forge.automation_cli import register_automation_commands
     from forge.audit.cli import register_audit_commands
     from forge.connectors.cli import register_connector_commands
     from forge.monitoring.cli import register_monitoring_commands
@@ -62,6 +64,7 @@ def _register_modular_commands(apps: ForgeCliApps) -> None:
     register_retention_commands(apps.retention_app)
     register_standards_commands(apps.standards_app)
     register_target_import_commands(apps.targets_app)
+    register_automation_commands(apps.automation_app)
     register_workspace_commands(apps.workspaces_app)
 
 
@@ -139,6 +142,7 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
         monitoring_app=_make_sub("monitoring", "Continuous monitoring"),
         remediation_app=_make_sub("remediation", "Remediation workflow"),
         active_validation_app=_make_sub("active-validation", "Separately gated active validation"),
+        automation_app=_make_sub("automation", "Operator automation policy and workflow plans"),
         connectors_app=_make_sub("connectors", "Free-first connector catalog"),
         standards_app=_make_sub("standards", "Local standards import/export"),
         workspaces_app=_make_sub("workspaces", "Workspace and member administration"),
@@ -163,6 +167,7 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
     root_app.add_typer(apps.monitoring_app)
     root_app.add_typer(apps.remediation_app)
     root_app.add_typer(apps.active_validation_app)
+    root_app.add_typer(apps.automation_app)
     root_app.add_typer(apps.connectors_app)
     root_app.add_typer(apps.standards_app)
     root_app.add_typer(apps.workspaces_app)

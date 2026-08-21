@@ -260,6 +260,9 @@ forge targets backfill-scope-manifests [--apply] [--limit N] [--reason REASON] [
 forge monitoring status|due-plan [--include-empty-db-results]|run-due|deliver-alerts|worker
 forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-retest|apply-retest-run|handoff-plan|integration-runbook|import-ticket-statuses|sync-tickets
 forge active-validation preview|create|approve|run|list|methods|coverage
+forge automation policy [--json]          # Show the operator-approved wildcard automation policy defaults
+forge automation run [--apply] [--json]   # Emit the automation execution plan; records apply intent without launching live actions
+forge automation command-review [--json]  # Read-only command count and consolidation review
 forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-first connector/plugin catalog
 forge connectors install-plan [--json]       # Print missing local binary install guidance; does not execute commands
 forge connectors run-plan [--domain NAME] [--json]  # Print free-first connector run guidance; does not execute commands
