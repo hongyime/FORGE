@@ -78,6 +78,7 @@ templates/
 .next/
 
 
+
 # AI / editor dot directories (managed via sourcerepo)
 .*
 !.github/
