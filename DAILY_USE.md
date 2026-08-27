@@ -31,13 +31,17 @@ Use `--skip-feed-build` to keep the older behavior of consuming only an existing
 forge automation feed-build --json
 forge automation feed-build --apply --json
 forge automation self-heal-plan --json
+forge automation guarded-autostart --json
 ```
 
 Optional Supabase live extraction is read-only and uses ignored local config at
 `imports/supabase-projects.local.json`; put keys in env vars named by `key_env`.
 Use `self-heal-plan` before any Docker/startup automation; it is read-only and
 checks resources, Docker readiness, packaged Go tools, locks, and the exact
-bounded autopilot commands.
+bounded autopilot commands. Use `guarded-autostart` for startup hooks; it stays
+dry-run/read-only by default and only runs bounded autopilot with `--apply` when
+ignored local `imports/autostart.local.json` explicitly has `enabled: true` and
+`apply_enabled: true`.
 
 ---
 

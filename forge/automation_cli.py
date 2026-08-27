@@ -12,7 +12,11 @@ from forge.automation_policy import (
     command_surface_review,
     forge_automation_policy,
 )
-from forge.automation_self_heal import automation_self_heal_plan
+from forge.automation_self_heal import (
+    DEFAULT_AUTOSTART_CONFIG_PATH,
+    automation_self_heal_plan,
+    run_guarded_autostart,
+)
 from forge.automation_target_feed import build_target_feed, write_target_feed
 
 console = Console(stderr=True)
@@ -182,6 +186,31 @@ def register_automation_commands(app: typer.Typer) -> None:
         console.print(
             "[bold]Automation self-heal plan[/bold] "
             f"status={payload['status']} blockers={len(payload['blockers'])}"
+        )
+        for blocker in payload["blockers"]:
+            console.print(f"- {blocker}")
+
+    @app.command("guarded-autostart")
+    def guarded_autostart(
+        config: Path = typer.Option(
+            DEFAULT_AUTOSTART_CONFIG_PATH,
+            "--config",
+            help="Ignored local autostart config path.",
+        ),
+        apply: bool = typer.Option(
+            False,
+            "--apply",
+            help="Run guarded autopilot only when local config also has apply_enabled=true.",
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        payload = run_guarded_autostart(config_path=config, apply=apply)
+        if json_output:
+            typer.echo(json.dumps(payload, sort_keys=True))
+            return
+        console.print(
+            "[bold]Guarded autostart[/bold] "
+            f"status={payload['status']} mode={payload['mode']} blockers={len(payload['blockers'])}"
         )
         for blocker in payload["blockers"]:
             console.print(f"- {blocker}")

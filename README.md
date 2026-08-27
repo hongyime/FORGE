@@ -266,6 +266,7 @@ forge automation run [--apply] [--json]   # Emit the automation execution plan; 
 forge automation command-review [--json]  # Read-only command count and consolidation review
 forge automation feed-build [--output imports/target-feed.json] [--apply] [--json] [--source all|supabase|reports|db|cti|connectors] [--supabase-config PATH] [--limit N]
 forge automation self-heal-plan [--json] [--probe-docker] [--min-free-memory-mb N] [--min-free-disk-gb N] [--max-parallel N]
+forge automation guarded-autostart [--config imports/autostart.local.json] [--apply] [--json]
 forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-first connector/plugin catalog
 forge connectors install-plan [--json]       # Print missing local binary install guidance; does not execute commands
 forge connectors run-plan [--domain NAME] [--json]  # Print free-first connector run guidance; does not execute commands
@@ -329,6 +330,36 @@ Use `--probe-docker` only when a read-only `docker compose ps` check is
 intended. Auto-start remains fail-closed: live work requires an explicit ROE,
 resource thresholds, a single-instance lock, and the normal scoped feed/import
 gates.
+
+`forge automation guarded-autostart` is the command a Docker or OS startup hook
+can call safely. Without `--apply` it evaluates the ignored local
+`imports/autostart.local.json` config, runs read-only readiness probes, and
+returns the same bounded command plan.
+With `--apply`, it still refuses live autopilot unless the config contains both
+`enabled: true` and `apply_enabled: true`, Docker/resource/tool guardrails pass,
+no guarded-autostart lock exists, and cooldown/backoff windows have expired.
+When allowed, it runs a bounded autopilot dry-run first, then the live autopilot
+command, records state under the Forge data dir, and removes its single-instance
+lock.
+
+Minimal local autostart config:
+
+```json
+{
+  "enabled": true,
+  "apply_enabled": false,
+  "roe_id_env": "FORGE_ROE_ID",
+  "min_free_memory_mb": 2048,
+  "min_free_disk_gb": 5,
+  "resume_limit": 10,
+  "max_parallel": 2,
+  "monitor_limit": 10,
+  "start_limit": 2,
+  "max_runtime_minutes": 10,
+  "cooldown_minutes": 60,
+  "failure_backoff_minutes": 120
+}
+```
 
 `forge targets import` consumes sanitized `target-feed.v1` feeds from
 `feed-build` or scheduled workflows such as theprawnhunter. Feed items can use
