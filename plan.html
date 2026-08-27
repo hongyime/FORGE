@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FORGE Free-First Autonomous Hardening Plan</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --panel: #121923;
+      --panel-2: #182231;
+      --text: #e7edf5;
+      --muted: #9ca9ba;
+      --line: #2a384b;
+      --accent: #7dd3fc;
+      --ok: #86efac;
+      --warn: #fbbf24;
+      --bad: #fca5a5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 22px;
+      margin-bottom: 28px;
+    }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 44px); letter-spacing: 0; }
+    h2 { margin: 30px 0 12px; font-size: 22px; letter-spacing: 0; }
+    h3 { margin: 18px 0 8px; font-size: 17px; letter-spacing: 0; }
+    p { margin: 8px 0; color: var(--muted); }
+    code {
+      background: #0f1722;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 1px 5px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .status {
+      display: inline-block;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 9px;
+      margin-right: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .free { color: var(--ok); border-color: rgba(134, 239, 172, .45); }
+    .maybe { color: var(--warn); border-color: rgba(251, 191, 36, .45); }
+    .no { color: var(--bad); border-color: rgba(252, 165, 165, .45); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 20px;
+      overflow-wrap: anywhere;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: var(--panel-2); color: var(--text); }
+    td { color: var(--muted); }
+    ol, ul { color: var(--muted); padding-left: 22px; }
+    li { margin: 6px 0; }
+    .callout {
+      background: #101827;
+      border-left: 4px solid var(--accent);
+      padding: 12px 14px;
+      margin: 16px 0;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>FORGE Free-First Autonomous Hardening Plan</h1>
+      <p>Purpose: step in from the interrupted Codex work, complete the autonomous target loop, and turn the remaining product-hardening ideas into an implementable, no-paid-key-first tasklist.</p>
+      <p>Secret handling: an OpenRouter key was pasted in chat. It is intentionally omitted from this document and should be rotated before any future use.</p>
+    </header>
+
+    <section>
+      <h2>Where Codex Left Off</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Committed baseline</h3>
+          <p><code>main</code> is at <code>8671f8d feat: add autopilot launchers</code>. B649-B653 added automation policy planning, pytest taxonomy, parallel resume-run, and daily autopilot launchers.</p>
+        </div>
+        <div class="card">
+          <h3>Known remaining drift</h3>
+          <p>Durable state says the old artifacts still read cleanly, but run-level drift remains: 49 failed/cancelled resume candidates and 3 long-run reviews.</p>
+        </div>
+        <div class="card">
+          <h3>Interrupted task</h3>
+          <p>The next intended slice was the autonomous target loop: build <code>imports/target-feed.json</code> from local artifacts and optional read-only Supabase, then let autopilot feed-build, import/start, resume, monitor, and refresh the dashboard. That slice is now implemented and pushed as <code>132107e feat: build autonomous target feed</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Completed Now</h2>
+      <div class="callout">The feed-build/autopilot loop is no longer just planned. It is committed and pushed to <code>main</code>.</div>
+      <ul>
+        <li><code>forge automation feed-build</code> creates a deterministic <code>target-feed.v1</code> from DB seeds, reports/dashboard data, CTI JSON, connector JSON, and optional read-only Supabase table selects.</li>
+        <li>Default mode is dry-run; <code>--apply</code> writes <code>imports/target-feed.json</code> atomically.</li>
+        <li>Supabase config lives in ignored <code>imports/supabase-projects.local.json</code>; keys are read from env vars or Forge secret references, never committed.</li>
+        <li><code>forge-autopilot.bat</code> and <code>forge-autopilot.sh</code> now run feed-build before import unless <code>--skip-feed-build</code>; dry-run remains non-mutating.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Free-First Decision Matrix</h2>
+      <table>
+        <thead><tr><th>Idea</th><th>Can implement now without paid keys?</th><th>Default path</th></tr></thead>
+        <tbody>
+          <tr><td>ProjectDiscovery cloud connector</td><td><span class="status free">yes</span> OSS binaries/templates are free; live scans require only operator scope/ROE.</td><td>Implement as local deterministic import/sync first, with dry-run and fixture tests. No paid cloud API dependency.</td></tr>
+          <tr><td>Burp DAST artifact import</td><td><span class="status free">yes</span> XML/JUnit files are local artifacts.</td><td>Ingest Burp XML/JUnit as scoped validation evidence; no live Burp API requirement.</td></tr>
+          <tr><td>Exposure-duration metrics</td><td><span class="status free">yes</span> Uses local DB/report timestamps.</td><td>Add computed first/last/open/recurrence/MTTR metrics from existing snapshots and remediation rows.</td></tr>
+          <tr><td>Censys/runZero-style asset delta import</td><td><span class="status maybe">partial</span> Censys live often needs a key; runZero is generally licensed.</td><td>Implement local artifact import and delta schema now. Keep live adapters catalog-only unless user supplies keys/licenses.</td></tr>
+          <tr><td>Active-validation matrix</td><td><span class="status free">yes</span> Metadata/reporting layer over existing methods.</td><td>Add ATT&amp;CK/control-family/proof/retest matrix from local active-validation tables.</td></tr>
+          <tr><td>Closed-loop remediation dashboard</td><td><span class="status free">yes</span> Local owner/SLA/ticket-state/proof freshness already fits existing remediation tables.</td><td>Build local dashboard/report surfaces first. External Jira/ServiceNow/Tines remain optional adapters.</td></tr>
+          <tr><td>Command consolidation</td><td><span class="status free">yes</span> CLI/docs/refactor only.</td><td>Make automation/doctor/targets/connectors/report review the daily-use layer and keep lower-level commands available.</td></tr>
+          <tr><td>Self-healing auto-start with Docker</td><td><span class="status free">yes</span> Local scripts, health checks, resource caps.</td><td>Add a cautious supervisor plan: dry-run, locks, backoff, CPU/RAM guardrails, no live scans unless ROE/feed exists.</td></tr>
+          <tr><td>OpenRouter free-tier LLM fallback</td><td><span class="status maybe">partial</span> Requires a user-managed key, but not payment if free models are available.</td><td>Never hard-code stale model names. Add a model-discovery helper that filters current free models by pricing/quality allowlist and refuses unknown/bad choices.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Packaged Go Tooling</h2>
+      <p>FORGE should remain standalone: all required local binaries, templates, parsers, default configs, and Python modules must be discoverable from the packaged install without requiring global PATH setup. These tools should be used through connector wrappers with dry-run, scope gates, rate limits, output caps, and deterministic fixture imports.</p>
+      <table>
+        <thead><tr><th>Binary</th><th>Size</th><th>Role in FORGE</th><th>Default use</th></tr></thead>
+        <tbody>
+          <tr><td><code>subfinder.exe</code></td><td>39,931,392</td><td>Passive subdomain discovery.</td><td>Already wired; package as local connector binary.</td></tr>
+          <tr><td><code>httpx.exe</code></td><td>68,553,728</td><td>HTTP service probing and response fingerprint import.</td><td>Already wired; enrich asset/fingerprint delta rows.</td></tr>
+          <tr><td><code>katana.exe</code></td><td>63,511,040</td><td>Scoped crawler and URL discovery.</td><td>Already wired; keep bounded depth/rate defaults.</td></tr>
+          <tr><td><code>nuclei.exe</code></td><td>189,070,848</td><td>Template-based exposure checks.</td><td>Already wired; pin local templates and sync template provenance.</td></tr>
+          <tr><td><code>gitleaks.exe</code></td><td>13,897,728</td><td>Local secret scanning.</td><td>Already wired; keep plaintext out of audit/report surfaces.</td></tr>
+          <tr><td><code>dnsx.exe</code></td><td>38,878,208</td><td>DNS resolution/enrichment.</td><td>Add connector/import path for DNS evidence and topology relationships.</td></tr>
+          <tr><td><code>naabu.exe</code></td><td>46,626,304</td><td>Port discovery.</td><td>Add active-gated runner only; default dry-run/lab fixtures.</td></tr>
+          <tr><td><code>tlsx.exe</code></td><td>41,943,552</td><td>TLS/certificate fingerprinting.</td><td>Add passive-safe import and optional scoped run wrapper.</td></tr>
+          <tr><td><code>mapcidr.exe</code></td><td>40,351,744</td><td>CIDR expansion/normalization.</td><td>Use locally for scope-safe IP/CIDR planning, never unbounded scanning.</td></tr>
+          <tr><td><code>uncover.exe</code></td><td>41,236,480</td><td>Provider search aggregator.</td><td>Catalog/import-only by default; live mode requires user-supplied free keys and explicit opt-in.</td></tr>
+          <tr><td><code>amass.exe</code></td><td>51,906,048</td><td>Passive/active attack surface enumeration.</td><td>Passive/import mode first; active mode behind ROE and resource guardrails.</td></tr>
+          <tr><td><code>ffuf.exe</code></td><td>14,524,928</td><td>Content discovery/fuzzing.</td><td>Active-gated only, bounded wordlists, low concurrency, disabled by default.</td></tr>
+          <tr><td><code>gobuster.exe</code></td><td>14,392,320</td><td>Directory/DNS/vhost discovery.</td><td>Active-gated only, bounded lists and CPU guardrails.</td></tr>
+          <tr><td><code>gopls.exe</code></td><td>43,044,352</td><td>Go language server.</td><td>Developer packaging helper only; not an operator runtime dependency.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Tasklist</h2>
+      <ol>
+        <li><strong>Finish feed-build/autopilot loop.</strong> Done in <code>132107e</code>. Continue only with follow-up refinements if quality-audit or production use reveals gaps.</li>
+        <li><strong>Standalone tool packaging.</strong> Add package manifest/checks for bundled Go binaries and templates, connector binary discovery from the FORGE package/tool cache, version/size/hash reporting, and doctor remediation that does not require global installs.</li>
+        <li><strong>System robustness doctor.</strong> Add a read-only <code>forge automation self-heal-plan --json</code> that reports locks, stale processes, Docker health, disk, RAM, CPU, due monitoring, resume backlog, dashboard freshness, packaged tool readiness, and exact dry-run/apply commands.</li>
+        <li><strong>Resource-safe auto-start.</strong> Add an optional Docker/startup supervisor wrapper that only runs when guardrails pass: one lock, cooldown/backoff, memory threshold, CPU/load threshold, bounded limits, and default dry-run unless explicitly configured for apply.</li>
+        <li><strong>ProjectDiscovery cloud connector sync.</strong> Normalize ProjectDiscovery outputs from <code>subfinder</code>, <code>httpx</code>, <code>katana</code>, <code>nuclei</code>, <code>dnsx</code>, <code>tlsx</code>, and <code>mapcidr</code> into assets/findings/templates with local deterministic mode, capped imports, template provenance, and no paid APIs.</li>
+        <li><strong>Burp DAST artifact import.</strong> Add local XML/JUnit parser, scope-gated URL matching, validation-evidence rows, proof references, and regression fixtures. Do not require Burp Enterprise/API keys.</li>
+        <li><strong>Exposure-duration metrics.</strong> Compute first_seen, last_seen, open_days, recurrence_count, last_closed_at, and MTTR from local findings, monitoring snapshots, and remediation validation events.</li>
+        <li><strong>Asset delta imports.</strong> Add a local JSON/CSV import shape for Censys/runZero-style exports and equivalent free local output from <code>httpx</code>, <code>dnsx</code>, <code>tlsx</code>, <code>naabu</code>, and <code>amass</code>, including provenance, fingerprint depth, topology relationships, and change detection. Live paid connectors remain optional.</li>
+        <li><strong>Active-validation matrix.</strong> Add local matrix output for ATT&amp;CK/control family, proof type, validation state, owner, retest state, and freshness. Expose as JSON and dashboard section.</li>
+        <li><strong>Closed-loop remediation dashboard.</strong> Surface owner, SLA, ticket state, validation proof freshness, recurrence, and MTTR in report/dashboard views using local remediation state first.</li>
+        <li><strong>Command consolidation.</strong> Update daily-use command surfaces so normal operation starts with <code>forge automation feed-build</code>, <code>forge-autopilot --dry-run</code>, <code>forge doctor --json</code>, <code>forge automation self-heal-plan --json</code>, <code>forge connectors run-plan --json</code>, and report/target review plans.</li>
+        <li><strong>OpenRouter free-model fallback.</strong> Add config that accepts only env/secret-store keys, queries current model metadata when needed, filters for free pricing and a quality allowlist, and falls back to template reporting if no acceptable free model is available.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Self-Healing Rules</h2>
+      <div class="callout">The supervisor should make the machine safer by refusing work, not by trying harder. Default mode is observe/dry-run. Apply mode needs explicit local config.</div>
+      <ul>
+        <li>Single-instance lock for autopilot and resume batches; stale lock break only after PID/dead-owner check.</li>
+        <li>RAM guard: skip live child work if available memory is below a configured threshold.</li>
+        <li>CPU/load guard: skip or reduce parallelism when load is already high.</li>
+        <li>Backoff after failures, with maximum attempts per boot/day.</li>
+        <li>Limits: small default feed/import/resume/monitoring caps; no unbounded loops.</li>
+        <li>Docker health integration: start only after required containers are healthy; degrade to report-only when unhealthy.</li>
+        <li>Packaged-tool guard: live connector phases run only when the required local binary and templates are present and version/hash checks pass.</li>
+        <li>Never run live target import/start without feed, ROE ID, scope manifests, and explicit apply config.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Verification Gates</h2>
+      <ul>
+        <li>Focused tests per slice, then CLI registry tests, Ruff, py_compile, and <code>git diff --check</code>.</li>
+        <li>No live provider calls in CI; Supabase/OpenRouter HTTP tests mocked.</li>
+        <li>No credential material in outputs, docs, state files, journals, audit rows, or uploaded plans.</li>
+        <li>Regression smoke: <code>forge report quality-audit --json</code> still reads old artifacts without path or format drift.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

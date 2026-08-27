@@ -265,6 +265,7 @@ forge automation policy [--json]          # Show the operator-approved wildcard 
 forge automation run [--apply] [--json]   # Emit the automation execution plan; records apply intent without launching live actions
 forge automation command-review [--json]  # Read-only command count and consolidation review
 forge automation feed-build [--output imports/target-feed.json] [--apply] [--json] [--source all|supabase|reports|db|cti|connectors] [--supabase-config PATH] [--limit N]
+forge automation self-heal-plan [--json] [--probe-docker] [--min-free-memory-mb N] [--min-free-disk-gb N] [--max-parallel N]
 forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-first connector/plugin catalog
 forge connectors install-plan [--json]       # Print missing local binary install guidance; does not execute commands
 forge connectors run-plan [--domain NAME] [--json]  # Print free-first connector run guidance; does not execute commands
@@ -319,6 +320,15 @@ vars or a Forge connector-secret reference, never in committed files:
   ]
 }
 ```
+
+`forge automation self-heal-plan` is the read-only preflight for any future
+Docker/startup autopilot. It reports resource guardrails, Docker compose
+readiness, resume-lock paths, packaged Go tool availability, and exact
+dry-run/apply command arrays without installing services or starting live work.
+Use `--probe-docker` only when a read-only `docker compose ps` check is
+intended. Auto-start remains fail-closed: live work requires an explicit ROE,
+resource thresholds, a single-instance lock, and the normal scoped feed/import
+gates.
 
 `forge targets import` consumes sanitized `target-feed.v1` feeds from
 `feed-build` or scheduled workflows such as theprawnhunter. Feed items can use

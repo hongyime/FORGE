@@ -118,7 +118,7 @@ def test_cli_registry_registers_modular_command_groups() -> None:
     assert {"list", "upsert", "members", "member-set", "member-delete", "backfill-memberships"}.issubset(
         _command_names(apps.workspaces_app)
     )
-    assert {"policy", "run", "command-review", "feed-build"}.issubset(
+    assert {"policy", "run", "command-review", "feed-build", "self-heal-plan"}.issubset(
         _command_names(apps.automation_app)
     )
     assert {"import", "resume-candidates", "resume-plan", "resume-run"}.issubset(

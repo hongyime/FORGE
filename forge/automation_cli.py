@@ -12,6 +12,7 @@ from forge.automation_policy import (
     command_surface_review,
     forge_automation_policy,
 )
+from forge.automation_self_heal import automation_self_heal_plan
 from forge.automation_target_feed import build_target_feed, write_target_feed
 
 console = Console(stderr=True)
@@ -144,3 +145,43 @@ def register_automation_commands(app: typer.Typer) -> None:
             write_target_feed(payload, output)
             if not json_output:
                 console.print(f"written={output}")
+
+    @app.command("self-heal-plan")
+    def self_heal_plan(
+        json_output: bool = typer.Option(False, "--json"),
+        probe_docker: bool = typer.Option(
+            False,
+            "--probe-docker",
+            help="Run a read-only docker compose ps probe. Default only checks config files.",
+        ),
+        min_free_memory_mb: int = typer.Option(
+            2048,
+            "--min-free-memory-mb",
+            help="Minimum free memory before live auto-start work is considered safe.",
+        ),
+        min_free_disk_gb: int = typer.Option(
+            5,
+            "--min-free-disk-gb",
+            help="Minimum free disk before live auto-start work is considered safe.",
+        ),
+        max_parallel: int = typer.Option(
+            2,
+            "--max-parallel",
+            help="Recommended autopilot resume parallelism for generated commands.",
+        ),
+    ) -> None:
+        payload = automation_self_heal_plan(
+            min_free_memory_mb=min_free_memory_mb,
+            min_free_disk_gb=min_free_disk_gb,
+            max_parallel=max_parallel,
+            probe_docker=probe_docker,
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, sort_keys=True))
+            return
+        console.print(
+            "[bold]Automation self-heal plan[/bold] "
+            f"status={payload['status']} blockers={len(payload['blockers'])}"
+        )
+        for blocker in payload["blockers"]:
+            console.print(f"- {blocker}")
