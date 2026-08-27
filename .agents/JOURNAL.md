@@ -156,3 +156,4 @@
 - 2026-08-27: B657 adds Burp/JUnit DAST XML import as free/local active-validation evidence intake only; scanner XML is parsed offline, scoped, sanitized, deduped, and never converted directly into reportable vulnerability findings.
 - 2026-08-27: Implementing exposure-duration metrics as a free/local read-only monitoring summary over existing Forge SQLite evidence; no schema migration or paid/API connector required.
 - 2026-08-28: Censys/runZero-style asset delta support is implemented as local JSON/CSV artifact import through import-discovery, preserving fingerprints/topology without requiring API keys.
+- 2026-08-28: Active-validation matrix now computes proof type and freshness from local job/run metadata, including imported Burp/JUnit artifact proof, without schema changes or live target calls.

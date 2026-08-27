@@ -2430,6 +2430,14 @@ def _active_validation_coverage_section_rows(
             if not isinstance(item, dict):
                 continue
             states = item.get("states") if isinstance(item.get("states"), dict) else {}
+            proof_types = (
+                item.get("proof_types") if isinstance(item.get("proof_types"), dict) else {}
+            )
+            proof_freshness = (
+                item.get("proof_freshness")
+                if isinstance(item.get("proof_freshness"), dict)
+                else {}
+            )
             rows.append(
                 {
                     "Type": label,
@@ -2440,6 +2448,22 @@ def _active_validation_coverage_section_rows(
                         ", ".join(
                             f"{state}={int(count or 0)}"
                             for state, count in sorted(states.items())
+                        ),
+                        160,
+                    )
+                    or "-",
+                    "Proof Types": _truncate(
+                        ", ".join(
+                            f"{proof_type}={int(count or 0)}"
+                            for proof_type, count in sorted(proof_types.items())
+                        ),
+                        160,
+                    )
+                    or "-",
+                    "Proof Freshness": _truncate(
+                        ", ".join(
+                            f"{freshness}={int(count or 0)}"
+                            for freshness, count in sorted(proof_freshness.items())
                         ),
                         160,
                     )

@@ -7,6 +7,7 @@ from pathlib import Path
 import typer
 from typer.testing import CliRunner
 
+from forge.active_validation.runner import active_validation_control_coverage
 from forge.connectors.cli import register_connector_commands
 from forge.connectors.validation_import import (
     ValidationArtifactImportConfig,
@@ -100,6 +101,11 @@ def test_burp_issue_xml_import_persists_scoped_active_validation_evidence(
             WHERE engagement_id=1001 AND phase='connectors'
             """
         ).fetchone()
+        coverage = active_validation_control_coverage(
+            con,
+            engagement_id=1001,
+            now="2026-07-20T00:00:00Z",
+        )
     finally:
         con.close()
 
@@ -142,6 +148,9 @@ def test_burp_issue_xml_import_persists_scoped_active_validation_evidence(
     assert audit["module"] == "burp_dast_xml"
     assert audit["action"] == "validation_artifact_import"
     assert "jobs=1" in audit["result"]
+    assert coverage["summary"]["proof_types"] == {"burp_issue_xml": 1}
+    assert coverage["summary"]["proof_freshness"] == {"fresh": 1}
+    assert coverage["methods"][0]["proof_types"] == {"burp_issue_xml": 1}
     assert "secret-never-store" not in blob
     assert "session=secret" not in blob
     assert "c2VjcmV0" not in blob

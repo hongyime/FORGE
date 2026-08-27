@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 from forge.db.direct_connect import direct_connect
 from forge.engagement_ids import numeric_engagement_db_files
+from forge.utils.artifact_url_sanitizer import strip_sensitive_url_query
 
 EXPOSURE_METRICS_SCHEMA_VERSION = "forge.monitoring.exposure_metrics.v1"
 
@@ -265,11 +266,12 @@ def _collect_active_validation_runs(
             or _parse_time(row["started_at"])
             or _parse_time(row["created_at"])
         )
+        target_ref = strip_sensitive_url_query(str(row["target_ref"] or "").strip())
         _record(
             buckets,
-            key=f"validation:{row['job_id']}:{row['target_ref']}",
+            key=f"validation:{row['job_id']}:{target_ref}",
             source_kind="active_validation",
-            title=f"{row['method'] or 'validation'} {row['target_ref']}",
+            title=f"{row['method'] or 'validation'} {target_ref}",
             severity="HIGH" if result == "control_failed" else "MEDIUM" if is_open else "INFO",
             seen_at=seen_at,
             open_state=is_open,
