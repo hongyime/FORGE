@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FORGE Autonomous Target Loop Plan</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111316;
+      --panel: #181c22;
+      --panel-2: #20262e;
+      --text: #edf1f7;
+      --muted: #aab4c2;
+      --line: #323a46;
+      --good: #4fd18b;
+      --warn: #f0bf5a;
+      --next: #72a8ff;
+      --bad: #ff7a7a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Segoe UI, Inter, Arial, sans-serif;
+      line-height: 1.45;
+    }
+    main { max-width: 1180px; margin: 0 auto; padding: 32px 20px 56px; }
+    h1 { margin: 0 0 10px; font-size: 34px; letter-spacing: 0; }
+    h2 { margin: 28px 0 12px; font-size: 20px; letter-spacing: 0; }
+    h3 { margin: 18px 0 8px; font-size: 16px; letter-spacing: 0; }
+    p { margin: 0 0 12px; color: var(--muted); }
+    .summary {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 18px;
+      margin: 18px 0 24px;
+    }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .card {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 100%;
+    }
+    .wide { grid-column: 1 / -1; }
+    .status {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #0b1016;
+    }
+    .done { background: var(--good); }
+    .next { background: var(--next); }
+    .blocked { background: var(--warn); }
+    .risk { background: var(--bad); }
+    ul { margin: 8px 0 0 20px; padding: 0; color: var(--muted); }
+    li { margin: 6px 0; }
+    code {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-family: Consolas, Menlo, monospace;
+      font-size: 0.95em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td { border-bottom: 1px solid var(--line); padding: 10px; text-align: left; vertical-align: top; }
+    th { color: var(--text); background: var(--panel-2); font-size: 13px; }
+    td { color: var(--muted); }
+    a { color: #9fc2ff; }
+    .note { color: var(--warn); }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>FORGE Autonomous Target Loop Plan</h1>
+  <p>Updated 2026-08-28. Scope merges the original target-feed/autopilot plan, the later free-first connector/dashboard requests, the packaged Go tool requirement, and the robustness review. Secret material is intentionally omitted.</p>
+
+  <section class="summary">
+    <h2>Operating Rule</h2>
+    <p>Implement only free, local, deterministic, or read-only features by default. Anything requiring paid APIs, account keys, live targets, ticket writes, SOAR webhooks, scheduled-task registration, or Docker mutation remains opt-in behind explicit config and apply flags.</p>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h3><span class="status done">Done</span> Target Feed Loop</h3>
+      <ul>
+        <li><code>forge automation feed-build</code> creates <code>imports/target-feed.json</code>.</li>
+        <li>Sources: local DB seeds, reports/dashboard artifacts, CTI files, connector payloads, optional read-only Supabase tables.</li>
+        <li>Autopilot runs feed-build before import unless <code>--skip-feed-build</code>.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="status done">Done</span> Free Artifact Imports</h3>
+      <ul>
+        <li>Burp/JUnit DAST XML imports as scoped active-validation evidence.</li>
+        <li>Censys/runZero-style JSON/CSV asset deltas import fingerprints and topology.</li>
+        <li>No scanner execution or provider calls are required.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="status done">Done</span> Metrics And Matrix</h3>
+      <ul>
+        <li>Exposure metrics: <code>first_seen</code>, <code>last_seen</code>, <code>open_days</code>, recurrence, MTTR.</li>
+        <li>Active-validation matrix: ATT&amp;CK/control family, proof type, freshness, retest state.</li>
+        <li>Closed-loop remediation dashboard: owner, SLA, ticket state, sync state, proof freshness.</li>
+      </ul>
+    </div>
+  </section>
+
+  <h2>Completed Commits</h2>
+  <table>
+    <thead><tr><th>Commit</th><th>Slice</th><th>Verification</th></tr></thead>
+    <tbody>
+      <tr><td><code>499ca0b</code></td><td>Exposure-duration metrics.</td><td>Focused metrics/dashboard tests, CLI smoke, lint, compile.</td></tr>
+      <tr><td><code>1af06dc</code></td><td>Censys/runZero-style local asset delta import.</td><td>Discovery import tests, connector registry tests, temp import smoke.</td></tr>
+      <tr><td><code>9d5ce3a</code></td><td>Active-validation matrix proof type/freshness.</td><td>Active-validation/Burp/exposure tests, coverage smoke.</td></tr>
+      <tr><td><code>faf5840</code></td><td>Closed-loop remediation dashboard freshness.</td><td>8 focused remediation/reporting tests, 41 remediation/web UI tests.</td></tr>
+      <tr><td><code>fcb4919</code></td><td>Guarded autostart hardening.</td><td>23 self-heal/subprocess/launcher/docker tests, dry-run smoke.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Remaining Free-First Work</h2>
+  <section class="grid">
+    <div class="card">
+      <h3><span class="status next">Next</span> Command Consolidation</h3>
+      <ul>
+        <li>Make <code>automation</code>, <code>doctor</code>, <code>targets resume</code>, <code>connectors plan/run</code>, and <code>report review</code> the daily-use layer.</li>
+        <li>Add static daily-use command grouping to command review.</li>
+        <li>Flag commands that are public but absent from <code>README.md</code> or <code>DAILY_USE.md</code>.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="status next">Next</span> ProjectDiscovery Cloud</h3>
+      <ul>
+        <li>Implement local deterministic mode first using existing ProjectDiscovery binaries and local exports.</li>
+        <li>Cloud API sync stays plan-only until the operator supplies a key through env/secret store.</li>
+        <li>Preserve scan assets, findings, templates, and provenance in connector payloads.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="status next">Next</span> Autostart Follow-Up</h3>
+      <ul>
+        <li>Add bounded redacted autostart log rotation under the Forge data dir.</li>
+        <li>Extend Docker readiness to inspect container health when Docker responds.</li>
+        <li>Keep OS/Docker startup pointed at <code>guarded-autostart</code>, not raw <code>forge-autopilot</code>.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="status blocked">Plan Only</span> Paid Or Keyed Providers</h3>
+      <ul>
+        <li>Supabase live read-only API, ProjectDiscovery Cloud, Censys API, runZero API, ticket APIs, and SOAR/SIEM webhooks require operator-owned keys.</li>
+        <li>Default implementation path remains offline import, dry-run, and explicit <code>--apply</code>.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="status next">Next</span> OpenRouter Free Model Selection</h3>
+      <ul>
+        <li>Do not hardcode a specific free model name.</li>
+        <li>At runtime, query OpenRouter model metadata or use <code>openrouter/free</code> only when it satisfies required capabilities.</li>
+        <li>Filter for zero pricing, sufficient context, structured-output/tool capability when needed, and reject weak or unknown-fit models.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="status done">Done</span> Packaged Go Tools</h3>
+      <ul>
+        <li>Self-heal checks the supplied binaries: nuclei, gopls, gitleaks, amass, ffuf, gobuster, mapcidr, tlsx, uncover, naabu, dnsx, httpx, katana, subfinder.</li>
+        <li>Resolution now prefers local tool dirs and <code>~/go/bin</code> before PATH shims.</li>
+      </ul>
+    </div>
+  </section>
+
+  <h2>Safety Gates</h2>
+  <ul>
+    <li>No raw secrets in repo, docs, plans, state, or logs. The pasted OpenRouter key must be rotated by the operator outside the repo.</li>
+    <li>Dry-run remains default for feed-build/import/resume/monitoring/autostart planning.</li>
+    <li>Live target actions require ROE, scoped manifests, normal Forge live gates, and explicit apply/start flags.</li>
+    <li>Startup automation fails closed on low memory, low disk, Docker failure, active locks, cooldown/backoff, or missing local config.</li>
+  </ul>
+
+  <h2>References</h2>
+  <ul>
+    <li><a href="https://openrouter.ai/openrouter/free">OpenRouter free router</a>: current no-cost routing option.</li>
+    <li><a href="https://openrouter.ai/collections/free-models">OpenRouter free model collection</a>: free-model catalog updated by OpenRouter.</li>
+  </ul>
+</main>
+</body>
+</html>
