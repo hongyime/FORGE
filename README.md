@@ -711,6 +711,12 @@ probes are disabled by default;
 use
 `forge doctor --live-provider-probes` only when local/SaaS provider probing is
 intentionally allowed.
+OpenRouter is the exception to the paid-backend gate only when
+`OPENROUTER_API_KEY` is set and the live model list proves a zero-price/free
+model. If pricing metadata cannot be fetched or no free model is advertised,
+Forge skips OpenRouter instead of falling back to a paid default. Set
+`FORGE_ALLOW_PAID_BACKENDS=1` only when you intentionally want keyed/paid SaaS
+LLM backends considered.
 Set `FORGE_DEPLOYMENT_PROFILE=production` for self-host/shared exposure; doctor
 then expects JWT web auth, scope-manifest enforcement, safe mode, append-only
 remote audit bundle storage, a strong web bootstrap credential, non-dev
@@ -1039,6 +1045,8 @@ the root CLI entry point focused on command handlers while preserving
 | `FORGE_ACTIVE_VALIDATION_ENABLE_LIVE` | Optional CLI live gate for approved, scope-bound active-validation methods; API live runs still require the `active_validation:live` permission and explicit `allow_live` request |
 | `FORGE_OFFLINE_STRICT` | `1` disables all outbound sockets process-wide |
 | `FORGE_LLM_PROVIDER` | Optional Phase 6 provider override. Unset defaults to `auto`, cascading through configured LLM CLI/API backends, then local/template fallbacks; set `llama_cpp` for explicit local GGUF; set `template` for deterministic no-LLM reporting |
+| `OPENROUTER_API_KEY` | Optional OpenRouter key. Without `FORGE_ALLOW_PAID_BACKENDS=1`, Forge only enables OpenRouter when `/models` proves a zero-price/free model; otherwise it skips the backend |
+| `FORGE_ALLOW_PAID_BACKENDS` | Optional `1` gate for keyed/paid SaaS LLM provider discovery. Leave unset for free/local-first operation |
 | `FORGE_ENGAGEMENT_KEY` | At-rest encryption master secret for engagement credentials and connector secrets; set at least 32 characters before storing encrypted values |
 | `FORGE_AUDIT_BUNDLE_REMOTE_URI` | Optional absolute mounted path or `file://` URI for append-only remote audit manifest bundle storage |
 | `FORGE_AUDIT_BUNDLE_REMOTE_SCOPE` | Required customer/workspace scope label when `FORGE_AUDIT_BUNDLE_REMOTE_URI` is set |

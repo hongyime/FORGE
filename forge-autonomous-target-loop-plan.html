@@ -169,11 +169,11 @@
       </ul>
     </div>
     <div class="card">
-      <h3><span class="status next">Next</span> OpenRouter Free Model Selection</h3>
+      <h3><span class="status done">Done</span> OpenRouter Free Model Selection</h3>
       <ul>
         <li>Do not hardcode a specific free model name.</li>
-        <li>At runtime, query OpenRouter model metadata or use <code>openrouter/free</code> only when it satisfies required capabilities.</li>
-        <li>Filter for zero pricing, sufficient context, structured-output/tool capability when needed, and reject weak or unknown-fit models.</li>
+        <li>At runtime, query OpenRouter model metadata and enable the backend only when a zero-price/free model is proven.</li>
+        <li>Prefer capable free families such as Qwen, DeepSeek, Llama, Gemma, or Mistral; skip OpenRouter if no free fit is advertised.</li>
       </ul>
     </div>
     <div class="card">

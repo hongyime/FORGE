@@ -180,6 +180,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup_forge_windows_local.ps1
 | "seed cannot classify" | Wrap full names in quotes; use `+` prefix for phones; use `@` prefix for usernames |
 | Empty name-search results | Search engines are rate-limiting; retry with `--tor` |
 | Report generation fails | Check `FORGE_LLM_PROVIDER=auto` in `.env`; falls back to template automatically |
+| OpenRouter should stay free | Leave `FORGE_ALLOW_PAID_BACKENDS` unset; Forge only enables OpenRouter when `/models` proves a zero-price/free model |
 | Keyscan hits GitHub 429 | Set a burn-account `FORGE_GITHUB_TOKEN` in `.env` |
 | Shodan hits 429 | Increase `FORGE_SHODAN_REQUEST_DELAY_SECONDS` and `FORGE_SHODAN_RATE_LIMIT_BACKOFF_SECONDS` |
 | crt.sh hits 429 | Increase `FORGE_CRTSH_REQUEST_DELAY_SECONDS` and `FORGE_CRTSH_RATE_LIMIT_BACKOFF_SECONDS` |
