@@ -342,6 +342,56 @@ def _safe_json_loads(value: str) -> Any:
         return None
 
 
+def _row_value(row: sqlite3.Row, key: str) -> Any:
+    try:
+        if key in row.keys():
+            return row[key]
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _remediation_ticket_state(row: sqlite3.Row) -> str:
+    if str(_row_value(row, "ticket_ref") or _row_value(row, "ticket_url") or "").strip():
+        return "linked"
+    return "missing"
+
+
+def _remediation_validation_proof_label_from_metadata(
+    metadata: dict[str, Any],
+    *,
+    retest_status: str,
+    retested_at: str,
+) -> str:
+    retest = metadata.get("active_validation_retest")
+    if not isinstance(retest, dict):
+        retest = {}
+    latest_status = str(retest.get("latest_retest_status") or "").strip()
+    latest_result = str(retest.get("latest_result") or "").strip()
+    latest_run = str(retest.get("latest_run_id") or "").strip()
+    proof_time = str(
+        retest.get("latest_completed_at")
+        or retest.get("latest_run_completed_at")
+        or retest.get("completed_at")
+        or retested_at
+        or ""
+    ).strip()
+    has_request = bool(str(retest.get("latest_job_id") or "").strip()) or retest_status in {
+        "pending",
+        "passed",
+        "failed",
+        "blocked",
+    }
+    if not has_request and not any((latest_status, latest_result, latest_run, proof_time)):
+        return "not requested"
+    if not any((latest_status, latest_result, latest_run, proof_time)):
+        return "missing"
+    parts = [part for part in (latest_status, latest_result, f"run {latest_run}" if latest_run else "") if part]
+    if proof_time:
+        parts.append(_format_dt(proof_time))
+    return _truncate(" ".join(parts) or "recorded", 120)
+
+
 def _is_sensitive_metadata_key(key: Any) -> bool:
     normalized = str(key or "").strip().lower()
     return (
@@ -1878,6 +1928,14 @@ def _remediation_item_section_row(row: sqlite3.Row) -> dict[str, str]:
         str(row["status"] or ""),
         str(row["risk_acceptance_expires_at"] or ""),
     )
+    metadata = _safe_json_loads(str(_row_value(row, "metadata_json") or "{}"))
+    if not isinstance(metadata, dict):
+        metadata = {}
+    proof_label = _remediation_validation_proof_label_from_metadata(
+        metadata,
+        retest_status=str(row["retest_status"] or ""),
+        retested_at=str(_row_value(row, "retested_at") or ""),
+    )
     return {
         "Severity": str(row["severity"] or ""),
         "Status": str(row["status"] or ""),
@@ -1888,7 +1946,9 @@ def _remediation_item_section_row(row: sqlite3.Row) -> dict[str, str]:
         "Finding": _truncate(f"{row['finding_table']}:{row['finding_ref']}", 120),
         "Title": _truncate(str(row["title"] or ""), 140),
         "Retest": str(row["retest_status"] or ""),
+        "Ticket State": _remediation_ticket_state(row),
         "Ticket": _truncate(str(row["ticket_ref"] or row["ticket_url"] or ""), 120),
+        "Validation Proof Freshness": proof_label,
         "Updated": _format_dt(str(row["updated_at"] or "")),
     }
 
@@ -1896,6 +1956,14 @@ def _remediation_item_section_row(row: sqlite3.Row) -> dict[str, str]:
 def _remediation_review_queue_section_row(item: dict[str, Any]) -> dict[str, str]:
     labels = item.get("queue_reason_labels") if isinstance(item.get("queue_reason_labels"), list) else []
     ticket_event = item.get("latest_ticket_event") if isinstance(item.get("latest_ticket_event"), dict) else {}
+    proof = (
+        item.get("validation_proof_freshness")
+        if isinstance(item.get("validation_proof_freshness"), dict)
+        else {}
+    )
+    proof_label = str(proof.get("freshness") or "").strip().replace("_", " ")
+    if proof.get("age_days") is not None:
+        proof_label = f"{proof_label} ({proof['age_days']}d)"
     ticket_sync = ""
     if ticket_event:
         ticket_sync = " ".join(
@@ -1914,10 +1982,12 @@ def _remediation_review_queue_section_row(item: dict[str, Any]) -> dict[str, str
         "Owner": str(item.get("owner") or ""),
         "SLA": _format_dt(str(item.get("sla_due_at") or "")),
         "Retest": str(item.get("retest_status") or ""),
+        "Ticket State": str(item.get("ticket_state") or ""),
         "Ticket": _truncate(str(item.get("ticket_label") or ""), 120),
         "Ticket Sync": _truncate(ticket_sync, 120),
         "Sync Attempts": str(ticket_event.get("attempt_count") or "") if ticket_event else "",
         "Sync Error": _truncate(str(ticket_event.get("last_error") or ""), 180),
+        "Validation Proof Freshness": _truncate(proof_label, 120),
         "Finding": _truncate(f"{item.get('finding_table') or 'manual'}:{item.get('finding_ref') or ''}", 120),
         "Title": _truncate(str(item.get("title") or ""), 140),
         "Updated": _format_dt(str(item.get("updated_at") or "")),

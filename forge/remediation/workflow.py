@@ -33,7 +33,10 @@ _REMEDIATION_REVIEW_REASON_LABELS = {
     "retest_pending": "retest pending",
     "missing_owner": "missing owner",
     "missing_ticket": "missing ticket",
+    "ticket_missing_or_failed": "ticket missing or failed",
     "ticket_sync_failed": "ticket sync failed",
+    "validation_proof_missing_after_retest": "validation proof missing after retest",
+    "validation_proof_stale": "validation proof stale",
 }
 _REMEDIATION_REVIEW_REASON_PRIORITY = {
     "sla_overdue": 0,
@@ -42,11 +45,15 @@ _REMEDIATION_REVIEW_REASON_PRIORITY = {
     "risk_acceptance_missing_expiry": 3,
     "retest_blocked": 4,
     "retest_pending": 5,
+    "validation_proof_missing_after_retest": 5,
+    "validation_proof_stale": 6,
     "ticket_sync_failed": 6,
+    "ticket_missing_or_failed": 6,
     "missing_owner": 6,
     "missing_ticket": 7,
     "risk_acceptance_expiring_soon": 8,
 }
+_VALIDATION_PROOF_FRESH_DAYS = 14
 _REMEDIATION_SEVERITY_PRIORITY = {
     "CRITICAL": 0,
     "HIGH": 1,
@@ -195,6 +202,96 @@ def _review_base_time(value: str | datetime | None) -> datetime:
     return parsed or datetime.now(UTC)
 
 
+def _review_age_days(value: str | datetime | None, *, now: datetime) -> int | None:
+    parsed = _parse_review_timestamp(value)
+    if parsed is None:
+        return None
+    return max(0, (now - parsed).days)
+
+
+def _ticket_state(item: dict[str, Any], latest_ticket_event: dict[str, Any] | None) -> str:
+    event_status = (
+        str((latest_ticket_event or {}).get("status") or "")
+        .strip()
+        .lower()
+    )
+    if event_status == "failed":
+        return "failed"
+    if event_status == "delivered":
+        return "delivered"
+    if _review_queue_ticket_label(item):
+        return "linked"
+    if latest_ticket_event:
+        return event_status or "event_recorded"
+    return "missing"
+
+
+def _validation_proof_time(retest: dict[str, Any]) -> str:
+    for key in (
+        "latest_completed_at",
+        "latest_run_completed_at",
+        "completed_at",
+        "retested_at",
+        "applied_at",
+    ):
+        value = str(retest.get(key) or "").strip()
+        if value:
+            return value
+    runs = retest.get("runs")
+    if isinstance(runs, list):
+        for entry in reversed(runs):
+            if not isinstance(entry, dict):
+                continue
+            for key in ("completed_at", "retested_at", "applied_at"):
+                value = str(entry.get(key) or "").strip()
+                if value:
+                    return value
+    return ""
+
+
+def _validation_proof_freshness(
+    item: dict[str, Any],
+    *,
+    now: datetime,
+) -> dict[str, Any]:
+    metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    retest = metadata.get("active_validation_retest") if isinstance(metadata, dict) else {}
+    if not isinstance(retest, dict):
+        retest = {}
+    retest_status = str(item.get("retest_status") or "").strip().lower()
+    latest_retest_status = str(retest.get("latest_retest_status") or "").strip().lower()
+    latest_run_id = str(retest.get("latest_run_id") or "").strip()
+    latest_result = str(retest.get("latest_result") or "").strip()
+    proof_time = _validation_proof_time(retest) or str(item.get("retested_at") or "").strip()
+    proof_age_days = _review_age_days(proof_time, now=now)
+    has_retest_request = bool(str(retest.get("latest_job_id") or "").strip()) or retest_status in {
+        "pending",
+        "passed",
+        "failed",
+        "blocked",
+    }
+    has_proof = bool(latest_run_id or latest_result or latest_retest_status or proof_time)
+
+    if not has_retest_request and not has_proof:
+        freshness = "not_requested"
+    elif not has_proof:
+        freshness = "missing"
+    elif proof_age_days is None:
+        freshness = "unknown"
+    elif proof_age_days <= _VALIDATION_PROOF_FRESH_DAYS:
+        freshness = "fresh"
+    else:
+        freshness = "stale"
+    return {
+        "freshness": freshness,
+        "age_days": proof_age_days,
+        "latest_run_id": latest_run_id,
+        "latest_result": latest_result,
+        "latest_retest_status": latest_retest_status,
+        "proof_time": proof_time,
+    }
+
+
 def risk_acceptance_review_status(
     status: str | None,
     expires_at: str | datetime | None,
@@ -249,7 +346,12 @@ def _sla_due_at_from_days(days: int | None, *, now: str | None = None) -> str | 
     return (base + timedelta(days=days)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def remediation_item_payload(row: sqlite3.Row) -> dict[str, Any]:
+def remediation_item_payload(
+    row: sqlite3.Row,
+    *,
+    latest_ticket_event: dict[str, Any] | None = None,
+    now: str | datetime | None = None,
+) -> dict[str, Any]:
     metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
     if not isinstance(metadata, dict):
         metadata = {}
@@ -258,7 +360,7 @@ def remediation_item_payload(row: sqlite3.Row) -> dict[str, Any]:
         owner_approval = {}
     risk_expires_at = str(row["risk_acceptance_expires_at"] or "")
     review_status = risk_acceptance_review_status(str(row["status"] or ""), risk_expires_at)
-    return {
+    item = {
         "id": int(row["id"]),
         "engagement_id": int(row["engagement_id"]),
         "finding_table": str(row["finding_table"] or ""),
@@ -286,6 +388,11 @@ def remediation_item_payload(row: sqlite3.Row) -> dict[str, Any]:
         "created_at": str(row["created_at"] or ""),
         "updated_at": str(row["updated_at"] or ""),
     }
+    base = _review_base_time(now)
+    item["ticket_state"] = _ticket_state(item, latest_ticket_event)
+    item["latest_ticket_event"] = latest_ticket_event
+    item["validation_proof_freshness"] = _validation_proof_freshness(item, now=base)
+    return item
 
 
 def _remediation_review_reason_labels(reasons: list[str]) -> list[str]:
@@ -383,6 +490,9 @@ def _remediation_review_queue_item(
         reasons.append("missing_ticket")
 
     latest_ticket_event = ticket_event if isinstance(ticket_event, dict) else None
+    ticket_state = _ticket_state(item, latest_ticket_event)
+    if active and ticket_state in {"missing", "failed"}:
+        reasons.append("ticket_missing_or_failed")
     if (
         active
         and latest_ticket_event
@@ -407,6 +517,11 @@ def _remediation_review_queue_item(
         reasons.append("retest_blocked")
     elif status == "retest_pending" or retest_status == "pending":
         reasons.append("retest_pending")
+    validation_proof = _validation_proof_freshness(item, now=now)
+    if validation_proof["freshness"] == "stale":
+        reasons.append("validation_proof_stale")
+    elif retest_status in {"passed", "failed", "blocked"} and validation_proof["freshness"] == "missing":
+        reasons.append("validation_proof_missing_after_retest")
 
     if not reasons:
         return None, []
@@ -430,7 +545,9 @@ def _remediation_review_queue_item(
             "risk_acceptance_review_status": risk_status,
             "retest_status": retest_status,
             "ticket_label": _review_queue_ticket_label(item),
+            "ticket_state": ticket_state,
             "latest_ticket_event": latest_ticket_event,
+            "validation_proof_freshness": validation_proof,
             "queue_reasons": reasons,
             "queue_reason_labels": _remediation_review_reason_labels(reasons),
             "review_priority": priority,
@@ -457,6 +574,7 @@ def remediation_review_queue(
         "attention_required": 0,
         "missing_owner": 0,
         "missing_ticket": 0,
+        "ticket_missing_or_failed": 0,
         "sla_overdue": 0,
         "risk_acceptance_review_due": 0,
         "risk_acceptance_expired": 0,
@@ -466,6 +584,8 @@ def remediation_review_queue(
         "retest_pending": 0,
         "retest_blocked": 0,
         "ticket_sync_failed": 0,
+        "validation_proof_missing_after_retest": 0,
+        "validation_proof_stale": 0,
     }
     columns = _table_columns(con, "remediation_items")
     if "engagement_id" not in columns:
@@ -492,14 +612,15 @@ def remediation_review_queue(
 
     queue_items: list[dict[str, Any]] = []
     for row in rows:
-        item = remediation_item_payload(row)
+        ticket_event = latest_ticket_events.get(int(row["id"] or 0))
+        item = remediation_item_payload(row, latest_ticket_event=ticket_event, now=base)
         summary["total"] += 1
         if str(item.get("status") or "").strip().lower() in _ACTIVE_REMEDIATION_STATUSES:
             summary["active"] += 1
         queue_item, reasons = _remediation_review_queue_item(
             item,
             now=base,
-            ticket_event=latest_ticket_events.get(int(item["id"])),
+            ticket_event=ticket_event,
         )
         if queue_item is None:
             continue

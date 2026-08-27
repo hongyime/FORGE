@@ -872,6 +872,11 @@ Failed ticket/SOAR/SIEM handoffs are now queue reasons too: the latest
 `remediation_ticket_events` status per item is summarized with connector,
 attempt count, redacted destination/error text, and a `ticket sync failed`
 review reason until a later delivered event clears it.
+The same local-only closed-loop view now derives ticket state and validation
+proof freshness from remediation rows, ticket events, and active-validation
+retest metadata, so the dashboard can flag missing/failed tickets, stale proof,
+and completed retests that lack proof without calling ticket APIs or rerunning
+validation.
 The same panel now exposes graph-owner propagation for unowned remediation
 items, with an explicit overwrite toggle for owner replacements.
 Graph-derived fix candidates can be drafted into normal owner/SLA/review-queue

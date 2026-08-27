@@ -157,3 +157,4 @@
 - 2026-08-27: Implementing exposure-duration metrics as a free/local read-only monitoring summary over existing Forge SQLite evidence; no schema migration or paid/API connector required.
 - 2026-08-28: Censys/runZero-style asset delta support is implemented as local JSON/CSV artifact import through import-discovery, preserving fingerprints/topology without requiring API keys.
 - 2026-08-28: Active-validation matrix now computes proof type and freshness from local job/run metadata, including imported Burp/JUnit artifact proof, without schema changes or live target calls.
+- 2026-08-28: Closed-loop remediation dashboard state is derived from local remediation/ticket/retest metadata first; ticket APIs, SOAR webhooks, and live validation remain explicit opt-in actions rather than dashboard refresh dependencies.

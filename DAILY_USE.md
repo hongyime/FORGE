@@ -33,6 +33,7 @@ forge automation feed-build --apply --json
 forge automation self-heal-plan --json
 forge automation guarded-autostart --json
 forge monitoring exposure-metrics --json
+forge remediation review-queue --engagement N --json
 forge connectors import-discovery --engagement N --connector asset_delta_import --report-file assets.json --target DOMAIN --json
 forge connectors import-validation --engagement N --connector burp_dast_xml --report-file REPORT.xml --dry-run --json
 ```
@@ -49,6 +50,9 @@ ignored local `imports/autostart.local.json` explicitly has `enabled: true` and
 Burp/JUnit DAST XML import is local evidence intake only. Rehearse with
 `--dry-run --json`; applied imports add scoped active-validation evidence rows
 without running scanners or creating reportable vulnerability findings.
+`forge remediation review-queue --engagement N --json` is also local-only: it
+surfaces owner, SLA, ticket state, latest ticket sync status, retest state, and
+validation proof freshness from existing rows.
 
 ---
 

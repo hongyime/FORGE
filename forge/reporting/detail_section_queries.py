@@ -820,6 +820,16 @@ def remediation_item_section_rows(
         if "risk_acceptance_expires_at" in remediation_columns
         else "NULL AS risk_acceptance_expires_at"
     )
+    metadata_select = (
+        "metadata_json"
+        if "metadata_json" in remediation_columns
+        else "'{}' AS metadata_json"
+    )
+    retested_at_select = (
+        "retested_at"
+        if "retested_at" in remediation_columns
+        else "NULL AS retested_at"
+    )
     return [
         callbacks.remediation_item_row(row)
         for row in callbacks.fetch_rows(
@@ -834,8 +844,10 @@ def remediation_item_section_rows(
                    {risk_expiry_select},
                    status,
                    retest_status,
+                   {retested_at_select},
                    ticket_ref,
                    ticket_url,
+                   {metadata_select},
                    updated_at
             FROM remediation_items
             WHERE engagement_id=?
