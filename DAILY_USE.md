@@ -32,6 +32,11 @@ forge automation feed-build --json
 forge automation feed-build --apply --json
 forge automation self-heal-plan --json
 forge automation guarded-autostart --json
+forge automation command-review --json
+forge doctor --json
+forge targets resume-run --dry-run --json
+forge connectors run-plan --json
+forge report quality-audit --json
 forge monitoring exposure-metrics --json
 forge remediation review-queue --engagement N --json
 forge connectors import-discovery --engagement N --connector asset_delta_import --report-file assets.json --target DOMAIN --json

@@ -10,6 +10,38 @@ from typing import Any
 SCHEMA_VERSION = "forge.automation_policy.v1"
 PLAN_SCHEMA_VERSION = "forge.automation_run_plan.v1"
 COMMAND_REVIEW_SCHEMA_VERSION = "forge.command_surface_review.v1"
+DAILY_USE_LAYER: tuple[dict[str, str], ...] = (
+    {
+        "id": "automation",
+        "command": "forge automation feed-build --json",
+        "purpose": "Build the local target feed before autopilot import/start work.",
+    },
+    {
+        "id": "doctor",
+        "command": "forge doctor --json",
+        "purpose": "Read-only readiness and action-plan review.",
+    },
+    {
+        "id": "targets_resume",
+        "command": "forge targets resume-run --dry-run --json",
+        "purpose": "Rehearse failed/cancelled target backlog recovery before live resume.",
+    },
+    {
+        "id": "connectors_plan",
+        "command": "forge connectors run-plan --json",
+        "purpose": "List free/local and optional connector commands without running them.",
+    },
+    {
+        "id": "connectors_run",
+        "command": "forge connectors import-discovery --json",
+        "purpose": "Import local connector/discovery artifacts with scoped provenance.",
+    },
+    {
+        "id": "report_review",
+        "command": "forge report quality-audit --json",
+        "purpose": "Review stale reports, resume candidates, long runs, and policy drift.",
+    },
+)
 
 APPROVED_LOCAL_PATHS: dict[str, list[str]] = {
     "allow_regex": [
@@ -234,8 +266,45 @@ def command_surface_review(repo_root: Path | None = None) -> dict[str, Any]:
         "groups": groups,
         "commands_by_module_group": dict(sorted(group_counts.items())),
         "largest_module_groups": Counter(group_counts).most_common(10),
+        "daily_use_layer": _daily_use_layer_status(root),
         "recommendations": recommendations,
     }
+
+
+def _daily_use_layer_status(root: Path) -> list[dict[str, Any]]:
+    readme = _read_text(root / "README.md")
+    daily_use = _read_text(root / "DAILY_USE.md")
+    rows: list[dict[str, Any]] = []
+    for item in DAILY_USE_LAYER:
+        command = item["command"]
+        base_command = " ".join(command.split()[:3])
+        documented_in_readme = base_command in readme
+        documented_in_daily_use = base_command in daily_use
+        rows.append(
+            {
+                **item,
+                "base_command": base_command,
+                "documented_in_readme": documented_in_readme,
+                "documented_in_daily_use": documented_in_daily_use,
+                "documentation_status": (
+                    "documented"
+                    if documented_in_readme and documented_in_daily_use
+                    else "missing_daily_use_doc"
+                    if documented_in_readme
+                    else "missing_readme_doc"
+                    if documented_in_daily_use
+                    else "missing_docs"
+                ),
+            }
+        )
+    return rows
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
 
 
 def _regex_errors(patterns: list[str]) -> list[dict[str, str]]:

@@ -86,6 +86,17 @@ def test_automation_command_review_reports_pressure_and_recommendations() -> Non
     assert payload["execution_policy"] == "read_only_source_scan_no_commands_executed"
     assert payload["group_count"] >= 20
     assert payload["command_count"] >= 50
+    daily = {item["id"]: item for item in payload["daily_use_layer"]}
+    assert {
+        "automation",
+        "doctor",
+        "targets_resume",
+        "connectors_plan",
+        "connectors_run",
+        "report_review",
+    }.issubset(daily)
+    assert daily["automation"]["base_command"] == "forge automation feed-build"
+    assert daily["doctor"]["documentation_status"] == "documented"
     assert payload["recommendations"]
 
 
@@ -110,3 +121,4 @@ def test_automation_cli_json_commands() -> None:
     assert review_result.exit_code == 0, review_result.output
     review_payload = json.loads(review_result.output)
     assert review_payload["command_count"] >= 50
+    assert review_payload["daily_use_layer"]
