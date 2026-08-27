@@ -15,6 +15,7 @@ from forge.monitoring.runner import (
     run_due_monitoring_for_data_dir,
     run_monitoring_worker,
 )
+from forge.monitoring.exposure_metrics import exposure_metrics_for_data_dir
 
 console = Console(stderr=True)
 
@@ -224,6 +225,47 @@ def register_monitoring_commands(app: typer.Typer) -> None:
             f"dbs={result['db_count']} engagements={result['engagement_count']} "
             f"delivered={result['delivery_count']} failures={result['failure_count']} "
             f"skipped={result['skipped_count']} unrouted={result['unrouted_count']} "
+            f"errors={len(result['errors'])}"
+        )
+
+    @app.command("exposure-metrics")
+    def exposure_metrics(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help="FORGE data directory. Defaults to FORGE_DATA_DIR.",
+        ),
+        now: Optional[str] = typer.Option(
+            None,
+            "--now",
+            help="Override clock for deterministic exposure-duration metrics/tests.",
+        ),
+        limit: Optional[int] = typer.Option(
+            None,
+            "--limit",
+            min=0,
+            help="Maximum exposure metric rows per engagement. Omit for all rows.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON.",
+        ),
+    ) -> None:
+        cfg = ForgeConfig.load()
+        root = data_dir or cfg.data_dir
+        result = exposure_metrics_for_data_dir(root, now=now, limit=limit)
+        if json_output:
+            typer.echo(json.dumps(result, sort_keys=True))
+            return
+        console.print(
+            "[bold]Exposure duration metrics[/bold] "
+            f"dbs={result['db_count']} ready_dbs={result['schema_ready_db_count']} "
+            f"engagements={result['engagement_count']} "
+            f"total={result['total_count']} selected={result['selected_count']} "
+            f"open={result['open_count']} recurrent={result['recurrent_count']} "
+            f"mttr_samples={result['mttr_sample_count']} "
+            f"mean_mttr_hours={result['mean_mttr_hours']} "
             f"errors={len(result['errors'])}"
         )
 

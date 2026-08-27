@@ -258,7 +258,7 @@ forge targets resume-plan [--limit N] [--reason REASON] [--max-iter N] [--max-ru
 forge targets resume-lock-status [--data-dir PATH] [--stale-lock-minutes N] [--redact-paths] [--json]
 forge targets resume-run [--dry-run] [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--max-parallel N] [--batch-id ID] [--continue-on-failure] [--data-dir PATH] [--break-stale-lock] [--stale-lock-minutes N] [--redact-paths] [--json]
 forge targets backfill-scope-manifests [--apply] [--limit N] [--reason REASON] [--data-dir PATH] [--json]
-forge monitoring status|due-plan [--include-empty-db-results]|run-due|deliver-alerts|worker
+forge monitoring status|due-plan [--include-empty-db-results]|exposure-metrics|run-due|deliver-alerts|worker
 forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-retest|apply-retest-run|handoff-plan|integration-runbook|import-ticket-statuses|sync-tickets
 forge active-validation preview|create|approve|run|list|methods|coverage
 forge automation policy [--json]          # Show the operator-approved wildcard automation policy defaults
@@ -506,13 +506,17 @@ commands.
 monitoring: it reports stale DB schemas, enabled/idle policy counts,
 due/overdue policies, open alerts, unrouted open alerts, failed alert-delivery
 rows, suppressed delivery rows, and active alert suppressions without running
-jobs or delivering alerts. `forge monitoring due-plan --json` is the bounded
-read-only apply preview for due policies; it reports policy IDs, modes, timing,
-sanitized refresh shape, default capped batch estimates, stale backlog age,
-policy composition, and safe next-action commands with
-`plan_only_no_commands_executed`. Empty DB result rows are omitted by default;
-use `--include-empty-db-results` when troubleshooting per-DB planning. `forge
-monitoring run-due --limit 50` and `forge monitoring worker --run-limit 50`
+jobs or delivering alerts. `forge monitoring exposure-metrics --json` is the
+read-only exposure-duration summary: it computes first seen, last seen, open
+days, recurrence, and MTTR from local findings, monitoring changes, validation
+runs, and remediation rows without creating snapshots or migrations. `forge
+monitoring due-plan --json` is the bounded read-only apply preview for due
+policies; it reports policy IDs, modes, timing, sanitized refresh shape, default
+capped batch estimates, stale backlog age, policy composition, and safe
+next-action commands with `plan_only_no_commands_executed`. Empty DB result rows
+are omitted by default; use `--include-empty-db-results` when troubleshooting
+per-DB planning. `forge monitoring run-due --limit 50` and `forge monitoring
+worker --run-limit 50`
 create scheduled snapshots and diff exposure state in bounded batches; pass
 `--all` only when intentionally applying the full due backlog in one invocation
 or worker tick.

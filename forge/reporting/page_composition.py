@@ -35,6 +35,7 @@ ENGAGEMENT_SECTION_TITLES = {
     "monitoring_alert_routes": "Monitoring Alert Routes",
     "monitoring_alert_suppressions": "Monitoring Alert Suppressions",
     "remediation_items": "Remediation Workflow",
+    "exposure_duration_metrics": "Exposure Duration Metrics",
     "retention_policies": "Retention Policies",
     "retention_runs": "Retention Runs",
     "retention_run_items": "Retention Run Items",

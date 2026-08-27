@@ -20,6 +20,7 @@ from forge.active_validation.methods import get_active_validation_method
 from forge.active_validation.runner import active_validation_control_coverage
 from forge.audit.manifest import summarize_run_audit_manifest
 from forge.graph.assets import list_asset_graph, ownership_conflicts_for_engagement
+from forge.monitoring.exposure_metrics import exposure_metrics_for_engagement
 from forge.opsec.scope_gate import scope_entries_from_payload
 from forge.reporting.engagement_detail_blocks import (
     EngagementGraphBlocks,
@@ -2017,6 +2018,25 @@ def _monitoring_alert_section_row(row: sqlite3.Row) -> dict[str, str]:
     )
 
 
+def _exposure_duration_metric_section_row(item: dict[str, Any]) -> dict[str, str]:
+    open_days = item.get("open_days")
+    mttr_hours = item.get("mttr_hours")
+    return {
+        "Key": _safe_dashboard_source_url(item.get("key"), 160),
+        "Title": _truncate(item.get("title"), 120),
+        "Severity": str(item.get("severity") or "INFO"),
+        "State": "open" if item.get("is_open") else "closed",
+        "First Seen": _format_dt(str(item.get("first_seen") or "")),
+        "Last Seen": _format_dt(str(item.get("last_seen") or "")),
+        "Closed": _format_dt(str(item.get("closed_at") or "")) or "-",
+        "Open Days": "-" if open_days is None else str(open_days),
+        "Recurrence": str(item.get("recurrence") or 0),
+        "MTTR Hours": "-" if mttr_hours is None else str(mttr_hours),
+        "Proof": ", ".join(str(value) for value in item.get("proof_types") or []) or "-",
+        "Sources": ", ".join(str(value) for value in item.get("source_kinds") or []) or "-",
+    }
+
+
 def _retention_days_label(value: Any) -> str:
     return retention_days_label(value)
 
@@ -2593,6 +2613,16 @@ def _detail_sections(
             callbacks=_detail_section_query_callbacks(),
         )
     )
+    exposure_metrics = exposure_metrics_for_engagement(
+        con,
+        engagement_id,
+        limit=SECTION_LIMIT,
+    )
+    sections["exposure_duration_metrics"] = [
+        _exposure_duration_metric_section_row(item)
+        for item in exposure_metrics.get("metrics", [])
+        if isinstance(item, dict)
+    ]
 
     sections.update(
         retention_sections(
