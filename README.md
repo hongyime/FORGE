@@ -271,7 +271,7 @@ forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-
 forge connectors install-plan [--json]       # Print missing local binary install guidance; does not execute commands
 forge connectors run-plan [--domain NAME] [--json]  # Print free-first connector run guidance; does not execute commands
 forge connectors run --engagement N --connector projectdiscovery_subfinder|projectdiscovery_httpx|projectdiscovery_katana|projectdiscovery_nuclei --target DOMAIN_OR_URL [--dry-run] [--max-results N]
-forge connectors import-discovery --engagement N --connector shodan_host_lookup|censys_lookup|urlscan_search --report-file REPORT.json [--target DOMAIN]
+forge connectors import-discovery --engagement N --connector shodan_host_lookup|censys_lookup|urlscan_search|asset_delta_import|runzero_asset_export --report-file REPORT.json|REPORT.csv [--target DOMAIN]
 forge connectors import-validation --engagement N --connector burp_dast_xml --report-file REPORT.xml [--target URL_PREFIX] [--dry-run] [--limit N] [--json]
 forge connectors import-cti --engagement N --connector abusech_threatfox|abusech_urlhaus|misp_event_import|supabase_table_import|stix_taxii_import --report-file OBSERVATIONS.json|csv|gz|zip [--dry-run] [--limit N] [--since ISO] [--until ISO] [--min-confidence 0.0-1.0] [--max-tlp clear|green|amber|red] [--fail-on-empty] [--promote-targets]
 forge connectors run-identity --engagement N --connector hibp_pwned_passwords [--domain DOMAIN] [--offline-corpus PATH]
@@ -824,10 +824,13 @@ already-stored SHA-1/NTLM password hashes against the HIBP k-anonymity range API
 or an operator-supplied offline corpus, stores only pwned-count metadata and
 remediation items, and never returns or audits plaintext passwords or full
 hashes. `forge connectors import-discovery` is the first Shodan/Censys/urlscan
-provider report path; it accepts operator-supplied JSON, scope-gates observed
-hostnames/IPs and urlscan page/task URLs, persists in-scope hosts/services/seeds
-with provider provenance, queues sanitized urlscan URLs for recursive crawling,
-and keeps raw report bodies/API keys out of connector results and audit rows.
+provider report path and also accepts free/local `asset_delta_import` and
+`runzero_asset_export` artifacts; it ingests operator-supplied JSON/CSV,
+scope-gates observed hostnames/IPs and urlscan page/task URLs, persists
+in-scope hosts/services/seeds with provider provenance, projects fingerprint
+depth and topology relationships into the asset graph, queues sanitized urlscan
+URLs for recursive crawling, and keeps raw report bodies/API keys out of
+connector results and audit rows.
 
 Run `forge demo proof-pack --force` to generate a repeatable local demo
 engagement. The proof pack writes a sanitized engagement DB plus template report

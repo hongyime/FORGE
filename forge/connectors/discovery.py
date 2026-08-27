@@ -3,11 +3,14 @@ from __future__ import annotations
 import ipaddress
 import json
 import sqlite3
+from csv import DictReader
+from io import StringIO
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from forge.graph.assets import upsert_asset_entity, upsert_asset_relationship
 from forge.opsec.scope_gate import (
     ScopeViolationError,
     assert_in_scope,
@@ -20,7 +23,13 @@ from forge.utils.intel.provider_urls import (
     provider_url_hostname,
 )
 
-SUPPORTED_DISCOVERY_IMPORT_CONNECTORS = ("shodan_host_lookup", "censys_lookup", "urlscan_search")
+SUPPORTED_DISCOVERY_IMPORT_CONNECTORS = (
+    "shodan_host_lookup",
+    "censys_lookup",
+    "urlscan_search",
+    "asset_delta_import",
+    "runzero_asset_export",
+)
 
 
 @dataclass(frozen=True)
@@ -74,7 +83,7 @@ def import_discovery_report(
         if config.report_path is None:
             raise ValueError("report_path is required")
         text = config.report_path.read_text(encoding="utf-8")
-    payload = _json_document(text)
+    payload = _discovery_document(connector_id, text)
     imported_hosts = _parse_discovery_report(connector_id, payload)
     provider_source = _provider_source_for_connector(connector_id)
     persisted_hosts = 0
@@ -82,6 +91,8 @@ def import_discovery_report(
     persisted_seeds = 0
     persisted_urls = 0
     persisted_crawl_rows = 0
+    persisted_graph_nodes = 0
+    persisted_graph_relationships = 0
     skipped_urls = 0
     skipped: list[dict[str, str]] = []
     for imported in imported_hosts:
@@ -103,9 +114,31 @@ def import_discovery_report(
             attribution_basis=str(decision["basis"]),
         )
         persisted_hosts += 1 if host_changed else 0
+        graph = _upsert_imported_asset_graph(
+            con,
+            engagement_id=engagement_id,
+            connector_id=connector_id,
+            host_id=host_id,
+            imported=imported,
+            attribution_basis=str(decision["basis"]),
+        )
+        persisted_graph_nodes += graph["node_count"]
+        persisted_graph_relationships += graph["relationship_count"]
         for service in imported.services:
-            if _upsert_service(con, host_id=host_id, service=service):
+            service_id, service_changed = _upsert_service(con, host_id=host_id, service=service)
+            if service_changed:
                 persisted_services += 1
+            graph = _upsert_imported_service_graph(
+                con,
+                engagement_id=engagement_id,
+                connector_id=connector_id,
+                host_id=host_id,
+                service_id=service_id,
+                imported=imported,
+                service=service,
+            )
+            persisted_graph_nodes += graph["node_count"]
+            persisted_graph_relationships += graph["relationship_count"]
         for seed_value, seed_type in _seed_candidates(imported, scope=scope):
             if _upsert_seed(
                 con,
@@ -150,6 +183,8 @@ def import_discovery_report(
         "persisted_seed_count": persisted_seeds,
         "persisted_url_seed_count": persisted_urls,
         "persisted_crawl_result_count": persisted_crawl_rows,
+        "persisted_graph_node_count": persisted_graph_nodes,
+        "persisted_graph_relationship_count": persisted_graph_relationships,
         "skipped_count": len(skipped),
         "skipped_url_count": skipped_urls,
         "skipped": skipped[:25],
@@ -169,6 +204,8 @@ def _parse_discovery_report(connector_id: str, payload: Any) -> list[_ImportedHo
         return _parse_censys_report(payload)
     if connector_id == "urlscan_search":
         return _parse_urlscan_report(payload)
+    if connector_id in {"asset_delta_import", "runzero_asset_export"}:
+        return _parse_asset_delta_report(payload, connector_id=connector_id)
     return []
 
 
@@ -179,6 +216,10 @@ def _provider_source_for_connector(connector_id: str) -> str:
         return "shodan"
     if connector_id == "censys_lookup":
         return "censys"
+    if connector_id == "runzero_asset_export":
+        return "runzero"
+    if connector_id == "asset_delta_import":
+        return "asset_delta"
     return connector_id
 
 
@@ -309,6 +350,55 @@ def _parse_censys_report(payload: Any) -> list[_ImportedHost]:
     return hosts
 
 
+def _parse_asset_delta_report(payload: Any, *, connector_id: str) -> list[_ImportedHost]:
+    items = _report_items(payload)
+    hosts: list[_ImportedHost] = []
+    for item in items:
+        if not isinstance(item, Mapping):
+            continue
+        ip = _normalize_ip(
+            _field(item, "ip", "ip_address", "address", "primary_ip", "public_ip")
+            or _first_list_value(item.get("addresses"))
+            or _first_list_value(item.get("ips"))
+        )
+        if not ip:
+            continue
+        names = _ordered_names(
+            _list_values(_field(item, "hostname", "host_name", "name", "dns_name", "fqdn"))
+            + _list_values(item.get("hostnames"))
+            + _list_values(item.get("dns_names"))
+            + _list_values(item.get("names"))
+        )
+        services_payload = _service_rows(item)
+        services = tuple(
+            service
+            for service in (_asset_delta_service(row) for row in services_payload)
+            if service is not None
+        )
+        provider = "runzero" if connector_id == "runzero_asset_export" else "asset_delta"
+        fingerprints = _fingerprint_payload(item)
+        topology = _topology_payload(item)
+        metadata = _bounded_mapping(
+            {
+                "provider": provider,
+                "asset_id": _field(item, "id", "asset_id", "uuid"),
+                "source": _field(item, "source", "source_name"),
+                "os": _field(item, "os", "os_name", "platform"),
+                "mac": _field(item, "mac", "mac_address"),
+                "hardware": _field(item, "hardware", "manufacturer", "vendor"),
+                "tags": ",".join(_list_values(item.get("tags"))[:20]),
+                "fingerprint_depth": len(fingerprints),
+                "topology_relationship_count": len(topology),
+                "fingerprints": fingerprints,
+                "topology_relationships": topology,
+                "name_count": len(names),
+                "service_count": len(services),
+            }
+        )
+        hosts.append(_ImportedHost(ip=ip, names=tuple(names), services=services, metadata=metadata))
+    return hosts
+
+
 def _urlscan_service(url: str, row: Mapping[str, Any]) -> _ImportedService | None:
     normalized = normalize_provider_url(url)
     if not normalized:
@@ -330,12 +420,54 @@ def _urlscan_service(url: str, row: Mapping[str, Any]) -> _ImportedService | Non
     )
 
 
+def _asset_delta_service(row: Mapping[str, Any]) -> _ImportedService | None:
+    port = _coerce_port(_field(row, "port", "number", "port_number"))
+    if port is None:
+        return None
+    return _ImportedService(
+        port=port,
+        protocol=_protocol(_field(row, "protocol", "transport", "transport_protocol")),
+        service_name=_bounded_text(
+            _field(row, "service", "service_name", "name", "protocol_name"),
+            80,
+        ),
+        banner=_bounded_text(_field(row, "banner", "product", "title"), 512),
+        version=_bounded_text(_field(row, "version", "product_version"), 120),
+    )
+
+
+def _service_rows(item: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    for key in ("services", "open_ports", "ports"):
+        value = item.get(key)
+        if not isinstance(value, list):
+            continue
+        rows: list[Mapping[str, Any]] = []
+        for entry in value:
+            if isinstance(entry, Mapping):
+                rows.append(entry)
+            elif _coerce_port(entry) is not None:
+                rows.append({"port": entry, "protocol": "tcp"})
+        return rows
+    port = _coerce_port(_field(item, "port", "open_port"))
+    if port is None:
+        return []
+    return [
+        {
+            "port": port,
+            "protocol": _field(item, "protocol", "transport", "transport_protocol") or "tcp",
+            "service_name": _field(item, "service", "service_name"),
+            "banner": _field(item, "banner", "product"),
+            "version": _field(item, "version", "product_version"),
+        }
+    ]
+
+
 def _report_items(payload: Any) -> list[Any]:
     if isinstance(payload, list):
         return payload
     if not isinstance(payload, Mapping):
         return []
-    for key in ("matches", "hits", "results"):
+    for key in ("matches", "hits", "results", "assets", "items", "data"):
         value = payload.get(key)
         if isinstance(value, list):
             return value
@@ -350,6 +482,16 @@ def _report_items(payload: Any) -> list[Any]:
     if payload.get("ip") or payload.get("ip_str"):
         return [payload]
     return []
+
+
+def _discovery_document(connector_id: str, text: str) -> Any:
+    try:
+        return json.loads(str(text or ""))
+    except json.JSONDecodeError as exc:
+        if connector_id not in {"asset_delta_import", "runzero_asset_export"}:
+            raise ValueError("discovery report is not valid JSON") from exc
+    reader = DictReader(StringIO(str(text or "")))
+    return [dict(row) for row in reader if any(str(value or "").strip() for value in row.values())]
 
 
 def _shodan_service(row: Mapping[str, Any]) -> _ImportedService | None:
@@ -460,7 +602,7 @@ def _upsert_service(
     *,
     host_id: int,
     service: _ImportedService,
-) -> bool:
+) -> tuple[int, bool]:
     cur = con.execute(
         """
         INSERT INTO services (host_id, port, protocol, service_name, banner, version)
@@ -479,7 +621,149 @@ def _upsert_service(
             service.version,
         ),
     )
-    return int(cur.rowcount or 0) > 0
+    row = con.execute(
+        """
+        SELECT id
+        FROM services
+        WHERE host_id=? AND port=? AND protocol=?
+        """,
+        (host_id, int(service.port), service.protocol),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError("service upsert failed")
+    return int(row["id"]), int(cur.rowcount or 0) > 0
+
+
+def _upsert_imported_asset_graph(
+    con: sqlite3.Connection,
+    *,
+    engagement_id: int,
+    connector_id: str,
+    host_id: int,
+    imported: _ImportedHost,
+    attribution_basis: str,
+) -> dict[str, int]:
+    hostname = imported.names[0] if imported.names else imported.ip
+    metadata = dict(imported.metadata)
+    metadata.update(
+        {
+            "connector_id": connector_id,
+            "ip": imported.ip,
+            "hostnames": list(imported.names[:25]),
+            "attribution_basis": attribution_basis,
+            "source": "provider_report_import",
+        }
+    )
+    host_entity = upsert_asset_entity(
+        con,
+        engagement_id=engagement_id,
+        entity_key=f"host:{hostname}",
+        entity_type="host",
+        label=hostname,
+        source_table="hosts",
+        source_id=host_id,
+        confidence=0.8,
+        metadata=metadata,
+    )
+    nodes = 1
+    relationships = 0
+    for related in _metadata_topology_refs(imported.metadata):
+        related_entity = upsert_asset_entity(
+            con,
+            engagement_id=engagement_id,
+            entity_key=f"asset:{related['kind']}:{related['ref']}",
+            entity_type="asset",
+            label=related["label"],
+            source_table="hosts",
+            source_id=host_id,
+            confidence=0.65,
+            metadata={
+                "connector_id": connector_id,
+                "source": "asset_delta_topology",
+                "topology_kind": related["kind"],
+            },
+        )
+        nodes += 1
+        upsert_asset_relationship(
+            con,
+            engagement_id=engagement_id,
+            source_entity_id=host_entity,
+            target_entity_id=related_entity,
+            relationship_type="related_asset",
+            confidence=0.65,
+            source_table="hosts",
+            source_id=host_id,
+            evidence={
+                "connector_id": connector_id,
+                "relationship": related["kind"],
+                "provider_report_import": True,
+            },
+        )
+        relationships += 1
+    return {"node_count": nodes, "relationship_count": relationships}
+
+
+def _upsert_imported_service_graph(
+    con: sqlite3.Connection,
+    *,
+    engagement_id: int,
+    connector_id: str,
+    host_id: int,
+    service_id: int,
+    imported: _ImportedHost,
+    service: _ImportedService,
+) -> dict[str, int]:
+    hostname = imported.names[0] if imported.names else imported.ip
+    host_entity = upsert_asset_entity(
+        con,
+        engagement_id=engagement_id,
+        entity_key=f"host:{hostname}",
+        entity_type="host",
+        label=hostname,
+        source_table="hosts",
+        source_id=host_id,
+        confidence=0.8,
+        metadata={
+            **dict(imported.metadata),
+            "connector_id": connector_id,
+            "ip": imported.ip,
+            "hostnames": list(imported.names[:25]),
+            "source": "provider_report_import",
+        },
+    )
+    service_label = f"{hostname}:{service.port}/{service.protocol}"
+    service_entity = upsert_asset_entity(
+        con,
+        engagement_id=engagement_id,
+        entity_key=f"service:{service_label}",
+        entity_type="service",
+        label=service_label,
+        source_table="services",
+        source_id=service_id,
+        confidence=0.8,
+        metadata={
+            "connector_id": connector_id,
+            "service_name": service.service_name,
+            "version": service.version,
+            "source": "provider_report_import",
+        },
+    )
+    upsert_asset_relationship(
+        con,
+        engagement_id=engagement_id,
+        source_entity_id=host_entity,
+        target_entity_id=service_entity,
+        relationship_type="runs_service",
+        confidence=0.8,
+        source_table="services",
+        source_id=service_id,
+        evidence={
+            "connector_id": connector_id,
+            "port": service.port,
+            "protocol": service.protocol,
+        },
+    )
+    return {"node_count": 2, "relationship_count": 1}
 
 
 def _seed_candidates(imported: _ImportedHost, *, scope: list[str]) -> list[tuple[str, str]]:
@@ -601,6 +885,15 @@ def _field(mapping: Mapping[str, Any], *keys: str) -> str:
     return ""
 
 
+def _first_list_value(value: Any) -> str:
+    if isinstance(value, list):
+        for item in value:
+            text = str(item or "").strip()
+            if text:
+                return text
+    return ""
+
+
 def _nested_get(mapping: Mapping[str, Any], keys: tuple[str, ...]) -> Any:
     value: Any = mapping
     for key in keys:
@@ -703,11 +996,119 @@ def _name_matches_target(name: str, target: str) -> bool:
 
 def _bounded_mapping(values: Mapping[str, Any]) -> dict[str, Any]:
     return {
-        str(key): _bounded_text(value, 240)
+        str(key): _bounded_value(value)
         for key, value in values.items()
         if value not in (None, "", [], {})
     }
 
 
+def _bounded_value(value: Any, *, depth: int = 2) -> Any:
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, int | float):
+        return value
+    if depth <= 0:
+        return _bounded_text(value, 240)
+    if isinstance(value, Mapping):
+        payload: dict[str, Any] = {}
+        for raw_key, raw_value in list(value.items())[:30]:
+            key = _bounded_text(raw_key, 80)
+            lowered = key.lower()
+            if any(fragment in lowered for fragment in ("authorization", "password", "secret", "token")):
+                continue
+            bounded = _bounded_value(raw_value, depth=depth - 1)
+            if bounded not in (None, "", [], {}):
+                payload[key] = bounded
+        return payload
+    if isinstance(value, list | tuple | set):
+        return [_bounded_value(item, depth=depth - 1) for item in list(value)[:30]]
+    return _bounded_text(value, 240)
+
+
 def _bounded_text(value: object, limit: int) -> str:
     return " ".join(str(value or "").replace("\r", " ").replace("\n", " ").split())[:limit]
+
+
+def _fingerprint_payload(item: Mapping[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    for key in (
+        "fingerprint",
+        "fingerprints",
+        "software",
+        "technologies",
+        "products",
+        "os",
+        "os_name",
+        "hardware",
+        "manufacturer",
+        "vendor",
+    ):
+        value = item.get(key)
+        if value not in (None, "", [], {}):
+            if key in {"fingerprint", "fingerprints"} and isinstance(value, Mapping):
+                for raw_name, raw_fingerprint in value.items():
+                    name = _bounded_text(raw_name, 80)
+                    if name:
+                        payload[name] = _bounded_value(raw_fingerprint)
+            else:
+                payload[key] = _bounded_value(value)
+    return payload
+
+
+def _topology_payload(item: Mapping[str, Any]) -> list[dict[str, str]]:
+    raw = (
+        item.get("topology")
+        or item.get("relationships")
+        or item.get("network")
+        or item.get("neighbors")
+        or []
+    )
+    entries: list[Any]
+    if isinstance(raw, Mapping):
+        entries = [raw]
+    elif isinstance(raw, list):
+        entries = raw
+    else:
+        entries = []
+    relationships: list[dict[str, str]] = []
+    for entry in entries[:30]:
+        if isinstance(entry, Mapping):
+            ref = _field(entry, "ref", "id", "asset_id", "name", "hostname", "ip", "target")
+            kind = _field(entry, "kind", "type", "relationship", "relationship_type") or "related"
+            label = _field(entry, "label", "name", "hostname", "ip", "target") or ref
+        else:
+            ref = str(entry or "").strip()
+            kind = "related"
+            label = ref
+        ref = _bounded_text(ref, 160)
+        if not ref:
+            continue
+        relationships.append(
+            {
+                "kind": _bounded_text(kind, 40) or "related",
+                "ref": ref,
+                "label": _bounded_text(label, 160) or ref,
+            }
+        )
+    return relationships
+
+
+def _metadata_topology_refs(metadata: Mapping[str, Any]) -> list[dict[str, str]]:
+    raw = metadata.get("topology_relationships")
+    if not isinstance(raw, list):
+        return []
+    refs: list[dict[str, str]] = []
+    for item in raw:
+        if not isinstance(item, Mapping):
+            continue
+        ref = _bounded_text(item.get("ref"), 160)
+        if not ref:
+            continue
+        refs.append(
+            {
+                "kind": _bounded_text(item.get("kind"), 40) or "related",
+                "ref": ref,
+                "label": _bounded_text(item.get("label") or ref, 160),
+            }
+        )
+    return refs

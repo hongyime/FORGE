@@ -316,6 +316,122 @@ def test_urlscan_report_import_persists_scoped_host_service_and_sanitized_url_se
     assert "user:pass" not in blob
 
 
+def test_asset_delta_import_persists_fingerprints_and_topology_graph(tmp_path: Path) -> None:
+    con = _build_discovery_db(tmp_path / "engagement.db")
+    report = {
+        "assets": [
+            {
+                "id": "asset-1",
+                "ip": "198.51.100.80",
+                "hostnames": ["edge.acme.example"],
+                "os": "Linux",
+                "fingerprints": {"http": {"server": "nginx"}, "tls": "present"},
+                "services": [
+                    {
+                        "port": 443,
+                        "protocol": "tcp",
+                        "service_name": "https",
+                        "product": "nginx",
+                        "version": "1.25",
+                    }
+                ],
+                "topology": [
+                    {"kind": "network", "ref": "dmz", "label": "DMZ"},
+                    {"kind": "switch", "ref": "sw-core"},
+                ],
+            }
+        ]
+    }
+
+    try:
+        result = import_discovery_report(
+            con,
+            DiscoveryReportImportConfig(
+                connector_id="asset_delta_import",
+                engagement_id=1001,
+                target="acme.example",
+            ),
+            report_text=json.dumps(report),
+        )
+        host_context = json.loads(
+            con.execute(
+                "SELECT host_context FROM hosts WHERE engagement_id=1001"
+            ).fetchone()["host_context"]
+        )
+        graph_nodes = {
+            row["entity_key"]: json.loads(row["metadata_json"])
+            for row in con.execute(
+                """
+                SELECT entity_key, metadata_json
+                FROM asset_entities
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        relationships = [
+            row["relationship_type"]
+            for row in con.execute(
+                """
+                SELECT relationship_type
+                FROM asset_relationships
+                WHERE engagement_id=1001
+                ORDER BY relationship_type
+                """
+            ).fetchall()
+        ]
+    finally:
+        con.close()
+
+    assert result["connector_id"] == "asset_delta_import"
+    assert result["persisted_host_count"] == 1
+    assert result["persisted_service_count"] == 1
+    assert result["persisted_graph_node_count"] >= 4
+    assert result["persisted_graph_relationship_count"] == 3
+    assert host_context["fingerprint_depth"] == 3
+    assert host_context["topology_relationship_count"] == 2
+    assert graph_nodes["host:edge.acme.example"]["fingerprints"]["http"]["server"] == "nginx"
+    assert graph_nodes["asset:network:dmz"]["topology_kind"] == "network"
+    assert relationships == ["related_asset", "related_asset", "runs_service"]
+
+
+def test_runzero_asset_export_import_accepts_csv_without_provider_key(tmp_path: Path) -> None:
+    con = _build_discovery_db(tmp_path / "engagement.db")
+    csv_text = "\n".join(
+        [
+            "id,ip,hostname,os,port,protocol,service,version,source",
+            "rz-1,198.51.100.81,scanner.acme.example,Linux,22,tcp,ssh,9.6,runzero-export",
+        ]
+    )
+
+    try:
+        result = import_discovery_report(
+            con,
+            DiscoveryReportImportConfig(
+                connector_id="runzero_asset_export",
+                engagement_id=1001,
+                target="acme.example",
+            ),
+            report_text=csv_text,
+        )
+        service = con.execute(
+            """
+            SELECT port, protocol, service_name, version
+            FROM services
+            WHERE host_id=(SELECT id FROM hosts WHERE engagement_id=1001)
+            """
+        ).fetchone()
+    finally:
+        con.close()
+
+    assert result["connector_id"] == "runzero_asset_export"
+    assert result["source"] == "provider_report_import"
+    assert result["persisted_host_count"] == 1
+    assert result["persisted_service_count"] == 1
+    assert result["persisted_seed_count"] == 1
+    assert result["persisted_graph_relationship_count"] == 1
+    assert tuple(service) == (22, "tcp", "ssh", "9.6")
+
+
 def test_connector_cli_import_discovery_invokes_importer_with_config(
     tmp_path: Path,
     monkeypatch,

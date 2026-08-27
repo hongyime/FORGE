@@ -33,6 +33,7 @@ forge automation feed-build --apply --json
 forge automation self-heal-plan --json
 forge automation guarded-autostart --json
 forge monitoring exposure-metrics --json
+forge connectors import-discovery --engagement N --connector asset_delta_import --report-file assets.json --target DOMAIN --json
 forge connectors import-validation --engagement N --connector burp_dast_xml --report-file REPORT.xml --dry-run --json
 ```
 
