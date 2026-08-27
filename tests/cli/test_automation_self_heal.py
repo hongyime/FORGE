@@ -52,6 +52,7 @@ def test_self_heal_plan_finds_packaged_go_tools(tmp_path: Path, monkeypatch) -> 
     )
     monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
     monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(self_heal.Path, "home", lambda: tmp_path / "empty-home")
 
     payload = automation_self_heal_plan(
         repo_root=tmp_path,
@@ -98,6 +99,7 @@ def test_self_heal_plan_blocks_on_wrong_binary_size_from_path(
     )
     monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
     monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: str(wrong))
+    monkeypatch.setattr(self_heal.Path, "home", lambda: tmp_path / "empty-home")
 
     payload = automation_self_heal_plan(
         repo_root=tmp_path,
@@ -109,6 +111,35 @@ def test_self_heal_plan_blocks_on_wrong_binary_size_from_path(
     assert payload["packaged_go_tools"][0]["available"] is True
     assert payload["packaged_go_tools"][0]["size_matches_hint"] is False
     assert "packaged_runtime_tool_size_mismatch:httpx" in payload["blockers"]
+
+
+def test_self_heal_plan_prefers_user_go_bin_before_path_shim(
+    tmp_path: Path, monkeypatch
+) -> None:
+    wrong = tmp_path / "httpx.exe"
+    wrong.write_bytes(b"python shim")
+    home = tmp_path / "home"
+    go_bin = home / "go" / "bin"
+    go_bin.mkdir(parents=True)
+    expected_size = 16
+    good = go_bin / "httpx.exe"
+    good.write_bytes(b"x" * expected_size)
+    monkeypatch.setattr(self_heal.Path, "home", lambda: home)
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: str(wrong))
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "httpx", "binary": "httpx.exe", "size_bytes": expected_size, "role": "http_probe"},),
+    )
+
+    payload = automation_self_heal_plan(
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+        probe_docker=False,
+    )
+
+    assert payload["packaged_go_tools"][0]["path"] == str(good)
+    assert payload["packaged_go_tools"][0]["size_matches_hint"] is True
+    assert "packaged_runtime_tool_size_mismatch:httpx" not in payload["blockers"]
 
 
 def test_self_heal_plan_cli_json() -> None:
@@ -301,20 +332,78 @@ def test_guarded_autostart_lock_race_returns_blocked_json(
     assert payload["runs"] == []
 
 
+def test_guarded_autostart_replaces_stale_dead_pid_lock(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": True,
+                "cooldown_minutes": 0,
+                "failure_backoff_minutes": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    data_dir = tmp_path / "data"
+    lock_file = data_dir / "automation" / "guarded-autostart.lock"
+    lock_file.parent.mkdir(parents=True)
+    lock_file.write_text(
+        json.dumps({"pid": 999999, "created_at": "2026-01-01T00:00:00+00:00"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_ROE_ID", "ROE-TEST")
+    monkeypatch.setattr("forge.automation_self_heal._pid_alive", lambda _pid: False)
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "gopls", "binary": "gopls.exe", "size_bytes": 1, "role": "developer"},),
+    )
+    monkeypatch.setattr(
+        "forge.automation_self_heal._docker_status",
+        lambda _root, *, probe: {
+            "ok": True,
+            "probed": probe,
+            "reason": "docker_compose_ps_ok",
+        },
+    )
+
+    def _runner(_command: list[str], _cwd: Path) -> dict:
+        return {"returncode": 0, "stdout_tail": "", "stderr_tail": ""}
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=data_dir,
+        apply=True,
+        command_runner=_runner,
+    )
+
+    assert payload["status"] == "completed"
+    assert payload["lock_status"]["reason"] == "dead_pid"
+    assert payload["lock_status"]["breakable"] is True
+    assert not lock_file.exists()
+
+
 def test_run_command_redacts_output_and_honors_timeout(tmp_path: Path, monkeypatch) -> None:
     seen: dict[str, object] = {}
     fake_openrouter_key = "sk-" + "or-v1-" + ("secret" * 4)
 
-    class _Completed:
-        returncode = 0
-        stdout = f"ok {fake_openrouter_key}"
-        stderr = "roe ROE-SENSITIVE-123"
-
     def _run(*_args, **kwargs):
-        seen["timeout"] = kwargs["timeout"]
-        return _Completed()
+        seen["timeout_seconds"] = kwargs["timeout_seconds"]
+        seen["cwd"] = kwargs["cwd"]
+        return self_heal.subprocess.CompletedProcess(
+            ["forge-autopilot.bat", "--dry-run"],
+            0,
+            f"ok {fake_openrouter_key}",
+            "roe ROE-SENSITIVE-123",
+        )
 
-    monkeypatch.setattr("forge.automation_self_heal.subprocess.run", _run)
+    monkeypatch.setattr("forge.automation_self_heal.run_contained_subprocess", _run)
 
     payload = self_heal._run_command_with_options(
         ["forge-autopilot.bat", "--dry-run"],
@@ -323,7 +412,8 @@ def test_run_command_redacts_output_and_honors_timeout(tmp_path: Path, monkeypat
         redactions=("ROE-SENSITIVE-123",),
     )
 
-    assert seen["timeout"] == 123
+    assert seen["timeout_seconds"] == 123
+    assert seen["cwd"] == tmp_path
     assert fake_openrouter_key not in payload["stdout_tail"]
     assert "ROE-SENSITIVE-123" not in payload["stderr_tail"]
     assert "[REDACTED]" in payload["stdout_tail"]

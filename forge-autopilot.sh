@@ -68,7 +68,11 @@ printf '\n======================================================================
 printf '  FORGE Autopilot\n'
 printf '============================================================================\n'
 printf '  feed_file=%s\n' "$FEED_FILE"
-printf '  roe_id=%s\n' "$ROE_ID"
+if [ -n "$ROE_ID" ]; then
+    printf '  roe_id_present=yes\n'
+else
+    printf '  roe_id_present=no\n'
+fi
 printf '  dry_run=%s feed_build=%s\n' "$DRY_RUN" "$FEED_BUILD"
 printf '  start_limit=%s resume_limit=%s max_parallel=%s\n\n' "$START_LIMIT" "$RESUME_LIMIT" "$MAX_PARALLEL"
 

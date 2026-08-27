@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from forge.config import ForgeConfig
+from forge.subprocess_tree import run_contained_subprocess
 
 SELF_HEAL_PLAN_SCHEMA_VERSION = "forge.automation_self_heal_plan.v1"
 GUARDED_AUTOSTART_SCHEMA_VERSION = "forge.automation_guarded_autostart.v1"
@@ -176,6 +177,7 @@ def run_guarded_autostart(
     lock_file = state_dir / "guarded-autostart.lock"
     now = datetime.now(timezone.utc)
     state = _read_json_object(state_file)
+    lock_status = _guarded_autostart_lock_status(lock_file, now=now)
     cooldown_blockers = _cooldown_blockers(
         state=state,
         now=now,
@@ -204,8 +206,14 @@ def run_guarded_autostart(
         and not os.environ.get(str(config["roe_id_env"]), "").strip()
     ):
         blockers.append("roe_id_env_missing")
-    if lock_file.exists():
-        blockers.append("guarded_autostart_lock_exists")
+    if lock_status["exists"]:
+        if apply and lock_status["breakable"]:
+            try:
+                lock_file.unlink()
+            except OSError:
+                blockers.append("guarded_autostart_stale_lock_unlink_failed")
+        else:
+            blockers.append("guarded_autostart_lock_exists")
     blockers.extend(cooldown_blockers)
     blockers.extend(str(item) for item in self_heal["blockers"])
     commands = _guarded_autostart_commands(root=root, config=config)
@@ -221,6 +229,7 @@ def run_guarded_autostart(
         "config_path": str(selected_config_path),
         "state_file": str(state_file),
         "lock_file": str(lock_file),
+        "lock_status": lock_status,
         "config": _redacted_autostart_config(config),
         "self_heal": self_heal,
         "commands": commands,
@@ -471,6 +480,116 @@ def _write_lock(path: Path, now: datetime) -> None:
         handle.write("\n")
 
 
+def _guarded_autostart_lock_status(lock_path: Path, *, now: datetime) -> dict[str, Any]:
+    stale_minutes = int(DEFAULT_AUTOSTART_CONFIG["failure_backoff_minutes"])
+    if not lock_path.exists():
+        return {
+            "exists": False,
+            "breakable": False,
+            "stale": False,
+            "reason": "lock_missing",
+            "pid": None,
+            "pid_alive": None,
+            "age_seconds": None,
+            "stale_lock_minutes": stale_minutes,
+            "metadata": {},
+        }
+    metadata = _read_json_object(lock_path)
+    pid = _safe_int(metadata.get("pid"))
+    pid_alive = _pid_alive(pid) if pid > 0 else None
+    created_at = str(metadata.get("created_at") or "").strip()
+    age_seconds = _lock_age_seconds(lock_path, created_at=created_at, now=now)
+    stale_by_dead_pid = pid > 0 and pid_alive is False
+    stale_by_age = (
+        pid_alive is not True
+        and age_seconds is not None
+        and age_seconds >= stale_minutes * 60
+    )
+    stale = bool(stale_by_dead_pid or stale_by_age)
+    reason = "active_lock"
+    if stale_by_dead_pid:
+        reason = "dead_pid"
+    elif stale_by_age:
+        reason = "stale_age"
+    elif not metadata:
+        reason = "unparsed_lock"
+    public_metadata: dict[str, Any] = {}
+    for key in ("pid", "created_at"):
+        if key in metadata:
+            public_metadata[key] = metadata[key]
+    return {
+        "exists": True,
+        "breakable": stale,
+        "stale": stale,
+        "reason": reason,
+        "pid": pid or None,
+        "pid_alive": pid_alive,
+        "age_seconds": age_seconds,
+        "stale_lock_minutes": stale_minutes,
+        "metadata": public_metadata,
+    }
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _lock_age_seconds(lock_path: Path, *, created_at: str, now: datetime) -> float | None:
+    created_epoch = _iso_epoch_seconds(created_at)
+    if created_epoch is None:
+        try:
+            created_epoch = lock_path.stat().st_mtime
+        except OSError:
+            return None
+    return max(0.0, now.timestamp() - created_epoch)
+
+
+def _iso_epoch_seconds(value: str) -> float | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        return _windows_pid_alive(pid)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _windows_pid_alive(pid: int) -> bool:
+    try:
+        import ctypes
+    except ImportError:  # pragma: no cover - ctypes is part of CPython on Windows.
+        return True
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    process_query_limited_information = 0x1000
+    handle = kernel32.OpenProcess(process_query_limited_information, False, int(pid))
+    if handle:
+        kernel32.CloseHandle(handle)
+        return True
+    error = ctypes.get_last_error()
+    if error == 87:  # ERROR_INVALID_PARAMETER: no such process.
+        return False
+    return True
+
+
 def _run_command(command: list[str], cwd: Path) -> dict[str, Any]:
     return _run_command_with_options(command, cwd, timeout_seconds=1800, redactions=())
 
@@ -483,15 +602,13 @@ def _run_command_with_options(
     redactions: tuple[str, ...],
 ) -> dict[str, Any]:
     try:
-        completed = subprocess.run(
+        completed = run_contained_subprocess(
             command,
             cwd=cwd,
-            text=True,
-            capture_output=True,
-            timeout=timeout_seconds,
-            check=False,
+            timeout_seconds=timeout_seconds,
+            timeout_stderr=f"guarded autostart child exceeded timeout_seconds={timeout_seconds}",
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except OSError as exc:
         return {"returncode": 124, "error": type(exc).__name__}
     return {
         "returncode": completed.returncode,
@@ -587,6 +704,7 @@ def _tool_search_roots(root: Path) -> list[Path]:
         root / "tools" / "bin",
         root / "bin",
         root / ".forge_data" / "tools" / "bin",
+        Path.home() / "go" / "bin",
     ]
     for env_name in ("FORGE_CONNECTOR_BIN_DIRS", "FORGE_CONNECTOR_BIN_DIR"):
         for value in str(os.environ.get(env_name, "")).split(os.pathsep):

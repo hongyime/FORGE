@@ -59,6 +59,12 @@ def test_production_compose_uses_repo_root_runtime_build_and_hardened_services()
     assert "postgres:" in compose
     assert "redis:" in compose
     assert "read_only: true" in compose
+    assert 'cpus: "${FORGE_CONTAINER_CPUS:-0.75}"' in compose
+    assert 'mem_limit: "${FORGE_CONTAINER_MEM_LIMIT:-768m}"' in compose
+    assert 'cpus: "${FORGE_POSTGRES_CPUS:-0.50}"' in compose
+    assert 'mem_limit: "${FORGE_POSTGRES_MEM_LIMIT:-512m}"' in compose
+    assert 'cpus: "${FORGE_REDIS_CPUS:-0.25}"' in compose
+    assert 'mem_limit: "${FORGE_REDIS_MEM_LIMIT:-128m}"' in compose
     assert "cap_drop:" in compose
     assert "no-new-privileges:true" in compose
     assert "127.0.0.1:${FORGE_WEB_PORT:-8080}:8080" in compose

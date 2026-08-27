@@ -48,6 +48,27 @@ def test_run_contained_subprocess_returns_completed_process(
     assert captured["command"] == ["forge", "doctor"]
 
 
+def test_run_contained_subprocess_accepts_cwd(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_popen(command: list[str], **kwargs: object) -> _FakeProcess:
+        captured["kwargs"] = kwargs
+        return _FakeProcess(command)
+
+    monkeypatch.setattr(subprocess_tree.subprocess, "Popen", fake_popen)
+
+    result = subprocess_tree.run_contained_subprocess(
+        ["forge", "doctor"],
+        cwd="/tmp/forge",
+        timeout_seconds=3,
+    )
+
+    assert result.returncode == 0
+    assert captured["kwargs"]["cwd"] == "/tmp/forge"
+
+
 def test_run_contained_subprocess_terminates_tree_on_timeout(
     monkeypatch,
 ) -> None:
@@ -73,4 +94,3 @@ def test_run_contained_subprocess_terminates_tree_on_timeout(
     assert result.returncode == 124
     assert result.stdout == "partialstdout"
     assert result.stderr == "child timed out"
-

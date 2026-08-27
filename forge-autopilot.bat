@@ -96,7 +96,11 @@ echo ===========================================================================
 echo   FORGE Autopilot
 echo ============================================================================
 echo   feed_file=%FEED_FILE%
-echo   roe_id=%ROE_ID%
+if "%ROE_ID%"=="" (
+    echo   roe_id_present=no
+) else (
+    echo   roe_id_present=yes
+)
 echo   dry_run=%DRY_RUN% feed_build=%FEED_BUILD%
 echo   start_limit=%START_LIMIT% resume_limit=%RESUME_LIMIT% max_parallel=%MAX_PARALLEL%
 echo.

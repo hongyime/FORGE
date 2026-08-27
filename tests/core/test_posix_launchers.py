@@ -96,3 +96,5 @@ def test_autopilot_posix_launcher_runs_start_resume_monitor_dashboard() -> None:
     assert "monitoring run-due" in text
     assert "dashboard" in text
     assert "--dry-run" in text
+    assert "roe_id_present" in text
+    assert "roe_id=%s" not in text

@@ -341,7 +341,13 @@ With `--apply`, it still refuses live autopilot unless the config contains both
 no guarded-autostart lock exists, and cooldown/backoff windows have expired.
 When allowed, it runs a bounded autopilot dry-run first, then the live autopilot
 command, records state under the Forge data dir, and removes its single-instance
-lock.
+lock. Stale or dead-PID guarded-autostart locks are replaced in apply mode,
+active locks remain blockers, and autopilot child process timeouts use the
+contained process-tree runner. Direct `forge-autopilot` launcher banners only
+print whether an ROE is present, not the ROE value.
+The production Compose file ships with conservative, env-overridable CPU/RAM
+caps for API, web UI, worker, Postgres, and Redis services so Docker startup has
+bounded defaults on small machines.
 
 Minimal local autostart config:
 

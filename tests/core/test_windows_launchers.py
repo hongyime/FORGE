@@ -46,6 +46,8 @@ def test_autopilot_launcher_runs_start_resume_monitor_dashboard() -> None:
     assert "monitoring run-due" in text
     assert "dashboard" in text
     assert "--dry-run" in text
+    assert "roe_id_present" in text
+    assert "echo   roe_id=%roe_id%" not in text
 
 
 def test_powershell_stack_helper_uses_docker_compose_dev_file() -> None:

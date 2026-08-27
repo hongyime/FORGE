@@ -6,6 +6,7 @@ import signal
 import subprocess
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 
 def run_contained_subprocess(
@@ -14,6 +15,7 @@ def run_contained_subprocess(
     timeout_seconds: float,
     timeout_returncode: int = 124,
     timeout_stderr: str | None = None,
+    cwd: str | Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command with captured text output and process-tree timeout cleanup."""
 
@@ -26,6 +28,7 @@ def run_contained_subprocess(
         popen_kwargs["start_new_session"] = True
     proc = subprocess.Popen(  # noqa: S603
         args,
+        cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,

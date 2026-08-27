@@ -52,6 +52,8 @@ x-forge-service: &forge-service
   restart: unless-stopped
   init: true
   user: "1000:1000"
+  cpus: "${FORGE_CONTAINER_CPUS:-0.75}"
+  mem_limit: "${FORGE_CONTAINER_MEM_LIMIT:-768m}"
   read_only: true
   cap_drop:
     - ALL
@@ -71,6 +73,8 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    cpus: "${FORGE_POSTGRES_CPUS:-0.50}"
+    mem_limit: "${FORGE_POSTGRES_MEM_LIMIT:-512m}"
     environment:
       POSTGRES_DB: forge
       POSTGRES_USER: forge
@@ -89,6 +93,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    cpus: "${FORGE_REDIS_CPUS:-0.25}"
+    mem_limit: "${FORGE_REDIS_MEM_LIMIT:-128m}"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
