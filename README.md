@@ -272,6 +272,7 @@ forge connectors install-plan [--json]       # Print missing local binary instal
 forge connectors run-plan [--domain NAME] [--json]  # Print free-first connector run guidance; does not execute commands
 forge connectors run --engagement N --connector projectdiscovery_subfinder|projectdiscovery_httpx|projectdiscovery_katana|projectdiscovery_nuclei --target DOMAIN_OR_URL [--dry-run] [--max-results N]
 forge connectors import-discovery --engagement N --connector shodan_host_lookup|censys_lookup|urlscan_search --report-file REPORT.json [--target DOMAIN]
+forge connectors import-validation --engagement N --connector burp_dast_xml --report-file REPORT.xml [--target URL_PREFIX] [--dry-run] [--limit N] [--json]
 forge connectors import-cti --engagement N --connector abusech_threatfox|abusech_urlhaus|misp_event_import|supabase_table_import|stix_taxii_import --report-file OBSERVATIONS.json|csv|gz|zip [--dry-run] [--limit N] [--since ISO] [--until ISO] [--min-confidence 0.0-1.0] [--max-tlp clear|green|amber|red] [--fail-on-empty] [--promote-targets]
 forge connectors run-identity --engagement N --connector hibp_pwned_passwords [--domain DOMAIN] [--offline-corpus PATH]
 forge connectors run-secrets --engagement N --connector gitleaks_local|trufflehog_local --source-path PATH --domain DOMAIN
@@ -385,6 +386,15 @@ target-specific ROE manifest rather than a global process default.
 as generated latest-run metadata. Its JSON includes the dashboard timestamp,
 source, meaning, and per-sample reasons so old/dry/non-live summaries are not
 confused with current operator defaults.
+
+`forge connectors import-validation` ingests local Burp Suite issue XML or
+JUnit-style DAST XML as scoped active-validation evidence. It is offline only:
+no network request, subprocess, scanner execution, or vulnerability-finding
+write occurs. Use `--dry-run --json` first. Applied imports write sanitized
+`active_validation_jobs` and `active_validation_runs` rows, reject XML
+DOCTYPE/ENTITY payloads, cap XML size, strip sensitive URL query parameters,
+skip out-of-scope URLs, avoid request/response body persistence, and dedupe
+repeated imports by artifact hash plus target/title/proof type.
 
 `forge targets resume-candidates` is read-only. It scans the latest
 `kill_chain` row in each local engagement DB, classifies failed or cancelled

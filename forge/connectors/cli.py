@@ -34,6 +34,10 @@ from forge.connectors.secrets import (
     list_connector_secrets,
     store_connector_secret,
 )
+from forge.connectors.validation_import import (
+    ValidationArtifactImportConfig,
+    import_validation_artifact,
+)
 from forge.db.direct_connect import direct_connect
 from forge.db.migrations import run_migrations
 from forge.db.validation import validate_canonical_schema
@@ -602,6 +606,68 @@ def register_connector_commands(app: typer.Typer) -> None:
             f"seeds={result['persisted_seed_count']} "
             f"urls={result.get('persisted_url_seed_count', 0)} "
             f"crawl={result.get('persisted_crawl_result_count', 0)} "
+            f"skipped={result['skipped_count']}"
+        )
+
+    @app.command("import-validation")
+    def import_validation(
+        engagement: int = typer.Option(..., "--engagement", "-e"),
+        connector: str = typer.Option("burp_dast_xml", "--connector"),
+        report_file: Path = typer.Option(
+            ...,
+            "--report-file",
+            exists=True,
+            dir_okay=False,
+            help="Offline Burp/JUnit XML artifact.",
+        ),
+        target: str = typer.Option("", "--target", help="Optional scoped URL prefix filter."),
+        dry_run: bool = typer.Option(
+            False,
+            "--dry-run",
+            help="Parse and scope-check the XML without writing active-validation evidence.",
+        ),
+        limit: int | None = typer.Option(
+            None,
+            "--limit",
+            min=1,
+            max=10000,
+            help="Maximum number of XML evidence items to process.",
+        ),
+        operator: str = typer.Option("connector-import", "--operator"),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        cfg = ForgeConfig.load()
+        db_path = cfg.engagement_db_path(str(engagement))
+        con = direct_connect(db_path)
+        con.row_factory = sqlite3.Row
+        try:
+            run_migrations(con)
+            validate_canonical_schema(con)
+            result = import_validation_artifact(
+                con,
+                ValidationArtifactImportConfig(
+                    connector_id=connector,
+                    engagement_id=int(engagement),
+                    report_path=report_file,
+                    target=target,
+                    operator=operator,
+                    dry_run=dry_run,
+                    limit=limit,
+                ),
+            )
+        except (FileNotFoundError, LookupError, OSError, ValueError) as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        finally:
+            con.close()
+        if json_output:
+            typer.echo(json.dumps(result, sort_keys=True))
+            return
+        console.print(
+            "[bold]Validation artifact import[/bold] "
+            f"{result['connector_id']} status={result['status']} "
+            f"parsed={result['parsed_count']} "
+            f"runs={result['persisted_run_count']} "
+            f"would_persist={result.get('would_persist_count', 0)} "
             f"skipped={result['skipped_count']}"
         )
 

@@ -91,6 +91,10 @@ def test_connector_registry_reports_free_first_readiness_without_secret_values()
     assert by_id["projectdiscovery_nuclei"]["execution_paths"] == ["forge connectors run"]
     assert by_id["projectdiscovery_nuclei"]["execution_status"] == "wired_operator_path"
     assert "templates_pinned" in by_id["projectdiscovery_nuclei"]["required_gates"]
+    assert by_id["burp_dast_xml"]["readiness"] == "available"
+    assert by_id["burp_dast_xml"]["execution_paths"] == ["forge connectors import-validation"]
+    assert by_id["burp_dast_xml"]["safety"] == "passive_offline"
+    assert "active_validation_runs" in by_id["burp_dast_xml"]["outputs"]
     assert by_id["shodan_host_lookup"]["readiness"] == "configured"
     assert by_id["shodan_host_lookup"]["execution_paths"] == [
         "forge connectors import-discovery"
@@ -515,6 +519,14 @@ def test_connector_run_plan_reports_free_runnable_commands_without_execution() -
             "execution_paths": ["forge connectors import-discovery"],
         },
         {
+            "id": "burp_dast_xml",
+            "domain": "validation",
+            "cost_profile": "free_local",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors import-validation"],
+        },
+        {
             "id": "gitleaks_local",
             "domain": "secrets",
             "cost_profile": "free_local",
@@ -536,10 +548,10 @@ def test_connector_run_plan_reports_free_runnable_commands_without_execution() -
 
     assert plan["schema_version"] == "forge.connector_run_plan.v1"
     assert plan["execution_policy"] == "plan_only_no_commands_executed"
-    assert plan["total_count"] == 8
-    assert plan["selected_count"] == 6
+    assert plan["total_count"] == 9
+    assert plan["selected_count"] == 7
     assert plan["omitted_count"] == 2
-    assert plan["runnable_count"] == 6
+    assert plan["runnable_count"] == 7
     by_id = {item["connector_id"]: item for item in plan["items"]}
     assert by_id["artifact_passive_parsers"]["command_template"] == [
         "forge",
@@ -591,6 +603,21 @@ def test_connector_run_plan_reports_free_runnable_commands_without_execution() -
         "PATH_TO_DISCOVERY_EXPORT",
         "--target",
         "DOMAIN_OR_URL",
+        "--json",
+    ]
+    assert by_id["burp_dast_xml"]["command_template"] == [
+        "forge",
+        "connectors",
+        "import-validation",
+        "--engagement",
+        "N",
+        "--connector",
+        "burp_dast_xml",
+        "--report-file",
+        "PATH_TO_BURP_OR_JUNIT_XML",
+        "--target",
+        "https://DOMAIN_OR_URL/",
+        "--dry-run",
         "--json",
     ]
     assert by_id["gitleaks_local"]["command_template"] == [

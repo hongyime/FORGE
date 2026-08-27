@@ -32,6 +32,7 @@ forge automation feed-build --json
 forge automation feed-build --apply --json
 forge automation self-heal-plan --json
 forge automation guarded-autostart --json
+forge connectors import-validation --engagement N --connector burp_dast_xml --report-file REPORT.xml --dry-run --json
 ```
 
 Optional Supabase live extraction is read-only and uses ignored local config at
@@ -42,6 +43,10 @@ bounded autopilot commands. Use `guarded-autostart` for startup hooks; it stays
 dry-run/read-only by default and only runs bounded autopilot with `--apply` when
 ignored local `imports/autostart.local.json` explicitly has `enabled: true` and
 `apply_enabled: true`.
+
+Burp/JUnit DAST XML import is local evidence intake only. Rehearse with
+`--dry-run --json`; applied imports add scoped active-validation evidence rows
+without running scanners or creating reportable vulnerability findings.
 
 ---
 

@@ -216,6 +216,18 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         execution_paths=("forge connectors run",),
     ),
     ConnectorDefinition(
+        id="burp_dast_xml",
+        label="Burp DAST XML Import",
+        domain="validation",
+        cost_profile="free_local",
+        safety="passive_offline",
+        description="Offline Burp Suite/JUnit XML import as scoped active-validation evidence.",
+        capabilities=("dast_artifact_import", "junit_xml_import", "proof_capture"),
+        outputs=("active_validation_jobs", "active_validation_runs"),
+        input_formats=("burp_issue_xml", "junit_xml"),
+        execution_paths=("forge connectors import-validation",),
+    ),
+    ConnectorDefinition(
         id="projectdiscovery_katana",
         label="ProjectDiscovery Katana",
         domain="discovery",
@@ -906,6 +918,21 @@ def _connector_run_command_template(row: Mapping[str, Any]) -> list[str]:
                 "PATH_TO_DISCOVERY_EXPORT",
                 "--target",
                 "DOMAIN_OR_URL",
+                "--json",
+            ]
+        )
+    elif primary == "forge connectors import-validation":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--connector",
+                connector_id,
+                "--report-file",
+                "PATH_TO_BURP_OR_JUNIT_XML",
+                "--target",
+                "https://DOMAIN_OR_URL/",
+                "--dry-run",
                 "--json",
             ]
         )

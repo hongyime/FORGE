@@ -102,6 +102,7 @@ def test_cli_registry_registers_modular_command_groups() -> None:
         "list",
         "install-plan",
         "plugin-validate",
+        "import-validation",
         "secret-key-plan",
         "secret-set",
         "secret-list",
