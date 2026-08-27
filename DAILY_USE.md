@@ -40,6 +40,7 @@ forge report quality-audit --json
 forge monitoring exposure-metrics --json
 forge remediation review-queue --engagement N --json
 forge connectors import-discovery --engagement N --connector asset_delta_import --report-file assets.json --target DOMAIN --json
+forge connectors import-discovery --engagement N --connector projectdiscovery_cloud --report-file pd-cloud-export.json --target DOMAIN --json
 forge connectors import-validation --engagement N --connector burp_dast_xml --report-file REPORT.xml --dry-run --json
 ```
 

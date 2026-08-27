@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from forge.graph.assets import upsert_asset_entity, upsert_asset_relationship
+from forge.connectors.runner import _nuclei_result_from_line, _persist_nuclei_result
 from forge.opsec.scope_gate import (
     ScopeViolationError,
     assert_in_scope,
@@ -29,6 +30,7 @@ SUPPORTED_DISCOVERY_IMPORT_CONNECTORS = (
     "urlscan_search",
     "asset_delta_import",
     "runzero_asset_export",
+    "projectdiscovery_cloud",
 )
 
 
@@ -85,6 +87,19 @@ def import_discovery_report(
         text = config.report_path.read_text(encoding="utf-8")
     payload = _discovery_document(connector_id, text)
     imported_hosts = _parse_discovery_report(connector_id, payload)
+    imported_findings = (
+        _parse_projectdiscovery_cloud_findings(
+            payload,
+            target_host=target or _first_scope_host(scope),
+        )
+        if connector_id == "projectdiscovery_cloud"
+        else []
+    )
+    parsed_template_count = (
+        _projectdiscovery_cloud_template_count(payload)
+        if connector_id == "projectdiscovery_cloud"
+        else 0
+    )
     provider_source = _provider_source_for_connector(connector_id)
     persisted_hosts = 0
     persisted_services = 0
@@ -93,7 +108,9 @@ def import_discovery_report(
     persisted_crawl_rows = 0
     persisted_graph_nodes = 0
     persisted_graph_relationships = 0
+    persisted_findings = 0
     skipped_urls = 0
+    skipped_findings = 0
     skipped: list[dict[str, str]] = []
     for imported in imported_hosts:
         decision = _scope_decision(imported, scope=scope, target=target)
@@ -171,6 +188,26 @@ def import_discovery_report(
             )
             persisted_urls += 1 if persisted_url["seed_inserted"] else 0
             persisted_crawl_rows += 1 if persisted_url["crawl_inserted"] else 0
+    for finding in imported_findings:
+        target_url = str(finding.get("target_url") or "")
+        try:
+            assert_url_in_scope(target_url, scope)
+        except ScopeViolationError:
+            skipped_findings += 1
+            continue
+        if target and not _url_matches_target(target_url, target):
+            skipped_findings += 1
+            continue
+        standards = dict(finding.get("standards") or {})
+        standards["source"] = "projectdiscovery_cloud"
+        standards["connector_id"] = "projectdiscovery_cloud"
+        if _persist_nuclei_result(
+            con,
+            engagement_id,
+            {**finding, "standards": standards},
+            target=target or provider_url_hostname(target_url),
+        ):
+            persisted_findings += 1
     result = {
         "connector_id": connector_id,
         "engagement_id": engagement_id,
@@ -185,6 +222,10 @@ def import_discovery_report(
         "persisted_crawl_result_count": persisted_crawl_rows,
         "persisted_graph_node_count": persisted_graph_nodes,
         "persisted_graph_relationship_count": persisted_graph_relationships,
+        "parsed_finding_count": len(imported_findings),
+        "persisted_finding_count": persisted_findings,
+        "skipped_finding_count": skipped_findings,
+        "parsed_template_count": parsed_template_count,
         "skipped_count": len(skipped),
         "skipped_url_count": skipped_urls,
         "skipped": skipped[:25],
@@ -206,6 +247,8 @@ def _parse_discovery_report(connector_id: str, payload: Any) -> list[_ImportedHo
         return _parse_urlscan_report(payload)
     if connector_id in {"asset_delta_import", "runzero_asset_export"}:
         return _parse_asset_delta_report(payload, connector_id=connector_id)
+    if connector_id == "projectdiscovery_cloud":
+        return _parse_asset_delta_report(payload, connector_id=connector_id)
     return []
 
 
@@ -220,6 +263,8 @@ def _provider_source_for_connector(connector_id: str) -> str:
         return "runzero"
     if connector_id == "asset_delta_import":
         return "asset_delta"
+    if connector_id == "projectdiscovery_cloud":
+        return "projectdiscovery_cloud"
     return connector_id
 
 
@@ -375,7 +420,12 @@ def _parse_asset_delta_report(payload: Any, *, connector_id: str) -> list[_Impor
             for service in (_asset_delta_service(row) for row in services_payload)
             if service is not None
         )
-        provider = "runzero" if connector_id == "runzero_asset_export" else "asset_delta"
+        if connector_id == "runzero_asset_export":
+            provider = "runzero"
+        elif connector_id == "projectdiscovery_cloud":
+            provider = "projectdiscovery_cloud"
+        else:
+            provider = "asset_delta"
         fingerprints = _fingerprint_payload(item)
         topology = _topology_payload(item)
         metadata = _bounded_mapping(
@@ -482,6 +532,148 @@ def _report_items(payload: Any) -> list[Any]:
     if payload.get("ip") or payload.get("ip_str"):
         return [payload]
     return []
+
+
+def _parse_projectdiscovery_cloud_findings(
+    payload: Any,
+    *,
+    target_host: str,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for row in _projectdiscovery_cloud_finding_rows(payload):
+        normalized = _projectdiscovery_cloud_nuclei_row(row)
+        if not normalized:
+            continue
+        item = _nuclei_result_from_line(json.dumps(normalized), target_host=target_host)
+        if not item:
+            continue
+        key = (
+            str(item.get("target_url") or ""),
+            str(item.get("template_id") or ""),
+            str(item.get("matcher_name") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(item)
+    return results
+
+
+def _projectdiscovery_cloud_finding_rows(payload: Any) -> list[Mapping[str, Any]]:
+    rows: list[Mapping[str, Any]] = []
+    if isinstance(payload, list):
+        candidates = payload
+    elif isinstance(payload, Mapping):
+        candidates = []
+        for key in ("findings", "vulnerabilities", "issues", "results", "data"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                candidates.extend(value)
+        scans = payload.get("scans")
+        if isinstance(scans, list):
+            for scan in scans:
+                if not isinstance(scan, Mapping):
+                    continue
+                for key in ("findings", "vulnerabilities", "issues", "results"):
+                    value = scan.get(key)
+                    if isinstance(value, list):
+                        candidates.extend(value)
+        if _looks_like_projectdiscovery_finding(payload):
+            candidates.append(payload)
+    else:
+        candidates = []
+    for candidate in candidates:
+        if isinstance(candidate, Mapping) and _looks_like_projectdiscovery_finding(candidate):
+            rows.append(candidate)
+    return rows
+
+
+def _looks_like_projectdiscovery_finding(row: Mapping[str, Any]) -> bool:
+    template_ref = _field(
+        row,
+        "template-id",
+        "template_id",
+        "templateID",
+        "template",
+        "template_name",
+    )
+    info = row.get("info")
+    has_info = isinstance(info, Mapping) and bool(info.get("name") or info.get("severity"))
+    return bool(template_ref and (_projectdiscovery_finding_url(row) or has_info))
+
+
+def _projectdiscovery_cloud_nuclei_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    template_id = _field(
+        row,
+        "template-id",
+        "template_id",
+        "templateID",
+        "template",
+        "template_name",
+    )
+    matched_at = _projectdiscovery_finding_url(row)
+    if not template_id or not matched_at:
+        return {}
+    info = row.get("info") if isinstance(row.get("info"), Mapping) else {}
+    classification = row.get("classification")
+    if not isinstance(classification, Mapping):
+        classification = info.get("classification") if isinstance(info, Mapping) else {}
+    tags = row.get("tags")
+    if not tags and isinstance(info, Mapping):
+        tags = info.get("tags")
+    references = row.get("reference")
+    if not references and isinstance(info, Mapping):
+        references = info.get("reference")
+    normalized_info = {
+        "name": _field(row, "name", "title") or _field(info, "name"),
+        "severity": _field(row, "severity") or _field(info, "severity"),
+        "description": _field(row, "description") or _field(info, "description"),
+        "tags": tags,
+        "reference": references,
+    }
+    if isinstance(classification, Mapping):
+        normalized_info["classification"] = dict(classification)
+    return {
+        "template-id": template_id,
+        "matched-at": matched_at,
+        "matcher-name": _field(row, "matcher-name", "matcher_name", "matcher"),
+        "type": _field(row, "type", "protocol"),
+        "template-url": _field(row, "template-url", "template_url"),
+        "template-path": _field(row, "template-path", "template_path"),
+        "info": {key: value for key, value in normalized_info.items() if value not in ("", [], {})},
+    }
+
+
+def _projectdiscovery_finding_url(row: Mapping[str, Any]) -> str:
+    for key in ("matched-at", "matched_at", "url", "target", "host", "asset"):
+        value = row.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    for parent_key in ("asset", "request", "response", "metadata"):
+        parent = row.get(parent_key)
+        if isinstance(parent, Mapping):
+            for key in ("url", "endpoint", "host", "name"):
+                value = parent.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+    return ""
+
+
+def _projectdiscovery_cloud_template_count(payload: Any) -> int:
+    if not isinstance(payload, Mapping):
+        return 0
+    templates = payload.get("templates")
+    if isinstance(templates, list):
+        return len([item for item in templates if item])
+    counts = payload.get("template_counts") or payload.get("templates_summary")
+    if isinstance(counts, Mapping):
+        total = counts.get("total") or counts.get("count")
+        try:
+            return max(0, int(total))
+        except (TypeError, ValueError):
+            return 0
+    return 0
 
 
 def _discovery_document(connector_id: str, text: str) -> Any:
@@ -829,8 +1021,11 @@ def _audit_discovery_import(
         f"seeds={int(result.get('persisted_seed_count') or 0)}",
         f"urls={int(result.get('persisted_url_seed_count') or 0)}",
         f"crawl={int(result.get('persisted_crawl_result_count') or 0)}",
+        f"findings={int(result.get('persisted_finding_count') or 0)}",
+        f"templates={int(result.get('parsed_template_count') or 0)}",
         f"skipped={int(result.get('skipped_count') or 0)}",
         f"url_skipped={int(result.get('skipped_url_count') or 0)}",
+        f"finding_skipped={int(result.get('skipped_finding_count') or 0)}",
     ]
     con.execute(
         """
@@ -988,10 +1183,23 @@ def _normalize_target(value: object) -> str:
     return str(value or "").strip().lower().strip(".")
 
 
+def _first_scope_host(scope: list[str]) -> str:
+    for entry in scope:
+        normalized = _normalize_target(entry).lstrip("*.")
+        if normalized:
+            return normalized
+    return ""
+
+
 def _name_matches_target(name: str, target: str) -> bool:
     normalized_name = _normalize_target(name)
     normalized_target = _normalize_target(target)
     return normalized_name == normalized_target or normalized_name.endswith(f".{normalized_target}")
+
+
+def _url_matches_target(url: str, target: str) -> bool:
+    host = provider_url_hostname(url)
+    return _name_matches_target(host, target) if host else False
 
 
 def _bounded_mapping(values: Mapping[str, Any]) -> dict[str, Any]:

@@ -95,6 +95,12 @@ def test_connector_registry_reports_free_first_readiness_without_secret_values()
     assert by_id["burp_dast_xml"]["execution_paths"] == ["forge connectors import-validation"]
     assert by_id["burp_dast_xml"]["safety"] == "passive_offline"
     assert "active_validation_runs" in by_id["burp_dast_xml"]["outputs"]
+    assert by_id["projectdiscovery_cloud"]["readiness"] == "available"
+    assert by_id["projectdiscovery_cloud"]["execution_paths"] == [
+        "forge connectors import-discovery"
+    ]
+    assert by_id["projectdiscovery_cloud"]["safety"] == "passive_offline"
+    assert "vulnerability_findings" in by_id["projectdiscovery_cloud"]["outputs"]
     assert by_id["shodan_host_lookup"]["readiness"] == "configured"
     assert by_id["shodan_host_lookup"]["execution_paths"] == [
         "forge connectors import-discovery"

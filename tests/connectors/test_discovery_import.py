@@ -432,6 +432,99 @@ def test_runzero_asset_export_import_accepts_csv_without_provider_key(tmp_path: 
     assert tuple(service) == (22, "tcp", "ssh", "9.6")
 
 
+def test_projectdiscovery_cloud_export_imports_assets_findings_and_templates(
+    tmp_path: Path,
+) -> None:
+    con = _build_discovery_db(tmp_path / "engagement.db")
+    report = {
+        "assets": [
+            {
+                "id": "pd-asset-1",
+                "ip": "198.51.100.82",
+                "hostnames": ["edge.acme.example"],
+                "services": [{"port": 443, "protocol": "tcp", "service_name": "https"}],
+                "fingerprints": {"http": {"server": "nginx"}},
+            }
+        ],
+        "findings": [
+            {
+                "template_id": "cve-2026-demo",
+                "matched_at": "https://edge.acme.example/admin?token=secret-never-store",
+                "matcher_name": "status-200",
+                "severity": "high",
+                "name": "Demo exposed panel",
+                "description": "CVE-2026-9999 demo exposure",
+                "classification": {"cve-id": ["CVE-2026-9999"], "cwe-id": ["CWE-200"]},
+            },
+            {
+                "template_id": "outside-demo",
+                "matched_at": "https://outside.example/admin",
+                "severity": "high",
+                "name": "Outside scope",
+            },
+        ],
+        "templates": [{"id": "cve-2026-demo"}, {"id": "outside-demo"}],
+    }
+
+    try:
+        result = import_discovery_report(
+            con,
+            DiscoveryReportImportConfig(
+                connector_id="projectdiscovery_cloud",
+                engagement_id=1001,
+                target="acme.example",
+            ),
+            report_text=json.dumps(report),
+        )
+        finding = con.execute(
+            """
+            SELECT target_url, parameter, severity, title, evidence, cve_id, standards_json
+            FROM vulnerability_findings
+            WHERE engagement_id=1001
+            """
+        ).fetchone()
+        host_context = json.loads(
+            con.execute(
+                "SELECT host_context FROM hosts WHERE engagement_id=1001"
+            ).fetchone()["host_context"]
+        )
+        audit = con.execute(
+            """
+            SELECT module, action, result
+            FROM audit_log
+            WHERE engagement_id=1001 AND phase='connectors'
+            """
+        ).fetchone()
+    finally:
+        con.close()
+
+    blob = json.dumps(
+        {"result": result, "finding": dict(finding), "audit": dict(audit)},
+        sort_keys=True,
+    )
+    standards = json.loads(finding["standards_json"])
+    assert result["connector_id"] == "projectdiscovery_cloud"
+    assert result["parsed_count"] == 1
+    assert result["persisted_host_count"] == 1
+    assert result["persisted_service_count"] == 1
+    assert result["parsed_finding_count"] == 2
+    assert result["persisted_finding_count"] == 1
+    assert result["skipped_finding_count"] == 1
+    assert result["parsed_template_count"] == 2
+    assert host_context["provider"] == "projectdiscovery_cloud"
+    assert finding["target_url"] == "https://edge.acme.example/admin"
+    assert finding["parameter"] == "cve-2026-demo"
+    assert finding["severity"] == "HIGH"
+    assert finding["cve_id"] == "CVE-2026-9999"
+    assert standards["connector_id"] == "projectdiscovery_cloud"
+    assert audit["module"] == "projectdiscovery_cloud"
+    assert audit["action"] == "discovery_report_import"
+    assert "findings=1" in audit["result"]
+    assert "templates=2" in audit["result"]
+    assert "secret-never-store" not in blob
+    assert "outside.example" not in blob
+
+
 def test_connector_cli_import_discovery_invokes_importer_with_config(
     tmp_path: Path,
     monkeypatch,

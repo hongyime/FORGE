@@ -216,6 +216,27 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         execution_paths=("forge connectors run",),
     ),
     ConnectorDefinition(
+        id="projectdiscovery_cloud",
+        label="ProjectDiscovery Cloud Export Import",
+        domain="discovery",
+        cost_profile="free_local",
+        safety="passive_offline",
+        description=(
+            "Offline ProjectDiscovery Cloud asset/finding/template export import; "
+            "live cloud sync remains operator-keyed and is not required for the baseline."
+        ),
+        capabilities=(
+            "cloud_export_import",
+            "asset_inventory_import",
+            "nuclei_finding_import",
+            "template_inventory",
+            "provider_provenance",
+        ),
+        outputs=("hosts", "services", "engagement_seeds", "asset_graph", "vulnerability_findings"),
+        input_formats=("projectdiscovery_cloud_json",),
+        execution_paths=("forge connectors import-discovery",),
+    ),
+    ConnectorDefinition(
         id="burp_dast_xml",
         label="Burp DAST XML Import",
         domain="validation",
