@@ -327,8 +327,10 @@ vars or a Forge connector-secret reference, never in committed files:
 Docker/startup autopilot. It reports resource guardrails, Docker compose
 readiness, resume-lock paths, packaged Go tool availability, and exact
 dry-run/apply command arrays without installing services or starting live work.
-Use `--probe-docker` only when a read-only `docker compose ps` check is
-intended. Auto-start remains fail-closed: live work requires an explicit ROE,
+Use `--probe-docker` only when a read-only `docker compose ps --format json`
+check is intended; the probe summarizes container state/health and blocks
+startup when Compose reports unhealthy, starting, exited, dead, or paused
+services. Auto-start remains fail-closed: live work requires an explicit ROE,
 resource thresholds, a single-instance lock, and the normal scoped feed/import
 gates.
 
@@ -343,8 +345,10 @@ When allowed, it runs a bounded autopilot dry-run first, then the live autopilot
 command, records state under the Forge data dir, and removes its single-instance
 lock. Stale or dead-PID guarded-autostart locks are replaced in apply mode,
 active locks remain blockers, and autopilot child process timeouts use the
-contained process-tree runner. Direct `forge-autopilot` launcher banners only
-print whether an ROE is present, not the ROE value.
+contained process-tree runner. Apply-mode runs append a bounded redacted JSONL
+history at `FORGE_DATA_DIR/automation/guarded-autostart.jsonl`; dry-run remains
+non-mutating. Direct `forge-autopilot` launcher banners only print whether an
+ROE is present, not the ROE value.
 The production Compose file ships with conservative, env-overridable CPU/RAM
 caps for API, web UI, worker, Postgres, and Redis services so Docker startup has
 bounded defaults on small machines.
@@ -364,7 +368,8 @@ Minimal local autostart config:
   "start_limit": 2,
   "max_runtime_minutes": 10,
   "cooldown_minutes": 60,
-  "failure_backoff_minutes": 120
+  "failure_backoff_minutes": 120,
+  "log_max_entries": 25
 }
 ```
 

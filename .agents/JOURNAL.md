@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-08-28: B666 made startup automation more self-healing without changing dry-run semantics: Docker JSON health is checked read-only, unhealthy containers block startup, and apply-mode guarded autostart writes bounded redacted history.
 - 2026-08-28: B665 implemented ProjectDiscovery Cloud as a no-key offline export importer first; live ProjectDiscovery Cloud API sync remains plan-only/keyed while local assets, nuclei-style findings, template counts, and provenance are now ingestible.
 - 2026-08-28: B664 kept OpenRouter discovery free-first by requiring model-list proof of a zero-price/free model unless `FORGE_ALLOW_PAID_BACKENDS=1`; unknown or paid-only model lists now skip OpenRouter instead of using a paid fallback.
 - 2026-08-20: Disabled the local scheduled FORGE target-import task on request and chose a safe CTI/OSINT integration path: passive/catalog-only providers plus normalized observations, provenance, redaction, budgets, and no third-party command execution.

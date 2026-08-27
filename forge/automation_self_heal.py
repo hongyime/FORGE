@@ -47,6 +47,7 @@ DEFAULT_AUTOSTART_CONFIG: dict[str, Any] = {
     "max_runtime_minutes": 10,
     "cooldown_minutes": 60,
     "failure_backoff_minutes": 120,
+    "log_max_entries": 25,
 }
 
 
@@ -108,6 +109,8 @@ def automation_self_heal_plan(
             "-f",
             str(root / "docker" / "docker-compose.dev.yml"),
             "ps",
+            "--format",
+            "json",
         ],
     }
     startup_policy = {
@@ -174,6 +177,7 @@ def run_guarded_autostart(
     config, config_errors = _load_autostart_config(selected_config_path)
     state_dir = Path(cfg_data_dir) / "automation"
     state_file = state_dir / "guarded-autostart-state.json"
+    log_file = state_dir / "guarded-autostart.jsonl"
     lock_file = state_dir / "guarded-autostart.lock"
     now = datetime.now(timezone.utc)
     state = _read_json_object(state_file)
@@ -228,6 +232,7 @@ def run_guarded_autostart(
         "mode": mode,
         "config_path": str(selected_config_path),
         "state_file": str(state_file),
+        "log_file": str(log_file),
         "lock_file": str(lock_file),
         "lock_status": lock_status,
         "config": _redacted_autostart_config(config),
@@ -241,6 +246,13 @@ def run_guarded_autostart(
         "omitted_count": len(commands),
     }
     if blockers or not apply:
+        if apply:
+            _append_autostart_log(
+                log_file,
+                result,
+                max_entries=int(config["log_max_entries"]),
+                redactions=sensitive_values,
+            )
         return result
 
     state_dir.mkdir(parents=True, exist_ok=True)
@@ -249,6 +261,12 @@ def run_guarded_autostart(
     except FileExistsError:
         result["blockers"].append("guarded_autostart_lock_exists")
         result["status"] = "blocked"
+        _append_autostart_log(
+            log_file,
+            result,
+            max_entries=int(config["log_max_entries"]),
+            redactions=sensitive_values,
+        )
         return result
     try:
         timeout_seconds = int(config["max_runtime_minutes"]) * 60 + 120
@@ -284,6 +302,12 @@ def run_guarded_autostart(
         )
         result["selected_count"] = len(result["runs"])
         result["omitted_count"] = max(0, len(commands) - len(result["runs"]))
+        _append_autostart_log(
+            log_file,
+            result,
+            max_entries=int(config["log_max_entries"]),
+            redactions=sensitive_values,
+        )
         return result
     finally:
         try:
@@ -321,6 +345,7 @@ def _validate_autostart_config(config: dict[str, Any]) -> list[str]:
         "max_runtime_minutes": (1, 60),
         "cooldown_minutes": (0, 1440),
         "failure_backoff_minutes": (0, 2880),
+        "log_max_entries": (1, 500),
     }
     for key, (minimum, maximum) in numeric_ranges.items():
         try:
@@ -470,6 +495,71 @@ def _write_autostart_state(path: Path, payload: dict[str, Any]) -> None:
         except OSError:
             pass
         raise
+
+
+def _append_autostart_log(
+    path: Path,
+    result: dict[str, Any],
+    *,
+    max_entries: int,
+    redactions: tuple[str, ...],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entries: list[dict[str, Any]] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                parsed = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(parsed, dict):
+                entries.append(parsed)
+    except OSError:
+        entries = []
+    entries.append(_autostart_log_entry(result, redactions=redactions))
+    entries = entries[-max(1, int(max_entries)) :]
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=".guarded-autostart-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            for entry in entries:
+                handle.write(json.dumps(entry, sort_keys=True))
+                handle.write("\n")
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+
+
+def _autostart_log_entry(result: dict[str, Any], *, redactions: tuple[str, ...]) -> dict[str, Any]:
+    runs = []
+    for run in result.get("runs") or []:
+        if not isinstance(run, dict):
+            continue
+        runs.append(
+            {
+                "id": str(run.get("id") or ""),
+                "returncode": run.get("returncode"),
+                "stdout_tail": _bounded_log_text(run.get("stdout_tail"), redactions=redactions),
+                "stderr_tail": _bounded_log_text(run.get("stderr_tail"), redactions=redactions),
+            }
+        )
+    return {
+        "schema_version": "forge.automation_guarded_autostart_log.v1",
+        "recorded_at": _iso(datetime.now(timezone.utc)),
+        "mode": str(result.get("mode") or ""),
+        "status": str(result.get("status") or ""),
+        "blockers": [str(item) for item in (result.get("blockers") or [])[:25]],
+        "runs": runs[:5],
+        "selected_count": int(result.get("selected_count") or 0),
+        "omitted_count": int(result.get("omitted_count") or 0),
+    }
+
+
+def _bounded_log_text(value: object, *, redactions: tuple[str, ...]) -> str:
+    return _redact_command_text(str(value or ""), redactions)[-1000:]
 
 
 def _write_lock(path: Path, now: datetime) -> None:
@@ -737,7 +827,7 @@ def _docker_status(root: Path, *, probe: bool) -> dict[str, Any]:
         }
     try:
         completed = subprocess.run(
-            ["docker", "compose", "-f", str(compose_file), "ps"],
+            ["docker", "compose", "-f", str(compose_file), "ps", "--format", "json"],
             cwd=root,
             text=True,
             capture_output=True,
@@ -746,12 +836,71 @@ def _docker_status(root: Path, *, probe: bool) -> dict[str, Any]:
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {"ok": False, "probed": True, "reason": type(exc).__name__}
+    containers = _docker_ps_containers(completed.stdout)
+    unhealthy = [
+        row
+        for row in containers
+        if str(row.get("health") or "").lower() in {"unhealthy", "starting"}
+        or str(row.get("state") or "").lower() in {"exited", "dead", "paused"}
+    ]
+    ok = completed.returncode == 0 and not unhealthy
+    if completed.returncode != 0:
+        reason = "docker_compose_ps_failed"
+    elif unhealthy:
+        reason = "docker_compose_unhealthy"
+    else:
+        reason = "docker_compose_ps_ok"
     return {
-        "ok": completed.returncode == 0,
+        "ok": ok,
         "probed": True,
         "returncode": completed.returncode,
-        "reason": "docker_compose_ps_ok" if completed.returncode == 0 else "docker_compose_ps_failed",
+        "reason": reason,
+        "container_count": len(containers),
+        "unhealthy_count": len(unhealthy),
+        "containers": containers[:25],
     }
+
+
+def _docker_ps_containers(stdout: str) -> list[dict[str, Any]]:
+    text = str(stdout or "").strip()
+    if not text:
+        return []
+    parsed_rows: list[Any] = []
+    try:
+        payload = json.loads(text)
+        parsed_rows = payload if isinstance(payload, list) else [payload]
+    except ValueError:
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                parsed_rows.append(json.loads(line))
+            except ValueError:
+                continue
+    containers: list[dict[str, Any]] = []
+    for row in parsed_rows:
+        if not isinstance(row, dict):
+            continue
+        name = row.get("Name") or row.get("name")
+        service = row.get("Service") or row.get("service")
+        state = row.get("State") or row.get("state")
+        health = row.get("Health") or row.get("health")
+        exit_code = row.get("ExitCode") or row.get("exit_code")
+        containers.append(
+            {
+                "name": _bounded_docker_text(name, 120),
+                "service": _bounded_docker_text(service, 80),
+                "state": _bounded_docker_text(state, 40),
+                "health": _bounded_docker_text(health, 40),
+                "exit_code": _bounded_docker_text(exit_code, 20),
+            }
+        )
+    return containers
+
+
+def _bounded_docker_text(value: object, limit: int) -> str:
+    return " ".join(str(value or "").replace("\r", " ").replace("\n", " ").split())[:limit]
 
 
 def _blockers(

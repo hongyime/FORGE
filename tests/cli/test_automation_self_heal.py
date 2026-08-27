@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import typer
@@ -37,6 +38,61 @@ def test_self_heal_plan_is_plan_only_and_skips_docker_probe_by_default(tmp_path:
         "reason": "compose_file_present_probe_skipped",
     }
     assert payload["commands"]["autopilot_dry_run"][1:3] == ["--dry-run", "--feed-build"]
+
+
+def test_self_heal_plan_probe_reports_unhealthy_docker_services(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    compose = tmp_path / "docker" / "docker-compose.dev.yml"
+    compose.parent.mkdir(parents=True)
+    compose.write_text("services: {}\n", encoding="utf-8")
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "gopls", "binary": "gopls.exe", "size_bytes": 1, "role": "developer"},),
+    )
+
+    def _run(*_args, **_kwargs):
+        stdout = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "Name": "forge-api-1",
+                        "Service": "api",
+                        "State": "running",
+                        "Health": "healthy",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "Name": "forge-worker-1",
+                        "Service": "worker",
+                        "State": "running",
+                        "Health": "unhealthy",
+                    }
+                ),
+            ]
+        )
+        return subprocess.CompletedProcess(["docker"], 0, stdout, "")
+
+    monkeypatch.setattr("forge.automation_self_heal.subprocess.run", _run)
+
+    payload = automation_self_heal_plan(
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+        min_free_memory_mb=1,
+        min_free_disk_gb=1,
+        probe_docker=True,
+    )
+
+    assert payload["status"] == "blocked"
+    assert payload["docker_status"]["reason"] == "docker_compose_unhealthy"
+    assert payload["docker_status"]["container_count"] == 2
+    assert payload["docker_status"]["unhealthy_count"] == 1
+    assert payload["docker_status"]["containers"][1]["service"] == "worker"
+    assert "docker_compose_unhealthy" in payload["blockers"]
+    assert payload["commands"]["docker_status"][-2:] == ["--format", "json"]
 
 
 def test_self_heal_plan_finds_packaged_go_tools(tmp_path: Path, monkeypatch) -> None:
@@ -479,6 +535,75 @@ def test_guarded_autostart_apply_runs_dry_run_then_live_and_writes_state(
     assert not Path(payload["lock_file"]).exists()
     state = json.loads(Path(payload["state_file"]).read_text(encoding="utf-8"))
     assert state["last_status"] == "completed"
+
+
+def test_guarded_autostart_apply_writes_bounded_redacted_log(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": True,
+                "cooldown_minutes": 0,
+                "failure_backoff_minutes": 0,
+                "log_max_entries": 2,
+            }
+        ),
+        encoding="utf-8",
+    )
+    data_dir = tmp_path / "data"
+    log_file = data_dir / "automation" / "guarded-autostart.jsonl"
+    log_file.parent.mkdir(parents=True)
+    log_file.write_text(
+        "\n".join(
+            [
+                json.dumps({"status": "oldest"}),
+                json.dumps({"status": "previous"}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_ROE_ID", "ROE-TEST-SECRET")
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "gopls", "binary": "gopls.exe", "size_bytes": 1, "role": "developer"},),
+    )
+    monkeypatch.setattr(
+        "forge.automation_self_heal._docker_status",
+        lambda _root, *, probe: {
+            "ok": True,
+            "probed": probe,
+            "reason": "docker_compose_ps_ok",
+        },
+    )
+
+    def _runner(command: list[str], _cwd: Path) -> dict:
+        stdout = "dry-run ok" if "--dry-run" in command else "live ok ROE-TEST-SECRET"
+        return {"returncode": 0, "stdout_tail": stdout, "stderr_tail": ""}
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=data_dir,
+        apply=True,
+        command_runner=_runner,
+    )
+
+    rows = [json.loads(line) for line in log_file.read_text(encoding="utf-8").splitlines()]
+    blob = json.dumps(rows, sort_keys=True)
+    assert payload["status"] == "completed"
+    assert payload["log_file"] == str(log_file)
+    assert [row["status"] for row in rows] == ["previous", "completed"]
+    assert rows[-1]["schema_version"] == "forge.automation_guarded_autostart_log.v1"
+    assert rows[-1]["selected_count"] == 2
+    assert "ROE-TEST-SECRET" not in blob
+    assert "[REDACTED]" in blob
 
 
 def test_guarded_autostart_cli_json() -> None:

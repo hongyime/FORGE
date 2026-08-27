@@ -53,7 +53,10 @@ dry-run/read-only by default and only runs bounded autopilot with `--apply` when
 ignored local `imports/autostart.local.json` explicitly has `enabled: true` and
 `apply_enabled: true`. Stale or dead-PID guarded-autostart locks are replaced
 in apply mode, active locks block, launcher banners hide ROE values, and the
-production Compose file includes conservative CPU/RAM caps.
+production Compose file includes conservative CPU/RAM caps. Apply-mode
+guarded-autostart writes a bounded redacted JSONL history under the Forge data
+dir; dry-run remains non-mutating. Docker probes summarize container
+state/health and block unhealthy startup.
 
 Burp/JUnit DAST XML import is local evidence intake only. Rehearse with
 `--dry-run --json`; applied imports add scoped active-validation evidence rows
