@@ -9,13 +9,31 @@ Single-page operator cheatsheet.
 | Windows | macOS/Linux | Action |
 |---|---|---|
 | `start_toolkit.bat` | `./start_toolkit.sh` | Top menu (recommended) |
-| `forge-autopilot.bat` | `./forge-autopilot.sh` | Import target feed, start new targets, resume backlog, run monitoring, refresh dashboard |
+| `forge-autopilot.bat` | `./forge-autopilot.sh` | Build/import target feed, start new targets, resume backlog, run monitoring, refresh dashboard |
 | `forge-kill-chain.bat` | `./forge-kill-chain.sh` | Interactive kill-chain (prompts for every option) |
 | `forge-menu.bat` | `./forge-menu.sh` | Direct TUI |
 | `forge-status.bat` | `./forge-status.sh` | Health check |
 | `forge-report.bat` | `./forge-report.sh` | Regenerate report on existing engagement |
 
 All launcher files set `FORGE_NO_TOR=1` (skips Tor bootstrap — 10× speedup).
+
+Autopilot order is feed-build -> target import/start -> resume backlog ->
+monitoring -> dashboard. Rehearse the full non-mutating loop with:
+
+```text
+forge-autopilot.bat --dry-run --feed-build
+```
+
+Use `--skip-feed-build` to keep the older behavior of consuming only an existing
+`imports/target-feed.json`. Build the feed directly with:
+
+```text
+forge automation feed-build --json
+forge automation feed-build --apply --json
+```
+
+Optional Supabase live extraction is read-only and uses ignored local config at
+`imports/supabase-projects.local.json`; put keys in env vars named by `key_env`.
 
 ---
 

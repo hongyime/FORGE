@@ -148,3 +148,6 @@
 - 2026-08-21: B652 keeps resume-run sequential by default but adds bounded `--max-parallel` execution with one batch lock and serialized ledger writes; public third-party resume candidates remain dry-run/planned from this chat.
 - 2026-08-21: B653 adds `forge-autopilot` launchers as the daily all-in-one operator path: optional target-feed import/start, parallel resume, due monitoring, and dashboard refresh with a dry-run rehearsal mode.
 - 2026-08-21 22:36:37 +08:00 [PRAWN-E14/codex/session-start] branch=main head=efec6db dirty=0
+- 2026-08-22 08:38:33 +08:00 [PRAWN-E14/codex/session-start] branch=main head=8671f8d dirty=0
+- 2026-08-27: Created a PostPlan HTML plan for the free-first FORGE autonomous hardening backlog at https://nepckuwxuhgp.postplan.dev; primary implementation track excludes paid/API-key-required dependencies by default and treats the pasted OpenRouter key as exposed, omitted secret material.
+- 2026-08-27: B654 adds the autonomous target-feed builder and autopilot feed-build phase: local artifacts and optional read-only Supabase table selects merge into `target-feed.v1` with canonical dedupe, per-source-group provenance, dry-run defaults, local-only Supabase config, and no committed keys or live actions during verification.

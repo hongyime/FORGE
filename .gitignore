@@ -33,6 +33,8 @@ htmlcov/
 
 # Generated outputs
 reports/
+imports/target-feed.json
+imports/supabase-projects.local.json
 chunks/
 downloads/
 archive/

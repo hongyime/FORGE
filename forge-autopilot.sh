@@ -24,6 +24,7 @@ RESUME_LIMIT=100
 MAX_PARALLEL=6
 MONITOR_LIMIT=50
 DRY_RUN=0
+FEED_BUILD=1
 SKIP_IMPORT=0
 SKIP_RESUME=0
 SKIP_MONITORING=0
@@ -33,6 +34,7 @@ usage() {
     printf 'Usage:\n'
     printf '  ./forge-autopilot.sh [--dry-run] [--feed-file PATH] [--roe-id ROE-ID]\n'
     printf '                       [--limit N] [--start-limit N] [--max-parallel N]\n'
+    printf '                       [--feed-build] [--skip-feed-build]\n'
     printf '                       [--skip-import] [--skip-resume]\n'
     printf '                       [--skip-monitoring] [--skip-dashboard]\n'
 }
@@ -40,6 +42,8 @@ usage() {
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=1; shift ;;
+        --feed-build) FEED_BUILD=1; shift ;;
+        --skip-feed-build) FEED_BUILD=0; shift ;;
         --skip-import) SKIP_IMPORT=1; shift ;;
         --skip-resume) SKIP_RESUME=1; shift ;;
         --skip-monitoring) SKIP_MONITORING=1; shift ;;
@@ -65,8 +69,17 @@ printf '  FORGE Autopilot\n'
 printf '============================================================================\n'
 printf '  feed_file=%s\n' "$FEED_FILE"
 printf '  roe_id=%s\n' "$ROE_ID"
-printf '  dry_run=%s\n' "$DRY_RUN"
+printf '  dry_run=%s feed_build=%s\n' "$DRY_RUN" "$FEED_BUILD"
 printf '  start_limit=%s resume_limit=%s max_parallel=%s\n\n' "$START_LIMIT" "$RESUME_LIMIT" "$MAX_PARALLEL"
+
+if [ "$FEED_BUILD" -eq 1 ]; then
+    printf '[FEED] building target feed...\n'
+    set -- automation feed-build --output "$FEED_FILE" --json
+    if [ "$DRY_RUN" -ne 1 ]; then
+        set -- "$@" --apply
+    fi
+    "$VENV_PYTHON" -m forge.cli "$@" || EXIT_CODE=$?
+fi
 
 if [ "$SKIP_IMPORT" -ne 1 ]; then
     if [ ! -f "$FEED_FILE" ]; then

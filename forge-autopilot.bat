@@ -2,8 +2,9 @@
 REM ============================================================================
 REM  FORGE Toolkit - Autopilot Launcher
 REM ============================================================================
-REM  Starts newly imported targets from a target feed, resumes existing ready
-REM  paused/failed runs, applies due monitoring, and refreshes the dashboard.
+REM  Builds the local target feed, starts newly imported targets, resumes
+REM  existing ready paused/failed runs, applies due monitoring, and refreshes
+REM  the dashboard.
 REM
 REM  Defaults:
 REM    --feed-file imports\target-feed.json
@@ -14,6 +15,7 @@ REM  Useful flags:
 REM    --dry-run
 REM    --feed-file PATH
 REM    --roe-id ROE-ID
+REM    --feed-build --skip-feed-build
 REM    --skip-import --skip-resume --skip-monitoring --skip-dashboard
 REM ============================================================================
 
@@ -40,6 +42,7 @@ set "RESUME_LIMIT=100"
 set "MAX_PARALLEL=6"
 set "MONITOR_LIMIT=50"
 set "DRY_RUN=0"
+set "FEED_BUILD=1"
 set "SKIP_IMPORT=0"
 set "SKIP_RESUME=0"
 set "SKIP_MONITORING=0"
@@ -48,6 +51,8 @@ set "SKIP_DASHBOARD=0"
 :parse_args
 if "%~1"=="" goto parsed_args
 if /i "%~1"=="--dry-run" set "DRY_RUN=1" & shift & goto parse_args
+if /i "%~1"=="--feed-build" set "FEED_BUILD=1" & shift & goto parse_args
+if /i "%~1"=="--skip-feed-build" set "FEED_BUILD=0" & shift & goto parse_args
 if /i "%~1"=="--skip-import" set "SKIP_IMPORT=1" & shift & goto parse_args
 if /i "%~1"=="--skip-resume" set "SKIP_RESUME=1" & shift & goto parse_args
 if /i "%~1"=="--skip-monitoring" set "SKIP_MONITORING=1" & shift & goto parse_args
@@ -69,6 +74,7 @@ goto usage
 echo Usage:
 echo   forge-autopilot.bat [--dry-run] [--feed-file PATH] [--roe-id ROE-ID]
 echo                       [--limit N] [--start-limit N] [--max-parallel N]
+echo                       [--feed-build] [--skip-feed-build]
 echo                       [--skip-import] [--skip-resume]
 echo                       [--skip-monitoring] [--skip-dashboard]
 exit /b 0
@@ -77,6 +83,7 @@ exit /b 0
 echo Usage:
 echo   forge-autopilot.bat [--dry-run] [--feed-file PATH] [--roe-id ROE-ID]
 echo                       [--limit N] [--start-limit N] [--max-parallel N]
+echo                       [--feed-build] [--skip-feed-build]
 echo                       [--skip-import] [--skip-resume]
 echo                       [--skip-monitoring] [--skip-dashboard]
 exit /b 2
@@ -90,10 +97,21 @@ echo   FORGE Autopilot
 echo ============================================================================
 echo   feed_file=%FEED_FILE%
 echo   roe_id=%ROE_ID%
-echo   dry_run=%DRY_RUN%
+echo   dry_run=%DRY_RUN% feed_build=%FEED_BUILD%
 echo   start_limit=%START_LIMIT% resume_limit=%RESUME_LIMIT% max_parallel=%MAX_PARALLEL%
 echo.
 
+:feed_build_phase
+if "%FEED_BUILD%"=="0" goto import_phase
+echo [FEED] building target feed...
+if "%DRY_RUN%"=="1" (
+    "%PYTHON%" -m forge.cli automation feed-build --output "%FEED_FILE%" --json
+) else (
+    "%PYTHON%" -m forge.cli automation feed-build --output "%FEED_FILE%" --apply --json
+)
+if errorlevel 1 set "EXIT_CODE=%errorlevel%"
+
+:import_phase
 if "%SKIP_IMPORT%"=="1" goto resume_phase
 if not exist "%FEED_FILE%" (
     echo [IMPORT] skipped: feed file not found: %FEED_FILE%

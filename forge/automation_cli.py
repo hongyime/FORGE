@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -11,6 +12,7 @@ from forge.automation_policy import (
     command_surface_review,
     forge_automation_policy,
 )
+from forge.automation_target_feed import build_target_feed, write_target_feed
 
 console = Console(stderr=True)
 
@@ -64,3 +66,81 @@ def register_automation_commands(app: typer.Typer) -> None:
         )
         for item in payload["recommendations"]:
             console.print(f"- {item['priority']}: {item['recommendation']}")
+
+    @app.command("feed-build")
+    def feed_build(
+        output: Path = typer.Option(
+            Path("imports") / "target-feed.json",
+            "--output",
+            help="Feed output path (default imports/target-feed.json).",
+        ),
+        apply: bool = typer.Option(
+            False,
+            "--apply",
+            help="Write the merged feed. Default is a dry-run that writes nothing.",
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+        source: list[str] = typer.Option(
+            ["all"],
+            "--source",
+            help="Repeatable source selector: all, db, reports, cti, connectors, supabase.",
+        ),
+        supabase_config: Path | None = typer.Option(
+            Path("imports") / "supabase-projects.local.json",
+            "--supabase-config",
+            help="Local untracked Supabase read-only project config.",
+        ),
+        data_dir: Path | None = typer.Option(
+            None,
+            "--data-dir",
+            help="Forge data dir holding engagements/*.db (default ForgeConfig).",
+        ),
+        reports_dir: Path | None = typer.Option(
+            None,
+            "--reports-dir",
+            help="Reports artifact dir (default ./reports).",
+        ),
+        imports_dir: Path | None = typer.Option(
+            None,
+            "--imports-dir",
+            help="Imports dir holding CTI/connector JSON payloads (default ./imports).",
+        ),
+        limit: int | None = typer.Option(
+            None,
+            "--limit",
+            help="Cap the number of feed items emitted.",
+        ),
+    ) -> None:
+        from forge.config import ForgeConfig
+
+        cfg_data_dir = Path(data_dir) if data_dir else ForgeConfig.load().data_dir
+        try:
+            payload = build_target_feed(
+                sources=list(source),
+                data_dir=cfg_data_dir,
+                reports_dir=reports_dir or Path("reports"),
+                imports_dir=imports_dir or Path("imports"),
+                limit=limit,
+                existing_feed_path=output,
+                apply=apply,
+                supabase_config_path=supabase_config,
+            )
+        except ValueError as exc:
+            console.print(f"[red]feed-build rejected:[/red] {exc}")
+            raise typer.Exit(code=2) from exc
+        if json_output:
+            typer.echo(json.dumps(payload, sort_keys=True))
+        else:
+            counts = payload["counts"]
+            mode = "apply" if payload["apply_requested"] else "dry-run"
+            console.print(
+                f"[bold]Target feed ({mode})[/bold] total={counts['total']} "
+                f"duplicates={counts['omitted_duplicate']} "
+                f"new_vs_existing={counts['new_vs_existing']}"
+            )
+            for err in payload["source_errors"]:
+                console.print(f"- {err['source']}: {err['error']}")
+        if apply:
+            write_target_feed(payload, output)
+            if not json_output:
+                console.print(f"written={output}")

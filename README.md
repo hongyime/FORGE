@@ -264,6 +264,7 @@ forge active-validation preview|create|approve|run|list|methods|coverage
 forge automation policy [--json]          # Show the operator-approved wildcard automation policy defaults
 forge automation run [--apply] [--json]   # Emit the automation execution plan; records apply intent without launching live actions
 forge automation command-review [--json]  # Read-only command count and consolidation review
+forge automation feed-build [--output imports/target-feed.json] [--apply] [--json] [--source all|supabase|reports|db|cti|connectors] [--supabase-config PATH] [--limit N]
 forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-first connector/plugin catalog
 forge connectors install-plan [--json]       # Print missing local binary install guidance; does not execute commands
 forge connectors run-plan [--domain NAME] [--json]  # Print free-first connector run guidance; does not execute commands
@@ -289,8 +290,39 @@ forge scaffold                              # Emit obfuscated directory tree
 forge clean --engagement N [--confirm]      # Securely wipe engagement artifacts
 ```
 
-`forge targets import` consumes sanitized `target-feed.v1` feeds from scheduled
-workflows such as theprawnhunter. Feed items can use canonical target types
+`forge automation feed-build` builds the daily local `imports/target-feed.json`
+handoff for `forge targets import`. It merges and dedupes by canonical target
+key across current engagement DB seeds, `reports/dashboard/data/*.json`,
+report metadata JSON under `reports/`, CTI observation JSON, connector output
+JSON under `imports/`, and explicitly configured read-only Supabase REST
+tables. The command is dry-run by default; `--apply` writes the feed
+atomically. Use `--source all` for the full loop, or repeat `--source` for a
+subset. JSON reports total/selected/omitted/new/duplicate counts plus per-source
+and per-source-group counts, preserving provenance such as
+`report_family:<id>` and `supabase:<project_ref>:<table>`.
+
+Live Supabase feed extraction is read-only and local-config only. Store project
+settings in ignored `imports/supabase-projects.local.json`; keep keys in env
+vars or a Forge connector-secret reference, never in committed files:
+
+```json
+{
+  "projects": [
+    {
+      "project_ref": "abc123",
+      "url": "https://abc123.supabase.co",
+      "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+      "tables": ["targets", "assets", "observations"],
+      "target_columns": ["domain", "url", "host", "ip", "email", "username"],
+      "limit": 1000
+    }
+  ]
+}
+```
+
+`forge targets import` consumes sanitized `target-feed.v1` feeds from
+`feed-build` or scheduled workflows such as theprawnhunter. Feed items can use
+canonical target types
 `domain`, `subdomain`, `url`, `apk_url`, `email`, `phone`, `username`, `name`,
 `company`, `ipv4`, `ipv6`, and `cloud_ref`, plus aliases such as `auto`,
 `artifact_url`, `host`, `ip`, `handle`, `telephone`, `person`, and
