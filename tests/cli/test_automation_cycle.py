@@ -30,6 +30,32 @@ def stub_resume_backlog(monkeypatch) -> None:
     monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fake_resume_plan)
 
 
+@pytest.fixture(autouse=True)
+def stub_report_review(monkeypatch) -> None:
+    def fake_report_audit(**_kwargs) -> dict[str, object]:
+        return {
+            "total_count": 0,
+            "selected_count": 0,
+            "omitted_count": 0,
+            "engagement_count": 0,
+            "report_file_count": 0,
+            "report_family_count": 0,
+            "dashboard_refresh_failure_count": 0,
+            "historical_dashboard_refresh_failure_count": 0,
+            "latest_fallback_reason_counts": {},
+            "resume_review_count": 0,
+            "failed_run_count": 0,
+            "long_run_count": 0,
+            "operator_action_plan": [],
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module,
+        "collect_report_quality_audit",
+        fake_report_audit,
+    )
+
+
 def test_automation_status_reports_ready_and_blocked_queue_items(tmp_path: Path) -> None:
     imports_dir = tmp_path / "imports"
     imports_dir.mkdir()
@@ -387,6 +413,128 @@ def test_automation_status_resume_backlog_fails_closed(tmp_path: Path, monkeypat
     assert "resume db unavailable" in payload["resume_backlog"]["error"]
 
 
+def test_automation_status_summarizes_report_review_without_mutating(
+    tmp_path: Path, monkeypatch
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_report_audit(**kwargs) -> dict[str, object]:
+        calls.append(kwargs)
+        return {
+            "total_count": 128,
+            "selected_count": 2,
+            "omitted_count": 126,
+            "engagement_count": 581,
+            "report_file_count": 3573,
+            "report_family_count": 581,
+            "dashboard_refresh_failure_count": 0,
+            "historical_dashboard_refresh_failure_count": 0,
+            "latest_fallback_reason_counts": {},
+            "resume_review_count": 49,
+            "failed_run_count": 49,
+            "long_run_count": 3,
+            "operator_action_plan": [
+                {
+                    "id": "review_resume_plan",
+                    "total_count": 49,
+                    "commands": [
+                        [
+                            "forge",
+                            "targets",
+                            "resume-plan",
+                            "--json",
+                            "--redact-paths",
+                            "--limit",
+                            "49",
+                        ]
+                    ],
+                    "follow_up_commands": [
+                        [
+                            "forge",
+                            "targets",
+                            "resume-run",
+                            "--dry-run",
+                            "--redact-paths",
+                            "--json",
+                            "--limit",
+                            "49",
+                        ]
+                    ],
+                },
+                {
+                    "id": "review_long_runs",
+                    "total_count": 3,
+                    "follow_up_commands": [
+                        ["forge", "report", "long-run-plan", "--json", "--limit", "3"]
+                    ],
+                },
+            ],
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module,
+        "collect_report_quality_audit",
+        fake_report_audit,
+    )
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+    )
+
+    assert calls == [
+        {"reports_dir": tmp_path / "reports", "top_limit": 0, "redact_paths": True}
+    ]
+    assert payload["report_review"]["execution_policy"] == (
+        "read_only_report_review_summary_no_commands_executed"
+    )
+    assert payload["report_review"]["status"] == "review_due"
+    assert payload["report_review"]["report_file_count"] == 3573
+    assert payload["report_review"]["report_family_count"] == 581
+    assert payload["report_review"]["resume_review_count"] == 49
+    assert payload["report_review"]["long_run_count"] == 3
+    assert payload["report_review"]["operator_action_counts"] == {
+        "review_long_runs": 3,
+        "review_resume_plan": 49,
+    }
+    assert payload["report_review"]["next_actions"][0] == [
+        "forge",
+        "targets",
+        "resume-plan",
+        "--json",
+        "--redact-paths",
+        "--limit",
+        "49",
+    ]
+
+
+def test_automation_status_report_review_fails_closed(tmp_path: Path, monkeypatch) -> None:
+    def fail_report_audit(**_kwargs):
+        raise RuntimeError("dashboard json unreadable")
+
+    monkeypatch.setattr(
+        automation_cycle_module,
+        "collect_report_quality_audit",
+        fail_report_audit,
+    )
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+    )
+
+    assert payload["report_review"]["execution_policy"] == (
+        "read_only_report_review_summary_failed"
+    )
+    assert payload["report_review"]["status"] == "unknown"
+    assert payload["report_review"]["total_count"] == 0
+    assert "dashboard json unreadable" in payload["report_review"]["error"]
+
+
 def test_automation_status_reports_autostart_probe_blockers(
     tmp_path: Path,
     monkeypatch,
@@ -549,6 +697,55 @@ def test_automation_cycle_includes_resume_backlog_summary(
     assert payload["resume_backlog"]["total_count"] == 0
     assert payload["resume_backlog"]["execution_policy"] == (
         "read_only_resume_backlog_summary_no_commands_executed"
+    )
+
+
+def test_automation_cycle_includes_report_review_summary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    def fake_report_audit(**kwargs) -> dict[str, object]:
+        assert kwargs == {
+            "reports_dir": tmp_path / "reports",
+            "top_limit": 0,
+            "redact_paths": True,
+        }
+        return {
+            "total_count": 1,
+            "selected_count": 0,
+            "omitted_count": 1,
+            "engagement_count": 1,
+            "report_file_count": 6,
+            "report_family_count": 1,
+            "dashboard_refresh_failure_count": 1,
+            "historical_dashboard_refresh_failure_count": 0,
+            "latest_fallback_reason_counts": {},
+            "resume_review_count": 0,
+            "failed_run_count": 0,
+            "long_run_count": 0,
+            "operator_action_plan": [],
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module,
+        "collect_report_quality_audit",
+        fake_report_audit,
+    )
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=tmp_path / "imports" / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+    )
+
+    assert payload["report_review"]["status"] == "dashboard_attention"
+    assert payload["report_review"]["total_count"] == 1
+    assert payload["report_review"]["dashboard_refresh_failure_count"] == 1
+    assert payload["report_review"]["execution_policy"] == (
+        "read_only_report_review_summary_no_commands_executed"
     )
 
 

@@ -14,6 +14,7 @@ from forge.automation_self_heal import run_guarded_autostart
 from forge.automation_target_feed import build_target_feed, write_target_feed
 from forge.config import ForgeConfig
 from forge.monitoring.runner import monitoring_due_plan_for_data_dir
+from forge.reporting.quality_audit import collect_report_quality_audit
 from forge.targets_resume_candidates import collect_target_resume_plan
 from forge.targets_import import MAX_TARGET_FEED_IMPORT_ITEMS, load_target_feed
 
@@ -73,6 +74,7 @@ def automation_status(
     imports_dir: Path | None = None,
     output: Path | None = None,
     data_dir: Path | None = None,
+    reports_dir: Path | None = None,
     engagement: int | None = None,
 ) -> dict[str, Any]:
     root_imports = Path(imports_dir or "imports")
@@ -114,6 +116,7 @@ def automation_status(
         ),
         "resume_backlog": _resume_backlog_summary(data_dir=Path(cfg_data_dir)),
         "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
+        "report_review": _report_review_summary(reports_dir=reports_dir or Path("reports")),
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "engagement": {
             "explicit": engagement,
@@ -253,6 +256,7 @@ def automation_cycle(
         ),
         "resume_backlog": _resume_backlog_summary(data_dir=Path(cfg_data_dir)),
         "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
+        "report_review": _report_review_summary(reports_dir=reports_dir or Path("reports")),
         "inbox": inbox_update,
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "queue_execution": {
@@ -458,6 +462,79 @@ def _resume_summary_include_legacy(data_dir: Path) -> bool:
     except OSError:
         return False
     return selected == configured
+
+
+def _report_review_summary(*, reports_dir: Path) -> dict[str, Any]:
+    try:
+        payload = collect_report_quality_audit(
+            reports_dir=reports_dir,
+            top_limit=0,
+            redact_paths=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "execution_policy": "read_only_report_review_summary_failed",
+            "status": "unknown",
+            "error": str(exc)[:240],
+            "total_count": 0,
+            "next_actions": [["forge", "report", "quality-audit", "--json", "--redact-paths"]],
+        }
+    action_plan = (
+        payload.get("operator_action_plan")
+        if isinstance(payload.get("operator_action_plan"), list)
+        else []
+    )
+    action_counts = {
+        str(action.get("id") or "unknown"): int(action.get("total_count") or 0)
+        for action in action_plan
+        if isinstance(action, dict)
+    }
+    next_actions: list[list[Any]] = []
+    for action in action_plan:
+        if not isinstance(action, dict):
+            continue
+        for key in ("commands", "follow_up_commands"):
+            commands = action.get(key)
+            if not isinstance(commands, list):
+                continue
+            for command in commands:
+                if isinstance(command, list):
+                    next_actions.append(command)
+                    if len(next_actions) >= 3:
+                        break
+            if len(next_actions) >= 3:
+                break
+        if len(next_actions) >= 3:
+            break
+    if not next_actions:
+        next_actions = [["forge", "report", "quality-audit", "--json", "--redact-paths"]]
+    total_count = int(payload.get("total_count") or 0)
+    dashboard_failures = int(payload.get("dashboard_refresh_failure_count") or 0)
+    status = "clean"
+    if total_count:
+        status = "review_due"
+    if dashboard_failures:
+        status = "dashboard_attention"
+    return {
+        "execution_policy": "read_only_report_review_summary_no_commands_executed",
+        "status": status,
+        "total_count": total_count,
+        "selected_count": int(payload.get("selected_count") or 0),
+        "omitted_count": int(payload.get("omitted_count") or 0),
+        "engagement_count": int(payload.get("engagement_count") or 0),
+        "report_file_count": int(payload.get("report_file_count") or 0),
+        "report_family_count": int(payload.get("report_family_count") or 0),
+        "dashboard_refresh_failure_count": dashboard_failures,
+        "historical_dashboard_refresh_failure_count": int(
+            payload.get("historical_dashboard_refresh_failure_count") or 0
+        ),
+        "latest_fallback_reason_counts": payload.get("latest_fallback_reason_counts") or {},
+        "resume_review_count": int(payload.get("resume_review_count") or 0),
+        "failed_run_count": int(payload.get("failed_run_count") or 0),
+        "long_run_count": int(payload.get("long_run_count") or 0),
+        "operator_action_counts": action_counts,
+        "next_actions": next_actions,
+    }
 
 
 def classify_import_inbox(*, imports_dir: Path | None = None, apply: bool = False) -> dict[str, Any]:

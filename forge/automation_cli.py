@@ -124,11 +124,17 @@ def register_automation_commands(app: typer.Typer) -> None:
             "--data-dir",
             help="Forge data dir holding engagements/*.db (default ForgeConfig).",
         ),
+        reports_dir: Path | None = typer.Option(
+            None,
+            "--reports-dir",
+            help="Reports artifact dir for report-review summary (default ./reports).",
+        ),
     ) -> None:
         payload = automation_status(
             imports_dir=imports_dir,
             output=output,
             data_dir=data_dir,
+            reports_dir=reports_dir,
             engagement=engagement,
         )
         if json_output:

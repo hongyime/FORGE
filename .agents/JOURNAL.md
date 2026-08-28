@@ -211,3 +211,4 @@
 - 2026-08-29 05:25:06 +08:00 [PRAWN-E14/codex/session-start] branch=main head=faac599 dirty=0
 - 2026-08-29: B709 surfaces resume backlog in automation status/cycle as a redacted read-only summary and only includes legacy DBs when using the configured Forge data dir.
 - 2026-08-29: B710 makes command-review report daily-use layer completeness and downgrades command-surface pressure when the documented daily layer is complete.
+- 2026-08-29: B711 adds report_review to automation status/cycle so report/dashboard drift is visible in the daily loop without running report repair or resume commands.
