@@ -466,6 +466,126 @@ def test_automation_status_recommends_cti_refresh_when_free_key_env_present(
     )
 
 
+def test_automation_status_summarizes_supabase_not_configured(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        quick=True,
+    )
+
+    assert payload["supabase_sync"]["execution_policy"] == (
+        "read_only_supabase_sync_readiness_no_network_or_writes"
+    )
+    assert payload["supabase_sync"]["status"] == "not_configured"
+    assert payload["supabase_sync"]["configured_count"] == 0
+    assert payload["supabase_sync"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "supabase-add",
+        "PROJECT_REF",
+        "FORGE_SUPABASE_PROJECT_READ_KEY",
+        "--apply",
+        "--json",
+    ]
+
+
+def test_automation_status_summarizes_supabase_project_key_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    monkeypatch.delenv("FORGE_SUPABASE_ABC123_READ_KEY", raising=False)
+    (imports_dir / "supabase-projects.local.json").write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        quick=True,
+    )
+
+    assert payload["supabase_sync"]["status"] == "key_env_unset"
+    assert payload["supabase_sync"]["ready_count"] == 0
+    assert payload["supabase_sync"]["key_env_unset_count"] == 1
+    assert payload["supabase_sync"]["all_tables_count"] == 1
+    assert payload["supabase_sync"]["all_columns_count"] == 1
+    assert payload["supabase_sync"]["projects"][0]["url"] == "https://abc123.supabase.co"
+    assert payload["supabase_sync"]["projects"][0]["tables"] == ["*"]
+    assert payload["supabase_sync"]["projects"][0]["target_columns"] == ["*"]
+    assert payload["supabase_sync"]["projects"][0]["limit"] == 100000
+    assert payload["supabase_sync"]["next_actions"][0] == [
+        "set",
+        "FORGE_SUPABASE_ABC123_READ_KEY=<owned Supabase read-only key>",
+    ]
+
+
+def test_automation_status_recommends_supabase_feed_build_when_key_env_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
+    monkeypatch.setenv("FORGE_SUPABASE_ABC123_READ_KEY", "owned-read-key")
+    (imports_dir / "supabase-projects.local.json").write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["supabase_sync"]["status"] == "ready"
+    assert payload["supabase_sync"]["ready_count"] == 1
+    assert payload["supabase_sync"]["projects"][0]["requested_all_tables"] is True
+    assert payload["supabase_sync"]["projects"][0]["requested_all_columns"] is True
+    assert payload["supabase_sync"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "feed-build",
+        "--source",
+        "supabase",
+        "--apply",
+        "--json",
+    ]
+    assert payload["next_actions"][0] == (
+        "forge automation feed-build --source supabase --apply --json"
+    )
+
+
 def test_automation_status_resume_backlog_fails_closed(tmp_path: Path, monkeypatch) -> None:
     def fail_resume_plan(**_kwargs):
         raise RuntimeError("resume db unavailable")
@@ -1193,6 +1313,46 @@ def test_automation_cycle_includes_cti_refresh_readiness(
         "--apply",
         "--json",
     ]
+
+
+def test_automation_cycle_includes_supabase_sync_readiness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    monkeypatch.setenv("FORGE_SUPABASE_ABC123_READ_KEY", "owned-read-key")
+    (imports_dir / "supabase-projects.local.json").write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=imports_dir,
+    )
+
+    assert payload["supabase_sync"]["execution_policy"] == (
+        "read_only_supabase_sync_readiness_no_network_or_writes"
+    )
+    assert payload["supabase_sync"]["status"] == "ready"
+    assert payload["supabase_sync"]["ready_count"] == 1
+    assert payload["supabase_sync"]["projects"][0]["requested_all_tables"] is True
+    assert payload["supabase_sync"]["projects"][0]["requested_all_columns"] is True
 
 
 def test_automation_cycle_classifies_inbox_into_source_queues(tmp_path: Path) -> None:

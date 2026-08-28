@@ -110,6 +110,9 @@ def automation_status(
         imports_dir=root_imports,
         engagement=effective_engagement,
     )
+    supabase_sync = _supabase_sync_readiness(
+        config_path=root_imports / "supabase-projects.local.json",
+    )
     if quick:
         resume_backlog = _quick_skipped_summary("resume_backlog")
         monitoring_due = _quick_skipped_summary("monitoring_due")
@@ -151,6 +154,7 @@ def automation_status(
         "target_feed_scan": target_feed_scan,
         "autostart_history": autostart_history,
         "cti_refresh": cti_refresh,
+        "supabase_sync": supabase_sync,
         "resume_backlog": resume_backlog,
         "monitoring_due": monitoring_due,
         "report_review": report_review,
@@ -173,6 +177,7 @@ def automation_status(
             monitoring_due=monitoring_due,
             report_review=report_review,
             cti_refresh=cti_refresh,
+            supabase_sync=supabase_sync,
         ),
         "total_count": len(queue_items),
         "selected_count": len(ready_items),
@@ -284,6 +289,9 @@ def automation_cycle(
         imports_dir=root_imports,
         engagement=effective_engagement,
     )
+    supabase_sync = _supabase_sync_readiness(
+        config_path=supabase_config or root_imports / "supabase-projects.local.json",
+    )
     resume_backlog = _resume_backlog_summary(data_dir=Path(cfg_data_dir))
     monitoring_due = _monitoring_due_summary(data_dir=Path(cfg_data_dir))
     report_review = _report_review_summary(reports_dir=reports_dir or Path("reports"))
@@ -325,6 +333,7 @@ def automation_cycle(
         "target_feed_scan": target_feed_scan,
         "autostart_history": autostart_history,
         "cti_refresh": cti_refresh,
+        "supabase_sync": supabase_sync,
         "resume_backlog": resume_backlog,
         "monitoring_due": monitoring_due,
         "report_review": report_review,
@@ -952,6 +961,141 @@ def refresh_public_cti_input(
         "queue_update": queue_update,
         "next_action": "Run forge automation cycle --apply --source all --json.",
     }
+
+
+def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
+    path = Path(config_path)
+    payload = _read_json_object(path) if path.is_file() else {}
+    raw_projects = payload.get("projects")
+    projects = raw_projects if isinstance(raw_projects, list) else []
+    summaries: list[dict[str, Any]] = []
+    for index, raw_project in enumerate(projects):
+        if not isinstance(raw_project, dict):
+            summaries.append(
+                {
+                    "index": index,
+                    "project_ref": "",
+                    "status": "invalid_project",
+                    "reason": "project_not_object",
+                    "key_env": "",
+                    "key_env_present": False,
+                }
+            )
+            continue
+        project_ref = str(raw_project.get("project_ref") or "").strip().lower()
+        key_env = str(raw_project.get("key_env") or "").strip()
+        tables = _string_list(raw_project.get("tables")) or ["*"]
+        columns = _string_list(raw_project.get("target_columns")) or ["*"]
+        status = "ready"
+        reason = ""
+        if not project_ref:
+            status = "invalid_project"
+            reason = "project_ref_missing"
+        elif not key_env:
+            status = "invalid_project"
+            reason = "key_env_missing"
+        elif not _env_var_name_valid(key_env):
+            status = "invalid_project"
+            reason = "key_env_invalid"
+        elif not os.environ.get(key_env, "").strip():
+            status = "key_env_unset"
+            reason = f"key_env_unset:{key_env}"
+        summaries.append(
+            {
+                "index": index,
+                "project_ref": project_ref,
+                "url": str(raw_project.get("url") or f"https://{project_ref}.supabase.co")
+                if project_ref
+                else "",
+                "status": status,
+                "reason": reason,
+                "key_env": key_env,
+                "key_env_present": bool(key_env and os.environ.get(key_env, "").strip()),
+                "requested_all_tables": "*" in tables,
+                "requested_all_columns": "*" in columns,
+                "tables": tables,
+                "target_columns": columns,
+                "limit": _supabase_readiness_limit(raw_project.get("limit")),
+            }
+        )
+    status_counts: dict[str, int] = {}
+    for project in summaries:
+        status = str(project.get("status") or "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+    ready_count = status_counts.get("ready", 0)
+    if not path.is_file():
+        status = "not_configured"
+    elif not projects:
+        status = "not_configured"
+    elif any(project.get("status") == "invalid_project" for project in summaries):
+        status = "invalid_config"
+    elif ready_count:
+        status = "ready"
+    else:
+        status = "key_env_unset"
+    next_actions: list[list[str]] = []
+    if ready_count:
+        next_actions.append(
+            ["forge", "automation", "feed-build", "--source", "supabase", "--apply", "--json"]
+        )
+    elif status == "not_configured":
+        next_actions.append(
+            [
+                "forge",
+                "automation",
+                "supabase-add",
+                "PROJECT_REF",
+                "FORGE_SUPABASE_PROJECT_READ_KEY",
+                "--apply",
+                "--json",
+            ]
+        )
+    else:
+        for project in summaries:
+            if str(project.get("status") or "") == "key_env_unset":
+                next_actions.append(
+                    [
+                        "set",
+                        f"{project['key_env']}=<owned Supabase read-only key>",
+                    ]
+                )
+                break
+    return {
+        "schema_version": "forge.supabase_sync_readiness.v1",
+        "execution_policy": "read_only_supabase_sync_readiness_no_network_or_writes",
+        "status": status,
+        "config_path": str(path),
+        "configured_count": len(summaries),
+        "ready_count": ready_count,
+        "key_env_unset_count": status_counts.get("key_env_unset", 0),
+        "invalid_count": status_counts.get("invalid_project", 0),
+        "all_tables_count": sum(1 for project in summaries if project["requested_all_tables"]),
+        "all_columns_count": sum(1 for project in summaries if project["requested_all_columns"]),
+        "projects": summaries,
+        "next_actions": next_actions,
+    }
+
+
+def _supabase_readiness_limit(value: Any) -> int:
+    try:
+        limit = int(value) if value is not None else 100000
+    except (TypeError, ValueError):
+        return 100000
+    if limit <= 0:
+        return 100000
+    return min(limit, 100000)
+
+
+def _string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items = [value]
+    elif isinstance(value, list):
+        items = value
+    else:
+        return []
+    return [str(item).strip() for item in items if str(item).strip()]
 
 
 def _selected_threatfox_key_env(key_env: str) -> str:
@@ -1863,6 +2007,7 @@ def _status_next_actions(
     monitoring_due: dict[str, Any] | None = None,
     report_review: dict[str, Any] | None = None,
     cti_refresh: dict[str, Any] | None = None,
+    supabase_sync: dict[str, Any] | None = None,
 ) -> list[str]:
     actions: list[str] = []
     autostart_blockers = [
@@ -1883,6 +2028,12 @@ def _status_next_actions(
         and str((cti_refresh or {}).get("status") or "") == "ready"
     ):
         actions.extend(_command_action_strings((cti_refresh or {}).get("next_actions"), limit=1))
+    if (
+        not ready_items
+        and not autostart_blockers
+        and str((supabase_sync or {}).get("status") or "") == "ready"
+    ):
+        actions.extend(_command_action_strings((supabase_sync or {}).get("next_actions"), limit=1))
     if any(item["reason"] == "engagement_required" for item in blocked_items):
         actions.append(
             "add engagement_id to queue entries, set autostart engagement_id, "
