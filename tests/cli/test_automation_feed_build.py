@@ -326,7 +326,7 @@ def test_feed_build_supabase_selects_configured_columns_with_env_key(
 
     assert observed["url"] == (
         "https://abc123.supabase.co/rest/v1/targets"
-        "?select=domain,url,email&limit=2"
+        "?select=domain,url,email&limit=2&offset=0"
     )
     assert observed["headers"] == {
         "apikey": "test-read-key",
@@ -377,7 +377,7 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
                     }
                 }
             )
-        if url == "https://abc123.supabase.co/rest/v1/assets?select=*&limit=1000":
+        if url == "https://abc123.supabase.co/rest/v1/assets?select=*&limit=1000&offset=0":
             return _Response(
                 [
                     {
@@ -390,7 +390,10 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
                     }
                 ]
             )
-        if url == "https://abc123.supabase.co/rest/v1/observations?select=*&limit=1000":
+        if url == (
+            "https://abc123.supabase.co/rest/v1/observations"
+            "?select=*&limit=1000&offset=0"
+        ):
             return _Response([{"notes": "api.example"}])
         raise AssertionError(f"unexpected URL {url}")
 
@@ -423,8 +426,8 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
 
     assert observed_urls == [
         "https://abc123.supabase.co/rest/v1/",
-        "https://abc123.supabase.co/rest/v1/assets?select=*&limit=1000",
-        "https://abc123.supabase.co/rest/v1/observations?select=*&limit=1000",
+        "https://abc123.supabase.co/rest/v1/assets?select=*&limit=1000&offset=0",
+        "https://abc123.supabase.co/rest/v1/observations?select=*&limit=1000&offset=0",
     ]
     typed_items = {
         (item["target_type"], item["canonical_value"], item["source_group"])
@@ -504,21 +507,28 @@ def test_feed_build_supabase_unset_key_env_does_not_call_http(
     ]
 
 
-def test_feed_build_supabase_caps_table_limit(
+def test_feed_build_supabase_paginates_and_caps_table_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    observed: dict[str, object] = {}
+    observed_urls: list[str] = []
 
     class _Response:
+        def __init__(self, rows: list[dict[str, str]]) -> None:
+            self._rows = rows
+
         def raise_for_status(self) -> None:
             return None
 
         def json(self) -> list[dict[str, str]]:
-            return [{"domain": "one.example"}]
+            return self._rows
 
     def _fake_get(url: str, *, headers: dict[str, str], timeout: float) -> _Response:
-        observed["url"] = url
-        return _Response()
+        observed_urls.append(url)
+        if url.endswith("&offset=0"):
+            return _Response([{"domain": f"page1-{index}.example"} for index in range(1000)])
+        if url.endswith("&offset=1000"):
+            return _Response([{"domain": "page2.example"}])
+        raise AssertionError(f"unexpected URL {url}")
 
     config = tmp_path / "supabase-projects.local.json"
     config.write_text(
@@ -541,7 +551,7 @@ def test_feed_build_supabase_caps_table_limit(
     monkeypatch.setenv("FORGE_SUPABASE_ABC123_READ_KEY", "test-read-key")
     monkeypatch.setattr("forge.automation_target_feed.httpx.get", _fake_get)
 
-    build_target_feed(
+    payload = build_target_feed(
         sources=["supabase"],
         data_dir=tmp_path / "data",
         reports_dir=tmp_path / "reports",
@@ -551,4 +561,66 @@ def test_feed_build_supabase_caps_table_limit(
         supabase_config_path=config,
     )
 
-    assert str(observed["url"]).endswith("&limit=1000")
+    assert observed_urls == [
+        "https://abc123.supabase.co/rest/v1/targets?select=domain&limit=1000&offset=0",
+        "https://abc123.supabase.co/rest/v1/targets?select=domain&limit=1000&offset=1000",
+    ]
+    assert payload["counts"]["by_source"]["supabase"] == 1001
+    assert payload["counts"]["by_source_group"]["supabase:abc123:targets"] == 1001
+
+
+def test_feed_build_supabase_uses_greedy_default_limit_for_minimal_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed_urls: list[str] = []
+
+    class _Response:
+        def __init__(self, payload: object) -> None:
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> object:
+            return self._payload
+
+    def _fake_get(url: str, *, headers: dict[str, str], timeout: float) -> _Response:
+        observed_urls.append(url)
+        if url == "https://abc123.supabase.co/rest/v1/":
+            return _Response({"paths": {"/targets": {}}})
+        if url == "https://abc123.supabase.co/rest/v1/targets?select=*&limit=1000&offset=0":
+            return _Response([{"domain": "one.example"}])
+        raise AssertionError(f"unexpected URL {url}")
+
+    config = tmp_path / "supabase-projects.local.json"
+    config.write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_SUPABASE_ABC123_READ_KEY", "test-read-key")
+    monkeypatch.setattr("forge.automation_target_feed.httpx.get", _fake_get)
+
+    payload = build_target_feed(
+        sources=["supabase"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+        supabase_config_path=config,
+    )
+
+    assert observed_urls == [
+        "https://abc123.supabase.co/rest/v1/",
+        "https://abc123.supabase.co/rest/v1/targets?select=*&limit=1000&offset=0",
+    ]
+    assert payload["counts"]["by_source"]["supabase"] == 1

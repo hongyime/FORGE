@@ -44,8 +44,9 @@ _MAX_ENGAGEMENT_DBS = 500
 _MAX_JSON_FILE_BYTES = 2 * 1024 * 1024
 _MAX_WALK_DEPTH = 6
 _MAX_VALUES_PER_FILE = 5000
-_MAX_SUPABASE_TABLE_ROWS = 1000
-_MAX_SUPABASE_DISCOVERED_TABLES = 200
+_SUPABASE_PAGE_SIZE = 1000
+_MAX_SUPABASE_TABLE_ROWS = 100000
+_MAX_SUPABASE_DISCOVERED_TABLES = 1000
 _DEFAULT_SUPABASE_CONFIG = Path("imports") / "supabase-projects.local.json"
 _DEFAULT_TARGET_COLUMNS = (
     "domain",
@@ -473,6 +474,8 @@ def _string_list(value: object) -> list[str]:
 
 
 def _coerce_supabase_limit(value: object) -> int:
+    if isinstance(value, str) and value.strip().lower() in {"all", "max", "*"}:
+        return _MAX_SUPABASE_TABLE_ROWS
     try:
         limit = int(value) if value is not None else _MAX_SUPABASE_TABLE_ROWS
     except (TypeError, ValueError):
@@ -590,6 +593,44 @@ def _discover_supabase_tables(
     return tables, errors
 
 
+def _supabase_table_rows(
+    *,
+    project: dict[str, Any],
+    headers: dict[str, str],
+    table_name: str,
+    select_param: str,
+) -> tuple[list[dict[str, Any]], list[str], int]:
+    row_limit = int(project["limit"])
+    rows: list[dict[str, Any]] = []
+    errors: list[str] = []
+    offset = 0
+    while offset < row_limit:
+        page_size = min(_SUPABASE_PAGE_SIZE, row_limit - offset)
+        url = (
+            f"{project['url']}/rest/v1/{quote(table_name, safe='')}"
+            f"?select={quote(select_param, safe=',*')}"
+            f"&limit={page_size}&offset={offset}"
+        )
+        try:
+            response = httpx.get(url, headers=headers, timeout=15.0)
+            response.raise_for_status()
+            page = response.json()
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{project['project_ref']}:{table_name}:http_{type(exc).__name__}")
+            break
+        if not isinstance(page, list):
+            errors.append(f"{project['project_ref']}:{table_name}:response_not_list")
+            break
+        dict_rows = [row for row in page if isinstance(row, dict)]
+        rows.extend(dict_rows)
+        if len(page) < page_size:
+            break
+        offset += page_size
+    if len(rows) >= row_limit:
+        errors.append(f"{project['project_ref']}:{table_name}:row_limit_reached:{row_limit}")
+    return rows, errors, row_limit
+
+
 def _harvest_supabase_row(
     row: dict[str, Any],
     *,
@@ -666,24 +707,17 @@ def _extract_supabase_source(
             if not _safe_supabase_identifier(table_name):
                 errors.append(f"{project_ref}:{table_name}:invalid_table")
                 continue
-            url = (
-                f"{project['url']}/rest/v1/{quote(table_name, safe='')}"
-                f"?select={quote(select_param, safe=',*')}&limit={project['limit']}"
+            rows, row_errors, _row_limit = _supabase_table_rows(
+                project=project,
+                headers=headers,
+                table_name=table_name,
+                select_param=select_param,
             )
-            try:
-                response = httpx.get(url, headers=headers, timeout=15.0)
-                response.raise_for_status()
-                rows = response.json()
-            except Exception as exc:  # noqa: BLE001
-                errors.append(f"{project_ref}:{table_name}:http_{type(exc).__name__}")
-                continue
-            if not isinstance(rows, list):
-                errors.append(f"{project_ref}:{table_name}:response_not_list")
+            errors.extend(row_errors)
+            if not rows:
                 continue
             row_count = 0
-            for row in rows[: int(project["limit"])]:
-                if not isinstance(row, dict):
-                    continue
+            for row in rows:
                 row_count += 1
                 candidates.extend(
                     _harvest_supabase_row(

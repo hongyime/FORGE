@@ -49,9 +49,10 @@ forge connectors import-validation --engagement N --connector burp_dast_xml --re
 Optional Supabase live extraction is read-only and uses ignored local config at
 `imports/supabase-projects.local.json`; put keys in env vars named by `key_env`.
 Minimal project entries only need `project_ref` and `key_env`. Forge derives the
-Supabase URL, discovers exposed tables from `/rest/v1/`, and reads all columns
-with `select=*`; optional `url`, `tables`, and `target_columns` can still narrow
-that behavior.
+Supabase URL, discovers exposed tables from `/rest/v1/`, and pages through all
+columns with `select=*`. Default greedy Supabase bounds are 100,000 rows per
+table and 1,000 discovered tables per configured project; optional `url`,
+`tables`, `target_columns`, and `limit` can still narrow that behavior.
 Local CTI feed extraction reads ignored JSON drops such as
 `imports/threatfox-observations.local.json`,
 `imports/urlhaus-observations.local.json`,

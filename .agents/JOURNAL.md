@@ -171,3 +171,4 @@
 - 2026-08-28: Added ignored local Supabase/CTI feed scaffolds with no secrets or placeholder targets, documented CTI drop conventions, and lowered local guarded-autostart memory gate to 1024 MB after source setup; live startup remains fail-closed when resource checks fail.
 - 2026-08-28: Broadened local import ignore coverage for CTI provider-marker drops and added empty per-provider CTI scaffold files so future runs can populate accepted feed-build markers without hand-built JSON.
 - 2026-08-28: Amended Supabase feed requirements so project entries can be minimal (`project_ref` plus `key_env`), with Forge deriving URL, discovering exposed tables, and processing all returned columns by default.
+- 2026-08-28: Raised Supabase configured-project feed extraction to a greedy paginated default: up to 1,000 discovered tables and 100,000 rows per table, while still requiring explicit owned project config and key material before database reads.

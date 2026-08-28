@@ -310,7 +310,9 @@ project settings in ignored `imports/supabase-projects.local.json`; keep keys in
 env vars or a Forge connector-secret reference, never in committed files. The
 minimal operator shape is `project_ref` plus `key_env`; Forge derives
 `https://<project_ref>.supabase.co`, discovers exposed table paths from the
-read-only Data API root, and reads all returned columns with `select=*`.
+read-only Data API root, and pages through all returned columns with
+`select=*`. The default greedy cap is 100,000 rows per table and 1,000 exposed
+tables per configured project.
 
 ```json
 {
@@ -318,16 +320,18 @@ read-only Data API root, and reads all returned columns with `select=*`.
     {
       "project_ref": "abc123",
       "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
-      "limit": 1000
+      "limit": 100000
     }
   ]
 }
 ```
 
-Optional `url`, `tables`, and `target_columns` still work for tighter scopes.
-Use `tables: ["*"]` or omit `tables` to process every exposed table, and use
-`target_columns: ["*"]` or omit `target_columns` to process every returned
-column. Forge only turns normalized target-like values into feed entries.
+Optional `url`, `tables`, `target_columns`, and `limit` still work for tighter
+scopes. Use `tables: ["*"]` or omit `tables` to process every exposed table, and
+use `target_columns: ["*"]` or omit `target_columns` to process every returned
+column. Forge only turns normalized target-like values into feed entries. Forge
+does not read arbitrary Supabase projects found in artifacts unless a matching
+owned project entry and key are configured here.
 
 Local CTI feed extraction is also file-based. Drop JSON directly under
 `imports/` with a filename containing `threatfox`, `urlhaus`, `misp`, `stix`,
