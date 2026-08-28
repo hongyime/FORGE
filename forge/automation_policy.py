@@ -411,7 +411,14 @@ def command_surface_review(repo_root: Path | None = None) -> dict[str, Any]:
     group_counts: dict[str, int] = defaultdict(int)
     for command in commands:
         group_counts[command["module_group"]] += 1
-    recommendations = _command_recommendations(commands, groups, group_counts)
+    daily_use_layer = _daily_use_layer_status(root)
+    daily_use_status = _daily_use_summary(daily_use_layer, command_count=len(commands))
+    recommendations = _command_recommendations(
+        commands,
+        groups,
+        group_counts,
+        daily_use_complete=bool(daily_use_status["complete"]),
+    )
     return {
         "schema_version": COMMAND_REVIEW_SCHEMA_VERSION,
         "execution_policy": "read_only_source_scan_no_commands_executed",
@@ -423,7 +430,8 @@ def command_surface_review(repo_root: Path | None = None) -> dict[str, Any]:
         "groups": groups,
         "commands_by_module_group": dict(sorted(group_counts.items())),
         "largest_module_groups": Counter(group_counts).most_common(10),
-        "daily_use_layer": _daily_use_layer_status(root),
+        "daily_use_layer": daily_use_layer,
+        "daily_use_status": daily_use_status,
         "recommendations": recommendations,
     }
 
@@ -455,6 +463,29 @@ def _daily_use_layer_status(root: Path) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+def _daily_use_summary(
+    daily_use_layer: list[dict[str, Any]],
+    *,
+    command_count: int,
+) -> dict[str, Any]:
+    documented = [
+        item for item in daily_use_layer if item.get("documentation_status") == "documented"
+    ]
+    missing = [
+        item for item in daily_use_layer if item.get("documentation_status") != "documented"
+    ]
+    return {
+        "status": "complete" if not missing else "incomplete",
+        "complete": not missing,
+        "daily_command_count": len(daily_use_layer),
+        "documented_count": len(documented),
+        "missing_count": len(missing),
+        "specialist_command_count": max(0, command_count - len(daily_use_layer)),
+        "documented_base_commands": [str(item["base_command"]) for item in documented],
+        "missing_base_commands": [str(item["base_command"]) for item in missing],
+    }
 
 
 def _read_text(path: Path) -> str:
@@ -569,19 +600,34 @@ def _command_recommendations(
     commands: list[dict[str, Any]],
     groups: list[dict[str, Any]],
     group_counts: dict[str, int],
+    *,
+    daily_use_complete: bool = False,
 ) -> list[dict[str, Any]]:
     recommendations: list[dict[str, Any]] = []
     if len(commands) >= 70:
-        recommendations.append(
-            {
-                "id": "reduce_memory_load",
-                "priority": "high",
-                "recommendation": (
-                    "Keep expert commands available, but make daily operation flow through "
-                    "`forge automation`, `forge doctor`, `forge targets`, and `forge connectors run-plan`."
-                ),
-            }
-        )
+        if daily_use_complete:
+            recommendations.append(
+                {
+                    "id": "daily_layer_ready",
+                    "priority": "low",
+                    "recommendation": (
+                        "Daily operation is documented through the consolidated automation, "
+                        "doctor, targets, connectors, and report-review commands; keep specialist "
+                        "commands available for drill-down work."
+                    ),
+                }
+            )
+        else:
+            recommendations.append(
+                {
+                    "id": "reduce_memory_load",
+                    "priority": "high",
+                    "recommendation": (
+                        "Keep expert commands available, but make daily operation flow through "
+                        "`forge automation`, `forge doctor`, `forge targets`, and `forge connectors run-plan`."
+                    ),
+                }
+            )
     for group, count in sorted(group_counts.items(), key=lambda item: item[1], reverse=True):
         if count >= 10:
             recommendations.append(

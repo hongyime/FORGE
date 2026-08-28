@@ -102,7 +102,14 @@ def test_automation_command_review_reports_pressure_and_recommendations() -> Non
     assert daily["automation"]["base_command"] == "forge automation cycle"
     assert daily["automation_status"]["base_command"] == "forge automation status"
     assert daily["doctor"]["documentation_status"] == "documented"
+    assert payload["daily_use_status"]["status"] == "complete"
+    assert payload["daily_use_status"]["documented_count"] == len(daily)
+    assert payload["daily_use_status"]["missing_count"] == 0
+    assert payload["daily_use_status"]["specialist_command_count"] >= 40
     assert payload["recommendations"]
+    recommendation_ids = {item["id"] for item in payload["recommendations"]}
+    assert "daily_layer_ready" in recommendation_ids
+    assert "reduce_memory_load" not in recommendation_ids
 
 
 def test_automation_defaults_review_exposes_tunable_free_first_options() -> None:

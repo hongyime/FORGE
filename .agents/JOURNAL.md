@@ -210,3 +210,4 @@
 - 2026-08-29: B708 makes compose-dependency Docker readiness report that app service health is delegated/not inspected and points operators to a host-compose probe for full container health.
 - 2026-08-29 05:25:06 +08:00 [PRAWN-E14/codex/session-start] branch=main head=faac599 dirty=0
 - 2026-08-29: B709 surfaces resume backlog in automation status/cycle as a redacted read-only summary and only includes legacy DBs when using the configured Forge data dir.
+- 2026-08-29: B710 makes command-review report daily-use layer completeness and downgrades command-surface pressure when the documented daily layer is complete.
