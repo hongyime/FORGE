@@ -11,6 +11,7 @@ from typing import Any
 from forge.automation_self_heal import DEFAULT_AUTOSTART_CONFIG_PATH, run_guarded_autostart
 from forge.automation_target_feed import build_target_feed, write_target_feed
 from forge.config import ForgeConfig
+from forge.targets_import import MAX_TARGET_FEED_IMPORT_ITEMS, load_target_feed
 
 AUTOMATION_STATUS_SCHEMA_VERSION = "forge.automation_status.v1"
 AUTOMATION_CYCLE_SCHEMA_VERSION = "forge.automation_cycle.v1"
@@ -87,6 +88,7 @@ def automation_status(
             "exists": feed_path.is_file(),
             "size_bytes": feed_path.stat().st_size if feed_path.is_file() else 0,
         },
+        "target_feed_scan": _target_feed_scan_summary(feed_path=feed_path),
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "scan_policy": _scan_policy(),
         "ready_inputs": ready_items,
@@ -175,6 +177,10 @@ def automation_cycle(
                 "source_input_registry_updates", []
             ),
         },
+        "target_feed_scan": _target_feed_scan_summary(
+            feed_path=feed_output,
+            feed_payload=feed_payload,
+        ),
         "inbox": inbox_update,
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "scan_policy": _scan_policy(),
@@ -696,6 +702,128 @@ def _is_empty_local_json_scaffold(path: Path) -> bool:
         if value not in (None, "", [], {}):
             return False
     return True
+
+
+def _target_feed_scan_summary(
+    *,
+    feed_path: Path,
+    feed_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    raw_items = feed_payload.get("items") if isinstance(feed_payload, dict) else None
+    if isinstance(raw_items, list):
+        return _summarize_target_feed_scan_items(
+            [_target_feed_summary_item(raw_item) for raw_item in raw_items]
+        )
+    if not feed_path.is_file():
+        return {
+            "exists": False,
+            "total_count": 0,
+            "eligible_count": 0,
+            "ineligible_count": 0,
+            "high_priority_count": 0,
+            "ineligible_reasons": {},
+            "top_targets": [],
+        }
+    try:
+        items = load_target_feed(
+            feed_url=None,
+            feed_file=feed_path,
+            auth_header_env=None,
+            limit=MAX_TARGET_FEED_IMPORT_ITEMS,
+        )
+    except (OSError, ValueError) as exc:
+        return {
+            "exists": True,
+            "total_count": 0,
+            "eligible_count": 0,
+            "ineligible_count": 0,
+            "high_priority_count": 0,
+            "ineligible_reasons": {},
+            "top_targets": [],
+            "error": _bounded_error(exc),
+        }
+    return _summarize_target_feed_scan_items(
+        [
+            {
+                "target_type": item.target_type,
+                "target_value": item.canonical_value,
+                "target_key": item.target_key,
+                "source_count": item.source_count,
+                "priority": item.priority,
+                "scan_eligible": item.scan_eligible,
+                "scan_eligibility_reason": item.scan_eligibility_reason,
+            }
+            for item in items
+        ]
+    )
+
+
+def _target_feed_summary_item(raw_item: object) -> dict[str, Any]:
+    if not isinstance(raw_item, dict):
+        return {}
+    return {
+        "target_type": str(raw_item.get("target_type") or ""),
+        "target_value": str(
+            raw_item.get("canonical_value") or raw_item.get("target_value") or ""
+        ),
+        "target_key": str(raw_item.get("target_key") or ""),
+        "source_count": _safe_int(raw_item.get("source_count"), default=1),
+        "priority": _safe_int(raw_item.get("priority"), default=60),
+        "scan_eligible": raw_item.get("scan_eligible") is not False,
+        "scan_eligibility_reason": str(
+            raw_item.get("scan_eligibility_reason") or "eligible"
+        ),
+    }
+
+
+def _summarize_target_feed_scan_items(items: list[dict[str, Any]]) -> dict[str, Any]:
+    usable = [item for item in items if item.get("target_value")]
+    eligible = [item for item in usable if item.get("scan_eligible") is True]
+    ineligible = [item for item in usable if item.get("scan_eligible") is not True]
+    reasons: dict[str, int] = {}
+    for item in ineligible:
+        reason = str(item.get("scan_eligibility_reason") or "ineligible")
+        reasons[reason] = reasons.get(reason, 0) + 1
+    top_targets = [
+        {
+            "target_type": item["target_type"],
+            "target_value": item["target_value"],
+            "source_count": item["source_count"],
+            "priority": item["priority"],
+            "scan_eligible": item["scan_eligible"],
+            "scan_eligibility_reason": item["scan_eligibility_reason"],
+        }
+        for item in sorted(
+            eligible,
+            key=lambda item: (
+                -_safe_int(item.get("priority"), default=0),
+                -_safe_int(item.get("source_count"), default=1),
+                str(item.get("target_key") or item.get("target_value") or ""),
+            ),
+        )[:5]
+    ]
+    return {
+        "exists": True,
+        "total_count": len(usable),
+        "eligible_count": len(eligible),
+        "ineligible_count": len(ineligible),
+        "high_priority_count": sum(
+            1 for item in eligible if _safe_int(item.get("priority"), default=0) >= 90
+        ),
+        "ineligible_reasons": dict(sorted(reasons.items())),
+        "top_targets": top_targets,
+    }
+
+
+def _safe_int(value: object, *, default: int) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def _bounded_error(exc: BaseException) -> str:
+    return " ".join(str(exc).split())[:180]
 
 
 def _scan_policy() -> dict[str, Any]:

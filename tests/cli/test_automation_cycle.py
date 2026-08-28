@@ -94,6 +94,58 @@ def test_automation_status_ignores_empty_scaffolds_and_control_references(
     assert payload["blocked_inputs"][0]["reason"] == "engagement_required"
 
 
+def test_automation_status_summarizes_existing_target_feed_scanability(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    feed_path = imports_dir / "target-feed.json"
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [
+                    {
+                        "target_type": "domain",
+                        "target_value": "shared.example",
+                        "source_groups": ["db", "report_family:shared"],
+                        "source_count": 2,
+                        "priority": 90,
+                        "scan_eligible": True,
+                        "scan_eligibility_reason": "eligible",
+                    },
+                    {
+                        "target_type": "ip",
+                        "target_value": "0.0.0.0",
+                        "source_groups": ["db", "report_family:noise"],
+                        "source_count": 2,
+                        "priority": 10,
+                        "scan_eligible": False,
+                        "scan_eligibility_reason": "non_global_ip",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=feed_path,
+        data_dir=tmp_path / "data",
+        engagement=None,
+    )
+
+    scan = payload["target_feed_scan"]
+    assert scan["exists"] is True
+    assert scan["total_count"] == 2
+    assert scan["eligible_count"] == 1
+    assert scan["ineligible_count"] == 1
+    assert scan["high_priority_count"] == 1
+    assert scan["ineligible_reasons"] == {"non_global_ip": 1}
+    assert scan["top_targets"][0]["target_value"] == "shared.example"
+
+
 def test_automation_cycle_dry_run_plans_feed_and_queue_without_writes(
     tmp_path: Path,
 ) -> None:
@@ -118,6 +170,8 @@ def test_automation_cycle_dry_run_plans_feed_and_queue_without_writes(
 
     assert payload["execution_policy"] == "dry_run_no_writes_or_live_commands_executed"
     assert payload["feed_written"] is False
+    assert payload["target_feed_scan"]["exists"] is True
+    assert payload["target_feed_scan"]["eligible_count"] == 0
     assert (
         payload["scan_policy"]["new_targets"]
         == "scan_immediately_when_cycle_runs_with_apply_live_and_roe_gates_pass"
