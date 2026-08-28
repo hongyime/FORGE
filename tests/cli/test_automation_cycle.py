@@ -81,6 +81,7 @@ def test_automation_status_reports_ready_and_blocked_queue_items(tmp_path: Path)
 
     assert payload["schema_version"] == "forge.automation_status.v1"
     assert payload["execution_policy"] == "read_only_status_no_commands_executed"
+    assert payload["status"] == "blocked"
     assert payload["queues"]["total"] == 2
     assert payload["queues"]["ready"] == 1
     assert payload["queues"]["blocked"] == 1
@@ -636,6 +637,66 @@ def test_automation_status_autostart_history_flags_unreadable_log(
     assert payload["autostart_history"]["recent_status_counts"] == {"completed": 1}
 
 
+def test_automation_status_label_ready_with_backlog_when_feed_exists(
+    tmp_path: Path, monkeypatch
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+
+    def fake_due_plan(_data_dir: Path, *, limit: int | None = None) -> dict[str, object]:
+        assert limit == 0
+        return {
+            "total_due_count": 1,
+            "planned_policy_count": 0,
+            "limited_policy_count": 1,
+            "default_execution_limit": 50,
+            "estimated_capped_invocations": 1,
+            "oldest_due_age_seconds": 60,
+            "stale_backlog": {},
+            "policy_summary": {},
+            "action_plan": [],
+            "errors": [],
+        }
+
+    monkeypatch.setattr(automation_cycle_module, "monitoring_due_plan_for_data_dir", fake_due_plan)
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["status"] == "ready_with_backlog"
+
+
+def test_automation_status_label_attention_for_autostart_log_errors(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    data_dir = tmp_path / "data"
+    state_dir = data_dir / "automation"
+    state_dir.mkdir(parents=True)
+    (state_dir / "guarded-autostart.jsonl").write_text("{bad json}\n", encoding="utf-8")
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=data_dir,
+    )
+
+    assert payload["status"] == "attention"
+    assert payload["autostart_history"]["status"] == "log_attention"
+
+
 def test_automation_status_report_review_fails_closed(tmp_path: Path, monkeypatch) -> None:
     def fail_report_audit(**_kwargs):
         raise RuntimeError("dashboard json unreadable")
@@ -739,6 +800,7 @@ def test_automation_status_next_actions_include_backlog_dry_runs(
         data_dir=tmp_path / "data",
     )
 
+    assert payload["status"] == "ready_needs_feed"
     assert payload["next_actions"][:4] == [
         "forge automation cycle --apply --live --docker-probe-mode compose-dependency --json",
         "forge targets resume-plan --json --redact-paths --limit 20",

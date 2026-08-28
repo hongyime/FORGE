@@ -107,9 +107,20 @@ def automation_status(
     resume_backlog = _resume_backlog_summary(data_dir=Path(cfg_data_dir))
     monitoring_due = _monitoring_due_summary(data_dir=Path(cfg_data_dir))
     report_review = _report_review_summary(reports_dir=reports_dir or Path("reports"))
+    status_label = _automation_status_label(
+        ready_items=ready_items,
+        blocked_items=blocked_items,
+        autostart_probe=autostart_probe,
+        autostart_history=autostart_history,
+        resume_backlog=resume_backlog,
+        monitoring_due=monitoring_due,
+        report_review=report_review,
+        target_feed_scan=target_feed_scan,
+    )
     return {
         "schema_version": AUTOMATION_STATUS_SCHEMA_VERSION,
         "execution_policy": "read_only_status_no_commands_executed",
+        "status": status_label,
         "generated_at": _now_iso(),
         "paths": {
             "imports_dir": str(root_imports),
@@ -1788,6 +1799,39 @@ def _status_next_actions(
             )
         )
     return _dedupe_strings(actions)[:8]
+
+
+def _automation_status_label(
+    *,
+    ready_items: list[dict[str, Any]],
+    blocked_items: list[dict[str, Any]],
+    autostart_probe: dict[str, Any] | None,
+    autostart_history: dict[str, Any],
+    resume_backlog: dict[str, Any],
+    monitoring_due: dict[str, Any],
+    report_review: dict[str, Any],
+    target_feed_scan: dict[str, Any],
+) -> str:
+    autostart_blockers = [
+        str(item)
+        for item in ((autostart_probe or {}).get("blockers") or [])
+        if str(item)
+    ]
+    if autostart_blockers or blocked_items:
+        return "blocked"
+    if str(autostart_history.get("status") or "") == "log_attention":
+        return "attention"
+    if ready_items:
+        return "ready_with_inputs"
+    if not bool(target_feed_scan.get("exists")):
+        return "ready_needs_feed"
+    if (
+        int(resume_backlog.get("resume_ready_count") or 0) > 0
+        or int(monitoring_due.get("total_due_count") or 0) > 0
+        or int(report_review.get("total_count") or 0) > 0
+    ):
+        return "ready_with_backlog"
+    return "ready"
 
 
 def _status_backlog_next_actions(
