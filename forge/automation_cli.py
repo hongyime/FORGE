@@ -11,6 +11,7 @@ from forge.automation_cycle import (
     automation_cycle,
     automation_status,
     configure_source_input,
+    refresh_public_cti_input,
 )
 from forge.automation_policy import (
     automation_defaults_review,
@@ -433,6 +434,75 @@ def register_automation_commands(app: typer.Typer) -> None:
             f"value={payload['value']} "
             f"status={payload['status']} "
             f"changed={payload['changed']}"
+        )
+        console.print(str(payload["next_action"]))
+
+    @app.command("cti-refresh")
+    def cti_refresh(
+        provider: str = typer.Option(
+            "threatfox",
+            "--provider",
+            help="Public no-key CTI provider to refresh. Currently: threatfox.",
+        ),
+        imports_dir: Path = typer.Option(
+            Path("imports"),
+            "--imports-dir",
+            help="Imports dir where the CTI artifact and source queue are maintained.",
+        ),
+        days: int = typer.Option(
+            1,
+            "--days",
+            min=1,
+            max=7,
+            help="ThreatFox recent IOC window in days.",
+        ),
+        limit: int | None = typer.Option(
+            None,
+            "--limit",
+            min=1,
+            max=100000,
+            help="Maximum downloaded IOCs to keep in the local artifact.",
+        ),
+        engagement: int | None = typer.Option(
+            None,
+            "--engagement",
+            "-e",
+            help="Optional engagement id to store on the queued import.",
+        ),
+        key_env: str = typer.Option(
+            "",
+            "--key-env",
+            help="Environment variable holding a free abuse.ch Auth-Key for --apply.",
+        ),
+        apply: bool = typer.Option(
+            False,
+            "--apply",
+            help="Fetch the public feed and update local artifact/queue. Requires --key-env; default dry-run does not call the network.",
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        try:
+            payload = refresh_public_cti_input(
+                provider=provider,
+                imports_dir=imports_dir,
+                days=days,
+                limit=limit,
+                engagement=engagement,
+                key_env=key_env,
+                apply=apply,
+            )
+        except ValueError as exc:
+            console.print(f"[red]cti-refresh rejected:[/red] {exc}")
+            raise typer.Exit(code=2) from exc
+        if json_output:
+            typer.echo(json.dumps(payload, sort_keys=True))
+            return
+        mode = "apply" if payload["apply_requested"] else "dry-run"
+        console.print(
+            f"[bold]CTI refresh ({mode})[/bold] "
+            f"provider={payload['provider']} "
+            f"downloaded={payload['downloaded_count']} "
+            f"written={payload['written']}"
         )
         console.print(str(payload["next_action"]))
 

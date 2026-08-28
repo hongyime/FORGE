@@ -10,6 +10,7 @@ import typer
 import pytest
 from typer.testing import CliRunner
 
+import forge.automation_cycle as automation_cycle_module
 from forge.automation_cli import register_automation_commands
 from forge.automation_target_feed import build_target_feed
 
@@ -721,6 +722,253 @@ def test_input_add_rejects_unknown_connector_control_files_and_secret_values(
     assert secret.exit_code == 2
     assert "artifact_must_be_local_path_not_secret_value" in secret.output
     assert not any(imports_dir.glob("*.local.json"))
+
+
+def test_cti_refresh_dry_run_does_not_call_network_or_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox-observations.local.json").write_text(
+        json.dumps({"schema_version": "forge.cti_observations.local.v1", "data": []}),
+        encoding="utf-8",
+    )
+
+    def fail_post(*_args, **_kwargs):
+        raise AssertionError("dry-run must not call ThreatFox")
+
+    monkeypatch.setattr(automation_cycle_module.httpx, "post", fail_post)
+
+    result = runner.invoke(
+        app,
+        [
+            "cti-refresh",
+            "--provider",
+            "threatfox",
+            "--imports-dir",
+            str(imports_dir),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.public_cti_refresh.v1"
+    assert payload["execution_policy"] == "dry_run_no_network_or_writes"
+    assert payload["downloaded_count"] == 0
+    assert payload["written"] is False
+    assert payload["requires_key_env"] is True
+    assert payload["queue_update"]["status"] == "would_append"
+    saved = json.loads(
+        (imports_dir / "threatfox-observations.local.json").read_text(encoding="utf-8")
+    )
+    assert saved["data"] == []
+    assert not (imports_dir / "threatfox-inputs.local.json").exists()
+
+
+def test_cti_refresh_apply_fetches_threatfox_artifact_and_queues_input(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imports_dir = tmp_path / "imports"
+    monkeypatch.setenv("FORGE_THREATFOX_AUTH_KEY", "free-test-auth-key")
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {
+                "query_status": "ok",
+                "data": [
+                    {
+                        "id": "1",
+                        "ioc": "alpha.example",
+                        "ioc_type": "domain",
+                        "confidence_level": 80,
+                    },
+                    {
+                        "id": "2",
+                        "ioc": "https://beta.example/path",
+                        "ioc_type": "url",
+                        "confidence_level": 75,
+                    },
+                ],
+            }
+
+    requests: list[dict] = []
+
+    def fake_post(url, *, headers, json, timeout):
+        requests.append(
+            {"url": url, "headers": headers, "json": json, "timeout": timeout}
+        )
+        return FakeResponse()
+
+    monkeypatch.setattr(automation_cycle_module.httpx, "post", fake_post)
+
+    result = runner.invoke(
+        app,
+        [
+            "cti-refresh",
+            "--provider",
+            "threatfox",
+            "--imports-dir",
+            str(imports_dir),
+            "--days",
+            "2",
+            "--limit",
+            "1",
+            "--engagement",
+            "1001",
+            "--key-env",
+            "FORGE_THREATFOX_AUTH_KEY",
+            "--apply",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["execution_policy"] == (
+        "public_provider_read_local_artifact_and_queue_write"
+    )
+    assert payload["downloaded_count"] == 1
+    assert requests == [
+        {
+            "url": automation_cycle_module.THREATFOX_RECENT_IOCS_URL,
+            "headers": {"Auth-Key": "free-test-auth-key"},
+            "json": {"query": "get_iocs", "days": 2},
+            "timeout": 30.0,
+        }
+    ]
+    artifact = imports_dir / "threatfox-observations.local.json"
+    saved = json.loads(artifact.read_text(encoding="utf-8"))
+    assert saved["schema_version"] == "forge.cti_observations.local.v1"
+    assert saved["provider"] == "abusech_threatfox"
+    assert saved["collection_method"] == "public_api_recent_iocs"
+    assert [item["ioc"] for item in saved["data"]] == ["alpha.example"]
+    queue = json.loads(
+        (imports_dir / "threatfox-inputs.local.json").read_text(encoding="utf-8")
+    )
+    assert queue["inputs"][0]["value"] == "threatfox-observations.local.json"
+    assert queue["inputs"][0]["engagement_id"] == 1001
+    assert payload["queue_update"]["status"] == "append"
+
+
+def test_cti_refresh_apply_requires_key_env_without_writes(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+
+    result = runner.invoke(
+        app,
+        [
+            "cti-refresh",
+            "--provider",
+            "threatfox",
+            "--imports-dir",
+            str(imports_dir),
+            "--apply",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "key_env_required_for_threatfox_apply" in result.output
+    assert not (imports_dir / "threatfox-observations.local.json").exists()
+    assert not (imports_dir / "threatfox-inputs.local.json").exists()
+
+
+def test_cti_refresh_apply_no_result_writes_no_empty_queue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imports_dir = tmp_path / "imports"
+    monkeypatch.setenv("FORGE_THREATFOX_AUTH_KEY", "free-test-auth-key")
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"query_status": "no_result", "data": []}
+
+    monkeypatch.setattr(
+        automation_cycle_module.httpx,
+        "post",
+        lambda *_args, **_kwargs: FakeResponse(),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "cti-refresh",
+            "--provider",
+            "threatfox",
+            "--key-env",
+            "FORGE_THREATFOX_AUTH_KEY",
+            "--imports-dir",
+            str(imports_dir),
+            "--apply",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["execution_policy"] == "public_provider_read_no_iocs_no_writes"
+    assert payload["downloaded_count"] == 0
+    assert payload["written"] is False
+    assert payload["queue_update"] is None
+    assert not (imports_dir / "threatfox-observations.local.json").exists()
+    assert not (imports_dir / "threatfox-inputs.local.json").exists()
+
+
+def test_cti_refresh_http_failure_writes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imports_dir = tmp_path / "imports"
+    monkeypatch.setenv("FORGE_THREATFOX_AUTH_KEY", "free-test-auth-key")
+
+    def fail_post(*_args, **_kwargs):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(automation_cycle_module.httpx, "post", fail_post)
+
+    result = runner.invoke(
+        app,
+        [
+            "cti-refresh",
+            "--provider",
+            "threatfox",
+            "--key-env",
+            "FORGE_THREATFOX_AUTH_KEY",
+            "--imports-dir",
+            str(imports_dir),
+            "--apply",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "threatfox_http:RuntimeError" in result.output
+    assert not (imports_dir / "threatfox-observations.local.json").exists()
+    assert not (imports_dir / "threatfox-inputs.local.json").exists()
+
+
+def test_cti_refresh_rejects_keyed_or_unimplemented_public_sources(
+    tmp_path: Path,
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "cti-refresh",
+            "--provider",
+            "urlhaus",
+            "--imports-dir",
+            str(tmp_path / "imports"),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "unsupported_public_cti_provider:urlhaus" in result.output
 
 
 def test_feed_build_missing_and_malformed_sources_fail_soft(tmp_path: Path) -> None:

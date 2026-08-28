@@ -100,6 +100,18 @@ forge automation input-add --connector burp_dast_xml --file burp-results.xml --t
 ```
 
 This writes only queue metadata, dedupes, and defaults to dry-run.
+ThreatFox direct refresh is free-account/keyed and explicit:
+
+```powershell
+forge automation cti-refresh --provider threatfox --key-env FORGE_THREATFOX_AUTH_KEY --days 1 --apply --json
+```
+
+Dry-run does not call the network or require the key. Apply writes
+`imports/threatfox-observations.local.json` and queues it for `automation cycle`.
+URLhaus, MISP, STIX/TAXII, and private CTI feeds stay on the local artifact queue
+path unless their required free auth/endpoint/export is configured. For no-key
+operation, drop local CTI exports under `imports/` or queue them with
+`forge automation input-add`.
 Local CTI/connector feed extraction is passive and bounded: JSON is parsed
 structurally, while JSONL/CSV/XML/TXT/LOG plus local GZ/ZIP drops are scanned
 only for normalized target-like values. Local CTI feed extraction reads ignored

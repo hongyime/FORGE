@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from forge.automation_self_heal import DEFAULT_AUTOSTART_CONFIG_PATH, run_guarded_autostart
 from forge.automation_target_feed import build_target_feed, write_target_feed
 from forge.config import ForgeConfig
@@ -60,6 +62,8 @@ QUEUE_MAX_FAILURES = 5
 QUEUE_RETRY_BASE_SECONDS = 15 * 60
 QUEUE_RETRY_MAX_SECONDS = 6 * 60 * 60
 DEFAULT_ENGAGEMENT_ENV = "FORGE_DEFAULT_ENGAGEMENT_ID"
+THREATFOX_RECENT_IOCS_URL = "https://threatfox-api.abuse.ch/api/v1/"
+THREATFOX_REFRESH_FILENAME = "threatfox-observations.local.json"
 
 
 def automation_status(
@@ -326,6 +330,156 @@ def classify_import_inbox(*, imports_dir: Path | None = None, apply: bool = Fals
     }
 
 
+def refresh_public_cti_input(
+    *,
+    provider: str,
+    imports_dir: Path | None = None,
+    days: int = 1,
+    limit: int | None = None,
+    engagement: int | None = None,
+    key_env: str = "",
+    apply: bool = False,
+) -> dict[str, Any]:
+    normalized_provider = str(provider or "").strip().lower()
+    if normalized_provider != "threatfox":
+        raise ValueError(f"unsupported_public_cti_provider:{normalized_provider}")
+    safe_days = max(1, min(int(days), 7))
+    safe_limit = _safe_positive_int(limit) if limit is not None else None
+    root_imports = Path(imports_dir or "imports")
+    artifact = root_imports / THREATFOX_REFRESH_FILENAME
+    if not apply:
+        queue_preview = {
+            "schema_version": "forge.source_input_config.v1",
+            "execution_policy": "dry_run_no_writes",
+            "dry_run": True,
+            "apply_requested": False,
+            "config_path": str(root_imports / SOURCE_QUEUE_FILES["abusech_threatfox"]["filename"]),
+            "connector_id": "abusech_threatfox",
+            "input_kind": "cti_marker",
+            "value": THREATFOX_REFRESH_FILENAME,
+            "engagement_id": engagement,
+            "target": "",
+            "priority": _default_input_priority("abusech_threatfox"),
+            "status": "would_append",
+            "changed": True,
+            "next_action": "Run forge automation cycle --apply --source all --json.",
+        }
+        return {
+            "schema_version": "forge.public_cti_refresh.v1",
+            "execution_policy": "dry_run_no_network_or_writes",
+            "dry_run": True,
+            "apply_requested": False,
+            "provider": normalized_provider,
+            "source_url": THREATFOX_RECENT_IOCS_URL,
+            "days": safe_days,
+            "limit": safe_limit,
+            "key_env": str(key_env or "").strip(),
+            "requires_key_env": True,
+            "artifact_path": str(artifact),
+            "downloaded_count": 0,
+            "written": False,
+            "queue_update": queue_preview,
+            "next_action": (
+                "Set a free abuse.ch Auth-Key in a local environment variable, then run "
+                "forge automation cti-refresh --provider threatfox --key-env ENV --apply --json."
+            ),
+        }
+
+    auth_key_env = str(key_env or "").strip()
+    if not auth_key_env:
+        raise ValueError("key_env_required_for_threatfox_apply")
+    if not _env_var_name_valid(auth_key_env):
+        raise ValueError("key_env_must_be_env_var_name_not_key_value")
+    auth_key = os.environ.get(auth_key_env, "").strip()
+    if not auth_key:
+        raise ValueError(f"key_env_unset:{auth_key_env}")
+
+    payload = _fetch_threatfox_recent_iocs(days=safe_days, auth_key=auth_key)
+    raw_data = payload.get("data")
+    data = raw_data if isinstance(raw_data, list) else []
+    if safe_limit is not None:
+        data = data[:safe_limit]
+    if not data:
+        return {
+            "schema_version": "forge.public_cti_refresh.v1",
+            "execution_policy": "public_provider_read_no_iocs_no_writes",
+            "dry_run": False,
+            "apply_requested": True,
+            "provider": normalized_provider,
+            "source_url": THREATFOX_RECENT_IOCS_URL,
+            "days": safe_days,
+            "limit": safe_limit,
+            "key_env": auth_key_env,
+            "requires_key_env": True,
+            "artifact_path": str(artifact),
+            "downloaded_count": 0,
+            "written": False,
+            "queue_update": None,
+            "next_action": "No recent ThreatFox IOCs were returned; keep using local artifact queues.",
+        }
+    export_payload = {
+        "schema_version": "forge.cti_observations.local.v1",
+        "provider": "abusech_threatfox",
+        "source_url": THREATFOX_RECENT_IOCS_URL,
+        "collection_method": "public_api_recent_iocs",
+        "fetched_at": _now_iso(),
+        "days": safe_days,
+        "query_status": str(payload.get("query_status") or ""),
+        "data": data,
+    }
+    root_imports.mkdir(parents=True, exist_ok=True)
+    _write_json_atomic(artifact, export_payload)
+    queue_update = configure_source_input(
+        connector_id="abusech_threatfox",
+        artifact=artifact,
+        imports_dir=root_imports,
+        engagement=engagement,
+        apply=True,
+    )
+    return {
+        "schema_version": "forge.public_cti_refresh.v1",
+        "execution_policy": "public_provider_read_local_artifact_and_queue_write",
+        "dry_run": False,
+        "apply_requested": True,
+        "provider": normalized_provider,
+        "source_url": THREATFOX_RECENT_IOCS_URL,
+        "days": safe_days,
+        "limit": safe_limit,
+        "key_env": auth_key_env,
+        "requires_key_env": True,
+        "artifact_path": str(artifact),
+        "downloaded_count": len(data),
+        "written": True,
+        "queue_update": queue_update,
+        "next_action": "Run forge automation cycle --apply --source all --json.",
+    }
+
+
+def _fetch_threatfox_recent_iocs(*, days: int, auth_key: str) -> dict[str, Any]:
+    try:
+        response = httpx.post(
+            THREATFOX_RECENT_IOCS_URL,
+            headers={"Auth-Key": auth_key},
+            json={"query": "get_iocs", "days": days},
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"threatfox_http:{type(exc).__name__}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("threatfox_response_not_object")
+    status = str(payload.get("query_status") or "").strip().lower()
+    if status and status not in {"ok", "no_result"}:
+        raise ValueError(f"threatfox_query_status:{status}")
+    raw_data = payload.get("data", [])
+    if raw_data is None:
+        payload["data"] = []
+    elif not isinstance(raw_data, list):
+        raise ValueError("threatfox_data_not_list")
+    return payload
+
+
 def configure_source_input(
     *,
     connector_id: str,
@@ -428,6 +582,16 @@ def _secret_like_input_value(value: str) -> bool:
     if lowered.startswith(("sk-", "sk_", "eyj", "xox", "ghp_", "github_pat_")):
         return True
     return False
+
+
+def _env_var_name_valid(value: str) -> bool:
+    stripped = str(value or "").strip()
+    if not stripped:
+        return False
+    first = stripped[0]
+    if not (first.isalpha() or first == "_"):
+        return False
+    return all(character.isalnum() or character == "_" for character in stripped)
 
 
 def _input_kind_for_command(command_kind: str) -> str:

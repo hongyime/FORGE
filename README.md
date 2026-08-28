@@ -271,6 +271,7 @@ forge automation cycle [--apply] [--live] [--docker-probe-mode host-compose|comp
 forge automation feed-build [--output imports/target-feed.json] [--apply] [--json] [--source all|supabase|reports|db|cti|connectors] [--supabase-config PATH] [--limit N]
 forge automation supabase-add PROJECT_REF KEY_ENV [--config imports/supabase-projects.local.json] [--apply] [--replace] [--json]
 forge automation input-add --connector CONNECTOR_ID --file ARTIFACT [--imports-dir imports] [--engagement N] [--target URL] [--apply] [--json]
+forge automation cti-refresh --provider threatfox [--key-env ENV] [--days 1-7] [--limit N] [--imports-dir imports] [--engagement N] [--apply] [--json]
 forge automation self-heal-plan [--json] [--probe-docker] [--min-free-memory-mb N] [--min-free-disk-gb N] [--max-parallel N]
 forge automation guarded-autostart [--config imports/autostart.local.json] [--apply] [--docker-probe-mode host-compose|compose-dependency|disabled] [--json]
 forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-first connector/plugin catalog
@@ -400,6 +401,22 @@ forge automation input-add --connector burp_dast_xml --file burp-results.xml --t
 The command writes only queue metadata, dedupes existing entries, and defaults
 to dry-run. Relative `--file` values are resolved under `imports/`; absolute
 paths are allowed for local artifacts outside the imports tree.
+
+ThreatFox recent-IOC refresh is free-account/keyed, not no-key. Forge can
+refresh it directly only when explicitly applied with a local env var holding
+the abuse.ch Auth-Key:
+
+```powershell
+forge automation cti-refresh --provider threatfox --key-env FORGE_THREATFOX_AUTH_KEY --days 1 --apply --json
+```
+
+Dry-run does not call the network or require the key. Apply writes
+`imports/threatfox-observations.local.json` and queues it in
+`imports/threatfox-inputs.local.json` for the next `automation cycle`. URLhaus,
+MISP, STIX/TAXII, and private CTI feeds remain local artifact/queue inputs
+unless you configure their required free account key, endpoint, or export
+yourself. For no-key operation, drop local CTI exports under `imports/` or queue
+them with `forge automation input-add`.
 
 Source queue execution is bounded for unattended runs. Failed local imports are
 marked `failed`, keep a redacted last error and return code, wait at least 15
