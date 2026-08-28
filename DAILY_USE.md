@@ -41,6 +41,7 @@ forge automation self-heal-plan --json
 forge automation guarded-autostart --json
 forge automation command-review --json
 forge doctor --json
+forge targets import --feed-file imports/target-feed.json --dry-run --limit 100 --json
 forge targets resume-run --dry-run --json
 forge connectors run-plan --json
 forge report quality-audit --json

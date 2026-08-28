@@ -60,7 +60,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
         limit: Optional[int] = typer.Option(
             None,
             "--limit",
-            help="Maximum feed items to import after dedupe. Default 100, max 1000.",
+            help="Maximum feed items to import after dedupe. Default 100, max 100000.",
         ),
         max_iter: int = typer.Option(
             3,
@@ -80,6 +80,11 @@ def register_target_import_commands(app: typer.Typer) -> None:
             None,
             "--start-limit",
             help="Maximum new kill-chain runs to launch during this import.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable import results.",
         ),
     ) -> None:
         """Import generic sanitized target feeds into one engagement per target."""
@@ -102,6 +107,26 @@ def register_target_import_commands(app: typer.Typer) -> None:
         created = sum(1 for item in results if item.created)
         reused = sum(1 for item in results if item.engagement_id is not None and not item.created)
         started = sum(1 for item in results if item.started)
+        if json_output:
+            payload = {
+                "schema_version": "forge.targets_import.v1",
+                "execution_policy": (
+                    "dry_run_no_engagement_writes_or_starts"
+                    if dry_run
+                    else "imports_targets_and_may_start_kill_chain"
+                ),
+                "dry_run": bool(dry_run),
+                "start_requested": bool(start),
+                "total_count": len(results),
+                "selected_count": len(results),
+                "omitted_count": 0,
+                "created_count": created,
+                "reused_count": reused,
+                "started_count": started,
+                "results": [_target_import_result_payload(item) for item in results],
+            }
+            typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+            return
         if dry_run:
             console.print(f"[green]DRY RUN:[/green] {len(results)} target(s) parsed and deduped.")
             return
@@ -269,6 +294,20 @@ def register_target_import_commands(app: typer.Typer) -> None:
             redact_paths=redact_paths,
         )
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+    def _target_import_result_payload(result: object) -> dict[str, object]:
+        scope_manifest = getattr(result, "scope_manifest", None)
+        return {
+            "engagement_id": getattr(result, "engagement_id", None),
+            "target_type": str(getattr(result, "target_type", "")),
+            "target_value": str(getattr(result, "target_value", "")),
+            "target_key": str(getattr(result, "target_key", "")),
+            "scope_manifest": str(scope_manifest) if scope_manifest is not None else None,
+            "created": bool(getattr(result, "created", False)),
+            "started": bool(getattr(result, "started", False)),
+            "dry_run": bool(getattr(result, "dry_run", False)),
+        }
 
     @app.command("resume-lock-status")
     def targets_resume_lock_status(

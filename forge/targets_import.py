@@ -27,6 +27,8 @@ TARGET_IMPORT_MONITORING_POLICY_NAME = "Target import seed exposure"
 TARGET_IMPORT_MONITORING_INTERVAL_MINUTES = 60
 DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES = 25
 TARGET_IMPORT_CHILD_TIMEOUT_GRACE_SECONDS = 120
+MAX_TARGET_FEED_FILE_BYTES = 64 * 1024 * 1024
+MAX_TARGET_FEED_IMPORT_ITEMS = 100_000
 SUPPORTED_TARGET_TYPES = {
     "apk_url",
     "artifact_url",
@@ -260,8 +262,8 @@ def _fetch_feed(feed_url: str | None, auth_header_env: str | None) -> Any:
 def _read_feed_file(feed_file: Path | None) -> Any:
     assert feed_file is not None
     path = Path(feed_file).expanduser()
-    if path.stat().st_size > 2_097_152:
-        raise ValueError("target feed file is too large: exceeds 2 MiB cap")
+    if path.stat().st_size > MAX_TARGET_FEED_FILE_BYTES:
+        raise ValueError("target feed file is too large: exceeds 64 MiB cap")
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -271,7 +273,7 @@ def _normalize_limit(limit: int | None) -> int:
     value = int(limit)
     if value <= 0:
         raise ValueError("--limit must be greater than zero")
-    return min(value, 1_000)
+    return min(value, MAX_TARGET_FEED_IMPORT_ITEMS)
 
 
 def _normalize_start_limit(start_limit: int | None) -> int | None:

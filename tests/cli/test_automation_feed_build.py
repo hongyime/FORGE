@@ -172,6 +172,54 @@ def test_feed_build_apply_writes_then_rerun_reports_no_new(tmp_path: Path) -> No
     assert second_payload["items"][0]["source_group"] == "db"
 
 
+def test_feed_build_rerun_reads_large_existing_feed_without_legacy_item_cap(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    existing = tmp_path / "imports" / "target-feed.json"
+    existing.parent.mkdir(parents=True)
+    existing_items = [
+        {
+            "target_type": "domain",
+            "target_value": f"bulk-{index}.example",
+            "source_kind": "previous",
+            "source_group": "previous",
+            "confidence": 0.9,
+            "first_seen_at": "2026-08-28T00:00:00Z",
+            "provenance": "previous-feed",
+        }
+        for index in range(1200)
+    ]
+    existing.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "generated_at": "2026-08-28T00:00:00Z",
+                "items": existing_items,
+            }
+        ),
+        encoding="utf-8",
+    )
+    _make_engagement_db(data_dir, 8, [("bulk-1100.example", "domain")])
+
+    payload = build_target_feed(
+        sources=["db"],
+        data_dir=data_dir,
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=existing,
+    )
+
+    assert payload["source_errors"] == []
+    assert payload["counts"]["new_vs_existing"] == 0
+    assert payload["counts"]["omitted_duplicate"] == 1
+    matched = [
+        item for item in payload["items"] if item["canonical_value"] == "bulk-1100.example"
+    ]
+    assert matched[0]["source_group"] == "previous"
+
+
 def test_feed_build_missing_and_malformed_sources_fail_soft(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True)
@@ -198,6 +246,31 @@ def test_feed_build_missing_and_malformed_sources_fail_soft(tmp_path: Path) -> N
     error_sources = {err["source"] for err in payload["source_errors"]}
     assert "db" in error_sources
     assert "reports" in error_sources
+
+
+def test_feed_build_reports_skips_dashboard_aggregate_without_error(tmp_path: Path) -> None:
+    reports_dir = tmp_path / "reports"
+    data_dir = reports_dir / "dashboard" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "engagements.json").write_text(
+        json.dumps({"items": [{"target": "aggregate-only.example"}]}),
+        encoding="utf-8",
+    )
+    _make_dashboard_report(reports_dir, "detailfam", {"hosts": ["detail.example"]})
+
+    payload = build_target_feed(
+        sources=["reports"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert payload["source_errors"] == []
+    values = {item["target_value"] for item in payload["items"]}
+    assert "detail.example" in values
+    assert "aggregate-only.example" not in values
 
 
 def test_feed_build_connector_source_ignores_local_config_files(tmp_path: Path) -> None:

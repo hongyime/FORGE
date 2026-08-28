@@ -2184,6 +2184,40 @@ def test_load_target_feed_skips_item_level_unpack_value_error(
     ]
 
 
+def test_load_target_feed_accepts_daily_feed_over_legacy_two_mib_cap(tmp_path: Path) -> None:
+    feed_path = tmp_path / "large-feed.json"
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "generated_at": "2026-08-28T00:00:00Z",
+                "padding": "x" * (2_097_152 + 1),
+                "items": [
+                    {
+                        "target_type": "domain",
+                        "target_value": "large-feed.example",
+                        "source_kind": "reports",
+                        "confidence": 1,
+                        "first_seen_at": "2026-08-28T00:00:00Z",
+                        "provenance": "test",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    items = load_target_feed(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        limit=None,
+    )
+
+    assert len(items) == 1
+    assert items[0].canonical_value == "large-feed.example"
+
+
 def test_targets_import_cli_registration_supports_dry_run(tmp_path: Path) -> None:
     feed_path = tmp_path / "feed.json"
     _write_feed(feed_path)
@@ -2207,6 +2241,36 @@ def test_targets_import_cli_registration_supports_dry_run(tmp_path: Path) -> Non
     assert result.exit_code == 0, result.output
     assert "DRY RUN" in result.output
     assert "2 target(s) parsed and deduped" in result.output
+
+
+def test_targets_import_cli_supports_json_output(tmp_path: Path) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+
+    app = typer.Typer()
+    targets_app = typer.Typer()
+    register_target_import_commands(targets_app)
+    app.add_typer(targets_app, name="targets")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "targets",
+            "import",
+            "--feed-file",
+            str(feed_path),
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.targets_import.v1"
+    assert payload["execution_policy"] == "dry_run_no_engagement_writes_or_starts"
+    assert payload["total_count"] == 2
+    assert payload["started_count"] == 0
+    assert payload["results"][0]["dry_run"] is True
 
 
 def test_targets_import_cli_passes_max_runtime_minutes(

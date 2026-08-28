@@ -252,7 +252,7 @@ forge graph attribution import --engagement N --file attributions.json|csv
 forge audit manifest-verify --engagement N
 forge audit manifest-export --engagement N [--sign] [--remote-store]
 forge audit manifest-bundle-verify --bundle PATH
-forge targets import --feed-url URL|--feed-file PATH
+forge targets import --feed-url URL|--feed-file PATH [--dry-run] [--json] [--limit N] [--start] [--roe-id ROE]
 forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--redact-paths] [--json]  # Default also scans repo-local legacy dashboard DBs
 forge targets resume-plan [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--data-dir PATH] [--redact-paths] [--json]
 forge targets resume-lock-status [--data-dir PATH] [--stale-lock-minutes N] [--redact-paths] [--json]
@@ -465,6 +465,9 @@ plain web URLs. Each imported engagement is also enrolled into the default
 `Target import seed exposure` passive monitoring policy with a baseline snapshot
 so scheduled monitoring can diff future exposure state without a separate setup
 step.
+The default import slice is 100 items, with an explicit bounded max of 100,000;
+local feed files are capped at 64 MiB so the daily merged feed can be reread
+without accepting unbounded input.
 With `--start`, the importer launches the normal scoped `forge kill-chain`
 defaults for each new target, including attack mode, resume, and detected
 follow-on execution; `--roe-id` and the generated narrow scope manifest are

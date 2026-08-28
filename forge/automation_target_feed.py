@@ -30,6 +30,7 @@ from forge.connectors.secrets import resolve_connector_secret_value
 from forge.db.session import get_engagement_db
 from forge.engagement_ids import numeric_engagement_db_files
 from forge.targets_import import (
+    MAX_TARGET_FEED_IMPORT_ITEMS,
     TARGET_FEED_SCHEMA_VERSION,
     _normalize_target_value,
     external_target_key,
@@ -381,6 +382,8 @@ def _extract_reports_source(
             resolved = path.resolve()
             if resolved in seen_files:
                 continue
+            if _is_dashboard_aggregate_file(path):
+                continue
             seen_files.add(resolved)
             scanned += 1
             payload, error = _load_json_file(path)
@@ -402,6 +405,10 @@ def _extract_reports_source(
                 )
             )
     return candidates, errors
+
+
+def _is_dashboard_aggregate_file(path: Path) -> bool:
+    return path.name.lower() == "engagements.json" and path.parent.name.lower() == "data"
 
 
 def _extract_dir_source(
@@ -1426,7 +1433,7 @@ def build_target_feed(
                 feed_url=None,
                 feed_file=Path(existing_feed_path),
                 auth_header_env=None,
-                limit=None,
+                limit=MAX_TARGET_FEED_IMPORT_ITEMS,
             )
             existing_keys = {item.target_key for item in loaded_existing}
             existing_items_raw = [
