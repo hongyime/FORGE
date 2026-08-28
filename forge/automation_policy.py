@@ -178,7 +178,7 @@ def automation_defaults_review(
             "monitor_limit": 25,
             "start_limit": 5,
             "max_runtime_minutes": 20,
-            "min_free_memory_mb": 2048,
+            "min_free_memory_mb": 1024,
             "cooldown_minutes": 30,
             "failure_backoff_minutes": 60,
         },
@@ -199,7 +199,7 @@ def automation_defaults_review(
         {
             "id": "memory_gate",
             "default": autostart_defaults["min_free_memory_mb"],
-            "options": [1536, 2048, 3072, 4096],
+            "options": [1024, 1536, 2048, 3072, 4096],
             "field": "min_free_memory_mb",
         },
         {

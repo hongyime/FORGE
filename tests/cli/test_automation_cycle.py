@@ -400,13 +400,73 @@ def test_automation_cycle_live_reuses_built_feed_without_guarded_rebuild(
         data_dir=tmp_path / "data",
         reports_dir=reports_dir,
         imports_dir=imports_dir,
+        docker_probe_mode="compose-dependency",
         command_runner=lambda _command, _cwd: {"returncode": 0, "stdout": "{}", "stderr": ""},
     )
 
     assert payload["execution_policy"] == "apply_with_live_guarded_autostart"
     assert payload["feed_written"] is True
     assert seen["skip_feed_build"] is True
+    assert seen["docker_probe_mode"] == "compose-dependency"
     assert payload["autostart"]["commands"]["autopilot_dry_run"][1] == "--skip-feed-build"
+
+
+def test_automation_cycle_live_consumes_ready_queue_before_guarded_autostart(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text(
+        json.dumps({"iocs": ["example.com"]}),
+        encoding="utf-8",
+    )
+    queue_path = imports_dir / "threatfox-inputs.local.json"
+    queue_path.write_text(
+        json.dumps({"inputs": [{"value": "threatfox.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    events: list[str] = []
+
+    def _runner(_command: list[str], _cwd: Path) -> dict[str, object]:
+        events.append("queue")
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    def fake_guarded_autostart(**_kwargs):
+        events.append("guarded")
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "ready",
+            "commands": {
+                "autopilot_dry_run": ["forge-autopilot.bat", "--skip-feed-build", "--dry-run"],
+                "autopilot_apply": ["forge-autopilot.bat", "--skip-feed-build"],
+            },
+        }
+
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        command_runner=_runner,
+    )
+
+    assert payload["execution_policy"] == "apply_with_live_guarded_autostart"
+    assert [run["status"] for run in payload["queue_runs"]] == ["completed"]
+    assert payload["autostart"]["status"] == "ready"
+    assert events == ["queue", "guarded"]
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert queue["inputs"][0]["status"] == "imported"
 
 
 def test_doctor_fix_safe_creates_and_repairs_local_files(tmp_path: Path) -> None:

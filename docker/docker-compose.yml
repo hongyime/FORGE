@@ -187,12 +187,13 @@ services:
       - -m
       - forge.cli
       - automation
-      - guarded-autostart
-      - --config
+      - cycle
+      - --autostart-config
       - /app/imports/autostart.local.json
       - --docker-probe-mode
       - compose-dependency
       - --apply
+      - --live
       - --json
     environment:
       <<: *forge-env

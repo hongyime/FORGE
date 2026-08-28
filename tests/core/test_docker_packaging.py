@@ -83,11 +83,13 @@ def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
     assert 'cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"' in compose
     assert 'mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-1024m}"' in compose
     assert "automation" in compose
-    assert "guarded-autostart" in compose
+    assert "cycle" in compose
+    assert "--autostart-config" in compose
     assert "/app/imports/autostart.local.json" in compose
     assert "--docker-probe-mode" in compose
     assert "compose-dependency" in compose
     assert "--apply" in compose
+    assert "--live" in compose
     assert "--json" in compose
     assert 'FORGE_ROE_ID: "${FORGE_ROE_ID:-}"' in compose
     assert "../imports:/app/imports:rw" in compose

@@ -113,7 +113,6 @@ def test_autopilot_windows_apply_stops_after_feed_build_failure(tmp_path: Path) 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     python_log = tmp_path / "python.log"
-    shutil.copy2(sys.executable, bin_dir / "python.exe")
     forge_pkg = tmp_path / "forge"
     forge_pkg.mkdir()
     (forge_pkg / "__init__.py").write_text("", encoding="utf-8")
@@ -135,6 +134,7 @@ def test_autopilot_windows_apply_stops_after_feed_build_failure(tmp_path: Path) 
 
     env = os.environ.copy()
     env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env["PYTHONPATH"] = str(tmp_path)
     env.pop("FORGE_ROE_ID", None)
     result = subprocess.run(
         ["cmd", "/c", str(launcher), "--apply", "--roe-id", "ROE-TEST", "--skip-dashboard"],

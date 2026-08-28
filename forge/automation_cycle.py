@@ -117,6 +117,7 @@ def automation_cycle(
     limit: int | None = None,
     supabase_config: Path | None = None,
     autostart_config: Path | None = None,
+    docker_probe_mode: str | None = None,
     command_runner: Any | None = None,
 ) -> dict[str, Any]:
     root_imports = Path(imports_dir or "imports")
@@ -156,6 +157,7 @@ def automation_cycle(
             data_dir=Path(cfg_data_dir),
             apply=apply,
             skip_feed_build=True,
+            docker_probe_mode=docker_probe_mode,
         )
     execution_policy = "dry_run_no_writes_or_live_commands_executed"
     if apply and live:

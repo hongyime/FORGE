@@ -297,6 +297,70 @@ def test_self_heal_plan_uses_host_connector_bin_dir_for_docker_mounted_tools(
     assert payload["packaged_go_tools"][0]["size_matches_hint"] is True
 
 
+def test_self_heal_plan_marks_docker_mount_missing_when_tools_are_host_only(
+    tmp_path: Path, monkeypatch
+) -> None:
+    home = tmp_path / "home"
+    go_bin = home / "go" / "bin"
+    go_bin.mkdir(parents=True)
+    expected_size = 9
+    (go_bin / "naabu.exe").write_bytes(b"x" * expected_size)
+    monkeypatch.delenv("FORGE_HOST_CONNECTOR_BIN_DIR", raising=False)
+    monkeypatch.setattr(self_heal.Path, "home", lambda: home)
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "naabu", "binary": "naabu.exe", "size_bytes": expected_size, "role": "active_ports"},),
+    )
+
+    payload = automation_self_heal_plan(
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+        min_free_memory_mb=1,
+        min_free_disk_gb=1,
+        probe_docker=True,
+        docker_probe_mode="compose-dependency",
+    )
+
+    assert payload["packaged_go_tools"][0]["available"] is True
+    assert payload["docker_tool_mount_status"]["required"] is True
+    assert payload["docker_tool_mount_status"]["available_count"] == 0
+    assert payload["docker_tool_mount_status"]["missing"] == ["naabu"]
+    assert "docker_tool_mount_missing_runtime_tools:naabu" in payload["blockers"]
+    assert payload["status"] == "blocked"
+
+
+def test_self_heal_plan_accepts_host_connector_bin_dir_for_docker_mount(
+    tmp_path: Path, monkeypatch
+) -> None:
+    mounted_bin = tmp_path / "mounted-tools"
+    mounted_bin.mkdir()
+    expected_size = 9
+    (mounted_bin / "naabu.exe").write_bytes(b"x" * expected_size)
+    monkeypatch.setenv("FORGE_HOST_CONNECTOR_BIN_DIR", str(mounted_bin))
+    monkeypatch.setattr(self_heal.Path, "home", lambda: tmp_path / "empty-home")
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "naabu", "binary": "naabu.exe", "size_bytes": expected_size, "role": "active_ports"},),
+    )
+
+    payload = automation_self_heal_plan(
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+        min_free_memory_mb=1,
+        min_free_disk_gb=1,
+        probe_docker=True,
+        docker_probe_mode="compose-dependency",
+    )
+
+    assert payload["docker_tool_mount_status"]["required"] is True
+    assert payload["docker_tool_mount_status"]["mount_dir"] == str(mounted_bin)
+    assert payload["docker_tool_mount_status"]["available_count"] == 1
+    assert payload["docker_tool_mount_status"]["missing"] == []
+    assert "docker_tool_mount_missing_runtime_tools:naabu" not in payload["blockers"]
+
+
 def test_self_heal_plan_cli_json() -> None:
     result = runner.invoke(app, ["self-heal-plan", "--json"])
 

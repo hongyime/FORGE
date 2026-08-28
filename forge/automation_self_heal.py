@@ -72,12 +72,17 @@ def automation_self_heal_plan(
     )
     tool_rows = _packaged_tool_status(root)
     docker_status = _docker_status(root, probe=probe_docker, mode=docker_probe_mode)
+    docker_tool_mount_status = _docker_tool_mount_status(
+        root,
+        required=_normalize_docker_probe_mode(docker_probe_mode) == "compose_dependency",
+    )
     feed_file = root / "imports" / "target-feed.json"
     lock_file = Path(cfg_data_dir) / "target_imports" / "resume_batches" / "resume-run.lock"
     blockers = _blockers(
         resource_status=resource_status,
         tool_rows=tool_rows,
         docker_status=docker_status,
+        docker_tool_mount_status=docker_tool_mount_status,
     )
     commands = {
         "review_readiness": ["forge", "automation", "self-heal-plan", "--json"],
@@ -169,6 +174,7 @@ def automation_self_heal_plan(
         "blockers": blockers,
         "resource_status": resource_status,
         "docker_status": docker_status,
+        "docker_tool_mount_status": docker_tool_mount_status,
         "packaged_go_tools": tool_rows,
         "paths": {
             "repo_root": str(root),
@@ -935,8 +941,62 @@ def _find_tool_path(binary: str, roots: list[Path]) -> Path | None:
     return Path(found) if found else None
 
 
+def _docker_tool_mount_status(root: Path, *, required: bool = False) -> dict[str, Any]:
+    configured = str(os.environ.get("FORGE_HOST_CONNECTOR_BIN_DIR", "")).strip()
+    mount_dir = Path(configured) if configured else root / "tools" / "bin"
+    rows: list[dict[str, Any]] = []
+    for tool in PACKAGED_GO_TOOLS:
+        if tool["role"] == "developer":
+            continue
+        path = _find_tool_path_in_roots(tool["binary"], [mount_dir])
+        actual_size = path.stat().st_size if path and path.is_file() else None
+        rows.append(
+            {
+                "name": tool["name"],
+                "binary": tool["binary"],
+                "expected_size_bytes": tool["size_bytes"],
+                "path": str(path) if path else "",
+                "available": path is not None,
+                "size_matches_hint": actual_size in {None, int(tool["size_bytes"])},
+                "actual_size_bytes": actual_size,
+            }
+        )
+    missing = [row["name"] for row in rows if not row["available"]]
+    size_mismatched = [
+        row["name"]
+        for row in rows
+        if row["available"] and not row["size_matches_hint"]
+    ]
+    return {
+        "ok": not missing and not size_mismatched,
+        "required": bool(required),
+        "configured_env": "FORGE_HOST_CONNECTOR_BIN_DIR" if configured else "",
+        "mount_dir": str(mount_dir),
+        "total_count": len(rows),
+        "available_count": sum(1 for row in rows if row["available"]),
+        "missing": missing,
+        "size_mismatched": size_mismatched,
+        "tools": rows,
+    }
+
+
+def _find_tool_path_in_roots(binary: str, roots: list[Path]) -> Path | None:
+    for root in roots:
+        candidate = root / binary
+        if candidate.is_file():
+            return candidate
+        non_windows = root / binary.removesuffix(".exe")
+        if non_windows.is_file():
+            return non_windows
+    return None
+
+
+def _normalize_docker_probe_mode(mode: object) -> str:
+    return str(mode or "host_compose").strip().lower().replace("-", "_")
+
+
 def _docker_status(root: Path, *, probe: bool, mode: str = "host_compose") -> dict[str, Any]:
-    normalized_mode = str(mode or "host_compose").strip().lower().replace("-", "_")
+    normalized_mode = _normalize_docker_probe_mode(mode)
     if normalized_mode == "disabled":
         return {"ok": True, "probed": False, "reason": "docker_probe_disabled"}
     if normalized_mode == "compose_dependency":
@@ -1037,6 +1097,7 @@ def _blockers(
     resource_status: dict[str, Any],
     tool_rows: list[dict[str, Any]],
     docker_status: dict[str, Any],
+    docker_tool_mount_status: dict[str, Any],
 ) -> list[str]:
     blockers: list[str] = []
     if not resource_status["memory"]["ok"]:
@@ -1059,4 +1120,15 @@ def _blockers(
     ]
     if mismatched_runtime:
         blockers.append("packaged_runtime_tool_size_mismatch:" + ",".join(mismatched_runtime))
+    if docker_tool_mount_status["required"]:
+        if docker_tool_mount_status["missing"]:
+            blockers.append(
+                "docker_tool_mount_missing_runtime_tools:"
+                + ",".join(docker_tool_mount_status["missing"])
+            )
+        if docker_tool_mount_status["size_mismatched"]:
+            blockers.append(
+                "docker_tool_mount_size_mismatch:"
+                + ",".join(docker_tool_mount_status["size_mismatched"])
+            )
     return blockers

@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-08-29: B686 changed Docker autostart to enter through `automation cycle --apply --live` so source queues are consumed before guarded live phases, added Docker mount-specific tool readiness blockers, and aligned the aggressive defaults review with the 1024 MB gate.
 - 2026-08-29: B685 made the standalone tool audit match Docker autostart reality by accepting `FORGE_HOST_CONNECTOR_BIN_DIR`, locking the requested Go binary inventory in tests, and executing Windows launcher fail-closed behavior tests.
 - 2026-08-29: B684 closed the restarted autonomous-loop audit gaps: feed-build now covers corpus-scale reports and bounded non-JSON local artifacts, source queues back off failed imports, launchers fail closed before live phases without ROE, ProjectDiscovery templates persist as graph evidence, and Censys imports carry richer fingerprints/topology.
 - 2026-08-29: B683 made autonomous startup fail closed more rigorously: direct autopilot launchers are dry-run by default, Docker container health can be delegated to Compose, memory gates are cgroup-aware, and local imports/tool binaries are excluded from Docker build context.

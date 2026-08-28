@@ -267,7 +267,7 @@ forge automation run [--apply] [--json]   # Emit the automation execution plan; 
 forge automation command-review [--json]  # Read-only command count and consolidation review
 forge automation defaults [--json]        # Read-only tunable defaults, presets, and disabled local config template
 forge automation status [--engagement N] [--json]  # Read-only feed, queue, blocker, and next-action status
-forge automation cycle [--apply] [--live] [--engagement N] [--json]  # Daily feed, queue, and optional guarded live loop
+forge automation cycle [--apply] [--live] [--docker-probe-mode host-compose|compose-dependency|disabled] [--engagement N] [--json]  # Daily feed, queue, and optional guarded live loop
 forge automation feed-build [--output imports/target-feed.json] [--apply] [--json] [--source all|supabase|reports|db|cti|connectors] [--supabase-config PATH] [--limit N]
 forge automation self-heal-plan [--json] [--probe-docker] [--min-free-memory-mb N] [--min-free-disk-gb N] [--max-parallel N]
 forge automation guarded-autostart [--config imports/autostart.local.json] [--apply] [--docker-probe-mode host-compose|compose-dependency|disabled] [--json]
@@ -434,8 +434,11 @@ docker compose -f docker/docker-compose.yml --profile autostart up -d
 The `forge-guarded-autostart` service runs once per Compose start with lower
 default caps (`FORGE_AUTOSTART_CPUS=0.25`,
 `FORGE_AUTOSTART_MEM_LIMIT=1024m`), reads
-`/app/imports/autostart.local.json`, and only writes through the mounted
-`imports/`, `reports/`, and `/data` paths. Local Go scanner binaries should be
+`/app/imports/autostart.local.json`, enters through
+`forge automation cycle --apply --live`, and only writes through the mounted
+`imports/`, `reports/`, and `/data` paths. That means Docker startup consumes
+ready local source queues before guarded-autostart launches target import,
+resume, monitoring, or dashboard work. Local Go scanner binaries should be
 placed in ignored `tools/bin/` or mounted by setting
 `FORGE_HOST_CONNECTOR_BIN_DIR`; the container sees them at `/app/tools/bin`,
 which the self-heal probe checks before live startup. Docker health inside this

@@ -192,6 +192,11 @@ def register_automation_commands(app: typer.Typer) -> None:
             "--autostart-config",
             help="Ignored local autostart config path for --live.",
         ),
+        docker_probe_mode: str | None = typer.Option(
+            None,
+            "--docker-probe-mode",
+            help="Override guarded-autostart Docker probe mode for --live.",
+        ),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
         payload = automation_cycle(
@@ -206,6 +211,7 @@ def register_automation_commands(app: typer.Typer) -> None:
             limit=limit,
             supabase_config=supabase_config,
             autostart_config=autostart_config,
+            docker_probe_mode=docker_probe_mode,
         )
         if json_output:
             typer.echo(json.dumps(payload, sort_keys=True))
