@@ -443,11 +443,16 @@ def _monitoring_due_summary(*, data_dir: Path) -> dict[str, Any]:
             "execution_policy": "read_only_monitoring_due_summary_failed",
             "status": "unknown",
             "error": str(exc)[:240],
+            "total_count": 0,
+            "selected_count": 0,
+            "omitted_count": 0,
             "total_due_count": 0,
             "estimated_capped_invocations": 0,
             "next_actions": ["forge monitoring due-plan --json"],
         }
     total_due = int(plan.get("total_due_count") or plan.get("due_policy_count") or 0)
+    planned_count = int(plan.get("planned_policy_count") or 0)
+    limited_count = int(plan.get("limited_policy_count") or max(total_due - planned_count, 0))
     stale_backlog = (
         plan.get("stale_backlog") if isinstance(plan.get("stale_backlog"), dict) else {}
     )
@@ -463,9 +468,12 @@ def _monitoring_due_summary(*, data_dir: Path) -> dict[str, Any]:
     return {
         "execution_policy": "read_only_monitoring_due_summary_no_commands_executed",
         "status": status,
+        "total_count": total_due,
+        "selected_count": planned_count,
+        "omitted_count": limited_count,
         "total_due_count": total_due,
-        "planned_policy_count": int(plan.get("planned_policy_count") or 0),
-        "limited_policy_count": int(plan.get("limited_policy_count") or 0),
+        "planned_policy_count": planned_count,
+        "limited_policy_count": limited_count,
         "default_execution_limit": int(plan.get("default_execution_limit") or 0),
         "estimated_capped_invocations": int(plan.get("estimated_capped_invocations") or 0),
         "oldest_due_age_seconds": int(plan.get("oldest_due_age_seconds") or 0),

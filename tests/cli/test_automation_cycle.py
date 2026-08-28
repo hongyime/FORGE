@@ -322,6 +322,9 @@ def test_automation_status_summarizes_due_monitoring_without_running_it(
         "read_only_monitoring_due_summary_no_commands_executed"
     )
     assert payload["monitoring_due"]["status"] == "stale_due"
+    assert payload["monitoring_due"]["total_count"] == 101
+    assert payload["monitoring_due"]["selected_count"] == 0
+    assert payload["monitoring_due"]["omitted_count"] == 101
     assert payload["monitoring_due"]["total_due_count"] == 101
     assert payload["monitoring_due"]["estimated_capped_invocations"] == 3
     assert payload["monitoring_due"]["next_actions"][0] == [
@@ -1187,6 +1190,9 @@ def test_automation_cycle_includes_monitoring_due_summary(
     )
 
     assert payload["monitoring_due"]["status"] == "idle"
+    assert payload["monitoring_due"]["total_count"] == 0
+    assert payload["monitoring_due"]["selected_count"] == 0
+    assert payload["monitoring_due"]["omitted_count"] == 0
     assert payload["monitoring_due"]["total_due_count"] == 0
     assert payload["monitoring_due"]["execution_policy"] == (
         "read_only_monitoring_due_summary_no_commands_executed"

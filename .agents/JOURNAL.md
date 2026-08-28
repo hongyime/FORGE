@@ -228,3 +228,4 @@
 - 2026-08-29: B725 makes source-readiness setup gates visible in full automation status next_actions while preserving quick-status and backlog-first ordering.
 - 2026-08-29: B726 treats OpenRouter as a free-only static provider signal by default; only an explicit paid-backend gate makes it count as paid API readiness.
 - 2026-08-29: B727 adds an outer timeout to the Docker guarded-autostart loop so a hung cycle cannot suppress later guarded attempts.
+- 2026-08-29: B728 standardizes monitoring-due automation summaries with total/selected/omitted count aliases while preserving existing due-plan fields.
