@@ -264,9 +264,37 @@ def automation_cycle(
         execution_policy = "apply_with_live_guarded_autostart"
     elif apply:
         execution_policy = "apply_local_feed_and_queue_imports"
+    target_feed_scan = _target_feed_scan_summary(
+        feed_path=feed_output,
+        feed_payload=feed_payload,
+        min_start_source_count=min_start_source_count,
+    )
+    autostart_history = _autostart_history_summary(
+        data_dir=Path(cfg_data_dir),
+        autostart_config=selected_autostart_config,
+    )
+    resume_backlog = _resume_backlog_summary(data_dir=Path(cfg_data_dir))
+    monitoring_due = _monitoring_due_summary(data_dir=Path(cfg_data_dir))
+    report_review = _report_review_summary(reports_dir=reports_dir or Path("reports"))
+    cycle_status = _automation_cycle_status_label(
+        apply=apply,
+        live=live,
+        feed_payload=feed_payload,
+        target_feed_scan=target_feed_scan,
+        blocked_items=blocked_items,
+        ready_items=ready_items,
+        deferred_ready_items=deferred_ready_items,
+        queue_runs=queue_runs,
+        autostart_result=autostart_result,
+        autostart_history=autostart_history,
+        resume_backlog=resume_backlog,
+        monitoring_due=monitoring_due,
+        report_review=report_review,
+    )
     return {
         "schema_version": AUTOMATION_CYCLE_SCHEMA_VERSION,
         "execution_policy": execution_policy,
+        "status": cycle_status,
         "apply_requested": bool(apply),
         "live_requested": bool(live),
         "generated_at": _now_iso(),
@@ -283,18 +311,11 @@ def automation_cycle(
                 "source_input_registry_updates", []
             ),
         },
-        "target_feed_scan": _target_feed_scan_summary(
-            feed_path=feed_output,
-            feed_payload=feed_payload,
-            min_start_source_count=min_start_source_count,
-        ),
-        "autostart_history": _autostart_history_summary(
-            data_dir=Path(cfg_data_dir),
-            autostart_config=selected_autostart_config,
-        ),
-        "resume_backlog": _resume_backlog_summary(data_dir=Path(cfg_data_dir)),
-        "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
-        "report_review": _report_review_summary(reports_dir=reports_dir or Path("reports")),
+        "target_feed_scan": target_feed_scan,
+        "autostart_history": autostart_history,
+        "resume_backlog": resume_backlog,
+        "monitoring_due": monitoring_due,
+        "report_review": report_review,
         "inbox": inbox_update,
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "queue_execution": {
@@ -1853,6 +1874,79 @@ def _automation_status_label(
     ):
         return "ready_with_backlog"
     return "ready"
+
+
+def _automation_cycle_status_label(
+    *,
+    apply: bool,
+    live: bool,
+    feed_payload: dict[str, Any],
+    target_feed_scan: dict[str, Any],
+    blocked_items: list[dict[str, Any]],
+    ready_items: list[dict[str, Any]],
+    deferred_ready_items: list[dict[str, Any]],
+    queue_runs: list[dict[str, Any]],
+    autostart_result: dict[str, Any] | None,
+    autostart_history: dict[str, Any],
+    resume_backlog: dict[str, Any],
+    monitoring_due: dict[str, Any],
+    report_review: dict[str, Any],
+) -> str:
+    queue_statuses = {str(item.get("status") or "") for item in queue_runs}
+    autostart_status = str((autostart_result or {}).get("status") or "")
+    autostart_blockers = [
+        str(item)
+        for item in ((autostart_result or {}).get("blockers") or [])
+        if str(item)
+    ]
+    if live and (autostart_status == "blocked" or autostart_blockers):
+        return "live_blocked"
+    if live and autostart_status in {"failed", "dry_run_failed", "error"}:
+        return "live_failed"
+    if "failed" in queue_statuses:
+        return "queue_failed"
+    if blocked_items:
+        return "queue_blocked"
+    if deferred_ready_items:
+        return "queue_deferred"
+    if (feed_payload.get("source_errors") or []) or (
+        (feed_payload.get("counts") or {}).get("source_errors") or []
+    ):
+        return "feed_errors"
+    if str(autostart_history.get("status") or "") == "log_attention":
+        return "attention"
+    if live and apply and autostart_status == "completed":
+        return "live_completed"
+    if live and apply:
+        return "live_ready"
+    if live:
+        return "live_ready_dry_run" if autostart_result else "live_planned"
+    if not apply and ready_items:
+        return "planned_with_inputs"
+    if _cycle_has_backlog(
+        resume_backlog=resume_backlog,
+        monitoring_due=monitoring_due,
+        report_review=report_review,
+    ):
+        return "applied_local_with_backlog" if apply else "planned_with_backlog"
+    if apply:
+        return "applied_local"
+    if not bool(target_feed_scan.get("exists")):
+        return "planned_needs_feed"
+    return "planned"
+
+
+def _cycle_has_backlog(
+    *,
+    resume_backlog: dict[str, Any],
+    monitoring_due: dict[str, Any],
+    report_review: dict[str, Any],
+) -> bool:
+    return (
+        int(resume_backlog.get("resume_ready_count") or 0) > 0
+        or int(monitoring_due.get("total_due_count") or 0) > 0
+        or int(report_review.get("total_count") or 0) > 0
+    )
 
 
 def _summary_skipped_for_quick(summary: dict[str, Any]) -> bool:

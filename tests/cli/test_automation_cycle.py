@@ -916,6 +916,7 @@ def test_automation_cycle_dry_run_plans_feed_and_queue_without_writes(
     )
 
     assert payload["execution_policy"] == "dry_run_no_writes_or_live_commands_executed"
+    assert payload["status"] == "planned_with_inputs"
     assert payload["feed_written"] is False
     assert payload["target_feed_scan"]["exists"] is True
     assert payload["target_feed_scan"]["eligible_count"] == 0
@@ -1234,6 +1235,7 @@ def test_automation_cycle_queue_limit_defers_extra_ready_items(tmp_path: Path) -
         "deferred_count": 1,
         "execution_order": "priority_desc_then_connector_then_value",
     }
+    assert payload["status"] == "queue_deferred"
     assert len(commands) == 2
     assert [run["status"] for run in payload["queue_runs"]] == ["completed", "completed"]
     assert payload["deferred_ready_inputs"][0]["reason"] == "queue_limit_reached:2"
@@ -1275,6 +1277,7 @@ def test_automation_cycle_failed_queue_item_gets_retry_backoff(
         command_runner=_runner,
     )
 
+    assert payload["status"] == "queue_failed"
     assert payload["queue_runs"][0]["status"] == "failed"
     queue = json.loads(queue_path.read_text(encoding="utf-8"))
     item = queue["inputs"][0]
@@ -1358,10 +1361,83 @@ def test_automation_cycle_live_reuses_built_feed_without_guarded_rebuild(
     )
 
     assert payload["execution_policy"] == "apply_with_live_guarded_autostart"
+    assert payload["status"] == "live_ready"
     assert payload["feed_written"] is True
     assert seen["skip_feed_build"] is True
     assert seen["docker_probe_mode"] == "compose-dependency"
     assert payload["autostart"]["commands"]["autopilot_dry_run"][1] == "--skip-feed-build"
+
+
+def test_automation_cycle_live_status_reports_guarded_blocker(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+
+    def fake_guarded_autostart(**_kwargs):
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "blocked",
+            "blockers": ["free_memory_below_threshold"],
+        }
+
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=False,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+    )
+
+    assert payload["execution_policy"] == "dry_run_no_writes_or_live_commands_executed"
+    assert payload["status"] == "live_blocked"
+    assert payload["autostart"]["blockers"] == ["free_memory_below_threshold"]
+
+
+def test_automation_cycle_live_status_reports_guarded_completion(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+
+    def fake_guarded_autostart(**_kwargs):
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "completed",
+            "returncode": 0,
+            "blockers": [],
+        }
+
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        command_runner=lambda _command, _cwd: {"returncode": 0, "stdout": "{}", "stderr": ""},
+    )
+
+    assert payload["execution_policy"] == "apply_with_live_guarded_autostart"
+    assert payload["status"] == "live_completed"
+    assert payload["autostart"]["status"] == "completed"
 
 
 def test_automation_cycle_live_consumes_ready_queue_before_guarded_autostart(
@@ -1415,6 +1491,7 @@ def test_automation_cycle_live_consumes_ready_queue_before_guarded_autostart(
     )
 
     assert payload["execution_policy"] == "apply_with_live_guarded_autostart"
+    assert payload["status"] == "live_ready"
     assert [run["status"] for run in payload["queue_runs"]] == ["completed"]
     assert payload["autostart"]["status"] == "ready"
     assert events == ["queue", "guarded"]
@@ -1512,6 +1589,7 @@ def test_automation_cycle_rebuilds_feed_after_successful_queue_import_before_liv
     )
 
     assert events == ["feed", "write", "queue", "feed", "write", "guarded"]
+    assert payload["status"] == "live_ready"
     assert payload["feed_rebuilt_after_queue_imports"] is True
     assert payload["feed"]["counts"]["selected"] == 2
     assert payload["autostart"]["status"] == "ready"
