@@ -193,6 +193,49 @@ def test_automation_cycle_apply_runs_ready_queue_and_marks_imported(
     assert queue["inputs"][0]["last_processed_at"]
 
 
+def test_automation_cycle_live_reuses_built_feed_without_guarded_rebuild(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    seen: dict[str, object] = {}
+
+    def fake_guarded_autostart(**kwargs):
+        seen.update(kwargs)
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "ready",
+            "commands": {
+                "autopilot_dry_run": ["forge-autopilot.bat", "--skip-feed-build", "--dry-run"],
+                "autopilot_apply": ["forge-autopilot.bat", "--skip-feed-build"],
+            },
+        }
+
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        command_runner=lambda _command, _cwd: {"returncode": 0, "stdout": "{}", "stderr": ""},
+    )
+
+    assert payload["execution_policy"] == "apply_with_live_guarded_autostart"
+    assert payload["feed_written"] is True
+    assert seen["skip_feed_build"] is True
+    assert payload["autostart"]["commands"]["autopilot_dry_run"][1] == "--skip-feed-build"
+
+
 def test_doctor_fix_safe_creates_and_repairs_local_files(tmp_path: Path) -> None:
     imports_dir = tmp_path / "imports"
     imports_dir.mkdir()

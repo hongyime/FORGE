@@ -51,6 +51,10 @@ forge connectors import-discovery --engagement N --connector projectdiscovery_cl
 forge connectors import-validation --engagement N --connector burp_dast_xml --report-file REPORT.xml --dry-run --json
 ```
 
+`forge automation cycle --apply --live` writes the target feed once, then hands
+off to guarded-autostart with `--skip-feed-build`; standalone startup hooks still
+let guarded-autostart run the launcher feed-build phase itself.
+
 Optional Supabase live extraction is read-only and uses ignored local config at
 `imports/supabase-projects.local.json`; put keys in env vars named by `key_env`.
 Minimal project entries only need `project_ref` and `key_env`. Forge derives the

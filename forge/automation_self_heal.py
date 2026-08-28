@@ -174,6 +174,7 @@ def run_guarded_autostart(
     repo_root: Path | None = None,
     data_dir: Path | None = None,
     apply: bool = False,
+    skip_feed_build: bool = False,
     command_runner: Any | None = None,
 ) -> dict[str, Any]:
     root = Path(repo_root or Path.cwd())
@@ -225,7 +226,11 @@ def run_guarded_autostart(
             blockers.append("guarded_autostart_lock_exists")
     blockers.extend(cooldown_blockers)
     blockers.extend(str(item) for item in self_heal["blockers"])
-    commands = _guarded_autostart_commands(root=root, config=config)
+    commands = _guarded_autostart_commands(
+        root=root,
+        config=config,
+        skip_feed_build=skip_feed_build,
+    )
     sensitive_values = _autostart_sensitive_values(config)
     result: dict[str, Any] = {
         "schema_version": GUARDED_AUTOSTART_SCHEMA_VERSION,
@@ -241,6 +246,7 @@ def run_guarded_autostart(
         "lock_file": str(lock_file),
         "lock_status": lock_status,
         "config": _redacted_autostart_config(config),
+        "skip_feed_build": bool(skip_feed_build),
         "self_heal": self_heal,
         "commands": commands,
         "blockers": blockers,
@@ -401,11 +407,15 @@ def _validated_feed_sources(value: Any, errors: list[str]) -> list[str]:
     return sources
 
 
-def _guarded_autostart_commands(root: Path, config: dict[str, Any]) -> dict[str, list[str]]:
+def _guarded_autostart_commands(
+    root: Path,
+    config: dict[str, Any],
+    *,
+    skip_feed_build: bool = False,
+) -> dict[str, list[str]]:
     launcher = "forge-autopilot.bat" if os.name == "nt" else "./forge-autopilot.sh"
     base = [
         launcher,
-        "--feed-build",
         "--resume-limit",
         str(config["resume_limit"]),
         "--max-parallel",
@@ -417,8 +427,12 @@ def _guarded_autostart_commands(root: Path, config: dict[str, Any]) -> dict[str,
         "--max-runtime-minutes",
         str(config["max_runtime_minutes"]),
     ]
-    for source in config["feed_sources"]:
-        base.extend(["--feed-source", str(source)])
+    if skip_feed_build:
+        base.append("--skip-feed-build")
+    else:
+        base.append("--feed-build")
+        for source in config["feed_sources"]:
+            base.extend(["--feed-source", str(source)])
     apply_cmd = [*base, "--feed-file", str(root / "imports" / "target-feed.json")]
     apply_cmd.extend(["--roe-id", f"${config['roe_id_env']}"])
     return {

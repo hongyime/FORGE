@@ -304,6 +304,9 @@ monitoring, and dashboard refresh still pass through ROE, memory, disk, Docker,
 cooldown, backoff, and single-instance gates. `forge automation status` is the
 read-only view of feed presence, queue readiness, blocked inputs, and next
 actions.
+When `cycle --apply --live` hands off to guarded-autostart, the guarded launcher
+uses the feed already written by the cycle and skips its own feed-build phase to
+avoid duplicate source reads.
 
 `forge automation feed-build` remains the lower-level feed builder. It builds
 the daily local `imports/target-feed.json` handoff for `forge targets import`.

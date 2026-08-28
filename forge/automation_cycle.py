@@ -149,6 +149,7 @@ def automation_cycle(
             config_path=autostart_config or DEFAULT_AUTOSTART_CONFIG_PATH,
             data_dir=Path(cfg_data_dir),
             apply=apply,
+            skip_feed_build=True,
         )
     execution_policy = "dry_run_no_writes_or_live_commands_executed"
     if apply and live:
