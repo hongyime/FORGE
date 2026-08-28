@@ -995,6 +995,94 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
     assert payload["counts"]["by_source"]["supabase"] == 3
     assert payload["counts"]["by_source_group"]["supabase:abc123:assets"] == 1
     assert payload["counts"]["by_source_group"]["supabase:abc123:observations"] == 1
+    assert payload["supabase_table_discovery"] == [
+        {
+            "project_ref": "abc123",
+            "url": "https://abc123.supabase.co",
+            "status": "discovered",
+            "requested_all_tables": True,
+            "requested_all_columns": True,
+            "configured_tables": ["*"],
+            "configured_tables_count": 1,
+            "discovered_tables_count": 2,
+            "scanned_tables": ["assets", "observations"],
+            "scanned_tables_count": 2,
+            "row_limit_per_table": 100000,
+            "errors": [],
+        }
+    ]
+
+
+def test_feed_build_supabase_all_tables_reports_blocked_discovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed_urls: list[str] = []
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> object:
+            return {"swagger": "2.0"}
+
+    def _fake_get(url: str, *, headers: dict[str, str], timeout: float) -> _Response:
+        assert headers["apikey"] == "test-read-key"
+        assert timeout == 15.0
+        observed_urls.append(url)
+        return _Response()
+
+    config = tmp_path / "supabase-projects.local.json"
+    config.write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_SUPABASE_ABC123_READ_KEY", "test-read-key")
+    monkeypatch.setattr("forge.automation_target_feed.httpx.get", _fake_get)
+
+    payload = build_target_feed(
+        sources=["supabase"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+        supabase_config_path=config,
+    )
+
+    assert observed_urls == ["https://abc123.supabase.co/rest/v1/"]
+    assert payload["items"] == []
+    assert payload["source_errors"] == [
+        {"source": "supabase", "error": "abc123:discover_tables:paths_missing"}
+    ]
+    assert payload["supabase_table_discovery"] == [
+        {
+            "project_ref": "abc123",
+            "url": "https://abc123.supabase.co",
+            "status": "blocked_table_discovery",
+            "requested_all_tables": True,
+            "requested_all_columns": True,
+            "configured_tables": ["*"],
+            "configured_tables_count": 1,
+            "discovered_tables_count": 0,
+            "scanned_tables": [],
+            "scanned_tables_count": 0,
+            "row_limit_per_table": 100000,
+            "errors": ["abc123:discover_tables:paths_missing"],
+            "next_action": (
+                "Ensure the supplied key can read the project REST OpenAPI root "
+                "or add explicit table names in imports/supabase-projects.local.json."
+            ),
+        }
+    ]
 
 
 def test_feed_build_supabase_missing_config_fails_soft(tmp_path: Path) -> None:
@@ -1059,6 +1147,22 @@ def test_feed_build_supabase_unset_key_env_does_not_call_http(
         {
             "source": "supabase",
             "error": "abc123:key_env_unset:FORGE_SUPABASE_ABC123_READ_KEY",
+        }
+    ]
+    assert payload["supabase_table_discovery"] == [
+        {
+            "project_ref": "abc123",
+            "url": "https://abc123.supabase.co",
+            "status": "blocked_key",
+            "requested_all_tables": False,
+            "requested_all_columns": False,
+            "configured_tables": ["targets"],
+            "configured_tables_count": 1,
+            "discovered_tables_count": 0,
+            "scanned_tables": [],
+            "scanned_tables_count": 0,
+            "row_limit_per_table": 100000,
+            "errors": ["key_env_unset:FORGE_SUPABASE_ABC123_READ_KEY"],
         }
     ]
 

@@ -1402,6 +1402,40 @@ def _discover_supabase_tables(
     return tables, errors
 
 
+def _supabase_discovery_summary(
+    *,
+    project: dict[str, Any],
+    requested_tables: list[str],
+    requested_columns: list[str],
+    status: str,
+    discovered_tables: list[str] | None = None,
+    scanned_tables: list[str] | None = None,
+    errors: list[str] | None = None,
+) -> dict[str, object]:
+    requested_all_tables = _wants_all_supabase_tables(requested_tables)
+    requested_all_columns = _wants_all_supabase_columns(requested_columns)
+    summary: dict[str, object] = {
+        "project_ref": str(project["project_ref"]),
+        "url": str(project["url"]),
+        "status": status,
+        "requested_all_tables": requested_all_tables,
+        "requested_all_columns": requested_all_columns,
+        "configured_tables": list(requested_tables),
+        "configured_tables_count": len(requested_tables),
+        "discovered_tables_count": len(discovered_tables or []),
+        "scanned_tables": list(scanned_tables or []),
+        "scanned_tables_count": len(scanned_tables or []),
+        "row_limit_per_table": int(project["limit"]),
+        "errors": list(errors or []),
+    }
+    if requested_all_tables and not scanned_tables:
+        summary["next_action"] = (
+            "Ensure the supplied key can read the project REST OpenAPI root "
+            "or add explicit table names in imports/supabase-projects.local.json."
+        )
+    return summary
+
+
 def _supabase_table_rows(
     *,
     project: dict[str, Any],
@@ -1486,29 +1520,56 @@ def _harvest_supabase_row(
 def _extract_supabase_source(
     config_path: Path | None,
     first_seen_at: str,
-) -> tuple[list[FeedCandidate], list[str], dict[str, int]]:
+) -> tuple[list[FeedCandidate], list[str], dict[str, int], list[dict[str, object]]]:
     projects, errors = _load_supabase_projects_config(config_path)
     candidates: list[FeedCandidate] = []
     source_group_counts: dict[str, int] = {}
+    discovery_summaries: list[dict[str, object]] = []
     for project in projects:
         project_ref = str(project["project_ref"])
+        raw_tables = list(project["tables"])
+        columns = list(project["target_columns"])
         try:
             key_value = _resolve_supabase_key(project)
         except (LookupError, ValueError) as exc:
             errors.append(f"{project_ref}:{exc}")
+            discovery_summaries.append(
+                _supabase_discovery_summary(
+                    project=project,
+                    requested_tables=raw_tables,
+                    requested_columns=columns,
+                    status="blocked_key",
+                    errors=[str(exc)],
+                )
+            )
             continue
         headers = {
             "apikey": key_value,
             "Authorization": f"Bearer {key_value}",
             "Accept": "application/json",
         }
-        raw_tables = list(project["tables"])
         if _wants_all_supabase_tables(raw_tables):
             tables, discovery_errors = _discover_supabase_tables(project, headers)
             errors.extend(discovery_errors)
+            if not tables:
+                discovery_summaries.append(
+                    _supabase_discovery_summary(
+                        project=project,
+                        requested_tables=raw_tables,
+                        requested_columns=columns,
+                        status="blocked_table_discovery",
+                        discovered_tables=tables,
+                        scanned_tables=[],
+                        errors=discovery_errors,
+                    )
+                )
+                continue
+            discovery_status = "discovered"
         else:
             tables = raw_tables
-        columns = list(project["target_columns"])
+            discovery_errors = []
+            discovery_status = "configured"
+        scanned_tables: list[str] = []
         select_param = "*" if _wants_all_supabase_columns(columns) else ",".join(columns)
         for table in tables:
             table_name = str(table).strip()
@@ -1523,6 +1584,7 @@ def _extract_supabase_source(
                 select_param=select_param,
             )
             errors.extend(row_errors)
+            scanned_tables.append(table_name)
             if not rows:
                 continue
             row_count = 0
@@ -1537,7 +1599,18 @@ def _extract_supabase_source(
                     )
                 )
             source_group_counts[source_group] = row_count
-    return candidates, errors, source_group_counts
+        discovery_summaries.append(
+            _supabase_discovery_summary(
+                project=project,
+                requested_tables=raw_tables,
+                requested_columns=columns,
+                status=discovery_status,
+                discovered_tables=tables if discovery_status == "discovered" else [],
+                scanned_tables=scanned_tables,
+                errors=discovery_errors,
+            )
+        )
+    return candidates, errors, source_group_counts, discovery_summaries
 
 
 def build_target_feed(
@@ -1566,6 +1639,7 @@ def build_target_feed(
     groups: dict[str, list[FeedCandidate]] = {name: [] for name in SUPPORTED_SOURCES}
     source_group_counts: dict[str, int] = {}
     source_errors: list[dict[str, str]] = []
+    supabase_table_discovery: list[dict[str, object]] = []
 
     if "db" in active_offline:
         found, errors = _extract_db_source(data_dir, generated_at)
@@ -1618,7 +1692,7 @@ def build_target_feed(
         source_errors.extend({"source": "connectors", "error": err} for err in errors)
 
     if wants_supabase:
-        found, errors, supabase_group_counts = _extract_supabase_source(
+        found, errors, supabase_group_counts, supabase_table_discovery = _extract_supabase_source(
             supabase_config_path, generated_at
         )
         groups["supabase"] = found
@@ -1751,6 +1825,7 @@ def build_target_feed(
         "generated_at": generated_at,
         "counts": counts,
         "source_errors": source_errors,
+        "supabase_table_discovery": supabase_table_discovery,
         "discovered_supabase_projects": discovered_supabase_projects,
         "new_discovered_supabase_projects": (
             appended_supabase_projects

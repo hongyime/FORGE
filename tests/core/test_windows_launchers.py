@@ -59,6 +59,11 @@ def test_autopilot_windows_launcher_defaults_to_dry_run_and_fails_fast_on_feed_a
     assert 'if /i "%~1"=="--apply" set "dry_run=0"' in text
     assert "failed in apply mode; stopping before stale feed import/resume/monitoring" in text
     assert "exit /b !exit_code!" in text
+    assert 'set "start_limit=2"' in text
+    assert 'set "max_runtime_minutes=10"' in text
+    assert 'set "resume_limit=10"' in text
+    assert 'set "max_parallel=2"' in text
+    assert 'set "monitor_limit=10"' in text
 
 
 def test_autopilot_windows_launcher_can_run_from_packaged_path_runtime() -> None:

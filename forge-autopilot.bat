@@ -8,8 +8,8 @@ REM  the dashboard.
 REM
 REM  Defaults:
 REM    --feed-file imports\target-feed.json
-REM    --limit 100 --start-limit 10 --max-iter 3 --max-runtime-minutes 25
-REM    --resume-limit 100 --max-parallel 6 --monitor-limit 50
+REM    --limit 100 --start-limit 2 --max-iter 3 --max-runtime-minutes 10
+REM    --resume-limit 10 --max-parallel 2 --monitor-limit 10
 REM
 REM  Useful flags:
 REM    --dry-run
@@ -45,12 +45,12 @@ set PYTHONIOENCODING=utf-8
 set "FEED_FILE=imports\target-feed.json"
 set "ROE_ID=%FORGE_ROE_ID%"
 set "LIMIT=100"
-set "START_LIMIT=10"
+set "START_LIMIT=2"
 set "MAX_ITER=3"
-set "MAX_RUNTIME_MINUTES=25"
-set "RESUME_LIMIT=100"
-set "MAX_PARALLEL=6"
-set "MONITOR_LIMIT=50"
+set "MAX_RUNTIME_MINUTES=10"
+set "RESUME_LIMIT=10"
+set "MAX_PARALLEL=2"
+set "MONITOR_LIMIT=10"
 set "DRY_RUN=1"
 set "FEED_BUILD=1"
 set "FEED_SOURCE_LABEL=all"

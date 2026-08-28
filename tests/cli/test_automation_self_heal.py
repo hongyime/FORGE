@@ -822,6 +822,68 @@ def test_guarded_autostart_apply_runs_dry_run_then_live_and_writes_state(
     assert state["last_status"] == "completed"
 
 
+def test_guarded_autostart_apply_blocks_ready_source_queue_bypass(
+    tmp_path: Path, monkeypatch
+) -> None:
+    imports = tmp_path / "imports"
+    imports.mkdir(parents=True)
+    (tmp_path / "docker").mkdir()
+    (tmp_path / "docker" / "docker-compose.dev.yml").write_text("services: {}\n", encoding="utf-8")
+    (imports / "threatfox.json").write_text('{"ioc":"queued.example"}\n', encoding="utf-8")
+    (imports / "threatfox-inputs.local.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "forge.source_inputs.v1",
+                "inputs": [{"path": "threatfox.json", "status": "pending"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = imports / "autostart.local.json"
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": True,
+                "engagement_id": 1001,
+                "cooldown_minutes": 0,
+                "failure_backoff_minutes": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_ROE_ID", "ROE-TEST")
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal._docker_status",
+        lambda _root, *, probe, mode="host_compose": {
+            "ok": True,
+            "probed": probe,
+            "reason": "docker_compose_ps_ok",
+        },
+    )
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "gopls", "binary": "gopls.exe", "size_bytes": 1, "role": "developer"},),
+    )
+    calls: list[list[str]] = []
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+        apply=True,
+        command_runner=lambda command, _cwd: calls.append(command) or {"returncode": 0},
+    )
+
+    assert payload["status"] == "blocked"
+    assert "source_queues_require_automation_cycle" in payload["blockers"]
+    assert payload["source_queues"]["ready"] == 1
+    assert payload["source_queues"]["next_action"].startswith("Run forge automation cycle")
+    assert calls == []
+
+
 def test_guarded_autostart_apply_writes_bounded_redacted_log(
     tmp_path: Path,
     monkeypatch,

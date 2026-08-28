@@ -63,7 +63,9 @@ Minimal project entries only need `project_ref` and `key_env`. Forge derives the
 Supabase URL, discovers exposed tables from `/rest/v1/`, and pages through all
 columns with `select=*`. Default greedy Supabase bounds are 100,000 rows per
 table and 1,000 discovered tables per configured project; optional `url`,
-`tables`, `target_columns`, and `limit` can still narrow that behavior. When
+`tables`, `target_columns`, and `limit` can still narrow that behavior. Feed
+JSON includes `supabase_table_discovery`, so a project that cannot expose table
+paths reports `blocked_table_discovery` with a local next action. When
 artifact/feed scans find Supabase hostnames, `feed-build --apply` appends them
 to the ignored local Supabase config as pending entries with generated
 `key_env` names; they are only database-read after that env var is set locally.
@@ -96,8 +98,10 @@ entry, `--engagement`, local `imports/autostart.local.json` `engagement_id`, or
 `FORGE_DEFAULT_ENGAGEMENT_ID`.
 Use `self-heal-plan` before any Docker/startup automation; it is read-only and
 checks resources, Docker readiness, packaged Go tools, locks, and the exact
-bounded autopilot commands. Use `guarded-autostart` for startup hooks; it stays
-dry-run/read-only by default and only runs bounded autopilot with `--apply` when
+bounded autopilot commands. Use `automation cycle --apply --live` for startup
+hooks so source queues are handled first; `guarded-autostart` stays the
+lower-level dry-run/read-only guard and only runs bounded autopilot with
+`--apply` when
 ignored local `imports/autostart.local.json` explicitly has `enabled: true` and
 `apply_enabled: true`. Stale or dead-PID guarded-autostart locks are replaced
 in apply mode, active locks block, launcher banners hide ROE values, and the
@@ -129,7 +133,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install_guarded_
 ```
 
 The task runs hidden at logon and on cadence, but still delegates every live
-decision to `forge automation guarded-autostart --apply --json`.
+decision to `forge automation cycle --apply --live --json`.
 If Task Scheduler is denied, the installer falls back to a user-level HKCU Run
 startup entry that runs at logon without admin rights.
 

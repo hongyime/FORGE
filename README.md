@@ -321,7 +321,9 @@ command is dry-run by default; `--apply` writes the feed atomically. Use
 `--source all` for the full loop, or repeat `--source` for a subset. JSON
 reports total/selected/omitted/new/duplicate counts plus per-source and
 per-source-group counts, preserving provenance such as `report_family:<id>` and
-`supabase:<project_ref>:<table>`.
+`supabase:<project_ref>:<table>`. Supabase runs also include a
+`supabase_table_discovery` block showing each project as `discovered`,
+`configured`, `blocked_key`, or `blocked_table_discovery`.
 
 Live Supabase feed extraction is read-only and local-config only. Store owned
 project settings in ignored `imports/supabase-projects.local.json`; keep keys in
@@ -348,6 +350,9 @@ Optional `url`, `tables`, `target_columns`, and `limit` still work for tighter
 scopes. Use `tables: ["*"]` or omit `tables` to process every exposed table, and
 use `target_columns: ["*"]` or omit `target_columns` to process every returned
 column. Forge only turns normalized target-like values into feed entries.
+If a project is set to all tables but the REST OpenAPI root does not expose
+table paths to the supplied key, JSON reports `blocked_table_discovery` with a
+local next action instead of silently skipping the project.
 Supabase hostnames found in scanned artifacts are appended to
 `imports/supabase-projects.local.json` as `status: "pending_key"` entries on
 `feed-build --apply`, using a generated `key_env` such as
@@ -407,13 +412,17 @@ services. Auto-start remains fail-closed: live work requires an explicit ROE,
 resource thresholds, a single-instance lock, and the normal scoped feed/import
 gates.
 
-`forge automation guarded-autostart` is the command a Docker or OS startup hook
-can call safely. Without `--apply` it evaluates the ignored local
+`forge automation cycle --apply --live` is the preferred Docker or OS startup
+entrypoint because it classifies inbox drops and consumes ready local source
+queues before handing off to guarded live work. `forge automation
+guarded-autostart` remains the lower-level fail-closed guard. Without `--apply`
+it evaluates the ignored local
 `imports/autostart.local.json` config, runs read-only readiness probes, and
 returns the same bounded command plan.
 With `--apply`, it still refuses live autopilot unless the config contains both
 `enabled: true` and `apply_enabled: true`, Docker/resource/tool guardrails pass,
-no guarded-autostart lock exists, and cooldown/backoff windows have expired.
+no guarded-autostart lock exists, cooldown/backoff windows have expired, and no
+ready source queues would be bypassed.
 When allowed, it runs a bounded autopilot dry-run first, then the live autopilot
 command, records state under the Forge data dir, and removes its single-instance
 lock. Stale or dead-PID guarded-autostart locks are replaced in apply mode,
@@ -454,10 +463,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install_guarded_
 ```
 
 The task runs hidden at logon after the delay and then on the configured
-cadence. It calls only `forge automation guarded-autostart --apply --json`, so
-live work still fails closed unless `imports/autostart.local.json`,
-`FORGE_ROE_ID`, resource checks, Docker health, cooldown/backoff, and the
-single-instance lock all pass.
+cadence. It calls `forge automation cycle --apply --live --json`, so ready
+local source queues are consumed before live work still fails closed on
+`imports/autostart.local.json`, `FORGE_ROE_ID`, resource checks, Docker health,
+cooldown/backoff, and the single-instance lock.
 If Task Scheduler registration is denied, the installer falls back to a
 user-level HKCU Run startup entry that runs at logon without admin rights.
 

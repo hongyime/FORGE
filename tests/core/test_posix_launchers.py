@@ -125,6 +125,11 @@ def test_autopilot_posix_launcher_defaults_to_dry_run_and_fails_fast_on_feed_app
     assert "PHASE_EXIT=$?" in text
     assert "failed in apply mode; stopping before stale feed import/resume/monitoring" in text
     assert 'exit "$EXIT_CODE"' in text
+    assert "START_LIMIT=2" in text
+    assert "MAX_RUNTIME_MINUTES=10" in text
+    assert "RESUME_LIMIT=10" in text
+    assert "MAX_PARALLEL=2" in text
+    assert "MONITOR_LIMIT=10" in text
 
 
 def test_autopilot_posix_apply_requires_roe_before_running_phases(tmp_path: Path) -> None:
