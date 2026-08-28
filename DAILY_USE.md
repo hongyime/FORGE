@@ -121,7 +121,8 @@ docker compose -f docker/docker-compose.yml --profile autostart up -d
 
 The extra `forge-guarded-autostart` service runs once per Compose start with
 lower default caps (`FORGE_AUTOSTART_CPUS=0.25`,
-`FORGE_AUTOSTART_MEM_LIMIT=1024m`) and enters through
+`FORGE_AUTOSTART_MEM_LIMIT=1536m`) while the guarded Forge memory gate remains
+`1024` MB. It enters through
 `forge automation cycle --apply --live`, so it classifies inbox drops, consumes
 ready source queues, and then still requires `FORGE_ROE_ID`, local
 `imports/autostart.local.json`, Docker/resource health, cooldown/backoff, and a

@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-08-29: B694 made startup more durable by honoring configured stale-lock recovery, giving Docker autostart memory headroom above the 1024 MB gate, and persisting non-secret local Docker/tool env knobs.
 - 2026-08-29: B693 fixed Windows scheduled/HKCU startup argument quoting so paths with spaces reach `automation cycle` intact during unattended launch.
 - 2026-08-29: B686 changed Docker autostart to enter through `automation cycle --apply --live` so source queues are consumed before guarded live phases, added Docker mount-specific tool readiness blockers, and aligned the aggressive defaults review with the 1024 MB gate.
 - 2026-08-29: B685 made the standalone tool audit match Docker autostart reality by accepting `FORGE_HOST_CONNECTOR_BIN_DIR`, locking the requested Go binary inventory in tests, and executing Windows launcher fail-closed behavior tests.

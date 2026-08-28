@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import subprocess
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from pathlib import Path
 
 import typer
@@ -738,6 +741,64 @@ def test_guarded_autostart_replaces_stale_dead_pid_lock(
 
     assert payload["status"] == "completed"
     assert payload["lock_status"]["reason"] == "dead_pid"
+    assert payload["lock_status"]["breakable"] is True
+    assert not lock_file.exists()
+
+
+def test_guarded_autostart_uses_configured_stale_lock_minutes(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": True,
+                "cooldown_minutes": 0,
+                "failure_backoff_minutes": 60,
+            }
+        ),
+        encoding="utf-8",
+    )
+    data_dir = tmp_path / "data"
+    lock_file = data_dir / "automation" / "guarded-autostart.lock"
+    lock_file.parent.mkdir(parents=True)
+    created_at = datetime.now(timezone.utc) - timedelta(minutes=90)
+    lock_file.write_text(
+        json.dumps({"created_at": created_at.isoformat()}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_ROE_ID", "ROE-TEST")
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "gopls", "binary": "gopls.exe", "size_bytes": 1, "role": "developer"},),
+    )
+    monkeypatch.setattr(
+        "forge.automation_self_heal._docker_status",
+        lambda _root, *, probe, mode="host_compose": {
+            "ok": True,
+            "probed": probe,
+            "reason": "docker_compose_ps_ok",
+        },
+    )
+
+    def _runner(_command: list[str], _cwd: Path) -> dict:
+        return {"returncode": 0, "stdout_tail": "", "stderr_tail": ""}
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=data_dir,
+        apply=True,
+        command_runner=_runner,
+    )
+
+    assert payload["status"] == "completed"
+    assert payload["lock_status"]["reason"] == "stale_age"
+    assert payload["lock_status"]["stale_lock_minutes"] == 60
     assert payload["lock_status"]["breakable"] is True
     assert not lock_file.exists()
 

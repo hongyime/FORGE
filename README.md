@@ -445,7 +445,8 @@ docker compose -f docker/docker-compose.yml --profile autostart up -d
 
 The `forge-guarded-autostart` service runs once per Compose start with lower
 default caps (`FORGE_AUTOSTART_CPUS=0.25`,
-`FORGE_AUTOSTART_MEM_LIMIT=1024m`), reads
+`FORGE_AUTOSTART_MEM_LIMIT=1536m`) and the guarded Forge memory gate still
+defaults to `1024` MB. It reads
 `/app/imports/autostart.local.json`, enters through
 `forge automation cycle --apply --live`, and only writes through the mounted
 `imports/`, `reports/`, and `/data` paths. That means Docker startup consumes

@@ -81,7 +81,7 @@ def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
     assert 'profiles: ["autostart"]' in compose
     assert 'restart: "no"' in compose
     assert 'cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"' in compose
-    assert 'mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-1024m}"' in compose
+    assert 'mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-1536m}"' in compose
     assert "automation" in compose
     assert "cycle" in compose
     assert "--autostart-config" in compose
@@ -183,7 +183,7 @@ def test_readme_autostart_sample_matches_1024_mb_memory_gate() -> None:
 
     assert '"min_free_memory_mb": 1024' in readme
     assert '"min_free_memory_mb": 2048' not in readme
-    assert "FORGE_AUTOSTART_MEM_LIMIT=1024m" in readme
+    assert "FORGE_AUTOSTART_MEM_LIMIT=1536m" in readme
 
 
 def test_helm_chart_pins_production_hardening_contract() -> None:

@@ -226,7 +226,11 @@ def run_guarded_autostart(
     lock_file = state_dir / "guarded-autostart.lock"
     now = datetime.now(timezone.utc)
     state = _read_json_object(state_file)
-    lock_status = _guarded_autostart_lock_status(lock_file, now=now)
+    lock_status = _guarded_autostart_lock_status(
+        lock_file,
+        now=now,
+        stale_lock_minutes=int(config["failure_backoff_minutes"]),
+    )
     cooldown_blockers = _cooldown_blockers(
         state=state,
         now=now,
@@ -757,8 +761,13 @@ def _write_lock(path: Path, now: datetime) -> None:
         handle.write("\n")
 
 
-def _guarded_autostart_lock_status(lock_path: Path, *, now: datetime) -> dict[str, Any]:
-    stale_minutes = int(DEFAULT_AUTOSTART_CONFIG["failure_backoff_minutes"])
+def _guarded_autostart_lock_status(
+    lock_path: Path,
+    *,
+    now: datetime,
+    stale_lock_minutes: int,
+) -> dict[str, Any]:
+    stale_minutes = max(0, int(stale_lock_minutes))
     if not lock_path.exists():
         return {
             "exists": False,
