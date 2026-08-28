@@ -4,12 +4,30 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 import typer
 from typer.testing import CliRunner
 
 import forge.automation_cycle as automation_cycle_module
 from forge.automation_cli import register_automation_commands
 from forge.automation_cycle import automation_cycle, automation_status, doctor_fix_safe
+
+
+@pytest.fixture(autouse=True)
+def stub_resume_backlog(monkeypatch) -> None:
+    def fake_resume_plan(**_kwargs) -> dict[str, object]:
+        return {
+            "total_count": 0,
+            "total_resume_ready_count": 0,
+            "planned_count": 0,
+            "skipped_count": 0,
+            "omitted_count": 0,
+            "estimated_serial_runtime_minutes": 0,
+            "total_reason_counts": {},
+            "skipped_blocker_counts": {},
+        }
+
+    monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fake_resume_plan)
 
 
 def test_automation_status_reports_ready_and_blocked_queue_items(tmp_path: Path) -> None:
@@ -287,6 +305,88 @@ def test_automation_status_summarizes_due_monitoring_without_running_it(
     ]
 
 
+def test_automation_status_summarizes_resume_backlog_without_running_it(
+    tmp_path: Path, monkeypatch
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_resume_plan(**kwargs) -> dict[str, object]:
+        calls.append(kwargs)
+        return {
+            "total_count": 49,
+            "resume_ready_count": 0,
+            "total_resume_ready_count": 49,
+            "planned_count": 0,
+            "skipped_count": 0,
+            "omitted_count": 49,
+            "estimated_serial_runtime_minutes": 0,
+            "reason_counts": {},
+            "total_reason_counts": {"pending_recursive_work": 31, "watchdog_timeout": 7},
+            "skipped_blocker_counts": {},
+        }
+
+    monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fake_resume_plan)
+    monkeypatch.setattr(
+        automation_cycle_module,
+        "_resume_summary_include_legacy",
+        lambda _data_dir: True,
+    )
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert calls == [
+        {
+            "data_dir": tmp_path / "data",
+            "include_legacy": True,
+            "limit": 0,
+            "redact_paths": True,
+        }
+    ]
+    assert payload["resume_backlog"]["execution_policy"] == (
+        "read_only_resume_backlog_summary_no_commands_executed"
+    )
+    assert payload["resume_backlog"]["status"] == "ready"
+    assert payload["resume_backlog"]["total_count"] == 49
+    assert payload["resume_backlog"]["resume_ready_count"] == 49
+    assert payload["resume_backlog"]["reason_counts"] == {
+        "pending_recursive_work": 31,
+        "watchdog_timeout": 7,
+    }
+    assert payload["resume_backlog"]["next_actions"][0] == [
+        "forge",
+        "targets",
+        "resume-plan",
+        "--json",
+        "--redact-paths",
+        "--limit",
+        "20",
+    ]
+
+
+def test_automation_status_resume_backlog_fails_closed(tmp_path: Path, monkeypatch) -> None:
+    def fail_resume_plan(**_kwargs):
+        raise RuntimeError("resume db unavailable")
+
+    monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fail_resume_plan)
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["resume_backlog"]["execution_policy"] == (
+        "read_only_resume_backlog_summary_failed"
+    )
+    assert payload["resume_backlog"]["status"] == "unknown"
+    assert payload["resume_backlog"]["total_count"] == 0
+    assert "resume db unavailable" in payload["resume_backlog"]["error"]
+
+
 def test_automation_status_reports_autostart_probe_blockers(
     tmp_path: Path,
     monkeypatch,
@@ -409,6 +509,46 @@ def test_automation_cycle_includes_monitoring_due_summary(
     assert payload["monitoring_due"]["total_due_count"] == 0
     assert payload["monitoring_due"]["execution_policy"] == (
         "read_only_monitoring_due_summary_no_commands_executed"
+    )
+
+
+def test_automation_cycle_includes_resume_backlog_summary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    def fake_resume_plan(**kwargs) -> dict[str, object]:
+        assert kwargs == {
+            "data_dir": tmp_path / "data",
+            "include_legacy": False,
+            "limit": 0,
+            "redact_paths": True,
+        }
+        return {
+            "total_count": 0,
+            "total_resume_ready_count": 0,
+            "planned_count": 0,
+            "skipped_count": 0,
+            "omitted_count": 0,
+            "estimated_serial_runtime_minutes": 0,
+            "total_reason_counts": {},
+            "skipped_blocker_counts": {},
+        }
+
+    monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fake_resume_plan)
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=tmp_path / "imports" / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+    )
+
+    assert payload["resume_backlog"]["status"] == "idle"
+    assert payload["resume_backlog"]["total_count"] == 0
+    assert payload["resume_backlog"]["execution_policy"] == (
+        "read_only_resume_backlog_summary_no_commands_executed"
     )
 
 

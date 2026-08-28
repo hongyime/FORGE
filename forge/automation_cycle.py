@@ -14,6 +14,7 @@ from forge.automation_self_heal import run_guarded_autostart
 from forge.automation_target_feed import build_target_feed, write_target_feed
 from forge.config import ForgeConfig
 from forge.monitoring.runner import monitoring_due_plan_for_data_dir
+from forge.targets_resume_candidates import collect_target_resume_plan
 from forge.targets_import import MAX_TARGET_FEED_IMPORT_ITEMS, load_target_feed
 
 AUTOMATION_STATUS_SCHEMA_VERSION = "forge.automation_status.v1"
@@ -111,6 +112,7 @@ def automation_status(
             feed_path=feed_path,
             min_start_source_count=min_start_source_count,
         ),
+        "resume_backlog": _resume_backlog_summary(data_dir=Path(cfg_data_dir)),
         "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "engagement": {
@@ -249,6 +251,7 @@ def automation_cycle(
             feed_payload=feed_payload,
             min_start_source_count=min_start_source_count,
         ),
+        "resume_backlog": _resume_backlog_summary(data_dir=Path(cfg_data_dir)),
         "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
         "inbox": inbox_update,
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
@@ -387,6 +390,74 @@ def _monitoring_due_summary(*, data_dir: Path) -> dict[str, Any]:
         "errors": plan.get("errors") or [],
         "next_actions": next_actions,
     }
+
+
+def _resume_backlog_summary(*, data_dir: Path) -> dict[str, Any]:
+    include_legacy = _resume_summary_include_legacy(data_dir)
+    try:
+        plan = collect_target_resume_plan(
+            data_dir=data_dir,
+            include_legacy=include_legacy,
+            limit=0,
+            redact_paths=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "execution_policy": "read_only_resume_backlog_summary_failed",
+            "status": "unknown",
+            "error": str(exc)[:240],
+            "total_count": 0,
+            "resume_ready_count": 0,
+            "planned_count": 0,
+            "next_actions": [["forge", "targets", "resume-plan", "--json", "--redact-paths"]],
+        }
+    total_count = int(plan.get("total_count") or 0)
+    ready_count = int(
+        plan.get("total_resume_ready_count")
+        or plan.get("resume_ready_count")
+        or 0
+    )
+    planned_count = int(plan.get("planned_count") or 0)
+    skipped_count = int(plan.get("skipped_count") or 0)
+    status = "ready" if ready_count else "idle"
+    if total_count and not ready_count:
+        status = "blocked"
+    return {
+        "execution_policy": "read_only_resume_backlog_summary_no_commands_executed",
+        "status": status,
+        "total_count": total_count,
+        "resume_ready_count": ready_count,
+        "planned_count": planned_count,
+        "skipped_count": skipped_count,
+        "omitted_count": int(plan.get("omitted_count") or 0),
+        "estimated_serial_runtime_minutes": int(
+            plan.get("estimated_serial_runtime_minutes") or 0
+        ),
+        "reason_counts": plan.get("total_reason_counts") or plan.get("reason_counts") or {},
+        "skipped_blocker_counts": plan.get("skipped_blocker_counts") or {},
+        "next_actions": [
+            ["forge", "targets", "resume-plan", "--json", "--redact-paths", "--limit", "20"],
+            [
+                "forge",
+                "targets",
+                "resume-run",
+                "--dry-run",
+                "--json",
+                "--redact-paths",
+                "--limit",
+                "20",
+            ],
+        ],
+    }
+
+
+def _resume_summary_include_legacy(data_dir: Path) -> bool:
+    try:
+        configured = Path(ForgeConfig.load().data_dir).resolve()
+        selected = Path(data_dir).resolve()
+    except OSError:
+        return False
+    return selected == configured
 
 
 def classify_import_inbox(*, imports_dir: Path | None = None, apply: bool = False) -> dict[str, Any]:
