@@ -49,6 +49,7 @@ Set-Content -LiteralPath $launcher -Value $launcherBody -Encoding ASCII
 $executionLimitMinutes = [Math]::Max($TimeoutMinutes + 5, 10)
 $interval = [Math]::Max([Math]::Max(5, $EveryMinutes), $executionLimitMinutes)
 $actionArgument = "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$taskRunner`" -Config `"$Config`" -TimeoutMinutes $TimeoutMinutes"
+$fallbackArgument = "$actionArgument -Loop -EveryMinutes $interval -StartupDelayMinutes $StartupDelayMinutes"
 $logonTrigger = New-ScheduledTaskTrigger -AtLogOn
 $logonTrigger.Delay = "PT$([Math]::Max(1, $StartupDelayMinutes))M"
 $repeatTrigger = New-ScheduledTaskTrigger `
@@ -76,7 +77,7 @@ if ($DryRun) {
     Write-Host "Config: $Config"
     Write-Host "Startup delay: $StartupDelayMinutes minute(s); interval: $interval minute(s); timeout: $TimeoutMinutes minute(s)"
     Write-Host "Action: powershell.exe $actionArgument"
-    Write-Host "Fallback HKCU Run action: powershell.exe $actionArgument"
+    Write-Host "Fallback HKCU Run action: powershell.exe $fallbackArgument"
     Write-Host "Launcher: $launcher"
     exit 0
 }
@@ -100,12 +101,12 @@ try {
     New-ItemProperty `
         -Path $runKeyPath `
         -Name $TaskName `
-        -Value "powershell.exe $actionArgument" `
+        -Value "powershell.exe $fallbackArgument" `
         -PropertyType String `
         -Force | Out-Null
     Write-Host "Scheduled task install failed: $($_.Exception.Message)"
     Write-Host "Installed HKCU Run startup entry instead: $TaskName"
-    Write-Host "Runs at user logon; recurring cadence requires Task Scheduler permission."
+    Write-Host "Runs a single guarded loop at user logon; Task Scheduler permission is still preferred for native recurring triggers."
 }
 Write-Host "Mode: cycle apply/live; source queues run before guarded live work, which still requires config gates, FORGE_ROE_ID, resource health, Docker health, cooldown/backoff, and a free lock."
 Write-Host "Config: $Config"

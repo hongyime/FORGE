@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-08-29: B698 made the Windows HKCU fallback recurring within the login session via a single mutex-guarded loop when Task Scheduler remains unavailable.
 - 2026-08-29: B697 made feed-build source-only output distinguish current-source contributions from preserved existing feed items, avoiding misleading Supabase selected counts.
 - 2026-08-29: B696 made compose-dependency readiness honor persisted Windows tool-path env and made automation status probe autostart before recommending live cycle apply.
 - 2026-08-29: B695 changed automation status next actions to prefer the guarded live cycle path and refreshed HKCU startup after Task Scheduler remained denied.
