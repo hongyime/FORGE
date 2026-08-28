@@ -36,7 +36,13 @@ reports/
 imports/target-feed.json
 imports/supabase-projects.local.json
 imports/autostart.local.json
+imports/*.local.json
 imports/*observations.local.json
+imports/*threatfox*
+imports/*urlhaus*
+imports/*misp*
+imports/*stix*
+imports/*taxii*
 chunks/
 downloads/
 archive/

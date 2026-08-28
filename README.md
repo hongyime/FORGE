@@ -328,8 +328,13 @@ Local CTI feed extraction is also file-based. Drop JSON directly under
 `imports/` with a filename containing `threatfox`, `urlhaus`, `misp`, `stix`,
 or `taxii`; Forge harvests scoped target-like strings from keys such as `ioc`,
 `iocs`, `domains`, `urls`, `ips`, `emails`, `targets`, `seeds`, `host`, and
-`cloud_ref`. Keep local observation files ignored, for example
-`imports/threatfox-observations.local.json`.
+`cloud_ref`. Local observation drops are ignored, including
+`imports/threatfox-observations.local.json`,
+`imports/urlhaus-observations.local.json`,
+`imports/misp-observations.local.json`, `imports/stix-observations.local.json`,
+and `imports/taxii-observations.local.json`. Raw CTI exports whose names
+contain those provider markers are ignored too, so downloaded `.json`, `.csv`,
+`.gz`, or `.zip` imports stay local.
 
 `forge automation defaults --json` exposes the operator-tunable defaults
 without writing files: automation policy defaults, the wildcard scope template,
