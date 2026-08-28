@@ -307,6 +307,13 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "created": bool(getattr(result, "created", False)),
             "started": bool(getattr(result, "started", False)),
             "dry_run": bool(getattr(result, "dry_run", False)),
+            "source_count": int(getattr(result, "source_count", 1)),
+            "priority": int(getattr(result, "priority", 60)),
+            "scan_eligible": bool(getattr(result, "scan_eligible", True)),
+            "scan_eligibility_reason": str(
+                getattr(result, "scan_eligibility_reason", "eligible")
+            ),
+            "start_skipped_reason": str(getattr(result, "start_skipped_reason", "")),
         }
 
     @app.command("resume-lock-status")

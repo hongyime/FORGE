@@ -118,6 +118,65 @@ def test_feed_build_dry_run_merges_sources_with_provenance_and_writes_nothing(
     assert any(item["source_group"] == "report_family:abc123" for item in payload["items"])
 
 
+def test_feed_build_prioritizes_targets_seen_from_multiple_sources(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    reports_dir = tmp_path / "reports"
+    _make_engagement_db(
+        data_dir,
+        1,
+        [
+            ("single-db.example", "domain"),
+            ("shared.example", "domain"),
+        ],
+    )
+    _make_dashboard_report(
+        reports_dir,
+        "sharedfam",
+        {"summary": {"hosts": ["shared.example", "single-report.example"]}},
+    )
+
+    payload = build_target_feed(
+        sources=["db", "reports"],
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    first = payload["items"][0]
+    assert first["canonical_value"] == "shared.example"
+    assert first["source_count"] == 2
+    assert first["priority"] == 90
+    assert first["source_groups"] == ["db", "report_family:sharedfam"]
+    assert all(item["priority"] == 60 for item in payload["items"][1:])
+
+
+def test_feed_build_marks_non_global_ips_ineligible_for_autonomous_scan(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    reports_dir = tmp_path / "reports"
+    _make_engagement_db(data_dir, 1, [("0.0.0.0", "ip")])
+    _make_dashboard_report(reports_dir, "noise", {"summary": {"ips": ["0.0.0.0"]}})
+
+    payload = build_target_feed(
+        sources=["db", "reports"],
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    item = payload["items"][0]
+    assert item["canonical_value"] == "0.0.0.0"
+    assert item["source_count"] == 2
+    assert item["priority"] == 10
+    assert item["scan_eligible"] is False
+    assert item["scan_eligibility_reason"] == "non_global_ip"
+
+
 def test_feed_build_apply_writes_then_rerun_reports_no_new(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     _make_engagement_db(data_dir, 7, [("resume.example", "domain")])

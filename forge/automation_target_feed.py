@@ -35,6 +35,7 @@ from forge.targets_import import (
     _normalize_target_value,
     external_target_key,
     load_target_feed,
+    target_scan_eligible,
 )
 
 SUPPORTED_SOURCES = ("db", "reports", "cti", "connectors", "supabase")
@@ -973,6 +974,9 @@ def _merge_candidates(
             key = external_target_key(candidate.target_type, candidate.canonical_value)
             existing = merged.get(key)
             if existing is None:
+                scan_eligible, scan_reason = target_scan_eligible(
+                    candidate.target_type, candidate.canonical_value
+                )
                 merged[key] = {
                     "target_type": candidate.target_type,
                     "target_value": candidate.target_value,
@@ -980,12 +984,36 @@ def _merge_candidates(
                     "target_key": key,
                     "source_kind": candidate.source_kind,
                     "source_group": candidate.source_group,
+                    "source_groups": [candidate.source_group],
+                    "source_count": 1,
+                    "priority": _target_priority(source_count=1, scan_eligible=scan_eligible),
+                    "scan_eligible": scan_eligible,
+                    "scan_eligibility_reason": scan_reason,
                     "confidence": candidate.confidence,
                     "first_seen_at": candidate.first_seen_at,
                     "provenance": candidate.provenance,
                 }
                 continue
             duplicates += 1
+            source_groups = {
+                str(group)
+                for group in existing.get("source_groups", [])
+                if str(group).strip()
+            }
+            if str(existing.get("source_group") or "").strip():
+                source_groups.add(str(existing["source_group"]))
+            if candidate.source_group:
+                source_groups.add(candidate.source_group)
+            existing["source_groups"] = sorted(source_groups)
+            existing["source_count"] = len(source_groups)
+            scan_eligible, scan_reason = target_scan_eligible(
+                candidate.target_type, candidate.canonical_value
+            )
+            existing["scan_eligible"] = scan_eligible
+            existing["scan_eligibility_reason"] = scan_reason
+            existing["priority"] = _target_priority(
+                source_count=len(source_groups), scan_eligible=scan_eligible
+            )
             prior_confidence = float(existing["confidence"])  # type: ignore[arg-type]
             if candidate.confidence > prior_confidence:
                 existing["source_kind"] = candidate.source_kind
@@ -996,8 +1024,21 @@ def _merge_candidates(
             if candidate.provenance not in prior_provenance.split("|"):
                 combined = f"{prior_provenance}|{candidate.provenance}"
                 existing["provenance"] = combined[:240]
-    items = [merged[key] for key in sorted(merged)]
+    items = sorted(
+        merged.values(),
+        key=lambda item: (
+            -int(item.get("priority") or 0),
+            -int(item.get("source_count") or 1),
+            str(item.get("target_key") or ""),
+        ),
+    )
     return items, {"omitted_duplicate": duplicates}
+
+
+def _target_priority(*, source_count: int, scan_eligible: bool) -> int:
+    if not scan_eligible:
+        return 10
+    return 90 if source_count >= 2 else 60
 
 
 def _load_supabase_projects_config(
@@ -1478,6 +1519,11 @@ def build_target_feed(
                     "target_key": item.target_key,
                     "source_kind": item.source_kind,
                     "source_group": item.source_group,
+                    "source_groups": list(item.source_groups),
+                    "source_count": item.source_count,
+                    "priority": item.priority,
+                    "scan_eligible": item.scan_eligible,
+                    "scan_eligibility_reason": item.scan_eligibility_reason,
                     "confidence": item.confidence,
                     "first_seen_at": item.first_seen_at,
                     "provenance": item.provenance,

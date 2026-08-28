@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-08-28: B680 made multi-source target corroboration operational for autonomous intake: eligible multi-source targets are prioritized for import/start, while non-global IP/URL-host artifacts are retained as evidence but cannot consume live scan budget.
 - 2026-08-28: B679 treats empty local scaffolds and Forge-maintained source queue/control files as non-actionable automation inputs; `doctor --fix-safe` prunes stale placeholders from both per-source queues and the shared discovered-input registry so future real drops can be accepted.
 - 2026-08-28: B667 exposed the automation/autostart defaults as a real read-only `forge automation defaults` command so operators can inspect tunables and disabled config templates before editing local config.
 - 2026-08-28: Final free-first audit marked the autonomous target loop backlog complete for no-key/local work; remaining 49 resume-review and 3 long-run rows are operator run backlog, not missing implementation.

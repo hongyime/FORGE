@@ -210,6 +210,9 @@ def test_import_feed_file_creates_deduped_engagements_and_manifests(tmp_path: Pa
     assert metadata["external_feed"] == "target-feed.v1"
     assert metadata["external_target_key"] == domain_result.target_key
     assert metadata["source_kind"] == "telemetry"
+    assert metadata["source_groups"] == ["telemetry"]
+    assert metadata["source_count"] == 1
+    assert metadata["scan_priority"] == 60
     assert metadata["provenance_summary"] == "network_domain"
     persisted = json.dumps(metadata)
     assert "must-not-persist" not in persisted
@@ -263,6 +266,58 @@ def test_import_feed_file_creates_deduped_engagements_and_manifests(tmp_path: Pa
     assert summary["workspace_id"] == "default"
     assert summary["seeds"] == ["example.com"]
     assert "must-not-persist" not in json.dumps(summary)
+
+
+def test_import_targets_prioritizes_multi_source_feed_items_before_limit(
+    tmp_path: Path,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [
+                    {
+                        "target_type": "domain",
+                        "target_value": "single.example",
+                        "source_kind": "db",
+                        "source_group": "db",
+                        "source_groups": ["db"],
+                        "source_count": 1,
+                        "priority": 60,
+                    },
+                    {
+                        "target_type": "domain",
+                        "target_value": "shared.example",
+                        "source_kind": "reports",
+                        "source_group": "report_family:shared",
+                        "source_groups": ["db", "report_family:shared"],
+                        "source_count": 2,
+                        "priority": 90,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = _FakeConfig(tmp_path / "data")
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id=None,
+        start=False,
+        dry_run=True,
+        limit=1,
+        max_iter=3,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert [item.target_value for item in results] == ["shared.example"]
+    assert results[0].source_count == 2
+    assert results[0].priority == 90
+    assert results[0].scan_eligible is True
 
 
 def test_import_feed_skips_allocator_id_with_existing_engagement(
@@ -333,11 +388,11 @@ def test_import_feed_accepts_canonical_multi_seed_targets(tmp_path: Path) -> Non
         ("username", "@forge_handle"),
         ("company", "Example Holdings Inc"),
         ("name", "Jane Doe"),
-        ("ipv4", "203.0.113.7"),
-        ("ipv6", "2001:db8::1"),
         ("cloud_ref", "aws_s3:acme-artifacts"),
         ("apk_url", "https://files.example.com/releases/app.apk"),
         ("cloud_ref", "https://demo.supabase.co:443/rest/v1"),
+        ("ipv4", "203.0.113.7"),
+        ("ipv6", "2001:db8::1"),
     ]
     assert len(results) == 10
     assert all(result.scope_manifest is not None for result in results)
@@ -348,16 +403,27 @@ def test_import_feed_accepts_canonical_multi_seed_targets(tmp_path: Path) -> Non
     assert email_manifest["ip_ranges"] == []
     assert email_manifest["urls"] == []
 
-    ipv4_manifest = json.loads(results[5].scope_manifest.read_text(encoding="utf-8"))
+    by_target = {result.target_value: result for result in results}
+    ipv4_manifest = json.loads(
+        by_target["203.0.113.7"].scope_manifest.read_text(encoding="utf-8")
+    )
     assert ipv4_manifest["authorized_seeds"] == ["203.0.113.7"]
     assert ipv4_manifest["ip_ranges"] == ["203.0.113.7/32"]
 
-    apk_manifest = json.loads(results[8].scope_manifest.read_text(encoding="utf-8"))
+    apk_manifest = json.loads(
+        by_target["https://files.example.com/releases/app.apk"].scope_manifest.read_text(
+            encoding="utf-8"
+        )
+    )
     assert apk_manifest["domains"] == ["files.example.com"]
     assert apk_manifest["urls"] == ["https://files.example.com/releases/app.apk"]
     assert apk_manifest["authorized_seeds"] == ["https://files.example.com/releases/app.apk"]
 
-    cloud_url_manifest = json.loads(results[9].scope_manifest.read_text(encoding="utf-8"))
+    cloud_url_manifest = json.loads(
+        by_target["https://demo.supabase.co:443/rest/v1"].scope_manifest.read_text(
+            encoding="utf-8"
+        )
+    )
     assert cloud_url_manifest["domains"] == ["demo.supabase.co"]
     assert cloud_url_manifest["urls"] == ["https://demo.supabase.co:443/rest/v1"]
     assert cloud_url_manifest["metadata"]["target_type"] == "cloud_ref"
@@ -1811,6 +1877,65 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
     assert "--no-auto-run-detected" not in command
     assert "--attack-mode" not in command
     assert "--auto-run-detected" not in command
+
+
+def test_start_skips_non_global_ip_without_consuming_start_budget(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [
+                    {
+                        "target_type": "ip",
+                        "target_value": "0.0.0.0",
+                        "source_groups": ["db", "report_family:noise"],
+                        "source_count": 2,
+                        "priority": 90,
+                    },
+                    {
+                        "target_type": "domain",
+                        "target_value": "shared.example",
+                        "source_groups": ["db", "report_family:shared"],
+                        "source_count": 2,
+                        "priority": 90,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = _FakeConfig(tmp_path / "data")
+    calls: list[list[str]] = []
+
+    def _fake_run(command: list[str], **_: object) -> object:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=None,
+        max_iter=3,
+        start_limit=1,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert [result.target_value for result in results] == ["shared.example", "0.0.0.0"]
+    assert results[0].started is True
+    assert results[1].started is False
+    assert results[1].start_skipped_reason == "non_global_ip"
+    assert len(calls) == 1
+    assert "shared.example" in calls[0]
 
 
 def test_start_uses_configured_kill_chain_runtime_timeout(

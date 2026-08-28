@@ -98,6 +98,11 @@ class TargetFeedItem:
     target_key: str
     source_kind: str
     source_group: str
+    source_groups: tuple[str, ...]
+    source_count: int
+    priority: int
+    scan_eligible: bool
+    scan_eligibility_reason: str
     confidence: float
     first_seen_at: str
     provenance: str
@@ -113,6 +118,11 @@ class TargetImportResult:
     created: bool
     started: bool
     dry_run: bool
+    source_count: int = 1
+    priority: int = 60
+    scan_eligible: bool = True
+    scan_eligibility_reason: str = "eligible"
+    start_skipped_reason: str = ""
 
 
 def load_target_feed(
@@ -138,17 +148,16 @@ def load_target_feed(
         raise ValueError("target feed items must be a list")
 
     max_items = _normalize_limit(limit)
-    items: list[TargetFeedItem] = []
+    ranked_items: list[tuple[int, TargetFeedItem]] = []
     seen: set[str] = set()
-    for raw_item in raw_items:
-        if len(items) >= max_items:
-            break
+    for index, raw_item in enumerate(raw_items):
         item = _coerce_feed_item(raw_item)
         if item is None or item.target_key in seen:
             continue
         seen.add(item.target_key)
-        items.append(item)
-    return items
+        ranked_items.append((index, item))
+    ranked_items.sort(key=lambda ranked: (-ranked[1].priority, -ranked[1].source_count, ranked[0]))
+    return [item for _, item in ranked_items[:max_items]]
 
 
 def import_targets(
@@ -189,6 +198,11 @@ def import_targets(
                     created=False,
                     started=False,
                     dry_run=True,
+                    source_count=item.source_count,
+                    priority=item.priority,
+                    scan_eligible=item.scan_eligible,
+                    scan_eligibility_reason=item.scan_eligibility_reason,
+                    start_skipped_reason="dry_run",
                 )
             )
             continue
@@ -204,9 +218,11 @@ def import_targets(
             )
         manifest_path = _write_scope_manifest(cfg, engagement_id, item, roe_id)
         started = False
+        start_skipped_reason = ""
         if (
             start
             and starts_remaining != 0
+            and item.scan_eligible
             and not _has_kill_chain_run(cfg, engagement_id, item.canonical_value)
         ):
             _start_kill_chain(
@@ -221,6 +237,8 @@ def import_targets(
             started = True
             if starts_remaining is not None:
                 starts_remaining -= 1
+        elif start and not item.scan_eligible:
+            start_skipped_reason = item.scan_eligibility_reason
         results.append(
             TargetImportResult(
                 engagement_id=engagement_id,
@@ -231,6 +249,11 @@ def import_targets(
                 created=created,
                 started=started,
                 dry_run=False,
+                source_count=item.source_count,
+                priority=item.priority,
+                scan_eligible=item.scan_eligible,
+                scan_eligibility_reason=item.scan_eligibility_reason,
+                start_skipped_reason=start_skipped_reason,
             )
         )
     return results
@@ -300,15 +323,31 @@ def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
         return None
     target_type, canonical_value = normalized
     target_key = external_target_key(target_type, canonical_value)
+    source_group = _bounded_text(
+        raw_item.get("source_group") or raw_item.get("source_kind"), 120
+    )
+    source_groups = _coerce_source_groups(raw_item.get("source_groups"), fallback=source_group)
+    source_count = _coerce_source_count(raw_item.get("source_count"), source_groups)
+    scan_eligible, scan_reason = target_scan_eligible(target_type, canonical_value)
+    if raw_item.get("scan_eligible") is False:
+        scan_eligible = False
+        scan_reason = _bounded_text(raw_item.get("scan_eligibility_reason"), 80) or "feed_marked_ineligible"
     return TargetFeedItem(
         target_type=target_type,
         target_value=target_value,
         canonical_value=canonical_value,
         target_key=target_key,
         source_kind=_bounded_text(raw_item.get("source_kind"), 80),
-        source_group=_bounded_text(
-            raw_item.get("source_group") or raw_item.get("source_kind"), 120
+        source_group=source_group,
+        source_groups=source_groups,
+        source_count=source_count,
+        priority=_coerce_priority(
+            raw_item.get("priority"),
+            source_count=source_count,
+            scan_eligible=scan_eligible,
         ),
+        scan_eligible=scan_eligible,
+        scan_eligibility_reason=scan_reason,
         confidence=_coerce_confidence(raw_item.get("confidence")),
         first_seen_at=_bounded_text(raw_item.get("first_seen_at"), 80),
         provenance=_bounded_text(raw_item.get("provenance"), 240),
@@ -507,8 +546,58 @@ def _coerce_confidence(value: object) -> float:
     return min(max(confidence, 0.0), 1.0)
 
 
+def _coerce_source_groups(value: object, *, fallback: str) -> tuple[str, ...]:
+    groups: list[str] = []
+    if isinstance(value, list):
+        for raw_group in value:
+            group = _bounded_text(raw_group, 120)
+            if group and group not in groups:
+                groups.append(group)
+    if fallback and fallback not in groups:
+        groups.append(fallback)
+    return tuple(groups)
+
+
+def _coerce_source_count(value: object, source_groups: tuple[str, ...]) -> int:
+    try:
+        raw_count = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        raw_count = len(source_groups)
+    return max(raw_count, len(source_groups), 1)
+
+
+def _coerce_priority(value: object, *, source_count: int, scan_eligible: bool) -> int:
+    try:
+        raw_priority = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        raw_priority = 90 if source_count >= 2 else 60
+    if not scan_eligible:
+        raw_priority = min(raw_priority, 10)
+    return max(0, min(raw_priority, 100))
+
+
 def _bounded_text(value: object, max_len: int) -> str:
     return " ".join(str(value or "").strip().split())[:max_len]
+
+
+def target_scan_eligible(target_type: str, canonical_value: str) -> tuple[bool, str]:
+    """Return whether an imported target should consume autonomous live scan budget."""
+    if target_type in {"ipv4", "ipv6"}:
+        try:
+            parsed_ip = ipaddress.ip_address(canonical_value)
+        except ValueError:
+            return False, "invalid_ip"
+        if not parsed_ip.is_global:
+            return False, "non_global_ip"
+    if target_type in {"url", "apk_url"}:
+        host = urlsplit(canonical_value).hostname or ""
+        try:
+            parsed_host_ip = ipaddress.ip_address(host)
+        except ValueError:
+            parsed_host_ip = None
+        if parsed_host_ip is not None and not parsed_host_ip.is_global:
+            return False, "non_global_url_host"
+    return True, "eligible"
 
 
 def _create_or_reuse_engagement(
@@ -529,6 +618,9 @@ def _create_or_reuse_engagement(
             "external_target_key": item.target_key,
             "source_kind": item.source_kind,
             "source_group": item.source_group,
+            "source_groups": list(item.source_groups),
+            "source_count": item.source_count,
+            "scan_priority": item.priority,
             "provenance_summary": item.provenance,
             "target_type": item.target_type,
             "target_value": item.canonical_value,
