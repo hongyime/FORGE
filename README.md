@@ -305,24 +305,29 @@ subset. JSON reports total/selected/omitted/new/duplicate counts plus per-source
 and per-source-group counts, preserving provenance such as
 `report_family:<id>` and `supabase:<project_ref>:<table>`.
 
-Live Supabase feed extraction is read-only and local-config only. Store project
-settings in ignored `imports/supabase-projects.local.json`; keep keys in env
-vars or a Forge connector-secret reference, never in committed files:
+Live Supabase feed extraction is read-only and local-config only. Store owned
+project settings in ignored `imports/supabase-projects.local.json`; keep keys in
+env vars or a Forge connector-secret reference, never in committed files. The
+minimal operator shape is `project_ref` plus `key_env`; Forge derives
+`https://<project_ref>.supabase.co`, discovers exposed table paths from the
+read-only Data API root, and reads all returned columns with `select=*`.
 
 ```json
 {
   "projects": [
     {
       "project_ref": "abc123",
-      "url": "https://abc123.supabase.co",
       "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
-      "tables": ["targets", "assets", "observations"],
-      "target_columns": ["domain", "url", "host", "ip", "email", "username"],
       "limit": 1000
     }
   ]
 }
 ```
+
+Optional `url`, `tables`, and `target_columns` still work for tighter scopes.
+Use `tables: ["*"]` or omit `tables` to process every exposed table, and use
+`target_columns: ["*"]` or omit `target_columns` to process every returned
+column. Forge only turns normalized target-like values into feed entries.
 
 Local CTI feed extraction is also file-based. Drop JSON directly under
 `imports/` with a filename containing `threatfox`, `urlhaus`, `misp`, `stix`,

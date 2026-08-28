@@ -45,6 +45,7 @@ _MAX_JSON_FILE_BYTES = 2 * 1024 * 1024
 _MAX_WALK_DEPTH = 6
 _MAX_VALUES_PER_FILE = 5000
 _MAX_SUPABASE_TABLE_ROWS = 1000
+_MAX_SUPABASE_DISCOVERED_TABLES = 200
 _DEFAULT_SUPABASE_CONFIG = Path("imports") / "supabase-projects.local.json"
 _DEFAULT_TARGET_COLUMNS = (
     "domain",
@@ -430,14 +431,14 @@ def _load_supabase_projects_config(
         if not isinstance(raw_project, dict):
             errors.append(f"project_invalid:{index}:not_object")
             continue
-        url = str(raw_project.get("url") or "").strip().rstrip("/")
         project_ref = str(raw_project.get("project_ref") or "").strip()
+        url = str(raw_project.get("url") or "").strip().rstrip("/")
+        if not url and project_ref:
+            url = f"https://{project_ref}.supabase.co"
         key_env = str(raw_project.get("key_env") or "").strip()
         key_secret_ref = str(raw_project.get("key_secret_ref") or "").strip()
-        tables = _string_list(raw_project.get("tables"))
-        target_columns = _string_list(raw_project.get("target_columns")) or list(
-            _DEFAULT_TARGET_COLUMNS
-        )
+        tables = _string_list(raw_project.get("tables")) or ["*"]
+        target_columns = _string_list(raw_project.get("target_columns")) or ["*"]
         limit = _coerce_supabase_limit(raw_project.get("limit"))
         label = project_ref or str(index)
         if not url.startswith("https://") or ".supabase." not in url:
@@ -540,6 +541,55 @@ def _is_connector_payload_filename(name: str) -> bool:
     return not any(marker in lowered for marker in _CTI_FILENAME_MARKERS)
 
 
+def _wants_all_supabase_tables(tables: list[str]) -> bool:
+    return any(str(table).strip() == "*" for table in tables)
+
+
+def _wants_all_supabase_columns(columns: list[str]) -> bool:
+    return any(str(column).strip() == "*" for column in columns)
+
+
+def _discover_supabase_tables(
+    project: dict[str, Any],
+    headers: dict[str, str],
+) -> tuple[list[str], list[str]]:
+    url = f"{project['url']}/rest/v1/"
+    discovery_headers = dict(headers)
+    discovery_headers["Accept"] = "application/openapi+json, application/json"
+    try:
+        response = httpx.get(url, headers=discovery_headers, timeout=15.0)
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:  # noqa: BLE001
+        return [], [f"{project['project_ref']}:discover_tables:http_{type(exc).__name__}"]
+    if not isinstance(payload, dict):
+        return [], [f"{project['project_ref']}:discover_tables:response_not_object"]
+    paths = payload.get("paths")
+    if not isinstance(paths, dict):
+        return [], [f"{project['project_ref']}:discover_tables:paths_missing"]
+    tables: list[str] = []
+    omitted = 0
+    for raw_path in sorted(paths):
+        path = str(raw_path or "").strip("/")
+        if not path or path.startswith("rpc/") or "/" in path:
+            continue
+        if not _safe_supabase_identifier(path):
+            continue
+        if len(tables) >= _MAX_SUPABASE_DISCOVERED_TABLES:
+            omitted += 1
+            continue
+        tables.append(path)
+    errors: list[str] = []
+    if omitted:
+        errors.append(
+            f"{project['project_ref']}:discover_tables:omitted_after_"
+            f"{_MAX_SUPABASE_DISCOVERED_TABLES}:{omitted}"
+        )
+    if not tables:
+        errors.append(f"{project['project_ref']}:discover_tables:none")
+    return tables, errors
+
+
 def _harvest_supabase_row(
     row: dict[str, Any],
     *,
@@ -548,6 +598,19 @@ def _harvest_supabase_row(
     first_seen_at: str,
 ) -> list[FeedCandidate]:
     candidates: list[FeedCandidate] = []
+    if _wants_all_supabase_columns(columns):
+        for _key_hint, value in _iter_json_strings(row):
+            candidate = _candidate(
+                value,
+                source_kind="supabase_table",
+                source_group=source_group,
+                provenance=source_group,
+                confidence=0.65,
+                first_seen_at=first_seen_at,
+            )
+            if candidate is not None:
+                candidates.append(candidate)
+        return candidates
     allowed = {column.lower() for column in columns}
     for key, value in row.items():
         key_hint = str(key or "").strip().lower()
@@ -589,9 +652,15 @@ def _extract_supabase_source(
             "Authorization": f"Bearer {key_value}",
             "Accept": "application/json",
         }
+        raw_tables = list(project["tables"])
+        if _wants_all_supabase_tables(raw_tables):
+            tables, discovery_errors = _discover_supabase_tables(project, headers)
+            errors.extend(discovery_errors)
+        else:
+            tables = raw_tables
         columns = list(project["target_columns"])
-        select_param = ",".join(columns)
-        for table in list(project["tables"]):
+        select_param = "*" if _wants_all_supabase_columns(columns) else ",".join(columns)
+        for table in tables:
             table_name = str(table).strip()
             source_group = f"supabase:{project_ref}:{table_name}"
             if not _safe_supabase_identifier(table_name):
@@ -599,7 +668,7 @@ def _extract_supabase_source(
                 continue
             url = (
                 f"{project['url']}/rest/v1/{quote(table_name, safe='')}"
-                f"?select={quote(select_param, safe=',')}&limit={project['limit']}"
+                f"?select={quote(select_param, safe=',*')}&limit={project['limit']}"
             )
             try:
                 response = httpx.get(url, headers=headers, timeout=15.0)
