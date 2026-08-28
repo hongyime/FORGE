@@ -504,5 +504,10 @@ def test_guarded_autostart_task_installer_uses_safe_hidden_apply_runner() -> Non
     assert "redirectstandardoutput" in runner
     assert "forge_guarded_autostart.stdout.log" in runner
     assert "forge_guarded_autostart.stderr.log" in runner
+    assert "function stop-processtree" in runner
+    assert "system32\\taskkill.exe" in runner
+    assert "/pid $rootprocessid /t /f" in runner
+    assert "stop-processtree -rootprocessid $process.id" in runner
+    assert "timed out process_tree_root_id=$($process.id)" in runner
     assert "return 124" in runner
     assert "exit (invoke-automationcycle)" in runner

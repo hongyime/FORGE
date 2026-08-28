@@ -36,6 +36,16 @@ function Join-ProcessArguments {
     return (($Values | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join " ")
 }
 
+function Stop-ProcessTree {
+    param([Parameter(Mandatory = $true)][int]$RootProcessId)
+    $taskkill = Join-Path $env:SystemRoot "System32\taskkill.exe"
+    if (Test-Path -LiteralPath $taskkill) {
+        & $taskkill /PID $RootProcessId /T /F | Out-Null
+        return
+    }
+    Stop-Process -Id $RootProcessId -Force -ErrorAction Stop
+}
+
 if ($SelfTest) {
     Write-TaskLog "self-test ok runner=$PSCommandPath"
     Write-Output "self-test ok"
@@ -82,11 +92,11 @@ function Invoke-AutomationCycle {
 
     if (-not $process.WaitForExit([Math]::Max(1, $TimeoutMinutes) * 60 * 1000)) {
         try {
-            Stop-Process -Id $process.Id -Force -ErrorAction Stop
+            Stop-ProcessTree -RootProcessId $process.Id
         } catch {
             Write-TaskLog "timed out and process already exited id=$($process.Id)"
         }
-        Write-TaskLog "timed out process_id=$($process.Id)"
+        Write-TaskLog "timed out process_tree_root_id=$($process.Id)"
         return 124
     }
 
