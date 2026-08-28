@@ -649,7 +649,7 @@ def _discover_input_registry_items(
                 break
             if not path.is_file():
                 continue
-            if path.name.lower().endswith("-inputs.local.json"):
+            if _is_local_input_control_file(path) or _is_empty_local_json_scaffold(path):
                 continue
             scanned += 1
             haystack = f"{path.name} {path.suffix}"
@@ -670,6 +670,40 @@ def _discover_input_registry_items(
         }
         for item in sorted(discovered.values(), key=_input_registry_key)
     ]
+
+
+def _is_local_input_control_file(path: Path) -> bool:
+    name = path.name.lower()
+    if name in _CONNECTOR_SOURCE_EXCLUDED_NAMES:
+        return True
+    return name.endswith("-inputs.local.json") or name.endswith("-imports.local.json")
+
+
+def _is_empty_local_json_scaffold(path: Path) -> bool:
+    if not path.name.lower().endswith(".local.json"):
+        return False
+    payload, error = _load_json_file(path)
+    if error is not None or not isinstance(payload, dict):
+        return False
+    meaningful_keys = [
+        key
+        for key in payload
+        if not str(key).startswith("_")
+        and key not in {"schema_version", "updated_at", "connector_id", "input_kind"}
+    ]
+    if not meaningful_keys:
+        return True
+    for key in meaningful_keys:
+        value = payload.get(key)
+        if isinstance(value, list) and value:
+            return False
+        if isinstance(value, dict) and value:
+            return False
+        if isinstance(value, str) and value.strip():
+            return False
+        if value not in (None, "", [], {}):
+            return False
+    return True
 
 
 def _append_discovered_input_registry_items(

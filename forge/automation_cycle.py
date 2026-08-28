@@ -68,7 +68,7 @@ def automation_status(
     feed_path = Path(output or root_imports / "target-feed.json")
     cfg_data_dir = data_dir or ForgeConfig.load().data_dir
     queue_items = _load_queue_items(root_imports)
-    ready_items, blocked_items = _classify_queue_items(
+    ready_items, blocked_items, ignored_items = _classify_queue_items(
         queue_items,
         imports_dir=root_imports,
         engagement=engagement,
@@ -87,14 +87,15 @@ def automation_status(
             "exists": feed_path.is_file(),
             "size_bytes": feed_path.stat().st_size if feed_path.is_file() else 0,
         },
-        "queues": _queue_summary(queue_items, ready_items, blocked_items),
+        "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "scan_policy": _scan_policy(),
         "ready_inputs": ready_items,
         "blocked_inputs": blocked_items,
+        "ignored_inputs": ignored_items,
         "next_actions": _status_next_actions(ready_items, blocked_items),
         "total_count": len(queue_items),
         "selected_count": len(ready_items),
-        "omitted_count": len(blocked_items),
+        "omitted_count": len(blocked_items) + len(ignored_items),
     }
 
 
@@ -133,7 +134,7 @@ def automation_cycle(
         feed_written = True
     inbox_update = classify_import_inbox(imports_dir=root_imports, apply=apply)
     queue_items = _load_queue_items(root_imports)
-    ready_items, blocked_items = _classify_queue_items(
+    ready_items, blocked_items, ignored_items = _classify_queue_items(
         queue_items,
         imports_dir=root_imports,
         engagement=engagement,
@@ -175,16 +176,17 @@ def automation_cycle(
             ),
         },
         "inbox": inbox_update,
-        "queues": _queue_summary(queue_items, ready_items, blocked_items),
+        "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "scan_policy": _scan_policy(),
         "ready_inputs": ready_items,
         "blocked_inputs": blocked_items,
+        "ignored_inputs": ignored_items,
         "queue_runs": queue_runs,
         "autostart": autostart_result,
         "total_count": 1 + len(queue_items) + (1 if live else 0),
         "selected_count": (1 if feed_written else 0)
         + sum(1 for item in queue_runs if item["status"] in {"completed", "planned"}),
-        "omitted_count": len(blocked_items),
+        "omitted_count": len(blocked_items) + len(ignored_items),
     }
 
 
@@ -231,6 +233,17 @@ def doctor_fix_safe(*, imports_dir: Path | None = None) -> dict[str, Any]:
                     "status": "repaired",
                     "path": str(path),
                     "backup": str(backup),
+                }
+            )
+            continue
+        pruned = _prune_ignored_queue_items(path, payload, imports_dir=root_imports)
+        if pruned:
+            actions.append(
+                {
+                    "id": "prune_ignored_queue_items",
+                    "status": "repaired",
+                    "path": str(path),
+                    "removed_count": pruned,
                 }
             )
             continue
@@ -410,6 +423,34 @@ def _load_queue_items(imports_dir: Path) -> list[dict[str, Any]]:
     return items
 
 
+def _prune_ignored_queue_items(path: Path, payload: dict[str, Any], *, imports_dir: Path) -> int:
+    descriptor_filenames = {descriptor["filename"] for descriptor in SOURCE_QUEUE_FILES.values()}
+    prunable_filenames = descriptor_filenames | {"discovered-inputs.local.json"}
+    if path.name not in prunable_filenames:
+        return 0
+    raw_inputs = payload.get("inputs")
+    if not isinstance(raw_inputs, list):
+        return 0
+    kept: list[object] = []
+    removed = 0
+    for index, raw_item in enumerate(raw_inputs):
+        if not isinstance(raw_item, dict):
+            kept.append(raw_item)
+            continue
+        item = dict(raw_item)
+        item["_queue_file"] = str(path)
+        item["_queue_index"] = index
+        if _queue_ignore_reason(item, imports_dir):
+            removed += 1
+            continue
+        kept.append(raw_item)
+    if removed:
+        payload["inputs"] = kept
+        payload["updated_at"] = _now_iso()
+        _write_json_atomic(path, payload)
+    return removed
+
+
 def _queue_item_key(item: dict[str, Any]) -> str:
     return "|".join(
         [
@@ -461,12 +502,17 @@ def _classify_queue_items(
     *,
     imports_dir: Path,
     engagement: int | None,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     ready: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
+    ignored: list[dict[str, Any]] = []
     for item in items:
         status = str(item.get("status") or "pending").strip().lower()
         if status in {"imported", "completed", "promoted"}:
+            continue
+        ignore_reason = _queue_ignore_reason(item, imports_dir)
+        if ignore_reason:
+            ignored.append(_ignored(item, ignore_reason))
             continue
         connector_id = str(item.get("connector_id") or "").strip()
         descriptor = SOURCE_QUEUE_FILES.get(connector_id)
@@ -506,7 +552,7 @@ def _classify_queue_items(
             }
         )
     ready.sort(key=lambda item: (-int(item["priority"]), str(item["connector_id"]), str(item["value"])))
-    return ready, blocked
+    return ready, blocked, ignored
 
 
 def _run_ready_queue_items(
@@ -602,6 +648,56 @@ def _queue_priority(item: dict[str, Any]) -> int:
     return 60
 
 
+def _queue_ignore_reason(item: dict[str, Any], imports_dir: Path) -> str:
+    artifact = _queue_artifact_path(item, imports_dir)
+    if artifact is None:
+        return ""
+    if _is_local_control_artifact(artifact):
+        return "local_control_file_reference"
+    if _is_empty_local_json_scaffold(artifact):
+        return "empty_local_scaffold"
+    return ""
+
+
+def _is_local_control_artifact(path: Path) -> bool:
+    name = path.name.lower()
+    if name in {
+        "autostart.local.json",
+        "discovered-inputs.local.json",
+        "supabase-projects.local.json",
+        "target-feed.json",
+    }:
+        return True
+    return name.endswith("-inputs.local.json") or name.endswith("-imports.local.json")
+
+
+def _is_empty_local_json_scaffold(path: Path) -> bool:
+    if not path.name.lower().endswith(".local.json") or not path.is_file():
+        return False
+    payload = _read_json_object(path)
+    if not payload:
+        return True
+    meaningful_keys = [
+        key
+        for key in payload
+        if not str(key).startswith("_")
+        and key not in {"schema_version", "updated_at", "connector_id", "input_kind"}
+    ]
+    if not meaningful_keys:
+        return True
+    for key in meaningful_keys:
+        value = payload.get(key)
+        if isinstance(value, list) and value:
+            return False
+        if isinstance(value, dict) and value:
+            return False
+        if isinstance(value, str) and value.strip():
+            return False
+        if value not in (None, "", [], {}):
+            return False
+    return True
+
+
 def _scan_policy() -> dict[str, Any]:
     return {
         "feed_sources": "all_by_default",
@@ -625,10 +721,23 @@ def _blocked(item: dict[str, Any], reason: str) -> dict[str, Any]:
     }
 
 
+def _ignored(item: dict[str, Any], reason: str) -> dict[str, Any]:
+    return {
+        "connector_id": str(item.get("connector_id") or ""),
+        "input_kind": str(item.get("input_kind") or ""),
+        "value": str(item.get("value") or ""),
+        "queue_file": str(item.get("_queue_file") or ""),
+        "queue_index": int(item.get("_queue_index") or 0),
+        "status": "ignored",
+        "reason": reason,
+    }
+
+
 def _queue_summary(
     all_items: list[dict[str, Any]],
     ready_items: list[dict[str, Any]],
     blocked_items: list[dict[str, Any]],
+    ignored_items: list[dict[str, Any]],
 ) -> dict[str, Any]:
     by_connector: dict[str, int] = {}
     for item in all_items:
@@ -638,6 +747,7 @@ def _queue_summary(
         "total": len(all_items),
         "ready": len(ready_items),
         "blocked": len(blocked_items),
+        "ignored": len(ignored_items),
         "by_connector": dict(sorted(by_connector.items())),
     }
 

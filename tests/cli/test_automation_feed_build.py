@@ -348,6 +348,39 @@ def test_feed_build_cti_source_ignores_source_input_queue_files(tmp_path: Path) 
     )
 
 
+def test_feed_build_discovery_ignores_empty_scaffolds_and_queue_controls(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox-observations.local.json").write_text(
+        json.dumps({"schema_version": "forge.cti_observations.local.v1", "data": []}),
+        encoding="utf-8",
+    )
+    (imports_dir / "projectdiscovery-cloud-imports.local.json").write_text(
+        json.dumps({"inputs": []}),
+        encoding="utf-8",
+    )
+    (imports_dir / "real-projectdiscovery-export.json").write_text(
+        json.dumps({"targets": ["pd-real.example"]}),
+        encoding="utf-8",
+    )
+
+    payload = build_target_feed(
+        sources=["connectors", "cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    discovered_values = {item["value"] for item in payload["new_discovered_inputs"]}
+    assert "threatfox-observations.local.json" not in discovered_values
+    assert "projectdiscovery-cloud-imports.local.json" not in discovered_values
+    assert "real-projectdiscovery-export.json" in discovered_values
+
+
 def test_feed_build_dry_run_reports_discovered_supabase_projects_without_config_write(
     tmp_path: Path,
 ) -> None:

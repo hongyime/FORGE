@@ -50,6 +50,50 @@ def test_automation_status_reports_ready_and_blocked_queue_items(tmp_path: Path)
     assert payload["blocked_inputs"][0]["reason"].startswith("local_artifact_missing")
 
 
+def test_automation_status_ignores_empty_scaffolds_and_control_references(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox-observations.local.json").write_text(
+        json.dumps({"schema_version": "forge.cti_observations.local.v1", "data": []}),
+        encoding="utf-8",
+    )
+    (imports_dir / "real-threatfox.json").write_text(
+        json.dumps({"data": [{"ioc": "bad.example"}]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "threatfox-inputs.local.json").write_text(
+        json.dumps(
+            {
+                "inputs": [
+                    {"value": "threatfox-observations.local.json", "status": "pending"},
+                    {"value": "threatfox-inputs.local.json", "status": "pending"},
+                    {"value": "real-threatfox.json", "status": "pending"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        engagement=None,
+    )
+
+    assert payload["queues"]["total"] == 3
+    assert payload["queues"]["ignored"] == 2
+    assert payload["queues"]["blocked"] == 1
+    assert {item["reason"] for item in payload["ignored_inputs"]} == {
+        "empty_local_scaffold",
+        "local_control_file_reference",
+    }
+    assert payload["blocked_inputs"][0]["value"] == "real-threatfox.json"
+    assert payload["blocked_inputs"][0]["reason"] == "engagement_required"
+
+
 def test_automation_cycle_dry_run_plans_feed_and_queue_without_writes(
     tmp_path: Path,
 ) -> None:
@@ -256,6 +300,54 @@ def test_doctor_fix_safe_creates_and_repairs_local_files(tmp_path: Path) -> None
     assert json.loads(broken.read_text(encoding="utf-8"))["inputs"] == []
     assert broken.with_suffix(".json.bak").is_file()
     assert payload["selected_count"] >= 2
+
+
+def test_doctor_fix_safe_prunes_ignored_queue_placeholders(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox-observations.local.json").write_text(
+        json.dumps({"schema_version": "forge.cti_observations.local.v1", "observations": []}),
+        encoding="utf-8",
+    )
+    (imports_dir / "real-threatfox.json").write_text(
+        json.dumps({"data": [{"ioc": "bad.example"}]}),
+        encoding="utf-8",
+    )
+    queue_path = imports_dir / "threatfox-inputs.local.json"
+    queue_path.write_text(
+        json.dumps(
+            {
+                "inputs": [
+                    {"value": "threatfox-observations.local.json", "status": "pending"},
+                    {"value": "threatfox-inputs.local.json", "status": "pending"},
+                    {"value": "real-threatfox.json", "status": "pending"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    registry_path = imports_dir / "discovered-inputs.local.json"
+    registry_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "forge.discovered_inputs.v1",
+                "inputs": [
+                    {"value": "threatfox-observations.local.json", "status": "accepted"},
+                    {"value": "threatfox-inputs.local.json", "status": "accepted"},
+                    {"value": "real-threatfox.json", "status": "accepted"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = doctor_fix_safe(imports_dir=imports_dir)
+
+    assert any(item["id"] == "prune_ignored_queue_items" for item in payload["actions"])
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert [item["value"] for item in queue["inputs"]] == ["real-threatfox.json"]
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert [item["value"] for item in registry["inputs"]] == ["real-threatfox.json"]
 
 
 def test_automation_cycle_cli_registers_status_and_cycle(tmp_path: Path) -> None:
