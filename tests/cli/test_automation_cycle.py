@@ -394,6 +394,78 @@ def test_automation_status_summarizes_resume_backlog_without_running_it(
     ]
 
 
+def test_automation_status_summarizes_cti_refresh_without_network(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    artifact = imports_dir / "threatfox-observations.local.json"
+    artifact.write_text(
+        json.dumps({"schema_version": "forge.cti_observations.local.v1", "data": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        engagement=1001,
+        quick=True,
+    )
+
+    assert payload["cti_refresh"]["execution_policy"] == (
+        "read_only_cti_refresh_readiness_no_network_or_writes"
+    )
+    assert payload["cti_refresh"]["status"] == "key_env_unset"
+    assert payload["cti_refresh"]["key_env"] == "FORGE_THREATFOX_AUTH_KEY"
+    assert payload["cti_refresh"]["key_env_present"] is False
+    assert payload["cti_refresh"]["artifact"]["exists"] is True
+    assert payload["cti_refresh"]["queue"]["input_count"] == 0
+    assert payload["cti_refresh"]["next_actions"] == [
+        ["set", "FORGE_THREATFOX_AUTH_KEY=<free abuse.ch Auth-Key>"]
+    ]
+
+
+def test_automation_status_recommends_cti_refresh_when_free_key_env_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_THREATFOX_AUTH_KEY", "free-test-auth-key")
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        engagement=1001,
+    )
+
+    assert payload["cti_refresh"]["status"] == "ready"
+    assert payload["cti_refresh"]["key_env_present"] is True
+    assert payload["cti_refresh"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "cti-refresh",
+        "--provider",
+        "threatfox",
+        "--engagement",
+        "1001",
+        "--apply",
+        "--json",
+    ]
+    assert payload["next_actions"][0] == (
+        "forge automation cti-refresh --provider threatfox "
+        "--engagement 1001 --apply --json"
+    )
+
+
 def test_automation_status_resume_backlog_fails_closed(tmp_path: Path, monkeypatch) -> None:
     def fail_resume_plan(**_kwargs):
         raise RuntimeError("resume db unavailable")
@@ -1087,6 +1159,40 @@ def test_automation_cycle_includes_autostart_history_summary(tmp_path: Path) -> 
     assert payload["autostart_history"]["execution_policy"] == (
         "read_only_autostart_history_no_commands_executed"
     )
+
+
+def test_automation_cycle_includes_cti_refresh_readiness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FORGE_THREATFOX_AUTH_KEY", "free-test-auth-key")
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=tmp_path / "imports" / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+    )
+
+    assert payload["cti_refresh"]["execution_policy"] == (
+        "read_only_cti_refresh_readiness_no_network_or_writes"
+    )
+    assert payload["cti_refresh"]["status"] == "ready"
+    assert payload["cti_refresh"]["key_env"] == "FORGE_THREATFOX_AUTH_KEY"
+    assert payload["cti_refresh"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "cti-refresh",
+        "--provider",
+        "threatfox",
+        "--engagement",
+        "1001",
+        "--apply",
+        "--json",
+    ]
 
 
 def test_automation_cycle_classifies_inbox_into_source_queues(tmp_path: Path) -> None:

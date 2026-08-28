@@ -222,3 +222,4 @@
 - 2026-08-29: B719 adds automation cycle status labels so startup/supervisor callers can distinguish planned, queued, blocked, deferred, failed, applied-local, and guarded-live outcomes without parsing nested payloads.
 - 2026-08-29: B720 keeps doctor JSON backward-compatible while adding daily-use aliases (`status`, `id`, `message`, `next_action`, `next_actions`) for simpler automation and supervisor parsing.
 - 2026-08-29: B721 defaults ThreatFox CTI refresh to `FORGE_THREATFOX_AUTH_KEY` and documents it as free/keyed, matching abuse.ch's Auth-Key requirement without storing secrets.
+- 2026-08-29: B722 exposes CTI refresh readiness in automation status/cycle so startup operators can see the free-key gate and safe refresh command without live network or writes.

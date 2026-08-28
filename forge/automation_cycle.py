@@ -106,6 +106,10 @@ def automation_status(
         data_dir=Path(cfg_data_dir),
         autostart_config=autostart_config_path,
     )
+    cti_refresh = _cti_refresh_readiness(
+        imports_dir=root_imports,
+        engagement=effective_engagement,
+    )
     if quick:
         resume_backlog = _quick_skipped_summary("resume_backlog")
         monitoring_due = _quick_skipped_summary("monitoring_due")
@@ -146,6 +150,7 @@ def automation_status(
         },
         "target_feed_scan": target_feed_scan,
         "autostart_history": autostart_history,
+        "cti_refresh": cti_refresh,
         "resume_backlog": resume_backlog,
         "monitoring_due": monitoring_due,
         "report_review": report_review,
@@ -167,6 +172,7 @@ def automation_status(
             resume_backlog=resume_backlog,
             monitoring_due=monitoring_due,
             report_review=report_review,
+            cti_refresh=cti_refresh,
         ),
         "total_count": len(queue_items),
         "selected_count": len(ready_items),
@@ -274,6 +280,10 @@ def automation_cycle(
         data_dir=Path(cfg_data_dir),
         autostart_config=selected_autostart_config,
     )
+    cti_refresh = _cti_refresh_readiness(
+        imports_dir=root_imports,
+        engagement=effective_engagement,
+    )
     resume_backlog = _resume_backlog_summary(data_dir=Path(cfg_data_dir))
     monitoring_due = _monitoring_due_summary(data_dir=Path(cfg_data_dir))
     report_review = _report_review_summary(reports_dir=reports_dir or Path("reports"))
@@ -314,6 +324,7 @@ def automation_cycle(
         },
         "target_feed_scan": target_feed_scan,
         "autostart_history": autostart_history,
+        "cti_refresh": cti_refresh,
         "resume_backlog": resume_backlog,
         "monitoring_due": monitoring_due,
         "report_review": report_review,
@@ -705,6 +716,67 @@ def _autostart_history_next_actions(*, status: str) -> list[list[str]]:
     if status == "recent_blocked":
         return [["forge", "automation", "status", "--json"]]
     return [["forge", "automation", "status", "--json"]]
+
+
+def _cti_refresh_readiness(
+    *,
+    imports_dir: Path,
+    engagement: int | None,
+    key_env: str = DEFAULT_THREATFOX_KEY_ENV,
+) -> dict[str, Any]:
+    root_imports = Path(imports_dir)
+    artifact = root_imports / THREATFOX_REFRESH_FILENAME
+    queue_path = root_imports / SOURCE_QUEUE_FILES["abusech_threatfox"]["filename"]
+    queue_count = 0
+    if queue_path.is_file():
+        try:
+            raw_inputs = _read_json_object(queue_path).get("inputs")
+            if isinstance(raw_inputs, list):
+                queue_count = len([item for item in raw_inputs if isinstance(item, dict)])
+        except ValueError:
+            queue_count = 0
+    env_name = _selected_threatfox_key_env(key_env)
+    env_present = bool(os.environ.get(env_name, "").strip())
+    status = "ready" if env_present else "key_env_unset"
+    command = [
+        "forge",
+        "automation",
+        "cti-refresh",
+        "--provider",
+        "threatfox",
+        "--apply",
+        "--json",
+    ]
+    if engagement is not None:
+        command[5:5] = ["--engagement", str(engagement)]
+    return {
+        "schema_version": "forge.cti_refresh_readiness.v1",
+        "execution_policy": "read_only_cti_refresh_readiness_no_network_or_writes",
+        "provider": "threatfox",
+        "status": status,
+        "requires_key_env": True,
+        "key_env": env_name,
+        "key_env_present": env_present,
+        "artifact": {
+            "path": str(artifact),
+            "exists": artifact.is_file(),
+            "size_bytes": artifact.stat().st_size if artifact.is_file() else 0,
+        },
+        "queue": {
+            "path": str(queue_path),
+            "exists": queue_path.is_file(),
+            "input_count": queue_count,
+        },
+        "engagement": engagement,
+        "next_actions": [
+            command
+            if env_present
+            else [
+                "set",
+                f"{env_name}=<free abuse.ch Auth-Key>",
+            ]
+        ],
+    }
 
 
 def _read_recent_jsonl_objects(path: Path, *, limit: int) -> tuple[list[dict[str, Any]], int]:
@@ -1790,6 +1862,7 @@ def _status_next_actions(
     resume_backlog: dict[str, Any] | None = None,
     monitoring_due: dict[str, Any] | None = None,
     report_review: dict[str, Any] | None = None,
+    cti_refresh: dict[str, Any] | None = None,
 ) -> list[str]:
     actions: list[str] = []
     autostart_blockers = [
@@ -1804,6 +1877,12 @@ def _status_next_actions(
                 "forge automation cycle --apply --live "
                 "--docker-probe-mode compose-dependency --engagement N --json"
             )
+    if (
+        not ready_items
+        and not autostart_blockers
+        and str((cti_refresh or {}).get("status") or "") == "ready"
+    ):
+        actions.extend(_command_action_strings((cti_refresh or {}).get("next_actions"), limit=1))
     if any(item["reason"] == "engagement_required" for item in blocked_items):
         actions.append(
             "add engagement_id to queue entries, set autostart engagement_id, "
