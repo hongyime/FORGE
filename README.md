@@ -489,9 +489,10 @@ Docker-started autopilot is available as an opt-in Compose profile:
 docker compose -f docker/docker-compose.yml --profile autostart up -d
 ```
 
-The `forge-guarded-autostart` service runs once per Compose start with lower
-default caps (`FORGE_AUTOSTART_CPUS=0.25`,
-`FORGE_AUTOSTART_MEM_LIMIT=1536m`) and the guarded Forge memory gate still
+The `forge-guarded-autostart` service runs a controlled loop with lower default
+caps (`FORGE_AUTOSTART_CPUS=0.25`, `FORGE_AUTOSTART_MEM_LIMIT=1536m`), startup
+delay `FORGE_AUTOSTART_STARTUP_DELAY_SECONDS=300`, cadence
+`FORGE_AUTOSTART_EVERY_SECONDS=9300`, and the guarded Forge memory gate still
 defaults to `1024` MB. It reads
 `/app/imports/autostart.local.json`, enters through
 `forge automation cycle --apply --live`, and only writes through the mounted
@@ -916,15 +917,15 @@ Redis, binds app ports to loopback for reverse-proxy/TLS exposure, and stores
 remote audit bundles under `/remote-audit` unless an external mounted/file URI
 is supplied.
 Add `--profile autostart` when Docker itself should attempt the guarded
-autopilot loop at stack startup. The profile is separate from API/web/worker so
-ordinary Compose restarts do not create a crash loop, and the service still
-requires the local guarded-autostart gates before any live target import, resume,
-monitoring, or dashboard refresh is attempted. Set
+autopilot loop at stack startup. The profile is separate from API/web/worker,
+uses conservative CPU/RAM caps, sleeps between attempts, and still requires the
+local guarded-autostart gates before any live target import, resume, monitoring,
+or dashboard refresh is attempted. Set
 `FORGE_HOST_CONNECTOR_BIN_DIR` to your local ProjectDiscovery/Go binary
 directory, or copy those binaries into ignored `tools/bin/`, before expecting
 the Docker autostart gate to pass packaged-tool checks. In `/etc/forge/forge.env`
 for the systemd wrapper, set `COMPOSE_PROFILES=autostart` when Linux service
-startup should include that guarded one-shot profile.
+startup should include that guarded loop profile.
 For Linux hosts, `docker/systemd/forge-compose.service` wraps the same compose
 file with a preflight `config --quiet` check and an `/etc/forge/forge.env`
 environment file. Install it only after `/opt/forge/docker/docker-compose.yml`

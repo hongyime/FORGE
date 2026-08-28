@@ -79,9 +79,14 @@ def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
 
     assert "forge-guarded-autostart:" in compose
     assert 'profiles: ["autostart"]' in compose
-    assert 'restart: "no"' in compose
+    assert "restart: unless-stopped" in compose
     assert 'cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"' in compose
     assert 'mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-1536m}"' in compose
+    assert "/bin/sh" in compose
+    assert "while true; do" in compose
+    assert 'sleep "$${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"' in compose
+    assert 'sleep "$${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"' in compose
+    assert "|| true" in compose
     assert "automation" in compose
     assert "cycle" in compose
     assert "--autostart-config" in compose
@@ -92,6 +97,8 @@ def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
     assert "--live" in compose
     assert "--json" in compose
     assert 'FORGE_ROE_ID: "${FORGE_ROE_ID:-}"' in compose
+    assert 'FORGE_AUTOSTART_STARTUP_DELAY_SECONDS: "${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"' in compose
+    assert 'FORGE_AUTOSTART_EVERY_SECONDS: "${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"' in compose
     assert "../imports:/app/imports:rw" in compose
     assert "../reports:/app/reports:rw" in compose
     assert "${FORGE_HOST_CONNECTOR_BIN_DIR:-../tools/bin}:/app/tools/bin:ro" in compose

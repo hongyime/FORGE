@@ -179,25 +179,28 @@ services:
     <<: *forge-service
     build: *forge-build
     profiles: ["autostart"]
-    restart: "no"
+    restart: unless-stopped
     cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"
     mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-1536m}"
     command:
-      - python
-      - -m
-      - forge.cli
-      - automation
-      - cycle
-      - --autostart-config
-      - /app/imports/autostart.local.json
-      - --docker-probe-mode
-      - compose-dependency
-      - --apply
-      - --live
-      - --json
+      - /bin/sh
+      - -c
+      - |
+        sleep "$${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
+        while true; do
+          python -m forge.cli automation cycle \
+            --autostart-config /app/imports/autostart.local.json \
+            --docker-probe-mode compose-dependency \
+            --apply \
+            --live \
+            --json || true
+          sleep "$${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
+        done
     environment:
       <<: *forge-env
       FORGE_ROE_ID: "${FORGE_ROE_ID:-}"
+      FORGE_AUTOSTART_STARTUP_DELAY_SECONDS: "${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
+      FORGE_AUTOSTART_EVERY_SECONDS: "${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
     volumes:
       - forge-data:/data
       - forge-plugins:/plugins:ro

@@ -11,7 +11,7 @@ RemainAfterExit=yes
 WorkingDirectory=/opt/forge
 EnvironmentFile=/etc/forge/forge.env
 # Set COMPOSE_PROFILES=autostart in /etc/forge/forge.env to include the
-# one-shot guarded-autostart profile when this unit starts the stack.
+# guarded-autostart loop profile when this unit starts the stack.
 ExecStartPre=/usr/bin/docker compose -f /opt/forge/docker/docker-compose.yml config --quiet
 ExecStart=/usr/bin/docker compose -f /opt/forge/docker/docker-compose.yml up -d --remove-orphans
 ExecReload=/usr/bin/docker compose -f /opt/forge/docker/docker-compose.yml up -d --remove-orphans

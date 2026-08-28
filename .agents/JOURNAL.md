@@ -206,3 +206,4 @@
 - 2026-08-29: B704 makes automation status/cycle show threshold-aware startable target counts, so raw scan eligibility is not confused with live-start budget eligibility.
 - 2026-08-29: B705 bounds live-cycle queue imports with `queue_limit`, keeping startup from spending unbounded time on local artifact queues before guarded import/start/resume/monitoring.
 - 2026-08-29: B706 makes the Windows guarded-autostart timeout path terminate the process tree with taskkill before falling back to Stop-Process.
+- 2026-08-29: B707 changes Docker guarded-autostart to a low-resource controlled loop with startup delay and cadence, while keeping live execution behind Forge guard gates.
