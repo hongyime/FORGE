@@ -161,8 +161,10 @@ The extra `forge-guarded-autostart` service runs a controlled loop with lower
 default caps (`FORGE_AUTOSTART_CPUS=0.25`,
 `FORGE_AUTOSTART_MEM_LIMIT=1536m`), startup delay
 `FORGE_AUTOSTART_STARTUP_DELAY_SECONDS=300`, and cadence
-`FORGE_AUTOSTART_EVERY_SECONDS=9300`, while the guarded Forge memory gate
-remains `1024` MB. It enters through
+`FORGE_AUTOSTART_EVERY_SECONDS=9300`, with outer cycle timeout
+`FORGE_AUTOSTART_TIMEOUT_SECONDS=9000`, while the guarded Forge memory gate
+remains `1024` MB. The timeout prevents a hung cycle from blocking later
+guarded attempts. It enters through
 `forge automation cycle --apply --live`, so it classifies inbox drops, consumes
 ready source queues, and then still requires `FORGE_ROE_ID`, local
 `imports/autostart.local.json`, Docker/resource health, cooldown/backoff, and a

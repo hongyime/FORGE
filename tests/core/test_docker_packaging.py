@@ -85,6 +85,7 @@ def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
     assert "/bin/sh" in compose
     assert "while true; do" in compose
     assert 'sleep "$${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"' in compose
+    assert 'timeout --preserve-status "$${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}"' in compose
     assert 'sleep "$${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"' in compose
     assert "|| true" in compose
     assert "automation" in compose
@@ -98,6 +99,7 @@ def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
     assert "--json" in compose
     assert 'FORGE_ROE_ID: "${FORGE_ROE_ID:-}"' in compose
     assert 'FORGE_AUTOSTART_STARTUP_DELAY_SECONDS: "${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"' in compose
+    assert 'FORGE_AUTOSTART_TIMEOUT_SECONDS: "${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}"' in compose
     assert 'FORGE_AUTOSTART_EVERY_SECONDS: "${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"' in compose
     assert "../imports:/app/imports:rw" in compose
     assert "../reports:/app/reports:rw" in compose

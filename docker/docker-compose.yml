@@ -188,6 +188,7 @@ services:
       - |
         sleep "$${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
         while true; do
+          timeout --preserve-status "$${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}" \
           python -m forge.cli automation cycle \
             --autostart-config /app/imports/autostart.local.json \
             --docker-probe-mode compose-dependency \
@@ -200,6 +201,7 @@ services:
       <<: *forge-env
       FORGE_ROE_ID: "${FORGE_ROE_ID:-}"
       FORGE_AUTOSTART_STARTUP_DELAY_SECONDS: "${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
+      FORGE_AUTOSTART_TIMEOUT_SECONDS: "${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}"
       FORGE_AUTOSTART_EVERY_SECONDS: "${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
     volumes:
       - forge-data:/data

@@ -495,8 +495,10 @@ docker compose -f docker/docker-compose.yml --profile autostart up -d
 The `forge-guarded-autostart` service runs a controlled loop with lower default
 caps (`FORGE_AUTOSTART_CPUS=0.25`, `FORGE_AUTOSTART_MEM_LIMIT=1536m`), startup
 delay `FORGE_AUTOSTART_STARTUP_DELAY_SECONDS=300`, cadence
-`FORGE_AUTOSTART_EVERY_SECONDS=9300`, and the guarded Forge memory gate still
-defaults to `1024` MB. It reads
+`FORGE_AUTOSTART_EVERY_SECONDS=9300`, an outer cycle timeout
+`FORGE_AUTOSTART_TIMEOUT_SECONDS=9000`, and the guarded Forge memory gate still
+defaults to `1024` MB. The timeout keeps a hung container cycle from blocking
+future guarded attempts. It reads
 `/app/imports/autostart.local.json`, enters through
 `forge automation cycle --apply --live`, and only writes through the mounted
 `imports/`, `reports/`, and `/data` paths. That means Docker startup consumes
