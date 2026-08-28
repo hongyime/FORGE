@@ -577,6 +577,7 @@ def test_doctor_payload_json_is_machine_readable_and_actionable() -> None:
     assert data["execution_policy"] == (
         "read_only_environment_readiness_no_commands_executed"
     )
+    assert data["status"] == "attention"
     assert data["total_count"] == 2
     assert data["selected_count"] == 2
     assert data["omitted_count"] == 0
@@ -599,6 +600,13 @@ def test_doctor_payload_json_is_machine_readable_and_actionable() -> None:
         "connectors",
         "run-plan",
         "--json",
+    ]
+    assert data["checks"][0]["id"] == "projectdiscovery_nuclei"
+    assert data["checks"][0]["message"] == "not in PATH"
+    assert data["checks"][0]["next_action"] == "forge connectors run-plan --json"
+    assert data["checks"][0]["next_actions"] == [
+        "forge connectors run-plan --json",
+        "set FORGE_OFFLINE_STRICT=1",
     ]
     assert data["checks"][0]["remediation"] == "Install with go install."
     assert "secret values are never printed" in data["secret_material_policy"]

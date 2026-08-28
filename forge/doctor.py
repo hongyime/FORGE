@@ -371,6 +371,7 @@ def doctor_payload(checks: Sequence[DoctorCheck]) -> dict[str, Any]:
         "schema": "forge.doctor.v1",
         "schema_version": "forge.doctor.v1",
         "execution_policy": "read_only_environment_readiness_no_commands_executed",
+        "status": _doctor_status_label(status_counts),
         "total_count": len(checks),
         "selected_count": len(checks),
         "omitted_count": 0,
@@ -383,26 +384,66 @@ def doctor_payload(checks: Sequence[DoctorCheck]) -> dict[str, Any]:
             "action_count": len(action_plan),
         },
         "action_plan": action_plan,
-        "checks": [
-            {
-                "component": check.component,
-                "status": check.status,
-                "details": check.details,
-                "remediation": check.remediation,
-                "action_items": [
-                    _doctor_action_payload(item)
-                    for item in check.action_items
-                    if isinstance(item, Mapping)
-                ],
-            }
-            for check in checks
-        ],
+        "checks": [_doctor_check_payload(check) for check in checks],
         "secret_material_policy": "Doctor reports env var names and paths only; secret values are never printed.",
     }
 
 
 def doctor_payload_json(checks: Sequence[DoctorCheck]) -> str:
     return json.dumps(doctor_payload(checks), sort_keys=True)
+
+
+def _doctor_status_label(status_counts: Mapping[str, int]) -> str:
+    if int(status_counts.get("ERROR") or 0) > 0:
+        return "error"
+    if any(int(status_counts.get(status) or 0) > 0 for status in _ATTENTION_STATUSES):
+        return "attention"
+    return "ready"
+
+
+def _doctor_check_payload(check: DoctorCheck) -> dict[str, Any]:
+    action_items = [
+        _doctor_action_payload(item)
+        for item in check.action_items
+        if isinstance(item, Mapping)
+    ]
+    return {
+        "id": _doctor_check_id(check.component),
+        "component": check.component,
+        "status": check.status,
+        "message": check.details,
+        "details": check.details,
+        "remediation": check.remediation,
+        "next_action": _doctor_check_next_action(action_items, check.remediation),
+        "next_actions": [
+            str(item.get("command") or "")
+            for item in action_items
+            if str(item.get("command") or "")
+        ],
+        "action_items": action_items,
+    }
+
+
+def _doctor_check_id(component: str) -> str:
+    return (
+        component.strip()
+        .lower()
+        .replace(":", "")
+        .replace("/", "_")
+        .replace(" ", "_")
+        .replace("-", "_")
+    )
+
+
+def _doctor_check_next_action(
+    action_items: Sequence[Mapping[str, Any]],
+    remediation: str,
+) -> str:
+    for item in action_items:
+        command = str(item.get("command") or "")
+        if command:
+            return command
+    return remediation
 
 
 _DOCTOR_ACTION_METADATA: dict[str, dict[str, str]] = {

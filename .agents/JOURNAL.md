@@ -220,3 +220,4 @@
 - 2026-08-29: B717 makes autostart_history recommend self-heal only for recent failures; aged historical failures now point back to automation status review.
 - 2026-08-29: B718 makes quick automation status recommend a full status audit before guarded live cycle when backlog summaries were intentionally skipped.
 - 2026-08-29: B719 adds automation cycle status labels so startup/supervisor callers can distinguish planned, queued, blocked, deferred, failed, applied-local, and guarded-live outcomes without parsing nested payloads.
+- 2026-08-29: B720 keeps doctor JSON backward-compatible while adding daily-use aliases (`status`, `id`, `message`, `next_action`, `next_actions`) for simpler automation and supervisor parsing.
