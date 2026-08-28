@@ -604,15 +604,16 @@ def _autostart_history_summary(
     last_failed_at = str(state.get("last_failed_at") or "")
     last_status = str(state.get("last_status") or "")
     failure_backoff_minutes = _autostart_failure_backoff_minutes(autostart_config)
+    history_status = _autostart_history_status(
+        state=state,
+        entries=entries,
+        unreadable_count=unreadable_count,
+        now=datetime.now(timezone.utc),
+        failure_backoff_minutes=failure_backoff_minutes,
+    )
     return {
         "execution_policy": "read_only_autostart_history_no_commands_executed",
-        "status": _autostart_history_status(
-            state=state,
-            entries=entries,
-            unreadable_count=unreadable_count,
-            now=datetime.now(timezone.utc),
-            failure_backoff_minutes=failure_backoff_minutes,
-        ),
+        "status": history_status,
         "failure_backoff_minutes": failure_backoff_minutes,
         "state_exists": state_file.is_file(),
         "log_exists": log_file.is_file(),
@@ -634,7 +635,7 @@ def _autostart_history_summary(
             for item in ((last_entry or {}).get("blockers") or [])
             if str(item)
         ][:10],
-        "next_actions": _autostart_history_next_actions(state=state, entries=entries),
+        "next_actions": _autostart_history_next_actions(status=history_status),
     }
 
 
@@ -676,17 +677,10 @@ def _autostart_failure_backoff_minutes(path: Path | None) -> int:
     return max(0, min(value, 2880))
 
 
-def _autostart_history_next_actions(
-    *,
-    state: dict[str, Any],
-    entries: list[dict[str, Any]],
-) -> list[list[str]]:
-    last_status = str(state.get("last_status") or "")
-    last_entry = entries[-1] if entries else {}
-    last_entry_status = str(last_entry.get("status") or "")
-    if last_status in {"failed", "dry_run_failed"} or last_entry_status == "failed":
+def _autostart_history_next_actions(*, status: str) -> list[list[str]]:
+    if status == "recent_failure":
         return [["forge", "automation", "self-heal-plan", "--json"]]
-    if last_entry_status == "blocked":
+    if status == "recent_blocked":
         return [["forge", "automation", "status", "--json"]]
     return [["forge", "automation", "status", "--json"]]
 

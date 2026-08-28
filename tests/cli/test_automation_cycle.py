@@ -613,6 +613,9 @@ def test_automation_status_autostart_history_ages_out_old_failures(
 
     assert payload["autostart_history"]["status"] == "historical_failure"
     assert payload["autostart_history"]["failure_backoff_minutes"] == 1
+    assert payload["autostart_history"]["next_actions"] == [
+        ["forge", "automation", "status", "--json"]
+    ]
 
 
 def test_automation_status_autostart_history_flags_unreadable_log(
