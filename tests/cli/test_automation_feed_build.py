@@ -337,6 +337,392 @@ def test_feed_build_source_only_counts_do_not_confuse_preserved_existing_feed(
     ]
 
 
+def test_supabase_add_dry_run_writes_no_config_and_derives_ref(tmp_path: Path) -> None:
+    config = tmp_path / "imports" / "supabase-projects.local.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "supabase-add",
+            "https://abc123.supabase.co",
+            "FORGE_SUPABASE_ABC123_READ_KEY",
+            "--config",
+            str(config),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.supabase_project_config.v1"
+    assert payload["dry_run"] is True
+    assert payload["execution_policy"] == "dry_run_no_writes"
+    assert payload["project_ref"] == "abc123"
+    assert payload["status"] == "would_append"
+    assert payload["changed"] is True
+    assert not config.exists()
+
+
+def test_supabase_add_apply_writes_minimal_no_secret_project_config(
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "imports" / "supabase-projects.local.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "supabase-add",
+            "abc123",
+            "FORGE_SUPABASE_ABC123_READ_KEY",
+            "--config",
+            str(config),
+            "--apply",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["dry_run"] is False
+    assert payload["execution_policy"] == "local_config_write_no_key_material"
+    assert payload["status"] == "append"
+    assert config.exists()
+    on_disk = json.loads(config.read_text(encoding="utf-8"))
+    assert on_disk["projects"] == [
+        {
+            "project_ref": "abc123",
+            "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+            "limit": 100000,
+            "status": "configured",
+        }
+    ]
+    assert "url" not in on_disk["projects"][0]
+    assert "tables" not in on_disk["projects"][0]
+    assert "target_columns" not in on_disk["projects"][0]
+
+
+def test_supabase_add_upgrades_pending_entry_without_replace(tmp_path: Path) -> None:
+    config = tmp_path / "imports" / "supabase-projects.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_env": "FORGE_SUPABASE_OLD_READ_KEY",
+                        "limit": 100000,
+                        "status": "pending_key",
+                        "discovered_from": "report_family:one",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "supabase-add",
+            "abc123",
+            "FORGE_SUPABASE_ABC123_READ_KEY",
+            "--config",
+            str(config),
+            "--limit",
+            "5000",
+            "--apply",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "update"
+    on_disk = json.loads(config.read_text(encoding="utf-8"))
+    assert on_disk["projects"][0]["key_env"] == "FORGE_SUPABASE_ABC123_READ_KEY"
+    assert on_disk["projects"][0]["limit"] == 5000
+    assert on_disk["projects"][0]["status"] == "configured"
+    assert on_disk["projects"][0]["discovered_from"] == "report_family:one"
+
+
+def test_supabase_add_preserves_configured_entry_unless_replace(
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "imports" / "supabase-projects.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_env": "FORGE_SUPABASE_OLD_READ_KEY",
+                        "limit": 1000,
+                        "status": "configured",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    no_replace = runner.invoke(
+        app,
+        [
+            "supabase-add",
+            "abc123",
+            "FORGE_SUPABASE_NEW_READ_KEY",
+            "--config",
+            str(config),
+            "--apply",
+            "--json",
+        ],
+    )
+
+    assert no_replace.exit_code == 0, no_replace.output
+    no_replace_payload = json.loads(no_replace.output)
+    assert no_replace_payload["status"] == "exists"
+    on_disk = json.loads(config.read_text(encoding="utf-8"))
+    assert on_disk["projects"][0]["key_env"] == "FORGE_SUPABASE_OLD_READ_KEY"
+
+    replace = runner.invoke(
+        app,
+        [
+            "supabase-add",
+            "abc123",
+            "FORGE_SUPABASE_NEW_READ_KEY",
+            "--config",
+            str(config),
+            "--replace",
+            "--apply",
+            "--json",
+        ],
+    )
+
+    assert replace.exit_code == 0, replace.output
+    replace_payload = json.loads(replace.output)
+    assert replace_payload["status"] == "update"
+    on_disk = json.loads(config.read_text(encoding="utf-8"))
+    assert on_disk["projects"][0]["key_env"] == "FORGE_SUPABASE_NEW_READ_KEY"
+
+
+def test_supabase_add_rejects_key_values_and_bad_refs(tmp_path: Path) -> None:
+    config = tmp_path / "imports" / "supabase-projects.local.json"
+
+    pasted_key = runner.invoke(
+        app,
+        [
+            "supabase-add",
+            "abc123",
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.fake",
+            "--config",
+            str(config),
+            "--json",
+        ],
+    )
+    assert pasted_key.exit_code == 2
+    assert "key_env_invalid" in pasted_key.output
+    assert not config.exists()
+
+    bad_ref = runner.invoke(
+        app,
+        [
+            "supabase-add",
+            "../abc123",
+            "FORGE_SUPABASE_ABC123_READ_KEY",
+            "--config",
+            str(config),
+            "--json",
+        ],
+    )
+    assert bad_ref.exit_code == 2
+    assert "project_ref_invalid" in bad_ref.output
+    assert not config.exists()
+
+
+def test_input_add_dry_run_writes_no_queue(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+
+    result = runner.invoke(
+        app,
+        [
+            "input-add",
+            "--connector",
+            "abusech_threatfox",
+            "--file",
+            "threatfox.json",
+            "--imports-dir",
+            str(imports_dir),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.source_input_config.v1"
+    assert payload["dry_run"] is True
+    assert payload["execution_policy"] == "dry_run_no_writes"
+    assert payload["config_path"] == str(imports_dir / "threatfox-inputs.local.json")
+    assert payload["connector_id"] == "abusech_threatfox"
+    assert payload["input_kind"] == "cti_marker"
+    assert payload["value"] == "threatfox.json"
+    assert payload["status"] == "would_append"
+    assert not (imports_dir / "threatfox-inputs.local.json").exists()
+
+
+def test_input_add_apply_writes_source_queue_and_dedupes(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "pd-cloud-export.json").write_text("{}", encoding="utf-8")
+
+    first = runner.invoke(
+        app,
+        [
+            "input-add",
+            "--connector",
+            "projectdiscovery_cloud",
+            "--file",
+            str(imports_dir / "pd-cloud-export.json"),
+            "--imports-dir",
+            str(imports_dir),
+            "--engagement",
+            "1001",
+            "--apply",
+            "--json",
+        ],
+    )
+
+    assert first.exit_code == 0, first.output
+    first_payload = json.loads(first.output)
+    assert first_payload["execution_policy"] == "local_queue_write_no_secret_material"
+    assert first_payload["status"] == "append"
+    assert first_payload["value"] == "pd-cloud-export.json"
+    queue_path = imports_dir / "projectdiscovery-cloud-imports.local.json"
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert queue["schema_version"] == "forge.source_inputs.v1"
+    assert queue["connector_id"] == "projectdiscovery_cloud"
+    assert queue["input_kind"] == "discovery_artifact"
+    assert queue["inputs"][0]["value"] == "pd-cloud-export.json"
+    assert queue["inputs"][0]["engagement_id"] == 1001
+    assert queue["inputs"][0]["priority"] == 85
+    assert queue["inputs"][0]["source_groups"] == ["operator:input-add"]
+
+    second = runner.invoke(
+        app,
+        [
+            "input-add",
+            "--connector",
+            "projectdiscovery_cloud",
+            "--file",
+            "pd-cloud-export.json",
+            "--imports-dir",
+            str(imports_dir),
+            "--engagement",
+            "1001",
+            "--apply",
+            "--json",
+        ],
+    )
+
+    assert second.exit_code == 0, second.output
+    second_payload = json.loads(second.output)
+    assert second_payload["status"] == "exists"
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert len(queue["inputs"]) == 1
+
+
+def test_input_add_supports_validation_target_and_absolute_external_path(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    artifact = tmp_path / "burp-results.xml"
+    artifact.write_text("<issues />", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "input-add",
+            "--connector",
+            "burp_dast_xml",
+            "--file",
+            str(artifact),
+            "--imports-dir",
+            str(imports_dir),
+            "--target",
+            "https://app.example",
+            "--apply",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["input_kind"] == "validation_artifact"
+    assert payload["value"] == str(artifact)
+    assert payload["target"] == "https://app.example"
+    queue = json.loads(
+        (imports_dir / "burp-dast-imports.local.json").read_text(encoding="utf-8")
+    )
+    assert queue["inputs"][0]["value"] == str(artifact)
+    assert queue["inputs"][0]["target"] == "https://app.example"
+
+
+def test_input_add_rejects_unknown_connector_control_files_and_secret_values(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+
+    unknown = runner.invoke(
+        app,
+        [
+            "input-add",
+            "--connector",
+            "unknown_connector",
+            "--file",
+            "artifact.json",
+            "--imports-dir",
+            str(imports_dir),
+            "--json",
+        ],
+    )
+    assert unknown.exit_code == 2
+    assert "unsupported_connector:unknown_connector" in unknown.output
+
+    control = runner.invoke(
+        app,
+        [
+            "input-add",
+            "--connector",
+            "abusech_threatfox",
+            "--file",
+            "threatfox-inputs.local.json",
+            "--imports-dir",
+            str(imports_dir),
+            "--json",
+        ],
+    )
+    assert control.exit_code == 2
+    assert "artifact_rejected:local_control_file_reference" in control.output
+
+    secret = runner.invoke(
+        app,
+        [
+            "input-add",
+            "--connector",
+            "abusech_threatfox",
+            "--file",
+            "sk-or-v1-do-not-store-this",
+            "--imports-dir",
+            str(imports_dir),
+            "--json",
+        ],
+    )
+    assert secret.exit_code == 2
+    assert "artifact_must_be_local_path_not_secret_value" in secret.output
+    assert not any(imports_dir.glob("*.local.json"))
+
+
 def test_feed_build_missing_and_malformed_sources_fail_soft(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True)

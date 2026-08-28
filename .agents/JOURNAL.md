@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-08-29: B700 added dry-run-by-default no-secret `automation supabase-add` and `automation input-add` helpers so owned Supabase refs and local CTI/connector/Burp artifacts can be queued without manual JSON edits.
 - 2026-08-29: B699 verified provider discovery with live probes enabled but no OpenRouter key, proving Forge reports only detected local/subscription backends and keeps paid backends disabled.
 - 2026-08-29: B698 made the Windows HKCU fallback recurring within the login session via a single mutex-guarded loop when Task Scheduler remains unavailable.
 - 2026-08-29: B697 made feed-build source-only output distinguish current-source contributions from preserved existing feed items, avoiding misleading Supabase selected counts.
@@ -198,3 +199,4 @@
 - 2026-08-29: B690 made OpenRouter free-only discovery request newest models and accept only capable numerically zero-priced free model families when paid backends are disabled.
 - 2026-08-29: B691 made self-heal/defaults command plans prefer `automation cycle` for startup/daily operation and leave direct guarded-autostart as a lower-level probe.
 - 2026-08-29: B692 made `automation status` resolve default engagement from local autostart config, matching `automation cycle`, and set ignored local autostart engagement to existing local engagement 1001.
+- 2026-08-29 03:58:58 +08:00 [PRAWN-E14/codex/session-start] branch=main head=39a92b7 dirty=0

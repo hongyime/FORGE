@@ -269,6 +269,8 @@ forge automation defaults [--json]        # Read-only tunable defaults, presets,
 forge automation status [--engagement N] [--json]  # Read-only feed, queue, blocker, and next-action status
 forge automation cycle [--apply] [--live] [--docker-probe-mode host-compose|compose-dependency|disabled] [--engagement N] [--json]  # Daily feed, queue, and optional guarded live loop
 forge automation feed-build [--output imports/target-feed.json] [--apply] [--json] [--source all|supabase|reports|db|cti|connectors] [--supabase-config PATH] [--limit N]
+forge automation supabase-add PROJECT_REF KEY_ENV [--config imports/supabase-projects.local.json] [--apply] [--replace] [--json]
+forge automation input-add --connector CONNECTOR_ID --file ARTIFACT [--imports-dir imports] [--engagement N] [--target URL] [--apply] [--json]
 forge automation self-heal-plan [--json] [--probe-docker] [--min-free-memory-mb N] [--min-free-disk-gb N] [--max-parallel N]
 forge automation guarded-autostart [--config imports/autostart.local.json] [--apply] [--docker-probe-mode host-compose|compose-dependency|disabled] [--json]
 forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-first connector/plugin catalog
@@ -334,6 +336,16 @@ read-only Data API root, and pages through all returned columns with
 `select=*`. The default greedy cap is 100,000 rows per table and 1,000 exposed
 tables per configured project; rows are harvested one page at a time, and key
 hints such as `username` or `handle` preserve canonical username targets.
+Use the no-secret helper instead of hand-editing when you only have a project
+ref and env var name:
+
+```powershell
+forge automation supabase-add abc123 FORGE_SUPABASE_ABC123_READ_KEY --apply --json
+```
+
+The helper writes only local config metadata. It refuses key-looking values,
+upgrades `pending_key` discoveries to `configured`, and preserves already
+configured entries unless `--replace` is explicit.
 
 ```json
 {
@@ -377,6 +389,17 @@ validation artifacts. Dry-run reports the same `discovered_inputs` and
 `new_discovered_inputs` without writing. This lets the loop grow outward from
 accepted artifacts while keeping live/keyed reads gated until the matching local
 credential or import file exists.
+To queue a known local input directly without hand-editing those files:
+
+```powershell
+forge automation input-add --connector abusech_threatfox --file threatfox.json --apply --json
+forge automation input-add --connector projectdiscovery_cloud --file pd-cloud-export.json --apply --json
+forge automation input-add --connector burp_dast_xml --file burp-results.xml --target https://app.example --apply --json
+```
+
+The command writes only queue metadata, dedupes existing entries, and defaults
+to dry-run. Relative `--file` values are resolved under `imports/`; absolute
+paths are allowed for local artifacts outside the imports tree.
 
 Source queue execution is bounded for unattended runs. Failed local imports are
 marked `failed`, keep a redacted last error and return code, wait at least 15

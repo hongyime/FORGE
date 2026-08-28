@@ -326,6 +326,128 @@ def classify_import_inbox(*, imports_dir: Path | None = None, apply: bool = Fals
     }
 
 
+def configure_source_input(
+    *,
+    connector_id: str,
+    artifact: Path,
+    imports_dir: Path | None = None,
+    engagement: int | None = None,
+    priority: int | None = None,
+    target: str = "",
+    apply: bool = False,
+) -> dict[str, Any]:
+    root_imports = Path(imports_dir or "imports")
+    normalized_connector = str(connector_id or "").strip()
+    descriptor = SOURCE_QUEUE_FILES.get(normalized_connector)
+    if descriptor is None:
+        raise ValueError(f"unsupported_connector:{normalized_connector}")
+    value = _queue_value_for_artifact(Path(artifact), imports_dir=root_imports)
+    if _secret_like_input_value(value):
+        raise ValueError("artifact_must_be_local_path_not_secret_value")
+    item = {
+        "input_kind": _input_kind_for_command(descriptor["command"]),
+        "connector_id": normalized_connector,
+        "value": value,
+        "status": "pending",
+        "priority": priority if priority is not None else _default_input_priority(normalized_connector),
+        "source_groups": ["operator:input-add"],
+    }
+    if engagement is not None:
+        if engagement <= 0:
+            raise ValueError("engagement_invalid")
+        item["engagement_id"] = engagement
+    if str(target or "").strip():
+        item["target"] = str(target).strip()
+    ignore_reason = _queue_ignore_reason(item, root_imports)
+    if ignore_reason:
+        raise ValueError(f"artifact_rejected:{ignore_reason}")
+
+    queue_path = root_imports / descriptor["filename"]
+    payload = _read_json_object(queue_path) if queue_path.is_file() else {}
+    raw_inputs = payload.get("inputs")
+    if raw_inputs is None:
+        raw_inputs = []
+    if not isinstance(raw_inputs, list):
+        raise ValueError("config_invalid:inputs_not_list")
+    known = {
+        _queue_item_key(existing)
+        for existing in raw_inputs
+        if isinstance(existing, dict)
+    }
+    changed = _queue_item_key(item) not in known
+    if apply and changed:
+        raw_inputs.append({**item, "first_seen_at": _now_iso()})
+        payload["schema_version"] = "forge.source_inputs.v1"
+        payload["connector_id"] = normalized_connector
+        payload["input_kind"] = item["input_kind"]
+        payload["updated_at"] = _now_iso()
+        payload["inputs"] = raw_inputs
+        _write_json_atomic(queue_path, payload)
+    status = "append" if apply and changed else "would_append" if changed else "exists"
+    return {
+        "schema_version": "forge.source_input_config.v1",
+        "execution_policy": (
+            "local_queue_write_no_secret_material" if apply else "dry_run_no_writes"
+        ),
+        "dry_run": not apply,
+        "apply_requested": apply,
+        "config_path": str(queue_path),
+        "connector_id": normalized_connector,
+        "input_kind": item["input_kind"],
+        "value": value,
+        "engagement_id": item.get("engagement_id"),
+        "target": item.get("target", ""),
+        "priority": item["priority"],
+        "status": status,
+        "changed": changed,
+        "next_action": "Run forge automation cycle --apply --source all --json.",
+    }
+
+
+def _queue_value_for_artifact(artifact: Path, *, imports_dir: Path) -> str:
+    raw = str(artifact).strip().strip('"')
+    if not raw:
+        raise ValueError("artifact_required")
+    path = Path(raw)
+    if path.is_absolute():
+        try:
+            return str(path.relative_to(imports_dir.resolve()))
+        except ValueError:
+            return str(path)
+    parts = path.parts
+    if parts and parts[0].lower() == imports_dir.name.lower():
+        return str(Path(*parts[1:])) if len(parts) > 1 else ""
+    return str(path)
+
+
+def _secret_like_input_value(value: str) -> bool:
+    stripped = str(value or "").strip()
+    lowered = stripped.lower()
+    if not stripped or "\n" in stripped or "\r" in stripped or len(stripped) > 1024:
+        return True
+    if lowered.startswith(("sk-", "sk_", "eyj", "xox", "ghp_", "github_pat_")):
+        return True
+    return False
+
+
+def _input_kind_for_command(command_kind: str) -> str:
+    if command_kind == "import-cti":
+        return "cti_marker"
+    if command_kind == "import-validation":
+        return "validation_artifact"
+    return "discovery_artifact"
+
+
+def _default_input_priority(connector_id: str) -> int:
+    if connector_id == "projectdiscovery_cloud":
+        return 85
+    if connector_id in {"censys_lookup", "runzero_asset_export", "asset_delta_import"}:
+        return 80
+    if connector_id == "burp_dast_xml":
+        return 75
+    return 70
+
+
 def _classify_inbox_file(path: Path, *, imports_dir: Path) -> dict[str, Any] | None:
     haystack = f"{path.name} {path.suffix}".lower()
     connector_id = ""

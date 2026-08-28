@@ -7,7 +7,11 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from forge.automation_cycle import automation_cycle, automation_status
+from forge.automation_cycle import (
+    automation_cycle,
+    automation_status,
+    configure_source_input,
+)
 from forge.automation_policy import (
     automation_defaults_review,
     automation_run_plan,
@@ -20,7 +24,11 @@ from forge.automation_self_heal import (
     automation_self_heal_plan,
     run_guarded_autostart,
 )
-from forge.automation_target_feed import build_target_feed, write_target_feed
+from forge.automation_target_feed import (
+    build_target_feed,
+    configure_supabase_project,
+    write_target_feed,
+)
 
 console = Console(stderr=True)
 
@@ -302,6 +310,131 @@ def register_automation_commands(app: typer.Typer) -> None:
             write_target_feed(payload, output)
             if not json_output:
                 console.print(f"written={output}")
+
+    @app.command("supabase-add")
+    def supabase_add(
+        project_ref: str = typer.Argument(
+            ...,
+            help="Owned Supabase project ref, or https://<ref>.supabase.co.",
+        ),
+        key_env: str = typer.Argument(
+            ...,
+            help="Environment variable name holding the read-only Supabase key.",
+        ),
+        config: Path = typer.Option(
+            Path("imports") / "supabase-projects.local.json",
+            "--config",
+            "--supabase-config",
+            help="Ignored local Supabase read-only project config.",
+        ),
+        limit: int | None = typer.Option(
+            None,
+            "--limit",
+            help="Rows per table cap. Defaults to Forge's greedy safe maximum.",
+        ),
+        apply: bool = typer.Option(
+            False,
+            "--apply",
+            help="Write the local config. Default dry-run writes nothing.",
+        ),
+        replace: bool = typer.Option(
+            False,
+            "--replace",
+            help="Replace an already configured project entry with this key env.",
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        try:
+            payload = configure_supabase_project(
+                project_ref=project_ref,
+                key_env=key_env,
+                config_path=config,
+                limit=limit,
+                apply=apply,
+                replace=replace,
+            )
+        except ValueError as exc:
+            console.print(f"[red]supabase-add rejected:[/red] {exc}")
+            raise typer.Exit(code=2) from exc
+        if json_output:
+            typer.echo(json.dumps(payload, sort_keys=True))
+            return
+        mode = "apply" if payload["apply_requested"] else "dry-run"
+        console.print(
+            f"[bold]Supabase config ({mode})[/bold] "
+            f"project_ref={payload['project_ref']} "
+            f"key_env={payload['key_env']} "
+            f"status={payload['status']} "
+            f"changed={payload['changed']}"
+        )
+        console.print(str(payload["next_action"]))
+
+    @app.command("input-add")
+    def input_add(
+        connector_id: str = typer.Option(
+            ...,
+            "--connector",
+            help="Source connector id such as abusech_threatfox, projectdiscovery_cloud, or burp_dast_xml.",
+        ),
+        artifact: Path = typer.Option(
+            ...,
+            "--file",
+            "--artifact",
+            help="Local artifact path to queue. Relative paths are resolved under --imports-dir.",
+        ),
+        imports_dir: Path = typer.Option(
+            Path("imports"),
+            "--imports-dir",
+            help="Imports dir holding source queue files and local artifacts.",
+        ),
+        engagement: int | None = typer.Option(
+            None,
+            "--engagement",
+            "-e",
+            help="Optional engagement id to store on this queue item.",
+        ),
+        priority: int | None = typer.Option(
+            None,
+            "--priority",
+            help="Optional queue priority override.",
+        ),
+        target: str = typer.Option(
+            "",
+            "--target",
+            help="Optional scoped target for validation artifacts.",
+        ),
+        apply: bool = typer.Option(
+            False,
+            "--apply",
+            help="Write the local source queue. Default dry-run writes nothing.",
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        try:
+            payload = configure_source_input(
+                connector_id=connector_id,
+                artifact=artifact,
+                imports_dir=imports_dir,
+                engagement=engagement,
+                priority=priority,
+                target=target,
+                apply=apply,
+            )
+        except ValueError as exc:
+            console.print(f"[red]input-add rejected:[/red] {exc}")
+            raise typer.Exit(code=2) from exc
+        if json_output:
+            typer.echo(json.dumps(payload, sort_keys=True))
+            return
+        mode = "apply" if payload["apply_requested"] else "dry-run"
+        console.print(
+            f"[bold]Source input ({mode})[/bold] "
+            f"connector={payload['connector_id']} "
+            f"value={payload['value']} "
+            f"status={payload['status']} "
+            f"changed={payload['changed']}"
+        )
+        console.print(str(payload["next_action"]))
 
     @app.command("self-heal-plan")
     def self_heal_plan(

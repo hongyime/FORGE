@@ -128,6 +128,8 @@ _PAYLOAD_TEXT_SUFFIXES = {".json", ".jsonl", ".csv", ".xml", ".txt", ".log", ".g
 _SUPABASE_PROJECT_REF_RE = re.compile(
     r"(?i)\b([a-z0-9][a-z0-9-]{4,62})\.supabase\.(?:co|in)\b"
 )
+_SUPABASE_PROJECT_REF_ONLY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{4,62}$")
+_ENV_VAR_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _TEXT_TARGET_RE = re.compile(
     r"(?ix)"
     r"(https?://[^\s<>'\"(){}\[\],]+)"
@@ -653,6 +655,149 @@ def _specific_input_registry_path(
 def _supabase_key_env(project_ref: str) -> str:
     normalized = re.sub(r"[^A-Z0-9]+", "_", project_ref.upper()).strip("_")
     return f"FORGE_SUPABASE_{normalized}_READ_KEY"
+
+
+def _validate_supabase_project_ref(project_ref: str) -> str:
+    normalized = str(project_ref or "").strip().lower()
+    if normalized.startswith("https://"):
+        match = _SUPABASE_PROJECT_REF_RE.search(normalized)
+        if match:
+            normalized = match.group(1).lower()
+    if not _SUPABASE_PROJECT_REF_ONLY_RE.fullmatch(normalized):
+        raise ValueError("project_ref_invalid")
+    return normalized
+
+
+def _validate_supabase_key_env(key_env: str) -> str:
+    normalized = str(key_env or "").strip()
+    if not _ENV_VAR_NAME_RE.fullmatch(normalized):
+        raise ValueError("key_env_invalid")
+    lowered = normalized.lower()
+    if lowered.startswith(("sk-", "eyj")) or "." in normalized:
+        raise ValueError("key_env_must_be_env_var_name_not_key_value")
+    return normalized
+
+
+def configure_supabase_project(
+    *,
+    project_ref: str,
+    key_env: str,
+    config_path: Path | None = None,
+    limit: int | None = None,
+    apply: bool = False,
+    replace: bool = False,
+) -> dict[str, object]:
+    """Add or update a local Supabase project reference without storing a key."""
+    normalized_ref = _validate_supabase_project_ref(project_ref)
+    normalized_key_env = _validate_supabase_key_env(key_env)
+    row_limit = _coerce_supabase_limit(limit)
+    path = _supabase_config_path(config_path)
+    payload: dict[str, object]
+    if path.is_file():
+        loaded, error = _load_json_file(path)
+        if error is not None:
+            raise ValueError(f"config_parse:{error}") from None
+        if not isinstance(loaded, dict):
+            raise ValueError("config_invalid:root_not_object")
+        payload = dict(loaded)
+    else:
+        payload = {}
+
+    raw_projects = payload.get("projects")
+    if raw_projects is None:
+        raw_projects = []
+    if not isinstance(raw_projects, list):
+        raise ValueError("config_invalid:projects_not_list")
+
+    projects = [dict(project) if isinstance(project, dict) else project for project in raw_projects]
+    existing_index: int | None = None
+    for index, project in enumerate(projects):
+        if not isinstance(project, dict):
+            continue
+        existing_ref = str(project.get("project_ref") or "").strip().lower()
+        if not existing_ref:
+            match = _SUPABASE_PROJECT_REF_RE.search(str(project.get("url") or "").strip())
+            existing_ref = match.group(1).lower() if match else ""
+        if existing_ref == normalized_ref:
+            existing_index = index
+            break
+
+    status = "would_append"
+    changed = False
+    if existing_index is None:
+        entry = {
+            "project_ref": normalized_ref,
+            "key_env": normalized_key_env,
+            "limit": row_limit,
+            "status": "configured",
+        }
+        projects.append(entry)
+        changed = True
+    else:
+        existing = projects[existing_index]
+        if not isinstance(existing, dict):
+            raise ValueError(f"project_invalid:{existing_index}:not_object")
+        existing_status = str(existing.get("status") or "").strip().lower()
+        existing_key_env = str(existing.get("key_env") or "").strip()
+        can_update = replace or existing_status == "pending_key" or not existing_key_env
+        if can_update:
+            updated = dict(existing)
+            updated["project_ref"] = normalized_ref
+            updated["key_env"] = normalized_key_env
+            updated["limit"] = row_limit
+            updated["status"] = "configured"
+            projects[existing_index] = updated
+            changed = updated != existing
+            status = "would_update" if changed else "exists"
+        else:
+            status = "exists"
+
+    if apply and changed:
+        payload["projects"] = projects
+        payload.setdefault(
+            "_instructions",
+            (
+                "Add owned read-only Supabase project entries to projects. Store "
+                "key values only in the local environment variable named by key_env."
+            ),
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(path.parent), prefix=".supabase-projects-", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, indent=2, sort_keys=True)
+                handle.write("\n")
+            os.replace(tmp_name, path)
+        except BaseException:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
+
+    if apply:
+        status = status.replace("would_", "") if changed else status
+    return {
+        "schema_version": "forge.supabase_project_config.v1",
+        "execution_policy": (
+            "local_config_write_no_key_material" if apply else "dry_run_no_writes"
+        ),
+        "dry_run": not apply,
+        "apply_requested": apply,
+        "config_path": str(path),
+        "project_ref": normalized_ref,
+        "key_env": normalized_key_env,
+        "limit": row_limit,
+        "status": status,
+        "changed": changed,
+        "replace_requested": replace,
+        "next_action": (
+            f"Set {normalized_key_env} in the local environment, then run "
+            "forge automation feed-build --source supabase --apply --json."
+        ),
+    }
 
 
 def _existing_supabase_project_refs(config_path: Path | None) -> set[str]:

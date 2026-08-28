@@ -72,6 +72,15 @@ paths reports `blocked_table_discovery` with a local next action. When
 artifact/feed scans find Supabase hostnames, `feed-build --apply` appends them
 to the ignored local Supabase config as pending entries with generated
 `key_env` names; they are only database-read after that env var is set locally.
+When you know an owned project ref and the local env var name, add it without
+storing any key material:
+
+```powershell
+forge automation supabase-add abc123 FORGE_SUPABASE_ABC123_READ_KEY --apply --json
+```
+
+The command defaults to dry-run, upgrades pending discoveries, and preserves
+configured refs unless you pass `--replace`.
 The same apply run maintains ignored `imports/discovered-inputs.local.json` with
 new no-key/free CTI, discovery-export, ProjectDiscovery Cloud, and Burp/JUnit
 DAST artifact hints found in scanned artifacts. It also writes source-specific
@@ -82,6 +91,15 @@ ignored queue files such as `imports/threatfox-inputs.local.json`,
 `imports/asset-delta-imports.local.json`, and
 `imports/burp-dast-imports.local.json`, so later runs have durable per-source
 backlogs instead of one-time transient observations.
+To add a known local input straight to the correct source queue:
+
+```powershell
+forge automation input-add --connector abusech_threatfox --file threatfox.json --apply --json
+forge automation input-add --connector projectdiscovery_cloud --file pd-cloud-export.json --apply --json
+forge automation input-add --connector burp_dast_xml --file burp-results.xml --target https://app.example --apply --json
+```
+
+This writes only queue metadata, dedupes, and defaults to dry-run.
 Local CTI/connector feed extraction is passive and bounded: JSON is parsed
 structurally, while JSONL/CSV/XML/TXT/LOG plus local GZ/ZIP drops are scanned
 only for normalized target-like values. Local CTI feed extraction reads ignored
