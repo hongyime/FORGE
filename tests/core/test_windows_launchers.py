@@ -43,6 +43,7 @@ def test_autopilot_launcher_runs_start_resume_monitor_dashboard() -> None:
     assert "--feed-source" in text
     assert "targets import" in text
     assert "--start-limit" in text
+    assert "--min-start-source-count" in text
     assert "targets resume-run" in text
     assert "--max-parallel" in text
     assert "monitoring run-due" in text
@@ -60,6 +61,7 @@ def test_autopilot_windows_launcher_defaults_to_dry_run_and_fails_fast_on_feed_a
     assert "failed in apply mode; stopping before stale feed import/resume/monitoring" in text
     assert "exit /b !exit_code!" in text
     assert 'set "start_limit=2"' in text
+    assert 'set "min_start_source_count=1"' in text
     assert 'set "max_runtime_minutes=10"' in text
     assert 'set "resume_limit=10"' in text
     assert 'set "max_parallel=2"' in text

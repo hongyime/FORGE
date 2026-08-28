@@ -253,7 +253,7 @@ forge graph attribution import --engagement N --file attributions.json|csv
 forge audit manifest-verify --engagement N
 forge audit manifest-export --engagement N [--sign] [--remote-store]
 forge audit manifest-bundle-verify --bundle PATH
-forge targets import --feed-url URL|--feed-file PATH [--dry-run] [--json] [--limit N] [--start] [--roe-id ROE]
+forge targets import --feed-url URL|--feed-file PATH [--dry-run] [--json] [--limit N] [--start] [--roe-id ROE] [--min-start-source-count N]
 forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--redact-paths] [--json]  # Default also scans repo-local legacy dashboard DBs
 forge targets resume-plan [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--data-dir PATH] [--redact-paths] [--json]
 forge targets resume-lock-status [--data-dir PATH] [--stale-lock-minutes N] [--redact-paths] [--json]
@@ -311,6 +311,9 @@ actions.
 When `cycle --apply --live` hands off to guarded-autostart, the guarded launcher
 uses the feed already written by the cycle and skips its own feed-build phase to
 avoid duplicate source reads.
+Autopilot and guarded autostart accept `--min-start-source-count N` /
+`min_start_source_count` so operators can import every target while reserving
+live scan starts for targets confirmed by multiple source groups.
 
 `forge automation feed-build` remains the lower-level feed builder. It builds
 the daily local `imports/target-feed.json` handoff for `forge targets import`.

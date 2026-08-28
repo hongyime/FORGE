@@ -533,6 +533,37 @@ def test_guarded_autostart_can_skip_feed_build_for_parent_cycle(
     assert "--feed-source" not in dry_run
 
 
+def test_guarded_autostart_propagates_min_start_source_count(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": False,
+                "min_start_source_count": 2,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+        skip_feed_build=True,
+    )
+
+    dry_run = payload["commands"]["autopilot_dry_run"]
+    assert payload["config"]["min_start_source_count"] == 2
+    assert "--min-start-source-count" in dry_run
+    assert dry_run[dry_run.index("--min-start-source-count") + 1] == "2"
+
+
 def test_guarded_autostart_rejects_invalid_feed_source(tmp_path: Path) -> None:
     config = tmp_path / "imports" / "autostart.local.json"
     config.parent.mkdir(parents=True)

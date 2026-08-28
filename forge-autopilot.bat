@@ -8,7 +8,8 @@ REM  the dashboard.
 REM
 REM  Defaults:
 REM    --feed-file imports\target-feed.json
-REM    --limit 100 --start-limit 2 --max-iter 3 --max-runtime-minutes 10
+REM    --limit 100 --start-limit 2 --min-start-source-count 1
+REM    --max-iter 3 --max-runtime-minutes 10
 REM    --resume-limit 10 --max-parallel 2 --monitor-limit 10
 REM
 REM  Useful flags:
@@ -16,6 +17,7 @@ REM    --dry-run
 REM    --apply
 REM    --feed-file PATH
 REM    --roe-id ROE-ID
+REM    --min-start-source-count N
 REM    --feed-source all|db|reports|cti|connectors|supabase
 REM    --feed-build --skip-feed-build
 REM    --skip-import --skip-resume --skip-monitoring --skip-dashboard
@@ -46,6 +48,7 @@ set "FEED_FILE=imports\target-feed.json"
 set "ROE_ID=%FORGE_ROE_ID%"
 set "LIMIT=100"
 set "START_LIMIT=2"
+set "MIN_START_SOURCE_COUNT=1"
 set "MAX_ITER=3"
 set "MAX_RUNTIME_MINUTES=10"
 set "RESUME_LIMIT=10"
@@ -93,6 +96,7 @@ if /i "%~1"=="--feed-file" set "FEED_FILE=%~2" & shift & shift & goto parse_args
 if /i "%~1"=="--roe-id" set "ROE_ID=%~2" & shift & shift & goto parse_args
 if /i "%~1"=="--limit" set "LIMIT=%~2" & shift & shift & goto parse_args
 if /i "%~1"=="--start-limit" set "START_LIMIT=%~2" & shift & shift & goto parse_args
+if /i "%~1"=="--min-start-source-count" set "MIN_START_SOURCE_COUNT=%~2" & shift & shift & goto parse_args
 if /i "%~1"=="--max-iter" set "MAX_ITER=%~2" & shift & shift & goto parse_args
 if /i "%~1"=="--max-runtime-minutes" set "MAX_RUNTIME_MINUTES=%~2" & shift & shift & goto parse_args
 if /i "%~1"=="--resume-limit" set "RESUME_LIMIT=%~2" & shift & shift & goto parse_args
@@ -106,6 +110,7 @@ goto usage
 echo Usage:
 echo   forge-autopilot.bat [--dry-run] [--apply] [--feed-file PATH] [--roe-id ROE-ID]
 echo                       [--limit N] [--start-limit N] [--max-parallel N]
+echo                       [--min-start-source-count N]
 echo                       [--feed-build] [--skip-feed-build] [--feed-source SOURCE]
 echo                       [--skip-import] [--skip-resume]
 echo                       [--skip-monitoring] [--skip-dashboard]
@@ -115,6 +120,7 @@ exit /b 0
 echo Usage:
 echo   forge-autopilot.bat [--dry-run] [--apply] [--feed-file PATH] [--roe-id ROE-ID]
 echo                       [--limit N] [--start-limit N] [--max-parallel N]
+echo                       [--min-start-source-count N]
 echo                       [--feed-build] [--skip-feed-build] [--feed-source SOURCE]
 echo                       [--skip-import] [--skip-resume]
 echo                       [--skip-monitoring] [--skip-dashboard]
@@ -135,7 +141,7 @@ if "%ROE_ID%"=="" (
 )
 echo   dry_run=%DRY_RUN% feed_build=%FEED_BUILD%
 echo   feed_source=%FEED_SOURCE_LABEL%
-echo   start_limit=%START_LIMIT% resume_limit=%RESUME_LIMIT% max_parallel=%MAX_PARALLEL%
+echo   start_limit=%START_LIMIT% min_start_source_count=%MIN_START_SOURCE_COUNT% resume_limit=%RESUME_LIMIT% max_parallel=%MAX_PARALLEL%
 echo.
 
 if not "%DRY_RUN%"=="1" if "%ROE_ID%"=="" (
@@ -172,9 +178,9 @@ if "%ROE_ID%"=="" (
 )
 echo [IMPORT] importing target feed and starting new targets...
 if "%DRY_RUN%"=="1" (
-    "%PYTHON%" -m forge.cli targets import --feed-file "%FEED_FILE%" --roe-id "%ROE_ID%" --limit "%LIMIT%" --max-iter "%MAX_ITER%" --max-runtime-minutes "%MAX_RUNTIME_MINUTES%" --start-limit "%START_LIMIT%" --start --dry-run --json
+    "%PYTHON%" -m forge.cli targets import --feed-file "%FEED_FILE%" --roe-id "%ROE_ID%" --limit "%LIMIT%" --max-iter "%MAX_ITER%" --max-runtime-minutes "%MAX_RUNTIME_MINUTES%" --start-limit "%START_LIMIT%" --min-start-source-count "%MIN_START_SOURCE_COUNT%" --start --dry-run --json
 ) else (
-    "%PYTHON%" -m forge.cli targets import --feed-file "%FEED_FILE%" --roe-id "%ROE_ID%" --limit "%LIMIT%" --max-iter "%MAX_ITER%" --max-runtime-minutes "%MAX_RUNTIME_MINUTES%" --start-limit "%START_LIMIT%" --start --json
+    "%PYTHON%" -m forge.cli targets import --feed-file "%FEED_FILE%" --roe-id "%ROE_ID%" --limit "%LIMIT%" --max-iter "%MAX_ITER%" --max-runtime-minutes "%MAX_RUNTIME_MINUTES%" --start-limit "%START_LIMIT%" --min-start-source-count "%MIN_START_SOURCE_COUNT%" --start --json
 )
 if errorlevel 1 set "EXIT_CODE=%errorlevel%"
 

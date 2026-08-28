@@ -108,6 +108,7 @@ def test_autopilot_posix_launcher_runs_start_resume_monitor_dashboard() -> None:
     assert "--feed-source" in text
     assert "targets import" in text
     assert "--start-limit" in text
+    assert "--min-start-source-count" in text
     assert "targets resume-run" in text
     assert "--max-parallel" in text
     assert "monitoring run-due" in text
@@ -126,6 +127,7 @@ def test_autopilot_posix_launcher_defaults_to_dry_run_and_fails_fast_on_feed_app
     assert "failed in apply mode; stopping before stale feed import/resume/monitoring" in text
     assert 'exit "$EXIT_CODE"' in text
     assert "START_LIMIT=2" in text
+    assert "MIN_START_SOURCE_COUNT=1" in text
     assert "MAX_RUNTIME_MINUTES=10" in text
     assert "RESUME_LIMIT=10" in text
     assert "MAX_PARALLEL=2" in text

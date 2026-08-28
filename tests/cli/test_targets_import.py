@@ -2124,6 +2124,69 @@ def test_start_limit_caps_scoped_kill_chain_launches(
     assert len(calls) == 1
 
 
+def test_start_min_source_count_skips_single_source_without_consuming_budget(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [
+                    {
+                        "target_type": "domain",
+                        "target_value": "single.example",
+                        "source_groups": ["connector:single"],
+                        "source_count": 1,
+                        "priority": 100,
+                    },
+                    {
+                        "target_type": "domain",
+                        "target_value": "shared.example",
+                        "source_groups": ["db", "report_family:shared"],
+                        "source_count": 2,
+                        "priority": 90,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = _FakeConfig(tmp_path / "data")
+    calls: list[list[str]] = []
+
+    def _fake_run(command: list[str], **_: object) -> object:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=None,
+        max_iter=3,
+        start_limit=1,
+        min_start_source_count=2,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert [result.target_value for result in results] == [
+        "single.example",
+        "shared.example",
+    ]
+    assert results[0].started is False
+    assert results[0].start_skipped_reason == "source_count_below_min_start_threshold:1<2"
+    assert results[1].started is True
+    assert len(calls) == 1
+    assert "shared.example" in calls[0]
+
+
 def test_monitoring_seed_failure_does_not_block_start(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2434,6 +2497,44 @@ def test_targets_import_cli_passes_max_runtime_minutes(
 
     assert result.exit_code == 0, result.output
     assert captured_kwargs["max_runtime_minutes"] == 13
+
+
+def test_targets_import_cli_passes_min_start_source_count(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    captured_kwargs: dict[str, object] = {}
+
+    def fake_import_targets(**kwargs: object) -> list[object]:
+        captured_kwargs.update(kwargs)
+        return []
+
+    monkeypatch.setattr("forge.targets_import_cli.import_targets", fake_import_targets)
+
+    app = typer.Typer()
+    targets_app = typer.Typer()
+    register_target_import_commands(targets_app)
+    app.add_typer(targets_app, name="targets")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "targets",
+            "import",
+            "--feed-file",
+            str(feed_path),
+            "--start",
+            "--roe-id",
+            "ROE-ACME-2026-08",
+            "--min-start-source-count",
+            "2",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured_kwargs["min_start_source_count"] == 2
 
 
 def test_targets_import_cli_dry_run_skips_item_level_unpack_value_error(

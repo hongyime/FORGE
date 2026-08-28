@@ -22,6 +22,7 @@ FEED_FILE="imports/target-feed.json"
 ROE_ID="${FORGE_ROE_ID:-}"
 LIMIT=100
 START_LIMIT=2
+MIN_START_SOURCE_COUNT=1
 MAX_ITER=3
 MAX_RUNTIME_MINUTES=10
 RESUME_LIMIT=10
@@ -39,6 +40,7 @@ usage() {
     printf 'Usage:\n'
     printf '  ./forge-autopilot.sh [--dry-run] [--apply] [--feed-file PATH] [--roe-id ROE-ID]\n'
     printf '                       [--limit N] [--start-limit N] [--max-parallel N]\n'
+    printf '                       [--min-start-source-count N]\n'
     printf '                       [--feed-build] [--skip-feed-build] [--feed-source SOURCE]\n'
     printf '                       [--skip-import] [--skip-resume]\n'
     printf '                       [--skip-monitoring] [--skip-dashboard]\n'
@@ -81,6 +83,7 @@ while [ "$#" -gt 0 ]; do
         --roe-id) ROE_ID=$2; shift 2 ;;
         --limit) LIMIT=$2; shift 2 ;;
         --start-limit) START_LIMIT=$2; shift 2 ;;
+        --min-start-source-count) MIN_START_SOURCE_COUNT=$2; shift 2 ;;
         --max-iter) MAX_ITER=$2; shift 2 ;;
         --max-runtime-minutes) MAX_RUNTIME_MINUTES=$2; shift 2 ;;
         --resume-limit) RESUME_LIMIT=$2; shift 2 ;;
@@ -104,7 +107,7 @@ else
 fi
 printf '  dry_run=%s feed_build=%s\n' "$DRY_RUN" "$FEED_BUILD"
 printf '  feed_source=%s\n' "$FEED_SOURCES"
-printf '  start_limit=%s resume_limit=%s max_parallel=%s\n\n' "$START_LIMIT" "$RESUME_LIMIT" "$MAX_PARALLEL"
+printf '  start_limit=%s min_start_source_count=%s resume_limit=%s max_parallel=%s\n\n' "$START_LIMIT" "$MIN_START_SOURCE_COUNT" "$RESUME_LIMIT" "$MAX_PARALLEL"
 
 if [ "$DRY_RUN" -ne 1 ] && [ -z "$ROE_ID" ]; then
     printf '[ERROR] --apply requires --roe-id or FORGE_ROE_ID before any live feed/import/resume/monitoring work.\n'
@@ -142,7 +145,8 @@ if [ "$SKIP_IMPORT" -ne 1 ]; then
         set -- targets import --feed-file "$FEED_FILE" --roe-id "$ROE_ID" \
             --limit "$LIMIT" --max-iter "$MAX_ITER" \
             --max-runtime-minutes "$MAX_RUNTIME_MINUTES" \
-            --start-limit "$START_LIMIT" --start --json
+            --start-limit "$START_LIMIT" \
+            --min-start-source-count "$MIN_START_SOURCE_COUNT" --start --json
         if [ "$DRY_RUN" -eq 1 ]; then
             set -- "$@" --dry-run
         fi

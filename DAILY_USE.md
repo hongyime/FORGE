@@ -57,6 +57,10 @@ forge connectors import-validation --engagement N --connector burp_dast_xml --re
 `forge automation cycle --apply --live` writes the target feed once, then hands
 off to guarded-autostart with `--skip-feed-build`; standalone startup hooks still
 let guarded-autostart run the launcher feed-build phase itself.
+Use `--min-start-source-count 2` on autopilot, or set
+`min_start_source_count: 2` in `imports/autostart.local.json`, to import
+single-source targets but reserve live scan starts for targets seen by at least
+two independent source groups.
 
 Optional Supabase live extraction is read-only and uses ignored local config at
 `imports/supabase-projects.local.json`; put keys in env vars named by `key_env`.

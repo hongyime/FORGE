@@ -81,6 +81,14 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "--start-limit",
             help="Maximum new kill-chain runs to launch during this import.",
         ),
+        min_start_source_count: int = typer.Option(
+            1,
+            "--min-start-source-count",
+            help=(
+                "Minimum independent source count required before --start may launch "
+                "a live kill-chain run for a feed item."
+            ),
+        ),
         json_output: bool = typer.Option(
             False,
             "--json",
@@ -100,6 +108,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
                 max_iter=max_iter,
                 max_runtime_minutes=max_runtime_minutes,
                 start_limit=start_limit,
+                min_start_source_count=min_start_source_count,
             )
         except Exception as exc:
             raise typer.BadParameter(str(exc)) from exc

@@ -172,6 +172,7 @@ def import_targets(
     max_iter: int,
     max_runtime_minutes: int = DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES,
     start_limit: int | None = None,
+    min_start_source_count: int = 1,
     config: ForgeConfig | None = None,
 ) -> list[TargetImportResult]:
     if start and not str(roe_id or "").strip():
@@ -185,6 +186,7 @@ def import_targets(
     )
     results: list[TargetImportResult] = []
     starts_remaining = _normalize_start_limit(start_limit)
+    min_start_sources = _normalize_min_start_source_count(min_start_source_count)
     existing_targets = _external_target_engagement_index(cfg)
     for item in items:
         if dry_run:
@@ -223,6 +225,7 @@ def import_targets(
             start
             and starts_remaining != 0
             and item.scan_eligible
+            and item.source_count >= min_start_sources
             and not _has_kill_chain_run(cfg, engagement_id, item.canonical_value)
         ):
             _start_kill_chain(
@@ -239,6 +242,11 @@ def import_targets(
                 starts_remaining -= 1
         elif start and not item.scan_eligible:
             start_skipped_reason = item.scan_eligibility_reason
+        elif start and item.source_count < min_start_sources:
+            start_skipped_reason = (
+                f"source_count_below_min_start_threshold:"
+                f"{item.source_count}<{min_start_sources}"
+            )
         results.append(
             TargetImportResult(
                 engagement_id=engagement_id,
@@ -306,6 +314,16 @@ def _normalize_start_limit(start_limit: int | None) -> int | None:
     if value <= 0:
         raise ValueError("--start-limit must be greater than zero")
     return value
+
+
+def _normalize_min_start_source_count(value: int | None) -> int:
+    try:
+        normalized = int(value) if value is not None else 1
+    except (TypeError, ValueError):
+        raise ValueError("--min-start-source-count must be an integer") from None
+    if normalized < 1:
+        raise ValueError("--min-start-source-count must be at least 1")
+    return min(normalized, 100)
 
 
 def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
