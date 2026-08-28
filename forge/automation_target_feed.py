@@ -642,6 +642,8 @@ def _discover_input_registry_items(
                 break
             if not path.is_file():
                 continue
+            if path.name.lower().endswith("-inputs.local.json"):
+                continue
             scanned += 1
             haystack = f"{path.name} {path.suffix}"
             for marker in _input_marker_hits(haystack):
@@ -749,8 +751,16 @@ def _append_specific_input_registry_items(
         raw_inputs = payload.get("inputs")
         if not isinstance(raw_inputs, list):
             raw_inputs = []
+        default_connector_id = str(items[0].get("connector_id") or "")
+        default_input_kind = str(items[0].get("input_kind") or "")
         existing_keys = {
-            _input_registry_key(item)
+            _input_registry_key(
+                {
+                    **item,
+                    "connector_id": item.get("connector_id") or default_connector_id,
+                    "input_kind": item.get("input_kind") or default_input_kind,
+                }
+            )
             for item in raw_inputs
             if isinstance(item, dict)
         }
@@ -776,8 +786,8 @@ def _append_specific_input_registry_items(
             continue
         payload["schema_version"] = "forge.source_inputs.v1"
         payload["updated_at"] = _now_iso()
-        payload["connector_id"] = str(items[0].get("connector_id") or "")
-        payload["input_kind"] = str(items[0].get("input_kind") or "")
+        payload["connector_id"] = default_connector_id
+        payload["input_kind"] = default_input_kind
         payload["inputs"] = raw_inputs
         payload.setdefault(
             "_instructions",
@@ -1084,6 +1094,15 @@ def _is_connector_payload_filename(name: str) -> bool:
     return not any(marker in lowered for marker in _CTI_FILENAME_MARKERS)
 
 
+def _is_cti_payload_filename(name: str) -> bool:
+    lowered = name.lower()
+    if lowered.endswith("-inputs.local.json"):
+        return False
+    if lowered in _CONNECTOR_SOURCE_EXCLUDED_NAMES:
+        return False
+    return any(marker in lowered for marker in _CTI_FILENAME_MARKERS)
+
+
 def _wants_all_supabase_tables(tables: list[str]) -> bool:
     return any(str(table).strip() == "*" for table in tables)
 
@@ -1319,7 +1338,7 @@ def build_target_feed(
     if "cti" in active_offline:
         found, errors = _extract_dir_source(
             cti_dir or Path("imports"),
-            filename_filter=lambda name: any(m in name.lower() for m in _CTI_FILENAME_MARKERS),
+            filename_filter=_is_cti_payload_filename,
             source_kind="cti_observation",
             provenance_prefix="cti_file:",
             first_seen_at=generated_at,

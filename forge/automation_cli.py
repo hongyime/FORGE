@@ -7,6 +7,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from forge.automation_cycle import automation_cycle, automation_status
 from forge.automation_policy import (
     automation_defaults_review,
     automation_run_plan,
@@ -89,6 +90,132 @@ def register_automation_commands(app: typer.Typer) -> None:
         console.print(f"autostart_config={payload['autostart']['config_path']}")
         for item in payload["tunables"]:
             console.print(f"- {item['id']}: default={item.get('default')}")
+
+    @app.command("status")
+    def status(
+        json_output: bool = typer.Option(False, "--json"),
+        engagement: int | None = typer.Option(
+            None,
+            "--engagement",
+            "-e",
+            help="Engagement used to decide which queued local imports are ready.",
+        ),
+        output: Path = typer.Option(
+            Path("imports") / "target-feed.json",
+            "--output",
+            help="Feed output path to summarize.",
+        ),
+        imports_dir: Path = typer.Option(
+            Path("imports"),
+            "--imports-dir",
+            help="Imports dir holding local queues and artifacts.",
+        ),
+        data_dir: Path | None = typer.Option(
+            None,
+            "--data-dir",
+            help="Forge data dir holding engagements/*.db (default ForgeConfig).",
+        ),
+    ) -> None:
+        payload = automation_status(
+            imports_dir=imports_dir,
+            output=output,
+            data_dir=data_dir,
+            engagement=engagement,
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, sort_keys=True))
+            return
+        console.print(
+            "[bold]Automation status[/bold] "
+            f"feed_exists={payload['feed']['exists']} "
+            f"queue_ready={payload['queues']['ready']} "
+            f"queue_blocked={payload['queues']['blocked']}"
+        )
+        for action in payload["next_actions"]:
+            console.print(f"- {action}")
+
+    @app.command("cycle")
+    def cycle(
+        apply: bool = typer.Option(
+            False,
+            "--apply",
+            help="Write feed and consume ready local queues. Default dry-run writes nothing.",
+        ),
+        live: bool = typer.Option(
+            False,
+            "--live",
+            help="Also invoke guarded-autostart; live work still requires ROE/resource gates.",
+        ),
+        engagement: int | None = typer.Option(
+            None,
+            "--engagement",
+            "-e",
+            help="Engagement used for queued local imports.",
+        ),
+        output: Path = typer.Option(
+            Path("imports") / "target-feed.json",
+            "--output",
+            help="Feed output path.",
+        ),
+        source: list[str] = typer.Option(
+            ["all"],
+            "--source",
+            help="Repeatable source selector: all, db, reports, cti, connectors, supabase.",
+        ),
+        supabase_config: Path | None = typer.Option(
+            Path("imports") / "supabase-projects.local.json",
+            "--supabase-config",
+            help="Local untracked Supabase read-only project config.",
+        ),
+        data_dir: Path | None = typer.Option(
+            None,
+            "--data-dir",
+            help="Forge data dir holding engagements/*.db (default ForgeConfig).",
+        ),
+        reports_dir: Path | None = typer.Option(
+            None,
+            "--reports-dir",
+            help="Reports artifact dir (default ./reports).",
+        ),
+        imports_dir: Path = typer.Option(
+            Path("imports"),
+            "--imports-dir",
+            help="Imports dir holding queues and artifacts.",
+        ),
+        limit: int | None = typer.Option(
+            None,
+            "--limit",
+            help="Cap the number of feed items emitted.",
+        ),
+        autostart_config: Path = typer.Option(
+            DEFAULT_AUTOSTART_CONFIG_PATH,
+            "--autostart-config",
+            help="Ignored local autostart config path for --live.",
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        payload = automation_cycle(
+            apply=apply,
+            live=live,
+            engagement=engagement,
+            output=output,
+            source=list(source),
+            data_dir=data_dir,
+            reports_dir=reports_dir,
+            imports_dir=imports_dir,
+            limit=limit,
+            supabase_config=supabase_config,
+            autostart_config=autostart_config,
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, sort_keys=True))
+            return
+        console.print(
+            "[bold]Automation cycle[/bold] "
+            f"policy={payload['execution_policy']} "
+            f"feed_written={payload['feed_written']} "
+            f"queue_runs={len(payload['queue_runs'])}"
+        )
 
     @app.command("feed-build")
     def feed_build(

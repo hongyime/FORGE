@@ -19,8 +19,13 @@ DAILY_USE_LAYER: tuple[dict[str, str], ...] = (
     },
     {
         "id": "automation",
-        "command": "forge automation feed-build --json",
-        "purpose": "Build the local target feed before autopilot import/start work.",
+        "command": "forge automation cycle --json",
+        "purpose": "Run the daily feed, local queue, and optional guarded live loop.",
+    },
+    {
+        "id": "automation_status",
+        "command": "forge automation status --json",
+        "purpose": "Summarize feed freshness, queue readiness, blockers, and next actions.",
     },
     {
         "id": "doctor",
@@ -215,7 +220,7 @@ def automation_defaults_review(
             "id": "feed_sources",
             "default": "all",
             "options": ["all", "db,reports,cti,connectors", "db,connectors", "supabase"],
-            "command": "forge automation feed-build --source SOURCE --json",
+            "command": "forge automation cycle --source SOURCE --json",
         },
         {
             "id": "openrouter_mode",
@@ -241,6 +246,8 @@ def automation_defaults_review(
         "tunables": tunables,
         "commands": {
             "review": ["forge", "automation", "defaults", "--json"],
+            "status": ["forge", "automation", "status", "--json"],
+            "cycle": ["forge", "automation", "cycle", "--json"],
             "autostart_dry_run": ["forge", "automation", "guarded-autostart", "--json"],
             "self_heal": ["forge", "automation", "self-heal-plan", "--json"],
             "feed_build": ["forge", "automation", "feed-build", "--json"],

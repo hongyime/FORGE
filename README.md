@@ -265,6 +265,8 @@ forge automation policy [--json]          # Show the operator-approved wildcard 
 forge automation run [--apply] [--json]   # Emit the automation execution plan; records apply intent without launching live actions
 forge automation command-review [--json]  # Read-only command count and consolidation review
 forge automation defaults [--json]        # Read-only tunable defaults, presets, and disabled local config template
+forge automation status [--engagement N] [--json]  # Read-only feed, queue, blocker, and next-action status
+forge automation cycle [--apply] [--live] [--engagement N] [--json]  # Daily feed, queue, and optional guarded live loop
 forge automation feed-build [--output imports/target-feed.json] [--apply] [--json] [--source all|supabase|reports|db|cti|connectors] [--supabase-config PATH] [--limit N]
 forge automation self-heal-plan [--json] [--probe-docker] [--min-free-memory-mb N] [--min-free-disk-gb N] [--max-parallel N]
 forge automation guarded-autostart [--config imports/autostart.local.json] [--apply] [--json]
@@ -289,21 +291,30 @@ forge workspaces list|upsert|members|member-set|member-delete|audit|backfill-mem
 forge demo proof-pack [--engagement 9901]
 forge retention preview|apply --engagement N
 forge dashboard                             # Generate the static local operator dashboard
-forge doctor [--json] [--live-provider-probes]  # Operator setup, dependency, key, and provider-readiness checks
+forge doctor [--json] [--live-provider-probes] [--fix-safe]  # Operator setup, readiness checks, and safe local repairs
 forge scaffold                              # Emit obfuscated directory tree
 forge clean --engagement N [--confirm]      # Securely wipe engagement artifacts
 ```
 
-`forge automation feed-build` builds the daily local `imports/target-feed.json`
-handoff for `forge targets import`. It merges and dedupes by canonical target
-key across current engagement DB seeds, `reports/dashboard/data/*.json`,
-report metadata JSON under `reports/`, CTI observation JSON, connector output
-JSON under `imports/`, and explicitly configured read-only Supabase REST
-tables. The command is dry-run by default; `--apply` writes the feed
-atomically. Use `--source all` for the full loop, or repeat `--source` for a
-subset. JSON reports total/selected/omitted/new/duplicate counts plus per-source
-and per-source-group counts, preserving provenance such as
-`report_family:<id>` and `supabase:<project_ref>:<table>`.
+`forge automation cycle` is the daily-use loop. Dry-run mode plans feed-build,
+source queue consumption, and optional guarded live startup without writing.
+`--apply` writes the local feed and consumes ready local/no-key source queues.
+`--live` additionally invokes guarded-autostart, so target import/start, resume,
+monitoring, and dashboard refresh still pass through ROE, memory, disk, Docker,
+cooldown, backoff, and single-instance gates. `forge automation status` is the
+read-only view of feed presence, queue readiness, blocked inputs, and next
+actions.
+
+`forge automation feed-build` remains the lower-level feed builder. It builds
+the daily local `imports/target-feed.json` handoff for `forge targets import`.
+It merges and dedupes by canonical target key across current engagement DB
+seeds, `reports/dashboard/data/*.json`, report metadata JSON under `reports/`,
+CTI observation JSON, connector output JSON under `imports/`, and explicitly
+configured read-only Supabase REST tables. The command is dry-run by default;
+`--apply` writes the feed atomically. Use `--source all` for the full loop, or
+repeat `--source` for a subset. JSON reports total/selected/omitted/new/
+duplicate counts plus per-source and per-source-group counts, preserving
+provenance such as `report_family:<id>` and `supabase:<project_ref>:<table>`.
 
 Live Supabase feed extraction is read-only and local-config only. Store owned
 project settings in ignored `imports/supabase-projects.local.json`; keep keys in

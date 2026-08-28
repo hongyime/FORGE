@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Optional
@@ -47,23 +48,38 @@ def run_doctor_command(
     *,
     json_output: bool,
     live_provider_probes: bool,
+    fix_safe: bool = False,
     console: Console,
 ) -> None:
     """Run the operator setup and provider-readiness check."""
 
+    from forge.automation_cycle import doctor_fix_safe  # noqa: PLC0415
     from forge.doctor import collect_doctor_checks, doctor_payload_json, run_doctor  # noqa: PLC0415
 
+    safe_fix_payload = doctor_fix_safe() if fix_safe else None
     if json_output:
-        typer.echo(
+        payload = json.loads(
             doctor_payload_json(
                 collect_doctor_checks(live_provider_probes=live_provider_probes)
             )
         )
+        if safe_fix_payload is not None:
+            payload["execution_policy"] = (
+                "local_safe_fixes_plus_read_only_environment_readiness_no_live_commands"
+            )
+            payload["safe_fix"] = safe_fix_payload
+        typer.echo(json.dumps(payload, sort_keys=True))
         return
     if live_provider_probes:
         run_doctor(console=console, live_provider_probes=True)
-        return
-    run_doctor(console=console)
+    else:
+        run_doctor(console=console)
+    if safe_fix_payload is not None:
+        console.print(
+            "[bold]Safe fixes[/bold] "
+            f"changed={safe_fix_payload['selected_count']} "
+            f"checked={safe_fix_payload['total_count']}"
+        )
 
 
 def run_scaffold_command(*, output_dir: str) -> None:

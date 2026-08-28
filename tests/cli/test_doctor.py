@@ -2186,3 +2186,40 @@ def test_root_doctor_command_supports_json(monkeypatch) -> None:
     assert payload["checks"][0]["component"] == "Connector Catalog"
     assert payload["checks"][0]["remediation"] == "Run connectors list."
     assert captured["live_provider_probes"] is True
+
+
+def test_root_doctor_fix_safe_labels_local_mutation(monkeypatch) -> None:
+    import forge.automation_cycle as cycle_module  # noqa: PLC0415
+    import forge.doctor as doctor_module  # noqa: PLC0415
+    from forge.cli import app as forge_app  # noqa: PLC0415
+
+    def fake_collect_doctor_checks(**_kwargs):
+        return [DoctorCheck("Connector Catalog", "OK", "1 free-first", "")]
+
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_doctor_checks",
+        fake_collect_doctor_checks,
+    )
+    monkeypatch.setattr(
+        cycle_module,
+        "doctor_fix_safe",
+        lambda: {
+            "schema_version": "forge.doctor_safe_fix.v1",
+            "execution_policy": "local_safe_fixes_no_live_or_provider_commands",
+            "actions": [],
+            "total_count": 0,
+            "selected_count": 0,
+            "omitted_count": 0,
+        },
+    )
+
+    result = CliRunner().invoke(forge_app, ["doctor", "--fix-safe", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert (
+        payload["execution_policy"]
+        == "local_safe_fixes_plus_read_only_environment_readiness_no_live_commands"
+    )
+    assert payload["safe_fix"]["schema_version"] == "forge.doctor_safe_fix.v1"

@@ -26,9 +26,14 @@ forge-autopilot.bat --dry-run --feed-build
 
 Use `--feed-source all` for the full feed-build input set; this is the default.
 Use `--skip-feed-build` to keep the older behavior of consuming only an existing
-`imports/target-feed.json`. Build the feed directly with:
+`imports/target-feed.json`. The streamlined daily CLI path is:
 
 ```text
+forge automation status --json
+forge automation cycle --json
+forge automation cycle --apply --engagement N --json
+forge automation cycle --apply --live --engagement N --json
+forge doctor --fix-safe --json
 forge automation feed-build --json
 forge automation feed-build --apply --json
 forge automation defaults --json

@@ -92,13 +92,15 @@ def test_automation_command_review_reports_pressure_and_recommendations() -> Non
     assert {
         "automation_defaults",
         "automation",
+        "automation_status",
         "doctor",
         "targets_resume",
         "connectors_plan",
         "connectors_run",
         "report_review",
     }.issubset(daily)
-    assert daily["automation"]["base_command"] == "forge automation feed-build"
+    assert daily["automation"]["base_command"] == "forge automation cycle"
+    assert daily["automation_status"]["base_command"] == "forge automation status"
     assert daily["doctor"]["documentation_status"] == "documented"
     assert payload["recommendations"]
 
@@ -158,3 +160,18 @@ def test_automation_cli_json_commands() -> None:
     defaults_payload = json.loads(defaults_result.output)
     assert defaults_payload["schema_version"] == "forge.automation_defaults_review.v1"
     assert defaults_payload["autostart"]["config_path"] == "imports\\autostart.local.json"
+
+    status_result = runner.invoke(
+        app,
+        [
+            "automation",
+            "status",
+            "--imports-dir",
+            "missing-imports",
+            "--data-dir",
+            "missing-data",
+            "--json",
+        ],
+    )
+    assert status_result.exit_code == 0, status_result.output
+    assert json.loads(status_result.output)["schema_version"] == "forge.automation_status.v1"

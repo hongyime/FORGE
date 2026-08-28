@@ -246,6 +246,35 @@ def test_feed_build_connector_source_ignores_local_config_files(tmp_path: Path) 
     assert payload["items"][0]["source_group"] == "connector_file:connector-output.json"
 
 
+def test_feed_build_cti_source_ignores_source_input_queue_files(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox-inputs.local.json").write_text(
+        json.dumps({"inputs": [{"value": "skip-queue.example"}]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "threatfox-observations.local.json").write_text(
+        json.dumps({"iocs": ["keep-observation.example"]}),
+        encoding="utf-8",
+    )
+
+    payload = build_target_feed(
+        sources=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert [item["canonical_value"] for item in payload["items"]] == [
+        "keep-observation.example"
+    ]
+    assert payload["items"][0]["source_group"] == (
+        "cti_file:threatfox-observations.local.json"
+    )
+
+
 def test_feed_build_dry_run_reports_discovered_supabase_projects_without_config_write(
     tmp_path: Path,
 ) -> None:
