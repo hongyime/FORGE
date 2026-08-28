@@ -361,6 +361,20 @@ The production Compose file ships with conservative, env-overridable CPU/RAM
 caps for API, web UI, worker, Postgres, and Redis services so Docker startup has
 bounded defaults on small machines.
 
+On Windows, install the startup-safe task with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install_guarded_autostart_task.ps1 -EveryMinutes 30 -StartupDelayMinutes 5 -TimeoutMinutes 150
+```
+
+The task runs hidden at logon after the delay and then on the configured
+cadence. It calls only `forge automation guarded-autostart --apply --json`, so
+live work still fails closed unless `imports/autostart.local.json`,
+`FORGE_ROE_ID`, resource checks, Docker health, cooldown/backoff, and the
+single-instance lock all pass.
+If Task Scheduler registration is denied, the installer falls back to a
+user-level HKCU Run startup entry that runs at logon without admin rights.
+
 Minimal local autostart config:
 
 ```json

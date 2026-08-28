@@ -60,6 +60,17 @@ guarded-autostart writes a bounded redacted JSONL history under the Forge data
 dir; dry-run remains non-mutating. Docker probes summarize container
 state/health and block unhealthy startup.
 
+Install the Windows startup hook with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install_guarded_autostart_task.ps1 -EveryMinutes 30 -StartupDelayMinutes 5 -TimeoutMinutes 150
+```
+
+The task runs hidden at logon and on cadence, but still delegates every live
+decision to `forge automation guarded-autostart --apply --json`.
+If Task Scheduler is denied, the installer falls back to a user-level HKCU Run
+startup entry that runs at logon without admin rights.
+
 Burp/JUnit DAST XML import is local evidence intake only. Rehearse with
 `--dry-run --json`; applied imports add scoped active-validation evidence rows
 without running scanners or creating reportable vulnerability findings.

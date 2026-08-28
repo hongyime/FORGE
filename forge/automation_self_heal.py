@@ -274,7 +274,8 @@ def run_guarded_autostart(
         )
         return result
     try:
-        timeout_seconds = int(config["max_runtime_minutes"]) * 60 + 120
+        timeout_seconds = _autopilot_timeout_seconds(config)
+        result["autopilot_timeout_seconds"] = timeout_seconds
         if command_runner is None:
             runner = lambda command, cwd: _run_command_with_options(
                 command,
@@ -319,6 +320,15 @@ def run_guarded_autostart(
             lock_file.unlink()
         except FileNotFoundError:
             pass
+
+
+def _autopilot_timeout_seconds(config: dict[str, Any]) -> int:
+    per_target_minutes = max(1, int(config.get("max_runtime_minutes") or 1))
+    start_limit = max(1, int(config.get("start_limit") or 1))
+    # The guarded child covers feed-build, import/start, resume, monitoring,
+    # and dashboard refresh. Budget for the full batch, not one target child.
+    overhead_minutes = 30
+    return min(6 * 60 * 60, (per_target_minutes * start_limit + overhead_minutes) * 60)
 
 
 def _load_autostart_config(config_path: Path) -> tuple[dict[str, Any], list[str]]:

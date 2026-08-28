@@ -579,6 +579,7 @@ def test_guarded_autostart_apply_runs_dry_run_then_live_and_writes_state(
     )
 
     assert payload["status"] == "completed"
+    assert payload["autopilot_timeout_seconds"] == 35 * 60
     assert len(calls) == 2
     assert "--dry-run" in calls[0]
     assert "--roe-id" in calls[1]

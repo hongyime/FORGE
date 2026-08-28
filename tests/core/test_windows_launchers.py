@@ -347,3 +347,37 @@ def test_remediation_ticket_status_import_installer_is_budgeted_and_apply_gated(
     assert "-multipleinstances ignorenew" in text
     assert "mode: $(if ($apply -and -not $dryrun) { 'apply' } else { 'dry-run' })" in text
     assert "close policy: $closepolicy" in text
+
+
+def test_guarded_autostart_task_installer_uses_safe_hidden_apply_runner() -> None:
+    installer = (
+        REPO_ROOT / "scripts" / "install_guarded_autostart_task.ps1"
+    ).read_text(encoding="utf-8").lower()
+    runner = (
+        REPO_ROOT / "scripts" / "run_guarded_autostart_task.ps1"
+    ).read_text(encoding="utf-8").lower()
+
+    assert "register-scheduledtask" in installer
+    assert "hkcu:\\software\\microsoft\\windows\\currentversion\\run" in installer
+    assert "installed hkcu run startup entry instead" in installer
+    assert "[int]$timeoutminutes = 150" in installer
+    assert "new-scheduledtasktrigger -atlogon" in installer
+    assert "repetitioninterval" in installer
+    assert "-multipleinstances ignorenew" in installer
+    assert "-priority 7" in installer
+    assert "new-scheduledtaskprincipal" in installer
+    assert "-logontype interactive" in installer
+    assert "-runlevel limited" in installer
+    assert "run_guarded_autostart_task.ps1" in installer
+    assert "windowstyle hidden" in installer
+    assert "mode: guarded apply" in installer
+
+    assert '"automation"' in runner
+    assert '"guarded-autostart"' in runner
+    assert '"--apply"' in runner
+    assert '"--json"' in runner
+    assert "-windowstyle hidden" in runner
+    assert "redirectstandardoutput" in runner
+    assert "forge_guarded_autostart.stdout.log" in runner
+    assert "forge_guarded_autostart.stderr.log" in runner
+    assert "exit 124" in runner
