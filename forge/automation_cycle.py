@@ -975,6 +975,10 @@ def _status_next_actions(
     actions: list[str] = []
     if ready_items:
         actions.append("forge automation cycle --apply --engagement N --json")
+        actions.append(
+            "forge automation cycle --apply --live "
+            "--docker-probe-mode compose-dependency --engagement N --json"
+        )
     if any(item["reason"] == "engagement_required" for item in blocked_items):
         actions.append(
             "add engagement_id to queue entries, set autostart engagement_id, "
@@ -983,7 +987,10 @@ def _status_next_actions(
     if any(str(item["reason"]).startswith("local_artifact_missing") for item in blocked_items):
         actions.append("place referenced artifacts under imports/ or fix queue item paths")
     if not actions:
-        actions.append("forge automation cycle --apply --json")
+        actions.append(
+            "forge automation cycle --apply --live "
+            "--docker-probe-mode compose-dependency --json"
+        )
     return actions
 
 

@@ -48,6 +48,13 @@ def test_automation_status_reports_ready_and_blocked_queue_items(tmp_path: Path)
         "1001",
         "--connector",
     ]
+    assert "forge automation cycle --apply --engagement N --json" in payload[
+        "next_actions"
+    ]
+    assert (
+        "forge automation cycle --apply --live --docker-probe-mode "
+        "compose-dependency --engagement N --json"
+    ) in payload["next_actions"]
     assert payload["blocked_inputs"][0]["reason"].startswith("local_artifact_missing")
 
 
@@ -196,6 +203,9 @@ def test_automation_status_summarizes_existing_target_feed_scanability(
     assert scan["high_priority_count"] == 1
     assert scan["ineligible_reasons"] == {"non_global_ip": 1}
     assert scan["top_targets"][0]["target_value"] == "shared.example"
+    assert payload["next_actions"] == [
+        "forge automation cycle --apply --live --docker-probe-mode compose-dependency --json"
+    ]
 
 
 def test_automation_cycle_dry_run_plans_feed_and_queue_without_writes(
