@@ -226,3 +226,4 @@
 - 2026-08-29: B723 exposes Supabase sync readiness in automation status/cycle from local project_ref/key_env config only, preserving explicit owned-project gating and no network reads during status.
 - 2026-08-29: B724 adds monitoring run-due status labels so valid dry-runs and scheduler outcomes no longer serialize as `status=null`.
 - 2026-08-29: B725 makes source-readiness setup gates visible in full automation status next_actions while preserving quick-status and backlog-first ordering.
+- 2026-08-29: B726 treats OpenRouter as a free-only static provider signal by default; only an explicit paid-backend gate makes it count as paid API readiness.

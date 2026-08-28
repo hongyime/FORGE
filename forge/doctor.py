@@ -124,6 +124,7 @@ _LLM_API_ENV_OPTIONS: tuple[tuple[str, ...], ...] = (
     ("GEMINI_API_KEY",),
     ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"),
 )
+_OPENROUTER_ENV_OPTION: tuple[str, ...] = ("OPENROUTER_API_KEY",)
 
 _BINARY_REMEDIATION: dict[str, str] = {
     "git": "Install Git and ensure `git` is on PATH.",
@@ -3004,15 +3005,33 @@ def _static_provider_readiness_check(env: Mapping[str, str], which: WhichResolve
                 ),
             )
 
+    paid_allowed = _truthy(env.get("FORGE_ALLOW_PAID_BACKENDS", ""))
     paid_env_configured = [
         " + ".join(option)
         for option in _LLM_API_ENV_OPTIONS
-        if all(str(env.get(name, "")).strip() for name in option)
+        if option != _OPENROUTER_ENV_OPTION
+        and all(str(env.get(name, "")).strip() for name in option)
     ]
-    if paid_env_configured and _truthy(env.get("FORGE_ALLOW_PAID_BACKENDS", "")):
-        detected.append(f"{len(paid_env_configured)} paid API env option(s)")
+    openrouter_key_configured = all(
+        str(env.get(name, "")).strip() for name in _OPENROUTER_ENV_OPTION
+    )
+    paid_provider_count = len(paid_env_configured) + (
+        1 if openrouter_key_configured and paid_allowed else 0
+    )
+    if paid_provider_count and paid_allowed:
+        detected.append(f"{paid_provider_count} paid API env option(s)")
+    if openrouter_key_configured and not paid_allowed:
+        detected.append("openrouter_free_only_key")
 
     if detected:
+        provider_action_status = "optional"
+        provider_action_summary = "static provider signal detected; live probes disabled by default"
+        provider_action_command = "forge doctor --live-provider-probes"
+        if openrouter_key_configured and not paid_allowed:
+            provider_action_summary = (
+                "OpenRouter key present; live probe will only accept capable zero-price/free models"
+            )
+            provider_action_command = "forge doctor --live-provider-probes"
         return DoctorCheck(
             "LLM Providers",
             "OK",
@@ -3031,9 +3050,9 @@ def _static_provider_readiness_check(env: Mapping[str, str], which: WhichResolve
                 {
                     "id": "run_live_provider_probes_if_intended",
                     "priority": "70",
-                    "status": "optional",
-                    "summary": "static provider signal detected; live probes disabled by default",
-                    "command": "forge doctor --live-provider-probes",
+                    "status": provider_action_status,
+                    "summary": provider_action_summary,
+                    "command": provider_action_command,
                 },
             ),
         )

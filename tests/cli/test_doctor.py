@@ -803,6 +803,50 @@ def test_collect_doctor_checks_reports_static_provider_key_gate(tmp_path) -> Non
     assert "openai-secret-should-not-print" not in row.remediation
 
 
+def test_collect_doctor_checks_reports_openrouter_free_only_key(tmp_path) -> None:
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        env={"OPENROUTER_API_KEY": "openrouter-secret-should-not-print"},
+        which=lambda _name: None,
+        provider_discovery=None,
+    )
+
+    rows = _rows(checks)
+    row = rows["LLM Providers"]
+    assert row.status == "OK"
+    assert "openrouter_free_only_key" in row.details
+    assert "paid API env option" not in row.details
+    assert "openrouter-secret-should-not-print" not in row.details
+    assert "openrouter-secret-should-not-print" not in row.remediation
+
+    action_by_id = {
+        item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]
+    }
+    provider_action = action_by_id["run_live_provider_probes_if_intended"]
+    assert provider_action["status"] == "optional"
+    assert "zero-price/free models" in provider_action["summary"]
+    assert provider_action["command"] == "forge doctor --live-provider-probes"
+    assert action_by_id["review_paid_llm_backends"]["status"] == "ready"
+
+
+def test_collect_doctor_checks_counts_openrouter_as_paid_when_gate_enabled(tmp_path) -> None:
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        env={
+            "OPENROUTER_API_KEY": "openrouter-secret-should-not-print",
+            "FORGE_ALLOW_PAID_BACKENDS": "1",
+        },
+        which=lambda _name: None,
+        provider_discovery=None,
+    )
+
+    row = _rows(checks)["LLM Providers"]
+    assert row.status == "OK"
+    assert "1 paid API env option" in row.details
+    assert "openrouter_free_only_key" not in row.details
+    assert "openrouter-secret-should-not-print" not in row.details
+
+
 def test_collect_doctor_checks_flags_incomplete_production_deployment_hardening(
     tmp_path,
 ) -> None:
