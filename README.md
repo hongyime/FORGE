@@ -468,6 +468,7 @@ Minimal local autostart config:
   "enabled": true,
   "apply_enabled": false,
   "roe_id_env": "FORGE_ROE_ID",
+  "engagement_id": 1001,
   "min_free_memory_mb": 1024,
   "min_free_disk_gb": 5,
   "resume_limit": 10,
@@ -481,6 +482,10 @@ Minimal local autostart config:
   "feed_sources": ["all"]
 }
 ```
+
+`engagement_id` lets unattended source-queue imports run without editing each
+queue entry. Explicit `--engagement` wins, then `engagement_id` from this local
+config, then `FORGE_DEFAULT_ENGAGEMENT_ID`.
 
 `forge targets import` consumes sanitized `target-feed.v1` feeds from
 `feed-build` or scheduled workflows such as theprawnhunter. Feed items can use

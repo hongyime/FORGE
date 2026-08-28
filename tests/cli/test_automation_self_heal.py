@@ -493,6 +493,42 @@ def test_guarded_autostart_rejects_invalid_feed_source(tmp_path: Path) -> None:
     assert payload["config"]["feed_sources"] == ["all"]
 
 
+def test_guarded_autostart_preserves_valid_engagement_id(tmp_path: Path) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps({"enabled": True, "apply_enabled": False, "engagement_id": "1001"}),
+        encoding="utf-8",
+    )
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["config"]["engagement_id"] == 1001
+    assert "autostart_config_invalid:engagement_id" not in payload["blockers"]
+
+
+def test_guarded_autostart_rejects_invalid_engagement_id(tmp_path: Path) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps({"enabled": True, "apply_enabled": False, "engagement_id": "nope"}),
+        encoding="utf-8",
+    )
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["config"]["engagement_id"] is None
+    assert "autostart_config_invalid:engagement_id" in payload["blockers"]
+
+
 def test_guarded_autostart_rejects_string_boolean_opt_in(tmp_path: Path, monkeypatch) -> None:
     config = tmp_path / "imports" / "autostart.local.json"
     config.parent.mkdir(parents=True)

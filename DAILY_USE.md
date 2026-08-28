@@ -91,6 +91,9 @@ keys such as `ioc`, `iocs`, `domains`, `urls`, `ips`, `emails`, and `targets`.
 Failed source-queue imports are marked `failed`, keep redacted failure metadata,
 back off for at least 15 minutes with exponential delay capped at 6 hours, and
 block after 5 failures until the entry or artifact is fixed.
+Queued imports run unattended when an engagement is available from the queue
+entry, `--engagement`, local `imports/autostart.local.json` `engagement_id`, or
+`FORGE_DEFAULT_ENGAGEMENT_ID`.
 Use `self-heal-plan` before any Docker/startup automation; it is read-only and
 checks resources, Docker readiness, packaged Go tools, locks, and the exact
 bounded autopilot commands. Use `guarded-autostart` for startup hooks; it stays

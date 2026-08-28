@@ -107,6 +107,6 @@ try {
     Write-Host "Installed HKCU Run startup entry instead: $TaskName"
     Write-Host "Runs at user logon; recurring cadence requires Task Scheduler permission."
 }
-Write-Host "Mode: guarded apply; live work still requires config gates, FORGE_ROE_ID, resource health, Docker health, cooldown/backoff, and a free lock."
+Write-Host "Mode: cycle apply/live; source queues run before guarded live work, which still requires config gates, FORGE_ROE_ID, resource health, Docker health, cooldown/backoff, and a free lock."
 Write-Host "Config: $Config"
 Write-Host "Launcher: $launcher"

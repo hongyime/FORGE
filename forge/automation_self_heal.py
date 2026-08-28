@@ -38,6 +38,7 @@ DEFAULT_AUTOSTART_CONFIG: dict[str, Any] = {
     "enabled": False,
     "apply_enabled": False,
     "roe_id_env": "FORGE_ROE_ID",
+    "engagement_id": None,
     "min_free_memory_mb": 1024,
     "min_free_disk_gb": 5,
     "resume_limit": 10,
@@ -404,6 +405,20 @@ def _validate_autostart_config(config: dict[str, Any]) -> list[str]:
         if value < minimum or value > maximum:
             errors.append(f"autostart_config_out_of_range:{key}")
         config[key] = max(minimum, min(maximum, value))
+    if config.get("engagement_id") in {None, ""}:
+        config["engagement_id"] = None
+    else:
+        try:
+            engagement_id = int(config["engagement_id"])
+        except (TypeError, ValueError):
+            errors.append("autostart_config_invalid:engagement_id")
+            config["engagement_id"] = None
+        else:
+            if engagement_id < 1:
+                errors.append("autostart_config_out_of_range:engagement_id")
+                config["engagement_id"] = None
+            else:
+                config["engagement_id"] = engagement_id
     for key in ("enabled", "apply_enabled"):
         if not isinstance(config[key], bool):
             errors.append(f"autostart_config_invalid_bool:{key}")

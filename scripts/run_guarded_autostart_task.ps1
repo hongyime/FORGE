@@ -40,14 +40,15 @@ $arguments = @(
     "-m",
     "forge.cli",
     "automation",
-    "guarded-autostart",
-    "--config",
+    "cycle",
+    "--autostart-config",
     $configPath,
     "--apply",
+    "--live",
     "--json"
 )
 
-Write-TaskLog "starting guarded autostart config=$configPath timeout_minutes=$TimeoutMinutes"
+Write-TaskLog "starting automation cycle autostart_config=$configPath timeout_minutes=$TimeoutMinutes"
 New-Item -ItemType Directory -Path $scheduledDir -Force | Out-Null
 Set-Content -LiteralPath $stdoutPath -Value "" -Encoding UTF8
 Set-Content -LiteralPath $stderrPath -Value "" -Encoding UTF8

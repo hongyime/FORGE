@@ -59,6 +59,7 @@ INBOX_DIRNAME = "inbox"
 QUEUE_MAX_FAILURES = 5
 QUEUE_RETRY_BASE_SECONDS = 15 * 60
 QUEUE_RETRY_MAX_SECONDS = 6 * 60 * 60
+DEFAULT_ENGAGEMENT_ENV = "FORGE_DEFAULT_ENGAGEMENT_ID"
 
 
 def automation_status(
@@ -71,11 +72,15 @@ def automation_status(
     root_imports = Path(imports_dir or "imports")
     feed_path = Path(output or root_imports / "target-feed.json")
     cfg_data_dir = data_dir or ForgeConfig.load().data_dir
+    effective_engagement = _resolve_default_engagement(
+        explicit=engagement,
+        autostart_config=None,
+    )
     queue_items = _load_queue_items(root_imports)
     ready_items, blocked_items, ignored_items = _classify_queue_items(
         queue_items,
         imports_dir=root_imports,
-        engagement=engagement,
+        engagement=effective_engagement,
     )
     return {
         "schema_version": AUTOMATION_STATUS_SCHEMA_VERSION,
@@ -93,6 +98,11 @@ def automation_status(
         },
         "target_feed_scan": _target_feed_scan_summary(feed_path=feed_path),
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
+        "engagement": {
+            "explicit": engagement,
+            "effective": effective_engagement,
+            "env": DEFAULT_ENGAGEMENT_ENV,
+        },
         "scan_policy": _scan_policy(),
         "ready_inputs": ready_items,
         "blocked_inputs": blocked_items,
@@ -124,6 +134,10 @@ def automation_cycle(
     feed_output = Path(output or root_imports / "target-feed.json")
     cfg_data_dir = data_dir or ForgeConfig.load().data_dir
     sources = list(source or ["all"])
+    effective_engagement = _resolve_default_engagement(
+        explicit=engagement,
+        autostart_config=autostart_config or DEFAULT_AUTOSTART_CONFIG_PATH,
+    )
     feed_payload = build_target_feed(
         sources=sources,
         data_dir=Path(cfg_data_dir),
@@ -143,7 +157,7 @@ def automation_cycle(
     ready_items, blocked_items, ignored_items = _classify_queue_items(
         queue_items,
         imports_dir=root_imports,
-        engagement=engagement,
+        engagement=effective_engagement,
     )
     queue_runs = _run_ready_queue_items(
         ready_items,
@@ -188,6 +202,11 @@ def automation_cycle(
         ),
         "inbox": inbox_update,
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
+        "engagement": {
+            "explicit": engagement,
+            "effective": effective_engagement,
+            "env": DEFAULT_ENGAGEMENT_ENV,
+        },
         "scan_policy": _scan_policy(),
         "ready_inputs": ready_items,
         "blocked_inputs": blocked_items,
@@ -661,6 +680,39 @@ def _item_engagement(item: dict[str, Any], fallback: int | None) -> int | None:
         return None
 
 
+def _resolve_default_engagement(
+    *,
+    explicit: int | None,
+    autostart_config: Path | None,
+) -> int | None:
+    if explicit is not None:
+        return explicit
+    config_engagement = _engagement_from_autostart_config(autostart_config)
+    if config_engagement is not None:
+        return config_engagement
+    return _safe_positive_int(os.environ.get(DEFAULT_ENGAGEMENT_ENV))
+
+
+def _engagement_from_autostart_config(path: Path | None) -> int | None:
+    if path is None or not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return _safe_positive_int(payload.get("engagement_id"))
+
+
+def _safe_positive_int(value: Any) -> int | None:
+    try:
+        parsed = int(str(value or "").strip())
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
 def _queue_priority(item: dict[str, Any]) -> int:
     raw_priority = item.get("priority")
     if raw_priority is not None:
@@ -923,7 +975,10 @@ def _status_next_actions(
     if ready_items:
         actions.append("forge automation cycle --apply --engagement N --json")
     if any(item["reason"] == "engagement_required" for item in blocked_items):
-        actions.append("add engagement_id to queue entries or pass --engagement N")
+        actions.append(
+            "add engagement_id to queue entries, set autostart engagement_id, "
+            "set FORGE_DEFAULT_ENGAGEMENT_ID, or pass --engagement N"
+        )
     if any(str(item["reason"]).startswith("local_artifact_missing") for item in blocked_items):
         actions.append("place referenced artifacts under imports/ or fix queue item paths")
     if not actions:

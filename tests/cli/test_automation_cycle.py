@@ -95,6 +95,29 @@ def test_automation_status_ignores_empty_scaffolds_and_control_references(
     assert payload["blocked_inputs"][0]["reason"] == "engagement_required"
 
 
+def test_automation_status_uses_default_engagement_env_for_queue_readiness(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text(
+        json.dumps({"iocs": ["example.com"]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "threatfox-inputs.local.json").write_text(
+        json.dumps({"inputs": [{"value": "threatfox.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_DEFAULT_ENGAGEMENT_ID", "1001")
+
+    payload = automation_status(imports_dir=imports_dir)
+
+    assert payload["engagement"]["effective"] == 1001
+    assert payload["queues"]["ready"] == 1
+    assert payload["ready_inputs"][0]["engagement_id"] == 1001
+
+
 def test_automation_status_summarizes_existing_target_feed_scanability(
     tmp_path: Path,
 ) -> None:
@@ -465,6 +488,46 @@ def test_automation_cycle_live_consumes_ready_queue_before_guarded_autostart(
     assert [run["status"] for run in payload["queue_runs"]] == ["completed"]
     assert payload["autostart"]["status"] == "ready"
     assert events == ["queue", "guarded"]
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert queue["inputs"][0]["status"] == "imported"
+
+
+def test_automation_cycle_uses_autostart_engagement_for_ready_queues(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text(
+        json.dumps({"iocs": ["example.com"]}),
+        encoding="utf-8",
+    )
+    queue_path = imports_dir / "threatfox-inputs.local.json"
+    queue_path.write_text(
+        json.dumps({"inputs": [{"value": "threatfox.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    autostart_config = imports_dir / "autostart.local.json"
+    autostart_config.write_text(json.dumps({"engagement_id": 1002}), encoding="utf-8")
+    commands: list[list[str]] = []
+
+    def _runner(command: list[str], _cwd: Path) -> dict[str, object]:
+        commands.append(command)
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    payload = automation_cycle(
+        apply=True,
+        output=imports_dir / "target-feed.json",
+        source=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        autostart_config=autostart_config,
+        command_runner=_runner,
+    )
+
+    assert payload["engagement"]["effective"] == 1002
+    assert commands[0][commands[0].index("--engagement") + 1] == "1002"
     queue = json.loads(queue_path.read_text(encoding="utf-8"))
     assert queue["inputs"][0]["status"] == "imported"
 

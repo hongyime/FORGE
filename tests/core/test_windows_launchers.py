@@ -475,11 +475,13 @@ def test_guarded_autostart_task_installer_uses_safe_hidden_apply_runner() -> Non
     assert "-runlevel limited" in installer
     assert "run_guarded_autostart_task.ps1" in installer
     assert "windowstyle hidden" in installer
-    assert "mode: guarded apply" in installer
+    assert "mode: cycle apply/live" in installer
 
     assert '"automation"' in runner
-    assert '"guarded-autostart"' in runner
+    assert '"cycle"' in runner
+    assert '"--autostart-config"' in runner
     assert '"--apply"' in runner
+    assert '"--live"' in runner
     assert '"--json"' in runner
     assert "-windowstyle hidden" in runner
     assert "redirectstandardoutput" in runner
