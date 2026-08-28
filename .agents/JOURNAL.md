@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-08-29: B696 made compose-dependency readiness honor persisted Windows tool-path env and made automation status probe autostart before recommending live cycle apply.
 - 2026-08-29: B695 changed automation status next actions to prefer the guarded live cycle path and refreshed HKCU startup after Task Scheduler remained denied.
 - 2026-08-29: B694 made startup more durable by honoring configured stale-lock recovery, giving Docker autostart memory headroom above the 1024 MB gate, and persisting non-secret local Docker/tool env knobs.
 - 2026-08-29: B693 fixed Windows scheduled/HKCU startup argument quoting so paths with spaces reach `automation cycle` intact during unattended launch.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -1028,7 +1029,7 @@ def _tool_search_roots(root: Path) -> list[Path]:
         "FORGE_CONNECTOR_BIN_DIR",
         "FORGE_HOST_CONNECTOR_BIN_DIR",
     ):
-        for value in str(os.environ.get(env_name, "")).split(os.pathsep):
+        for value in str(_env_value(env_name) or "").split(os.pathsep):
             if value.strip():
                 roots.append(Path(value.strip()))
     return roots
@@ -1047,7 +1048,7 @@ def _find_tool_path(binary: str, roots: list[Path]) -> Path | None:
 
 
 def _docker_tool_mount_status(root: Path, *, required: bool = False) -> dict[str, Any]:
-    configured = str(os.environ.get("FORGE_HOST_CONNECTOR_BIN_DIR", "")).strip()
+    configured = str(_env_value("FORGE_HOST_CONNECTOR_BIN_DIR") or "").strip()
     mount_dir = Path(configured) if configured else root / "tools" / "bin"
     rows: list[dict[str, Any]] = []
     for tool in PACKAGED_GO_TOOLS:
@@ -1094,6 +1095,41 @@ def _find_tool_path_in_roots(binary: str, roots: list[Path]) -> Path | None:
         if non_windows.is_file():
             return non_windows
     return None
+
+
+def _env_value(name: str) -> str:
+    value = os.environ.get(name, "")
+    if value:
+        return value
+    if name != "FORGE_HOST_CONNECTOR_BIN_DIR":
+        return ""
+    return _persistent_env_value(name)
+
+
+def _persistent_env_value(name: str) -> str:
+    if platform.system().lower() != "windows":
+        return ""
+    try:
+        import winreg
+    except ImportError:
+        return ""
+    locations = (
+        (winreg.HKEY_CURRENT_USER, "Environment"),
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+        ),
+    )
+    for hive, path in locations:
+        try:
+            with winreg.OpenKey(hive, path) as key:
+                value, _kind = winreg.QueryValueEx(key, name)
+        except OSError:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
 
 
 def _normalize_docker_probe_mode(mode: object) -> str:

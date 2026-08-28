@@ -203,8 +203,54 @@ def test_automation_status_summarizes_existing_target_feed_scanability(
     assert scan["high_priority_count"] == 1
     assert scan["ineligible_reasons"] == {"non_global_ip": 1}
     assert scan["top_targets"][0]["target_value"] == "shared.example"
+    assert payload["autostart_probe"] is None
     assert payload["next_actions"] == [
         "forge automation cycle --apply --live --docker-probe-mode compose-dependency --json"
+    ]
+
+
+def test_automation_status_reports_autostart_probe_blockers(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "autostart.local.json").write_text(
+        json.dumps({"enabled": True, "apply_enabled": True}),
+        encoding="utf-8",
+    )
+
+    def fake_guarded_autostart(**kwargs):
+        assert kwargs["apply"] is False
+        assert kwargs["skip_feed_build"] is True
+        assert kwargs["docker_probe_mode"] == "compose-dependency"
+        return {
+            "status": "blocked",
+            "execution_policy": "dry_run_no_autostart_or_live_commands_executed",
+            "blockers": ["docker_tool_mount_missing_runtime_tools:nuclei"],
+        }
+
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        engagement=1001,
+    )
+
+    assert payload["autostart_probe"] == {
+        "status": "blocked",
+        "execution_policy": "dry_run_no_autostart_or_live_commands_executed",
+        "config_path": str(imports_dir / "autostart.local.json"),
+        "blockers": ["docker_tool_mount_missing_runtime_tools:nuclei"],
+    }
+    assert payload["next_actions"] == [
+        "forge automation self-heal-plan --json --docker-probe-mode compose-dependency",
+        "resolve autostart blockers before running cycle --apply --live",
     ]
 
 

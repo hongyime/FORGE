@@ -83,6 +83,10 @@ def automation_status(
         imports_dir=root_imports,
         engagement=effective_engagement,
     )
+    autostart_probe = _status_autostart_probe(
+        autostart_config_path=autostart_config_path,
+        data_dir=cfg_data_dir,
+    )
     return {
         "schema_version": AUTOMATION_STATUS_SCHEMA_VERSION,
         "execution_policy": "read_only_status_no_commands_executed",
@@ -105,10 +109,15 @@ def automation_status(
             "env": DEFAULT_ENGAGEMENT_ENV,
         },
         "scan_policy": _scan_policy(),
+        "autostart_probe": autostart_probe,
         "ready_inputs": ready_items,
         "blocked_inputs": blocked_items,
         "ignored_inputs": ignored_items,
-        "next_actions": _status_next_actions(ready_items, blocked_items),
+        "next_actions": _status_next_actions(
+            ready_items,
+            blocked_items,
+            autostart_probe,
+        ),
         "total_count": len(queue_items),
         "selected_count": len(ready_items),
         "omitted_count": len(blocked_items) + len(ignored_items),
@@ -971,14 +980,21 @@ def _queue_summary(
 def _status_next_actions(
     ready_items: list[dict[str, Any]],
     blocked_items: list[dict[str, Any]],
+    autostart_probe: dict[str, Any] | None = None,
 ) -> list[str]:
     actions: list[str] = []
+    autostart_blockers = [
+        str(item)
+        for item in ((autostart_probe or {}).get("blockers") or [])
+        if str(item)
+    ]
     if ready_items:
         actions.append("forge automation cycle --apply --engagement N --json")
-        actions.append(
-            "forge automation cycle --apply --live "
-            "--docker-probe-mode compose-dependency --engagement N --json"
-        )
+        if not autostart_blockers:
+            actions.append(
+                "forge automation cycle --apply --live "
+                "--docker-probe-mode compose-dependency --engagement N --json"
+            )
     if any(item["reason"] == "engagement_required" for item in blocked_items):
         actions.append(
             "add engagement_id to queue entries, set autostart engagement_id, "
@@ -986,12 +1002,37 @@ def _status_next_actions(
         )
     if any(str(item["reason"]).startswith("local_artifact_missing") for item in blocked_items):
         actions.append("place referenced artifacts under imports/ or fix queue item paths")
+    if autostart_blockers:
+        actions.append("forge automation self-heal-plan --json --docker-probe-mode compose-dependency")
+        actions.append("resolve autostart blockers before running cycle --apply --live")
     if not actions:
         actions.append(
             "forge automation cycle --apply --live "
             "--docker-probe-mode compose-dependency --json"
         )
     return actions
+
+
+def _status_autostart_probe(
+    *,
+    autostart_config_path: Path,
+    data_dir: Path,
+) -> dict[str, Any] | None:
+    if not autostart_config_path.is_file():
+        return None
+    payload = run_guarded_autostart(
+        config_path=autostart_config_path,
+        data_dir=Path(data_dir),
+        apply=False,
+        skip_feed_build=True,
+        docker_probe_mode="compose-dependency",
+    )
+    return {
+        "status": payload.get("status"),
+        "blockers": list(payload.get("blockers") or []),
+        "config_path": str(autostart_config_path),
+        "execution_policy": payload.get("execution_policy"),
+    }
 
 
 def _mark_queue_item_status(*, queue_file: Path, queue_index: int, status: str) -> None:
