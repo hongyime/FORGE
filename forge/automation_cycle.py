@@ -13,6 +13,7 @@ import httpx
 from forge.automation_self_heal import DEFAULT_AUTOSTART_CONFIG_PATH, run_guarded_autostart
 from forge.automation_target_feed import build_target_feed, write_target_feed
 from forge.config import ForgeConfig
+from forge.monitoring.runner import monitoring_due_plan_for_data_dir
 from forge.targets_import import MAX_TARGET_FEED_IMPORT_ITEMS, load_target_feed
 
 AUTOMATION_STATUS_SCHEMA_VERSION = "forge.automation_status.v1"
@@ -106,6 +107,7 @@ def automation_status(
             "size_bytes": feed_path.stat().st_size if feed_path.is_file() else 0,
         },
         "target_feed_scan": _target_feed_scan_summary(feed_path=feed_path),
+        "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "engagement": {
             "explicit": engagement,
@@ -178,6 +180,21 @@ def automation_cycle(
         apply=apply,
         command_runner=command_runner,
     )
+    completed_queue_run_count = sum(1 for item in queue_runs if item["status"] == "completed")
+    feed_rebuilt_after_queue_imports = False
+    if apply and completed_queue_run_count:
+        feed_payload = build_target_feed(
+            sources=sources,
+            data_dir=Path(cfg_data_dir),
+            reports_dir=reports_dir or Path("reports"),
+            imports_dir=root_imports,
+            limit=limit,
+            existing_feed_path=feed_output,
+            apply=apply,
+            supabase_config_path=supabase_config or root_imports / "supabase-projects.local.json",
+        )
+        write_target_feed(feed_payload, feed_output)
+        feed_rebuilt_after_queue_imports = True
     autostart_result: dict[str, Any] | None = None
     if live:
         autostart_result = run_guarded_autostart(
@@ -199,6 +216,7 @@ def automation_cycle(
         "live_requested": bool(live),
         "generated_at": _now_iso(),
         "feed_written": feed_written,
+        "feed_rebuilt_after_queue_imports": feed_rebuilt_after_queue_imports,
         "feed": {
             "output": str(feed_output),
             "counts": feed_payload["counts"],
@@ -214,6 +232,7 @@ def automation_cycle(
             feed_path=feed_output,
             feed_payload=feed_payload,
         ),
+        "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
         "inbox": inbox_update,
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "engagement": {
@@ -300,6 +319,47 @@ def doctor_fix_safe(*, imports_dir: Path | None = None) -> dict[str, Any]:
         "total_count": len(actions),
         "selected_count": sum(1 for item in actions if item["status"] in {"created", "repaired"}),
         "omitted_count": sum(1 for item in actions if item["status"] == "ok"),
+    }
+
+
+def _monitoring_due_summary(*, data_dir: Path) -> dict[str, Any]:
+    try:
+        plan = monitoring_due_plan_for_data_dir(data_dir, limit=0)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "execution_policy": "read_only_monitoring_due_summary_failed",
+            "status": "unknown",
+            "error": str(exc)[:240],
+            "total_due_count": 0,
+            "estimated_capped_invocations": 0,
+            "next_actions": ["forge monitoring due-plan --json"],
+        }
+    total_due = int(plan.get("total_due_count") or plan.get("due_policy_count") or 0)
+    stale_backlog = (
+        plan.get("stale_backlog") if isinstance(plan.get("stale_backlog"), dict) else {}
+    )
+    action_plan = plan.get("action_plan") if isinstance(plan.get("action_plan"), list) else []
+    next_actions = [
+        list(action.get("command"))
+        for action in action_plan
+        if isinstance(action, dict) and isinstance(action.get("command"), list)
+    ][:3]
+    status = "due" if total_due else "idle"
+    if stale_backlog.get("enabled"):
+        status = "stale_due"
+    return {
+        "execution_policy": "read_only_monitoring_due_summary_no_commands_executed",
+        "status": status,
+        "total_due_count": total_due,
+        "planned_policy_count": int(plan.get("planned_policy_count") or 0),
+        "limited_policy_count": int(plan.get("limited_policy_count") or 0),
+        "default_execution_limit": int(plan.get("default_execution_limit") or 0),
+        "estimated_capped_invocations": int(plan.get("estimated_capped_invocations") or 0),
+        "oldest_due_age_seconds": int(plan.get("oldest_due_age_seconds") or 0),
+        "oldest_overdue_days": float(stale_backlog.get("oldest_overdue_days") or 0.0),
+        "policy_summary": plan.get("policy_summary") or {},
+        "errors": plan.get("errors") or [],
+        "next_actions": next_actions,
     }
 
 

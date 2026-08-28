@@ -7,6 +7,7 @@ from pathlib import Path
 import typer
 from typer.testing import CliRunner
 
+import forge.automation_cycle as automation_cycle_module
 from forge.automation_cli import register_automation_commands
 from forge.automation_cycle import automation_cycle, automation_status, doctor_fix_safe
 
@@ -209,6 +210,64 @@ def test_automation_status_summarizes_existing_target_feed_scanability(
     ]
 
 
+def test_automation_status_summarizes_due_monitoring_without_running_it(
+    tmp_path: Path, monkeypatch
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_due_plan(data_dir: Path, *, limit: int | None = None) -> dict[str, object]:
+        calls.append({"data_dir": data_dir, "limit": limit})
+        return {
+            "total_due_count": 101,
+            "planned_policy_count": 0,
+            "limited_policy_count": 101,
+            "default_execution_limit": 50,
+            "estimated_capped_invocations": 3,
+            "oldest_due_age_seconds": 90000,
+            "stale_backlog": {"enabled": True, "oldest_overdue_days": 1.04},
+            "policy_summary": {"mode_counts": {"passive": 101}},
+            "action_plan": [
+                {"command": ["forge", "monitoring", "due-plan", "--json"]},
+                {
+                    "command": [
+                        "forge",
+                        "monitoring",
+                        "run-due",
+                        "--dry-run",
+                        "--limit",
+                        "50",
+                        "--json",
+                    ]
+                },
+            ],
+            "errors": [],
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module, "monitoring_due_plan_for_data_dir", fake_due_plan
+    )
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert calls == [{"data_dir": tmp_path / "data", "limit": 0}]
+    assert payload["monitoring_due"]["execution_policy"] == (
+        "read_only_monitoring_due_summary_no_commands_executed"
+    )
+    assert payload["monitoring_due"]["status"] == "stale_due"
+    assert payload["monitoring_due"]["total_due_count"] == 101
+    assert payload["monitoring_due"]["estimated_capped_invocations"] == 3
+    assert payload["monitoring_due"]["next_actions"][0] == [
+        "forge",
+        "monitoring",
+        "due-plan",
+        "--json",
+    ]
+
+
 def test_automation_status_reports_autostart_probe_blockers(
     tmp_path: Path,
     monkeypatch,
@@ -290,6 +349,45 @@ def test_automation_cycle_dry_run_plans_feed_and_queue_without_writes(
         (imports_dir / "burp-dast-imports.local.json").read_text(encoding="utf-8")
     )
     assert queue["inputs"][0]["status"] == "pending"
+
+
+def test_automation_cycle_includes_monitoring_due_summary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    def fake_due_plan(_data_dir: Path, *, limit: int | None = None) -> dict[str, object]:
+        assert limit == 0
+        return {
+            "total_due_count": 0,
+            "planned_policy_count": 0,
+            "limited_policy_count": 0,
+            "default_execution_limit": 50,
+            "estimated_capped_invocations": 0,
+            "oldest_due_age_seconds": 0,
+            "stale_backlog": {},
+            "policy_summary": {},
+            "action_plan": [],
+            "errors": [],
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module, "monitoring_due_plan_for_data_dir", fake_due_plan
+    )
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=tmp_path / "imports" / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+    )
+
+    assert payload["monitoring_due"]["status"] == "idle"
+    assert payload["monitoring_due"]["total_due_count"] == 0
+    assert payload["monitoring_due"]["execution_policy"] == (
+        "read_only_monitoring_due_summary_no_commands_executed"
+    )
 
 
 def test_automation_cycle_classifies_inbox_into_source_queues(tmp_path: Path) -> None:
@@ -574,6 +672,101 @@ def test_automation_cycle_live_consumes_ready_queue_before_guarded_autostart(
     assert events == ["queue", "guarded"]
     queue = json.loads(queue_path.read_text(encoding="utf-8"))
     assert queue["inputs"][0]["status"] == "imported"
+
+
+def test_automation_cycle_rebuilds_feed_after_successful_queue_import_before_live(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text(
+        json.dumps({"iocs": ["fresh.example"]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "threatfox-inputs.local.json").write_text(
+        json.dumps({"inputs": [{"value": "threatfox.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    events: list[str] = []
+
+    def fake_build_target_feed(**kwargs):
+        events.append("feed")
+        selected = 1 if events.count("feed") == 1 else 2
+        return {
+            "schema_version": "target-feed.v1",
+            "counts": {
+                "selected": selected,
+                "total": selected,
+                "source_errors": [],
+            },
+            "source_errors": [],
+            "discovered_input_registry_update": {},
+            "source_input_registry_updates": [],
+            "items": [
+                {
+                    "target_type": "domain",
+                    "target_value": "fresh.example",
+                    "canonical_value": "fresh.example",
+                    "target_key": "domain:fresh.example",
+                    "source_kind": "cti_observation",
+                    "source_group": "cti_file:threatfox.json",
+                    "source_groups": ["cti_file:threatfox.json"],
+                    "source_count": selected,
+                    "priority": 90,
+                    "scan_eligible": True,
+                    "scan_eligibility_reason": "eligible",
+                    "confidence": 0.5,
+                    "first_seen_at": "2026-08-29T00:00:00+00:00",
+                    "provenance": "cti_file:threatfox.json",
+                }
+            ],
+        }
+
+    def fake_write_target_feed(_payload, _output_path):
+        events.append("write")
+
+    def _runner(_command: list[str], _cwd: Path) -> dict[str, object]:
+        events.append("queue")
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    def fake_guarded_autostart(**kwargs):
+        events.append("guarded")
+        assert kwargs["skip_feed_build"] is True
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "ready",
+            "commands": {},
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module, "build_target_feed", fake_build_target_feed
+    )
+    monkeypatch.setattr(
+        automation_cycle_module, "write_target_feed", fake_write_target_feed
+    )
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        command_runner=_runner,
+    )
+
+    assert events == ["feed", "write", "queue", "feed", "write", "guarded"]
+    assert payload["feed_rebuilt_after_queue_imports"] is True
+    assert payload["feed"]["counts"]["selected"] == 2
+    assert payload["autostart"]["status"] == "ready"
 
 
 def test_automation_cycle_uses_autostart_engagement_for_ready_queues(

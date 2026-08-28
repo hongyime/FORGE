@@ -201,3 +201,4 @@
 - 2026-08-29: B691 made self-heal/defaults command plans prefer `automation cycle` for startup/daily operation and leave direct guarded-autostart as a lower-level probe.
 - 2026-08-29: B692 made `automation status` resolve default engagement from local autostart config, matching `automation cycle`, and set ignored local autostart engagement to existing local engagement 1001.
 - 2026-08-29 03:58:58 +08:00 [PRAWN-E14/codex/session-start] branch=main head=39a92b7 dirty=0
+- 2026-08-29: B702 keeps guarded-autostart feed reuse but rebuilds the feed after successful local queue imports, and surfaces monitoring due backlog in `automation status`/`cycle` as read-only summary data.
