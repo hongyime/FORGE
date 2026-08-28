@@ -338,13 +338,21 @@ runs, but Forge only database-reads projects after you provide the matching
 owned read-only key locally.
 
 `feed-build --apply` also maintains ignored
-`imports/discovered-inputs.local.json` as a reusable input backlog. Artifact
-scans append newly observed no-key/free input hints for CTI marker drops,
-ProjectDiscovery Cloud exports, Censys/runZero/asset-delta discovery artifacts,
-and Burp/JUnit DAST XML validation artifacts. Dry-run reports the same
-`discovered_inputs` and `new_discovered_inputs` without writing. This lets the
-loop grow outward from accepted artifacts while keeping live/keyed reads gated
-until the matching local credential or import file exists.
+`imports/discovered-inputs.local.json` as a reusable input backlog and writes
+source-specific local queues for the same entries. Supabase keeps its own
+credential-bearing config file; CTI and artifact imports get their own ignored
+queue files such as `imports/threatfox-inputs.local.json`,
+`imports/urlhaus-inputs.local.json`,
+`imports/projectdiscovery-cloud-imports.local.json`,
+`imports/censys-imports.local.json`, `imports/runzero-imports.local.json`,
+`imports/asset-delta-imports.local.json`, and
+`imports/burp-dast-imports.local.json`. Artifact scans append newly observed
+no-key/free input hints for CTI marker drops, ProjectDiscovery Cloud exports,
+Censys/runZero/asset-delta discovery artifacts, and Burp/JUnit DAST XML
+validation artifacts. Dry-run reports the same `discovered_inputs` and
+`new_discovered_inputs` without writing. This lets the loop grow outward from
+accepted artifacts while keeping live/keyed reads gated until the matching local
+credential or import file exists.
 
 Local CTI feed extraction is also file-based. Drop JSON directly under
 `imports/` with a filename containing `threatfox`, `urlhaus`, `misp`, `stix`,

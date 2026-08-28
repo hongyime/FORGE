@@ -50,6 +50,17 @@ _MAX_SUPABASE_TABLE_ROWS = 100000
 _MAX_SUPABASE_DISCOVERED_TABLES = 1000
 _DEFAULT_SUPABASE_CONFIG = Path("imports") / "supabase-projects.local.json"
 _DEFAULT_DISCOVERED_INPUTS_REGISTRY = Path("imports") / "discovered-inputs.local.json"
+_SPECIFIC_INPUT_REGISTRY_FILENAMES = {
+    "abusech_threatfox": "threatfox-inputs.local.json",
+    "abusech_urlhaus": "urlhaus-inputs.local.json",
+    "misp_event_import": "misp-inputs.local.json",
+    "stix_taxii_import": "stix-taxii-inputs.local.json",
+    "projectdiscovery_cloud": "projectdiscovery-cloud-imports.local.json",
+    "censys_lookup": "censys-imports.local.json",
+    "runzero_asset_export": "runzero-imports.local.json",
+    "asset_delta_import": "asset-delta-imports.local.json",
+    "burp_dast_xml": "burp-dast-imports.local.json",
+}
 _DEFAULT_TARGET_COLUMNS = (
     "domain",
     "url",
@@ -450,6 +461,15 @@ def _discovered_inputs_registry_path(imports_dir: Path | None = None) -> Path:
     return _DEFAULT_DISCOVERED_INPUTS_REGISTRY
 
 
+def _specific_input_registry_path(
+    connector_id: str, imports_dir: Path | None = None
+) -> Path | None:
+    filename = _SPECIFIC_INPUT_REGISTRY_FILENAMES.get(connector_id)
+    if filename is None:
+        return None
+    return Path(imports_dir or "imports") / filename
+
+
 def _supabase_key_env(project_ref: str) -> str:
     normalized = re.sub(r"[^A-Z0-9]+", "_", project_ref.upper()).strip("_")
     return f"FORGE_SUPABASE_{normalized}_READ_KEY"
@@ -706,6 +726,116 @@ def _append_discovered_input_registry_items(
     return appended
 
 
+def _append_specific_input_registry_items(
+    *,
+    appended_inputs: list[dict[str, object]],
+    imports_dir: Path | None,
+) -> list[dict[str, object]]:
+    updates: list[dict[str, object]] = []
+    by_path: dict[Path, list[dict[str, object]]] = {}
+    for item in appended_inputs:
+        connector_id = str(item.get("connector_id") or "").strip()
+        path = _specific_input_registry_path(connector_id, imports_dir)
+        if path is None:
+            continue
+        by_path.setdefault(path, []).append(item)
+    for path, items in sorted(by_path.items(), key=lambda pair: str(pair[0])):
+        if path.is_file():
+            payload, error = _load_json_file(path)
+            if error is not None or not isinstance(payload, dict):
+                payload = {}
+        else:
+            payload = {}
+        raw_inputs = payload.get("inputs")
+        if not isinstance(raw_inputs, list):
+            raw_inputs = []
+        existing_keys = {
+            _input_registry_key(item)
+            for item in raw_inputs
+            if isinstance(item, dict)
+        }
+        written = 0
+        for item in items:
+            key = _input_registry_key(item)
+            if not key.strip("|") or key in existing_keys:
+                continue
+            entry = dict(item)
+            entry["first_seen_at"] = _now_iso()
+            raw_inputs.append(entry)
+            existing_keys.add(key)
+            written += 1
+        if not written:
+            updates.append(
+                {
+                    "config_path": str(path),
+                    "applied": True,
+                    "appended_count": 0,
+                    "pending_count": 0,
+                }
+            )
+            continue
+        payload["schema_version"] = "forge.source_inputs.v1"
+        payload["updated_at"] = _now_iso()
+        payload["connector_id"] = str(items[0].get("connector_id") or "")
+        payload["input_kind"] = str(items[0].get("input_kind") or "")
+        payload["inputs"] = raw_inputs
+        payload.setdefault(
+            "_instructions",
+            (
+                "Source-specific local input queue maintained by "
+                "feed-build --apply. Values are references to local/free "
+                "artifact inputs or pending keyed sources; no secrets belong here."
+            ),
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(path.parent), prefix=f".{path.stem}-", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, indent=2, sort_keys=True)
+                handle.write("\n")
+            os.replace(tmp_name, path)
+        except BaseException:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
+        updates.append(
+            {
+                "config_path": str(path),
+                "applied": True,
+                "appended_count": written,
+                "pending_count": 0,
+            }
+        )
+    return updates
+
+
+def _specific_input_registry_update_plan(
+    *,
+    pending_inputs: list[dict[str, object]],
+    imports_dir: Path | None,
+) -> list[dict[str, object]]:
+    counts: dict[Path, int] = {}
+    for item in pending_inputs:
+        connector_id = str(item.get("connector_id") or "").strip()
+        path = _specific_input_registry_path(connector_id, imports_dir)
+        if path is None:
+            continue
+        counts[path] = counts.get(path, 0) + 1
+    return [
+        {
+            "config_path": str(path),
+            "applied": False,
+            "appended_count": 0,
+            "pending_count": count,
+        }
+        for path, count in sorted(counts.items(), key=lambda pair: str(pair[0]))
+    ]
+
+
 def _append_discovered_supabase_projects(
     *,
     config_path: Path | None,
@@ -947,6 +1077,8 @@ def _safe_supabase_identifier(value: str) -> bool:
 
 def _is_connector_payload_filename(name: str) -> bool:
     lowered = name.lower()
+    if lowered.endswith(".local.json"):
+        return False
     if lowered in _CONNECTOR_SOURCE_EXCLUDED_NAMES:
         return False
     return not any(marker in lowered for marker in _CTI_FILENAME_MARKERS)
@@ -1244,6 +1376,7 @@ def build_target_feed(
     ]
     appended_supabase_projects: list[dict[str, str]] = []
     appended_inputs: list[dict[str, object]] = []
+    specific_input_registry_updates: list[dict[str, object]] = []
     if apply and new_discovered_supabase_projects:
         appended_supabase_projects = _append_discovered_supabase_projects(
             config_path=supabase_config_path,
@@ -1254,6 +1387,15 @@ def build_target_feed(
         appended_inputs = _append_discovered_input_registry_items(
             discovered_inputs=discovered_inputs,
             existing_keys=existing_input_keys,
+            imports_dir=imports_dir,
+        )
+        specific_input_registry_updates = _append_specific_input_registry_items(
+            appended_inputs=appended_inputs,
+            imports_dir=imports_dir,
+        )
+    elif not apply and new_discovered_inputs:
+        specific_input_registry_updates = _specific_input_registry_update_plan(
+            pending_inputs=new_discovered_inputs,
             imports_dir=imports_dir,
         )
 
@@ -1359,6 +1501,7 @@ def build_target_feed(
             if not apply
             else len(appended_inputs),
         },
+        "source_input_registry_updates": specific_input_registry_updates,
         "items": items,
     }
     return payload

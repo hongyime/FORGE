@@ -58,8 +58,14 @@ to the ignored local Supabase config as pending entries with generated
 `key_env` names; they are only database-read after that env var is set locally.
 The same apply run maintains ignored `imports/discovered-inputs.local.json` with
 new no-key/free CTI, discovery-export, ProjectDiscovery Cloud, and Burp/JUnit
-DAST artifact hints found in scanned artifacts, so later runs have a durable
-input backlog instead of a one-time transient observation.
+DAST artifact hints found in scanned artifacts. It also writes source-specific
+ignored queue files such as `imports/threatfox-inputs.local.json`,
+`imports/urlhaus-inputs.local.json`,
+`imports/projectdiscovery-cloud-imports.local.json`,
+`imports/censys-imports.local.json`, `imports/runzero-imports.local.json`,
+`imports/asset-delta-imports.local.json`, and
+`imports/burp-dast-imports.local.json`, so later runs have durable per-source
+backlogs instead of one-time transient observations.
 Local CTI feed extraction reads ignored JSON drops such as
 `imports/threatfox-observations.local.json`,
 `imports/urlhaus-observations.local.json`,

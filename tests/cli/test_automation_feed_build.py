@@ -223,6 +223,10 @@ def test_feed_build_connector_source_ignores_local_config_files(tmp_path: Path) 
         json.dumps({"items": [{"target_value": "skip-existing.example"}]}),
         encoding="utf-8",
     )
+    (imports_dir / "projectdiscovery-cloud-imports.local.json").write_text(
+        json.dumps({"inputs": [{"value": "skip-local-registry.example"}]}),
+        encoding="utf-8",
+    )
     (imports_dir / "connector-output.json").write_text(
         json.dumps({"targets": ["keep.example"]}),
         encoding="utf-8",
@@ -391,6 +395,22 @@ def test_feed_build_dry_run_reports_discovered_input_registry_without_write(
         "appended_count": 0,
         "pending_count": len(payload["new_discovered_inputs"]),
     }
+    update_paths = {
+        Path(str(item["config_path"])).name: item
+        for item in payload["source_input_registry_updates"]
+    }
+    assert update_paths["projectdiscovery-cloud-imports.local.json"] == {
+        "config_path": str(imports_dir / "projectdiscovery-cloud-imports.local.json"),
+        "applied": False,
+        "appended_count": 0,
+        "pending_count": 1,
+    }
+    assert update_paths["burp-dast-imports.local.json"] == {
+        "config_path": str(imports_dir / "burp-dast-imports.local.json"),
+        "applied": False,
+        "appended_count": 0,
+        "pending_count": 1,
+    }
 
 
 def test_feed_build_apply_appends_discovered_input_registry(
@@ -448,7 +468,69 @@ def test_feed_build_apply_appends_discovered_input_registry(
     ) in keys
     assert payload["discovered_input_registry_update"]["applied"] is True
     assert payload["discovered_input_registry_update"]["appended_count"] == 1
+    assert payload["source_input_registry_updates"] == [
+        {
+            "config_path": str(imports_dir / "threatfox-inputs.local.json"),
+            "applied": True,
+            "appended_count": 1,
+            "pending_count": 0,
+        }
+    ]
+    specific = json.loads(
+        (imports_dir / "threatfox-inputs.local.json").read_text(encoding="utf-8")
+    )
+    assert specific["connector_id"] == "abusech_threatfox"
+    assert [
+        item["value"]
+        for item in specific["inputs"]
+    ] == ["threatfox-observations.local.json"]
     assert payload["counts"]["by_source"]["connectors"] == 0
+
+
+def test_feed_build_apply_writes_source_specific_input_registries(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "pd-cloud-export.json").write_text("{}", encoding="utf-8")
+    (imports_dir / "censys-hosts.json").write_text("{}", encoding="utf-8")
+    (imports_dir / "runzero-assets.csv").write_text("id,name\n1,host\n", encoding="utf-8")
+    (imports_dir / "asset-delta.json").write_text("{}", encoding="utf-8")
+    (imports_dir / "burp-results.xml").write_text("<issues />", encoding="utf-8")
+
+    payload = build_target_feed(
+        sources=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+        apply=True,
+        supabase_config_path=imports_dir / "supabase-projects.local.json",
+    )
+
+    update_paths = {
+        Path(str(item["config_path"])).name
+        for item in payload["source_input_registry_updates"]
+    }
+    assert update_paths == {
+        "asset-delta-imports.local.json",
+        "burp-dast-imports.local.json",
+        "censys-imports.local.json",
+        "projectdiscovery-cloud-imports.local.json",
+        "runzero-imports.local.json",
+    }
+    expected = {
+        "asset-delta-imports.local.json": "asset_delta_import",
+        "burp-dast-imports.local.json": "burp_dast_xml",
+        "censys-imports.local.json": "censys_lookup",
+        "projectdiscovery-cloud-imports.local.json": "projectdiscovery_cloud",
+        "runzero-imports.local.json": "runzero_asset_export",
+    }
+    for filename, connector_id in expected.items():
+        payload_on_disk = json.loads((imports_dir / filename).read_text(encoding="utf-8"))
+        assert payload_on_disk["connector_id"] == connector_id
+        assert payload_on_disk["inputs"]
 
 
 def test_feed_build_db_source_skips_master_sequence_db(tmp_path: Path) -> None:
