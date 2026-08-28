@@ -90,6 +90,37 @@ def test_openrouter_free_only_picker_prefers_capable_zero_priced_model() -> None
     assert pricing["qwen/qwen3-coder:free"] == (0.0, 0.0)
 
 
+def test_openrouter_free_only_picker_prefers_newest_capable_zero_priced_model() -> None:
+    payload = {
+        "data": [
+            {
+                "id": "qwen/qwen3-coder-old:free",
+                "created": 1710000000,
+                "pricing": {"prompt": "0", "completion": "0"},
+            },
+            {
+                "id": "deepseek/deepseek-chat-new:free",
+                "created": 1790000000,
+                "pricing": {"prompt": "0", "completion": "0"},
+            },
+            {
+                "id": "tiny/weak-newest:free",
+                "created": 1800000000,
+                "pricing": {"prompt": "0", "completion": "0"},
+            },
+        ]
+    }
+
+    model, _pricing = _pick_default_from_model_list(
+        payload,
+        "anthropic/claude-haiku",
+        "openrouter",
+        free_only=True,
+    )
+
+    assert model == "deepseek/deepseek-chat-new:free"
+
+
 def test_openrouter_free_only_picker_skips_when_free_model_not_proven() -> None:
     payload = {
         "data": [
@@ -129,6 +160,24 @@ def test_openrouter_free_only_picker_requires_numeric_zero_pricing() -> None:
     assert pricing == {}
 
 
+def test_openrouter_free_only_picker_rejects_only_weak_free_models() -> None:
+    payload = {
+        "data": [
+            {"id": "tiny/weak:free", "pricing": {"prompt": "0", "completion": "0"}},
+            {"id": "unknown/free:free", "pricing": {"prompt": "0", "completion": "0"}},
+        ]
+    }
+
+    model, _pricing = _pick_default_from_model_list(
+        payload,
+        "qwen/qwen3-coder:free",
+        "openrouter",
+        free_only=True,
+    )
+
+    assert model is None
+
+
 @pytest.mark.asyncio
 async def test_openrouter_probe_allows_free_only_backend_without_paid_gate(monkeypatch) -> None:
     payload = {
@@ -139,6 +188,7 @@ async def test_openrouter_probe_allows_free_only_backend_without_paid_gate(monke
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["authorization"] == "Bearer test-openrouter-key"
+        assert str(request.url) == "https://openrouter.ai/api/v1/models?sort=newest"
         return httpx.Response(200, json=payload)
 
     real_async_client = httpx.AsyncClient
