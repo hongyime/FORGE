@@ -172,3 +172,4 @@
 - 2026-08-28: Broadened local import ignore coverage for CTI provider-marker drops and added empty per-provider CTI scaffold files so future runs can populate accepted feed-build markers without hand-built JSON.
 - 2026-08-28: Amended Supabase feed requirements so project entries can be minimal (`project_ref` plus `key_env`), with Forge deriving URL, discovering exposed tables, and processing all returned columns by default.
 - 2026-08-28: Raised Supabase configured-project feed extraction to a greedy paginated default: up to 1,000 discovered tables and 100,000 rows per table, while still requiring explicit owned project config and key material before database reads.
+- 2026-08-28: B674 feed-build discovery expansion keeps target-feed as the target handoff and adds ignored local pending-input registries; free/local artifact hints may be queued automatically, while live/keyed reads remain gated by local credentials and ROE.

@@ -329,9 +329,22 @@ tables per configured project.
 Optional `url`, `tables`, `target_columns`, and `limit` still work for tighter
 scopes. Use `tables: ["*"]` or omit `tables` to process every exposed table, and
 use `target_columns: ["*"]` or omit `target_columns` to process every returned
-column. Forge only turns normalized target-like values into feed entries. Forge
-does not read arbitrary Supabase projects found in artifacts unless a matching
-owned project entry and key are configured here.
+column. Forge only turns normalized target-like values into feed entries.
+Supabase hostnames found in scanned artifacts are appended to
+`imports/supabase-projects.local.json` as `status: "pending_key"` entries on
+`feed-build --apply`, using a generated `key_env` such as
+`FORGE_SUPABASE_ABC123_READ_KEY`. Those pending refs are maintained for future
+runs, but Forge only database-reads projects after you provide the matching
+owned read-only key locally.
+
+`feed-build --apply` also maintains ignored
+`imports/discovered-inputs.local.json` as a reusable input backlog. Artifact
+scans append newly observed no-key/free input hints for CTI marker drops,
+ProjectDiscovery Cloud exports, Censys/runZero/asset-delta discovery artifacts,
+and Burp/JUnit DAST XML validation artifacts. Dry-run reports the same
+`discovered_inputs` and `new_discovered_inputs` without writing. This lets the
+loop grow outward from accepted artifacts while keeping live/keyed reads gated
+until the matching local credential or import file exists.
 
 Local CTI feed extraction is also file-based. Drop JSON directly under
 `imports/` with a filename containing `threatfox`, `urlhaus`, `misp`, `stix`,

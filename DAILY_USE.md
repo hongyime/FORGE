@@ -52,7 +52,14 @@ Minimal project entries only need `project_ref` and `key_env`. Forge derives the
 Supabase URL, discovers exposed tables from `/rest/v1/`, and pages through all
 columns with `select=*`. Default greedy Supabase bounds are 100,000 rows per
 table and 1,000 discovered tables per configured project; optional `url`,
-`tables`, `target_columns`, and `limit` can still narrow that behavior.
+`tables`, `target_columns`, and `limit` can still narrow that behavior. When
+artifact/feed scans find Supabase hostnames, `feed-build --apply` appends them
+to the ignored local Supabase config as pending entries with generated
+`key_env` names; they are only database-read after that env var is set locally.
+The same apply run maintains ignored `imports/discovered-inputs.local.json` with
+new no-key/free CTI, discovery-export, ProjectDiscovery Cloud, and Burp/JUnit
+DAST artifact hints found in scanned artifacts, so later runs have a durable
+input backlog instead of a one-time transient observation.
 Local CTI feed extraction reads ignored JSON drops such as
 `imports/threatfox-observations.local.json`,
 `imports/urlhaus-observations.local.json`,

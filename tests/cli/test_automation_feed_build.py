@@ -242,6 +242,215 @@ def test_feed_build_connector_source_ignores_local_config_files(tmp_path: Path) 
     assert payload["items"][0]["source_group"] == "connector_file:connector-output.json"
 
 
+def test_feed_build_dry_run_reports_discovered_supabase_projects_without_config_write(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _make_dashboard_report(
+        reports_dir,
+        "supabase_refs",
+        {
+            "urls": [
+                "https://abc123.supabase.co/rest/v1/assets?id=eq.1",
+                "https://def456.supabase.co/storage/v1/object/public/logo.png",
+            ]
+        },
+    )
+    config = tmp_path / "imports" / "supabase-projects.local.json"
+
+    payload = build_target_feed(
+        sources=["reports", "supabase"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+        apply=False,
+        supabase_config_path=config,
+    )
+
+    assert not config.exists()
+    discovered = {
+        (item["project_ref"], item["key_env"])
+        for item in payload["discovered_supabase_projects"]
+    }
+    assert discovered == {
+        ("abc123", "FORGE_SUPABASE_ABC123_READ_KEY"),
+        ("def456", "FORGE_SUPABASE_DEF456_READ_KEY"),
+    }
+    assert payload["supabase_project_config_update"] == {
+        "config_path": str(config),
+        "applied": False,
+        "appended_count": 0,
+        "pending_key_count": 2,
+    }
+
+
+def test_feed_build_apply_appends_discovered_supabase_projects_to_local_config(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _make_dashboard_report(
+        reports_dir,
+        "supabase_refs",
+        {"urls": ["https://abc123.supabase.co/rest/v1/assets?id=eq.1"]},
+    )
+    config = tmp_path / "imports" / "supabase-projects.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps({"projects": [{"project_ref": "knownref", "key_env": "KNOWN_KEY"}]}),
+        encoding="utf-8",
+    )
+
+    payload = build_target_feed(
+        sources=["reports"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+        apply=True,
+        supabase_config_path=config,
+    )
+
+    updated = json.loads(config.read_text(encoding="utf-8"))
+    projects = {project["project_ref"]: project for project in updated["projects"]}
+    assert set(projects) == {"knownref", "abc123"}
+    assert projects["abc123"]["key_env"] == "FORGE_SUPABASE_ABC123_READ_KEY"
+    assert projects["abc123"]["limit"] == 100000
+    assert projects["abc123"]["status"] == "pending_key"
+    assert "report_family:supabase_refs" in projects["abc123"]["discovered_from"]
+    assert payload["supabase_project_config_update"]["applied"] is True
+    assert payload["supabase_project_config_update"]["appended_count"] == 1
+    assert payload["new_discovered_supabase_projects"] == [
+        {
+            "project_ref": "abc123",
+            "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+            "status": "pending_key",
+        }
+    ]
+
+
+def test_feed_build_dry_run_reports_discovered_input_registry_without_write(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "burp-results.xml").write_text("<issues />", encoding="utf-8")
+    (imports_dir / "pd-cloud-export.json").write_text("{}", encoding="utf-8")
+    (imports_dir / "runzero-assets.csv").write_text("id,name\n1,host\n", encoding="utf-8")
+    reports_dir = tmp_path / "reports"
+    _make_dashboard_report(
+        reports_dir,
+        "input_hints",
+        {
+            "urls": ["https://abc123.supabase.co/rest/v1/assets?id=eq.1"],
+            "targets": ["artifact-hints.example"],
+        },
+    )
+
+    payload = build_target_feed(
+        sources=["reports", "connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+        apply=False,
+        supabase_config_path=imports_dir / "supabase-projects.local.json",
+    )
+
+    assert not (imports_dir / "discovered-inputs.local.json").exists()
+    discovered = {
+        (item["input_kind"], item["connector_id"], item["value"])
+        for item in payload["discovered_inputs"]
+    }
+    assert (
+        "supabase_project",
+        "supabase_table_import",
+        "abc123",
+    ) in discovered
+    assert (
+        "discovery_artifact",
+        "projectdiscovery_cloud",
+        "pd-cloud-export.json",
+    ) in discovered
+    assert (
+        "validation_artifact",
+        "burp_dast_xml",
+        "burp-results.xml",
+    ) in discovered
+    assert (
+        "discovery_artifact",
+        "runzero_asset_export",
+        "runzero-assets.csv",
+    ) in discovered
+    assert payload["discovered_input_registry_update"] == {
+        "config_path": str(imports_dir / "discovered-inputs.local.json"),
+        "applied": False,
+        "appended_count": 0,
+        "pending_count": len(payload["new_discovered_inputs"]),
+    }
+
+
+def test_feed_build_apply_appends_discovered_input_registry(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox-observations.local.json").write_text(
+        json.dumps({"iocs": ["ioc.example"]}),
+        encoding="utf-8",
+    )
+    registry = imports_dir / "discovered-inputs.local.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "schema_version": "forge.discovered_inputs.v1",
+                "inputs": [
+                    {
+                        "input_kind": "validation_artifact",
+                        "connector_id": "burp_dast_xml",
+                        "value": "burp-results.xml",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (imports_dir / "burp-results.xml").write_text("<issues />", encoding="utf-8")
+
+    payload = build_target_feed(
+        sources=["cti", "connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+        apply=True,
+        supabase_config_path=imports_dir / "supabase-projects.local.json",
+    )
+
+    updated = json.loads(registry.read_text(encoding="utf-8"))
+    keys = {
+        (item.get("input_kind"), item.get("connector_id"), item.get("value"))
+        for item in updated["inputs"]
+    }
+    assert (
+        "validation_artifact",
+        "burp_dast_xml",
+        "burp-results.xml",
+    ) in keys
+    assert (
+        "cti_marker",
+        "abusech_threatfox",
+        "threatfox-observations.local.json",
+    ) in keys
+    assert payload["discovered_input_registry_update"]["applied"] is True
+    assert payload["discovered_input_registry_update"]["appended_count"] == 1
+    assert payload["counts"]["by_source"]["connectors"] == 0
+
+
 def test_feed_build_db_source_skips_master_sequence_db(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     _make_engagement_db(data_dir, 42, [("numeric.example", "domain")])

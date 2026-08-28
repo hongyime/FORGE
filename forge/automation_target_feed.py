@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import tempfile
 from collections.abc import Iterator
@@ -48,6 +49,7 @@ _SUPABASE_PAGE_SIZE = 1000
 _MAX_SUPABASE_TABLE_ROWS = 100000
 _MAX_SUPABASE_DISCOVERED_TABLES = 1000
 _DEFAULT_SUPABASE_CONFIG = Path("imports") / "supabase-projects.local.json"
+_DEFAULT_DISCOVERED_INPUTS_REGISTRY = Path("imports") / "discovered-inputs.local.json"
 _DEFAULT_TARGET_COLUMNS = (
     "domain",
     "url",
@@ -101,9 +103,78 @@ _HARVEST_KEYS = {
 _CTI_FILENAME_MARKERS = ("threatfox", "urlhaus", "misp", "stix", "taxii")
 _CONNECTOR_SOURCE_EXCLUDED_NAMES = {
     "autostart.local.json",
+    "discovered-inputs.local.json",
     "supabase-projects.local.json",
     "target-feed.json",
 }
+_SUPABASE_PROJECT_REF_RE = re.compile(
+    r"(?i)\b([a-z0-9][a-z0-9-]{4,62})\.supabase\.(?:co|in)\b"
+)
+_DISCOVERABLE_INPUT_MARKERS = (
+    {
+        "input_kind": "cti_marker",
+        "connector_id": "abusech_threatfox",
+        "status": "accepted_local_marker",
+        "markers": ("threatfox",),
+        "next_action": "forge connectors import-cti --connector abusech_threatfox --report-file <path> --dry-run --json",
+    },
+    {
+        "input_kind": "cti_marker",
+        "connector_id": "abusech_urlhaus",
+        "status": "accepted_local_marker",
+        "markers": ("urlhaus",),
+        "next_action": "forge connectors import-cti --connector abusech_urlhaus --report-file <path> --dry-run --json",
+    },
+    {
+        "input_kind": "cti_marker",
+        "connector_id": "misp_event_import",
+        "status": "accepted_local_marker",
+        "markers": ("misp",),
+        "next_action": "forge connectors import-cti --connector misp_event_import --report-file <path> --dry-run --json",
+    },
+    {
+        "input_kind": "cti_marker",
+        "connector_id": "stix_taxii_import",
+        "status": "accepted_local_marker",
+        "markers": ("stix", "taxii"),
+        "next_action": "forge connectors import-cti --connector stix_taxii_import --report-file <path> --dry-run --json",
+    },
+    {
+        "input_kind": "discovery_artifact",
+        "connector_id": "projectdiscovery_cloud",
+        "status": "pending_local_import",
+        "markers": ("projectdiscovery", "pd-cloud", "pd_cloud", "nuclei-cloud"),
+        "next_action": "forge connectors import-discovery --connector projectdiscovery_cloud --report-file <path> --json",
+    },
+    {
+        "input_kind": "discovery_artifact",
+        "connector_id": "asset_delta_import",
+        "status": "pending_local_import",
+        "markers": ("asset-delta", "asset_delta", "asset delta"),
+        "next_action": "forge connectors import-discovery --connector asset_delta_import --report-file <path> --json",
+    },
+    {
+        "input_kind": "discovery_artifact",
+        "connector_id": "runzero_asset_export",
+        "status": "pending_local_import",
+        "markers": ("runzero", "run0", "rumble"),
+        "next_action": "forge connectors import-discovery --connector runzero_asset_export --report-file <path> --json",
+    },
+    {
+        "input_kind": "discovery_artifact",
+        "connector_id": "censys_lookup",
+        "status": "pending_local_import",
+        "markers": ("censys",),
+        "next_action": "forge connectors import-discovery --connector censys_lookup --report-file <path> --json",
+    },
+    {
+        "input_kind": "validation_artifact",
+        "connector_id": "burp_dast_xml",
+        "status": "pending_local_import",
+        "markers": ("burp", "junit", "dast", "zap"),
+        "next_action": "forge connectors import-validation --connector burp_dast_xml --report-file <path> --dry-run --json",
+    },
+)
 
 
 @dataclass(frozen=True)
@@ -367,6 +438,343 @@ def _all_candidate_keys(groups: dict[str, list[FeedCandidate]]) -> set[str]:
                 external_target_key(candidate.target_type, candidate.canonical_value)
             )
     return keys
+
+
+def _supabase_config_path(config_path: Path | None) -> Path:
+    return Path(config_path or _DEFAULT_SUPABASE_CONFIG)
+
+
+def _discovered_inputs_registry_path(imports_dir: Path | None = None) -> Path:
+    if imports_dir is not None:
+        return Path(imports_dir) / _DEFAULT_DISCOVERED_INPUTS_REGISTRY.name
+    return _DEFAULT_DISCOVERED_INPUTS_REGISTRY
+
+
+def _supabase_key_env(project_ref: str) -> str:
+    normalized = re.sub(r"[^A-Z0-9]+", "_", project_ref.upper()).strip("_")
+    return f"FORGE_SUPABASE_{normalized}_READ_KEY"
+
+
+def _existing_supabase_project_refs(config_path: Path | None) -> set[str]:
+    path = _supabase_config_path(config_path)
+    payload, error = _load_json_file(path) if path.is_file() else ({}, None)
+    if error is not None or not isinstance(payload, dict):
+        return set()
+    refs: set[str] = set()
+    raw_projects = payload.get("projects")
+    if not isinstance(raw_projects, list):
+        return refs
+    for project in raw_projects:
+        if not isinstance(project, dict):
+            continue
+        project_ref = str(project.get("project_ref") or "").strip().lower()
+        if project_ref:
+            refs.add(project_ref)
+            continue
+        url = str(project.get("url") or "").strip()
+        match = _SUPABASE_PROJECT_REF_RE.search(url)
+        if match:
+            refs.add(match.group(1).lower())
+    return refs
+
+
+def _discovered_supabase_project_refs(
+    groups: dict[str, list[FeedCandidate]],
+) -> list[dict[str, str]]:
+    discovered: dict[str, set[str]] = {}
+    for source_name in _OFFLINE_SOURCES:
+        for candidate in groups.get(source_name, []):
+            haystack = " ".join(
+                [
+                    candidate.target_value,
+                    candidate.canonical_value,
+                    candidate.provenance,
+                ]
+            )
+            for match in _SUPABASE_PROJECT_REF_RE.finditer(haystack):
+                ref = match.group(1).lower()
+                discovered.setdefault(ref, set()).add(candidate.source_group)
+    return [
+        {
+            "project_ref": ref,
+            "key_env": _supabase_key_env(ref),
+            "source_groups": ",".join(sorted(source_groups))[:500],
+        }
+        for ref, source_groups in sorted(discovered.items())
+    ]
+
+
+def _input_registry_key(item: dict[str, object]) -> str:
+    parts = [
+        str(item.get("input_kind") or "").strip().lower(),
+        str(item.get("connector_id") or "").strip().lower(),
+        str(item.get("value") or item.get("project_ref") or "").strip().lower(),
+    ]
+    return "|".join(parts)
+
+
+def _existing_discovered_input_keys(imports_dir: Path | None = None) -> set[str]:
+    registry_path = _discovered_inputs_registry_path(imports_dir)
+    payload, error = _load_json_file(registry_path) if registry_path.is_file() else ({}, None)
+    if error is not None or not isinstance(payload, dict):
+        return set()
+    raw_inputs = payload.get("inputs")
+    if not isinstance(raw_inputs, list):
+        return set()
+    keys: set[str] = set()
+    for item in raw_inputs:
+        if isinstance(item, dict):
+            key = _input_registry_key(item)
+            if key.strip("|"):
+                keys.add(key)
+    return keys
+
+
+def _input_marker_hits(haystack: str) -> list[dict[str, object]]:
+    lowered = haystack.lower()
+    return [
+        marker
+        for marker in _DISCOVERABLE_INPUT_MARKERS
+        if any(str(raw_marker).lower() in lowered for raw_marker in marker["markers"])
+    ]
+
+
+def _add_discovered_input(
+    discovered: dict[str, dict[str, object]],
+    *,
+    input_kind: str,
+    connector_id: str,
+    value: str,
+    status: str,
+    source_group: str,
+    next_action: str,
+) -> None:
+    entry = {
+        "input_kind": input_kind,
+        "connector_id": connector_id,
+        "value": value,
+        "status": status,
+        "source_groups": [source_group],
+        "next_action": next_action,
+    }
+    key = _input_registry_key(entry)
+    existing = discovered.get(key)
+    if existing is None:
+        discovered[key] = entry
+        return
+    source_groups = set(str(group) for group in existing.get("source_groups", []))
+    if source_group:
+        source_groups.add(source_group)
+    existing["source_groups"] = sorted(source_groups)
+
+
+def _discover_input_registry_items(
+    *,
+    groups: dict[str, list[FeedCandidate]],
+    discovered_supabase_projects: list[dict[str, str]],
+    imports_dir: Path | None,
+) -> list[dict[str, object]]:
+    discovered: dict[str, dict[str, object]] = {}
+    for project in discovered_supabase_projects:
+        _add_discovered_input(
+            discovered,
+            input_kind="supabase_project",
+            connector_id="supabase_table_import",
+            value=str(project["project_ref"]),
+            status="pending_key",
+            source_group=str(project.get("source_groups") or ""),
+            next_action=(
+                "set "
+                f"{project['key_env']} locally, then run "
+                "forge automation feed-build --source supabase --apply --json"
+            ),
+        )
+    for source_name in _OFFLINE_SOURCES:
+        for candidate in groups.get(source_name, []):
+            if not candidate.source_group.startswith(("cti_file:", "connector_file:")):
+                continue
+            haystack = " ".join(
+                [
+                    candidate.target_value,
+                    candidate.canonical_value,
+                    candidate.provenance,
+                    candidate.source_group,
+                ]
+            )
+            for marker in _input_marker_hits(haystack):
+                value = str(marker["connector_id"])
+                if ":" in candidate.source_group:
+                    value = candidate.source_group.split(":", 1)[1]
+                _add_discovered_input(
+                    discovered,
+                    input_kind=str(marker["input_kind"]),
+                    connector_id=str(marker["connector_id"]),
+                    value=value,
+                    status=str(marker["status"]),
+                    source_group=candidate.source_group,
+                    next_action=str(marker["next_action"]),
+                )
+    root = imports_dir or Path("imports")
+    if root.is_dir():
+        scanned = 0
+        for path in sorted(root.iterdir()):
+            if scanned >= _MAX_FILES_PER_DIR_SOURCE:
+                break
+            if not path.is_file():
+                continue
+            scanned += 1
+            haystack = f"{path.name} {path.suffix}"
+            for marker in _input_marker_hits(haystack):
+                _add_discovered_input(
+                    discovered,
+                    input_kind=str(marker["input_kind"]),
+                    connector_id=str(marker["connector_id"]),
+                    value=path.name,
+                    status=str(marker["status"]),
+                    source_group=f"import_file:{path.name}",
+                    next_action=str(marker["next_action"]),
+                )
+    return [
+        {
+            **item,
+            "source_groups": sorted(str(group) for group in item.get("source_groups", [])),
+        }
+        for item in sorted(discovered.values(), key=_input_registry_key)
+    ]
+
+
+def _append_discovered_input_registry_items(
+    *,
+    discovered_inputs: list[dict[str, object]],
+    existing_keys: set[str],
+    imports_dir: Path | None,
+) -> list[dict[str, object]]:
+    pending = [
+        item
+        for item in discovered_inputs
+        if _input_registry_key(item) not in existing_keys
+    ]
+    if not pending:
+        return []
+    path = _discovered_inputs_registry_path(imports_dir)
+    if path.is_file():
+        payload, error = _load_json_file(path)
+        if error is not None or not isinstance(payload, dict):
+            payload = {}
+    else:
+        payload = {}
+    raw_inputs = payload.get("inputs")
+    if not isinstance(raw_inputs, list):
+        raw_inputs = []
+    known = set(existing_keys)
+    appended: list[dict[str, object]] = []
+    for item in pending:
+        key = _input_registry_key(item)
+        if not key.strip("|") or key in known:
+            continue
+        entry = dict(item)
+        entry["first_seen_at"] = _now_iso()
+        raw_inputs.append(entry)
+        appended.append(item)
+        known.add(key)
+    payload["schema_version"] = "forge.discovered_inputs.v1"
+    payload["updated_at"] = _now_iso()
+    payload["inputs"] = raw_inputs
+    payload.setdefault(
+        "_instructions",
+        (
+            "Local no-secret registry maintained by feed-build --apply. "
+            "Free/local artifact inputs can be imported directly; keyed/live "
+            "inputs remain pending until local credentials exist."
+        ),
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=".discovered-inputs-", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+    return appended
+
+
+def _append_discovered_supabase_projects(
+    *,
+    config_path: Path | None,
+    discovered_projects: list[dict[str, str]],
+    existing_refs: set[str],
+) -> list[dict[str, str]]:
+    pending = [
+        project
+        for project in discovered_projects
+        if str(project["project_ref"]).lower() not in existing_refs
+    ]
+    if not pending:
+        return []
+    path = _supabase_config_path(config_path)
+    if path.is_file():
+        payload, error = _load_json_file(path)
+        if error is not None or not isinstance(payload, dict):
+            payload = {}
+    else:
+        payload = {}
+    raw_projects = payload.get("projects")
+    if not isinstance(raw_projects, list):
+        raw_projects = []
+    known_refs = set(existing_refs)
+    appended: list[dict[str, str]] = []
+    for project in pending:
+        project_ref = str(project["project_ref"]).lower()
+        if project_ref in known_refs:
+            continue
+        entry = {
+            "project_ref": project_ref,
+            "key_env": project["key_env"],
+            "limit": _MAX_SUPABASE_TABLE_ROWS,
+            "status": "pending_key",
+            "discovered_from": project.get("source_groups", ""),
+        }
+        raw_projects.append(entry)
+        appended.append(
+            {
+                "project_ref": project_ref,
+                "key_env": project["key_env"],
+                "status": "pending_key",
+            }
+        )
+        known_refs.add(project_ref)
+    payload["projects"] = raw_projects
+    payload.setdefault(
+        "_instructions",
+        (
+            "Add owned read-only Supabase project entries to projects. Entries "
+            "discovered from artifacts are pending until key_env is set locally."
+        ),
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=".supabase-projects-", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+    return appended
 
 
 def _merge_candidates(
@@ -816,6 +1224,39 @@ def build_target_feed(
         source_group_counts.update(supabase_group_counts)
         source_errors.extend({"source": "supabase", "error": err} for err in errors)
 
+    existing_supabase_refs = _existing_supabase_project_refs(supabase_config_path)
+    discovered_supabase_projects = _discovered_supabase_project_refs(groups)
+    new_discovered_supabase_projects = [
+        project
+        for project in discovered_supabase_projects
+        if project["project_ref"] not in existing_supabase_refs
+    ]
+    discovered_inputs = _discover_input_registry_items(
+        groups=groups,
+        discovered_supabase_projects=discovered_supabase_projects,
+        imports_dir=imports_dir,
+    )
+    existing_input_keys = _existing_discovered_input_keys(imports_dir)
+    new_discovered_inputs = [
+        item
+        for item in discovered_inputs
+        if _input_registry_key(item) not in existing_input_keys
+    ]
+    appended_supabase_projects: list[dict[str, str]] = []
+    appended_inputs: list[dict[str, object]] = []
+    if apply and new_discovered_supabase_projects:
+        appended_supabase_projects = _append_discovered_supabase_projects(
+            config_path=supabase_config_path,
+            discovered_projects=discovered_supabase_projects,
+            existing_refs=existing_supabase_refs,
+        )
+    if apply and new_discovered_inputs:
+        appended_inputs = _append_discovered_input_registry_items(
+            discovered_inputs=discovered_inputs,
+            existing_keys=existing_input_keys,
+            imports_dir=imports_dir,
+        )
+
     existing_items_raw: list[dict[str, object]] = []
     new_vs_existing = 0
     if existing_feed_path is not None and Path(existing_feed_path).is_file():
@@ -894,6 +1335,30 @@ def build_target_feed(
         "generated_at": generated_at,
         "counts": counts,
         "source_errors": source_errors,
+        "discovered_supabase_projects": discovered_supabase_projects,
+        "new_discovered_supabase_projects": (
+            appended_supabase_projects
+            if apply
+            else new_discovered_supabase_projects
+        ),
+        "supabase_project_config_update": {
+            "config_path": str(_supabase_config_path(supabase_config_path)),
+            "applied": bool(apply),
+            "appended_count": len(appended_supabase_projects),
+            "pending_key_count": len(new_discovered_supabase_projects)
+            if not apply
+            else len(appended_supabase_projects),
+        },
+        "discovered_inputs": discovered_inputs,
+        "new_discovered_inputs": appended_inputs if apply else new_discovered_inputs,
+        "discovered_input_registry_update": {
+            "config_path": str(_discovered_inputs_registry_path(imports_dir)),
+            "applied": bool(apply),
+            "appended_count": len(appended_inputs),
+            "pending_count": len(new_discovered_inputs)
+            if not apply
+            else len(appended_inputs),
+        },
         "items": items,
     }
     return payload
