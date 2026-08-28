@@ -54,6 +54,21 @@ def test_self_heal_plan_is_plan_only_and_skips_docker_probe_by_default(tmp_path:
         "probed": False,
         "reason": "compose_file_present_probe_skipped",
     }
+    assert payload["commands"]["cycle_dry_run"] == [
+        "forge",
+        "automation",
+        "cycle",
+        "--source",
+        "all",
+        "--json",
+    ]
+    assert payload["commands"]["cycle_apply_live"][:4] == [
+        "forge",
+        "automation",
+        "cycle",
+        "--apply",
+    ]
+    assert "--live" in payload["commands"]["cycle_apply_live"]
     assert payload["commands"]["autopilot_dry_run"][1:3] == ["--dry-run", "--feed-build"]
     assert payload["commands"]["autopilot_dry_run"][-2:] == ["--feed-source", "all"]
     assert payload["commands"]["autopilot_apply"][-1] == "--apply"

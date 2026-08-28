@@ -133,6 +133,19 @@ def test_automation_defaults_review_exposes_tunable_free_first_options() -> None
     assert tunables["memory_gate"]["default"] == 1024
     assert 1024 in tunables["memory_gate"]["options"]
     assert tunables["openrouter_mode"]["default"] == "free_only"
+    assert payload["commands"]["startup_dry_run"] == [
+        "forge",
+        "automation",
+        "cycle",
+        "--live",
+        "--json",
+    ]
+    assert payload["commands"]["guarded_probe"] == [
+        "forge",
+        "automation",
+        "guarded-autostart",
+        "--json",
+    ]
 
 
 def test_automation_cli_json_commands() -> None:

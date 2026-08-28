@@ -87,6 +87,17 @@ def automation_self_heal_plan(
     )
     commands = {
         "review_readiness": ["forge", "automation", "self-heal-plan", "--json"],
+        "cycle_dry_run": ["forge", "automation", "cycle", "--source", "all", "--json"],
+        "cycle_apply_live": [
+            "forge",
+            "automation",
+            "cycle",
+            "--apply",
+            "--live",
+            "--docker-probe-mode",
+            str(docker_probe_mode).replace("_", "-"),
+            "--json",
+        ],
         "feed_build_dry_run": ["forge", "automation", "feed-build", "--json"],
         "autopilot_dry_run": [
             "forge-autopilot.bat" if os.name == "nt" else "./forge-autopilot.sh",
@@ -152,6 +163,7 @@ def automation_self_heal_plan(
             "cap resume parallelism at 4 and recommend 2 on small hosts",
             "back off after failures instead of retrying continuously",
             "probe Docker health before scheduled autopilot work",
+            "route startup through automation cycle before guarded live work",
         ],
     }
     total_checks = 4 + len(tool_rows)

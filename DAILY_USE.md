@@ -39,7 +39,8 @@ forge automation feed-build --json
 forge automation feed-build --apply --json
 forge automation defaults --json
 forge automation self-heal-plan --json
-forge automation guarded-autostart --json
+forge automation cycle --live --json
+forge automation guarded-autostart --json   # lower-level guard probe
 forge automation command-review --json
 forge doctor --json
 forge targets import --feed-file imports/target-feed.json --dry-run --limit 100 --json

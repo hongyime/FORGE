@@ -189,3 +189,4 @@
 - 2026-08-29: B688 made `automation cycle --apply --live` the documented startup path, blocked direct guarded-autostart apply when ready source queues would be bypassed, aligned direct launcher defaults with guarded limits, and surfaced Supabase table discovery status in feed-build JSON.
 - 2026-08-29: B689 changed Supabase feed extraction to harvest REST pages incrementally and use key hints so all-column rows preserve bare usernames as canonical username targets.
 - 2026-08-29: B690 made OpenRouter free-only discovery request newest models and accept only capable numerically zero-priced free model families when paid backends are disabled.
+- 2026-08-29: B691 made self-heal/defaults command plans prefer `automation cycle` for startup/daily operation and leave direct guarded-autostart as a lower-level probe.

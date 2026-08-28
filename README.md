@@ -399,8 +399,10 @@ contain those provider markers are ignored too, so downloaded `.json`, `.csv`,
 without writing files: automation policy defaults, the wildcard scope template,
 guarded-autostart defaults, conservative/current/aggressive startup presets,
 memory/cadence/log/feed/OpenRouter options, and a disabled local
-`imports/autostart.local.json` template. It returns secret variable names and
-placeholders only, never secret values.
+`imports/autostart.local.json` template. Its command plan prefers
+`forge automation cycle` for startup/daily operation and keeps
+`guarded-autostart` as a lower-level readiness probe. It returns secret
+variable names and placeholders only, never secret values.
 
 `forge automation self-heal-plan` is the read-only preflight for any future
 Docker/startup autopilot. It reports resource guardrails, Docker compose
