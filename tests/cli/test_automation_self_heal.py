@@ -16,6 +16,23 @@ app = typer.Typer()
 register_automation_commands(app)
 runner = CliRunner()
 
+EXPECTED_PACKAGED_GO_TOOLS = {
+    "nuclei": "templates",
+    "gopls": "developer",
+    "gitleaks": "secrets",
+    "amass": "asset_discovery",
+    "ffuf": "active_content",
+    "gobuster": "active_content",
+    "mapcidr": "scope_planning",
+    "tlsx": "tls_fingerprint",
+    "uncover": "provider_search",
+    "naabu": "active_ports",
+    "dnsx": "dns_enrichment",
+    "httpx": "http_probe",
+    "katana": "crawler",
+    "subfinder": "subdomains",
+}
+
 
 def test_self_heal_plan_is_plan_only_and_skips_docker_probe_by_default(tmp_path: Path) -> None:
     compose = tmp_path / "docker" / "docker-compose.dev.yml"
@@ -41,6 +58,16 @@ def test_self_heal_plan_is_plan_only_and_skips_docker_probe_by_default(tmp_path:
     assert payload["commands"]["autopilot_dry_run"][-2:] == ["--feed-source", "all"]
     assert payload["commands"]["autopilot_apply"][-1] == "--apply"
     assert self_heal.DEFAULT_AUTOSTART_CONFIG["min_free_memory_mb"] == 1024
+
+
+def test_packaged_go_tool_contract_matches_standalone_bundle_request() -> None:
+    assert {
+        str(row["name"]): str(row["role"])
+        for row in self_heal.PACKAGED_GO_TOOLS
+    } == EXPECTED_PACKAGED_GO_TOOLS
+    for row in self_heal.PACKAGED_GO_TOOLS:
+        assert str(row["binary"]).endswith(".exe")
+        assert int(row["size_bytes"]) > 0
 
 
 def test_self_heal_plan_probe_reports_unhealthy_docker_services(
@@ -241,6 +268,33 @@ def test_self_heal_plan_prefers_user_go_bin_before_path_shim(
     assert payload["packaged_go_tools"][0]["path"] == str(good)
     assert payload["packaged_go_tools"][0]["size_matches_hint"] is True
     assert "packaged_runtime_tool_size_mismatch:httpx" not in payload["blockers"]
+
+
+def test_self_heal_plan_uses_host_connector_bin_dir_for_docker_mounted_tools(
+    tmp_path: Path, monkeypatch
+) -> None:
+    mounted_bin = tmp_path / "mounted-tools"
+    mounted_bin.mkdir()
+    expected_size = 8
+    (mounted_bin / "naabu.exe").write_bytes(b"x" * expected_size)
+    monkeypatch.setenv("FORGE_HOST_CONNECTOR_BIN_DIR", str(mounted_bin))
+    monkeypatch.setattr(self_heal.Path, "home", lambda: tmp_path / "empty-home")
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "naabu", "binary": "naabu.exe", "size_bytes": expected_size, "role": "active_ports"},),
+    )
+
+    payload = automation_self_heal_plan(
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+        min_free_memory_mb=1,
+        min_free_disk_gb=1,
+    )
+
+    assert payload["packaged_go_tools"][0]["path"] == str(mounted_bin / "naabu.exe")
+    assert payload["packaged_go_tools"][0]["available"] is True
+    assert payload["packaged_go_tools"][0]["size_matches_hint"] is True
 
 
 def test_self_heal_plan_cli_json() -> None:

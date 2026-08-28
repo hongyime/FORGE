@@ -1,3 +1,4 @@
+import os
 import re
 import shutil
 import subprocess
@@ -68,6 +69,91 @@ def test_autopilot_windows_launcher_can_run_from_packaged_path_runtime() -> None
     assert 'set "python=python"' in text
     assert "use the packaged docker image" in text
     assert re.search(r"(?m)^\s*pause\s*$", text) is None
+
+
+def test_autopilot_windows_apply_requires_roe_before_python_call(tmp_path: Path) -> None:
+    if sys.platform != "win32":
+        pytest.skip("cmd launcher behavior is Windows-specific")
+
+    launcher = tmp_path / "forge-autopilot.bat"
+    launcher.write_text((REPO_ROOT / "forge-autopilot.bat").read_text(encoding="utf-8"), encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python_log = tmp_path / "python.log"
+    (bin_dir / "python.bat").write_text(
+        f"@echo off\r\necho %*>>\"{python_log}\"\r\nexit /b 0\r\n",
+        encoding="utf-8",
+    )
+    (bin_dir / "forge.bat").write_text("@echo off\r\nexit /b 0\r\n", encoding="utf-8")
+
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env.pop("FORGE_ROE_ID", None)
+    result = subprocess.run(
+        ["cmd", "/c", str(launcher), "--apply", "--skip-dashboard"],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "--apply requires --roe-id or FORGE_ROE_ID" in result.stdout
+    assert not python_log.exists()
+
+
+def test_autopilot_windows_apply_stops_after_feed_build_failure(tmp_path: Path) -> None:
+    if sys.platform != "win32":
+        pytest.skip("cmd launcher behavior is Windows-specific")
+
+    launcher = tmp_path / "forge-autopilot.bat"
+    launcher.write_text((REPO_ROOT / "forge-autopilot.bat").read_text(encoding="utf-8"), encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python_log = tmp_path / "python.log"
+    shutil.copy2(sys.executable, bin_dir / "python.exe")
+    forge_pkg = tmp_path / "forge"
+    forge_pkg.mkdir()
+    (forge_pkg / "__init__.py").write_text("", encoding="utf-8")
+    (forge_pkg / "cli.py").write_text(
+        "\n".join(
+            [
+                "from pathlib import Path",
+                "import sys",
+                f"Path({str(python_log)!r}).write_text(' '.join(sys.argv[1:]) + '\\n', encoding='utf-8')",
+                "if sys.argv[1:3] == ['automation', 'feed-build']:",
+                "    raise SystemExit(7)",
+                "raise SystemExit(0)",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (bin_dir / "forge.bat").write_text("@echo off\r\nexit /b 0\r\n", encoding="utf-8")
+
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env.pop("FORGE_ROE_ID", None)
+    result = subprocess.run(
+        ["cmd", "/c", str(launcher), "--apply", "--roe-id", "ROE-TEST", "--skip-dashboard"],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+    calls = python_log.read_text(encoding="utf-8").lower().splitlines()
+
+    assert result.returncode == 7
+    assert "failed in apply mode; stopping before stale feed import/resume/monitoring" in result.stdout
+    assert len(calls) == 1
+    assert "automation feed-build" in calls[0]
+    assert "targets import" not in "\n".join(calls)
+    assert "targets resume-run" not in "\n".join(calls)
+    assert "monitoring run-due" not in "\n".join(calls)
 
 
 def test_powershell_stack_helper_uses_docker_compose_dev_file() -> None:

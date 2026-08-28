@@ -912,7 +912,11 @@ def _tool_search_roots(root: Path) -> list[Path]:
         root / ".forge_data" / "tools" / "bin",
         Path.home() / "go" / "bin",
     ]
-    for env_name in ("FORGE_CONNECTOR_BIN_DIRS", "FORGE_CONNECTOR_BIN_DIR"):
+    for env_name in (
+        "FORGE_CONNECTOR_BIN_DIRS",
+        "FORGE_CONNECTOR_BIN_DIR",
+        "FORGE_HOST_CONNECTOR_BIN_DIR",
+    ):
         for value in str(os.environ.get(env_name, "")).split(os.pathsep):
             if value.strip():
                 roots.append(Path(value.strip()))
