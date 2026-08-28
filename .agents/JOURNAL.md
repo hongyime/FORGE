@@ -218,3 +218,4 @@
 - 2026-08-29: B715 adds a top-level automation status label so machine/startup consumers can distinguish blocked, attention, ready-with-inputs, ready-needs-feed, ready-with-backlog, and ready states.
 - 2026-08-29: B716 adds automation status --quick for startup/supervisor checks that skip expensive backlog inventories while marking the result as backlog-unverified.
 - 2026-08-29: B717 makes autostart_history recommend self-heal only for recent failures; aged historical failures now point back to automation status review.
+- 2026-08-29: B718 makes quick automation status recommend a full status audit before guarded live cycle when backlog summaries were intentionally skipped.

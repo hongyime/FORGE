@@ -842,6 +842,10 @@ def test_automation_status_quick_skips_slow_backlog_inventory(
     assert payload["resume_backlog"]["execution_policy"] == "read_only_quick_status_skipped"
     assert payload["monitoring_due"]["execution_policy"] == "read_only_quick_status_skipped"
     assert payload["report_review"]["execution_policy"] == "read_only_quick_status_skipped"
+    assert payload["next_actions"][:2] == [
+        "forge automation status --json",
+        "forge automation cycle --apply --live --docker-probe-mode compose-dependency --json",
+    ]
 
 
 def test_automation_status_reports_autostart_probe_blockers(

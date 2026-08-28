@@ -1790,18 +1790,30 @@ def _status_next_actions(
     if autostart_blockers:
         actions.append("forge automation self-heal-plan --json --docker-probe-mode compose-dependency")
         actions.append("resolve autostart blockers before running cycle --apply --live")
+    quick_skipped_backlog = (
+        _summary_skipped_for_quick(resume_backlog or {})
+        or _summary_skipped_for_quick(monitoring_due or {})
+        or _summary_skipped_for_quick(report_review or {})
+    )
+    if quick_skipped_backlog and not autostart_blockers:
+        actions.append("forge automation status --json")
     if not actions:
         actions.append(
             "forge automation cycle --apply --live "
             "--docker-probe-mode compose-dependency --json"
         )
-    if not autostart_blockers:
+    if not autostart_blockers and not quick_skipped_backlog:
         actions.extend(
             _status_backlog_next_actions(
                 resume_backlog=resume_backlog or {},
                 monitoring_due=monitoring_due or {},
                 report_review=report_review or {},
             )
+        )
+    if quick_skipped_backlog and not autostart_blockers:
+        actions.append(
+            "forge automation cycle --apply --live "
+            "--docker-probe-mode compose-dependency --json"
         )
     return _dedupe_strings(actions)[:8]
 
