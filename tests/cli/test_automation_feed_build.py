@@ -275,10 +275,66 @@ def test_feed_build_rerun_reads_large_existing_feed_without_legacy_item_cap(
     assert payload["source_errors"] == []
     assert payload["counts"]["new_vs_existing"] == 0
     assert payload["counts"]["omitted_duplicate"] == 1
+    assert payload["counts"]["existing_feed_items"] == 1200
+    assert payload["counts"]["selected_existing_preserved"] == 1200
+    assert payload["counts"]["selected_from_current_sources"] == 1
+    assert payload["counts"]["generated_candidate_total"] == 1
+    assert payload["counts"]["generated_unique_candidate_total"] == 1
+    assert payload["counts"]["selected_includes_existing"] is True
     matched = [
         item for item in payload["items"] if item["canonical_value"] == "bulk-1100.example"
     ]
     assert matched[0]["source_group"] == "previous"
+
+
+def test_feed_build_source_only_counts_do_not_confuse_preserved_existing_feed(
+    tmp_path: Path,
+) -> None:
+    existing = tmp_path / "imports" / "target-feed.json"
+    existing.parent.mkdir(parents=True)
+    existing.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "generated_at": "2026-08-28T00:00:00Z",
+                "items": [
+                    {
+                        "target_type": "domain",
+                        "target_value": "preserved.example",
+                        "source_kind": "previous",
+                        "source_group": "previous",
+                        "confidence": 0.9,
+                        "first_seen_at": "2026-08-28T00:00:00Z",
+                        "provenance": "previous-feed",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_target_feed(
+        sources=["supabase"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=existing,
+        supabase_config_path=tmp_path / "missing-supabase.json",
+    )
+
+    counts = payload["counts"]
+    assert counts["selected"] == 1
+    assert counts["selected_existing_preserved"] == 1
+    assert counts["selected_from_current_sources"] == 0
+    assert counts["selected_includes_existing"] is True
+    assert counts["existing_feed_items"] == 1
+    assert counts["generated_candidate_total"] == 0
+    assert counts["generated_unique_candidate_total"] == 0
+    assert counts["by_source"]["supabase"] == 0
+    assert payload["source_errors"] == [
+        {"source": "supabase", "error": "not_configured:local_config_file_missing"}
+    ]
 
 
 def test_feed_build_missing_and_malformed_sources_fail_soft(tmp_path: Path) -> None:

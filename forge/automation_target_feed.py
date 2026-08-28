@@ -1795,6 +1795,8 @@ def build_target_feed(
         )
 
     existing_items_raw: list[dict[str, object]] = []
+    existing_keys: set[str] = set()
+    candidate_keys = _all_candidate_keys(groups)
     new_vs_existing = 0
     if existing_feed_path is not None and Path(existing_feed_path).is_file():
         try:
@@ -1824,15 +1826,13 @@ def build_target_feed(
                 }
                 for item in loaded_existing
             ]
-            new_vs_existing = sum(
-                1 for key in _all_candidate_keys(groups) if key not in existing_keys
-            )
+            new_vs_existing = sum(1 for key in candidate_keys if key not in existing_keys)
         except (OSError, ValueError):
             source_errors.append(
                 {"source": "existing_feed", "error": "unreadable_existing_feed"}
             )
     elif existing_feed_path is not None:
-        new_vs_existing = len(_all_candidate_keys(groups))
+        new_vs_existing = len(candidate_keys)
 
     items, dedupe_counts = _merge_candidates(groups, existing_items_raw)
     total_before_limit = len(items)
@@ -1852,6 +1852,16 @@ def build_target_feed(
     counts = {
         "total": len(items),
         "selected": len(items),
+        "selected_existing_preserved": sum(
+            1 for item in items if str(item.get("target_key") or "") in existing_keys
+        ),
+        "selected_from_current_sources": sum(
+            1 for item in items if str(item.get("target_key") or "") in candidate_keys
+        ),
+        "selected_includes_existing": bool(existing_items_raw),
+        "existing_feed_items": len(existing_items_raw),
+        "generated_candidate_total": sum(len(groups[name]) for name in SUPPORTED_SOURCES),
+        "generated_unique_candidate_total": len(candidate_keys),
         "omitted_duplicate": dedupe_counts["omitted_duplicate"],
         "omitted_by_limit": omitted_by_limit,
         "new_vs_existing": new_vs_existing,

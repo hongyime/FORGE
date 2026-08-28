@@ -291,6 +291,8 @@ def register_automation_commands(app: typer.Typer) -> None:
             mode = "apply" if payload["apply_requested"] else "dry-run"
             console.print(
                 f"[bold]Target feed ({mode})[/bold] total={counts['total']} "
+                f"current_source={counts['selected_from_current_sources']} "
+                f"preserved_existing={counts['selected_existing_preserved']} "
                 f"duplicates={counts['omitted_duplicate']} "
                 f"new_vs_existing={counts['new_vs_existing']}"
             )
