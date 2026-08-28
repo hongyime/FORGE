@@ -303,6 +303,11 @@ def register_automation_commands(app: typer.Typer) -> None:
             "--probe-docker",
             help="Run a read-only docker compose ps probe. Default only checks config files.",
         ),
+        docker_probe_mode: str = typer.Option(
+            "host-compose",
+            "--docker-probe-mode",
+            help="Docker probe mode: host-compose, compose-dependency, or disabled.",
+        ),
         min_free_memory_mb: int = typer.Option(
             2048,
             "--min-free-memory-mb",
@@ -324,6 +329,7 @@ def register_automation_commands(app: typer.Typer) -> None:
             min_free_disk_gb=min_free_disk_gb,
             max_parallel=max_parallel,
             probe_docker=probe_docker,
+            docker_probe_mode=docker_probe_mode,
         )
         if json_output:
             typer.echo(json.dumps(payload, sort_keys=True))
@@ -348,8 +354,17 @@ def register_automation_commands(app: typer.Typer) -> None:
             help="Run guarded autopilot only when local config also has apply_enabled=true.",
         ),
         json_output: bool = typer.Option(False, "--json"),
+        docker_probe_mode: str | None = typer.Option(
+            None,
+            "--docker-probe-mode",
+            help="Override config Docker probe mode: host-compose, compose-dependency, or disabled.",
+        ),
     ) -> None:
-        payload = run_guarded_autostart(config_path=config, apply=apply)
+        payload = run_guarded_autostart(
+            config_path=config,
+            apply=apply,
+            docker_probe_mode=docker_probe_mode,
+        )
         if json_output:
             typer.echo(json.dumps(payload, sort_keys=True))
             return

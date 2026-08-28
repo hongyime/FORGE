@@ -81,15 +81,18 @@ def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
     assert 'profiles: ["autostart"]' in compose
     assert 'restart: "no"' in compose
     assert 'cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"' in compose
-    assert 'mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-256m}"' in compose
+    assert 'mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-1024m}"' in compose
     assert "automation" in compose
     assert "guarded-autostart" in compose
     assert "/app/imports/autostart.local.json" in compose
+    assert "--docker-probe-mode" in compose
+    assert "compose-dependency" in compose
     assert "--apply" in compose
     assert "--json" in compose
     assert 'FORGE_ROE_ID: "${FORGE_ROE_ID:-}"' in compose
     assert "../imports:/app/imports:rw" in compose
     assert "../reports:/app/reports:rw" in compose
+    assert "${FORGE_HOST_CONNECTOR_BIN_DIR:-../tools/bin}:/app/tools/bin:ro" in compose
 
 
 def test_production_compose_matches_doctor_hardening_contract() -> None:
@@ -129,11 +132,19 @@ def test_dockerignore_excludes_local_state_and_secret_material() -> None:
         "/.forge_data",
         "/reports",
         "/downloads",
+        "/imports",
+        "/tools/bin",
         "*.db",
         "*.jsonl",
         "forge/reporting/webui/node_modules",
     ]:
         assert pattern in dockerignore
+
+
+def test_gitignore_keeps_local_tool_binaries_untracked_for_bind_mounts() -> None:
+    gitignore = _read(".gitignore")
+
+    assert "tools/bin/" in gitignore
 
 
 def test_reverse_proxy_examples_match_loopback_compose_ports_and_security_headers() -> None:

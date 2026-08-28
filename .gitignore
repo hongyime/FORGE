@@ -75,6 +75,7 @@ data/*.db
 .forge_data/
 
 # Binary bundles
+tools/bin/
 *.tar.gz
 *.zip
 vendor/tor/

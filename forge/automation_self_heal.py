@@ -49,6 +49,7 @@ DEFAULT_AUTOSTART_CONFIG: dict[str, Any] = {
     "failure_backoff_minutes": 120,
     "log_max_entries": 25,
     "feed_sources": ["all"],
+    "docker_probe_mode": "host_compose",
 }
 
 
@@ -60,6 +61,7 @@ def automation_self_heal_plan(
     min_free_disk_gb: int = 5,
     max_parallel: int = 2,
     probe_docker: bool = False,
+    docker_probe_mode: str = "host_compose",
 ) -> dict[str, Any]:
     root = Path(repo_root or Path.cwd())
     cfg_data_dir = data_dir or ForgeConfig.load().data_dir
@@ -69,7 +71,7 @@ def automation_self_heal_plan(
         min_free_disk_gb=min_free_disk_gb,
     )
     tool_rows = _packaged_tool_status(root)
-    docker_status = _docker_status(root, probe=probe_docker)
+    docker_status = _docker_status(root, probe=probe_docker, mode=docker_probe_mode)
     feed_file = root / "imports" / "target-feed.json"
     lock_file = Path(cfg_data_dir) / "target_imports" / "resume_batches" / "resume-run.lock"
     blockers = _blockers(
@@ -107,6 +109,7 @@ def automation_self_heal_plan(
             "10",
             "--feed-source",
             "all",
+            "--apply",
         ],
         "docker_status": [
             "docker",
@@ -116,6 +119,16 @@ def automation_self_heal_plan(
             "ps",
             "--format",
             "json",
+        ],
+        "docker_autostart": [
+            "docker",
+            "compose",
+            "-f",
+            str(root / "docker" / "docker-compose.yml"),
+            "--profile",
+            "autostart",
+            "up",
+            "-d",
         ],
     }
     startup_policy = {
@@ -175,12 +188,19 @@ def run_guarded_autostart(
     data_dir: Path | None = None,
     apply: bool = False,
     skip_feed_build: bool = False,
+    docker_probe_mode: str | None = None,
     command_runner: Any | None = None,
 ) -> dict[str, Any]:
     root = Path(repo_root or Path.cwd())
     cfg_data_dir = data_dir or ForgeConfig.load().data_dir
     selected_config_path = Path(config_path or DEFAULT_AUTOSTART_CONFIG_PATH)
     config, config_errors = _load_autostart_config(selected_config_path)
+    if docker_probe_mode is not None:
+        config["docker_probe_mode"] = docker_probe_mode
+        config["docker_probe_mode"] = _validated_docker_probe_mode(
+            config.get("docker_probe_mode"),
+            config_errors,
+        )
     state_dir = Path(cfg_data_dir) / "automation"
     state_file = state_dir / "guarded-autostart-state.json"
     log_file = state_dir / "guarded-autostart.jsonl"
@@ -201,6 +221,7 @@ def run_guarded_autostart(
         min_free_disk_gb=int(config["min_free_disk_gb"]),
         max_parallel=int(config["max_parallel"]),
         probe_docker=True,
+        docker_probe_mode=str(config["docker_probe_mode"]),
     )
     mode = "apply" if apply else "dry_run"
     blockers: list[str] = []
@@ -382,6 +403,10 @@ def _validate_autostart_config(config: dict[str, Any]) -> list[str]:
             errors.append(f"autostart_config_invalid_bool:{key}")
             config[key] = False
     config["feed_sources"] = _validated_feed_sources(config.get("feed_sources"), errors)
+    config["docker_probe_mode"] = _validated_docker_probe_mode(
+        config.get("docker_probe_mode"),
+        errors,
+    )
     config["roe_id_env"] = str(config.get("roe_id_env") or "FORGE_ROE_ID").strip()
     if not config["roe_id_env"]:
         errors.append("autostart_config_invalid:roe_id_env")
@@ -405,6 +430,15 @@ def _validated_feed_sources(value: Any, errors: list[str]) -> list[str]:
         errors.append("autostart_config_invalid:feed_sources")
         return ["all"]
     return sources
+
+
+def _validated_docker_probe_mode(value: Any, errors: list[str]) -> str:
+    mode = str(value or "host_compose").strip().lower().replace("-", "_")
+    allowed = {"host_compose", "compose_dependency", "disabled"}
+    if mode not in allowed:
+        errors.append("autostart_config_invalid:docker_probe_mode")
+        return "host_compose"
+    return mode
 
 
 def _guarded_autostart_commands(
@@ -438,7 +472,7 @@ def _guarded_autostart_commands(
     return {
         "self_heal_probe": ["forge", "automation", "self-heal-plan", "--json", "--probe-docker"],
         "autopilot_dry_run": [*base, "--dry-run"],
-        "autopilot_apply": apply_cmd,
+        "autopilot_apply": [*apply_cmd, "--apply"],
     }
 
 
@@ -786,6 +820,7 @@ def _resource_status(
 
 
 def _free_memory_mb() -> int | None:
+    cgroup_memory_mb = _cgroup_available_memory_mb()
     if os.name == "nt":
         try:
             import ctypes
@@ -806,17 +841,47 @@ def _free_memory_mb() -> int | None:
             status = _MemoryStatus()
             status.dwLength = ctypes.sizeof(_MemoryStatus)
             if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
-                return int(status.ullAvailPhys / (1024 * 1024))
+                host_memory_mb = int(status.ullAvailPhys / (1024 * 1024))
+                return min(host_memory_mb, cgroup_memory_mb) if cgroup_memory_mb is not None else host_memory_mb
         except Exception:
-            return None
+            return cgroup_memory_mb
     if hasattr(os, "sysconf"):
         try:
             pages = os.sysconf("SC_AVPHYS_PAGES")
             page_size = os.sysconf("SC_PAGE_SIZE")
-            return int((int(pages) * int(page_size)) / (1024 * 1024))
+            host_memory_mb = int((int(pages) * int(page_size)) / (1024 * 1024))
+            return min(host_memory_mb, cgroup_memory_mb) if cgroup_memory_mb is not None else host_memory_mb
         except (OSError, ValueError, TypeError):
-            return None
+            return cgroup_memory_mb
+    return cgroup_memory_mb
+
+
+def _cgroup_available_memory_mb(cgroup_root: Path = Path("/sys/fs/cgroup")) -> int | None:
+    v2_max = _read_cgroup_memory_value(cgroup_root / "memory.max")
+    v2_current = _read_cgroup_memory_value(cgroup_root / "memory.current")
+    if v2_max is not None and v2_current is not None:
+        return max(0, int((v2_max - v2_current) / (1024 * 1024)))
+    v1_max = _read_cgroup_memory_value(cgroup_root / "memory" / "memory.limit_in_bytes")
+    v1_current = _read_cgroup_memory_value(cgroup_root / "memory" / "memory.usage_in_bytes")
+    if v1_max is not None and v1_current is not None:
+        return max(0, int((v1_max - v1_current) / (1024 * 1024)))
     return None
+
+
+def _read_cgroup_memory_value(path: Path) -> int | None:
+    try:
+        text = path.read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        return None
+    if not text or text == "max":
+        return None
+    try:
+        value = int(text)
+    except ValueError:
+        return None
+    if value <= 0 or value >= 1 << 60:
+        return None
+    return value
 
 
 def _packaged_tool_status(root: Path) -> list[dict[str, Any]]:
@@ -866,7 +931,16 @@ def _find_tool_path(binary: str, roots: list[Path]) -> Path | None:
     return Path(found) if found else None
 
 
-def _docker_status(root: Path, *, probe: bool) -> dict[str, Any]:
+def _docker_status(root: Path, *, probe: bool, mode: str = "host_compose") -> dict[str, Any]:
+    normalized_mode = str(mode or "host_compose").strip().lower().replace("-", "_")
+    if normalized_mode == "disabled":
+        return {"ok": True, "probed": False, "reason": "docker_probe_disabled"}
+    if normalized_mode == "compose_dependency":
+        return {
+            "ok": True,
+            "probed": False,
+            "reason": "docker_health_delegated_to_compose_dependency",
+        }
     compose_file = root / "docker" / "docker-compose.dev.yml"
     if not compose_file.is_file():
         return {"ok": False, "probed": False, "reason": "compose_file_missing"}

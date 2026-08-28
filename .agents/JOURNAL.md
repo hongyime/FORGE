@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-08-29: B683 made autonomous startup fail closed more rigorously: direct autopilot launchers are dry-run by default, Docker container health can be delegated to Compose, memory gates are cgroup-aware, and local imports/tool binaries are excluded from Docker build context.
 - 2026-08-28: B682 added an opt-in Docker Compose `autostart` profile and packaged-runtime launcher fallback so Docker startup can invoke guarded-autostart without crash loops or local-venv assumptions.
 - 2026-08-28: B681 added `target_feed_scan` to automation status/cycle output so Forge can self-report eligible, high-priority, and ineligible target counts before live startup consumes scan budget.
 - 2026-08-28: B680 made multi-source target corroboration operational for autonomous intake: eligible multi-source targets are prioritized for import/start, while non-global IP/URL-host artifacts are retained as evidence but cannot consume live scan budget.

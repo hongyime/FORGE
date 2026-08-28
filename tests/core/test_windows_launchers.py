@@ -51,6 +51,15 @@ def test_autopilot_launcher_runs_start_resume_monitor_dashboard() -> None:
     assert "echo   roe_id=%roe_id%" not in text
 
 
+def test_autopilot_windows_launcher_defaults_to_dry_run_and_fails_fast_on_feed_apply() -> None:
+    text = _read_launcher("forge-autopilot.bat")
+
+    assert 'set "dry_run=1"' in text
+    assert 'if /i "%~1"=="--apply" set "dry_run=0"' in text
+    assert "failed in apply mode; stopping before stale feed import/resume/monitoring" in text
+    assert "exit /b !exit_code!" in text
+
+
 def test_autopilot_windows_launcher_can_run_from_packaged_path_runtime() -> None:
     text = _read_launcher("forge-autopilot.bat")
 

@@ -27,7 +27,7 @@ MAX_RUNTIME_MINUTES=25
 RESUME_LIMIT=100
 MAX_PARALLEL=6
 MONITOR_LIMIT=50
-DRY_RUN=0
+DRY_RUN=1
 FEED_BUILD=1
 FEED_SOURCES=all
 SKIP_IMPORT=0
@@ -37,7 +37,7 @@ SKIP_DASHBOARD=0
 
 usage() {
     printf 'Usage:\n'
-    printf '  ./forge-autopilot.sh [--dry-run] [--feed-file PATH] [--roe-id ROE-ID]\n'
+    printf '  ./forge-autopilot.sh [--dry-run] [--apply] [--feed-file PATH] [--roe-id ROE-ID]\n'
     printf '                       [--limit N] [--start-limit N] [--max-parallel N]\n'
     printf '                       [--feed-build] [--skip-feed-build] [--feed-source SOURCE]\n'
     printf '                       [--skip-import] [--skip-resume]\n'
@@ -65,6 +65,7 @@ FEED_SOURCE_SET=0
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=1; shift ;;
+        --apply) DRY_RUN=0; shift ;;
         --feed-build) FEED_BUILD=1; shift ;;
         --skip-feed-build) FEED_BUILD=0; shift ;;
         --feed-source)
@@ -114,7 +115,15 @@ if [ "$FEED_BUILD" -eq 1 ]; then
     if [ "$DRY_RUN" -ne 1 ]; then
         set -- "$@" --apply
     fi
-    "$FORGE_PYTHON" -m forge.cli "$@" || EXIT_CODE=$?
+    "$FORGE_PYTHON" -m forge.cli "$@"
+    PHASE_EXIT=$?
+    if [ "$PHASE_EXIT" -ne 0 ]; then
+        EXIT_CODE=$PHASE_EXIT
+        if [ "$DRY_RUN" -ne 1 ]; then
+            printf '[FEED] failed in apply mode; stopping before stale feed import/resume/monitoring.\n'
+            exit "$EXIT_CODE"
+        fi
+    fi
 fi
 
 if [ "$SKIP_IMPORT" -ne 1 ]; then

@@ -110,3 +110,13 @@ def test_autopilot_posix_launcher_runs_start_resume_monitor_dashboard() -> None:
     assert "--dry-run" in text
     assert "roe_id_present" in text
     assert "roe_id=%s" not in text
+
+
+def test_autopilot_posix_launcher_defaults_to_dry_run_and_fails_fast_on_feed_apply() -> None:
+    text = _read_launcher("forge-autopilot.sh")
+
+    assert "DRY_RUN=1" in text
+    assert "--apply) DRY_RUN=0" in text
+    assert "PHASE_EXIT=$?" in text
+    assert "failed in apply mode; stopping before stale feed import/resume/monitoring" in text
+    assert 'exit "$EXIT_CODE"' in text

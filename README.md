@@ -75,6 +75,7 @@ git clone <repo> forge-toolkit
 cd forge-toolkit
 setup.bat        # picks safe/default or scoped active-assessment mode
 forge-autopilot.bat --dry-run  # optional all-in-one feed/resume/monitor/dashboard rehearsal
+forge-autopilot.bat --apply --roe-id ROE-ID  # explicit live all-in-one path
 ```
 
 ```bash
@@ -269,7 +270,7 @@ forge automation status [--engagement N] [--json]  # Read-only feed, queue, bloc
 forge automation cycle [--apply] [--live] [--engagement N] [--json]  # Daily feed, queue, and optional guarded live loop
 forge automation feed-build [--output imports/target-feed.json] [--apply] [--json] [--source all|supabase|reports|db|cti|connectors] [--supabase-config PATH] [--limit N]
 forge automation self-heal-plan [--json] [--probe-docker] [--min-free-memory-mb N] [--min-free-disk-gb N] [--max-parallel N]
-forge automation guarded-autostart [--config imports/autostart.local.json] [--apply] [--json]
+forge automation guarded-autostart [--config imports/autostart.local.json] [--apply] [--docker-probe-mode host-compose|compose-dependency|disabled] [--json]
 forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-first connector/plugin catalog
 forge connectors install-plan [--json]       # Print missing local binary install guidance; does not execute commands
 forge connectors run-plan [--domain NAME] [--json]  # Print free-first connector run guidance; does not execute commands
@@ -424,11 +425,16 @@ docker compose -f docker/docker-compose.yml --profile autostart up -d
 
 The `forge-guarded-autostart` service runs once per Compose start with lower
 default caps (`FORGE_AUTOSTART_CPUS=0.25`,
-`FORGE_AUTOSTART_MEM_LIMIT=256m`), reads
+`FORGE_AUTOSTART_MEM_LIMIT=1024m`), reads
 `/app/imports/autostart.local.json`, and only writes through the mounted
-`imports/`, `reports/`, and `/data` paths. It still fails closed unless the
-local config, `FORGE_ROE_ID`, Docker health, resource gates, cooldown/backoff,
-and single-instance lock all pass.
+`imports/`, `reports/`, and `/data` paths. Local Go scanner binaries should be
+placed in ignored `tools/bin/` or mounted by setting
+`FORGE_HOST_CONNECTOR_BIN_DIR`; the container sees them at `/app/tools/bin`,
+which the self-heal probe checks before live startup. Docker health inside this
+container is delegated to Compose `depends_on` service health rather than a
+Docker socket probe. It still fails closed unless the local config,
+`FORGE_ROE_ID`, resource gates, cooldown/backoff, and single-instance lock all
+pass.
 
 On Windows, install the startup-safe task with:
 
@@ -835,7 +841,12 @@ Add `--profile autostart` when Docker itself should attempt the guarded
 autopilot loop at stack startup. The profile is separate from API/web/worker so
 ordinary Compose restarts do not create a crash loop, and the service still
 requires the local guarded-autostart gates before any live target import, resume,
-monitoring, or dashboard refresh is attempted.
+monitoring, or dashboard refresh is attempted. Set
+`FORGE_HOST_CONNECTOR_BIN_DIR` to your local ProjectDiscovery/Go binary
+directory, or copy those binaries into ignored `tools/bin/`, before expecting
+the Docker autostart gate to pass packaged-tool checks. In `/etc/forge/forge.env`
+for the systemd wrapper, set `COMPOSE_PROFILES=autostart` when Linux service
+startup should include that guarded one-shot profile.
 For Linux hosts, `docker/systemd/forge-compose.service` wraps the same compose
 file with a preflight `config --quiet` check and an `/etc/forge/forge.env`
 environment file. Install it only after `/opt/forge/docker/docker-compose.yml`

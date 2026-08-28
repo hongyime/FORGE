@@ -181,7 +181,7 @@ services:
     profiles: ["autostart"]
     restart: "no"
     cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"
-    mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-256m}"
+    mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-1024m}"
     command:
       - python
       - -m
@@ -190,6 +190,8 @@ services:
       - guarded-autostart
       - --config
       - /app/imports/autostart.local.json
+      - --docker-probe-mode
+      - compose-dependency
       - --apply
       - --json
     environment:
@@ -202,6 +204,7 @@ services:
       - forge-models:/home/forge/.cache/forge/models:ro
       - ../imports:/app/imports:rw
       - ../reports:/app/reports:rw
+      - ${FORGE_HOST_CONNECTOR_BIN_DIR:-../tools/bin}:/app/tools/bin:ro
     depends_on:
       postgres:
         condition: service_healthy

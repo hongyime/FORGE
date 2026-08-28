@@ -22,6 +22,7 @@ monitoring -> dashboard. Rehearse the full non-mutating loop with:
 
 ```text
 forge-autopilot.bat --dry-run --feed-build
+forge-autopilot.bat --apply --roe-id ROE-ID --feed-build
 ```
 
 Use `--feed-source all` for the full feed-build input set; this is the default.
@@ -104,9 +105,11 @@ docker compose -f docker/docker-compose.yml --profile autostart up -d
 
 The extra `forge-guarded-autostart` service runs once per Compose start with
 lower default caps (`FORGE_AUTOSTART_CPUS=0.25`,
-`FORGE_AUTOSTART_MEM_LIMIT=256m`) and still requires `FORGE_ROE_ID`, local
+`FORGE_AUTOSTART_MEM_LIMIT=1024m`) and still requires `FORGE_ROE_ID`, local
 `imports/autostart.local.json`, Docker/resource health, cooldown/backoff, and a
-free lock before live work.
+free lock before live work. It mounts ignored `tools/bin/` into
+`/app/tools/bin` by default; set `FORGE_HOST_CONNECTOR_BIN_DIR` if your
+ProjectDiscovery/Go binaries live somewhere else.
 
 Install the Windows startup hook with:
 

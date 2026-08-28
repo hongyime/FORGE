@@ -39,6 +39,7 @@ def test_self_heal_plan_is_plan_only_and_skips_docker_probe_by_default(tmp_path:
     }
     assert payload["commands"]["autopilot_dry_run"][1:3] == ["--dry-run", "--feed-build"]
     assert payload["commands"]["autopilot_dry_run"][-2:] == ["--feed-source", "all"]
+    assert payload["commands"]["autopilot_apply"][-1] == "--apply"
 
 
 def test_self_heal_plan_probe_reports_unhealthy_docker_services(
@@ -94,6 +95,48 @@ def test_self_heal_plan_probe_reports_unhealthy_docker_services(
     assert payload["docker_status"]["containers"][1]["service"] == "worker"
     assert "docker_compose_unhealthy" in payload["blockers"]
     assert payload["commands"]["docker_status"][-2:] == ["--format", "json"]
+    assert payload["commands"]["docker_autostart"][-4:] == [
+        "--profile",
+        "autostart",
+        "up",
+        "-d",
+    ]
+
+
+def test_self_heal_plan_can_delegate_docker_health_to_compose(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "gopls", "binary": "gopls.exe", "size_bytes": 1, "role": "developer"},),
+    )
+
+    payload = automation_self_heal_plan(
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+        min_free_memory_mb=1,
+        min_free_disk_gb=1,
+        probe_docker=True,
+        docker_probe_mode="compose-dependency",
+    )
+
+    assert payload["status"] == "ready"
+    assert payload["docker_status"] == {
+        "ok": True,
+        "probed": False,
+        "reason": "docker_health_delegated_to_compose_dependency",
+    }
+
+
+def test_cgroup_memory_limit_reduces_reported_free_memory(tmp_path: Path) -> None:
+    cgroup = tmp_path / "sys" / "fs" / "cgroup"
+    cgroup.mkdir(parents=True)
+    (cgroup / "memory.max").write_text(str(1024 * 1024 * 1024), encoding="utf-8")
+    (cgroup / "memory.current").write_text(str(768 * 1024 * 1024), encoding="utf-8")
+
+    assert self_heal._cgroup_available_memory_mb(cgroup) == 256
 
 
 def test_self_heal_plan_finds_packaged_go_tools(tmp_path: Path, monkeypatch) -> None:
@@ -383,7 +426,7 @@ def test_guarded_autostart_apply_requires_roe_id_env(tmp_path: Path, monkeypatch
     )
     monkeypatch.setattr(
         "forge.automation_self_heal._docker_status",
-        lambda _root, *, probe: {
+        lambda _root, *, probe, mode="host_compose": {
             "ok": True,
             "probed": probe,
             "reason": "docker_compose_ps_ok",
@@ -449,7 +492,7 @@ def test_guarded_autostart_lock_race_returns_blocked_json(
     )
     monkeypatch.setattr(
         "forge.automation_self_heal._docker_status",
-        lambda _root, *, probe: {
+        lambda _root, *, probe, mode="host_compose": {
             "ok": True,
             "probed": probe,
             "reason": "docker_compose_ps_ok",
@@ -505,7 +548,7 @@ def test_guarded_autostart_replaces_stale_dead_pid_lock(
     )
     monkeypatch.setattr(
         "forge.automation_self_heal._docker_status",
-        lambda _root, *, probe: {
+        lambda _root, *, probe, mode="host_compose": {
             "ok": True,
             "probed": probe,
             "reason": "docker_compose_ps_ok",
@@ -588,7 +631,7 @@ def test_guarded_autostart_apply_runs_dry_run_then_live_and_writes_state(
     monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
     monkeypatch.setattr(
         "forge.automation_self_heal._docker_status",
-        lambda _root, *, probe: {
+        lambda _root, *, probe, mode="host_compose": {
             "ok": True,
             "probed": probe,
             "reason": "docker_compose_ps_ok",
@@ -616,7 +659,9 @@ def test_guarded_autostart_apply_runs_dry_run_then_live_and_writes_state(
     assert payload["autopilot_timeout_seconds"] == 35 * 60
     assert len(calls) == 2
     assert "--dry-run" in calls[0]
+    assert "--apply" not in calls[0]
     assert "--roe-id" in calls[1]
+    assert "--apply" in calls[1]
     assert not Path(payload["lock_file"]).exists()
     state = json.loads(Path(payload["state_file"]).read_text(encoding="utf-8"))
     assert state["last_status"] == "completed"
@@ -661,7 +706,7 @@ def test_guarded_autostart_apply_writes_bounded_redacted_log(
     )
     monkeypatch.setattr(
         "forge.automation_self_heal._docker_status",
-        lambda _root, *, probe: {
+        lambda _root, *, probe, mode="host_compose": {
             "ok": True,
             "probed": probe,
             "reason": "docker_compose_ps_ok",

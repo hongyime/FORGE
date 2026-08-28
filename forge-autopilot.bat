@@ -13,6 +13,7 @@ REM    --resume-limit 100 --max-parallel 6 --monitor-limit 50
 REM
 REM  Useful flags:
 REM    --dry-run
+REM    --apply
 REM    --feed-file PATH
 REM    --roe-id ROE-ID
 REM    --feed-source all|db|reports|cti|connectors|supabase
@@ -50,7 +51,7 @@ set "MAX_RUNTIME_MINUTES=25"
 set "RESUME_LIMIT=100"
 set "MAX_PARALLEL=6"
 set "MONITOR_LIMIT=50"
-set "DRY_RUN=0"
+set "DRY_RUN=1"
 set "FEED_BUILD=1"
 set "FEED_SOURCE_LABEL=all"
 set "FEED_SOURCE_ARGS=--source all"
@@ -63,6 +64,7 @@ set "SKIP_DASHBOARD=0"
 :parse_args
 if "%~1"=="" goto parsed_args
 if /i "%~1"=="--dry-run" set "DRY_RUN=1" & shift & goto parse_args
+if /i "%~1"=="--apply" set "DRY_RUN=0" & shift & goto parse_args
 if /i "%~1"=="--feed-build" set "FEED_BUILD=1" & shift & goto parse_args
 if /i "%~1"=="--skip-feed-build" set "FEED_BUILD=0" & shift & goto parse_args
 if /i "%~1"=="--feed-source" (
@@ -102,7 +104,7 @@ goto usage
 
 :usage_ok
 echo Usage:
-echo   forge-autopilot.bat [--dry-run] [--feed-file PATH] [--roe-id ROE-ID]
+echo   forge-autopilot.bat [--dry-run] [--apply] [--feed-file PATH] [--roe-id ROE-ID]
 echo                       [--limit N] [--start-limit N] [--max-parallel N]
 echo                       [--feed-build] [--skip-feed-build] [--feed-source SOURCE]
 echo                       [--skip-import] [--skip-resume]
@@ -111,7 +113,7 @@ exit /b 0
 
 :usage
 echo Usage:
-echo   forge-autopilot.bat [--dry-run] [--feed-file PATH] [--roe-id ROE-ID]
+echo   forge-autopilot.bat [--dry-run] [--apply] [--feed-file PATH] [--roe-id ROE-ID]
 echo                       [--limit N] [--start-limit N] [--max-parallel N]
 echo                       [--feed-build] [--skip-feed-build] [--feed-source SOURCE]
 echo                       [--skip-import] [--skip-resume]
@@ -144,7 +146,13 @@ if "%DRY_RUN%"=="1" (
 ) else (
     "%PYTHON%" -m forge.cli automation feed-build --output "%FEED_FILE%" %FEED_SOURCE_ARGS% --apply --json
 )
-if errorlevel 1 set "EXIT_CODE=%errorlevel%"
+if errorlevel 1 (
+    set "EXIT_CODE=%errorlevel%"
+    if not "%DRY_RUN%"=="1" (
+        echo [FEED] failed in apply mode; stopping before stale feed import/resume/monitoring.
+        exit /b !EXIT_CODE!
+    )
+)
 
 :import_phase
 if "%SKIP_IMPORT%"=="1" goto resume_phase
