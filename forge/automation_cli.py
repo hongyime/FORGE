@@ -8,11 +8,13 @@ from rich.console import Console
 from rich.table import Table
 
 from forge.automation_policy import (
+    automation_defaults_review,
     automation_run_plan,
     command_surface_review,
     forge_automation_policy,
 )
 from forge.automation_self_heal import (
+    DEFAULT_AUTOSTART_CONFIG,
     DEFAULT_AUTOSTART_CONFIG_PATH,
     automation_self_heal_plan,
     run_guarded_autostart,
@@ -71,6 +73,22 @@ def register_automation_commands(app: typer.Typer) -> None:
         )
         for item in payload["recommendations"]:
             console.print(f"- {item['priority']}: {item['recommendation']}")
+
+    @app.command("defaults")
+    def defaults(
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        payload = automation_defaults_review(
+            autostart_defaults=DEFAULT_AUTOSTART_CONFIG,
+            autostart_config_path=str(DEFAULT_AUTOSTART_CONFIG_PATH),
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, sort_keys=True))
+            return
+        console.print("[bold]Automation defaults[/bold]")
+        console.print(f"autostart_config={payload['autostart']['config_path']}")
+        for item in payload["tunables"]:
+            console.print(f"- {item['id']}: default={item.get('default')}")
 
     @app.command("feed-build")
     def feed_build(

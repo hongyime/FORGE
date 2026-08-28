@@ -8,10 +8,12 @@ from typer.testing import CliRunner
 from forge.automation_cli import register_automation_commands
 from forge.automation_policy import (
     approved_local_path,
+    automation_defaults_review,
     automation_run_plan,
     command_surface_review,
     forge_automation_policy,
 )
+from forge.automation_self_heal import DEFAULT_AUTOSTART_CONFIG
 
 
 def test_operator_automation_policy_captures_requested_defaults() -> None:
@@ -88,6 +90,7 @@ def test_automation_command_review_reports_pressure_and_recommendations() -> Non
     assert payload["command_count"] >= 50
     daily = {item["id"]: item for item in payload["daily_use_layer"]}
     assert {
+        "automation_defaults",
         "automation",
         "doctor",
         "targets_resume",
@@ -98,6 +101,31 @@ def test_automation_command_review_reports_pressure_and_recommendations() -> Non
     assert daily["automation"]["base_command"] == "forge automation feed-build"
     assert daily["doctor"]["documentation_status"] == "documented"
     assert payload["recommendations"]
+
+
+def test_automation_defaults_review_exposes_tunable_free_first_options() -> None:
+    payload = automation_defaults_review(
+        autostart_defaults=DEFAULT_AUTOSTART_CONFIG,
+        autostart_config_path="imports/autostart.local.json",
+    )
+
+    assert payload["schema_version"] == "forge.automation_defaults_review.v1"
+    assert payload["execution_policy"] == "read_only_defaults_no_config_written"
+    assert payload["safety"]["paid_backends_default"] == "disabled"
+    assert payload["autostart"]["local_config_template"]["enabled"] is False
+    assert payload["autostart"]["local_config_template"]["apply_enabled"] is False
+    assert payload["autostart"]["presets"]["conservative"]["max_parallel"] == 1
+    assert payload["autostart"]["presets"]["aggressive"]["max_parallel"] == 4
+    tunables = {item["id"]: item for item in payload["tunables"]}
+    assert {
+        "startup_profile",
+        "memory_gate",
+        "autostart_cadence",
+        "log_retention",
+        "feed_sources",
+        "openrouter_mode",
+    }.issubset(tunables)
+    assert tunables["openrouter_mode"]["default"] == "free_only"
 
 
 def test_automation_cli_json_commands() -> None:
@@ -122,3 +150,9 @@ def test_automation_cli_json_commands() -> None:
     review_payload = json.loads(review_result.output)
     assert review_payload["command_count"] >= 50
     assert review_payload["daily_use_layer"]
+
+    defaults_result = runner.invoke(app, ["automation", "defaults", "--json"])
+    assert defaults_result.exit_code == 0, defaults_result.output
+    defaults_payload = json.loads(defaults_result.output)
+    assert defaults_payload["schema_version"] == "forge.automation_defaults_review.v1"
+    assert defaults_payload["autostart"]["config_path"] == "imports\\autostart.local.json"

@@ -30,6 +30,7 @@ Use `--skip-feed-build` to keep the older behavior of consuming only an existing
 ```text
 forge automation feed-build --json
 forge automation feed-build --apply --json
+forge automation defaults --json
 forge automation self-heal-plan --json
 forge automation guarded-autostart --json
 forge automation command-review --json

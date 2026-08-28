@@ -264,6 +264,7 @@ forge active-validation preview|create|approve|run|list|methods|coverage
 forge automation policy [--json]          # Show the operator-approved wildcard automation policy defaults
 forge automation run [--apply] [--json]   # Emit the automation execution plan; records apply intent without launching live actions
 forge automation command-review [--json]  # Read-only command count and consolidation review
+forge automation defaults [--json]        # Read-only tunable defaults, presets, and disabled local config template
 forge automation feed-build [--output imports/target-feed.json] [--apply] [--json] [--source all|supabase|reports|db|cti|connectors] [--supabase-config PATH] [--limit N]
 forge automation self-heal-plan [--json] [--probe-docker] [--min-free-memory-mb N] [--min-free-disk-gb N] [--max-parallel N]
 forge automation guarded-autostart [--config imports/autostart.local.json] [--apply] [--json]
@@ -322,6 +323,13 @@ vars or a Forge connector-secret reference, never in committed files:
   ]
 }
 ```
+
+`forge automation defaults --json` exposes the operator-tunable defaults
+without writing files: automation policy defaults, the wildcard scope template,
+guarded-autostart defaults, conservative/current/aggressive startup presets,
+memory/cadence/log/feed/OpenRouter options, and a disabled local
+`imports/autostart.local.json` template. It returns secret variable names and
+placeholders only, never secret values.
 
 `forge automation self-heal-plan` is the read-only preflight for any future
 Docker/startup autopilot. It reports resource guardrails, Docker compose

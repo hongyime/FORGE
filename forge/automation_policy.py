@@ -10,7 +10,13 @@ from typing import Any
 SCHEMA_VERSION = "forge.automation_policy.v1"
 PLAN_SCHEMA_VERSION = "forge.automation_run_plan.v1"
 COMMAND_REVIEW_SCHEMA_VERSION = "forge.command_surface_review.v1"
+DEFAULTS_REVIEW_SCHEMA_VERSION = "forge.automation_defaults_review.v1"
 DAILY_USE_LAYER: tuple[dict[str, str], ...] = (
+    {
+        "id": "automation_defaults",
+        "command": "forge automation defaults --json",
+        "purpose": "Expose free-first defaults and operator-tunable startup/profile options.",
+    },
     {
         "id": "automation",
         "command": "forge automation feed-build --json",
@@ -124,6 +130,126 @@ def forge_automation_policy() -> dict[str, Any]:
         "automation_defaults": AUTOMATION_DEFAULTS,
         "scope_template": WILDCARD_SCOPE_TEMPLATE,
         "validation": validation,
+    }
+
+
+def automation_defaults_review(
+    *,
+    autostart_defaults: dict[str, Any],
+    autostart_config_path: str,
+) -> dict[str, Any]:
+    config_template = dict(autostart_defaults)
+    config_template["enabled"] = False
+    config_template["apply_enabled"] = False
+    presets = {
+        "conservative": {
+            "resume_limit": 5,
+            "max_parallel": 1,
+            "monitor_limit": 5,
+            "start_limit": 1,
+            "max_runtime_minutes": 5,
+            "min_free_memory_mb": 3072,
+            "cooldown_minutes": 120,
+            "failure_backoff_minutes": 240,
+        },
+        "current": {
+            key: autostart_defaults[key]
+            for key in (
+                "resume_limit",
+                "max_parallel",
+                "monitor_limit",
+                "start_limit",
+                "max_runtime_minutes",
+                "min_free_memory_mb",
+                "cooldown_minutes",
+                "failure_backoff_minutes",
+                "log_max_entries",
+            )
+        },
+        "aggressive": {
+            "resume_limit": 25,
+            "max_parallel": 4,
+            "monitor_limit": 25,
+            "start_limit": 5,
+            "max_runtime_minutes": 20,
+            "min_free_memory_mb": 2048,
+            "cooldown_minutes": 30,
+            "failure_backoff_minutes": 60,
+        },
+    }
+    tunables = [
+        {
+            "id": "startup_profile",
+            "default": "current",
+            "options": ["conservative", "current", "aggressive"],
+            "field_group": [
+                "resume_limit",
+                "max_parallel",
+                "monitor_limit",
+                "start_limit",
+                "max_runtime_minutes",
+            ],
+        },
+        {
+            "id": "memory_gate",
+            "default": autostart_defaults["min_free_memory_mb"],
+            "options": [1536, 2048, 3072, 4096],
+            "field": "min_free_memory_mb",
+        },
+        {
+            "id": "autostart_cadence",
+            "default": {
+                "cooldown_minutes": autostart_defaults["cooldown_minutes"],
+                "failure_backoff_minutes": autostart_defaults["failure_backoff_minutes"],
+            },
+            "field_group": ["cooldown_minutes", "failure_backoff_minutes"],
+        },
+        {
+            "id": "log_retention",
+            "default": autostart_defaults["log_max_entries"],
+            "options": [10, 25, 50, 100],
+            "field": "log_max_entries",
+        },
+        {
+            "id": "feed_sources",
+            "default": "all",
+            "options": ["all", "db,reports,cti,connectors", "db,connectors", "supabase"],
+            "command": "forge automation feed-build --source SOURCE --json",
+        },
+        {
+            "id": "openrouter_mode",
+            "default": "free_only",
+            "options": ["free_only", "paid_opt_in"],
+            "paid_opt_in_env": "FORGE_ALLOW_PAID_BACKENDS=1",
+        },
+    ]
+    return {
+        "schema_version": DEFAULTS_REVIEW_SCHEMA_VERSION,
+        "execution_policy": "read_only_defaults_no_config_written",
+        "total_count": len(tunables),
+        "selected_count": len(tunables),
+        "omitted_count": 0,
+        "automation_defaults": AUTOMATION_DEFAULTS,
+        "scope_template": WILDCARD_SCOPE_TEMPLATE,
+        "autostart": {
+            "config_path": autostart_config_path,
+            "defaults": dict(autostart_defaults),
+            "local_config_template": config_template,
+            "presets": presets,
+        },
+        "tunables": tunables,
+        "commands": {
+            "review": ["forge", "automation", "defaults", "--json"],
+            "autostart_dry_run": ["forge", "automation", "guarded-autostart", "--json"],
+            "self_heal": ["forge", "automation", "self-heal-plan", "--json"],
+            "feed_build": ["forge", "automation", "feed-build", "--json"],
+        },
+        "safety": {
+            "dry_run_default": True,
+            "autostart_template_disables_apply": True,
+            "paid_backends_default": "disabled",
+            "secret_values_returned": False,
+        },
     }
 
 
