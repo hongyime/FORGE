@@ -48,6 +48,11 @@ forge connectors import-validation --engagement N --connector burp_dast_xml --re
 
 Optional Supabase live extraction is read-only and uses ignored local config at
 `imports/supabase-projects.local.json`; put keys in env vars named by `key_env`.
+Local CTI feed extraction reads ignored JSON drops such as
+`imports/threatfox-observations.local.json`; filenames must contain
+`threatfox`, `urlhaus`, `misp`, `stix`, or `taxii`, and target-like values are
+harvested from keys such as `ioc`, `iocs`, `domains`, `urls`, `ips`, `emails`,
+and `targets`.
 Use `self-heal-plan` before any Docker/startup automation; it is read-only and
 checks resources, Docker readiness, packaged Go tools, locks, and the exact
 bounded autopilot commands. Use `guarded-autostart` for startup hooks; it stays

@@ -324,6 +324,13 @@ vars or a Forge connector-secret reference, never in committed files:
 }
 ```
 
+Local CTI feed extraction is also file-based. Drop JSON directly under
+`imports/` with a filename containing `threatfox`, `urlhaus`, `misp`, `stix`,
+or `taxii`; Forge harvests scoped target-like strings from keys such as `ioc`,
+`iocs`, `domains`, `urls`, `ips`, `emails`, `targets`, `seeds`, `host`, and
+`cloud_ref`. Keep local observation files ignored, for example
+`imports/threatfox-observations.local.json`.
+
 `forge automation defaults --json` exposes the operator-tunable defaults
 without writing files: automation policy defaults, the wildcard scope template,
 guarded-autostart defaults, conservative/current/aggressive startup presets,

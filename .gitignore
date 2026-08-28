@@ -36,6 +36,7 @@ reports/
 imports/target-feed.json
 imports/supabase-projects.local.json
 imports/autostart.local.json
+imports/*observations.local.json
 chunks/
 downloads/
 archive/

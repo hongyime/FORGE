@@ -200,6 +200,48 @@ def test_feed_build_missing_and_malformed_sources_fail_soft(tmp_path: Path) -> N
     assert "reports" in error_sources
 
 
+def test_feed_build_connector_source_ignores_local_config_files(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir(parents=True)
+    (imports_dir / "supabase-projects.local.json").write_text(
+        json.dumps(
+            {
+                "projects": [],
+                "_example_project": {
+                    "url": "https://abc123.supabase.co",
+                    "domain": "should-not-import.example",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (imports_dir / "autostart.local.json").write_text(
+        json.dumps({"feed_sources": ["all"], "target": "skip-autostart.example"}),
+        encoding="utf-8",
+    )
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"items": [{"target_value": "skip-existing.example"}]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "connector-output.json").write_text(
+        json.dumps({"targets": ["keep.example"]}),
+        encoding="utf-8",
+    )
+
+    payload = build_target_feed(
+        sources=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert payload["counts"]["by_source"]["connectors"] == 1
+    assert payload["items"][0]["canonical_value"] == "keep.example"
+    assert payload["items"][0]["source_group"] == "connector_file:connector-output.json"
+
+
 def test_feed_build_db_source_skips_master_sequence_db(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     _make_engagement_db(data_dir, 42, [("numeric.example", "domain")])

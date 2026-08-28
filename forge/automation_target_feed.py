@@ -97,6 +97,11 @@ _HARVEST_KEYS = {
 }
 
 _CTI_FILENAME_MARKERS = ("threatfox", "urlhaus", "misp", "stix", "taxii")
+_CONNECTOR_SOURCE_EXCLUDED_NAMES = {
+    "autostart.local.json",
+    "supabase-projects.local.json",
+    "target-feed.json",
+}
 
 
 @dataclass(frozen=True)
@@ -528,6 +533,13 @@ def _safe_supabase_identifier(value: str) -> bool:
     )
 
 
+def _is_connector_payload_filename(name: str) -> bool:
+    lowered = name.lower()
+    if lowered in _CONNECTOR_SOURCE_EXCLUDED_NAMES:
+        return False
+    return not any(marker in lowered for marker in _CTI_FILENAME_MARKERS)
+
+
 def _harvest_supabase_row(
     row: dict[str, Any],
     *,
@@ -680,9 +692,7 @@ def build_target_feed(
     if "connectors" in active_offline:
         found, errors = _extract_dir_source(
             connectors_dir or Path("imports"),
-            filename_filter=lambda name: not any(
-                m in name.lower() for m in _CTI_FILENAME_MARKERS
-            ),
+            filename_filter=_is_connector_payload_filename,
             source_kind="connector_output",
             provenance_prefix="connector_file:",
             first_seen_at=generated_at,
