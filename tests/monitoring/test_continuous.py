@@ -762,6 +762,7 @@ def test_run_due_monitoring_for_data_dir_scans_numeric_engagement_dbs(tmp_path: 
     )
 
     assert result["db_count"] == 2
+    assert result["status"] == "completed"
     assert result["engagement_count"] == 2
     assert result["run_count"] == 1
     assert result["change_count"] == 1
@@ -795,6 +796,7 @@ def test_run_due_monitoring_for_data_dir_limits_mutating_backlog(tmp_path: Path)
     assert result["db_count"] == 3
     assert result["due_count"] == 3
     assert result["schema_version"] == "forge.monitoring.run_due.v1"
+    assert result["status"] == "completed"
     assert result["total_due_count"] == 3
     assert result["total_count"] == 3
     assert result["run_count"] == 2
@@ -860,6 +862,7 @@ def test_run_due_monitoring_for_data_dir_dry_run_is_read_only(tmp_path: Path) ->
     assert result["result_schema_version"] == "forge.monitoring.run_due.v1"
     assert result["schema_version"] == "forge.monitoring.run_due.v1"
     assert result["execution_policy"] == "dry_run_no_monitoring_executed"
+    assert result["status"] == "dry_run"
     assert result["dry_run"] is True
     assert result["due_count"] == 1
     assert result["total_due_count"] == 1
@@ -886,6 +889,24 @@ def test_run_due_monitoring_for_data_dir_dry_run_is_read_only(tmp_path: Path) ->
     assert after_snapshots == before_snapshots
     assert after_due_audit == before_due_audit
     assert after_next_run == before_next_run
+
+
+def test_run_due_monitoring_for_data_dir_reports_idle_status(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    db_path = _build_runner_db(data_dir, 1001, "app.acme.example")
+    _seed_due_policy(db_path, 1001, due=False)
+
+    result = run_due_monitoring_for_data_dir(
+        data_dir,
+        now="2026-07-09T10:00:00Z",
+        operator="scheduler",
+        dry_run=True,
+    )
+
+    assert result["status"] == "idle"
+    assert result["due_count"] == 0
+    assert result["selected_count"] == 0
+    assert result["errors"] == []
 
 
 def test_run_due_monitoring_for_data_dir_passes_refresh_callback_before_diff(

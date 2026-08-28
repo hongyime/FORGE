@@ -844,6 +844,12 @@ def run_due_monitoring_for_data_dir(
             "result_schema_version": "forge.monitoring.run_due.v1",
             "schema_version": "forge.monitoring.run_due.v1",
             "execution_policy": "dry_run_no_monitoring_executed",
+            "status": _run_due_status(
+                dry_run=True,
+                due_count=due_count,
+                selected_count=planned_count,
+                errors=plan.get("errors") or [],
+            ),
             "dry_run": True,
             "data_dir": str(data_dir.resolve()),
             "observed_at": plan.get("observed_at"),
@@ -905,6 +911,12 @@ def run_due_monitoring_for_data_dir(
         "result_schema_version": "forge.monitoring.run_due.v1",
         "schema_version": "forge.monitoring.run_due.v1",
         "execution_policy": "executes_due_monitoring_policies",
+        "status": _run_due_status(
+            dry_run=False,
+            due_count=int(totals["due_count"]),
+            selected_count=int(totals["run_count"]),
+            errors=errors,
+        ),
         "dry_run": False,
         **totals,
         **_run_due_count_aliases(
@@ -916,6 +928,24 @@ def run_due_monitoring_for_data_dir(
         "db_results": db_results,
         "errors": errors,
     }
+
+
+def _run_due_status(
+    *,
+    dry_run: bool,
+    due_count: int,
+    selected_count: int,
+    errors: list[Any],
+) -> str:
+    if errors and int(selected_count) <= 0:
+        return "failed"
+    if errors:
+        return "completed_with_errors"
+    if int(due_count) <= 0:
+        return "idle"
+    if dry_run:
+        return "dry_run"
+    return "completed"
 
 
 def _run_due_count_aliases(

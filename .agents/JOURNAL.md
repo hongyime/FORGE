@@ -224,3 +224,4 @@
 - 2026-08-29: B721 defaults ThreatFox CTI refresh to `FORGE_THREATFOX_AUTH_KEY` and documents it as free/keyed, matching abuse.ch's Auth-Key requirement without storing secrets.
 - 2026-08-29: B722 exposes CTI refresh readiness in automation status/cycle so startup operators can see the free-key gate and safe refresh command without live network or writes.
 - 2026-08-29: B723 exposes Supabase sync readiness in automation status/cycle from local project_ref/key_env config only, preserving explicit owned-project gating and no network reads during status.
+- 2026-08-29: B724 adds monitoring run-due status labels so valid dry-runs and scheduler outcomes no longer serialize as `status=null`.
