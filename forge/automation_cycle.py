@@ -72,9 +72,10 @@ def automation_status(
     root_imports = Path(imports_dir or "imports")
     feed_path = Path(output or root_imports / "target-feed.json")
     cfg_data_dir = data_dir or ForgeConfig.load().data_dir
+    autostart_config_path = root_imports / "autostart.local.json"
     effective_engagement = _resolve_default_engagement(
         explicit=engagement,
-        autostart_config=None,
+        autostart_config=autostart_config_path,
     )
     queue_items = _load_queue_items(root_imports)
     ready_items, blocked_items, ignored_items = _classify_queue_items(
@@ -90,7 +91,7 @@ def automation_status(
             "imports_dir": str(root_imports),
             "target_feed": str(feed_path),
             "data_dir": str(cfg_data_dir),
-            "autostart_config": str(DEFAULT_AUTOSTART_CONFIG_PATH),
+            "autostart_config": str(autostart_config_path),
         },
         "feed": {
             "exists": feed_path.is_file(),

@@ -190,3 +190,4 @@
 - 2026-08-29: B689 changed Supabase feed extraction to harvest REST pages incrementally and use key hints so all-column rows preserve bare usernames as canonical username targets.
 - 2026-08-29: B690 made OpenRouter free-only discovery request newest models and accept only capable numerically zero-priced free model families when paid backends are disabled.
 - 2026-08-29: B691 made self-heal/defaults command plans prefer `automation cycle` for startup/daily operation and leave direct guarded-autostart as a lower-level probe.
+- 2026-08-29: B692 made `automation status` resolve default engagement from local autostart config, matching `automation cycle`, and set ignored local autostart engagement to existing local engagement 1001.

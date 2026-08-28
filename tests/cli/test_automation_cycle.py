@@ -118,6 +118,34 @@ def test_automation_status_uses_default_engagement_env_for_queue_readiness(
     assert payload["ready_inputs"][0]["engagement_id"] == 1001
 
 
+def test_automation_status_uses_autostart_engagement_for_queue_readiness(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "autostart.local.json").write_text(
+        json.dumps({"engagement_id": 1002}),
+        encoding="utf-8",
+    )
+    (imports_dir / "urlhaus.json").write_text(
+        json.dumps({"urls": ["https://queued.example/path"]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "urlhaus-inputs.local.json").write_text(
+        json.dumps({"inputs": [{"value": "urlhaus.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_DEFAULT_ENGAGEMENT_ID", raising=False)
+
+    payload = automation_status(imports_dir=imports_dir)
+
+    assert payload["paths"]["autostart_config"] == str(imports_dir / "autostart.local.json")
+    assert payload["engagement"]["effective"] == 1002
+    assert payload["queues"]["ready"] == 1
+    assert payload["ready_inputs"][0]["engagement_id"] == 1002
+
+
 def test_automation_status_summarizes_existing_target_feed_scanability(
     tmp_path: Path,
 ) -> None:
