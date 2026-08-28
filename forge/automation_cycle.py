@@ -114,7 +114,10 @@ def automation_status(
             feed_path=feed_path,
             min_start_source_count=min_start_source_count,
         ),
-        "autostart_history": _autostart_history_summary(data_dir=Path(cfg_data_dir)),
+        "autostart_history": _autostart_history_summary(
+            data_dir=Path(cfg_data_dir),
+            autostart_config=autostart_config_path,
+        ),
         "resume_backlog": _resume_backlog_summary(data_dir=Path(cfg_data_dir)),
         "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
         "report_review": _report_review_summary(reports_dir=reports_dir or Path("reports")),
@@ -255,7 +258,10 @@ def automation_cycle(
             feed_payload=feed_payload,
             min_start_source_count=min_start_source_count,
         ),
-        "autostart_history": _autostart_history_summary(data_dir=Path(cfg_data_dir)),
+        "autostart_history": _autostart_history_summary(
+            data_dir=Path(cfg_data_dir),
+            autostart_config=selected_autostart_config,
+        ),
         "resume_backlog": _resume_backlog_summary(data_dir=Path(cfg_data_dir)),
         "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
         "report_review": _report_review_summary(reports_dir=reports_dir or Path("reports")),
@@ -539,7 +545,12 @@ def _report_review_summary(*, reports_dir: Path) -> dict[str, Any]:
     }
 
 
-def _autostart_history_summary(*, data_dir: Path, max_entries: int = 25) -> dict[str, Any]:
+def _autostart_history_summary(
+    *,
+    data_dir: Path,
+    autostart_config: Path | None,
+    max_entries: int = 25,
+) -> dict[str, Any]:
     state_dir = Path(data_dir) / "automation"
     state_file = state_dir / "guarded-autostart-state.json"
     log_file = state_dir / "guarded-autostart.jsonl"
@@ -562,13 +573,17 @@ def _autostart_history_summary(*, data_dir: Path, max_entries: int = 25) -> dict
     last_started_at = str(state.get("last_started_at") or "")
     last_failed_at = str(state.get("last_failed_at") or "")
     last_status = str(state.get("last_status") or "")
+    failure_backoff_minutes = _autostart_failure_backoff_minutes(autostart_config)
     return {
         "execution_policy": "read_only_autostart_history_no_commands_executed",
         "status": _autostart_history_status(
             state=state,
             entries=entries,
             unreadable_count=unreadable_count,
+            now=datetime.now(timezone.utc),
+            failure_backoff_minutes=failure_backoff_minutes,
         ),
+        "failure_backoff_minutes": failure_backoff_minutes,
         "state_exists": state_file.is_file(),
         "log_exists": log_file.is_file(),
         "state_ref": state_file.name,
@@ -598,15 +613,23 @@ def _autostart_history_status(
     state: dict[str, Any],
     entries: list[dict[str, Any]],
     unreadable_count: int,
+    now: datetime,
+    failure_backoff_minutes: int,
 ) -> str:
     if unreadable_count:
         return "log_attention"
     last_status = str(state.get("last_status") or "")
+    last_failed = _parse_iso(str(state.get("last_failed_at") or ""))
     if last_status in {"failed", "dry_run_failed"}:
+        if last_failed and now - last_failed > timedelta(minutes=failure_backoff_minutes):
+            return "historical_failure"
         return "recent_failure"
     if entries:
         last_entry_status = str(entries[-1].get("status") or "")
         if last_entry_status == "failed":
+            last_recorded = _parse_iso(str(entries[-1].get("recorded_at") or ""))
+            if last_recorded and now - last_recorded > timedelta(minutes=failure_backoff_minutes):
+                return "historical_failure"
             return "recent_failure"
         if last_entry_status == "blocked":
             return "recent_blocked"
@@ -615,6 +638,12 @@ def _autostart_history_status(
     if state:
         return "state_present"
     return "empty"
+
+
+def _autostart_failure_backoff_minutes(path: Path | None) -> int:
+    payload = _read_json_object(path) if path is not None and Path(path).is_file() else {}
+    value = _safe_int(payload.get("failure_backoff_minutes"), default=120)
+    return max(0, min(value, 2880))
 
 
 def _autostart_history_next_actions(

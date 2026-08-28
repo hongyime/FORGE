@@ -511,6 +511,12 @@ def test_automation_status_summarizes_report_review_without_mutating(
 
 
 def test_automation_status_summarizes_autostart_history(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "autostart.local.json").write_text(
+        json.dumps({"failure_backoff_minutes": 2880}),
+        encoding="utf-8",
+    )
     data_dir = tmp_path / "data"
     state_dir = data_dir / "automation"
     state_dir.mkdir(parents=True)
@@ -550,14 +556,15 @@ def test_automation_status_summarizes_autostart_history(tmp_path: Path) -> None:
     )
 
     payload = automation_status(
-        imports_dir=tmp_path / "imports",
-        output=tmp_path / "imports" / "target-feed.json",
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
         data_dir=data_dir,
     )
 
     history = payload["autostart_history"]
     assert history["execution_policy"] == "read_only_autostart_history_no_commands_executed"
     assert history["status"] == "recent_failure"
+    assert history["failure_backoff_minutes"] == 2880
     assert history["state_exists"] is True
     assert history["log_exists"] is True
     assert history["state_ref"] == "guarded-autostart-state.json"
@@ -573,6 +580,38 @@ def test_automation_status_summarizes_autostart_history(tmp_path: Path) -> None:
     assert history["last_recorded_status"] == "failed"
     assert history["last_recorded_blockers"] == ["failure_backoff_active"]
     assert history["next_actions"] == [["forge", "automation", "self-heal-plan", "--json"]]
+
+
+def test_automation_status_autostart_history_ages_out_old_failures(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "autostart.local.json").write_text(
+        json.dumps({"failure_backoff_minutes": 1}),
+        encoding="utf-8",
+    )
+    data_dir = tmp_path / "data"
+    state_dir = data_dir / "automation"
+    state_dir.mkdir(parents=True)
+    (state_dir / "guarded-autostart-state.json").write_text(
+        json.dumps(
+            {
+                "last_failed_at": "2026-01-01T00:00:00+00:00",
+                "last_status": "failed",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=data_dir,
+    )
+
+    assert payload["autostart_history"]["status"] == "historical_failure"
+    assert payload["autostart_history"]["failure_backoff_minutes"] == 1
 
 
 def test_automation_status_autostart_history_flags_unreadable_log(
