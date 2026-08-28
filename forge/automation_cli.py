@@ -463,7 +463,7 @@ def register_automation_commands(app: typer.Typer) -> None:
         provider: str = typer.Option(
             "threatfox",
             "--provider",
-            help="Public no-key CTI provider to refresh. Currently: threatfox.",
+            help="Public/free CTI provider to refresh. Currently: threatfox.",
         ),
         imports_dir: Path = typer.Option(
             Path("imports"),
@@ -493,7 +493,7 @@ def register_automation_commands(app: typer.Typer) -> None:
         key_env: str = typer.Option(
             "",
             "--key-env",
-            help="Environment variable holding a free abuse.ch Auth-Key for --apply.",
+            help="Environment variable holding a free abuse.ch Auth-Key for --apply. Defaults to FORGE_THREATFOX_AUTH_KEY.",
         ),
         apply: bool = typer.Option(
             False,

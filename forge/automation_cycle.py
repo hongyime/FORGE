@@ -67,6 +67,7 @@ QUEUE_RETRY_MAX_SECONDS = 6 * 60 * 60
 DEFAULT_ENGAGEMENT_ENV = "FORGE_DEFAULT_ENGAGEMENT_ID"
 THREATFOX_RECENT_IOCS_URL = "https://threatfox-api.abuse.ch/api/v1/"
 THREATFOX_REFRESH_FILENAME = "threatfox-observations.local.json"
+DEFAULT_THREATFOX_KEY_ENV = "FORGE_THREATFOX_AUTH_KEY"
 
 
 def automation_status(
@@ -801,21 +802,19 @@ def refresh_public_cti_input(
             "source_url": THREATFOX_RECENT_IOCS_URL,
             "days": safe_days,
             "limit": safe_limit,
-            "key_env": str(key_env or "").strip(),
+            "key_env": _selected_threatfox_key_env(key_env),
             "requires_key_env": True,
             "artifact_path": str(artifact),
             "downloaded_count": 0,
             "written": False,
             "queue_update": queue_preview,
             "next_action": (
-                "Set a free abuse.ch Auth-Key in a local environment variable, then run "
-                "forge automation cti-refresh --provider threatfox --key-env ENV --apply --json."
+                f"Set a free abuse.ch Auth-Key in {DEFAULT_THREATFOX_KEY_ENV}, then run "
+                "forge automation cti-refresh --provider threatfox --apply --json."
             ),
         }
 
-    auth_key_env = str(key_env or "").strip()
-    if not auth_key_env:
-        raise ValueError("key_env_required_for_threatfox_apply")
+    auth_key_env = _selected_threatfox_key_env(key_env)
     if not _env_var_name_valid(auth_key_env):
         raise ValueError("key_env_must_be_env_var_name_not_key_value")
     auth_key = os.environ.get(auth_key_env, "").strip()
@@ -881,6 +880,10 @@ def refresh_public_cti_input(
         "queue_update": queue_update,
         "next_action": "Run forge automation cycle --apply --source all --json.",
     }
+
+
+def _selected_threatfox_key_env(key_env: str) -> str:
+    return str(key_env or "").strip() or DEFAULT_THREATFOX_KEY_ENV
 
 
 def _fetch_threatfox_recent_iocs(*, days: int, auth_key: str) -> dict[str, Any]:
