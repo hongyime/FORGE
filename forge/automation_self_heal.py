@@ -48,6 +48,7 @@ DEFAULT_AUTOSTART_CONFIG: dict[str, Any] = {
     "cooldown_minutes": 60,
     "failure_backoff_minutes": 120,
     "log_max_entries": 25,
+    "feed_sources": ["all"],
 }
 
 
@@ -89,6 +90,8 @@ def automation_self_heal_plan(
             str(max(1, min(int(max_parallel or 1), 4))),
             "--monitor-limit",
             "10",
+            "--feed-source",
+            "all",
         ],
         "autopilot_apply": [
             "forge-autopilot.bat" if os.name == "nt" else "./forge-autopilot.sh",
@@ -102,6 +105,8 @@ def automation_self_heal_plan(
             str(max(1, min(int(max_parallel or 1), 4))),
             "--monitor-limit",
             "10",
+            "--feed-source",
+            "all",
         ],
         "docker_status": [
             "docker",
@@ -360,10 +365,30 @@ def _validate_autostart_config(config: dict[str, Any]) -> list[str]:
         if not isinstance(config[key], bool):
             errors.append(f"autostart_config_invalid_bool:{key}")
             config[key] = False
+    config["feed_sources"] = _validated_feed_sources(config.get("feed_sources"), errors)
     config["roe_id_env"] = str(config.get("roe_id_env") or "FORGE_ROE_ID").strip()
     if not config["roe_id_env"]:
         errors.append("autostart_config_invalid:roe_id_env")
     return errors
+
+
+def _validated_feed_sources(value: Any, errors: list[str]) -> list[str]:
+    allowed = {"all", "supabase", "reports", "db", "cti", "connectors"}
+    if isinstance(value, str):
+        raw_values = [item.strip().lower() for item in value.split(",")]
+    elif isinstance(value, list):
+        raw_values = [str(item or "").strip().lower() for item in value]
+    else:
+        errors.append("autostart_config_invalid:feed_sources")
+        return ["all"]
+    sources = [item for item in raw_values if item]
+    if not sources or any(item not in allowed for item in sources):
+        errors.append("autostart_config_invalid:feed_sources")
+        return ["all"]
+    if "all" in sources and len(sources) > 1:
+        errors.append("autostart_config_invalid:feed_sources")
+        return ["all"]
+    return sources
 
 
 def _guarded_autostart_commands(root: Path, config: dict[str, Any]) -> dict[str, list[str]]:
@@ -382,6 +407,8 @@ def _guarded_autostart_commands(root: Path, config: dict[str, Any]) -> dict[str,
         "--max-runtime-minutes",
         str(config["max_runtime_minutes"]),
     ]
+    for source in config["feed_sources"]:
+        base.extend(["--feed-source", str(source)])
     apply_cmd = [*base, "--feed-file", str(root / "imports" / "target-feed.json")]
     apply_cmd.extend(["--roe-id", f"${config['roe_id_env']}"])
     return {

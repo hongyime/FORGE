@@ -377,7 +377,8 @@ Minimal local autostart config:
   "max_runtime_minutes": 10,
   "cooldown_minutes": 60,
   "failure_backoff_minutes": 120,
-  "log_max_entries": 25
+  "log_max_entries": 25,
+  "feed_sources": ["all"]
 }
 ```
 

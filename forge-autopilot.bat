@@ -15,11 +15,12 @@ REM  Useful flags:
 REM    --dry-run
 REM    --feed-file PATH
 REM    --roe-id ROE-ID
+REM    --feed-source all|db|reports|cti|connectors|supabase
 REM    --feed-build --skip-feed-build
 REM    --skip-import --skip-resume --skip-monitoring --skip-dashboard
 REM ============================================================================
 
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
 set "PYTHON=.venv\Scripts\python.exe"
@@ -43,6 +44,9 @@ set "MAX_PARALLEL=6"
 set "MONITOR_LIMIT=50"
 set "DRY_RUN=0"
 set "FEED_BUILD=1"
+set "FEED_SOURCE_LABEL=all"
+set "FEED_SOURCE_ARGS=--source all"
+set "FEED_SOURCE_SET=0"
 set "SKIP_IMPORT=0"
 set "SKIP_RESUME=0"
 set "SKIP_MONITORING=0"
@@ -53,6 +57,24 @@ if "%~1"=="" goto parsed_args
 if /i "%~1"=="--dry-run" set "DRY_RUN=1" & shift & goto parse_args
 if /i "%~1"=="--feed-build" set "FEED_BUILD=1" & shift & goto parse_args
 if /i "%~1"=="--skip-feed-build" set "FEED_BUILD=0" & shift & goto parse_args
+if /i "%~1"=="--feed-source" (
+    if "%~2"=="" goto usage
+    call :validate_feed_source "%~2" || goto usage
+    if "!FEED_SOURCE_SET!"=="0" (
+        set "FEED_SOURCE_LABEL="
+        set "FEED_SOURCE_ARGS="
+        set "FEED_SOURCE_SET=1"
+    )
+    if "!FEED_SOURCE_LABEL!"=="" (
+        set "FEED_SOURCE_LABEL=%~2"
+    ) else (
+        set "FEED_SOURCE_LABEL=!FEED_SOURCE_LABEL!,%~2"
+    )
+    set "FEED_SOURCE_ARGS=!FEED_SOURCE_ARGS! --source %~2"
+    shift
+    shift
+    goto parse_args
+)
 if /i "%~1"=="--skip-import" set "SKIP_IMPORT=1" & shift & goto parse_args
 if /i "%~1"=="--skip-resume" set "SKIP_RESUME=1" & shift & goto parse_args
 if /i "%~1"=="--skip-monitoring" set "SKIP_MONITORING=1" & shift & goto parse_args
@@ -74,7 +96,7 @@ goto usage
 echo Usage:
 echo   forge-autopilot.bat [--dry-run] [--feed-file PATH] [--roe-id ROE-ID]
 echo                       [--limit N] [--start-limit N] [--max-parallel N]
-echo                       [--feed-build] [--skip-feed-build]
+echo                       [--feed-build] [--skip-feed-build] [--feed-source SOURCE]
 echo                       [--skip-import] [--skip-resume]
 echo                       [--skip-monitoring] [--skip-dashboard]
 exit /b 0
@@ -83,7 +105,7 @@ exit /b 0
 echo Usage:
 echo   forge-autopilot.bat [--dry-run] [--feed-file PATH] [--roe-id ROE-ID]
 echo                       [--limit N] [--start-limit N] [--max-parallel N]
-echo                       [--feed-build] [--skip-feed-build]
+echo                       [--feed-build] [--skip-feed-build] [--feed-source SOURCE]
 echo                       [--skip-import] [--skip-resume]
 echo                       [--skip-monitoring] [--skip-dashboard]
 exit /b 2
@@ -102,6 +124,7 @@ if "%ROE_ID%"=="" (
     echo   roe_id_present=yes
 )
 echo   dry_run=%DRY_RUN% feed_build=%FEED_BUILD%
+echo   feed_source=%FEED_SOURCE_LABEL%
 echo   start_limit=%START_LIMIT% resume_limit=%RESUME_LIMIT% max_parallel=%MAX_PARALLEL%
 echo.
 
@@ -109,9 +132,9 @@ echo.
 if "%FEED_BUILD%"=="0" goto import_phase
 echo [FEED] building target feed...
 if "%DRY_RUN%"=="1" (
-    "%PYTHON%" -m forge.cli automation feed-build --output "%FEED_FILE%" --json
+    "%PYTHON%" -m forge.cli automation feed-build --output "%FEED_FILE%" %FEED_SOURCE_ARGS% --json
 ) else (
-    "%PYTHON%" -m forge.cli automation feed-build --output "%FEED_FILE%" --apply --json
+    "%PYTHON%" -m forge.cli automation feed-build --output "%FEED_FILE%" %FEED_SOURCE_ARGS% --apply --json
 )
 if errorlevel 1 set "EXIT_CODE=%errorlevel%"
 
@@ -169,3 +192,13 @@ echo ===========================================================================
 echo   FORGE Autopilot complete. exit_code=%EXIT_CODE%
 echo ============================================================================
 exit /b %EXIT_CODE%
+
+:validate_feed_source
+if /i "%~1"=="all" exit /b 0
+if /i "%~1"=="db" exit /b 0
+if /i "%~1"=="reports" exit /b 0
+if /i "%~1"=="cti" exit /b 0
+if /i "%~1"=="connectors" exit /b 0
+if /i "%~1"=="supabase" exit /b 0
+echo [ERROR] Unsupported feed source: %~1
+exit /b 1

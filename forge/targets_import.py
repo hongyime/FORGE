@@ -95,6 +95,7 @@ class TargetFeedItem:
     canonical_value: str
     target_key: str
     source_kind: str
+    source_group: str
     confidence: float
     first_seen_at: str
     provenance: str
@@ -303,6 +304,9 @@ def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
         canonical_value=canonical_value,
         target_key=target_key,
         source_kind=_bounded_text(raw_item.get("source_kind"), 80),
+        source_group=_bounded_text(
+            raw_item.get("source_group") or raw_item.get("source_kind"), 120
+        ),
         confidence=_coerce_confidence(raw_item.get("confidence")),
         first_seen_at=_bounded_text(raw_item.get("first_seen_at"), 80),
         provenance=_bounded_text(raw_item.get("provenance"), 240),
@@ -522,6 +526,7 @@ def _create_or_reuse_engagement(
             "external_feed": TARGET_FEED_SCHEMA_VERSION,
             "external_target_key": item.target_key,
             "source_kind": item.source_kind,
+            "source_group": item.source_group,
             "provenance_summary": item.provenance,
             "target_type": item.target_type,
             "target_value": item.canonical_value,

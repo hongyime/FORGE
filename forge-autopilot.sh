@@ -25,6 +25,7 @@ MAX_PARALLEL=6
 MONITOR_LIMIT=50
 DRY_RUN=0
 FEED_BUILD=1
+FEED_SOURCES=all
 SKIP_IMPORT=0
 SKIP_RESUME=0
 SKIP_MONITORING=0
@@ -34,16 +35,39 @@ usage() {
     printf 'Usage:\n'
     printf '  ./forge-autopilot.sh [--dry-run] [--feed-file PATH] [--roe-id ROE-ID]\n'
     printf '                       [--limit N] [--start-limit N] [--max-parallel N]\n'
-    printf '                       [--feed-build] [--skip-feed-build]\n'
+    printf '                       [--feed-build] [--skip-feed-build] [--feed-source SOURCE]\n'
     printf '                       [--skip-import] [--skip-resume]\n'
     printf '                       [--skip-monitoring] [--skip-dashboard]\n'
 }
+
+append_feed_source() {
+    case "$1" in
+        all|db|reports|cti|connectors|supabase) ;;
+        *) printf '[ERROR] Unsupported feed source: %s\n' "$1"; usage; exit 2 ;;
+    esac
+    if [ "$FEED_SOURCE_SET" -ne 1 ]; then
+        FEED_SOURCES=
+        FEED_SOURCE_SET=1
+    fi
+    if [ -n "$FEED_SOURCES" ]; then
+        FEED_SOURCES="$FEED_SOURCES $1"
+    else
+        FEED_SOURCES=$1
+    fi
+}
+
+FEED_SOURCE_SET=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=1; shift ;;
         --feed-build) FEED_BUILD=1; shift ;;
         --skip-feed-build) FEED_BUILD=0; shift ;;
+        --feed-source)
+            if [ "$#" -lt 2 ]; then usage; exit 2; fi
+            append_feed_source "$2"
+            shift 2
+            ;;
         --skip-import) SKIP_IMPORT=1; shift ;;
         --skip-resume) SKIP_RESUME=1; shift ;;
         --skip-monitoring) SKIP_MONITORING=1; shift ;;
@@ -74,11 +98,15 @@ else
     printf '  roe_id_present=no\n'
 fi
 printf '  dry_run=%s feed_build=%s\n' "$DRY_RUN" "$FEED_BUILD"
+printf '  feed_source=%s\n' "$FEED_SOURCES"
 printf '  start_limit=%s resume_limit=%s max_parallel=%s\n\n' "$START_LIMIT" "$RESUME_LIMIT" "$MAX_PARALLEL"
 
 if [ "$FEED_BUILD" -eq 1 ]; then
     printf '[FEED] building target feed...\n'
     set -- automation feed-build --output "$FEED_FILE" --json
+    for source in $FEED_SOURCES; do
+        set -- "$@" --source "$source"
+    done
     if [ "$DRY_RUN" -ne 1 ]; then
         set -- "$@" --apply
     fi

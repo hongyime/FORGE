@@ -38,6 +38,7 @@ def test_self_heal_plan_is_plan_only_and_skips_docker_probe_by_default(tmp_path:
         "reason": "compose_file_present_probe_skipped",
     }
     assert payload["commands"]["autopilot_dry_run"][1:3] == ["--dry-run", "--feed-build"]
+    assert payload["commands"]["autopilot_dry_run"][-2:] == ["--feed-source", "all"]
 
 
 def test_self_heal_plan_probe_reports_unhealthy_docker_services(
@@ -245,6 +246,55 @@ def test_guarded_autostart_apply_requires_config_apply_enabled(
     assert payload["status"] == "blocked"
     assert "apply_requested_but_config_apply_disabled" in payload["blockers"]
     assert payload["runs"] == []
+
+
+def test_guarded_autostart_propagates_configured_feed_sources(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": False,
+                "feed_sources": ["db", "connectors"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+    )
+
+    dry_run = payload["commands"]["autopilot_dry_run"]
+    assert payload["config"]["feed_sources"] == ["db", "connectors"]
+    assert dry_run.count("--feed-source") == 2
+    assert "db" in dry_run
+    assert "connectors" in dry_run
+
+
+def test_guarded_autostart_rejects_invalid_feed_source(tmp_path: Path) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps({"enabled": True, "apply_enabled": False, "feed_sources": ["all", "db"]}),
+        encoding="utf-8",
+    )
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+    )
+
+    assert "autostart_config_invalid:feed_sources" in payload["blockers"]
+    assert payload["config"]["feed_sources"] == ["all"]
 
 
 def test_guarded_autostart_rejects_string_boolean_opt_in(tmp_path: Path, monkeypatch) -> None:

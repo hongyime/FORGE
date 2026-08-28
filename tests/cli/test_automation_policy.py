@@ -114,8 +114,10 @@ def test_automation_defaults_review_exposes_tunable_free_first_options() -> None
     assert payload["safety"]["paid_backends_default"] == "disabled"
     assert payload["autostart"]["local_config_template"]["enabled"] is False
     assert payload["autostart"]["local_config_template"]["apply_enabled"] is False
+    assert payload["autostart"]["local_config_template"]["feed_sources"] == ["all"]
     assert payload["autostart"]["presets"]["conservative"]["max_parallel"] == 1
     assert payload["autostart"]["presets"]["aggressive"]["max_parallel"] == 4
+    assert payload["autostart"]["presets"]["current"]["feed_sources"] == ["all"]
     tunables = {item["id"]: item for item in payload["tunables"]}
     assert {
         "startup_profile",

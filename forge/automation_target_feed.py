@@ -721,7 +721,7 @@ def build_target_feed(
                     "canonical_value": item.canonical_value,
                     "target_key": item.target_key,
                     "source_kind": item.source_kind,
-                    "source_group": item.source_kind,
+                    "source_group": item.source_group,
                     "confidence": item.confidence,
                     "first_seen_at": item.first_seen_at,
                     "provenance": item.provenance,

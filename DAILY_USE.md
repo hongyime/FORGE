@@ -24,6 +24,7 @@ monitoring -> dashboard. Rehearse the full non-mutating loop with:
 forge-autopilot.bat --dry-run --feed-build
 ```
 
+Use `--feed-source all` for the full feed-build input set; this is the default.
 Use `--skip-feed-build` to keep the older behavior of consuming only an existing
 `imports/target-feed.json`. Build the feed directly with:
 

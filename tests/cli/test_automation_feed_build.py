@@ -147,6 +147,7 @@ def test_feed_build_apply_writes_then_rerun_reports_no_new(tmp_path: Path) -> No
     on_disk = json.loads(out.read_text(encoding="utf-8"))
     assert on_disk["schema_version"] == "target-feed.v1"
     assert len(on_disk["items"]) == first_payload["counts"]["total"]
+    assert on_disk["items"][0]["source_group"] == "db"
 
     second = runner.invoke(
         app,
@@ -168,6 +169,7 @@ def test_feed_build_apply_writes_then_rerun_reports_no_new(tmp_path: Path) -> No
     second_payload = json.loads(second.output)
     assert second_payload["counts"]["new_vs_existing"] == 0
     assert second_payload["counts"]["omitted_duplicate"] >= 1
+    assert second_payload["items"][0]["source_group"] == "db"
 
 
 def test_feed_build_missing_and_malformed_sources_fail_soft(tmp_path: Path) -> None:

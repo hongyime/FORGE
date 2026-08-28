@@ -164,6 +164,7 @@ def automation_defaults_review(
                 "cooldown_minutes",
                 "failure_backoff_minutes",
                 "log_max_entries",
+                "feed_sources",
             )
         },
         "aggressive": {

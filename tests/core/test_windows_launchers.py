@@ -39,6 +39,7 @@ def test_autopilot_launcher_runs_start_resume_monitor_dashboard() -> None:
     text = _read_launcher("forge-autopilot.bat")
     assert "automation feed-build" in text
     assert "--skip-feed-build" in text
+    assert "--feed-source" in text
     assert "targets import" in text
     assert "--start-limit" in text
     assert "targets resume-run" in text
