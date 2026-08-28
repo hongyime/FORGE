@@ -148,6 +148,7 @@ def automation_cycle(
     supabase_config: Path | None = None,
     autostart_config: Path | None = None,
     docker_probe_mode: str | None = None,
+    queue_limit: int | None = None,
     command_runner: Any | None = None,
 ) -> dict[str, Any]:
     root_imports = Path(imports_dir or "imports")
@@ -160,6 +161,11 @@ def automation_cycle(
         autostart_config=selected_autostart_config,
     )
     min_start_source_count = _autostart_min_start_source_count(selected_autostart_config)
+    selected_queue_limit = _selected_queue_limit(
+        explicit=queue_limit,
+        autostart_config=selected_autostart_config,
+        live=live,
+    )
     feed_payload = build_target_feed(
         sources=sources,
         data_dir=Path(cfg_data_dir),
@@ -181,8 +187,12 @@ def automation_cycle(
         imports_dir=root_imports,
         engagement=effective_engagement,
     )
-    queue_runs = _run_ready_queue_items(
+    selected_ready_items, deferred_ready_items = _bounded_ready_queue_items(
         ready_items,
+        queue_limit=selected_queue_limit,
+    )
+    queue_runs = _run_ready_queue_items(
+        selected_ready_items,
         apply=apply,
         command_runner=command_runner,
     )
@@ -242,6 +252,13 @@ def automation_cycle(
         "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
         "inbox": inbox_update,
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
+        "queue_execution": {
+            "queue_limit": selected_queue_limit,
+            "ready_count": len(ready_items),
+            "selected_count": len(selected_ready_items),
+            "deferred_count": len(deferred_ready_items),
+            "execution_order": "priority_desc_then_connector_then_value",
+        },
         "engagement": {
             "explicit": engagement,
             "effective": effective_engagement,
@@ -249,6 +266,8 @@ def automation_cycle(
         },
         "scan_policy": _scan_policy(min_start_source_count=min_start_source_count),
         "ready_inputs": ready_items,
+        "selected_ready_inputs": selected_ready_items,
+        "deferred_ready_inputs": deferred_ready_items,
         "blocked_inputs": blocked_items,
         "ignored_inputs": ignored_items,
         "queue_runs": queue_runs,
@@ -256,7 +275,7 @@ def automation_cycle(
         "total_count": 1 + len(queue_items) + (1 if live else 0),
         "selected_count": (1 if feed_written else 0)
         + sum(1 for item in queue_runs if item["status"] in {"completed", "planned"}),
-        "omitted_count": len(blocked_items) + len(ignored_items),
+        "omitted_count": len(blocked_items) + len(ignored_items) + len(deferred_ready_items),
     }
 
 
@@ -1305,6 +1324,43 @@ def _autostart_min_start_source_count(path: Path | None) -> int:
     payload = _read_json_object(path) if path is not None and Path(path).is_file() else {}
     value = _safe_int(payload.get("min_start_source_count"), default=1)
     return max(1, min(value, 100))
+
+
+def _autostart_queue_limit(path: Path | None) -> int:
+    payload = _read_json_object(path) if path is not None and Path(path).is_file() else {}
+    value = _safe_int(payload.get("queue_limit"), default=10)
+    return max(0, min(value, 1000))
+
+
+def _selected_queue_limit(
+    *,
+    explicit: int | None,
+    autostart_config: Path | None,
+    live: bool,
+) -> int | None:
+    if explicit is not None:
+        value = _safe_int(explicit, default=-1)
+        if value < 0:
+            raise ValueError("--queue-limit must be zero or greater")
+        return min(value, 1000)
+    if live:
+        return _autostart_queue_limit(autostart_config)
+    return None
+
+
+def _bounded_ready_queue_items(
+    ready_items: list[dict[str, Any]],
+    *,
+    queue_limit: int | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if queue_limit is None:
+        return ready_items, []
+    selected = ready_items[:queue_limit]
+    deferred = [
+        {**item, "status": "deferred", "reason": f"queue_limit_reached:{queue_limit}"}
+        for item in ready_items[queue_limit:]
+    ]
+    return selected, deferred
 
 
 def _parse_iso(value: str) -> datetime | None:

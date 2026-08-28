@@ -120,10 +120,14 @@ def test_automation_defaults_review_exposes_tunable_free_first_options() -> None
     assert payload["autostart"]["presets"]["conservative"]["max_parallel"] == 1
     assert payload["autostart"]["presets"]["aggressive"]["max_parallel"] == 4
     assert payload["autostart"]["presets"]["aggressive"]["min_free_memory_mb"] == 1024
+    assert payload["autostart"]["presets"]["aggressive"]["queue_limit"] == 10
+    assert payload["autostart"]["presets"]["aggressive"]["min_start_source_count"] == 2
     assert payload["autostart"]["presets"]["current"]["feed_sources"] == ["all"]
     tunables = {item["id"]: item for item in payload["tunables"]}
     assert {
         "startup_profile",
+        "queue_limit",
+        "min_start_source_count",
         "memory_gate",
         "autostart_cadence",
         "log_retention",
@@ -132,6 +136,8 @@ def test_automation_defaults_review_exposes_tunable_free_first_options() -> None
     }.issubset(tunables)
     assert tunables["memory_gate"]["default"] == 1024
     assert 1024 in tunables["memory_gate"]["options"]
+    assert tunables["queue_limit"]["default"] == 10
+    assert tunables["min_start_source_count"]["default"] == 1
     assert tunables["openrouter_mode"]["default"] == "free_only"
     assert payload["commands"]["startup_dry_run"] == [
         "forge",

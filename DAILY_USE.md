@@ -57,6 +57,9 @@ forge connectors import-validation --engagement N --connector burp_dast_xml --re
 `forge automation cycle --apply --live` writes the target feed once, then hands
 off to guarded-autostart with `--skip-feed-build`; standalone startup hooks still
 let guarded-autostart run the launcher feed-build phase itself.
+Live startup queue consumption is bounded by `queue_limit` in
+`imports/autostart.local.json`, or by `--queue-limit N`; deferred ready inputs
+remain pending for the next cycle.
 Use `--min-start-source-count 2` on autopilot, or set
 `min_start_source_count: 2` in `imports/autostart.local.json`, to import
 single-source targets but reserve live scan starts for targets seen by at least

@@ -519,6 +519,56 @@ def test_automation_cycle_apply_runs_ready_queue_and_marks_imported(
     assert queue["inputs"][0]["last_processed_at"]
 
 
+def test_automation_cycle_queue_limit_defers_extra_ready_items(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    inputs: list[dict[str, str]] = []
+    for index in range(3):
+        artifact = imports_dir / f"threatfox-{index}.json"
+        artifact.write_text(
+            json.dumps({"iocs": [f"queued-{index}.example"]}),
+            encoding="utf-8",
+        )
+        inputs.append({"value": artifact.name, "status": "pending"})
+    queue_path = imports_dir / "threatfox-inputs.local.json"
+    queue_path.write_text(json.dumps({"inputs": inputs}), encoding="utf-8")
+    commands: list[list[str]] = []
+
+    def _runner(command: list[str], _cwd: Path) -> dict[str, object]:
+        commands.append(command)
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    payload = automation_cycle(
+        apply=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        queue_limit=2,
+        command_runner=_runner,
+    )
+
+    assert payload["queue_execution"] == {
+        "queue_limit": 2,
+        "ready_count": 3,
+        "selected_count": 2,
+        "deferred_count": 1,
+        "execution_order": "priority_desc_then_connector_then_value",
+    }
+    assert len(commands) == 2
+    assert [run["status"] for run in payload["queue_runs"]] == ["completed", "completed"]
+    assert payload["deferred_ready_inputs"][0]["reason"] == "queue_limit_reached:2"
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert [item["status"] for item in queue["inputs"]] == [
+        "imported",
+        "imported",
+        "pending",
+    ]
+
+
 def test_automation_cycle_failed_queue_item_gets_retry_backoff(
     tmp_path: Path,
 ) -> None:
@@ -940,4 +990,6 @@ def test_automation_cycle_cli_registers_status_and_cycle(tmp_path: Path) -> None
         ],
     )
     assert cycle_result.exit_code == 0, cycle_result.output
-    assert json.loads(cycle_result.output)["schema_version"] == "forge.automation_cycle.v1"
+    cycle_payload = json.loads(cycle_result.output)
+    assert cycle_payload["schema_version"] == "forge.automation_cycle.v1"
+    assert cycle_payload["target_feed_scan"]["min_start_source_count"] == 1

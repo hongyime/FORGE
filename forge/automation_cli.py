@@ -196,8 +196,8 @@ def register_automation_commands(app: typer.Typer) -> None:
             "--limit",
             help="Cap the number of feed items emitted.",
         ),
-        autostart_config: Path = typer.Option(
-            DEFAULT_AUTOSTART_CONFIG_PATH,
+        autostart_config: Path | None = typer.Option(
+            None,
             "--autostart-config",
             help="Ignored local autostart config path for --live.",
         ),
@@ -205,6 +205,14 @@ def register_automation_commands(app: typer.Typer) -> None:
             None,
             "--docker-probe-mode",
             help="Override guarded-autostart Docker probe mode for --live.",
+        ),
+        queue_limit: int | None = typer.Option(
+            None,
+            "--queue-limit",
+            help=(
+                "Maximum ready source-queue imports to execute before live handoff. "
+                "Defaults to autostart queue_limit for --live, otherwise unlimited."
+            ),
         ),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
@@ -221,6 +229,7 @@ def register_automation_commands(app: typer.Typer) -> None:
             supabase_config=supabase_config,
             autostart_config=autostart_config,
             docker_probe_mode=docker_probe_mode,
+            queue_limit=queue_limit,
         )
         if json_output:
             typer.echo(json.dumps(payload, sort_keys=True))

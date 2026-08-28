@@ -204,3 +204,4 @@
 - 2026-08-29: B702 keeps guarded-autostart feed reuse but rebuilds the feed after successful local queue imports, and surfaces monitoring due backlog in `automation status`/`cycle` as read-only summary data.
 - 2026-08-29: B703 makes live-start source confirmation configurable with `--min-start-source-count`, importing broad targets while reserving scan budget for multi-source targets when local autostart sets the threshold to 2.
 - 2026-08-29: B704 makes automation status/cycle show threshold-aware startable target counts, so raw scan eligibility is not confused with live-start budget eligibility.
+- 2026-08-29: B705 bounds live-cycle queue imports with `queue_limit`, keeping startup from spending unbounded time on local artifact queues before guarded import/start/resume/monitoring.

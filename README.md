@@ -267,7 +267,7 @@ forge automation run [--apply] [--json]   # Emit the automation execution plan; 
 forge automation command-review [--json]  # Read-only command count and consolidation review
 forge automation defaults [--json]        # Read-only tunable defaults, presets, and disabled local config template
 forge automation status [--engagement N] [--json]  # Read-only feed, queue, blocker, and next-action status
-forge automation cycle [--apply] [--live] [--docker-probe-mode host-compose|compose-dependency|disabled] [--engagement N] [--json]  # Daily feed, queue, and optional guarded live loop
+forge automation cycle [--apply] [--live] [--queue-limit N] [--docker-probe-mode host-compose|compose-dependency|disabled] [--engagement N] [--json]  # Daily feed, queue, and optional guarded live loop
 forge automation feed-build [--output imports/target-feed.json] [--apply] [--json] [--source all|supabase|reports|db|cti|connectors] [--supabase-config PATH] [--limit N]
 forge automation supabase-add PROJECT_REF KEY_ENV [--config imports/supabase-projects.local.json] [--apply] [--replace] [--json]
 forge automation input-add --connector CONNECTOR_ID --file ARTIFACT [--imports-dir imports] [--engagement N] [--target URL] [--apply] [--json]
@@ -308,6 +308,9 @@ monitoring, and dashboard refresh still pass through ROE, memory, disk, Docker,
 cooldown, backoff, and single-instance gates. `forge automation status` is the
 read-only view of feed presence, queue readiness, blocked inputs, and next
 actions.
+For live startup, ready source-queue imports are bounded by
+`queue_limit` in `imports/autostart.local.json` unless `--queue-limit N`
+overrides it; deferred items stay pending for the next cycle.
 When `cycle --apply --live` hands off to guarded-autostart, the guarded launcher
 uses the feed already written by the cycle and skips its own feed-build phase to
 avoid duplicate source reads.
