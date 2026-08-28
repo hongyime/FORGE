@@ -179,6 +179,9 @@ The task runs hidden at logon and on cadence, but still delegates every live
 decision to `forge automation cycle --apply --live --json`.
 If Task Scheduler is denied, the installer falls back to a user-level HKCU Run
 startup entry that runs at logon without admin rights.
+Use `forge automation status --json` to inspect current readiness plus guarded
+autostart history, including recent blocked/failed runs and blocker counts,
+without opening the local JSONL log by hand.
 
 Burp/JUnit DAST XML import is local evidence intake only. Rehearse with
 `--dry-run --json`; applied imports add scoped active-validation evidence rows

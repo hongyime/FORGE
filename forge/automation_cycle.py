@@ -114,6 +114,7 @@ def automation_status(
             feed_path=feed_path,
             min_start_source_count=min_start_source_count,
         ),
+        "autostart_history": _autostart_history_summary(data_dir=Path(cfg_data_dir)),
         "resume_backlog": _resume_backlog_summary(data_dir=Path(cfg_data_dir)),
         "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
         "report_review": _report_review_summary(reports_dir=reports_dir or Path("reports")),
@@ -254,6 +255,7 @@ def automation_cycle(
             feed_payload=feed_payload,
             min_start_source_count=min_start_source_count,
         ),
+        "autostart_history": _autostart_history_summary(data_dir=Path(cfg_data_dir)),
         "resume_backlog": _resume_backlog_summary(data_dir=Path(cfg_data_dir)),
         "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
         "report_review": _report_review_summary(reports_dir=reports_dir or Path("reports")),
@@ -535,6 +537,124 @@ def _report_review_summary(*, reports_dir: Path) -> dict[str, Any]:
         "operator_action_counts": action_counts,
         "next_actions": next_actions,
     }
+
+
+def _autostart_history_summary(*, data_dir: Path, max_entries: int = 25) -> dict[str, Any]:
+    state_dir = Path(data_dir) / "automation"
+    state_file = state_dir / "guarded-autostart-state.json"
+    log_file = state_dir / "guarded-autostart.jsonl"
+    state = _read_json_object(state_file)
+    entries, unreadable_count = _read_recent_jsonl_objects(log_file, limit=max_entries)
+    status_counts: dict[str, int] = {}
+    mode_counts: dict[str, int] = {}
+    blocker_counts: dict[str, int] = {}
+    last_entry: dict[str, Any] | None = entries[-1] if entries else None
+    for entry in entries:
+        status = str(entry.get("status") or "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+        mode = str(entry.get("mode") or "unknown")
+        mode_counts[mode] = mode_counts.get(mode, 0) + 1
+        blockers = entry.get("blockers")
+        if isinstance(blockers, list):
+            for blocker in blockers:
+                key = str(blocker or "unknown")
+                blocker_counts[key] = blocker_counts.get(key, 0) + 1
+    last_started_at = str(state.get("last_started_at") or "")
+    last_failed_at = str(state.get("last_failed_at") or "")
+    last_status = str(state.get("last_status") or "")
+    return {
+        "execution_policy": "read_only_autostart_history_no_commands_executed",
+        "status": _autostart_history_status(
+            state=state,
+            entries=entries,
+            unreadable_count=unreadable_count,
+        ),
+        "state_exists": state_file.is_file(),
+        "log_exists": log_file.is_file(),
+        "state_ref": state_file.name,
+        "log_ref": log_file.name,
+        "last_status": last_status,
+        "last_started_at": last_started_at,
+        "last_failed_at": last_failed_at,
+        "last_returncode": state.get("last_returncode"),
+        "recent_count": len(entries),
+        "unreadable_line_count": unreadable_count,
+        "recent_status_counts": dict(sorted(status_counts.items())),
+        "recent_mode_counts": dict(sorted(mode_counts.items())),
+        "recent_blocker_counts": dict(sorted(blocker_counts.items())),
+        "last_recorded_at": str((last_entry or {}).get("recorded_at") or ""),
+        "last_recorded_status": str((last_entry or {}).get("status") or ""),
+        "last_recorded_blockers": [
+            str(item)
+            for item in ((last_entry or {}).get("blockers") or [])
+            if str(item)
+        ][:10],
+        "next_actions": _autostart_history_next_actions(state=state, entries=entries),
+    }
+
+
+def _autostart_history_status(
+    *,
+    state: dict[str, Any],
+    entries: list[dict[str, Any]],
+    unreadable_count: int,
+) -> str:
+    if unreadable_count:
+        return "log_attention"
+    last_status = str(state.get("last_status") or "")
+    if last_status in {"failed", "dry_run_failed"}:
+        return "recent_failure"
+    if entries:
+        last_entry_status = str(entries[-1].get("status") or "")
+        if last_entry_status == "failed":
+            return "recent_failure"
+        if last_entry_status == "blocked":
+            return "recent_blocked"
+        if last_entry_status == "completed":
+            return "recent_success"
+    if state:
+        return "state_present"
+    return "empty"
+
+
+def _autostart_history_next_actions(
+    *,
+    state: dict[str, Any],
+    entries: list[dict[str, Any]],
+) -> list[list[str]]:
+    last_status = str(state.get("last_status") or "")
+    last_entry = entries[-1] if entries else {}
+    last_entry_status = str(last_entry.get("status") or "")
+    if last_status in {"failed", "dry_run_failed"} or last_entry_status == "failed":
+        return [["forge", "automation", "self-heal-plan", "--json"]]
+    if last_entry_status == "blocked":
+        return [["forge", "automation", "status", "--json"]]
+    return [["forge", "automation", "status", "--json"]]
+
+
+def _read_recent_jsonl_objects(path: Path, *, limit: int) -> tuple[list[dict[str, Any]], int]:
+    if not path.is_file():
+        return [], 0
+    entries: list[dict[str, Any]] = []
+    unreadable_count = 0
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return [], 1
+    for line in lines[-max(1, int(limit)) :]:
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            parsed = json.loads(text)
+        except ValueError:
+            unreadable_count += 1
+            continue
+        if isinstance(parsed, dict):
+            entries.append(parsed)
+        else:
+            unreadable_count += 1
+    return entries, unreadable_count
 
 
 def classify_import_inbox(*, imports_dir: Path | None = None, apply: bool = False) -> dict[str, Any]:

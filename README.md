@@ -306,7 +306,8 @@ source queue consumption, and optional guarded live startup without writing.
 `--live` additionally invokes guarded-autostart, so target import/start, resume,
 monitoring, and dashboard refresh still pass through ROE, memory, disk, Docker,
 cooldown, backoff, and single-instance gates. `forge automation status` is the
-read-only view of feed presence, queue readiness, blocked inputs, and next
+read-only view of feed presence, queue readiness, blocked inputs, resume and
+monitoring backlog, report review drift, guarded-autostart history, and next
 actions.
 For live startup, ready source-queue imports are bounded by
 `queue_limit` in `imports/autostart.local.json` unless `--queue-limit N`

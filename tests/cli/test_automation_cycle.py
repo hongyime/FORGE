@@ -510,6 +510,93 @@ def test_automation_status_summarizes_report_review_without_mutating(
     ]
 
 
+def test_automation_status_summarizes_autostart_history(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    state_dir = data_dir / "automation"
+    state_dir.mkdir(parents=True)
+    (state_dir / "guarded-autostart-state.json").write_text(
+        json.dumps(
+            {
+                "last_started_at": "2026-08-29T01:00:00+00:00",
+                "last_failed_at": "2026-08-29T01:00:00+00:00",
+                "last_status": "failed",
+                "last_returncode": 7,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (state_dir / "guarded-autostart.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "recorded_at": "2026-08-29T00:00:00+00:00",
+                        "mode": "apply",
+                        "status": "blocked",
+                        "blockers": ["cooldown_active"],
+                    }
+                ),
+                json.dumps(
+                    {
+                        "recorded_at": "2026-08-29T01:00:00+00:00",
+                        "mode": "apply",
+                        "status": "failed",
+                        "blockers": ["failure_backoff_active"],
+                    }
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=data_dir,
+    )
+
+    history = payload["autostart_history"]
+    assert history["execution_policy"] == "read_only_autostart_history_no_commands_executed"
+    assert history["status"] == "recent_failure"
+    assert history["state_exists"] is True
+    assert history["log_exists"] is True
+    assert history["state_ref"] == "guarded-autostart-state.json"
+    assert history["log_ref"] == "guarded-autostart.jsonl"
+    assert history["last_status"] == "failed"
+    assert history["last_returncode"] == 7
+    assert history["recent_status_counts"] == {"blocked": 1, "failed": 1}
+    assert history["recent_mode_counts"] == {"apply": 2}
+    assert history["recent_blocker_counts"] == {
+        "cooldown_active": 1,
+        "failure_backoff_active": 1,
+    }
+    assert history["last_recorded_status"] == "failed"
+    assert history["last_recorded_blockers"] == ["failure_backoff_active"]
+    assert history["next_actions"] == [["forge", "automation", "self-heal-plan", "--json"]]
+
+
+def test_automation_status_autostart_history_flags_unreadable_log(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    state_dir = data_dir / "automation"
+    state_dir.mkdir(parents=True)
+    (state_dir / "guarded-autostart.jsonl").write_text(
+        "{bad json}\n" + json.dumps({"status": "completed", "mode": "apply"}),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=data_dir,
+    )
+
+    assert payload["autostart_history"]["status"] == "log_attention"
+    assert payload["autostart_history"]["unreadable_line_count"] == 1
+    assert payload["autostart_history"]["recent_status_counts"] == {"completed": 1}
+
+
 def test_automation_status_report_review_fails_closed(tmp_path: Path, monkeypatch) -> None:
     def fail_report_audit(**_kwargs):
         raise RuntimeError("dashboard json unreadable")
@@ -746,6 +833,32 @@ def test_automation_cycle_includes_report_review_summary(
     assert payload["report_review"]["dashboard_refresh_failure_count"] == 1
     assert payload["report_review"]["execution_policy"] == (
         "read_only_report_review_summary_no_commands_executed"
+    )
+
+
+def test_automation_cycle_includes_autostart_history_summary(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    state_dir = data_dir / "automation"
+    state_dir.mkdir(parents=True)
+    (state_dir / "guarded-autostart.jsonl").write_text(
+        json.dumps({"status": "completed", "mode": "apply"}),
+        encoding="utf-8",
+    )
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=tmp_path / "imports" / "target-feed.json",
+        source=["connectors"],
+        data_dir=data_dir,
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+    )
+
+    assert payload["autostart_history"]["status"] == "recent_success"
+    assert payload["autostart_history"]["recent_status_counts"] == {"completed": 1}
+    assert payload["autostart_history"]["execution_policy"] == (
+        "read_only_autostart_history_no_commands_executed"
     )
 
 
