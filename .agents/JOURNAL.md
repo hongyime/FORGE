@@ -214,3 +214,4 @@
 - 2026-08-29: B711 adds report_review to automation status/cycle so report/dashboard drift is visible in the daily loop without running report repair or resume commands.
 - 2026-08-29: B712 adds autostart_history to automation status/cycle so persisted guarded-autostart failures and blocker counts are visible without opening local logs.
 - 2026-08-29: B713 classifies guarded-autostart failures as historical after the configured backoff window so old failures do not masquerade as current blockers.
+- 2026-08-29: B714 makes automation status top-level next_actions include safe resume, monitoring, and report-review follow-ups when guarded live startup is not blocked.

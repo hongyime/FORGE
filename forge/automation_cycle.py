@@ -96,6 +96,17 @@ def automation_status(
         autostart_config_path=autostart_config_path,
         data_dir=cfg_data_dir,
     )
+    target_feed_scan = _target_feed_scan_summary(
+        feed_path=feed_path,
+        min_start_source_count=min_start_source_count,
+    )
+    autostart_history = _autostart_history_summary(
+        data_dir=Path(cfg_data_dir),
+        autostart_config=autostart_config_path,
+    )
+    resume_backlog = _resume_backlog_summary(data_dir=Path(cfg_data_dir))
+    monitoring_due = _monitoring_due_summary(data_dir=Path(cfg_data_dir))
+    report_review = _report_review_summary(reports_dir=reports_dir or Path("reports"))
     return {
         "schema_version": AUTOMATION_STATUS_SCHEMA_VERSION,
         "execution_policy": "read_only_status_no_commands_executed",
@@ -110,17 +121,11 @@ def automation_status(
             "exists": feed_path.is_file(),
             "size_bytes": feed_path.stat().st_size if feed_path.is_file() else 0,
         },
-        "target_feed_scan": _target_feed_scan_summary(
-            feed_path=feed_path,
-            min_start_source_count=min_start_source_count,
-        ),
-        "autostart_history": _autostart_history_summary(
-            data_dir=Path(cfg_data_dir),
-            autostart_config=autostart_config_path,
-        ),
-        "resume_backlog": _resume_backlog_summary(data_dir=Path(cfg_data_dir)),
-        "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
-        "report_review": _report_review_summary(reports_dir=reports_dir or Path("reports")),
+        "target_feed_scan": target_feed_scan,
+        "autostart_history": autostart_history,
+        "resume_backlog": resume_backlog,
+        "monitoring_due": monitoring_due,
+        "report_review": report_review,
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "engagement": {
             "explicit": engagement,
@@ -136,6 +141,9 @@ def automation_status(
             ready_items,
             blocked_items,
             autostart_probe,
+            resume_backlog=resume_backlog,
+            monitoring_due=monitoring_due,
+            report_review=report_review,
         ),
         "total_count": len(queue_items),
         "selected_count": len(ready_items),
@@ -1738,6 +1746,10 @@ def _status_next_actions(
     ready_items: list[dict[str, Any]],
     blocked_items: list[dict[str, Any]],
     autostart_probe: dict[str, Any] | None = None,
+    *,
+    resume_backlog: dict[str, Any] | None = None,
+    monitoring_due: dict[str, Any] | None = None,
+    report_review: dict[str, Any] | None = None,
 ) -> list[str]:
     actions: list[str] = []
     autostart_blockers = [
@@ -1767,7 +1779,57 @@ def _status_next_actions(
             "forge automation cycle --apply --live "
             "--docker-probe-mode compose-dependency --json"
         )
+    if not autostart_blockers:
+        actions.extend(
+            _status_backlog_next_actions(
+                resume_backlog=resume_backlog or {},
+                monitoring_due=monitoring_due or {},
+                report_review=report_review or {},
+            )
+        )
+    return _dedupe_strings(actions)[:8]
+
+
+def _status_backlog_next_actions(
+    *,
+    resume_backlog: dict[str, Any],
+    monitoring_due: dict[str, Any],
+    report_review: dict[str, Any],
+) -> list[str]:
+    actions: list[str] = []
+    if int(resume_backlog.get("resume_ready_count") or 0) > 0:
+        actions.extend(_command_action_strings(resume_backlog.get("next_actions"), limit=1))
+    if int(monitoring_due.get("total_due_count") or 0) > 0:
+        actions.extend(_command_action_strings(monitoring_due.get("next_actions"), limit=2))
+    if int(report_review.get("total_count") or 0) > 0:
+        actions.extend(_command_action_strings(report_review.get("next_actions"), limit=2))
     return actions
+
+
+def _command_action_strings(value: Any, *, limit: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    actions: list[str] = []
+    for item in value:
+        if isinstance(item, list):
+            actions.append(" ".join(str(part) for part in item if str(part)))
+        elif isinstance(item, str):
+            actions.append(item)
+        if len(actions) >= max(0, int(limit)):
+            break
+    return actions
+
+
+def _dedupe_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
 
 
 def _status_autostart_probe(

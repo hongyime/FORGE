@@ -661,6 +661,92 @@ def test_automation_status_report_review_fails_closed(tmp_path: Path, monkeypatc
     assert "dashboard json unreadable" in payload["report_review"]["error"]
 
 
+def test_automation_status_next_actions_include_backlog_dry_runs(
+    tmp_path: Path, monkeypatch
+) -> None:
+    def fake_resume_plan(**_kwargs) -> dict[str, object]:
+        return {
+            "total_count": 3,
+            "total_resume_ready_count": 3,
+            "planned_count": 0,
+            "skipped_count": 0,
+            "omitted_count": 3,
+            "estimated_serial_runtime_minutes": 0,
+            "total_reason_counts": {"watchdog_timeout": 3},
+            "skipped_blocker_counts": {},
+        }
+
+    def fake_due_plan(_data_dir: Path, *, limit: int | None = None) -> dict[str, object]:
+        assert limit == 0
+        return {
+            "total_due_count": 2,
+            "planned_policy_count": 0,
+            "limited_policy_count": 2,
+            "default_execution_limit": 50,
+            "estimated_capped_invocations": 1,
+            "oldest_due_age_seconds": 60,
+            "stale_backlog": {},
+            "policy_summary": {},
+            "action_plan": [
+                {
+                    "command": [
+                        "forge",
+                        "monitoring",
+                        "run-due",
+                        "--dry-run",
+                        "--limit",
+                        "50",
+                        "--json",
+                    ]
+                }
+            ],
+            "errors": [],
+        }
+
+    def fake_report_audit(**_kwargs) -> dict[str, object]:
+        return {
+            "total_count": 1,
+            "selected_count": 0,
+            "omitted_count": 1,
+            "engagement_count": 1,
+            "report_file_count": 2,
+            "report_family_count": 1,
+            "dashboard_refresh_failure_count": 0,
+            "historical_dashboard_refresh_failure_count": 0,
+            "latest_fallback_reason_counts": {},
+            "resume_review_count": 1,
+            "failed_run_count": 1,
+            "long_run_count": 0,
+            "operator_action_plan": [
+                {
+                    "id": "review_resume_plan",
+                    "total_count": 1,
+                    "commands": [["forge", "targets", "resume-plan", "--json"]],
+                    "follow_up_commands": [
+                        ["forge", "targets", "resume-run", "--dry-run", "--json"]
+                    ],
+                }
+            ],
+        }
+
+    monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fake_resume_plan)
+    monkeypatch.setattr(automation_cycle_module, "monitoring_due_plan_for_data_dir", fake_due_plan)
+    monkeypatch.setattr(automation_cycle_module, "collect_report_quality_audit", fake_report_audit)
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["next_actions"][:4] == [
+        "forge automation cycle --apply --live --docker-probe-mode compose-dependency --json",
+        "forge targets resume-plan --json --redact-paths --limit 20",
+        "forge monitoring run-due --dry-run --limit 50 --json",
+        "forge targets resume-plan --json",
+    ]
+
+
 def test_automation_status_reports_autostart_probe_blockers(
     tmp_path: Path,
     monkeypatch,
