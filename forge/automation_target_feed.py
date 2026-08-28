@@ -226,12 +226,13 @@ def _candidate(
     provenance: str,
     confidence: float,
     first_seen_at: str,
+    target_type_hint: str = "auto",
 ) -> FeedCandidate | None:
     value = str(raw_value or "").strip()
     if not value or len(value) > 300:
         return None
     try:
-        normalized = _normalize_target_value("auto", value)
+        normalized = _normalize_target_value(target_type_hint or "auto", value)
     except ValueError:
         return None
     if normalized is None:
@@ -247,6 +248,13 @@ def _candidate(
         first_seen_at=first_seen_at,
         provenance=provenance,
     )
+
+
+def _target_type_from_key_hint(key_hint: str) -> str:
+    hint = str(key_hint or "").strip().lower()
+    if hint in {"username", "usernames", "handle", "handles", "screen_name"}:
+        return "username"
+    return "auto"
 
 
 def _iter_json_strings(
@@ -1474,6 +1482,57 @@ def _supabase_table_rows(
     return rows, errors, row_limit
 
 
+def _harvest_supabase_table(
+    *,
+    project: dict[str, Any],
+    headers: dict[str, str],
+    table_name: str,
+    columns: list[str],
+    source_group: str,
+    first_seen_at: str,
+) -> tuple[list[FeedCandidate], list[str], int]:
+    row_limit = int(project["limit"])
+    select_param = "*" if _wants_all_supabase_columns(columns) else ",".join(columns)
+    candidates: list[FeedCandidate] = []
+    errors: list[str] = []
+    row_count = 0
+    offset = 0
+    while offset < row_limit:
+        page_size = min(_SUPABASE_PAGE_SIZE, row_limit - offset)
+        url = (
+            f"{project['url']}/rest/v1/{quote(table_name, safe='')}"
+            f"?select={quote(select_param, safe=',*')}"
+            f"&limit={page_size}&offset={offset}"
+        )
+        try:
+            response = httpx.get(url, headers=headers, timeout=15.0)
+            response.raise_for_status()
+            page = response.json()
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{project['project_ref']}:{table_name}:http_{type(exc).__name__}")
+            break
+        if not isinstance(page, list):
+            errors.append(f"{project['project_ref']}:{table_name}:response_not_list")
+            break
+        dict_rows = [row for row in page if isinstance(row, dict)]
+        row_count += len(dict_rows)
+        for row in dict_rows:
+            candidates.extend(
+                _harvest_supabase_row(
+                    row,
+                    columns=columns,
+                    source_group=source_group,
+                    first_seen_at=first_seen_at,
+                )
+            )
+        if len(page) < page_size:
+            break
+        offset += page_size
+    if row_count >= row_limit:
+        errors.append(f"{project['project_ref']}:{table_name}:row_limit_reached:{row_limit}")
+    return candidates, errors, row_count
+
+
 def _harvest_supabase_row(
     row: dict[str, Any],
     *,
@@ -1483,7 +1542,7 @@ def _harvest_supabase_row(
 ) -> list[FeedCandidate]:
     candidates: list[FeedCandidate] = []
     if _wants_all_supabase_columns(columns):
-        for _key_hint, value in _iter_json_strings(row):
+        for key_hint, value in _iter_json_strings(row):
             candidate = _candidate(
                 value,
                 source_kind="supabase_table",
@@ -1491,6 +1550,7 @@ def _harvest_supabase_row(
                 provenance=source_group,
                 confidence=0.65,
                 first_seen_at=first_seen_at,
+                target_type_hint=_target_type_from_key_hint(key_hint),
             )
             if candidate is not None:
                 candidates.append(candidate)
@@ -1511,6 +1571,7 @@ def _harvest_supabase_row(
                 provenance=source_group,
                 confidence=0.65,
                 first_seen_at=first_seen_at,
+                target_type_hint=_target_type_from_key_hint(key_hint),
             )
             if candidate is not None:
                 candidates.append(candidate)
@@ -1570,34 +1631,25 @@ def _extract_supabase_source(
             discovery_errors = []
             discovery_status = "configured"
         scanned_tables: list[str] = []
-        select_param = "*" if _wants_all_supabase_columns(columns) else ",".join(columns)
         for table in tables:
             table_name = str(table).strip()
             source_group = f"supabase:{project_ref}:{table_name}"
             if not _safe_supabase_identifier(table_name):
                 errors.append(f"{project_ref}:{table_name}:invalid_table")
                 continue
-            rows, row_errors, _row_limit = _supabase_table_rows(
+            table_candidates, row_errors, row_count = _harvest_supabase_table(
                 project=project,
                 headers=headers,
                 table_name=table_name,
-                select_param=select_param,
+                columns=columns,
+                source_group=source_group,
+                first_seen_at=first_seen_at,
             )
             errors.extend(row_errors)
             scanned_tables.append(table_name)
-            if not rows:
+            candidates.extend(table_candidates)
+            if row_count == 0:
                 continue
-            row_count = 0
-            for row in rows:
-                row_count += 1
-                candidates.extend(
-                    _harvest_supabase_row(
-                        row,
-                        columns=columns,
-                        source_group=source_group,
-                        first_seen_at=first_seen_at,
-                    )
-                )
             source_group_counts[source_group] = row_count
         discovery_summaries.append(
             _supabase_discovery_summary(

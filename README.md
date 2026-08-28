@@ -332,7 +332,8 @@ minimal operator shape is `project_ref` plus `key_env`; Forge derives
 `https://<project_ref>.supabase.co`, discovers exposed table paths from the
 read-only Data API root, and pages through all returned columns with
 `select=*`. The default greedy cap is 100,000 rows per table and 1,000 exposed
-tables per configured project.
+tables per configured project; rows are harvested one page at a time, and key
+hints such as `username` or `handle` preserve canonical username targets.
 
 ```json
 {

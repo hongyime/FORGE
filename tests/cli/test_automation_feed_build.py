@@ -939,6 +939,7 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
                     {
                         "id": 1,
                         "name": "Portal",
+                        "username": "Alice",
                         "nested": {
                             "urls": ["https://app.example/path?token=drop"],
                             "owner": "ops@example.com",
@@ -991,8 +992,9 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
     }
     assert ("url", "https://app.example/path", "supabase:abc123:assets") in typed_items
     assert ("email", "ops@example.com", "supabase:abc123:assets") in typed_items
+    assert ("username", "@alice", "supabase:abc123:assets") in typed_items
     assert ("domain", "api.example", "supabase:abc123:observations") in typed_items
-    assert payload["counts"]["by_source"]["supabase"] == 3
+    assert payload["counts"]["by_source"]["supabase"] == 4
     assert payload["counts"]["by_source_group"]["supabase:abc123:assets"] == 1
     assert payload["counts"]["by_source_group"]["supabase:abc123:observations"] == 1
     assert payload["supabase_table_discovery"] == [
