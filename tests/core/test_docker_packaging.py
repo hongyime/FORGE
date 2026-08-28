@@ -38,6 +38,8 @@ def test_runtime_dockerfile_matches_project_packaging() -> None:
     assert "requirements.lock" not in dockerfile
     assert "COPY pyproject.toml README.md ./" in dockerfile
     assert "COPY forge ./forge" in dockerfile
+    assert "COPY forge-autopilot.sh forge-autopilot.bat ./" in dockerfile
+    assert "chmod +x forge-autopilot.sh" in dockerfile
     assert 'python -m pip install ".[artifacts,graph]"' in dockerfile
     assert "USER forge" in dockerfile
     assert 'CMD ["forge", "--help"]' in dockerfile
@@ -56,6 +58,7 @@ def test_production_compose_uses_repo_root_runtime_build_and_hardened_services()
     assert "forge-api:" in compose
     assert "forge-webui:" in compose
     assert "forge-worker:" in compose
+    assert "forge-guarded-autostart:" in compose
     assert "postgres:" in compose
     assert "redis:" in compose
     assert "read_only: true" in compose
@@ -69,6 +72,24 @@ def test_production_compose_uses_repo_root_runtime_build_and_hardened_services()
     assert "no-new-privileges:true" in compose
     assert "127.0.0.1:${FORGE_WEB_PORT:-8080}:8080" in compose
     assert "127.0.0.1:${FORGE_API_PORT:-8000}:8000" in compose
+
+
+def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
+    compose = _read("docker/docker-compose.yml")
+
+    assert "forge-guarded-autostart:" in compose
+    assert 'profiles: ["autostart"]' in compose
+    assert 'restart: "no"' in compose
+    assert 'cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"' in compose
+    assert 'mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-256m}"' in compose
+    assert "automation" in compose
+    assert "guarded-autostart" in compose
+    assert "/app/imports/autostart.local.json" in compose
+    assert "--apply" in compose
+    assert "--json" in compose
+    assert 'FORGE_ROE_ID: "${FORGE_ROE_ID:-}"' in compose
+    assert "../imports:/app/imports:rw" in compose
+    assert "../reports:/app/reports:rw" in compose
 
 
 def test_production_compose_matches_doctor_hardening_contract() -> None:

@@ -6,8 +6,12 @@ cd "$ROOT" || exit 1
 VENV_PYTHON="$ROOT/.venv/bin/python"
 VENV_FORGE="$ROOT/.venv/bin/forge"
 
-if [ ! -x "$VENV_PYTHON" ] || [ ! -x "$VENV_FORGE" ]; then
-    printf '[ERROR] Run ./setup.sh once first.\n'
+if [ -x "$VENV_PYTHON" ] && [ -x "$VENV_FORGE" ]; then
+    FORGE_PYTHON="$VENV_PYTHON"
+elif command -v python >/dev/null 2>&1 && command -v forge >/dev/null 2>&1; then
+    FORGE_PYTHON=python
+else
+    printf '[ERROR] Python/Forge runtime not found. Run ./setup.sh once first or use the packaged Docker image.\n'
     exit 1
 fi
 
@@ -110,7 +114,7 @@ if [ "$FEED_BUILD" -eq 1 ]; then
     if [ "$DRY_RUN" -ne 1 ]; then
         set -- "$@" --apply
     fi
-    "$VENV_PYTHON" -m forge.cli "$@" || EXIT_CODE=$?
+    "$FORGE_PYTHON" -m forge.cli "$@" || EXIT_CODE=$?
 fi
 
 if [ "$SKIP_IMPORT" -ne 1 ]; then
@@ -128,7 +132,7 @@ if [ "$SKIP_IMPORT" -ne 1 ]; then
         if [ "$DRY_RUN" -eq 1 ]; then
             set -- "$@" --dry-run
         fi
-        "$VENV_PYTHON" -m forge.cli "$@" || EXIT_CODE=$?
+        "$FORGE_PYTHON" -m forge.cli "$@" || EXIT_CODE=$?
     fi
 fi
 
@@ -139,7 +143,7 @@ if [ "$SKIP_RESUME" -ne 1 ]; then
     if [ "$DRY_RUN" -eq 1 ]; then
         set -- "$@" --dry-run
     fi
-    "$VENV_PYTHON" -m forge.cli "$@" || EXIT_CODE=$?
+    "$FORGE_PYTHON" -m forge.cli "$@" || EXIT_CODE=$?
 fi
 
 if [ "$SKIP_MONITORING" -ne 1 ]; then
@@ -148,12 +152,12 @@ if [ "$SKIP_MONITORING" -ne 1 ]; then
     if [ "$DRY_RUN" -eq 1 ]; then
         set -- "$@" --dry-run
     fi
-    "$VENV_PYTHON" -m forge.cli "$@" || EXIT_CODE=$?
+    "$FORGE_PYTHON" -m forge.cli "$@" || EXIT_CODE=$?
 fi
 
 if [ "$SKIP_DASHBOARD" -ne 1 ]; then
     printf '\n[DASHBOARD] refreshing local dashboard...\n'
-    "$VENV_PYTHON" -m forge.cli dashboard || EXIT_CODE=$?
+    "$FORGE_PYTHON" -m forge.cli dashboard || EXIT_CODE=$?
 fi
 
 printf '\n============================================================================\n'

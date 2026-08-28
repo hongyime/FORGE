@@ -175,6 +175,39 @@ services:
     deploy:
       replicas: ${FORGE_WORKER_REPLICAS:-1}
 
+  forge-guarded-autostart:
+    <<: *forge-service
+    build: *forge-build
+    profiles: ["autostart"]
+    restart: "no"
+    cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"
+    mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-256m}"
+    command:
+      - python
+      - -m
+      - forge.cli
+      - automation
+      - guarded-autostart
+      - --config
+      - /app/imports/autostart.local.json
+      - --apply
+      - --json
+    environment:
+      <<: *forge-env
+      FORGE_ROE_ID: "${FORGE_ROE_ID:-}"
+    volumes:
+      - forge-data:/data
+      - forge-plugins:/plugins:ro
+      - forge-remote-audit:/remote-audit
+      - forge-models:/home/forge/.cache/forge/models:ro
+      - ../imports:/app/imports:rw
+      - ../reports:/app/reports:rw
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   forge-data:
   forge-models:

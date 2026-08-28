@@ -416,6 +416,19 @@ ROE is present, not the ROE value.
 The production Compose file ships with conservative, env-overridable CPU/RAM
 caps for API, web UI, worker, Postgres, and Redis services so Docker startup has
 bounded defaults on small machines.
+Docker-started autopilot is available as an opt-in Compose profile:
+
+```bash
+docker compose -f docker/docker-compose.yml --profile autostart up -d
+```
+
+The `forge-guarded-autostart` service runs once per Compose start with lower
+default caps (`FORGE_AUTOSTART_CPUS=0.25`,
+`FORGE_AUTOSTART_MEM_LIMIT=256m`), reads
+`/app/imports/autostart.local.json`, and only writes through the mounted
+`imports/`, `reports/`, and `/data` paths. It still fails closed unless the
+local config, `FORGE_ROE_ID`, Docker health, resource gates, cooldown/backoff,
+and single-instance lock all pass.
 
 On Windows, install the startup-safe task with:
 
@@ -818,6 +831,11 @@ web UI, and worker containers as the non-root image user, uses Postgres and
 Redis, binds app ports to loopback for reverse-proxy/TLS exposure, and stores
 remote audit bundles under `/remote-audit` unless an external mounted/file URI
 is supplied.
+Add `--profile autostart` when Docker itself should attempt the guarded
+autopilot loop at stack startup. The profile is separate from API/web/worker so
+ordinary Compose restarts do not create a crash loop, and the service still
+requires the local guarded-autostart gates before any live target import, resume,
+monitoring, or dashboard refresh is attempted.
 For Linux hosts, `docker/systemd/forge-compose.service` wraps the same compose
 file with a preflight `config --quiet` check and an `/etc/forge/forge.env`
 environment file. Install it only after `/opt/forge/docker/docker-compose.yml`

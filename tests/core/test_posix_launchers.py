@@ -40,6 +40,17 @@ def test_runtime_launchers_use_project_posix_virtualenv() -> None:
         assert ".exe" not in text.lower()
 
 
+def test_autopilot_posix_launcher_can_run_from_packaged_path_runtime() -> None:
+    text = _read_launcher("forge-autopilot.sh")
+
+    assert 'FORGE_PYTHON="$VENV_PYTHON"' in text
+    assert "command -v python" in text
+    assert "command -v forge" in text
+    assert "FORGE_PYTHON=python" in text
+    assert '"$FORGE_PYTHON" -m forge.cli' in text
+    assert '"$VENV_PYTHON" -m forge.cli' not in text
+
+
 def test_posix_launchers_do_not_call_windows_batch_launchers() -> None:
     for launcher in POSIX_LAUNCHERS:
         text = _read_launcher(launcher).lower()

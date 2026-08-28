@@ -51,6 +51,16 @@ def test_autopilot_launcher_runs_start_resume_monitor_dashboard() -> None:
     assert "echo   roe_id=%roe_id%" not in text
 
 
+def test_autopilot_windows_launcher_can_run_from_packaged_path_runtime() -> None:
+    text = _read_launcher("forge-autopilot.bat")
+
+    assert "where python >nul 2>nul" in text
+    assert "where forge >nul 2>nul" in text
+    assert 'set "python=python"' in text
+    assert "use the packaged docker image" in text
+    assert re.search(r"(?m)^\s*pause\s*$", text) is None
+
+
 def test_powershell_stack_helper_uses_docker_compose_dev_file() -> None:
     text = (REPO_ROOT / "tools" / "forge-stack.ps1").read_text(encoding="utf-8").lower()
     assert "..\\docker\\docker-compose.dev.yml" in text

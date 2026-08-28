@@ -25,9 +25,17 @@ cd /d "%~dp0"
 
 set "PYTHON=.venv\Scripts\python.exe"
 if not exist "%PYTHON%" (
-    echo [ERROR] Virtual environment not found. Run setup.bat once first.
-    pause
-    exit /b 1
+    where python >nul 2>nul
+    if errorlevel 1 (
+        echo [ERROR] Python runtime not found. Run setup.bat once first or use the packaged Docker image.
+        exit /b 1
+    )
+    where forge >nul 2>nul
+    if errorlevel 1 (
+        echo [ERROR] Forge CLI not found. Run setup.bat once first or use the packaged Docker image.
+        exit /b 1
+    )
+    set "PYTHON=python"
 )
 
 set FORGE_NO_TOR=1
