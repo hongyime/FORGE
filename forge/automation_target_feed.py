@@ -11,11 +11,13 @@ existing feed entries.
 
 from __future__ import annotations
 
+import gzip
 import json
 import os
 import re
 import sqlite3
 import tempfile
+import zipfile
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -42,9 +44,11 @@ SUPPORTED_SOURCES = ("db", "reports", "cti", "connectors", "supabase")
 _OFFLINE_SOURCES = ("db", "reports", "cti", "connectors")
 
 _MAX_FILES_PER_DIR_SOURCE = 200
-_MAX_REPORT_FILES = 500
+_MAX_REPORT_FILES = 5000
 _MAX_ENGAGEMENT_DBS = 500
 _MAX_JSON_FILE_BYTES = 2 * 1024 * 1024
+_MAX_TEXT_FILE_BYTES = 2 * 1024 * 1024
+_MAX_ZIP_MEMBERS = 25
 _MAX_WALK_DEPTH = 6
 _MAX_VALUES_PER_FILE = 5000
 _SUPABASE_PAGE_SIZE = 1000
@@ -120,8 +124,16 @@ _CONNECTOR_SOURCE_EXCLUDED_NAMES = {
     "supabase-projects.local.json",
     "target-feed.json",
 }
+_PAYLOAD_TEXT_SUFFIXES = {".json", ".jsonl", ".csv", ".xml", ".txt", ".log", ".gz", ".zip"}
 _SUPABASE_PROJECT_REF_RE = re.compile(
     r"(?i)\b([a-z0-9][a-z0-9-]{4,62})\.supabase\.(?:co|in)\b"
+)
+_TEXT_TARGET_RE = re.compile(
+    r"(?ix)"
+    r"(https?://[^\s<>'\"(){}\[\],]+)"
+    r"|([a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,63})"
+    r"|(\b(?:\d{1,3}\.){3}\d{1,3}\b)"
+    r"|(\b(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\b)"
 )
 _DISCOVERABLE_INPUT_MARKERS = (
     {
@@ -270,6 +282,157 @@ def _load_json_file(path: Path) -> tuple[object | None, str | None]:
         return json.loads(path.read_text(encoding="utf-8")), None
     except (OSError, ValueError) as exc:
         return None, f"{type(exc).__name__}:{path.name}"
+
+
+def _read_text_file(path: Path) -> tuple[str | None, str | None]:
+    try:
+        if path.stat().st_size > _MAX_TEXT_FILE_BYTES:
+            return None, f"file_too_large:{path.name}"
+        return path.read_text(encoding="utf-8", errors="replace"), None
+    except OSError as exc:
+        return None, f"{type(exc).__name__}:{path.name}"
+
+
+def _read_gzip_text_file(path: Path) -> tuple[str | None, str | None]:
+    try:
+        if path.stat().st_size > _MAX_TEXT_FILE_BYTES:
+            return None, f"file_too_large:{path.name}"
+        with gzip.open(path, "rt", encoding="utf-8", errors="replace") as handle:
+            data = handle.read(_MAX_TEXT_FILE_BYTES + 1)
+    except (OSError, gzip.BadGzipFile) as exc:
+        return None, f"{type(exc).__name__}:{path.name}"
+    if len(data.encode("utf-8", errors="ignore")) > _MAX_TEXT_FILE_BYTES:
+        return None, f"decoded_file_too_large:{path.name}"
+    return data, None
+
+
+def _read_zip_text_values(path: Path) -> tuple[list[str], str | None]:
+    try:
+        if path.stat().st_size > _MAX_TEXT_FILE_BYTES:
+            return [], f"file_too_large:{path.name}"
+        values: list[str] = []
+        with zipfile.ZipFile(path) as archive:
+            members = [
+                info
+                for info in sorted(archive.infolist(), key=lambda item: item.filename)
+                if not info.is_dir()
+            ][: _MAX_ZIP_MEMBERS]
+            for info in members:
+                if info.file_size > _MAX_TEXT_FILE_BYTES:
+                    continue
+                with archive.open(info) as handle:
+                    raw = handle.read(_MAX_TEXT_FILE_BYTES + 1)
+                if len(raw) > _MAX_TEXT_FILE_BYTES:
+                    continue
+                text = raw.decode("utf-8", errors="replace")
+                values.extend(_text_target_values(text))
+                if len(values) >= _MAX_VALUES_PER_FILE:
+                    break
+    except (OSError, zipfile.BadZipFile) as exc:
+        return [], f"{type(exc).__name__}:{path.name}"
+    return values[:_MAX_VALUES_PER_FILE], None
+
+
+def _text_target_values(text: str) -> list[str]:
+    values: list[str] = []
+    seen: set[str] = set()
+    for match in _TEXT_TARGET_RE.finditer(text):
+        value = next((group for group in match.groups() if group), "").strip()
+        value = value.rstrip(".,;:)]}'\"")
+        if not value:
+            continue
+        lowered = value.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        values.append(value)
+        if len(values) >= _MAX_VALUES_PER_FILE:
+            break
+    return values
+
+
+def _harvest_text_candidates(
+    values: list[str],
+    *,
+    source_kind: str,
+    source_group: str,
+    provenance: str,
+    first_seen_at: str,
+    confidence: float,
+) -> list[FeedCandidate]:
+    candidates: list[FeedCandidate] = []
+    for text in values[:_MAX_VALUES_PER_FILE]:
+        candidate = _candidate(
+            text,
+            source_kind=source_kind,
+            source_group=source_group,
+            provenance=provenance,
+            confidence=confidence,
+            first_seen_at=first_seen_at,
+        )
+        if candidate is not None:
+            candidates.append(candidate)
+    return candidates
+
+
+def _harvest_file_candidates(
+    path: Path,
+    *,
+    source_kind: str,
+    source_group: str,
+    provenance: str,
+    first_seen_at: str,
+    confidence: float,
+) -> tuple[list[FeedCandidate], str | None]:
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        payload, error = _load_json_file(path)
+        if error is not None:
+            return [], error
+        return (
+            _harvest_json_candidates(
+                payload,
+                source_kind=source_kind,
+                source_group=source_group,
+                provenance=provenance,
+                first_seen_at=first_seen_at,
+                confidence=confidence,
+            ),
+            None,
+        )
+    if suffix == ".zip":
+        values, error = _read_zip_text_values(path)
+        if error is not None:
+            return [], error
+        return (
+            _harvest_text_candidates(
+                values,
+                source_kind=source_kind,
+                source_group=source_group,
+                provenance=provenance,
+                first_seen_at=first_seen_at,
+                confidence=confidence,
+            ),
+            None,
+        )
+    if suffix == ".gz":
+        text, error = _read_gzip_text_file(path)
+    else:
+        text, error = _read_text_file(path)
+    if error is not None:
+        return [], error
+    values = _text_target_values(text or "")
+    return (
+        _harvest_text_candidates(
+            values,
+            source_kind=source_kind,
+            source_group=source_group,
+            provenance=provenance,
+            first_seen_at=first_seen_at,
+            confidence=confidence,
+        ),
+        None,
+    )
 
 
 def _harvest_json_candidates(
@@ -426,26 +589,27 @@ def _extract_dir_source(
     if not imports_dir.is_dir():
         return candidates, errors
     scanned = 0
-    for path in sorted(imports_dir.glob("*.json")):
+    for path in sorted(imports_dir.iterdir()):
         if scanned >= _MAX_FILES_PER_DIR_SOURCE:
             break
+        if not path.is_file():
+            continue
         if not filename_filter(path.name):
             continue
         scanned += 1
-        payload, error = _load_json_file(path)
+        source_group = f"{provenance_prefix}{path.name}"
+        candidates_for_file, error = _harvest_file_candidates(
+            path,
+            source_kind=source_kind,
+            source_group=source_group,
+            provenance=source_group,
+            first_seen_at=first_seen_at,
+            confidence=confidence,
+        )
         if error is not None:
             errors.append(f"{source_kind}_parse:{error}")
             continue
-        candidates.extend(
-            _harvest_json_candidates(
-                payload,
-                source_kind=source_kind,
-                source_group=f"{provenance_prefix}{path.name}",
-                provenance=f"{provenance_prefix}{path.name}",
-                first_seen_at=first_seen_at,
-                confidence=confidence,
-            )
-        )
+        candidates.extend(candidates_for_file)
     return candidates, errors
 
 
@@ -1169,6 +1333,8 @@ def _safe_supabase_identifier(value: str) -> bool:
 
 def _is_connector_payload_filename(name: str) -> bool:
     lowered = name.lower()
+    if Path(lowered).suffix not in _PAYLOAD_TEXT_SUFFIXES:
+        return False
     if lowered.endswith(".local.json"):
         return False
     if lowered in _CONNECTOR_SOURCE_EXCLUDED_NAMES:
@@ -1178,6 +1344,8 @@ def _is_connector_payload_filename(name: str) -> bool:
 
 def _is_cti_payload_filename(name: str) -> bool:
     lowered = name.lower()
+    if Path(lowered).suffix not in _PAYLOAD_TEXT_SUFFIXES:
+        return False
     if lowered.endswith("-inputs.local.json"):
         return False
     if lowered in _CONNECTOR_SOURCE_EXCLUDED_NAMES:

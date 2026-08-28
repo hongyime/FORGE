@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import gzip
 import json
 import sqlite3
+import zipfile
 from pathlib import Path
 
 import typer
@@ -332,6 +334,36 @@ def test_feed_build_reports_skips_dashboard_aggregate_without_error(tmp_path: Pa
     assert "aggregate-only.example" not in values
 
 
+def test_feed_build_reports_scan_current_corpus_sized_family_count(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    for index in range(520):
+        _make_dashboard_report(
+            reports_dir,
+            f"family_{index:03d}",
+            {"hosts": [f"family-{index}.example"]},
+        )
+
+    payload = build_target_feed(
+        sources=["reports"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert payload["source_errors"] == []
+    assert payload["counts"]["by_source"]["reports"] == 520
+    assert (
+        payload["counts"]["by_source_group"]["report_family:family_519"] == 1
+    )
+    assert "family-519.example" in {
+        item["canonical_value"] for item in payload["items"]
+    }
+
+
 def test_feed_build_connector_source_ignores_local_config_files(tmp_path: Path) -> None:
     imports_dir = tmp_path / "imports"
     imports_dir.mkdir(parents=True)
@@ -376,6 +408,45 @@ def test_feed_build_connector_source_ignores_local_config_files(tmp_path: Path) 
     assert payload["counts"]["by_source"]["connectors"] == 1
     assert payload["items"][0]["canonical_value"] == "keep.example"
     assert payload["items"][0]["source_group"] == "connector_file:connector-output.json"
+
+
+def test_feed_build_connector_source_harvests_text_csv_xml_gzip_and_zip(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "runzero-assets.csv").write_text(
+        "hostname,ip\ncsv-feed.example,198.51.100.10\n",
+        encoding="utf-8",
+    )
+    (imports_dir / "burp-results.xml").write_text(
+        "<issue><host>xml-feed.example</host></issue>",
+        encoding="utf-8",
+    )
+    with gzip.open(imports_dir / "censys-hosts.json.gz", "wt", encoding="utf-8") as handle:
+        handle.write('{"services":[{"host":"gzip-feed.example"}]}')
+    with zipfile.ZipFile(imports_dir / "pd-cloud-export.zip", "w") as archive:
+        archive.writestr("assets.json", '{"targets":["zip-feed.example"]}')
+
+    payload = build_target_feed(
+        sources=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    values = {item["canonical_value"] for item in payload["items"]}
+    assert {
+        "csv-feed.example",
+        "198.51.100.10",
+        "xml-feed.example",
+        "gzip-feed.example",
+        "zip-feed.example",
+    } <= values
+    assert payload["counts"]["by_source_group"]["connector_file:runzero-assets.csv"] == 2
+    assert payload["counts"]["by_source_group"]["connector_file:burp-results.xml"] == 1
 
 
 def test_feed_build_cti_source_ignores_source_input_queue_files(tmp_path: Path) -> None:

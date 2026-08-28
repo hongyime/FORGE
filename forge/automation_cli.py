@@ -309,7 +309,7 @@ def register_automation_commands(app: typer.Typer) -> None:
             help="Docker probe mode: host-compose, compose-dependency, or disabled.",
         ),
         min_free_memory_mb: int = typer.Option(
-            2048,
+            1024,
             "--min-free-memory-mb",
             help="Minimum free memory before live auto-start work is considered safe.",
         ),

@@ -4,7 +4,7 @@ import json
 import os
 import subprocess
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +56,9 @@ SOURCE_QUEUE_FILES: dict[str, dict[str, str]] = {
 }
 
 INBOX_DIRNAME = "inbox"
+QUEUE_MAX_FAILURES = 5
+QUEUE_RETRY_BASE_SECONDS = 15 * 60
+QUEUE_RETRY_MAX_SECONDS = 6 * 60 * 60
 
 
 def automation_status(
@@ -516,6 +519,14 @@ def _classify_queue_items(
         status = str(item.get("status") or "pending").strip().lower()
         if status in {"imported", "completed", "promoted"}:
             continue
+        failure_count = _safe_int(item.get("failure_count"), default=0)
+        if failure_count >= QUEUE_MAX_FAILURES:
+            blocked.append(_blocked(item, f"retry_limit_reached:{failure_count}"))
+            continue
+        retry_after = _parse_iso(str(item.get("retry_after_at") or ""))
+        if retry_after is not None and retry_after > datetime.now(timezone.utc):
+            blocked.append(_blocked(item, f"retry_backoff_active:{retry_after.isoformat(timespec='seconds')}"))
+            continue
         ignore_reason = _queue_ignore_reason(item, imports_dir)
         if ignore_reason:
             ignored.append(_ignored(item, ignore_reason))
@@ -590,6 +601,13 @@ def _run_ready_queue_items(
                 queue_file=Path(str(item["queue_file"])),
                 queue_index=int(item["queue_index"]),
                 status="imported",
+            )
+        else:
+            _mark_queue_item_failure(
+                queue_file=Path(str(item["queue_file"])),
+                queue_index=int(item["queue_index"]),
+                returncode=int(result.get("returncode", 1)),
+                stderr=str(result.get("stderr") or ""),
             )
     return runs
 
@@ -822,6 +840,21 @@ def _safe_int(value: object, *, default: int) -> int:
         return default
 
 
+def _parse_iso(value: str) -> datetime | None:
+    text = value.strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def _bounded_error(exc: BaseException) -> str:
     return " ".join(str(exc).split())[:180]
 
@@ -906,6 +939,11 @@ def _mark_queue_item_status(*, queue_file: Path, queue_index: int, status: str) 
         return
     item["status"] = status
     item["last_processed_at"] = _now_iso()
+    if status in {"imported", "completed", "promoted"}:
+        item.pop("retry_after_at", None)
+        item.pop("failure_count", None)
+        item.pop("last_error", None)
+        item.pop("last_returncode", None)
     payload["updated_at"] = _now_iso()
     queue_file.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(
@@ -922,6 +960,37 @@ def _mark_queue_item_status(*, queue_file: Path, queue_index: int, status: str) 
         except OSError:
             pass
         raise
+
+
+def _mark_queue_item_failure(
+    *,
+    queue_file: Path,
+    queue_index: int,
+    returncode: int,
+    stderr: str,
+) -> None:
+    payload = _read_json_object(queue_file)
+    raw_inputs = payload.get("inputs")
+    if not isinstance(raw_inputs, list) or queue_index >= len(raw_inputs):
+        return
+    item = raw_inputs[queue_index]
+    if not isinstance(item, dict):
+        return
+    failure_count = _safe_int(item.get("failure_count"), default=0) + 1
+    delay_seconds = min(
+        QUEUE_RETRY_BASE_SECONDS * (2 ** max(failure_count - 1, 0)),
+        QUEUE_RETRY_MAX_SECONDS,
+    )
+    retry_after = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
+    item["status"] = "failed"
+    item["failure_count"] = failure_count
+    item["last_returncode"] = int(returncode)
+    item["last_processed_at"] = _now_iso()
+    item["retry_after_at"] = retry_after.isoformat(timespec="seconds")
+    if stderr.strip():
+        item["last_error"] = " ".join(stderr.split())[:500]
+    payload["updated_at"] = _now_iso()
+    _write_json_atomic(queue_file, payload)
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:

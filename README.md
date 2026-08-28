@@ -313,12 +313,15 @@ avoid duplicate source reads.
 the daily local `imports/target-feed.json` handoff for `forge targets import`.
 It merges and dedupes by canonical target key across current engagement DB
 seeds, `reports/dashboard/data/*.json`, report metadata JSON under `reports/`,
-CTI observation JSON, connector output JSON under `imports/`, and explicitly
-configured read-only Supabase REST tables. The command is dry-run by default;
-`--apply` writes the feed atomically. Use `--source all` for the full loop, or
-repeat `--source` for a subset. JSON reports total/selected/omitted/new/
-duplicate counts plus per-source and per-source-group counts, preserving
-provenance such as `report_family:<id>` and `supabase:<project_ref>:<table>`.
+CTI observation drops, connector outputs under `imports/`, and explicitly
+configured read-only Supabase REST tables. Local CTI/connector feed mining is
+bounded and passive: JSON is parsed structurally, while JSONL/CSV/XML/TXT/LOG
+and local GZ/ZIP drops are scanned only for normalized target-like values. The
+command is dry-run by default; `--apply` writes the feed atomically. Use
+`--source all` for the full loop, or repeat `--source` for a subset. JSON
+reports total/selected/omitted/new/duplicate counts plus per-source and
+per-source-group counts, preserving provenance such as `report_family:<id>` and
+`supabase:<project_ref>:<table>`.
 
 Live Supabase feed extraction is read-only and local-config only. Store owned
 project settings in ignored `imports/supabase-projects.local.json`; keep keys in
@@ -368,6 +371,11 @@ validation artifacts. Dry-run reports the same `discovered_inputs` and
 `new_discovered_inputs` without writing. This lets the loop grow outward from
 accepted artifacts while keeping live/keyed reads gated until the matching local
 credential or import file exists.
+
+Source queue execution is bounded for unattended runs. Failed local imports are
+marked `failed`, keep a redacted last error and return code, wait at least 15
+minutes before retrying, use exponential backoff capped at 6 hours, and block
+after 5 failures until the queue entry or artifact is fixed.
 
 Local CTI feed extraction is also file-based. Drop JSON directly under
 `imports/` with a filename containing `threatfox`, `urlhaus`, `misp`, `stix`,
@@ -457,7 +465,7 @@ Minimal local autostart config:
   "enabled": true,
   "apply_enabled": false,
   "roe_id_env": "FORGE_ROE_ID",
-  "min_free_memory_mb": 2048,
+  "min_free_memory_mb": 1024,
   "min_free_disk_gb": 5,
   "resume_limit": 10,
   "max_parallel": 2,

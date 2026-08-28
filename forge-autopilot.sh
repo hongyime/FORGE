@@ -106,6 +106,11 @@ printf '  dry_run=%s feed_build=%s\n' "$DRY_RUN" "$FEED_BUILD"
 printf '  feed_source=%s\n' "$FEED_SOURCES"
 printf '  start_limit=%s resume_limit=%s max_parallel=%s\n\n' "$START_LIMIT" "$RESUME_LIMIT" "$MAX_PARALLEL"
 
+if [ "$DRY_RUN" -ne 1 ] && [ -z "$ROE_ID" ]; then
+    printf '[ERROR] --apply requires --roe-id or FORGE_ROE_ID before any live feed/import/resume/monitoring work.\n'
+    exit 1
+fi
+
 if [ "$FEED_BUILD" -eq 1 ]; then
     printf '[FEED] building target feed...\n'
     set -- automation feed-build --output "$FEED_FILE" --json

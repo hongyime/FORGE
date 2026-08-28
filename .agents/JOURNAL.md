@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-08-29: B684 closed the restarted autonomous-loop audit gaps: feed-build now covers corpus-scale reports and bounded non-JSON local artifacts, source queues back off failed imports, launchers fail closed before live phases without ROE, ProjectDiscovery templates persist as graph evidence, and Censys imports carry richer fingerprints/topology.
 - 2026-08-29: B683 made autonomous startup fail closed more rigorously: direct autopilot launchers are dry-run by default, Docker container health can be delegated to Compose, memory gates are cgroup-aware, and local imports/tool binaries are excluded from Docker build context.
 - 2026-08-28: B682 added an opt-in Docker Compose `autostart` profile and packaged-runtime launcher fallback so Docker startup can invoke guarded-autostart without crash loops or local-venv assumptions.
 - 2026-08-28: B681 added `target_feed_scan` to automation status/cycle output so Forge can self-report eligible, high-priority, and ineligible target counts before live startup consumes scan budget.

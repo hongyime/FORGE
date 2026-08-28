@@ -138,6 +138,11 @@ echo   feed_source=%FEED_SOURCE_LABEL%
 echo   start_limit=%START_LIMIT% resume_limit=%RESUME_LIMIT% max_parallel=%MAX_PARALLEL%
 echo.
 
+if not "%DRY_RUN%"=="1" if "%ROE_ID%"=="" (
+    echo [ERROR] --apply requires --roe-id or FORGE_ROE_ID before any live feed/import/resume/monitoring work.
+    exit /b 1
+)
+
 :feed_build_phase
 if "%FEED_BUILD%"=="0" goto import_phase
 echo [FEED] building target feed...

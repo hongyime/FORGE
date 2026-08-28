@@ -143,15 +143,18 @@ def test_censys_report_import_accepts_hits_and_certificate_names(tmp_path: Path)
                             "port": 8443,
                             "transport_protocol": "TCP",
                             "service_name": "HTTPS",
+                            "software": [{"name": "nginx", "version": "1.25"}],
                             "tls": {
                                 "certificates": {
                                     "leaf_data": {
-                                        "names": ["portal.acme.example", "ignored.outside.example"]
+                                        "names": ["portal.acme.example", "ignored.outside.example"],
+                                        "fingerprint_sha256": "abc123",
                                     }
                                 }
                             },
                         }
                     ],
+                    "topology": [{"kind": "asn", "ref": "AS64500", "label": "AS64500"}],
                 }
             ]
         }
@@ -168,7 +171,7 @@ def test_censys_report_import_accepts_hits_and_certificate_names(tmp_path: Path)
             report_text=json.dumps(report),
         )
         host = con.execute(
-            "SELECT ip, hostname FROM hosts WHERE engagement_id=1001"
+            "SELECT id, ip, hostname, host_context FROM hosts WHERE engagement_id=1001"
         ).fetchone()
         service = con.execute(
             """
@@ -177,6 +180,27 @@ def test_censys_report_import_accepts_hits_and_certificate_names(tmp_path: Path)
             WHERE host_id=(SELECT id FROM hosts WHERE engagement_id=1001)
             """
         ).fetchone()
+        graph_nodes = {
+            row["entity_key"]: json.loads(row["metadata_json"])
+            for row in con.execute(
+                """
+                SELECT entity_key, metadata_json
+                FROM asset_entities
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        relationships = [
+            row["relationship_type"]
+            for row in con.execute(
+                """
+                SELECT relationship_type
+                FROM asset_relationships
+                WHERE engagement_id=1001
+                ORDER BY relationship_type
+                """
+            ).fetchall()
+        ]
     finally:
         con.close()
 
@@ -184,8 +208,17 @@ def test_censys_report_import_accepts_hits_and_certificate_names(tmp_path: Path)
     assert result["persisted_host_count"] == 1
     assert result["persisted_service_count"] == 1
     assert result["persisted_seed_count"] == 1
-    assert tuple(host) == ("198.51.100.44", "portal.acme.example")
+    assert (host["ip"], host["hostname"]) == ("198.51.100.44", "portal.acme.example")
     assert tuple(service) == (8443, "tcp", "HTTPS")
+    host_context = json.loads(host["host_context"])
+    assert host_context["fingerprint_depth"] >= 1
+    assert host_context["fingerprints"]["services"][0]["tls_names"] == [
+        "portal.acme.example",
+        "ignored.outside.example",
+    ]
+    assert host_context["topology_relationship_count"] == 1
+    assert graph_nodes["asset:asn:AS64500"]["topology_kind"] == "asn"
+    assert relationships == ["related_asset", "runs_service"]
 
 
 def test_urlscan_report_import_persists_scoped_host_service_and_sanitized_url_seed(
@@ -495,11 +528,26 @@ def test_projectdiscovery_cloud_export_imports_assets_findings_and_templates(
             WHERE engagement_id=1001 AND phase='connectors'
             """
         ).fetchone()
+        template_nodes = {
+            row["entity_key"]: json.loads(row["metadata_json"])
+            for row in con.execute(
+                """
+                SELECT entity_key, metadata_json
+                FROM asset_entities
+                WHERE engagement_id=1001 AND entity_key LIKE 'pd_template:%'
+                """
+            ).fetchall()
+        }
     finally:
         con.close()
 
     blob = json.dumps(
-        {"result": result, "finding": dict(finding), "audit": dict(audit)},
+        {
+            "result": result,
+            "finding": dict(finding),
+            "audit": dict(audit),
+            "template_nodes": template_nodes,
+        },
         sort_keys=True,
     )
     standards = json.loads(finding["standards_json"])
@@ -511,7 +559,18 @@ def test_projectdiscovery_cloud_export_imports_assets_findings_and_templates(
     assert result["persisted_finding_count"] == 1
     assert result["skipped_finding_count"] == 1
     assert result["parsed_template_count"] == 2
+    assert result["persisted_template_count"] == 2
+    assert {item["id"] for item in result["templates"]} == {
+        "cve-2026-demo",
+        "outside-demo",
+    }
     assert host_context["provider"] == "projectdiscovery_cloud"
+    assert template_nodes["pd_template:cve-2026-demo"]["connector_id"] == (
+        "projectdiscovery_cloud"
+    )
+    assert template_nodes["pd_template:outside-demo"]["source"] == (
+        "projectdiscovery_cloud_template_inventory"
+    )
     assert finding["target_url"] == "https://edge.acme.example/admin"
     assert finding["parameter"] == "cve-2026-demo"
     assert finding["severity"] == "HIGH"

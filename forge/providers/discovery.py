@@ -249,7 +249,7 @@ def _openrouter_model_is_free(
     pricing: dict[str, tuple[float | None, float | None]],
 ) -> bool:
     input_price, output_price = pricing.get(model_id, (None, None))
-    return model_id.endswith(":free") or (input_price == 0.0 and output_price == 0.0)
+    return input_price == 0.0 and output_price == 0.0
 
 
 def _pick_default_from_model_list(

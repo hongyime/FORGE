@@ -40,6 +40,7 @@ def test_self_heal_plan_is_plan_only_and_skips_docker_probe_by_default(tmp_path:
     assert payload["commands"]["autopilot_dry_run"][1:3] == ["--dry-run", "--feed-build"]
     assert payload["commands"]["autopilot_dry_run"][-2:] == ["--feed-source", "all"]
     assert payload["commands"]["autopilot_apply"][-1] == "--apply"
+    assert self_heal.DEFAULT_AUTOSTART_CONFIG["min_free_memory_mb"] == 1024
 
 
 def test_self_heal_plan_probe_reports_unhealthy_docker_services(

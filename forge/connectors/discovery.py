@@ -100,6 +100,11 @@ def import_discovery_report(
         if connector_id == "projectdiscovery_cloud"
         else 0
     )
+    template_inventory = (
+        _projectdiscovery_cloud_template_inventory(payload)
+        if connector_id == "projectdiscovery_cloud"
+        else []
+    )
     provider_source = _provider_source_for_connector(connector_id)
     persisted_hosts = 0
     persisted_services = 0
@@ -109,6 +114,7 @@ def import_discovery_report(
     persisted_graph_nodes = 0
     persisted_graph_relationships = 0
     persisted_findings = 0
+    persisted_templates = 0
     skipped_urls = 0
     skipped_findings = 0
     skipped: list[dict[str, str]] = []
@@ -208,6 +214,14 @@ def import_discovery_report(
             target=target or provider_url_hostname(target_url),
         ):
             persisted_findings += 1
+    if connector_id == "projectdiscovery_cloud" and template_inventory:
+        template_graph = _upsert_projectdiscovery_template_inventory(
+            con,
+            engagement_id=engagement_id,
+            templates=template_inventory,
+        )
+        persisted_templates = template_graph["template_count"]
+        persisted_graph_nodes += template_graph["node_count"]
     result = {
         "connector_id": connector_id,
         "engagement_id": engagement_id,
@@ -226,6 +240,8 @@ def import_discovery_report(
         "persisted_finding_count": persisted_findings,
         "skipped_finding_count": skipped_findings,
         "parsed_template_count": parsed_template_count,
+        "persisted_template_count": persisted_templates,
+        "templates": template_inventory[:50],
         "skipped_count": len(skipped),
         "skipped_url_count": skipped_urls,
         "skipped": skipped[:25],
@@ -382,14 +398,22 @@ def _parse_censys_report(payload: Any) -> list[_ImportedHost]:
             )
             if service is not None
         )
+        fingerprints = _censys_fingerprint_payload(item, services_payload)
+        topology = _topology_payload(item)
         metadata = _bounded_mapping(
             {
                 "provider": "censys",
+                "source": _field(item, "source", "source_name") or "censys",
                 "location": _nested_get(item, ("location", "country")),
                 "autonomous_system": _nested_get(item, ("autonomous_system", "asn")),
+                "fingerprint_depth": len(fingerprints),
+                "topology_relationship_count": len(topology),
+                "fingerprints": fingerprints,
+                "topology_relationships": topology,
                 "name_count": len(names),
                 "service_count": len(services),
-            }
+            },
+            depth=4,
         )
         hosts.append(_ImportedHost(ip=ip, names=tuple(names), services=services, metadata=metadata))
     return hosts
@@ -676,6 +700,55 @@ def _projectdiscovery_cloud_template_count(payload: Any) -> int:
     return 0
 
 
+def _projectdiscovery_cloud_template_inventory(payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(payload, Mapping):
+        return []
+    raw_templates = payload.get("templates")
+    if not isinstance(raw_templates, list):
+        return []
+    templates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw_template in raw_templates[:500]:
+        if isinstance(raw_template, str):
+            template_id = _bounded_text(raw_template, 160)
+            entry: dict[str, Any] = {"id": template_id}
+        elif isinstance(raw_template, Mapping):
+            template_id = _bounded_text(
+                _field(
+                    raw_template,
+                    "id",
+                    "template_id",
+                    "template-id",
+                    "templateID",
+                    "path",
+                ),
+                160,
+            )
+            if not template_id:
+                continue
+            info = raw_template.get("info")
+            if not isinstance(info, Mapping):
+                info = {}
+            entry = _bounded_mapping(
+                {
+                    "id": template_id,
+                    "name": _field(raw_template, "name", "title") or _field(info, "name"),
+                    "severity": _field(raw_template, "severity") or _field(info, "severity"),
+                    "type": _field(raw_template, "type", "protocol"),
+                    "tags": raw_template.get("tags") or info.get("tags"),
+                    "author": raw_template.get("author") or info.get("author"),
+                }
+            )
+        else:
+            continue
+        key = str(entry.get("id") or "").strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        templates.append(entry)
+    return templates
+
+
 def _discovery_document(connector_id: str, text: str) -> Any:
     try:
         return json.loads(str(text or ""))
@@ -958,6 +1031,36 @@ def _upsert_imported_service_graph(
     return {"node_count": 2, "relationship_count": 1}
 
 
+def _upsert_projectdiscovery_template_inventory(
+    con: sqlite3.Connection,
+    *,
+    engagement_id: int,
+    templates: list[dict[str, Any]],
+) -> dict[str, int]:
+    node_count = 0
+    for template in templates:
+        template_id = _bounded_text(template.get("id"), 160)
+        if not template_id:
+            continue
+        upsert_asset_entity(
+            con,
+            engagement_id=engagement_id,
+            entity_key=f"pd_template:{template_id}",
+            entity_type="evidence",
+            label=template_id,
+            source_table="audit_log",
+            source_id=0,
+            confidence=0.7,
+            metadata={
+                **template,
+                "connector_id": "projectdiscovery_cloud",
+                "source": "projectdiscovery_cloud_template_inventory",
+            },
+        )
+        node_count += 1
+    return {"template_count": node_count, "node_count": node_count}
+
+
 def _seed_candidates(imported: _ImportedHost, *, scope: list[str]) -> list[tuple[str, str]]:
     candidates: list[tuple[str, str]] = []
     for name in imported.names:
@@ -1132,6 +1235,46 @@ def _censys_service_names(services: Any) -> list[str]:
     return names
 
 
+def _censys_fingerprint_payload(
+    item: Mapping[str, Any],
+    services: Any,
+) -> dict[str, Any]:
+    payload = _fingerprint_payload(item)
+    if isinstance(services, list):
+        service_fingerprints: list[dict[str, Any]] = []
+        for service in services[:30]:
+            if not isinstance(service, Mapping):
+                continue
+            fingerprint = _bounded_mapping(
+                {
+                    "port": service.get("port"),
+                    "transport_protocol": service.get("transport_protocol")
+                    or service.get("protocol"),
+                    "service_name": service.get("service_name")
+                    or service.get("extended_service_name"),
+                    "software": service.get("software"),
+                    "http_title": _nested_get(service, ("http", "response", "html_title")),
+                    "tls_names": _nested_get(
+                        service,
+                        ("tls", "certificates", "leaf_data", "names"),
+                    ),
+                    "certificate_fingerprint": _nested_get(
+                        service,
+                        ("tls", "certificates", "leaf_data", "fingerprint"),
+                    )
+                    or _nested_get(
+                        service,
+                        ("tls", "certificates", "leaf_data", "fingerprint_sha256"),
+                    ),
+                }
+            )
+            if fingerprint:
+                service_fingerprints.append(fingerprint)
+        if service_fingerprints:
+            payload["services"] = service_fingerprints
+    return payload
+
+
 def _ordered_names(values: list[str]) -> list[str]:
     names: list[str] = []
     seen: set[str] = set()
@@ -1202,9 +1345,9 @@ def _url_matches_target(url: str, target: str) -> bool:
     return _name_matches_target(host, target) if host else False
 
 
-def _bounded_mapping(values: Mapping[str, Any]) -> dict[str, Any]:
+def _bounded_mapping(values: Mapping[str, Any], *, depth: int = 2) -> dict[str, Any]:
     return {
-        str(key): _bounded_value(value)
+        str(key): _bounded_value(value, depth=depth)
         for key, value in values.items()
         if value not in (None, "", [], {})
     }

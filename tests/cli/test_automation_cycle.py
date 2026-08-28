@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import typer
@@ -289,6 +290,80 @@ def test_automation_cycle_apply_runs_ready_queue_and_marks_imported(
     queue = json.loads(queue_path.read_text(encoding="utf-8"))
     assert queue["inputs"][0]["status"] == "imported"
     assert queue["inputs"][0]["last_processed_at"]
+
+
+def test_automation_cycle_failed_queue_item_gets_retry_backoff(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text(
+        json.dumps({"iocs": ["example.com"]}),
+        encoding="utf-8",
+    )
+    queue_path = imports_dir / "threatfox-inputs.local.json"
+    queue_path.write_text(
+        json.dumps({"inputs": [{"value": "threatfox.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+
+    def _runner(command: list[str], _cwd: Path) -> dict[str, object]:
+        return {"returncode": 9, "stdout": "", "stderr": "temporary parse failure"}
+
+    payload = automation_cycle(
+        apply=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        command_runner=_runner,
+    )
+
+    assert payload["queue_runs"][0]["status"] == "failed"
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    item = queue["inputs"][0]
+    assert item["status"] == "failed"
+    assert item["failure_count"] == 1
+    assert item["last_returncode"] == 9
+    assert item["retry_after_at"]
+    assert item["last_error"] == "temporary parse failure"
+
+    blocked = automation_status(imports_dir=imports_dir, engagement=1001)["blocked_inputs"]
+    assert blocked[0]["reason"].startswith("retry_backoff_active:")
+
+
+def test_automation_status_blocks_queue_item_after_retry_limit(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text("{}", encoding="utf-8")
+    retry_after = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(
+        timespec="seconds"
+    )
+    (imports_dir / "threatfox-inputs.local.json").write_text(
+        json.dumps(
+            {
+                "inputs": [
+                    {
+                        "value": "threatfox.json",
+                        "status": "failed",
+                        "failure_count": 5,
+                        "retry_after_at": retry_after,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(imports_dir=imports_dir, engagement=1001)
+
+    assert payload["queues"]["ready"] == 0
+    assert payload["blocked_inputs"][0]["reason"] == "retry_limit_reached:5"
 
 
 def test_automation_cycle_live_reuses_built_feed_without_guarded_rebuild(

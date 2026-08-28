@@ -77,7 +77,10 @@ ignored queue files such as `imports/threatfox-inputs.local.json`,
 `imports/asset-delta-imports.local.json`, and
 `imports/burp-dast-imports.local.json`, so later runs have durable per-source
 backlogs instead of one-time transient observations.
-Local CTI feed extraction reads ignored JSON drops such as
+Local CTI/connector feed extraction is passive and bounded: JSON is parsed
+structurally, while JSONL/CSV/XML/TXT/LOG plus local GZ/ZIP drops are scanned
+only for normalized target-like values. Local CTI feed extraction reads ignored
+drops such as
 `imports/threatfox-observations.local.json`,
 `imports/urlhaus-observations.local.json`,
 `imports/misp-observations.local.json`,
@@ -85,6 +88,9 @@ Local CTI feed extraction reads ignored JSON drops such as
 `imports/taxii-observations.local.json`. Filenames must contain `threatfox`,
 `urlhaus`, `misp`, `stix`, or `taxii`, and target-like values are harvested from
 keys such as `ioc`, `iocs`, `domains`, `urls`, `ips`, `emails`, and `targets`.
+Failed source-queue imports are marked `failed`, keep redacted failure metadata,
+back off for at least 15 minutes with exponential delay capped at 6 hours, and
+block after 5 failures until the entry or artifact is fixed.
 Use `self-heal-plan` before any Docker/startup automation; it is read-only and
 checks resources, Docker readiness, packaged Go tools, locks, and the exact
 bounded autopilot commands. Use `guarded-autostart` for startup hooks; it stays

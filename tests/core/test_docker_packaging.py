@@ -173,6 +173,15 @@ def test_systemd_unit_wraps_existing_hardened_compose_stack() -> None:
     assert "docker compose -f /opt/forge/docker/docker-compose.yml config --quiet" in unit
     assert "docker compose -f /opt/forge/docker/docker-compose.yml up -d --remove-orphans" in unit
     assert "docker compose -f /opt/forge/docker/docker-compose.yml down" in unit
+    assert "COMPOSE_PROFILES=autostart" in unit
+
+
+def test_readme_autostart_sample_matches_1024_mb_memory_gate() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert '"min_free_memory_mb": 1024' in readme
+    assert '"min_free_memory_mb": 2048' not in readme
+    assert "FORGE_AUTOSTART_MEM_LIMIT=1024m" in readme
 
 
 def test_helm_chart_pins_production_hardening_contract() -> None:

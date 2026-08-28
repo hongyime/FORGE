@@ -110,6 +110,25 @@ def test_openrouter_free_only_picker_skips_when_free_model_not_proven() -> None:
     assert model is None
 
 
+def test_openrouter_free_only_picker_requires_numeric_zero_pricing() -> None:
+    payload = {
+        "data": [
+            {"id": "qwen/qwen3-coder:free"},
+            {"id": "deepseek/deepseek-chat:free", "pricing": {"prompt": "unknown"}},
+        ]
+    }
+
+    model, pricing = _pick_default_from_model_list(
+        payload,
+        "qwen/qwen3-coder:free",
+        "openrouter",
+        free_only=True,
+    )
+
+    assert model is None
+    assert pricing == {}
+
+
 @pytest.mark.asyncio
 async def test_openrouter_probe_allows_free_only_backend_without_paid_gate(monkeypatch) -> None:
     payload = {
