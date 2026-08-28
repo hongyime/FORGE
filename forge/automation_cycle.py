@@ -76,6 +76,7 @@ def automation_status(
     data_dir: Path | None = None,
     reports_dir: Path | None = None,
     engagement: int | None = None,
+    quick: bool = False,
 ) -> dict[str, Any]:
     root_imports = Path(imports_dir or "imports")
     feed_path = Path(output or root_imports / "target-feed.json")
@@ -104,9 +105,14 @@ def automation_status(
         data_dir=Path(cfg_data_dir),
         autostart_config=autostart_config_path,
     )
-    resume_backlog = _resume_backlog_summary(data_dir=Path(cfg_data_dir))
-    monitoring_due = _monitoring_due_summary(data_dir=Path(cfg_data_dir))
-    report_review = _report_review_summary(reports_dir=reports_dir or Path("reports"))
+    if quick:
+        resume_backlog = _quick_skipped_summary("resume_backlog")
+        monitoring_due = _quick_skipped_summary("monitoring_due")
+        report_review = _quick_skipped_summary("report_review")
+    else:
+        resume_backlog = _resume_backlog_summary(data_dir=Path(cfg_data_dir))
+        monitoring_due = _monitoring_due_summary(data_dir=Path(cfg_data_dir))
+        report_review = _report_review_summary(reports_dir=reports_dir or Path("reports"))
     status_label = _automation_status_label(
         ready_items=ready_items,
         blocked_items=blocked_items,
@@ -119,7 +125,12 @@ def automation_status(
     )
     return {
         "schema_version": AUTOMATION_STATUS_SCHEMA_VERSION,
-        "execution_policy": "read_only_status_no_commands_executed",
+        "execution_policy": (
+            "read_only_quick_status_no_backlog_inventory"
+            if quick
+            else "read_only_status_no_commands_executed"
+        ),
+        "quick": bool(quick),
         "status": status_label,
         "generated_at": _now_iso(),
         "paths": {
@@ -1825,6 +1836,10 @@ def _automation_status_label(
         return "ready_with_inputs"
     if not bool(target_feed_scan.get("exists")):
         return "ready_needs_feed"
+    if _summary_skipped_for_quick(resume_backlog) or _summary_skipped_for_quick(
+        monitoring_due
+    ) or _summary_skipped_for_quick(report_review):
+        return "ready_unverified_backlog"
     if (
         int(resume_backlog.get("resume_ready_count") or 0) > 0
         or int(monitoring_due.get("total_due_count") or 0) > 0
@@ -1832,6 +1847,20 @@ def _automation_status_label(
     ):
         return "ready_with_backlog"
     return "ready"
+
+
+def _summary_skipped_for_quick(summary: dict[str, Any]) -> bool:
+    return str(summary.get("execution_policy") or "") == "read_only_quick_status_skipped"
+
+
+def _quick_skipped_summary(name: str) -> dict[str, Any]:
+    return {
+        "execution_policy": "read_only_quick_status_skipped",
+        "status": "skipped",
+        "summary": f"{name} omitted by automation status --quick",
+        "total_count": 0,
+        "next_actions": [["forge", "automation", "status", "--json"]],
+    }
 
 
 def _status_backlog_next_actions(

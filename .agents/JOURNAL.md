@@ -216,3 +216,4 @@
 - 2026-08-29: B713 classifies guarded-autostart failures as historical after the configured backoff window so old failures do not masquerade as current blockers.
 - 2026-08-29: B714 makes automation status top-level next_actions include safe resume, monitoring, and report-review follow-ups when guarded live startup is not blocked.
 - 2026-08-29: B715 adds a top-level automation status label so machine/startup consumers can distinguish blocked, attention, ready-with-inputs, ready-needs-feed, ready-with-backlog, and ready states.
+- 2026-08-29: B716 adds automation status --quick for startup/supervisor checks that skip expensive backlog inventories while marking the result as backlog-unverified.

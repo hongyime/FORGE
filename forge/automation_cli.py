@@ -129,6 +129,11 @@ def register_automation_commands(app: typer.Typer) -> None:
             "--reports-dir",
             help="Reports artifact dir for report-review summary (default ./reports).",
         ),
+        quick: bool = typer.Option(
+            False,
+            "--quick",
+            help="Skip slower resume/monitoring/report backlog inventories.",
+        ),
     ) -> None:
         payload = automation_status(
             imports_dir=imports_dir,
@@ -136,6 +141,7 @@ def register_automation_commands(app: typer.Typer) -> None:
             data_dir=data_dir,
             reports_dir=reports_dir,
             engagement=engagement,
+            quick=quick,
         )
         if json_output:
             typer.echo(json.dumps(payload, sort_keys=True))

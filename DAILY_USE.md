@@ -31,6 +31,7 @@ Use `--skip-feed-build` to keep the older behavior of consuming only an existing
 
 ```text
 forge automation status --json
+forge automation status --quick --json
 forge automation cycle --json
 forge automation cycle --apply --engagement N --json
 forge automation cycle --apply --live --docker-probe-mode compose-dependency --engagement N --json

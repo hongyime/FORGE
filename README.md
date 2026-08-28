@@ -308,7 +308,9 @@ monitoring, and dashboard refresh still pass through ROE, memory, disk, Docker,
 cooldown, backoff, and single-instance gates. `forge automation status` is the
 read-only view of feed presence, queue readiness, blocked inputs, resume and
 monitoring backlog, report review drift, guarded-autostart history, and next
-actions.
+actions. Use `forge automation status --quick --json` for startup/supervisor
+health checks that need feed/queue/autostart readiness without the slower
+resume, monitoring, and report backlog inventories.
 For live startup, ready source-queue imports are bounded by
 `queue_limit` in `imports/autostart.local.json` unless `--queue-limit N`
 overrides it; deferred items stay pending for the next cycle.

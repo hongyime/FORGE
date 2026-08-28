@@ -809,6 +809,38 @@ def test_automation_status_next_actions_include_backlog_dry_runs(
     ]
 
 
+def test_automation_status_quick_skips_slow_backlog_inventory(
+    tmp_path: Path, monkeypatch
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("slow backlog collector should not run in quick mode")
+
+    monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fail_if_called)
+    monkeypatch.setattr(automation_cycle_module, "monitoring_due_plan_for_data_dir", fail_if_called)
+    monkeypatch.setattr(automation_cycle_module, "collect_report_quality_audit", fail_if_called)
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        quick=True,
+    )
+
+    assert payload["quick"] is True
+    assert payload["execution_policy"] == "read_only_quick_status_no_backlog_inventory"
+    assert payload["status"] == "ready_unverified_backlog"
+    assert payload["resume_backlog"]["execution_policy"] == "read_only_quick_status_skipped"
+    assert payload["monitoring_due"]["execution_policy"] == "read_only_quick_status_skipped"
+    assert payload["report_review"]["execution_policy"] == "read_only_quick_status_skipped"
+
+
 def test_automation_status_reports_autostart_probe_blockers(
     tmp_path: Path,
     monkeypatch,
@@ -1609,6 +1641,26 @@ def test_automation_cycle_cli_registers_status_and_cycle(tmp_path: Path) -> None
     )
     assert status_result.exit_code == 0, status_result.output
     assert json.loads(status_result.output)["schema_version"] == "forge.automation_status.v1"
+
+    quick_status_result = runner.invoke(
+        app,
+        [
+            "automation",
+            "status",
+            "--imports-dir",
+            str(tmp_path / "imports"),
+            "--data-dir",
+            str(tmp_path / "data"),
+            "--quick",
+            "--json",
+        ],
+    )
+    assert quick_status_result.exit_code == 0, quick_status_result.output
+    quick_status_payload = json.loads(quick_status_result.output)
+    assert quick_status_payload["quick"] is True
+    assert quick_status_payload["execution_policy"] == (
+        "read_only_quick_status_no_backlog_inventory"
+    )
 
     cycle_result = runner.invoke(
         app,
