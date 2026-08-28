@@ -159,12 +159,25 @@ def test_automation_status_summarizes_existing_target_feed_scanability(
 ) -> None:
     imports_dir = tmp_path / "imports"
     imports_dir.mkdir()
+    (imports_dir / "autostart.local.json").write_text(
+        json.dumps({"min_start_source_count": 2}),
+        encoding="utf-8",
+    )
     feed_path = imports_dir / "target-feed.json"
     feed_path.write_text(
         json.dumps(
             {
                 "schema_version": "target-feed.v1",
                 "items": [
+                    {
+                        "target_type": "domain",
+                        "target_value": "single.example",
+                        "source_groups": ["connector:single"],
+                        "source_count": 1,
+                        "priority": 100,
+                        "scan_eligible": True,
+                        "scan_eligibility_reason": "eligible",
+                    },
                     {
                         "target_type": "domain",
                         "target_value": "shared.example",
@@ -198,15 +211,21 @@ def test_automation_status_summarizes_existing_target_feed_scanability(
 
     scan = payload["target_feed_scan"]
     assert scan["exists"] is True
-    assert scan["total_count"] == 2
-    assert scan["eligible_count"] == 1
+    assert scan["total_count"] == 3
+    assert scan["eligible_count"] == 2
+    assert scan["startable_count"] == 1
+    assert scan["eligible_below_start_threshold_count"] == 1
+    assert scan["min_start_source_count"] == 2
     assert scan["ineligible_count"] == 1
-    assert scan["high_priority_count"] == 1
+    assert scan["high_priority_count"] == 2
     assert scan["ineligible_reasons"] == {"non_global_ip": 1}
-    assert scan["top_targets"][0]["target_value"] == "shared.example"
-    assert payload["autostart_probe"] is None
+    assert scan["top_targets"][0]["target_value"] == "single.example"
+    assert scan["top_startable_targets"][0]["target_value"] == "shared.example"
+    assert payload["scan_policy"]["min_start_source_count"] == 2
+    assert payload["autostart_probe"]["status"] == "blocked"
     assert payload["next_actions"] == [
-        "forge automation cycle --apply --live --docker-probe-mode compose-dependency --json"
+        "forge automation self-heal-plan --json --docker-probe-mode compose-dependency",
+        "resolve autostart blockers before running cycle --apply --live",
     ]
 
 
@@ -339,10 +358,13 @@ def test_automation_cycle_dry_run_plans_feed_and_queue_without_writes(
     assert payload["feed_written"] is False
     assert payload["target_feed_scan"]["exists"] is True
     assert payload["target_feed_scan"]["eligible_count"] == 0
+    assert payload["target_feed_scan"]["startable_count"] == 0
+    assert payload["target_feed_scan"]["min_start_source_count"] == 1
     assert (
         payload["scan_policy"]["new_targets"]
         == "scan_immediately_when_cycle_runs_with_apply_live_and_roe_gates_pass"
     )
+    assert payload["scan_policy"]["min_start_source_count"] == 1
     assert not (imports_dir / "target-feed.json").exists()
     assert payload["queue_runs"][0]["status"] == "planned"
     queue = json.loads(

@@ -10,7 +10,7 @@ from typing import Any
 
 import httpx
 
-from forge.automation_self_heal import DEFAULT_AUTOSTART_CONFIG_PATH, run_guarded_autostart
+from forge.automation_self_heal import run_guarded_autostart
 from forge.automation_target_feed import build_target_feed, write_target_feed
 from forge.config import ForgeConfig
 from forge.monitoring.runner import monitoring_due_plan_for_data_dir
@@ -78,6 +78,7 @@ def automation_status(
     feed_path = Path(output or root_imports / "target-feed.json")
     cfg_data_dir = data_dir or ForgeConfig.load().data_dir
     autostart_config_path = root_imports / "autostart.local.json"
+    min_start_source_count = _autostart_min_start_source_count(autostart_config_path)
     effective_engagement = _resolve_default_engagement(
         explicit=engagement,
         autostart_config=autostart_config_path,
@@ -106,7 +107,10 @@ def automation_status(
             "exists": feed_path.is_file(),
             "size_bytes": feed_path.stat().st_size if feed_path.is_file() else 0,
         },
-        "target_feed_scan": _target_feed_scan_summary(feed_path=feed_path),
+        "target_feed_scan": _target_feed_scan_summary(
+            feed_path=feed_path,
+            min_start_source_count=min_start_source_count,
+        ),
         "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "engagement": {
@@ -114,7 +118,7 @@ def automation_status(
             "effective": effective_engagement,
             "env": DEFAULT_ENGAGEMENT_ENV,
         },
-        "scan_policy": _scan_policy(),
+        "scan_policy": _scan_policy(min_start_source_count=min_start_source_count),
         "autostart_probe": autostart_probe,
         "ready_inputs": ready_items,
         "blocked_inputs": blocked_items,
@@ -148,12 +152,14 @@ def automation_cycle(
 ) -> dict[str, Any]:
     root_imports = Path(imports_dir or "imports")
     feed_output = Path(output or root_imports / "target-feed.json")
+    selected_autostart_config = autostart_config or root_imports / "autostart.local.json"
     cfg_data_dir = data_dir or ForgeConfig.load().data_dir
     sources = list(source or ["all"])
     effective_engagement = _resolve_default_engagement(
         explicit=engagement,
-        autostart_config=autostart_config or DEFAULT_AUTOSTART_CONFIG_PATH,
+        autostart_config=selected_autostart_config,
     )
+    min_start_source_count = _autostart_min_start_source_count(selected_autostart_config)
     feed_payload = build_target_feed(
         sources=sources,
         data_dir=Path(cfg_data_dir),
@@ -198,7 +204,7 @@ def automation_cycle(
     autostart_result: dict[str, Any] | None = None
     if live:
         autostart_result = run_guarded_autostart(
-            config_path=autostart_config or DEFAULT_AUTOSTART_CONFIG_PATH,
+            config_path=selected_autostart_config,
             data_dir=Path(cfg_data_dir),
             apply=apply,
             skip_feed_build=True,
@@ -231,6 +237,7 @@ def automation_cycle(
         "target_feed_scan": _target_feed_scan_summary(
             feed_path=feed_output,
             feed_payload=feed_payload,
+            min_start_source_count=min_start_source_count,
         ),
         "monitoring_due": _monitoring_due_summary(data_dir=Path(cfg_data_dir)),
         "inbox": inbox_update,
@@ -240,7 +247,7 @@ def automation_cycle(
             "effective": effective_engagement,
             "env": DEFAULT_ENGAGEMENT_ENV,
         },
-        "scan_policy": _scan_policy(),
+        "scan_policy": _scan_policy(min_start_source_count=min_start_source_count),
         "ready_inputs": ready_items,
         "blocked_inputs": blocked_items,
         "ignored_inputs": ignored_items,
@@ -1136,21 +1143,27 @@ def _target_feed_scan_summary(
     *,
     feed_path: Path,
     feed_payload: dict[str, Any] | None = None,
+    min_start_source_count: int = 1,
 ) -> dict[str, Any]:
     raw_items = feed_payload.get("items") if isinstance(feed_payload, dict) else None
     if isinstance(raw_items, list):
         return _summarize_target_feed_scan_items(
-            [_target_feed_summary_item(raw_item) for raw_item in raw_items]
+            [_target_feed_summary_item(raw_item) for raw_item in raw_items],
+            min_start_source_count=min_start_source_count,
         )
     if not feed_path.is_file():
         return {
             "exists": False,
             "total_count": 0,
             "eligible_count": 0,
+            "startable_count": 0,
+            "eligible_below_start_threshold_count": 0,
+            "min_start_source_count": min_start_source_count,
             "ineligible_count": 0,
             "high_priority_count": 0,
             "ineligible_reasons": {},
             "top_targets": [],
+            "top_startable_targets": [],
         }
     try:
         items = load_target_feed(
@@ -1164,10 +1177,14 @@ def _target_feed_scan_summary(
             "exists": True,
             "total_count": 0,
             "eligible_count": 0,
+            "startable_count": 0,
+            "eligible_below_start_threshold_count": 0,
+            "min_start_source_count": min_start_source_count,
             "ineligible_count": 0,
             "high_priority_count": 0,
             "ineligible_reasons": {},
             "top_targets": [],
+            "top_startable_targets": [],
             "error": _bounded_error(exc),
         }
     return _summarize_target_feed_scan_items(
@@ -1182,7 +1199,8 @@ def _target_feed_scan_summary(
                 "scan_eligibility_reason": item.scan_eligibility_reason,
             }
             for item in items
-        ]
+        ],
+        min_start_source_count=min_start_source_count,
     )
 
 
@@ -1204,14 +1222,39 @@ def _target_feed_summary_item(raw_item: object) -> dict[str, Any]:
     }
 
 
-def _summarize_target_feed_scan_items(items: list[dict[str, Any]]) -> dict[str, Any]:
+def _summarize_target_feed_scan_items(
+    items: list[dict[str, Any]],
+    *,
+    min_start_source_count: int = 1,
+) -> dict[str, Any]:
     usable = [item for item in items if item.get("target_value")]
     eligible = [item for item in usable if item.get("scan_eligible") is True]
+    startable = [
+        item
+        for item in eligible
+        if _safe_int(item.get("source_count"), default=1) >= min_start_source_count
+    ]
     ineligible = [item for item in usable if item.get("scan_eligible") is not True]
     reasons: dict[str, int] = {}
     for item in ineligible:
         reason = str(item.get("scan_eligibility_reason") or "ineligible")
         reasons[reason] = reasons.get(reason, 0) + 1
+    sorted_eligible = sorted(
+        eligible,
+        key=lambda item: (
+            -_safe_int(item.get("priority"), default=0),
+            -_safe_int(item.get("source_count"), default=1),
+            str(item.get("target_key") or item.get("target_value") or ""),
+        ),
+    )
+    sorted_startable = sorted(
+        startable,
+        key=lambda item: (
+            -_safe_int(item.get("priority"), default=0),
+            -_safe_int(item.get("source_count"), default=1),
+            str(item.get("target_key") or item.get("target_value") or ""),
+        ),
+    )
     top_targets = [
         {
             "target_type": item["target_type"],
@@ -1221,25 +1264,33 @@ def _summarize_target_feed_scan_items(items: list[dict[str, Any]]) -> dict[str, 
             "scan_eligible": item["scan_eligible"],
             "scan_eligibility_reason": item["scan_eligibility_reason"],
         }
-        for item in sorted(
-            eligible,
-            key=lambda item: (
-                -_safe_int(item.get("priority"), default=0),
-                -_safe_int(item.get("source_count"), default=1),
-                str(item.get("target_key") or item.get("target_value") or ""),
-            ),
-        )[:5]
+        for item in sorted_eligible[:5]
+    ]
+    top_startable_targets = [
+        {
+            "target_type": item["target_type"],
+            "target_value": item["target_value"],
+            "source_count": item["source_count"],
+            "priority": item["priority"],
+            "scan_eligible": item["scan_eligible"],
+            "scan_eligibility_reason": item["scan_eligibility_reason"],
+        }
+        for item in sorted_startable[:5]
     ]
     return {
         "exists": True,
         "total_count": len(usable),
         "eligible_count": len(eligible),
+        "startable_count": len(startable),
+        "eligible_below_start_threshold_count": len(eligible) - len(startable),
+        "min_start_source_count": min_start_source_count,
         "ineligible_count": len(ineligible),
         "high_priority_count": sum(
             1 for item in eligible if _safe_int(item.get("priority"), default=0) >= 90
         ),
         "ineligible_reasons": dict(sorted(reasons.items())),
         "top_targets": top_targets,
+        "top_startable_targets": top_startable_targets,
     }
 
 
@@ -1248,6 +1299,12 @@ def _safe_int(value: object, *, default: int) -> int:
         return int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return default
+
+
+def _autostart_min_start_source_count(path: Path | None) -> int:
+    payload = _read_json_object(path) if path is not None and Path(path).is_file() else {}
+    value = _safe_int(payload.get("min_start_source_count"), default=1)
+    return max(1, min(value, 100))
 
 
 def _parse_iso(value: str) -> datetime | None:
@@ -1269,12 +1326,13 @@ def _bounded_error(exc: BaseException) -> str:
     return " ".join(str(exc).split())[:180]
 
 
-def _scan_policy() -> dict[str, Any]:
+def _scan_policy(*, min_start_source_count: int = 1) -> dict[str, Any]:
     return {
         "feed_sources": "all_by_default",
         "new_targets": "scan_immediately_when_cycle_runs_with_apply_live_and_roe_gates_pass",
+        "min_start_source_count": min_start_source_count,
         "multi_source_target_threshold": 2,
-        "multi_source_priority": "high",
+        "multi_source_priority": "high_and_startable_when_min_start_source_count_is_2",
         "queue_order": "priority_desc_then_connector_then_value",
         "live_guard": "guarded_autostart_memory_disk_docker_cooldown_backoff_single_instance",
     }
