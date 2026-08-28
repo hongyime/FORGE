@@ -20,6 +20,19 @@ function Write-TaskLog {
     Add-Content -LiteralPath $logPath -Value "[$stamp] $Message" -Encoding UTF8
 }
 
+function ConvertTo-ProcessArgument {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value)
+    if ($Value -notmatch '[\s"]') {
+        return $Value
+    }
+    return '"' + ($Value -replace '"', '\"') + '"'
+}
+
+function Join-ProcessArguments {
+    param([Parameter(Mandatory = $true)][string[]]$Values)
+    return (($Values | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join " ")
+}
+
 if ($SelfTest) {
     Write-TaskLog "self-test ok runner=$PSCommandPath"
     Write-Output "self-test ok"
@@ -47,6 +60,7 @@ $arguments = @(
     "--live",
     "--json"
 )
+$argumentText = Join-ProcessArguments $arguments
 
 Write-TaskLog "starting automation cycle autostart_config=$configPath timeout_minutes=$TimeoutMinutes"
 New-Item -ItemType Directory -Path $scheduledDir -Force | Out-Null
@@ -55,7 +69,7 @@ Set-Content -LiteralPath $stderrPath -Value "" -Encoding UTF8
 
 $process = Start-Process `
     -FilePath $python `
-    -ArgumentList $arguments `
+    -ArgumentList $argumentText `
     -WorkingDirectory $repoRoot `
     -WindowStyle Hidden `
     -PassThru `

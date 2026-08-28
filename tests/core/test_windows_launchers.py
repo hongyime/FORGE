@@ -488,6 +488,9 @@ def test_guarded_autostart_task_installer_uses_safe_hidden_apply_runner() -> Non
     assert '"--apply"' in runner
     assert '"--live"' in runner
     assert '"--json"' in runner
+    assert "function convertto-processargument" in runner
+    assert "$argumenttext = join-processarguments $arguments" in runner
+    assert "-argumentlist $argumenttext" in runner
     assert "-windowstyle hidden" in runner
     assert "redirectstandardoutput" in runner
     assert "forge_guarded_autostart.stdout.log" in runner
