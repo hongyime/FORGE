@@ -207,3 +207,4 @@
 - 2026-08-29: B705 bounds live-cycle queue imports with `queue_limit`, keeping startup from spending unbounded time on local artifact queues before guarded import/start/resume/monitoring.
 - 2026-08-29: B706 makes the Windows guarded-autostart timeout path terminate the process tree with taskkill before falling back to Stop-Process.
 - 2026-08-29: B707 changes Docker guarded-autostart to a low-resource controlled loop with startup delay and cadence, while keeping live execution behind Forge guard gates.
+- 2026-08-29: B708 makes compose-dependency Docker readiness report that app service health is delegated/not inspected and points operators to a host-compose probe for full container health.
