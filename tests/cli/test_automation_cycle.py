@@ -493,6 +493,33 @@ def test_automation_status_summarizes_supabase_not_configured(tmp_path: Path) ->
     ]
 
 
+def test_automation_status_next_actions_include_source_setup_gates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["next_actions"][:2] == [
+        "set FORGE_THREATFOX_AUTH_KEY=<free abuse.ch Auth-Key>",
+        (
+            "forge automation supabase-add PROJECT_REF "
+            "FORGE_SUPABASE_PROJECT_READ_KEY --apply --json"
+        ),
+    ]
+
+
 def test_automation_status_summarizes_supabase_project_key_gate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

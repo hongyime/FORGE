@@ -225,3 +225,4 @@
 - 2026-08-29: B722 exposes CTI refresh readiness in automation status/cycle so startup operators can see the free-key gate and safe refresh command without live network or writes.
 - 2026-08-29: B723 exposes Supabase sync readiness in automation status/cycle from local project_ref/key_env config only, preserving explicit owned-project gating and no network reads during status.
 - 2026-08-29: B724 adds monitoring run-due status labels so valid dry-runs and scheduler outcomes no longer serialize as `status=null`.
+- 2026-08-29: B725 makes source-readiness setup gates visible in full automation status next_actions while preserving quick-status and backlog-first ordering.

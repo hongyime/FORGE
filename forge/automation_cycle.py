@@ -2015,6 +2015,16 @@ def _status_next_actions(
         for item in ((autostart_probe or {}).get("blockers") or [])
         if str(item)
     ]
+    quick_skipped_backlog = (
+        _summary_skipped_for_quick(resume_backlog or {})
+        or _summary_skipped_for_quick(monitoring_due or {})
+        or _summary_skipped_for_quick(report_review or {})
+    )
+    has_backlog = _cycle_has_backlog(
+        resume_backlog=resume_backlog or {},
+        monitoring_due=monitoring_due or {},
+        report_review=report_review or {},
+    )
     if ready_items:
         actions.append("forge automation cycle --apply --engagement N --json")
         if not autostart_blockers:
@@ -2025,15 +2035,15 @@ def _status_next_actions(
     if (
         not ready_items
         and not autostart_blockers
-        and str((cti_refresh or {}).get("status") or "") == "ready"
+        and not quick_skipped_backlog
+        and not has_backlog
     ):
-        actions.extend(_command_action_strings((cti_refresh or {}).get("next_actions"), limit=1))
-    if (
-        not ready_items
-        and not autostart_blockers
-        and str((supabase_sync or {}).get("status") or "") == "ready"
-    ):
-        actions.extend(_command_action_strings((supabase_sync or {}).get("next_actions"), limit=1))
+        actions.extend(
+            _source_readiness_next_actions(
+                cti_refresh=cti_refresh or {},
+                supabase_sync=supabase_sync or {},
+            )
+        )
     if any(item["reason"] == "engagement_required" for item in blocked_items):
         actions.append(
             "add engagement_id to queue entries, set autostart engagement_id, "
@@ -2044,11 +2054,6 @@ def _status_next_actions(
     if autostart_blockers:
         actions.append("forge automation self-heal-plan --json --docker-probe-mode compose-dependency")
         actions.append("resolve autostart blockers before running cycle --apply --live")
-    quick_skipped_backlog = (
-        _summary_skipped_for_quick(resume_backlog or {})
-        or _summary_skipped_for_quick(monitoring_due or {})
-        or _summary_skipped_for_quick(report_review or {})
-    )
     if quick_skipped_backlog and not autostart_blockers:
         actions.append("forge automation status --json")
     if not actions:
@@ -2064,12 +2069,34 @@ def _status_next_actions(
                 report_review=report_review or {},
             )
         )
+        if has_backlog and not ready_items:
+            actions.extend(
+                _source_readiness_next_actions(
+                    cti_refresh=cti_refresh or {},
+                    supabase_sync=supabase_sync or {},
+                )
+            )
     if quick_skipped_backlog and not autostart_blockers:
         actions.append(
             "forge automation cycle --apply --live "
             "--docker-probe-mode compose-dependency --json"
         )
     return _dedupe_strings(actions)[:8]
+
+
+def _source_readiness_next_actions(
+    *,
+    cti_refresh: dict[str, Any],
+    supabase_sync: dict[str, Any],
+) -> list[str]:
+    actions: list[str] = []
+    for summary in (cti_refresh, supabase_sync):
+        if str(summary.get("status") or "") == "ready":
+            actions.extend(_command_action_strings(summary.get("next_actions"), limit=1))
+    for summary in (cti_refresh, supabase_sync):
+        if str(summary.get("status") or "") != "ready":
+            actions.extend(_command_action_strings(summary.get("next_actions"), limit=1))
+    return actions
 
 
 def _automation_status_label(
