@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-08-29: B731 bounded Supabase target-feed harvesting to page-by-page capped processing and exposed per-table row/page telemetry so all-table/all-column sync stays observable under the 1024 MB startup profile.
 - 2026-08-29: B701 changed ThreatFox refresh from assumed no-key live sync to explicit free-account keyed refresh after current abuse.ch docs showed Auth-Key is required, keeping no-key CTI on local artifact queues.
 - 2026-08-29: B700 added dry-run-by-default no-secret `automation supabase-add` and `automation input-add` helpers so owned Supabase refs and local CTI/connector/Burp artifacts can be queued without manual JSON edits.
 - 2026-08-29: B699 verified provider discovery with live probes enabled but no OpenRouter key, proving Forge reports only detected local/subscription backends and keeps paid backends disabled.

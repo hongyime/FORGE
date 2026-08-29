@@ -1863,6 +1863,8 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
             "discovered_tables_count": 2,
             "scanned_tables": ["assets", "observations"],
             "scanned_tables_count": 2,
+            "scanned_table_rows": {"assets": 1, "observations": 1},
+            "scanned_table_pages": {"assets": 1, "observations": 1},
             "row_limit_per_table": 100000,
             "errors": [],
         }
@@ -1931,6 +1933,8 @@ def test_feed_build_supabase_all_tables_reports_blocked_discovery(
             "discovered_tables_count": 0,
             "scanned_tables": [],
             "scanned_tables_count": 0,
+            "scanned_table_rows": {},
+            "scanned_table_pages": {},
             "row_limit_per_table": 100000,
             "errors": ["abc123:discover_tables:paths_missing"],
             "next_action": (
@@ -2017,6 +2021,8 @@ def test_feed_build_supabase_unset_key_env_does_not_call_http(
             "discovered_tables_count": 0,
             "scanned_tables": [],
             "scanned_tables_count": 0,
+            "scanned_table_rows": {},
+            "scanned_table_pages": {},
             "row_limit_per_table": 100000,
             "errors": ["key_env_unset:FORGE_SUPABASE_ABC123_READ_KEY"],
         }
@@ -2083,6 +2089,80 @@ def test_feed_build_supabase_paginates_and_caps_table_limit(
     ]
     assert payload["counts"]["by_source"]["supabase"] == 1001
     assert payload["counts"]["by_source_group"]["supabase:abc123:targets"] == 1001
+    assert payload["supabase_table_discovery"][0]["scanned_table_rows"] == {
+        "targets": 1001
+    }
+    assert payload["supabase_table_discovery"][0]["scanned_table_pages"] == {
+        "targets": 2
+    }
+
+
+def test_feed_build_supabase_harvests_no_more_than_configured_row_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed_urls: list[str] = []
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> list[dict[str, str]]:
+            return [{"domain": f"over-{index}.example"} for index in range(5)]
+
+    def _fake_get(url: str, *, headers: dict[str, str], timeout: float) -> _Response:
+        observed_urls.append(url)
+        return _Response()
+
+    config = tmp_path / "supabase-projects.local.json"
+    config.write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "url": "https://abc123.supabase.co",
+                        "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+                        "tables": ["targets"],
+                        "target_columns": ["domain"],
+                        "limit": 3,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_SUPABASE_ABC123_READ_KEY", "test-read-key")
+    monkeypatch.setattr("forge.automation_target_feed.httpx.get", _fake_get)
+
+    payload = build_target_feed(
+        sources=["supabase"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+        supabase_config_path=config,
+    )
+
+    assert observed_urls == [
+        "https://abc123.supabase.co/rest/v1/targets?select=domain&limit=3&offset=0"
+    ]
+    assert payload["counts"]["by_source"]["supabase"] == 3
+    assert payload["counts"]["by_source_group"]["supabase:abc123:targets"] == 3
+    assert {item["canonical_value"] for item in payload["items"]} == {
+        "over-0.example",
+        "over-1.example",
+        "over-2.example",
+    }
+    assert payload["source_errors"] == [
+        {"source": "supabase", "error": "abc123:targets:row_limit_reached:3"}
+    ]
+    assert payload["supabase_table_discovery"][0]["scanned_table_rows"] == {
+        "targets": 3
+    }
+    assert payload["supabase_table_discovery"][0]["scanned_table_pages"] == {
+        "targets": 1
+    }
 
 
 def test_feed_build_supabase_uses_greedy_default_limit_for_minimal_project(

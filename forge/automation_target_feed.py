@@ -1563,6 +1563,8 @@ def _supabase_discovery_summary(
     status: str,
     discovered_tables: list[str] | None = None,
     scanned_tables: list[str] | None = None,
+    scanned_table_rows: dict[str, int] | None = None,
+    scanned_table_pages: dict[str, int] | None = None,
     errors: list[str] | None = None,
 ) -> dict[str, object]:
     requested_all_tables = _wants_all_supabase_tables(requested_tables)
@@ -1578,6 +1580,8 @@ def _supabase_discovery_summary(
         "discovered_tables_count": len(discovered_tables or []),
         "scanned_tables": list(scanned_tables or []),
         "scanned_tables_count": len(scanned_tables or []),
+        "scanned_table_rows": dict(scanned_table_rows or {}),
+        "scanned_table_pages": dict(scanned_table_pages or {}),
         "row_limit_per_table": int(project["limit"]),
         "errors": list(errors or []),
     }
@@ -1589,44 +1593,6 @@ def _supabase_discovery_summary(
     return summary
 
 
-def _supabase_table_rows(
-    *,
-    project: dict[str, Any],
-    headers: dict[str, str],
-    table_name: str,
-    select_param: str,
-) -> tuple[list[dict[str, Any]], list[str], int]:
-    row_limit = int(project["limit"])
-    rows: list[dict[str, Any]] = []
-    errors: list[str] = []
-    offset = 0
-    while offset < row_limit:
-        page_size = min(_SUPABASE_PAGE_SIZE, row_limit - offset)
-        url = (
-            f"{project['url']}/rest/v1/{quote(table_name, safe='')}"
-            f"?select={quote(select_param, safe=',*')}"
-            f"&limit={page_size}&offset={offset}"
-        )
-        try:
-            response = httpx.get(url, headers=headers, timeout=15.0)
-            response.raise_for_status()
-            page = response.json()
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"{project['project_ref']}:{table_name}:http_{type(exc).__name__}")
-            break
-        if not isinstance(page, list):
-            errors.append(f"{project['project_ref']}:{table_name}:response_not_list")
-            break
-        dict_rows = [row for row in page if isinstance(row, dict)]
-        rows.extend(dict_rows)
-        if len(page) < page_size:
-            break
-        offset += page_size
-    if len(rows) >= row_limit:
-        errors.append(f"{project['project_ref']}:{table_name}:row_limit_reached:{row_limit}")
-    return rows, errors, row_limit
-
-
 def _harvest_supabase_table(
     *,
     project: dict[str, Any],
@@ -1635,12 +1601,14 @@ def _harvest_supabase_table(
     columns: list[str],
     source_group: str,
     first_seen_at: str,
-) -> tuple[list[FeedCandidate], list[str], int]:
+) -> tuple[list[FeedCandidate], list[str], int, int]:
     row_limit = int(project["limit"])
     select_param = "*" if _wants_all_supabase_columns(columns) else ",".join(columns)
     candidates: list[FeedCandidate] = []
     errors: list[str] = []
     row_count = 0
+    page_count = 0
+    limit_reached = False
     offset = 0
     while offset < row_limit:
         page_size = min(_SUPABASE_PAGE_SIZE, row_limit - offset)
@@ -1659,9 +1627,12 @@ def _harvest_supabase_table(
         if not isinstance(page, list):
             errors.append(f"{project['project_ref']}:{table_name}:response_not_list")
             break
+        page_count += 1
         dict_rows = [row for row in page if isinstance(row, dict)]
-        row_count += len(dict_rows)
-        for row in dict_rows:
+        remaining = max(row_limit - row_count, 0)
+        rows_to_harvest = dict_rows[:remaining]
+        row_count += len(rows_to_harvest)
+        for row in rows_to_harvest:
             candidates.extend(
                 _harvest_supabase_row(
                     row,
@@ -1670,12 +1641,15 @@ def _harvest_supabase_table(
                     first_seen_at=first_seen_at,
                 )
             )
+        if row_count >= row_limit:
+            limit_reached = True
+            break
         if len(page) < page_size:
             break
         offset += page_size
-    if row_count >= row_limit:
+    if limit_reached:
         errors.append(f"{project['project_ref']}:{table_name}:row_limit_reached:{row_limit}")
-    return candidates, errors, row_count
+    return candidates, errors, row_count, page_count
 
 
 def _harvest_supabase_row(
@@ -1776,13 +1750,15 @@ def _extract_supabase_source(
             discovery_errors = []
             discovery_status = "configured"
         scanned_tables: list[str] = []
+        scanned_table_rows: dict[str, int] = {}
+        scanned_table_pages: dict[str, int] = {}
         for table in tables:
             table_name = str(table).strip()
             source_group = f"supabase:{project_ref}:{table_name}"
             if not _safe_supabase_identifier(table_name):
                 errors.append(f"{project_ref}:{table_name}:invalid_table")
                 continue
-            table_candidates, row_errors, row_count = _harvest_supabase_table(
+            table_candidates, row_errors, row_count, page_count = _harvest_supabase_table(
                 project=project,
                 headers=headers,
                 table_name=table_name,
@@ -1792,6 +1768,8 @@ def _extract_supabase_source(
             )
             errors.extend(row_errors)
             scanned_tables.append(table_name)
+            scanned_table_rows[table_name] = row_count
+            scanned_table_pages[table_name] = page_count
             candidates.extend(table_candidates)
             if row_count == 0:
                 continue
@@ -1804,6 +1782,8 @@ def _extract_supabase_source(
                 status=discovery_status,
                 discovered_tables=tables if discovery_status == "discovered" else [],
                 scanned_tables=scanned_tables,
+                scanned_table_rows=scanned_table_rows,
+                scanned_table_pages=scanned_table_pages,
                 errors=discovery_errors,
             )
         )
