@@ -571,6 +571,18 @@ def register_connector_commands(app: typer.Typer) -> None:
         connector: str = typer.Option("shodan_host_lookup", "--connector"),
         report_file: Path = typer.Option(..., "--report-file", exists=True, dir_okay=False),
         target: str = typer.Option("", "--target", help="Optional scoped domain/IP target filter."),
+        dry_run: bool = typer.Option(
+            False,
+            "--dry-run",
+            help="Parse and scope-check the report without writing discovery evidence.",
+        ),
+        limit: int | None = typer.Option(
+            None,
+            "--limit",
+            min=1,
+            max=10000,
+            help="Maximum number of hosts, findings, and templates to process.",
+        ),
         operator: str = typer.Option("connector-import", "--operator"),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
@@ -589,6 +601,8 @@ def register_connector_commands(app: typer.Typer) -> None:
                     report_path=report_file,
                     target=target,
                     operator=operator,
+                    dry_run=dry_run,
+                    limit=limit,
                 ),
             )
         except (FileNotFoundError, LookupError, ValueError) as exc:

@@ -32,6 +32,9 @@ SUPPORTED_DISCOVERY_IMPORT_CONNECTORS = (
     "runzero_asset_export",
     "projectdiscovery_cloud",
 )
+DISCOVERY_IMPORT_SCHEMA_VERSION = "forge.discovery_report_import.v1"
+MAX_DISCOVERY_REPORT_BYTES = 10 * 1024 * 1024
+MAX_DISCOVERY_IMPORT_ITEMS = 10000
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,8 @@ class DiscoveryReportImportConfig:
     report_path: Path | None = None
     target: str = ""
     operator: str = "connector-import"
+    dry_run: bool = False
+    limit: int | None = None
 
 
 @dataclass(frozen=True)
@@ -84,7 +89,7 @@ def import_discovery_report(
     if text is None:
         if config.report_path is None:
             raise ValueError("report_path is required")
-        text = config.report_path.read_text(encoding="utf-8")
+        text = _read_discovery_report_text(config.report_path)
     payload = _discovery_document(connector_id, text)
     imported_hosts = _parse_discovery_report(connector_id, payload)
     imported_findings = (
@@ -105,6 +110,14 @@ def import_discovery_report(
         if connector_id == "projectdiscovery_cloud"
         else []
     )
+    item_limit = _normalize_import_limit(config.limit)
+    selected_hosts = imported_hosts[:item_limit]
+    selected_findings = imported_findings[:item_limit]
+    selected_templates = template_inventory[:item_limit]
+    total_count = len(imported_hosts) + len(imported_findings) + len(template_inventory)
+    selected_count = len(selected_hosts) + len(selected_findings) + len(selected_templates)
+    omitted_count = max(0, total_count - selected_count)
+    dry_run = bool(config.dry_run)
     provider_source = _provider_source_for_connector(connector_id)
     persisted_hosts = 0
     persisted_services = 0
@@ -118,7 +131,7 @@ def import_discovery_report(
     skipped_urls = 0
     skipped_findings = 0
     skipped: list[dict[str, str]] = []
-    for imported in imported_hosts:
+    for imported in selected_hosts:
         decision = _scope_decision(imported, scope=scope, target=target)
         if not decision["allowed"]:
             skipped.append(
@@ -128,6 +141,8 @@ def import_discovery_report(
                     "names": ",".join(imported.names[:3]),
                 }
             )
+            continue
+        if dry_run:
             continue
         host_id, host_changed = _upsert_host(
             con,
@@ -194,7 +209,7 @@ def import_discovery_report(
             )
             persisted_urls += 1 if persisted_url["seed_inserted"] else 0
             persisted_crawl_rows += 1 if persisted_url["crawl_inserted"] else 0
-    for finding in imported_findings:
+    for finding in selected_findings:
         target_url = str(finding.get("target_url") or "")
         try:
             assert_url_in_scope(target_url, scope)
@@ -203,6 +218,8 @@ def import_discovery_report(
             continue
         if target and not _url_matches_target(target_url, target):
             skipped_findings += 1
+            continue
+        if dry_run:
             continue
         standards = dict(finding.get("standards") or {})
         standards["source"] = "projectdiscovery_cloud"
@@ -214,20 +231,31 @@ def import_discovery_report(
             target=target or provider_url_hostname(target_url),
         ):
             persisted_findings += 1
-    if connector_id == "projectdiscovery_cloud" and template_inventory:
+    if connector_id == "projectdiscovery_cloud" and selected_templates and not dry_run:
         template_graph = _upsert_projectdiscovery_template_inventory(
             con,
             engagement_id=engagement_id,
-            templates=template_inventory,
+            templates=selected_templates,
         )
         persisted_templates = template_graph["template_count"]
         persisted_graph_nodes += template_graph["node_count"]
     result = {
+        "schema_version": DISCOVERY_IMPORT_SCHEMA_VERSION,
         "connector_id": connector_id,
         "engagement_id": engagement_id,
         "target": target,
-        "status": "completed",
+        "status": "dry_run" if dry_run else "completed",
+        "execution_policy": (
+            "dry_run_no_writes" if dry_run else "applied_local_write"
+        ),
+        "dry_run": dry_run,
+        "apply_requested": not dry_run,
+        "total_count": total_count,
+        "selected_count": selected_count,
+        "omitted_count": omitted_count,
+        "limit": None if config.limit is None else item_limit,
         "parsed_count": len(imported_hosts),
+        "selected_host_count": len(selected_hosts),
         "persisted_count": persisted_hosts,
         "persisted_host_count": persisted_hosts,
         "persisted_service_count": persisted_services,
@@ -237,11 +265,13 @@ def import_discovery_report(
         "persisted_graph_node_count": persisted_graph_nodes,
         "persisted_graph_relationship_count": persisted_graph_relationships,
         "parsed_finding_count": len(imported_findings),
+        "selected_finding_count": len(selected_findings),
         "persisted_finding_count": persisted_findings,
         "skipped_finding_count": skipped_findings,
         "parsed_template_count": parsed_template_count,
+        "selected_template_count": len(selected_templates),
         "persisted_template_count": persisted_templates,
-        "templates": template_inventory[:50],
+        "templates": selected_templates[:50],
         "skipped_count": len(skipped),
         "skipped_url_count": skipped_urls,
         "skipped": skipped[:25],
@@ -249,9 +279,32 @@ def import_discovery_report(
         "report_file": str(config.report_path or ""),
         "privacy": "Provider report bodies and API keys are not returned or audited.",
     }
-    _audit_discovery_import(con, config, result=result)
-    con.commit()
+    if not dry_run:
+        _audit_discovery_import(con, config, result=result)
+        con.commit()
     return result
+
+
+def _normalize_import_limit(value: int | None) -> int:
+    if value is None:
+        return MAX_DISCOVERY_IMPORT_ITEMS
+    try:
+        limit = int(value)
+    except (TypeError, ValueError):
+        return MAX_DISCOVERY_IMPORT_ITEMS
+    if limit <= 0:
+        return MAX_DISCOVERY_IMPORT_ITEMS
+    return min(limit, MAX_DISCOVERY_IMPORT_ITEMS)
+
+
+def _read_discovery_report_text(path: Path) -> str:
+    size = path.stat().st_size
+    if size > MAX_DISCOVERY_REPORT_BYTES:
+        raise ValueError(
+            "discovery report exceeds max size "
+            f"{MAX_DISCOVERY_REPORT_BYTES} bytes"
+        )
+    return path.read_text(encoding="utf-8")
 
 
 def _parse_discovery_report(connector_id: str, payload: Any) -> list[_ImportedHost]:

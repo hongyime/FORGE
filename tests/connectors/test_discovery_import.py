@@ -8,7 +8,11 @@ import typer
 from typer.testing import CliRunner
 
 from forge.connectors.cli import register_connector_commands
-from forge.connectors.discovery import DiscoveryReportImportConfig, import_discovery_report
+from forge.connectors.discovery import (
+    MAX_DISCOVERY_REPORT_BYTES,
+    DiscoveryReportImportConfig,
+    import_discovery_report,
+)
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.db.validation import validate_canonical_schema
@@ -129,6 +133,129 @@ def test_shodan_report_import_persists_scoped_hosts_services_and_seeds(
     assert audit["action"] == "discovery_report_import"
     assert "hosts=1" in audit["result"]
     assert api_key not in blob
+
+
+def test_discovery_report_import_dry_run_does_not_persist_or_audit(
+    tmp_path: Path,
+) -> None:
+    con = _build_discovery_db(tmp_path / "engagement.db")
+    report = {
+        "matches": [
+            {
+                "ip_str": "198.51.100.10",
+                "hostnames": ["vpn.acme.example"],
+                "port": 443,
+                "transport": "tcp",
+            }
+        ]
+    }
+
+    try:
+        result = import_discovery_report(
+            con,
+            DiscoveryReportImportConfig(
+                connector_id="shodan_host_lookup",
+                engagement_id=1001,
+                target="acme.example",
+                operator="discovery-test",
+                dry_run=True,
+            ),
+            report_text=json.dumps(report),
+        )
+        host_count = con.execute(
+            "SELECT COUNT(*) FROM hosts WHERE engagement_id=1001"
+        ).fetchone()[0]
+        seed_count = con.execute(
+            "SELECT COUNT(*) FROM engagement_seeds WHERE engagement_id=1001"
+        ).fetchone()[0]
+        audit_count = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM audit_log
+            WHERE engagement_id=1001 AND phase='connectors'
+            """
+        ).fetchone()[0]
+    finally:
+        con.close()
+
+    assert result["schema_version"] == "forge.discovery_report_import.v1"
+    assert result["status"] == "dry_run"
+    assert result["execution_policy"] == "dry_run_no_writes"
+    assert result["dry_run"] is True
+    assert result["apply_requested"] is False
+    assert result["total_count"] == 1
+    assert result["selected_count"] == 1
+    assert result["omitted_count"] == 0
+    assert result["parsed_count"] == 1
+    assert result["selected_host_count"] == 1
+    assert result["persisted_count"] == 0
+    assert result["persisted_host_count"] == 0
+    assert host_count == 0
+    assert seed_count == 0
+    assert audit_count == 0
+
+
+def test_discovery_report_import_limit_caps_selected_hosts(tmp_path: Path) -> None:
+    con = _build_discovery_db(tmp_path / "engagement.db")
+    report = {
+        "matches": [
+            {
+                "ip_str": f"198.51.100.{index}",
+                "hostnames": [f"host{index}.acme.example"],
+                "port": 443,
+            }
+            for index in range(3)
+        ]
+    }
+
+    try:
+        result = import_discovery_report(
+            con,
+            DiscoveryReportImportConfig(
+                connector_id="shodan_host_lookup",
+                engagement_id=1001,
+                target="acme.example",
+                operator="discovery-test",
+                dry_run=True,
+                limit=2,
+            ),
+            report_text=json.dumps(report),
+        )
+    finally:
+        con.close()
+
+    assert result["total_count"] == 3
+    assert result["selected_count"] == 2
+    assert result["omitted_count"] == 1
+    assert result["parsed_count"] == 3
+    assert result["selected_host_count"] == 2
+    assert result["limit"] == 2
+
+
+def test_discovery_report_import_rejects_oversized_report_file(tmp_path: Path) -> None:
+    con = _build_discovery_db(tmp_path / "engagement.db")
+    report_file = tmp_path / "large-shodan.json"
+    report_file.write_text("x" * (MAX_DISCOVERY_REPORT_BYTES + 1), encoding="utf-8")
+
+    try:
+        try:
+            import_discovery_report(
+                con,
+                DiscoveryReportImportConfig(
+                    connector_id="shodan_host_lookup",
+                    engagement_id=1001,
+                    report_path=report_file,
+                    target="acme.example",
+                    operator="discovery-test",
+                    dry_run=True,
+                ),
+            )
+        except ValueError as exc:
+            assert "exceeds max size" in str(exc)
+        else:
+            raise AssertionError("oversized discovery report should be rejected")
+    finally:
+        con.close()
 
 
 def test_censys_report_import_accepts_hits_and_certificate_names(tmp_path: Path) -> None:
@@ -636,6 +763,9 @@ def test_connector_cli_import_discovery_invokes_importer_with_config(
             str(report_file),
             "--target",
             "acme.example",
+            "--dry-run",
+            "--limit",
+            "2",
             "--operator",
             "cli-test",
             "--json",
@@ -651,4 +781,6 @@ def test_connector_cli_import_discovery_invokes_importer_with_config(
     assert config.report_path == report_file
     assert config.target == "acme.example"
     assert config.operator == "cli-test"
+    assert config.dry_run is True
+    assert config.limit == 2
     assert payload["source"] == "provider_report_import"
