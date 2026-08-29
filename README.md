@@ -388,7 +388,10 @@ and `max_candidates` still work for tighter scopes. Use `tables: ["*"]` or omit
 target-like values into feed entries.
 For secret-store mode, store the key with `forge connectors secret-set` and put
 only the resulting URI shape in `key_secret_ref`; `automation status` validates
-that URI shape without decrypting or printing the secret value.
+that URI shape and checks the referenced connector-secret metadata row exists
+without decrypting or printing the secret value. A missing metadata row reports
+`secret_ref_unresolved` with the exact `forge connectors secret-set ... --value-env`
+next action.
 If a project is set to all tables but the REST OpenAPI root does not expose
 table paths to the supplied key, JSON reports `blocked_table_discovery` with a
 local next action instead of silently skipping the project.

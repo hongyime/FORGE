@@ -384,6 +384,7 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         capabilities=("table_export_import", "target_normalization", "provider_provenance"),
         outputs=("cti_observations", "indicator_confidence", "engagement_seeds"),
         input_formats=("supabase_table_json", "supabase_table_csv"),
+        env_options=(("FORGE_SUPABASE_PROJECT_READ_KEY",), ("READ_KEY",)),
         execution_paths=("forge connectors import-cti",),
     ),
     ConnectorDefinition(

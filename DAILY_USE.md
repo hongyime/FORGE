@@ -78,6 +78,10 @@ or point `key_secret_ref` at a Forge connector-secret URI such as
 entries only need `project_ref` and `key_env`; secret-store entries need
 `project_ref` and `key_secret_ref`. Forge derives the Supabase URL, discovers
 exposed tables from `/rest/v1/`, and pages through all columns with `select=*`.
+`automation status` checks that a secret-store URI points at an existing
+connector-secret metadata row without decrypting or printing the stored key; a
+missing row reports `secret_ref_unresolved` and the local `secret-set --value-env`
+command to fix it.
 Default greedy Supabase bounds are 100,000 rows per table, 1,000 discovered
 tables, 100,000 total rows, and 100,000 candidate feed entries per configured
 project; optional `url`, `tables`, `target_columns`, `limit`, `max_tables`,

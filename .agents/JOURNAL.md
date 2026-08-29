@@ -249,3 +249,4 @@
 - 2026-08-29: B745 makes Supabase status honor valid Forge connector-secret references as configured credentials while keeping secret resolution inside feed-build.
 - 2026-08-29: B746 refreshes the autonomous target loop PostPlan draft to version 5 so the public HTML includes Supabase secret-store readiness.
 - 2026-08-29: Current supervisor verification after B746 shows live startup is correctly fail-closed only on `free_memory_below_threshold` at 542 MB free against the 1024 MB local gate.
+- 2026-08-29: B747 tightens Supabase secret-store readiness from URI-shape validation to read-only connector-secret metadata existence checks, and registers Supabase read-key names with the connector secret store so documented refs are actionable without decrypting secrets.

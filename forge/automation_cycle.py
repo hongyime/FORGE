@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import os
+import sqlite3
 import subprocess
 import tempfile
 from datetime import datetime, timedelta, timezone
@@ -16,6 +17,8 @@ import httpx
 from forge.automation_self_heal import run_guarded_autostart
 from forge.automation_target_feed import build_target_feed, write_target_feed
 from forge.config import ForgeConfig
+from forge.connectors.secrets import list_connector_secrets
+from forge.db.session import get_readonly_db
 from forge.monitoring.runner import monitoring_due_plan_for_data_dir
 from forge.reporting.quality_audit import collect_report_quality_audit
 from forge.targets_resume_candidates import collect_target_resume_plan
@@ -128,6 +131,7 @@ def automation_status(
     )
     supabase_sync = _supabase_sync_readiness(
         config_path=root_imports / "supabase-projects.local.json",
+        data_dir=Path(cfg_data_dir),
     )
     if quick:
         resume_backlog = _quick_skipped_summary("resume_backlog")
@@ -311,6 +315,7 @@ def automation_cycle(
     )
     supabase_sync = _supabase_sync_readiness(
         config_path=supabase_config or root_imports / "supabase-projects.local.json",
+        data_dir=Path(cfg_data_dir),
     )
     resume_backlog = _resume_backlog_summary(data_dir=Path(cfg_data_dir))
     monitoring_due = _monitoring_due_summary(data_dir=Path(cfg_data_dir))
@@ -1044,7 +1049,7 @@ def refresh_public_cti_input(
     }
 
 
-def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
+def _supabase_sync_readiness(*, config_path: Path, data_dir: Path | None = None) -> dict[str, Any]:
     path = Path(config_path)
     payload = _read_json_object(path) if path.is_file() else {}
     raw_projects = payload.get("projects")
@@ -1076,9 +1081,17 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
         reason = ""
         credential_source = "env"
         key_env_present = bool(key_env and os.environ.get(key_env, "").strip())
-        key_secret_ref_valid = bool(
-            key_secret_ref and _supabase_secret_ref_valid(key_secret_ref)
-        )
+        key_secret_ref_parts = _parse_supabase_secret_ref(key_secret_ref)
+        key_secret_ref_valid = key_secret_ref_parts is not None
+        key_secret_ref_exists = False
+        key_secret_ref_status = "not_configured"
+        key_secret_ref_reason = ""
+        if key_secret_ref_valid:
+            key_secret_ref_status, key_secret_ref_reason = _supabase_secret_ref_status(
+                key_secret_ref_parts,
+                data_dir=data_dir,
+            )
+            key_secret_ref_exists = key_secret_ref_status == "configured"
         if not project_ref:
             status = "invalid_project"
             reason = "project_ref_missing"
@@ -1091,6 +1104,9 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
                 if not key_secret_ref_valid:
                     status = "invalid_project"
                     reason = "key_secret_ref_invalid"
+                elif not key_secret_ref_exists:
+                    status = "secret_ref_unresolved"
+                    reason = key_secret_ref_reason
             else:
                 status = "invalid_project"
                 reason = "key_env_missing"
@@ -1103,6 +1119,9 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
             if not key_secret_ref_valid:
                 status = "invalid_project"
                 reason = "key_secret_ref_invalid"
+            elif not key_secret_ref_exists:
+                status = "secret_ref_unresolved"
+                reason = key_secret_ref_reason
         else:
             status = "invalid_project"
             reason = "key_env_missing"
@@ -1121,6 +1140,8 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
                 "key_secret_ref": key_secret_ref,
                 "key_secret_ref_present": bool(key_secret_ref),
                 "key_secret_ref_valid": key_secret_ref_valid,
+                "key_secret_ref_exists": key_secret_ref_exists,
+                "key_secret_ref_status": key_secret_ref_status,
                 "requested_all_tables": "*" in tables,
                 "requested_all_columns": "*" in columns,
                 "tables": tables,
@@ -1150,6 +1171,8 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
         status = "invalid_config"
     elif ready_count:
         status = "ready"
+    elif status_counts.get("secret_ref_unresolved", 0):
+        status = "secret_ref_unresolved"
     else:
         status = "key_env_unset"
     next_actions: list[list[str]] = []
@@ -1196,6 +1219,27 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
                     ]
                 )
                 break
+            if str(project.get("status") or "") == "secret_ref_unresolved":
+                ref_parts = _parse_supabase_secret_ref(str(project.get("key_secret_ref") or ""))
+                engagement_id = str(ref_parts[0]) if ref_parts else "N"
+                connector_id = str(ref_parts[1]) if ref_parts else "supabase_table_import"
+                secret_name = str(ref_parts[2]) if ref_parts else "READ_KEY"
+                next_actions.append(
+                    [
+                        "forge",
+                        "connectors",
+                        "secret-set",
+                        "--engagement",
+                        engagement_id,
+                        "--connector",
+                        connector_id,
+                        "--name",
+                        secret_name,
+                        "--value-env",
+                        "FORGE_SUPABASE_PROJECT_READ_KEY",
+                    ]
+                )
+                break
     return {
         "schema_version": "forge.supabase_sync_readiness.v1",
         "execution_policy": "read_only_supabase_sync_readiness_no_network_or_writes",
@@ -1204,6 +1248,7 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
         "configured_count": len(summaries),
         "ready_count": ready_count,
         "key_env_unset_count": status_counts.get("key_env_unset", 0),
+        "secret_ref_unresolved_count": status_counts.get("secret_ref_unresolved", 0),
         "secret_ref_configured_count": sum(
             1 for project in summaries if project.get("credential_source") == "secret_ref"
         ),
@@ -1245,19 +1290,56 @@ def _supabase_readiness_project_limit(value: Any) -> int:
     return min(limit, 100000)
 
 
-def _supabase_secret_ref_valid(value: str) -> bool:
+def _parse_supabase_secret_ref(value: str) -> tuple[int, str, str] | None:
     prefix = "forge-secret://"
     text = str(value or "").strip()
     if not text.startswith(prefix):
-        return False
+        return None
     parts = [part for part in text[len(prefix) :].split("/") if part]
     if len(parts) != 3:
-        return False
+        return None
     try:
         engagement_id = int(parts[0])
     except ValueError:
-        return False
-    return engagement_id > 0 and all(parts[1:])
+        return None
+    if engagement_id <= 0 or not all(parts[1:]):
+        return None
+    return engagement_id, parts[1], parts[2]
+
+
+def _supabase_secret_ref_valid(value: str) -> bool:
+    return _parse_supabase_secret_ref(value) is not None
+
+
+def _supabase_secret_ref_status(
+    ref_parts: tuple[int, str, str],
+    *,
+    data_dir: Path | None,
+) -> tuple[str, str]:
+    engagement_id, connector_id, secret_name = ref_parts
+    if data_dir is None:
+        return "unverified", "data_dir_unavailable"
+    db_path = Path(data_dir) / "engagements" / f"{engagement_id}.db"
+    if not db_path.is_file():
+        return "missing", f"engagement_db_missing:{engagement_id}"
+    try:
+        con = get_readonly_db(db_path)
+    except (FileNotFoundError, sqlite3.Error, OSError):
+        return "unreadable", f"engagement_db_unreadable:{engagement_id}"
+    try:
+        items = list_connector_secrets(
+            con,
+            engagement_id=engagement_id,
+            connector_id=connector_id,
+        )
+    except (LookupError, ValueError, sqlite3.Error):
+        return "unreadable", f"connector_secret_metadata_unreadable:{connector_id}"
+    finally:
+        con.close()
+    for item in items:
+        if str(item.get("secret_name") or "") == secret_name:
+            return "configured", ""
+    return "missing", f"connector_secret_missing:{connector_id}/{secret_name}"
 
 
 def _string_list(value: Any) -> list[str]:

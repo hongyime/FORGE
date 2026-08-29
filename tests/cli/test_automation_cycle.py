@@ -11,6 +11,8 @@ from typer.testing import CliRunner
 import forge.automation_cycle as automation_cycle_module
 from forge.automation_cli import register_automation_commands
 from forge.automation_cycle import automation_cycle, automation_status, doctor_fix_safe
+from forge.connectors.secrets import store_connector_secret
+from forge.db.session import get_engagement_db
 
 
 @pytest.fixture(autouse=True)
@@ -684,11 +686,86 @@ def test_automation_status_accepts_supabase_secret_store_ref(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     imports_dir = tmp_path / "imports"
+    data_dir = tmp_path / "data"
     imports_dir.mkdir()
     (imports_dir / "target-feed.json").write_text(
         json.dumps({"schema_version": "target-feed.v1", "items": []}),
         encoding="utf-8",
     )
+    monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
+    monkeypatch.setenv("FORGE_ENGAGEMENT_KEY", "0123456789abcdef0123456789abcdef")
+    con = get_engagement_db(data_dir / "engagements" / "1001.db")
+    try:
+        con.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (1001, 'Supabase Secret Ref', '["abc123.supabase.co"]', 'ACTIVE', 'unit')
+            """
+        )
+        store_connector_secret(
+            con,
+            engagement_id=1001,
+            connector_id="supabase_table_import",
+            secret_name="READ_KEY",
+            secret_value="owned-read-key",
+            secret_ref="env:FORGE_SUPABASE_PROJECT_READ_KEY",
+            operator="unit-test",
+        )
+        con.commit()
+    finally:
+        con.close()
+    (imports_dir / "supabase-projects.local.json").write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_secret_ref": (
+                            "forge-secret://1001/supabase_table_import/READ_KEY"
+                        ),
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=data_dir,
+        quick=True,
+    )
+
+    project = payload["supabase_sync"]["projects"][0]
+    assert payload["supabase_sync"]["status"] == "ready"
+    assert payload["supabase_sync"]["ready_count"] == 1
+    assert payload["supabase_sync"]["key_env_unset_count"] == 0
+    assert payload["supabase_sync"]["secret_ref_configured_count"] == 1
+    assert project["credential_source"] == "secret_ref"
+    assert project["key_env"] == ""
+    assert project["key_env_present"] is False
+    assert project["key_secret_ref_present"] is True
+    assert project["key_secret_ref_valid"] is True
+    assert project["key_secret_ref_exists"] is True
+    assert project["key_secret_ref_status"] == "configured"
+    assert payload["supabase_sync"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "feed-build",
+        "--source",
+        "supabase",
+        "--apply",
+        "--json",
+    ]
+
+
+def test_automation_status_blocks_missing_supabase_secret_store_ref(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
     monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
     (imports_dir / "supabase-projects.local.json").write_text(
         json.dumps(
@@ -714,23 +791,26 @@ def test_automation_status_accepts_supabase_secret_store_ref(
     )
 
     project = payload["supabase_sync"]["projects"][0]
-    assert payload["supabase_sync"]["status"] == "ready"
-    assert payload["supabase_sync"]["ready_count"] == 1
-    assert payload["supabase_sync"]["key_env_unset_count"] == 0
-    assert payload["supabase_sync"]["secret_ref_configured_count"] == 1
+    assert payload["supabase_sync"]["status"] == "secret_ref_unresolved"
+    assert payload["supabase_sync"]["ready_count"] == 0
+    assert payload["supabase_sync"]["secret_ref_unresolved_count"] == 1
     assert project["credential_source"] == "secret_ref"
-    assert project["key_env"] == ""
-    assert project["key_env_present"] is False
-    assert project["key_secret_ref_present"] is True
+    assert project["reason"] == "engagement_db_missing:1001"
     assert project["key_secret_ref_valid"] is True
+    assert project["key_secret_ref_exists"] is False
+    assert project["key_secret_ref_status"] == "missing"
     assert payload["supabase_sync"]["next_actions"][0] == [
         "forge",
-        "automation",
-        "feed-build",
-        "--source",
-        "supabase",
-        "--apply",
-        "--json",
+        "connectors",
+        "secret-set",
+        "--engagement",
+        "1001",
+        "--connector",
+        "supabase_table_import",
+        "--name",
+        "READ_KEY",
+        "--value-env",
+        "FORGE_SUPABASE_PROJECT_READ_KEY",
     ]
 
 
