@@ -2022,6 +2022,104 @@ def test_automation_cycle_rebuilds_feed_after_successful_queue_import_before_liv
     assert payload["autostart"]["status"] == "ready"
 
 
+def test_automation_cycle_consumes_feed_build_created_queue_before_live(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    events: list[str] = []
+
+    def fake_build_target_feed(**kwargs):
+        events.append("feed")
+        if events.count("feed") == 1:
+            (imports_dir / "pd-cloud.json").write_text(
+                json.dumps({"assets": [{"host": "edge.example"}]}),
+                encoding="utf-8",
+            )
+            (imports_dir / "projectdiscovery-cloud-imports.local.json").write_text(
+                json.dumps(
+                    {
+                        "inputs": [
+                            {
+                                "value": "pd-cloud.json",
+                                "status": "pending",
+                                "connector_id": "projectdiscovery_cloud",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+        selected = 1 if events.count("feed") == 1 else 2
+        return {
+            "schema_version": "target-feed.v1",
+            "counts": {
+                "selected": selected,
+                "total": selected,
+                "source_errors": [],
+            },
+            "source_errors": [],
+            "discovered_input_registry_update": {},
+            "source_input_registry_updates": [],
+            "items": [],
+        }
+
+    def fake_write_target_feed(_payload, _output_path):
+        events.append("write")
+
+    def _runner(command: list[str], _cwd: Path) -> dict[str, object]:
+        events.append("queue")
+        assert command[:3] == ["forge", "connectors", "import-discovery"]
+        assert command[command.index("--connector") + 1] == "projectdiscovery_cloud"
+        assert command[command.index("--limit") + 1] == "1000"
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    def fake_guarded_autostart(**kwargs):
+        events.append("guarded")
+        assert kwargs["skip_feed_build"] is True
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "ready",
+            "commands": {},
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module, "build_target_feed", fake_build_target_feed
+    )
+    monkeypatch.setattr(
+        automation_cycle_module, "write_target_feed", fake_write_target_feed
+    )
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        command_runner=_runner,
+    )
+
+    assert events == ["feed", "write", "queue", "feed", "write", "guarded"]
+    assert payload["status"] == "live_ready"
+    assert payload["queue_runs"][0]["connector_id"] == "projectdiscovery_cloud"
+    assert payload["feed_rebuilt_after_queue_imports"] is True
+    queue = json.loads(
+        (imports_dir / "projectdiscovery-cloud-imports.local.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert queue["inputs"][0]["status"] == "imported"
+
+
 def test_automation_cycle_uses_autostart_engagement_for_ready_queues(
     tmp_path: Path,
 ) -> None:
