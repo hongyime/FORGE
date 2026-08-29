@@ -77,6 +77,7 @@ def test_self_heal_plan_is_plan_only_and_skips_docker_probe_by_default(tmp_path:
     assert payload["commands"]["autopilot_apply"][-1] == "--apply"
     assert self_heal.DEFAULT_AUTOSTART_CONFIG["min_free_memory_mb"] == 1024
     assert self_heal.DEFAULT_AUTOSTART_CONFIG["queue_import_item_limit"] == 1000
+    assert self_heal.DEFAULT_AUTOSTART_CONFIG["queue_promote_targets"] is True
 
 
 def test_packaged_go_tool_contract_matches_standalone_bundle_request() -> None:

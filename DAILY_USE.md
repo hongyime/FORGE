@@ -63,7 +63,9 @@ Live startup queue consumption is bounded by `queue_limit` in
 `imports/autostart.local.json`, or by `--queue-limit N`. Each queued
 CTI/discovery/validation artifact is also passed an explicit `--limit` from
 `queue_import_item_limit` (default 1000); deferred ready inputs remain pending
-for the next cycle.
+for the next cycle. CTI queue imports add `--promote-targets` only when
+`queue_promote_targets` is true, and individual queue items can override it
+with `promote_targets`.
 Use `--min-start-source-count 2` on autopilot, or set
 `min_start_source_count: 2` in `imports/autostart.local.json`, to import
 single-source targets but reserve live scan starts for targets seen by at least

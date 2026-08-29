@@ -47,6 +47,7 @@ DEFAULT_AUTOSTART_CONFIG: dict[str, Any] = {
     "monitor_limit": 10,
     "queue_limit": 10,
     "queue_import_item_limit": 1000,
+    "queue_promote_targets": True,
     "start_limit": 2,
     "min_start_source_count": 1,
     "max_runtime_minutes": 10,
@@ -427,6 +428,7 @@ def _direct_source_queue_status(
             imports_dir=imports_dir,
             engagement=engagement,
             import_item_limit=int(config["queue_import_item_limit"]),
+            promote_targets=bool(config["queue_promote_targets"]),
         )
     except Exception as exc:  # noqa: BLE001
         return {
@@ -516,6 +518,9 @@ def _validate_autostart_config(config: dict[str, Any]) -> list[str]:
         if not isinstance(config[key], bool):
             errors.append(f"autostart_config_invalid_bool:{key}")
             config[key] = False
+    if not isinstance(config["queue_promote_targets"], bool):
+        errors.append("autostart_config_invalid_bool:queue_promote_targets")
+        config["queue_promote_targets"] = True
     config["feed_sources"] = _validated_feed_sources(config.get("feed_sources"), errors)
     config["docker_probe_mode"] = _validated_docker_probe_mode(
         config.get("docker_probe_mode"),

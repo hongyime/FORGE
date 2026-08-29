@@ -69,6 +69,7 @@ QUEUE_RETRY_BASE_SECONDS = 15 * 60
 QUEUE_RETRY_MAX_SECONDS = 6 * 60 * 60
 DEFAULT_QUEUE_IMPORT_ITEM_LIMIT = 1000
 MAX_QUEUE_IMPORT_ITEM_LIMIT = 10000
+DEFAULT_QUEUE_PROMOTE_TARGETS = True
 DEFAULT_ENGAGEMENT_ENV = "FORGE_DEFAULT_ENGAGEMENT_ID"
 THREATFOX_RECENT_IOCS_URL = "https://threatfox-api.abuse.ch/api/v1/"
 THREATFOX_REFRESH_FILENAME = "threatfox-observations.local.json"
@@ -100,12 +101,14 @@ def automation_status(
         autostart_config=autostart_config_path,
     )
     queue_import_item_limit = _autostart_queue_import_item_limit(autostart_config_path)
+    queue_promote_targets = _autostart_queue_promote_targets(autostart_config_path)
     queue_items = _load_queue_items(root_imports)
     ready_items, blocked_items, ignored_items = _classify_queue_items(
         queue_items,
         imports_dir=root_imports,
         engagement=effective_engagement,
         import_item_limit=queue_import_item_limit,
+        promote_targets=queue_promote_targets,
     )
     autostart_probe = _status_autostart_probe(
         autostart_config_path=autostart_config_path,
@@ -231,6 +234,7 @@ def automation_cycle(
         live=live,
     )
     queue_import_item_limit = _autostart_queue_import_item_limit(selected_autostart_config)
+    queue_promote_targets = _autostart_queue_promote_targets(selected_autostart_config)
     feed_payload = build_target_feed(
         sources=sources,
         data_dir=Path(cfg_data_dir),
@@ -252,6 +256,7 @@ def automation_cycle(
         imports_dir=root_imports,
         engagement=effective_engagement,
         import_item_limit=queue_import_item_limit,
+        promote_targets=queue_promote_targets,
     )
     selected_ready_items, deferred_ready_items = _bounded_ready_queue_items(
         ready_items,
@@ -357,6 +362,7 @@ def automation_cycle(
         "queue_execution": {
             "queue_limit": selected_queue_limit,
             "import_item_limit": queue_import_item_limit,
+            "promote_targets": queue_promote_targets,
             "ready_count": len(ready_items),
             "selected_count": len(selected_ready_items),
             "deferred_count": len(deferred_ready_items),
@@ -1662,6 +1668,7 @@ def _classify_queue_items(
     imports_dir: Path,
     engagement: int | None,
     import_item_limit: int,
+    promote_targets: bool,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     ready: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
@@ -1707,6 +1714,10 @@ def _classify_queue_items(
             import_item_limit=_queue_item_import_limit(
                 item,
                 default=import_item_limit,
+            ),
+            promote_targets=_queue_item_promote_targets(
+                item,
+                default=promote_targets,
             ),
         )
         ready.append(
@@ -1775,6 +1786,7 @@ def _queue_command(
     artifact: Path,
     target: str,
     import_item_limit: int,
+    promote_targets: bool,
 ) -> list[str]:
     command = [
         "forge",
@@ -1789,7 +1801,7 @@ def _queue_command(
     ]
     if target:
         command.extend(["--target", target])
-    if command_kind == "import-cti":
+    if command_kind == "import-cti" and promote_targets:
         command.append("--promote-targets")
     if command_kind in {"import-cti", "import-discovery", "import-validation"}:
         command.extend(["--limit", str(import_item_limit)])
@@ -2096,12 +2108,34 @@ def _autostart_queue_import_item_limit(path: Path | None) -> int:
     return max(1, min(value, MAX_QUEUE_IMPORT_ITEM_LIMIT))
 
 
+def _autostart_queue_promote_targets(path: Path | None) -> bool:
+    payload = _read_json_object(path) if path is not None and Path(path).is_file() else {}
+    return _safe_bool(payload.get("queue_promote_targets"), default=DEFAULT_QUEUE_PROMOTE_TARGETS)
+
+
 def _queue_item_import_limit(item: dict[str, Any], *, default: int) -> int:
     value = _safe_int(
         item.get("limit", item.get("import_item_limit")),
         default=default,
     )
     return max(1, min(value, MAX_QUEUE_IMPORT_ITEM_LIMIT))
+
+
+def _queue_item_promote_targets(item: dict[str, Any], *, default: bool) -> bool:
+    return _safe_bool(item.get("promote_targets"), default=default)
+
+
+def _safe_bool(value: object, *, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 def _selected_queue_limit(

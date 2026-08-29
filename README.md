@@ -316,7 +316,9 @@ For live startup, ready source-queue imports are bounded by
 `queue_limit` in `imports/autostart.local.json` unless `--queue-limit N`
 overrides it; each queued CTI/discovery/validation artifact is also passed an
 explicit `--limit` from `queue_import_item_limit` (default 1000), and deferred
-items stay pending for the next cycle.
+items stay pending for the next cycle. CTI queue imports only add
+`--promote-targets` when `queue_promote_targets` is true, and an individual
+queue item can override that with `promote_targets`.
 When `cycle --apply --live` hands off to guarded-autostart, the guarded launcher
 uses the feed already written by the cycle and skips its own feed-build phase to
 avoid duplicate source reads.

@@ -133,6 +133,7 @@ def test_automation_defaults_review_exposes_tunable_free_first_options() -> None
     assert payload["autostart"]["presets"]["aggressive"]["min_free_memory_mb"] == 1024
     assert payload["autostart"]["presets"]["aggressive"]["queue_limit"] == 10
     assert payload["autostart"]["presets"]["aggressive"]["queue_import_item_limit"] == 1000
+    assert payload["autostart"]["presets"]["aggressive"]["queue_promote_targets"] is True
     assert payload["autostart"]["presets"]["aggressive"]["min_start_source_count"] == 2
     assert payload["autostart"]["presets"]["current"]["feed_sources"] == ["all"]
     tunables = {item["id"]: item for item in payload["tunables"]}
@@ -140,6 +141,7 @@ def test_automation_defaults_review_exposes_tunable_free_first_options() -> None
         "startup_profile",
         "queue_limit",
         "queue_import_item_limit",
+        "queue_promote_targets",
         "min_start_source_count",
         "memory_gate",
         "autostart_cadence",
@@ -151,6 +153,7 @@ def test_automation_defaults_review_exposes_tunable_free_first_options() -> None
     assert 1024 in tunables["memory_gate"]["options"]
     assert tunables["queue_limit"]["default"] == 10
     assert tunables["queue_import_item_limit"]["default"] == 1000
+    assert tunables["queue_promote_targets"]["default"] is True
     assert tunables["min_start_source_count"]["default"] == 1
     assert tunables["openrouter_mode"]["default"] == "free_only"
     assert payload["commands"]["startup_dry_run"] == [
@@ -179,6 +182,7 @@ def test_automation_limits_review_exposes_effective_limits(tmp_path) -> None:
                 "monitor_limit": 25,
                 "queue_limit": 10,
                 "queue_import_item_limit": 500,
+                "queue_promote_targets": False,
                 "start_limit": 5,
                 "min_start_source_count": 2,
                 "feed_sources": ["all"],
@@ -204,6 +208,7 @@ def test_automation_limits_review_exposes_effective_limits(tmp_path) -> None:
     assert limits["max_parallel"]["value"] == 4
     assert limits["monitor_limit"]["value"] == 25
     assert limits["queue_import_item_limit"]["value"] == 500
+    assert limits["queue_promote_targets"]["value"] is False
     assert limits["start_limit"]["value"] == 5
     assert limits["min_start_source_count"]["value"] == 2
     assert limits["feed_sources"]["value"] == ["all"]
