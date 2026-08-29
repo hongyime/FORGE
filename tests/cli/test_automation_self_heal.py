@@ -885,8 +885,40 @@ def test_guarded_autostart_rejects_string_boolean_opt_in(tmp_path: Path, monkeyp
     assert payload["status"] == "blocked"
     assert "autostart_config_invalid_bool:enabled" in payload["blockers"]
     assert "autostart_config_invalid_bool:apply_enabled" in payload["blockers"]
+    assert "autostart_config_invalid_bool:auto_live_when_roe_ready" not in payload["blockers"]
     assert "apply_requested_but_config_apply_disabled" in payload["blockers"]
     assert payload["runs"] == []
+
+
+def test_guarded_autostart_rejects_string_auto_live_bool(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": False,
+                "auto_live_when_roe_ready": "true",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+        apply=False,
+    )
+
+    assert payload["status"] == "blocked"
+    assert "autostart_config_invalid_bool:auto_live_when_roe_ready" in payload["blockers"]
+    assert payload["config"]["auto_live_when_roe_ready"] is False
 
 
 def test_self_heal_plan_blocks_when_memory_probe_unknown(tmp_path: Path, monkeypatch) -> None:

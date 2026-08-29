@@ -227,6 +227,14 @@ def automation_cycle(
     selected_autostart_config = autostart_config or root_imports / "autostart.local.json"
     cfg_data_dir = data_dir or ForgeConfig.load().data_dir
     sources = list(source or ["all"])
+    live_requested = bool(live)
+    auto_live = _autostart_auto_live_when_roe_ready(selected_autostart_config)
+    auto_live_roe_env = _autostart_roe_id_env(selected_autostart_config)
+    auto_live_roe_present = bool(os.environ.get(auto_live_roe_env, "").strip())
+    live_auto_promoted = False
+    if apply and not live and auto_live and auto_live_roe_present:
+        live = True
+        live_auto_promoted = True
     effective_engagement = _resolve_default_engagement(
         explicit=engagement,
         autostart_config=selected_autostart_config,
@@ -365,7 +373,11 @@ def automation_cycle(
         "execution_policy": execution_policy,
         "status": cycle_status,
         "apply_requested": bool(apply),
-        "live_requested": bool(live),
+        "live_requested": live_requested,
+        "live_auto_promoted": live_auto_promoted,
+        "auto_live_when_roe_ready": auto_live,
+        "roe_id_env": auto_live_roe_env,
+        "roe_id_present": auto_live_roe_present,
         "generated_at": _now_iso(),
         "feed_written": feed_written,
         "feed_rebuilt_after_queue_imports": feed_rebuilt_after_queue_imports,
@@ -2382,6 +2394,17 @@ def _autostart_queue_import_item_limit(path: Path | None) -> int:
 def _autostart_queue_promote_targets(path: Path | None) -> bool:
     payload = _read_json_object(path) if path is not None and Path(path).is_file() else {}
     return _safe_bool(payload.get("queue_promote_targets"), default=DEFAULT_QUEUE_PROMOTE_TARGETS)
+
+
+def _autostart_auto_live_when_roe_ready(path: Path | None) -> bool:
+    payload = _read_json_object(path) if path is not None and Path(path).is_file() else {}
+    return _safe_bool(payload.get("auto_live_when_roe_ready"), default=False)
+
+
+def _autostart_roe_id_env(path: Path | None) -> str:
+    payload = _read_json_object(path) if path is not None and Path(path).is_file() else {}
+    value = str(payload.get("roe_id_env") or "FORGE_ROE_ID").strip()
+    return value or "FORGE_ROE_ID"
 
 
 def _queue_item_import_limit(item: dict[str, Any], *, default: int) -> int:

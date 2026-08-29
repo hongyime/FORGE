@@ -306,7 +306,11 @@ source queue consumption, and optional guarded live startup without writing.
 `--apply` writes the local feed and consumes ready local/no-key source queues.
 `--live` additionally invokes guarded-autostart, so target import/start, resume,
 monitoring, and dashboard refresh still pass through ROE, memory, disk, Docker,
-cooldown, backoff, and single-instance gates. `forge automation status` is the
+cooldown, backoff, and single-instance gates. If local
+`imports/autostart.local.json` sets `auto_live_when_roe_ready=true`, then
+`forge automation cycle --apply` auto-promotes to the same guarded live path
+only when the configured ROE env var is present. Dry-run remains non-mutating.
+`forge automation status` is the
 read-only view of feed presence, queue readiness, blocked inputs, resume and
 monitoring backlog, report review drift, guarded-autostart history, and next
 actions. Use `forge automation status --quick --json` for startup/supervisor
@@ -575,6 +579,7 @@ Minimal local autostart config:
 {
   "enabled": true,
   "apply_enabled": false,
+  "auto_live_when_roe_ready": false,
   "roe_id_env": "FORGE_ROE_ID",
   "engagement_id": 1001,
   "min_free_memory_mb": 1024,

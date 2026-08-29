@@ -2036,6 +2036,119 @@ def test_automation_cycle_live_reuses_built_feed_without_guarded_rebuild(
     assert payload["autostart"]["commands"]["autopilot_dry_run"][1] == "--skip-feed-build"
 
 
+def test_automation_cycle_apply_auto_promotes_to_live_when_roe_ready(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    config = imports_dir / "autostart.local.json"
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": True,
+                "auto_live_when_roe_ready": True,
+                "failure_backoff_minutes": 0,
+                "cooldown_minutes": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    calls: list[dict[str, object]] = []
+
+    def fake_guarded_autostart(**kwargs):
+        calls.append(kwargs)
+        if kwargs.get("preflight_only"):
+            return {
+                "schema_version": "forge.automation_guarded_autostart.v1",
+                "status": "ready",
+                "blockers": [],
+            }
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "completed",
+            "blockers": [],
+            "commands": {},
+            "runs": [{"id": "autopilot_apply", "returncode": 0}],
+        }
+
+    monkeypatch.setenv("FORGE_ROE_ID", "ROE-TEST")
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=False,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        autostart_config=config,
+    )
+
+    assert payload["execution_policy"] == "apply_with_live_guarded_autostart"
+    assert payload["status"] == "live_completed"
+    assert payload["live_requested"] is False
+    assert payload["live_auto_promoted"] is True
+    assert payload["auto_live_when_roe_ready"] is True
+    assert payload["roe_id_env"] == "FORGE_ROE_ID"
+    assert payload["roe_id_present"] is True
+    assert [call.get("preflight_only", False) for call in calls] == [True, False]
+
+
+def test_automation_cycle_apply_does_not_auto_promote_without_roe(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    config = imports_dir / "autostart.local.json"
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": True,
+                "auto_live_when_roe_ready": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+
+    def fake_guarded_autostart(**_kwargs):
+        raise AssertionError("live autostart should not run without ROE")
+
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=False,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        autostart_config=config,
+    )
+
+    assert payload["execution_policy"] == "apply_local_feed_and_queue_imports"
+    assert payload["live_requested"] is False
+    assert payload["live_auto_promoted"] is False
+    assert payload["auto_live_when_roe_ready"] is True
+    assert payload["roe_id_present"] is False
+
+
 def test_automation_cycle_apply_live_blocks_before_feed_and_queue_when_resources_low(
     tmp_path: Path,
     monkeypatch,

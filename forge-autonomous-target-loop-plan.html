@@ -83,7 +83,55 @@
     td { color: var(--muted); }
     a { color: #9fc2ff; }
     .note { color: var(--warn); }
-    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
+    .diagram {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+    }
+    .diagram-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(160px, 1fr));
+      gap: 10px;
+      align-items: stretch;
+      margin: 10px 0;
+    }
+    .node {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      border-radius: 8px;
+      padding: 10px;
+      min-height: 82px;
+    }
+    .node strong { display: block; color: var(--text); margin-bottom: 5px; }
+    .node small { color: var(--muted); display: block; }
+    .connector {
+      text-align: center;
+      color: var(--next);
+      font-weight: 700;
+      margin: 4px 0;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(130px, 1fr));
+      gap: 8px;
+      align-items: stretch;
+      margin-top: 10px;
+    }
+    .step {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      border-radius: 8px;
+      padding: 10px;
+      min-height: 96px;
+    }
+    .step b { color: var(--text); }
+    .step span { color: var(--muted); display: block; margin-top: 5px; }
+    @media (max-width: 860px) {
+      .grid, .diagram-row, .flow { grid-template-columns: 1fr; }
+      h1 { font-size: 28px; }
+    }
   </style>
 </head>
 <body>
@@ -93,7 +141,39 @@
 
   <section class="summary">
     <h2>Operating Rule</h2>
-    <p>Implement only free, local, deterministic, or read-only features by default. Anything requiring paid APIs, account keys, live targets, ticket writes, SOAR webhooks, scheduled-task registration, or Docker mutation remains opt-in behind explicit config and apply flags.</p>
+    <p>Implement only free, local, deterministic, or read-only features by default. Anything requiring paid APIs, account keys, live targets, ticket writes, SOAR webhooks, scheduled-task registration, or Docker mutation remains opt-in behind explicit config and apply flags. When local config enables auto-live and the configured ROE env var is present, apply cycles can promote directly into the guarded live path after the normal preflight gates pass.</p>
+  </section>
+
+  <h2>Architecture Diagram</h2>
+  <section class="diagram" aria-label="FORGE autonomous architecture">
+    <div class="diagram-row">
+      <div class="node"><strong>Inputs</strong><small>Supabase refs, CTI drops, reports, dashboards, DB seeds, connector artifacts, inbox markers.</small></div>
+      <div class="node"><strong>Feed Builder</strong><small><code>forge automation feed-build</code> normalizes, dedupes, preserves provenance, and writes <code>target-feed.json</code>.</small></div>
+      <div class="node"><strong>Source Queues</strong><small>ThreatFox, URLhaus, MISP, STIX/TAXII, ProjectDiscovery, Censys, runZero, Burp/JUnit.</small></div>
+      <div class="node"><strong>Guarded Cycle</strong><small><code>forge automation cycle</code> applies feeds, imports bounded queue items, and runs guarded live when allowed.</small></div>
+      <div class="node"><strong>Execution</strong><small>Target import/start, resume backlog, monitoring due policies, report/dashboard refresh.</small></div>
+    </div>
+    <div class="connector">Inputs -&gt; target-feed.v1 -&gt; scoped queues -&gt; ROE/resource/Docker gates -&gt; bounded live work</div>
+    <div class="diagram-row">
+      <div class="node"><strong>Safety Gates</strong><small>ROE env, scope manifests, memory/disk thresholds, Docker health, cooldown/backoff, single lock.</small></div>
+      <div class="node"><strong>Local Tools</strong><small>nuclei, subfinder, httpx, katana, dnsx, naabu, tlsx, mapcidr, uncover, amass, ffuf, gobuster, gitleaks.</small></div>
+      <div class="node"><strong>Evidence Store</strong><small>Engagement DBs, audit logs, active-validation proof, exposure metrics, remediation rows.</small></div>
+      <div class="node"><strong>Dashboard</strong><small>Exposure duration, validation matrix, remediation owner/SLA/ticket/proof freshness.</small></div>
+      <div class="node"><strong>Supervision</strong><small>Docker autostart and Windows startup wrappers back off and surface repeated wrapper failures.</small></div>
+    </div>
+  </section>
+
+  <h2>User Flow</h2>
+  <section class="diagram" aria-label="FORGE user flow">
+    <div class="flow">
+      <div class="step"><b>1. Configure</b><span>Set local ROE env, autostart config, optional Supabase/CTI refs, and low-memory limits.</span></div>
+      <div class="step"><b>2. Drop Inputs</b><span>Place CTI, Burp/JUnit, ProjectDiscovery, Censys/runZero, or asset delta files under <code>imports/</code>.</span></div>
+      <div class="step"><b>3. Build Feed</b><span>Dry-run by default; apply writes merged canonical targets with source provenance.</span></div>
+      <div class="step"><b>4. Queue Imports</b><span>Ready local inputs import with explicit limits; deferred or blocked items stay visible.</span></div>
+      <div class="step"><b>5. Gate Live</b><span>ROE, scope, resources, Docker health, cooldown, and lock checks must pass.</span></div>
+      <div class="step"><b>6. Execute</b><span>New targets start, failed runs resume, due monitoring runs, reports and dashboard refresh.</span></div>
+      <div class="step"><b>7. Learn Outward</b><span>Newly observed scoped assets feed back into target lists for the next cycle.</span></div>
+    </div>
   </section>
 
   <section class="grid">

@@ -54,12 +54,16 @@ forge monitoring exposure-metrics --json
 forge remediation review-queue --engagement N --json
 forge connectors import-discovery --engagement N --connector asset_delta_import --report-file assets.json --target DOMAIN --dry-run --limit 1000 --json
 forge connectors import-discovery --engagement N --connector projectdiscovery_cloud --report-file pd-cloud-export.json --target DOMAIN --dry-run --limit 1000 --json
-forge connectors import-validation --engagement N --connector burp_dast_xml --report-file REPORT.xml --dry-run --json
+forge connectors import-validation --engagement N --connector burp_dast_xml --report-file REPORT.xml --dry-run --limit 1000 --json
 ```
 
 `forge automation cycle --apply --live` writes the target feed once, then hands
 off to guarded-autostart with `--skip-feed-build`; standalone startup hooks still
 let guarded-autostart run the launcher feed-build phase itself.
+If `imports/autostart.local.json` sets `auto_live_when_roe_ready=true`,
+`forge automation cycle --apply` auto-promotes to that guarded live handoff when
+the configured ROE env var is present. Dry-run still never writes or launches
+live work.
 Live startup queue consumption is bounded by `queue_limit` in
 `imports/autostart.local.json`, or by `--queue-limit N`. Each queued
 CTI/discovery/validation artifact is also passed an explicit `--limit` from

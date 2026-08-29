@@ -122,6 +122,7 @@ DEFAULT_AUTOSTART_CONFIG_PATH = Path("imports") / "autostart.local.json"
 DEFAULT_AUTOSTART_CONFIG: dict[str, Any] = {
     "enabled": False,
     "apply_enabled": False,
+    "auto_live_when_roe_ready": False,
     "roe_id_env": "FORGE_ROE_ID",
     "engagement_id": None,
     "min_free_memory_mb": 1024,
@@ -665,7 +666,7 @@ def _validate_autostart_config(config: dict[str, Any]) -> list[str]:
                 config["engagement_id"] = None
             else:
                 config["engagement_id"] = engagement_id
-    for key in ("enabled", "apply_enabled"):
+    for key in ("enabled", "apply_enabled", "auto_live_when_roe_ready"):
         if not isinstance(config[key], bool):
             errors.append(f"autostart_config_invalid_bool:{key}")
             config[key] = False

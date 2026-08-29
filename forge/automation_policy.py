@@ -162,6 +162,7 @@ def automation_defaults_review(
     config_template = dict(autostart_defaults)
     config_template["enabled"] = False
     config_template["apply_enabled"] = False
+    config_template["auto_live_when_roe_ready"] = False
     presets = {
         "conservative": {
             "resume_limit": 5,
@@ -170,6 +171,7 @@ def automation_defaults_review(
             "queue_limit": 5,
             "queue_import_item_limit": 500,
             "queue_promote_targets": False,
+            "auto_live_when_roe_ready": False,
             "start_limit": 1,
             "min_start_source_count": 2,
             "max_runtime_minutes": 5,
@@ -186,6 +188,7 @@ def automation_defaults_review(
                 "queue_limit",
                 "queue_import_item_limit",
                 "queue_promote_targets",
+                "auto_live_when_roe_ready",
                 "start_limit",
                 "min_start_source_count",
                 "max_runtime_minutes",
@@ -203,6 +206,7 @@ def automation_defaults_review(
             "queue_limit": 10,
             "queue_import_item_limit": 1000,
             "queue_promote_targets": True,
+            "auto_live_when_roe_ready": True,
             "start_limit": 5,
             "min_start_source_count": 2,
             "max_runtime_minutes": 20,
@@ -223,6 +227,7 @@ def automation_defaults_review(
                 "queue_limit",
                 "queue_import_item_limit",
                 "queue_promote_targets",
+                "auto_live_when_roe_ready",
                 "start_limit",
                 "min_start_source_count",
                 "max_runtime_minutes",
@@ -248,6 +253,14 @@ def automation_defaults_review(
             "options": [False, True],
             "field": "queue_promote_targets",
             "command": "forge connectors import-cti --promote-targets ...",
+        },
+        {
+            "id": "auto_live_when_roe_ready",
+            "default": autostart_defaults["auto_live_when_roe_ready"],
+            "options": [False, True],
+            "field": "auto_live_when_roe_ready",
+            "command": "forge automation cycle --apply --json",
+            "effect": "When true, apply-only cycles promote to guarded live mode if the configured ROE env var is present.",
         },
         {
             "id": "min_start_source_count",
@@ -360,6 +373,12 @@ def automation_limits_review(
         _limit_item(
             "queue_promote_targets",
             config.get("queue_promote_targets"),
+            "bool",
+            config_source,
+        ),
+        _limit_item(
+            "auto_live_when_roe_ready",
+            config.get("auto_live_when_roe_ready"),
             "bool",
             config_source,
         ),
