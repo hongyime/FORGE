@@ -13,6 +13,15 @@ PLAN_SCHEMA_VERSION = "forge.automation_run_plan.v1"
 COMMAND_REVIEW_SCHEMA_VERSION = "forge.command_surface_review.v1"
 DEFAULTS_REVIEW_SCHEMA_VERSION = "forge.automation_defaults_review.v1"
 LIMITS_REVIEW_SCHEMA_VERSION = "forge.automation_limits_review.v1"
+DOCKER_LOW_MEMORY_ENV_PATH = "docker/low-memory.env.example"
+DOCKER_LOW_MEMORY_PROFILE_LIMITS = {
+    "forge-api": "128m",
+    "forge-webui": "128m",
+    "forge-worker": "128m",
+    "postgres": "256m",
+    "redis": "64m",
+    "forge-guarded-autostart": "256m",
+}
 DAILY_USE_LAYER: tuple[dict[str, str], ...] = (
     {
         "id": "automation_defaults",
@@ -387,6 +396,24 @@ def automation_limits_review(
         _limit_item("docker_autostart_mem_limit_default", "1536m", "memory", "compose_default"),
         _limit_item("docker_autostart_timeout_seconds", 9000, "seconds", "compose_default"),
         _limit_item("docker_autostart_every_seconds", 9300, "seconds", "compose_default"),
+        _limit_item(
+            "docker_low_memory_env_file",
+            DOCKER_LOW_MEMORY_ENV_PATH,
+            "path",
+            "compose_low_memory_profile",
+        ),
+        _limit_item(
+            "docker_low_memory_total_mib",
+            _memory_limit_total_mib(DOCKER_LOW_MEMORY_PROFILE_LIMITS),
+            "MiB",
+            "compose_low_memory_profile",
+        ),
+        _limit_item(
+            "docker_low_memory_service_mem_limits",
+            dict(DOCKER_LOW_MEMORY_PROFILE_LIMITS),
+            "memory_by_service",
+            "compose_low_memory_profile",
+        ),
     ]
     return {
         "schema_version": LIMITS_REVIEW_SCHEMA_VERSION,
@@ -404,6 +431,17 @@ def automation_limits_review(
             "review_limits": ["forge", "automation", "limits", "--json"],
             "review_defaults": ["forge", "automation", "defaults", "--json"],
             "review_status": ["forge", "automation", "status", "--json"],
+            "review_low_memory_docker_config": [
+                "docker",
+                "compose",
+                "--env-file",
+                DOCKER_LOW_MEMORY_ENV_PATH,
+                "-f",
+                "docker/docker-compose.yml",
+                "--profile",
+                "autostart",
+                "config",
+            ],
         },
     }
 
@@ -415,6 +453,19 @@ def _limit_item(id: str, value: Any, unit: str, source: str) -> dict[str, Any]:
         "unit": unit,
         "source": source,
     }
+
+
+def _memory_limit_total_mib(values: dict[str, str]) -> int:
+    return sum(_memory_limit_mib(value) for value in values.values())
+
+
+def _memory_limit_mib(value: str) -> int:
+    normalized = str(value).strip().lower()
+    if normalized.endswith("m"):
+        return int(normalized[:-1])
+    if normalized.endswith("g"):
+        return int(normalized[:-1]) * 1024
+    return int(normalized) // (1024 * 1024)
 
 
 def validate_automation_policy() -> dict[str, Any]:

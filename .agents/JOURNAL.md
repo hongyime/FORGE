@@ -244,3 +244,4 @@
 - 2026-08-29: B740 closes resumed audit gaps by enforcing shared discovery import budgets, adding report quality status labels, making only explicit startup-critical Go tools block autostart, documenting a 960 MiB Docker low-memory profile, and routing status launchers through automation status.
 - 2026-08-29: B741 refreshes the autonomous target loop PostPlan draft to version 3 so the public HTML includes the B740 hardening checkpoint.
 - 2026-08-29: B742 adds direct queue alias regression coverage for automation status and guarded-autostart skipped/unavailable source-queue paths.
+- 2026-08-29: B743 exposes the 960 MiB Docker low-memory autostart profile through automation limits so operators can review 1024 MB startup caps from the daily CLI.

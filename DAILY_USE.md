@@ -172,8 +172,9 @@ docker compose --env-file docker/low-memory.env.example -f docker/docker-compose
 ```
 
 That example caps API, web UI, worker, Postgres, Redis, and guarded autostart at
-960 MiB total. Provide secrets through your normal local env source before
-starting containers.
+960 MiB total. `forge automation limits --json` reports the same low-memory
+profile fields and review command. Provide secrets through your normal local
+env source before starting containers.
 
 The extra `forge-guarded-autostart` service runs a controlled loop with lower
 default caps (`FORGE_AUTOSTART_CPUS=0.25`,
