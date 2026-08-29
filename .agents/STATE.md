@@ -458,12 +458,12 @@ Next steps:
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-08-29 09:29:31 +08:00
+- Updated: 2026-08-29 15:11:14 +08:00
 - Machine: PRAWN-E14
 - Harness: codex
 - Event: session-start
 - Branch: main
-- HEAD: dccdbcb
+- HEAD: 6c04634
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
@@ -493,3 +493,5 @@ Next steps:
 - Final current-state note after B758 on 2026-08-29: repo is pushed through `7d4b947` with a clean worktree before this note. Final quick status during verification reported `blocked` only because the autostart probe saw `free_memory_below_threshold`; feed remains present with `6,867` total targets and `3,733` startable, and source queues remain `0`. A lower-level `automation self-heal-plan --json --docker-probe-mode compose-dependency` rerun immediately after reported `status=ready`, no blockers, and Docker health delegated to Compose dependencies, so the memory gate is behaving as a fail-closed runtime guard rather than indicating a code failure. Report quality remains `ready_with_backlog` with `3,573` files, `581` families, no latest fallback counts, no current dashboard refresh failures, `49` resume-review candidates, and `3` long-run reviews. Doctor remains `attention` for operator/config/backlog posture, with no missing local binaries in the final summary. No live provider/API call, scanner execution, target import/start apply, resume-run apply, monitoring apply, Docker mutation, scheduled-task mutation, ticket/webhook write, secret decrypt, or credential persistence was executed.
 
 - Completed B759 locally on 2026-08-29: added ROE-ready auto-live promotion and refreshed the PostPlan HTML with architecture and user-flow diagrams. Repo defaults remain safe (`auto_live_when_roe_ready=false`), but local ignored `imports/autostart.local.json` is set to `auto_live_when_roe_ready=true`, so `forge automation cycle --apply` promotes to guarded live only when the configured ROE env var is present; dry-run remains non-mutating and explicit `--live` still works. Verification passed: focused auto-live/policy/self-heal tests (`5 passed`), broader automation cycle/policy/self-heal tests (`104 passed`, existing sqlite timestamp warnings only), Ruff, `py_compile`, `git diff --check`, dry-run `automation cycle --json` smoke showing no auto-promotion without apply, `automation limits --json` smoke showing local auto-live true, and pasted-key fragment scan. PostPlan version 11 uploaded at https://ylrghmdr8arh.postplan.dev with raw HTML https://postplan.dev/d/ylrghmdr8arh/raw. No live provider/API call, scanner execution, target import/start apply, resume-run apply, monitoring apply, Docker mutation, scheduled-task mutation, ticket/webhook write, secret decrypt, or credential persistence was executed.
+
+- In progress B760 on 2026-08-29: first user-approved live start ran `forge automation cycle --apply --json`, auto-promoted through ROE, wrote the target feed, ran the guarded autopilot dry-run/apply path, and executed a bounded monitoring batch (`25` due policies). The live apply returned `live_failed` after the dashboard phase surfaced a Windows `FileNotFoundError`, and a standalone diagnostic `forge dashboard` process then wedged until stopped. Fix in progress: guarded autostart now runs the core autopilot apply with `--skip-dashboard`, then runs dashboard refresh as a separate contained command with `dashboard_timeout_seconds`; dashboard-only failure becomes `completed_with_dashboard_attention` / `live_dashboard_attention` instead of masking successful start/resume/monitoring work. Focused regressions currently pass (`4 passed`) and Ruff is clean on touched files. Supabase remains configured only by project ref/key-env metadata; the configured key env is still unset, so no live Supabase rows were read.

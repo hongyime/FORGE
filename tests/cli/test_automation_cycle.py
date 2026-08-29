@@ -2149,6 +2149,65 @@ def test_automation_cycle_apply_does_not_auto_promote_without_roe(
     assert payload["roe_id_present"] is False
 
 
+def test_automation_cycle_live_dashboard_attention_is_not_live_failed(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    config = imports_dir / "autostart.local.json"
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": True,
+                "failure_backoff_minutes": 0,
+                "cooldown_minutes": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_guarded_autostart(**kwargs):
+        if kwargs.get("preflight_only"):
+            return {
+                "schema_version": "forge.automation_guarded_autostart.v1",
+                "status": "ready",
+                "blockers": [],
+            }
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "completed_with_dashboard_attention",
+            "blockers": [],
+            "commands": {},
+            "runs": [
+                {"id": "autopilot_apply", "returncode": 0},
+                {"id": "dashboard_refresh", "returncode": 124},
+            ],
+        }
+
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        autostart_config=config,
+    )
+
+    assert payload["status"] == "live_dashboard_attention"
+    assert payload["autostart"]["status"] == "completed_with_dashboard_attention"
+
+
 def test_automation_cycle_apply_live_blocks_before_feed_and_queue_when_resources_low(
     tmp_path: Path,
     monkeypatch,

@@ -269,3 +269,6 @@
 - 2026-08-29 B757: Daily-use import guidance must be both dry-run-first and explicitly bounded, and startup wrapper loops must back off then surface repeated wrapper-level failures instead of retrying forever.
 - 2026-08-29 B758: Refreshed the autonomous target loop PostPlan draft to version 10 so the public HTML includes bounded import guidance and startup wrapper backoff.
 - 2026-08-29 B759: Auto-live is local opt-in only; when `auto_live_when_roe_ready=true` and the configured ROE env var is present, `automation cycle --apply` may promote to the guarded live path after the same preflight gates, while dry-run remains non-mutating.
+- 2026-08-29 15:08:49 +08:00 [PRAWN-E14/claude/session-start] branch=main head=6c04634 dirty=0
+- 2026-08-29 15:11:14 +08:00 [PRAWN-E14/codex/session-start] branch=main head=6c04634 dirty=0
+- 2026-08-29 B760: Guarded autostart now runs core autopilot apply with dashboard skipped, then refreshes the dashboard as a separate bounded command; dashboard-only failure is attention, not a failed live batch.

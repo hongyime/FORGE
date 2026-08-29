@@ -57,6 +57,7 @@ def test_autopilot_launcher_runs_start_resume_monitor_dashboard() -> None:
     assert "--max-parallel" in text
     assert "monitoring run-due" in text
     assert "dashboard" in text
+    assert "--skip-dashboard" in text
     assert "--dry-run" in text
     assert "roe_id_present" in text
     assert "echo   roe_id=%roe_id%" not in text

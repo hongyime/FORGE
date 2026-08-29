@@ -136,6 +136,7 @@ DEFAULT_AUTOSTART_CONFIG: dict[str, Any] = {
     "start_limit": 2,
     "min_start_source_count": 1,
     "max_runtime_minutes": 10,
+    "dashboard_timeout_seconds": 300,
     "cooldown_minutes": 60,
     "failure_backoff_minutes": 120,
     "log_max_entries": 25,
@@ -487,13 +488,30 @@ def run_guarded_autostart(
             return result
         live = runner(_execution_command(commands["autopilot_apply"], config), root)
         result["runs"].append({"id": "autopilot_apply", **live})
+        dashboard: dict[str, Any] | None = None
+        if live["returncode"] == 0:
+            if command_runner is None:
+                dashboard = _run_command_with_options(
+                    _execution_command(commands["dashboard_refresh"], config),
+                    root,
+                    timeout_seconds=int(config["dashboard_timeout_seconds"]),
+                    redactions=sensitive_values,
+                )
+            else:
+                dashboard = runner(_execution_command(commands["dashboard_refresh"], config), root)
+            result["runs"].append({"id": "dashboard_refresh", **dashboard})
         result["status"] = "completed" if live["returncode"] == 0 else "failed"
+        if dashboard is not None and dashboard["returncode"] != 0:
+            result["status"] = "completed_with_dashboard_attention"
         _write_autostart_state(
             state_file,
             {
                 "last_started_at": _iso(now),
                 "last_status": result["status"],
                 "last_returncode": live["returncode"],
+                "last_dashboard_returncode": (
+                    dashboard["returncode"] if dashboard is not None else None
+                ),
                 "last_failed_at": _iso(now) if live["returncode"] != 0 else "",
             },
         )
@@ -639,6 +657,7 @@ def _validate_autostart_config(config: dict[str, Any]) -> list[str]:
         "start_limit": (0, 20),
         "min_start_source_count": (1, 100),
         "max_runtime_minutes": (1, 60),
+        "dashboard_timeout_seconds": (30, 3600),
         "cooldown_minutes": (0, 1440),
         "failure_backoff_minutes": (0, 2880),
         "log_max_entries": (1, 500),
@@ -740,12 +759,18 @@ def _guarded_autostart_commands(
         base.append("--feed-build")
         for source in config["feed_sources"]:
             base.extend(["--feed-source", str(source)])
-    apply_cmd = [*base, "--feed-file", str(root / "imports" / "target-feed.json")]
+    apply_cmd = [
+        *base,
+        "--skip-dashboard",
+        "--feed-file",
+        str(root / "imports" / "target-feed.json"),
+    ]
     apply_cmd.extend(["--roe-id", f"${config['roe_id_env']}"])
     return {
         "self_heal_probe": ["forge", "automation", "self-heal-plan", "--json", "--probe-docker"],
         "autopilot_dry_run": [*base, "--dry-run"],
         "autopilot_apply": [*apply_cmd, "--apply"],
+        "dashboard_refresh": ["forge", "dashboard"],
     }
 
 

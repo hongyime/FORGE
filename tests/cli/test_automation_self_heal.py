@@ -1352,14 +1352,78 @@ def test_guarded_autostart_apply_runs_dry_run_then_live_and_writes_state(
 
     assert payload["status"] == "completed"
     assert payload["autopilot_timeout_seconds"] == 35 * 60
-    assert len(calls) == 2
+    assert len(calls) == 3
     assert "--dry-run" in calls[0]
     assert "--apply" not in calls[0]
     assert "--roe-id" in calls[1]
     assert "--apply" in calls[1]
+    assert "--skip-dashboard" in calls[1]
+    assert calls[2][-1] == "dashboard"
     assert not Path(payload["lock_file"]).exists()
     state = json.loads(Path(payload["state_file"]).read_text(encoding="utf-8"))
     assert state["last_status"] == "completed"
+    assert state["last_dashboard_returncode"] == 0
+
+
+def test_guarded_autostart_dashboard_failure_is_attention_after_live_success(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    (tmp_path / "docker").mkdir()
+    (tmp_path / "docker" / "docker-compose.dev.yml").write_text("services: {}\n", encoding="utf-8")
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": True,
+                "cooldown_minutes": 0,
+                "failure_backoff_minutes": 0,
+                "dashboard_timeout_seconds": 30,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_ROE_ID", "ROE-TEST")
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal._docker_status",
+        lambda _root, *, probe, mode="host_compose": {
+            "ok": True,
+            "probed": probe,
+            "reason": "docker_compose_ps_ok",
+        },
+    )
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "gopls", "binary": "gopls.exe", "size_bytes": 1, "role": "developer"},),
+    )
+    calls: list[list[str]] = []
+
+    def _runner(command: list[str], _cwd: Path) -> dict:
+        calls.append(command)
+        if command[-1] == "dashboard":
+            return {"returncode": 124, "stdout_tail": "", "stderr_tail": "timeout"}
+        return {"returncode": 0, "stdout_tail": "", "stderr_tail": ""}
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+        apply=True,
+        command_runner=_runner,
+    )
+
+    assert payload["status"] == "completed_with_dashboard_attention"
+    assert [run["id"] for run in payload["runs"]] == [
+        "autopilot_dry_run",
+        "autopilot_apply",
+        "dashboard_refresh",
+    ]
+    state = json.loads(Path(payload["state_file"]).read_text(encoding="utf-8"))
+    assert state["last_status"] == "completed_with_dashboard_attention"
+    assert state["last_dashboard_returncode"] == 124
 
 
 def test_guarded_autostart_apply_blocks_ready_source_queue_bypass(
@@ -1491,7 +1555,7 @@ def test_guarded_autostart_apply_writes_bounded_redacted_log(
     assert payload["log_file"] == str(log_file)
     assert [row["status"] for row in rows] == ["previous", "completed"]
     assert rows[-1]["schema_version"] == "forge.automation_guarded_autostart_log.v1"
-    assert rows[-1]["selected_count"] == 2
+    assert rows[-1]["selected_count"] == 3
     assert "ROE-TEST-SECRET" not in blob
     assert "[REDACTED]" in blob
 

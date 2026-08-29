@@ -395,6 +395,12 @@ def automation_limits_review(
             "minutes_per_target",
             config_source,
         ),
+        _limit_item(
+            "dashboard_timeout_seconds",
+            config.get("dashboard_timeout_seconds"),
+            "seconds",
+            config_source,
+        ),
         _limit_item("cooldown_minutes", config.get("cooldown_minutes"), "minutes", config_source),
         _limit_item(
             "failure_backoff_minutes",

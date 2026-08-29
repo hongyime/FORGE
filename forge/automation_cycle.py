@@ -2718,6 +2718,8 @@ def _automation_cycle_status_label(
         return "feed_errors"
     if str(autostart_history.get("status") or "") == "log_attention":
         return "attention"
+    if live and apply and autostart_status == "completed_with_dashboard_attention":
+        return "live_dashboard_attention"
     if live and apply and autostart_status == "completed":
         return "live_completed"
     if live and apply:
