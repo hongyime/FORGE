@@ -272,3 +272,8 @@
 - 2026-08-29 15:08:49 +08:00 [PRAWN-E14/claude/session-start] branch=main head=6c04634 dirty=0
 - 2026-08-29 15:11:14 +08:00 [PRAWN-E14/codex/session-start] branch=main head=6c04634 dirty=0
 - 2026-08-29 B760: Guarded autostart now runs core autopilot apply with dashboard skipped, then refreshes the dashboard as a separate bounded command; dashboard-only failure is attention, not a failed live batch.
+- 2026-08-29 B761: Forge module subprocess launch errors are normal failed child results (`127`) so missing optional prerequisite executables audit as follow-up work instead of crashing an otherwise completed kill-chain.
+- 2026-08-29 16:15:17 +08:00 [PRAWN-E14/claude/session-start] branch=main head=32b1558 dirty=0
+- 2026-08-29 16:15:53 +08:00 [PRAWN-E14/codex/session-start] branch=main head=32b1558 dirty=0
+- 2026-08-29 16:20:32 +08:00 [PRAWN-E14/claude/session-start] branch=main head=32b1558 dirty=0
+- 2026-08-29 16:20:59 +08:00 [PRAWN-E14/codex/session-start] branch=main head=32b1558 dirty=0

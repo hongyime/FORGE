@@ -79,6 +79,24 @@ def test_run_forge_module_subprocess_returns_timeout_exit_code(
     assert "late stderr" in result.stderr
 
 
+def test_run_forge_module_subprocess_returns_missing_executable_exit_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _missing_run(_args: list[str], **_kwargs: object) -> object:
+        raise FileNotFoundError("missing executable")
+
+    monkeypatch.setattr(cli.subprocess, "run", _missing_run)
+
+    result = cli._run_forge_module_subprocess(
+        ["cloud", "aws", "--engagement", "1001"],
+        timeout_seconds=2.5,
+    )
+
+    assert result.returncode == 127
+    assert result.stdout == ""
+    assert "FileNotFoundError: missing executable" in result.stderr
+
+
 def test_detected_prereq_child_argv_adds_live_authorization_once() -> None:
     manifest = '{"roe_id":"ROE-ACME-2026-07","domains":["acme.example"]}'
 

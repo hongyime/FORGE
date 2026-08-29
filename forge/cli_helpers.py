@@ -257,6 +257,13 @@ def _run_forge_module_subprocess(
             _timeout_stream_text(exc.stdout),
             timeout_message,
         )
+    except OSError as exc:
+        return subprocess.CompletedProcess(
+            args,
+            127,
+            "",
+            f"{type(exc).__name__}: {_timeout_stream_text(exc)}",
+        )
 
 
 def _append_cli_option_once(argv: list[str], flag: str, value: str) -> list[str]:
