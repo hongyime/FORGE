@@ -83,6 +83,20 @@ def _table_names(con: sqlite3.Connection) -> set[str]:
     return {str(row[0]) for row in rows}
 
 
+def _table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:
+    try:
+        rows = con.execute(f"PRAGMA table_info({table_name})").fetchall()
+    except sqlite3.DatabaseError:
+        return set()
+    return {str(row["name"] if isinstance(row, sqlite3.Row) else row[1]) for row in rows}
+
+
+def _column_expr(columns: set[str], column: str, *, default: str = "NULL") -> str:
+    if column in columns:
+        return column
+    return f"{default} AS {column}"
+
+
 def _safe_json_loads(value: Any) -> Any:
     if not value:
         return {}
@@ -198,11 +212,20 @@ def _collect_vulnerability_findings(
     engagement_id: int,
     buckets: dict[str, dict[str, Any]],
 ) -> None:
+    remediation_columns = _table_columns(con, "remediation_items")
+    remediation_where = (
+        "engagement_id=? AND finding_table='vulnerability_findings'"
+        if "finding_table" in remediation_columns
+        else "engagement_id=? AND 0"
+    )
     remediation_rows = con.execute(
-        """
-        SELECT finding_id, finding_ref, status, updated_at
+        f"""
+        SELECT {_column_expr(remediation_columns, "finding_id")},
+               {_column_expr(remediation_columns, "finding_ref")},
+               {_column_expr(remediation_columns, "status")},
+               {_column_expr(remediation_columns, "updated_at")}
         FROM remediation_items
-        WHERE engagement_id=? AND finding_table='vulnerability_findings'
+        WHERE {remediation_where}
         """,
         (engagement_id,),
     ).fetchall()
@@ -210,12 +233,22 @@ def _collect_vulnerability_findings(
     by_ref: dict[str, sqlite3.Row] = {}
     for row in remediation_rows:
         if row["finding_id"] is not None:
-            by_id[int(row["finding_id"])] = row
+            try:
+                by_id[int(row["finding_id"])] = row
+            except (TypeError, ValueError):
+                pass
         if row["finding_ref"]:
             by_ref[str(row["finding_ref"])] = row
+    finding_columns = _table_columns(con, "vulnerability_findings")
     rows = con.execute(
-        """
-        SELECT id, vuln_type, target_url, parameter, severity, title, found_at
+        f"""
+        SELECT id,
+               {_column_expr(finding_columns, "vuln_type", default="''")},
+               {_column_expr(finding_columns, "target_url", default="''")},
+               {_column_expr(finding_columns, "parameter", default="''")},
+               {_column_expr(finding_columns, "severity", default="'INFO'")},
+               {_column_expr(finding_columns, "title", default="''")},
+               {_column_expr(finding_columns, "found_at")}
         FROM vulnerability_findings
         WHERE engagement_id=?
         ORDER BY found_at, id
@@ -286,10 +319,18 @@ def _collect_remediation_mttr(
     engagement_id: int,
     buckets: dict[str, dict[str, Any]],
 ) -> list[float]:
+    columns = _table_columns(con, "remediation_items")
     rows = con.execute(
-        """
-        SELECT id, finding_table, finding_ref, title, severity, status,
-               created_at, updated_at, retested_at
+        f"""
+        SELECT id,
+               {_column_expr(columns, "finding_table", default="'manual'")},
+               {_column_expr(columns, "finding_ref", default="''")},
+               {_column_expr(columns, "title", default="''")},
+               {_column_expr(columns, "severity", default="'INFO'")},
+               {_column_expr(columns, "status", default="''")},
+               {_column_expr(columns, "created_at")},
+               {_column_expr(columns, "updated_at")},
+               {_column_expr(columns, "retested_at")}
         FROM remediation_items
         WHERE engagement_id=?
         ORDER BY created_at, id

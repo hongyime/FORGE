@@ -964,6 +964,7 @@ def _connector_run_command_template(row: Mapping[str, Any]) -> list[str]:
                 "PATH_TO_DISCOVERY_EXPORT",
                 "--target",
                 "DOMAIN_OR_URL",
+                "--dry-run",
                 "--json",
             ]
         )

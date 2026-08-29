@@ -609,6 +609,7 @@ def test_connector_run_plan_reports_free_runnable_commands_without_execution() -
         "PATH_TO_DISCOVERY_EXPORT",
         "--target",
         "DOMAIN_OR_URL",
+        "--dry-run",
         "--json",
     ]
     assert by_id["burp_dast_xml"]["command_template"] == [
@@ -672,6 +673,19 @@ def test_connector_run_plan_cli_outputs_json_without_running_connectors() -> Non
     assert payload["omitted_count"] == payload["total_count"] - payload["selected_count"]
     assert isinstance(payload["items"], list)
     assert "DOMAIN_OR_URL" in result.output
+
+
+def test_connector_run_plan_import_templates_are_dry_run_first() -> None:
+    payload = connector_run_plan()
+
+    import_items = [
+        item
+        for item in payload["items"]
+        if any(path.startswith("forge connectors import-") for path in item["execution_paths"])
+    ]
+    assert import_items
+    for item in import_items:
+        assert "--dry-run" in item["command_template"], item["connector_id"]
 
 
 def test_connector_secret_key_plan_outputs_no_secret_material(monkeypatch) -> None:
