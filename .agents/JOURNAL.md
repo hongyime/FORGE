@@ -260,3 +260,5 @@
 - 2026-08-29 B752: Refreshed the autonomous target loop PostPlan draft to version 7 so the public HTML includes feed-input readiness, live autostart preflight hardening, and autopilot dry-run non-mutating behavior.
 
 - 2026-08-29 B753: Docker autostart low-memory overrides must be passed through Compose service environment explicitly, and guarded read-only probes should avoid enumerating secret-like environment values unless logs or child commands need redaction.
+
+- 2026-08-29 B754: Refreshed the autonomous target loop PostPlan draft to version 8 so the public HTML includes the Docker autostart memory-gate wiring fix.
