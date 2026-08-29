@@ -344,8 +344,11 @@ per-source-group counts, preserving provenance such as `report_family:<id>` and
 
 Live Supabase feed extraction is read-only and local-config only. Store owned
 project settings in ignored `imports/supabase-projects.local.json`; keep keys in
-env vars or a Forge connector-secret reference, never in committed files. The
-minimal operator shape is `project_ref` plus `key_env`; Forge derives
+env vars or a Forge connector-secret reference, never in committed files.
+Env-based entries use `project_ref` plus `key_env`; secret-store entries use
+`project_ref` plus `key_secret_ref` with the shape
+`forge-secret://ENGAGEMENT_ID/CONNECTOR_ID/SECRET_NAME`, for example
+`forge-secret://1001/supabase_table_import/READ_KEY`. Forge derives
 `https://<project_ref>.supabase.co`, discovers exposed table paths from the
 read-only Data API root, and pages through all returned columns with
 `select=*`. The default greedy cap is 100,000 rows per table, 1,000 exposed
@@ -383,6 +386,9 @@ and `max_candidates` still work for tighter scopes. Use `tables: ["*"]` or omit
 `tables` to process every exposed table, and use `target_columns: ["*"]` or omit
 `target_columns` to process every returned column. Forge only turns normalized
 target-like values into feed entries.
+For secret-store mode, store the key with `forge connectors secret-set` and put
+only the resulting URI shape in `key_secret_ref`; `automation status` validates
+that URI shape without decrypting or printing the secret value.
 If a project is set to all tables but the REST OpenAPI root does not expose
 table paths to the supplied key, JSON reports `blocked_table_discovery` with a
 local next action instead of silently skipping the project.

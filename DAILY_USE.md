@@ -72,15 +72,18 @@ single-source targets but reserve live scan starts for targets seen by at least
 two independent source groups.
 
 Optional Supabase live extraction is read-only and uses ignored local config at
-`imports/supabase-projects.local.json`; put keys in env vars named by `key_env`.
-Minimal project entries only need `project_ref` and `key_env`. Forge derives the
-Supabase URL, discovers exposed tables from `/rest/v1/`, and pages through all
-columns with `select=*`. Default greedy Supabase bounds are 100,000 rows per
-table, 1,000 discovered tables, 100,000 total rows, and 100,000 candidate feed
-entries per configured project; optional `url`, `tables`, `target_columns`,
-`limit`, `max_tables`, `max_rows`, and `max_candidates` can still narrow that
-behavior. Rows are harvested one page at a time, and key hints preserve values
-such as bare usernames as canonical username targets. Feed
+`imports/supabase-projects.local.json`; put keys in env vars named by `key_env`,
+or point `key_secret_ref` at a Forge connector-secret URI such as
+`forge-secret://1001/supabase_table_import/READ_KEY`. Minimal env-based project
+entries only need `project_ref` and `key_env`; secret-store entries need
+`project_ref` and `key_secret_ref`. Forge derives the Supabase URL, discovers
+exposed tables from `/rest/v1/`, and pages through all columns with `select=*`.
+Default greedy Supabase bounds are 100,000 rows per table, 1,000 discovered
+tables, 100,000 total rows, and 100,000 candidate feed entries per configured
+project; optional `url`, `tables`, `target_columns`, `limit`, `max_tables`,
+`max_rows`, and `max_candidates` can still narrow that behavior. Rows are
+harvested one page at a time, and key hints preserve values such as bare
+usernames as canonical username targets. Feed
 JSON includes `supabase_table_discovery`, so a project that cannot expose table
 paths reports `blocked_table_discovery` with a local next action. When
 artifact/feed scans find Supabase hostnames, `feed-build --apply` appends them

@@ -679,6 +679,105 @@ def test_automation_status_recommends_supabase_feed_build_when_key_env_present(
     )
 
 
+def test_automation_status_accepts_supabase_secret_store_ref(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
+    (imports_dir / "supabase-projects.local.json").write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_secret_ref": (
+                            "forge-secret://1001/supabase_table_import/READ_KEY"
+                        ),
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        quick=True,
+    )
+
+    project = payload["supabase_sync"]["projects"][0]
+    assert payload["supabase_sync"]["status"] == "ready"
+    assert payload["supabase_sync"]["ready_count"] == 1
+    assert payload["supabase_sync"]["key_env_unset_count"] == 0
+    assert payload["supabase_sync"]["secret_ref_configured_count"] == 1
+    assert project["credential_source"] == "secret_ref"
+    assert project["key_env"] == ""
+    assert project["key_env_present"] is False
+    assert project["key_secret_ref_present"] is True
+    assert project["key_secret_ref_valid"] is True
+    assert payload["supabase_sync"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "feed-build",
+        "--source",
+        "supabase",
+        "--apply",
+        "--json",
+    ]
+
+
+def test_automation_status_rejects_invalid_supabase_secret_store_ref(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "supabase-projects.local.json").write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_secret_ref": "forge-secret://bad-ref",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        quick=True,
+    )
+
+    project = payload["supabase_sync"]["projects"][0]
+    assert payload["supabase_sync"]["status"] == "invalid_config"
+    assert payload["supabase_sync"]["ready_count"] == 0
+    assert payload["supabase_sync"]["invalid_count"] == 1
+    assert payload["supabase_sync"]["secret_ref_configured_count"] == 1
+    assert project["credential_source"] == "secret_ref"
+    assert project["reason"] == "key_secret_ref_invalid"
+    assert project["key_secret_ref_valid"] is False
+    assert payload["supabase_sync"]["next_actions"][0][:6] == [
+        "forge",
+        "connectors",
+        "secret-set",
+        "--engagement",
+        "N",
+        "--connector",
+    ]
+
+
 def test_automation_status_resume_backlog_fails_closed(tmp_path: Path, monkeypatch) -> None:
     def fail_resume_plan(**_kwargs):
         raise RuntimeError("resume db unavailable")

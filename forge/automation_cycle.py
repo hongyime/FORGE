@@ -1058,29 +1058,54 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
                     "project_ref": "",
                     "status": "invalid_project",
                     "reason": "project_not_object",
+                    "credential_source": "",
                     "key_env": "",
                     "key_env_present": False,
+                    "key_secret_ref": "",
+                    "key_secret_ref_present": False,
+                    "key_secret_ref_valid": False,
                 }
             )
             continue
         project_ref = str(raw_project.get("project_ref") or "").strip().lower()
         key_env = str(raw_project.get("key_env") or "").strip()
+        key_secret_ref = str(raw_project.get("key_secret_ref") or "").strip()
         tables = _string_list(raw_project.get("tables")) or ["*"]
         columns = _string_list(raw_project.get("target_columns")) or ["*"]
         status = "ready"
         reason = ""
+        credential_source = "env"
+        key_env_present = bool(key_env and os.environ.get(key_env, "").strip())
+        key_secret_ref_valid = bool(
+            key_secret_ref and _supabase_secret_ref_valid(key_secret_ref)
+        )
         if not project_ref:
             status = "invalid_project"
             reason = "project_ref_missing"
-        elif not key_env:
+        elif not _env_var_name_valid(key_env):
+            if key_env:
+                status = "invalid_project"
+                reason = "key_env_invalid"
+            elif key_secret_ref:
+                credential_source = "secret_ref"
+                if not key_secret_ref_valid:
+                    status = "invalid_project"
+                    reason = "key_secret_ref_invalid"
+            else:
+                status = "invalid_project"
+                reason = "key_env_missing"
+        elif key_env:
+            if not key_env_present:
+                status = "key_env_unset"
+                reason = f"key_env_unset:{key_env}"
+        elif key_secret_ref:
+            credential_source = "secret_ref"
+            if not key_secret_ref_valid:
+                status = "invalid_project"
+                reason = "key_secret_ref_invalid"
+        else:
             status = "invalid_project"
             reason = "key_env_missing"
-        elif not _env_var_name_valid(key_env):
-            status = "invalid_project"
-            reason = "key_env_invalid"
-        elif not os.environ.get(key_env, "").strip():
-            status = "key_env_unset"
-            reason = f"key_env_unset:{key_env}"
         summaries.append(
             {
                 "index": index,
@@ -1090,8 +1115,12 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
                 else "",
                 "status": status,
                 "reason": reason,
+                "credential_source": credential_source,
                 "key_env": key_env,
-                "key_env_present": bool(key_env and os.environ.get(key_env, "").strip()),
+                "key_env_present": key_env_present,
+                "key_secret_ref": key_secret_ref,
+                "key_secret_ref_present": bool(key_secret_ref),
+                "key_secret_ref_valid": key_secret_ref_valid,
                 "requested_all_tables": "*" in tables,
                 "requested_all_columns": "*" in columns,
                 "tables": tables,
@@ -1150,6 +1179,23 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
                     ]
                 )
                 break
+            if str(project.get("reason") or "") == "key_secret_ref_invalid":
+                next_actions.append(
+                    [
+                        "forge",
+                        "connectors",
+                        "secret-set",
+                        "--engagement",
+                        "N",
+                        "--connector",
+                        "supabase_table_import",
+                        "--name",
+                        "READ_KEY",
+                        "--value-env",
+                        "FORGE_SUPABASE_PROJECT_READ_KEY",
+                    ]
+                )
+                break
     return {
         "schema_version": "forge.supabase_sync_readiness.v1",
         "execution_policy": "read_only_supabase_sync_readiness_no_network_or_writes",
@@ -1158,6 +1204,9 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
         "configured_count": len(summaries),
         "ready_count": ready_count,
         "key_env_unset_count": status_counts.get("key_env_unset", 0),
+        "secret_ref_configured_count": sum(
+            1 for project in summaries if project.get("credential_source") == "secret_ref"
+        ),
         "invalid_count": status_counts.get("invalid_project", 0),
         "all_tables_count": sum(1 for project in summaries if project["requested_all_tables"]),
         "all_columns_count": sum(1 for project in summaries if project["requested_all_columns"]),
@@ -1194,6 +1243,21 @@ def _supabase_readiness_project_limit(value: Any) -> int:
     if limit <= 0:
         return 100000
     return min(limit, 100000)
+
+
+def _supabase_secret_ref_valid(value: str) -> bool:
+    prefix = "forge-secret://"
+    text = str(value or "").strip()
+    if not text.startswith(prefix):
+        return False
+    parts = [part for part in text[len(prefix) :].split("/") if part]
+    if len(parts) != 3:
+        return False
+    try:
+        engagement_id = int(parts[0])
+    except ValueError:
+        return False
+    return engagement_id > 0 and all(parts[1:])
 
 
 def _string_list(value: Any) -> list[str]:
