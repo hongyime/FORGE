@@ -264,3 +264,5 @@
 - 2026-08-29 B754: Refreshed the autonomous target loop PostPlan draft to version 8 so the public HTML includes the Docker autostart memory-gate wiring fix.
 
 - 2026-08-29 B755: Connector run-plan import commands must be dry-run-first, and exposure metrics/dashboard readers must tolerate legacy remediation schemas without requiring migrations before read-only dashboard generation.
+
+- 2026-08-29 B756: Refreshed the autonomous target loop PostPlan draft to version 9 so the public HTML includes the run-plan and exposure-metrics robustness fix.
