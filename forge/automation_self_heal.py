@@ -409,6 +409,10 @@ def _direct_source_queue_status(
             "ready": 0,
             "blocked": 0,
             "ignored": 0,
+            "total_count": 0,
+            "ready_count": 0,
+            "blocked_count": 0,
+            "ignored_count": 0,
         }
     imports_dir = root / "imports"
     try:
@@ -439,6 +443,10 @@ def _direct_source_queue_status(
             "ready": 0,
             "blocked": 0,
             "ignored": 0,
+            "total_count": 0,
+            "ready_count": 0,
+            "blocked_count": 0,
+            "ignored_count": 0,
         }
     return {
         "checked": True,
@@ -453,6 +461,10 @@ def _direct_source_queue_status(
         "ready": len(ready),
         "blocked": len(blocked),
         "ignored": len(ignored),
+        "total_count": len(items),
+        "ready_count": len(ready),
+        "blocked_count": len(blocked),
+        "ignored_count": len(ignored),
         "ready_connectors": sorted({str(item["connector_id"]) for item in ready}),
     }
 

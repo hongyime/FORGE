@@ -2239,6 +2239,10 @@ def _queue_summary(
         "ready": len(ready_items),
         "blocked": len(blocked_items),
         "ignored": len(ignored_items),
+        "total_count": len(all_items),
+        "ready_count": len(ready_items),
+        "blocked_count": len(blocked_items),
+        "ignored_count": len(ignored_items),
         "by_connector": dict(sorted(by_connector.items())),
     }
 

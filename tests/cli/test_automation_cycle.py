@@ -1598,6 +1598,10 @@ def test_automation_cycle_queue_limit_defers_extra_ready_items(tmp_path: Path) -
         "deferred_count": 1,
         "execution_order": "priority_desc_then_connector_then_value",
     }
+    assert payload["queues"]["total_count"] == 3
+    assert payload["queues"]["ready_count"] == 3
+    assert payload["queues"]["blocked_count"] == 0
+    assert payload["queues"]["ignored_count"] == 0
     assert payload["status"] == "queue_deferred"
     assert len(commands) == 2
     assert [run["status"] for run in payload["queue_runs"]] == ["completed", "completed"]

@@ -1036,6 +1036,9 @@ def test_guarded_autostart_apply_blocks_ready_source_queue_bypass(
     assert payload["status"] == "blocked"
     assert "source_queues_require_automation_cycle" in payload["blockers"]
     assert payload["source_queues"]["ready"] == 1
+    assert payload["source_queues"]["ready_count"] == 1
+    assert payload["source_queues"]["blocked_count"] == 0
+    assert payload["source_queues"]["ignored_count"] == 0
     assert payload["source_queues"]["next_action"].startswith("Run forge automation cycle")
     assert calls == []
 
