@@ -72,6 +72,8 @@ __all__ = [
     "_MODULE_SUBPROCESS_DEFAULT_TIMEOUT_SECONDS",
     "_MODULE_SUBPROCESS_TIMEOUT_EXIT_CODE",
     "_module_subprocess_timeout_seconds",
+    "_PREREQ_SUBPROCESS_DEFAULT_TIMEOUT_SECONDS",
+    "_prereq_subprocess_timeout_seconds",
     "_REPORT_GENERATE_SUBPROCESS_DEFAULT_TIMEOUT_SECONDS",
     "_report_generate_subprocess_timeout_seconds",
     "_subprocess_timeout_seconds_for_module",
@@ -121,6 +123,7 @@ _PROVIDER_DEFAULT_MAX_WORKERS = 1
 _PROVIDER_BATCH_STAGGER_DEFAULT_SECONDS = 0.0
 _MODULE_SUBPROCESS_DEFAULT_TIMEOUT_SECONDS = 900.0
 _REPORT_GENERATE_SUBPROCESS_DEFAULT_TIMEOUT_SECONDS = 300.0
+_PREREQ_SUBPROCESS_DEFAULT_TIMEOUT_SECONDS = 120.0
 _MODULE_SUBPROCESS_TIMEOUT_EXIT_CODE = 124
 
 
@@ -234,6 +237,15 @@ def _report_generate_subprocess_timeout_seconds() -> float:
     )
 
 
+def _prereq_subprocess_timeout_seconds() -> float:
+    return _cli_float_env(
+        "FORGE_PREREQ_SUBPROCESS_TIMEOUT_SECONDS",
+        _PREREQ_SUBPROCESS_DEFAULT_TIMEOUT_SECONDS,
+        minimum=30.0,
+        maximum=3600.0,
+    )
+
+
 def _subprocess_timeout_seconds_for_module(
     cmd_argv: Sequence[str],
     label: str,
@@ -242,6 +254,8 @@ def _subprocess_timeout_seconds_for_module(
 ) -> float:
     if label == "report generate" or list(cmd_argv[:2]) == ["report", "generate"]:
         return _report_generate_subprocess_timeout_seconds()
+    if str(label or "").strip().lower().startswith("prereq:"):
+        return _prereq_subprocess_timeout_seconds()
     if default_timeout_seconds is not None:
         return max(1.0, float(default_timeout_seconds))
     return _module_subprocess_timeout_seconds()
