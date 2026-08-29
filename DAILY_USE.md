@@ -74,10 +74,11 @@ Optional Supabase live extraction is read-only and uses ignored local config at
 Minimal project entries only need `project_ref` and `key_env`. Forge derives the
 Supabase URL, discovers exposed tables from `/rest/v1/`, and pages through all
 columns with `select=*`. Default greedy Supabase bounds are 100,000 rows per
-table and 1,000 discovered tables per configured project; optional `url`,
-`tables`, `target_columns`, and `limit` can still narrow that behavior. Rows
-are harvested one page at a time, and key hints preserve values such as bare
-usernames as canonical username targets. Feed
+table, 1,000 discovered tables, 100,000 total rows, and 100,000 candidate feed
+entries per configured project; optional `url`, `tables`, `target_columns`,
+`limit`, `max_tables`, `max_rows`, and `max_candidates` can still narrow that
+behavior. Rows are harvested one page at a time, and key hints preserve values
+such as bare usernames as canonical username targets. Feed
 JSON includes `supabase_table_discovery`, so a project that cannot expose table
 paths reports `blocked_table_discovery` with a local next action. When
 artifact/feed scans find Supabase hostnames, `feed-build --apply` appends them

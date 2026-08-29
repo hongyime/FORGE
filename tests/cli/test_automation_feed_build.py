@@ -1866,6 +1866,11 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
             "scanned_table_rows": {"assets": 1, "observations": 1},
             "scanned_table_pages": {"assets": 1, "observations": 1},
             "row_limit_per_table": 100000,
+            "max_tables_per_project": 1000,
+            "max_rows_per_project": 100000,
+            "max_candidates_per_project": 100000,
+            "omitted_table_count": 0,
+            "omitted_reason": "",
             "errors": [],
         }
     ]
@@ -1936,6 +1941,11 @@ def test_feed_build_supabase_all_tables_reports_blocked_discovery(
             "scanned_table_rows": {},
             "scanned_table_pages": {},
             "row_limit_per_table": 100000,
+            "max_tables_per_project": 1000,
+            "max_rows_per_project": 100000,
+            "max_candidates_per_project": 100000,
+            "omitted_table_count": 0,
+            "omitted_reason": "",
             "errors": ["abc123:discover_tables:paths_missing"],
             "next_action": (
                 "Ensure the supplied key can read the project REST OpenAPI root "
@@ -2024,6 +2034,11 @@ def test_feed_build_supabase_unset_key_env_does_not_call_http(
             "scanned_table_rows": {},
             "scanned_table_pages": {},
             "row_limit_per_table": 100000,
+            "max_tables_per_project": 1000,
+            "max_rows_per_project": 100000,
+            "max_candidates_per_project": 100000,
+            "omitted_table_count": 0,
+            "omitted_reason": "",
             "errors": ["key_env_unset:FORGE_SUPABASE_ABC123_READ_KEY"],
         }
     ]
@@ -2163,6 +2178,79 @@ def test_feed_build_supabase_harvests_no_more_than_configured_row_cap(
     assert payload["supabase_table_discovery"][0]["scanned_table_pages"] == {
         "targets": 1
     }
+
+
+def test_feed_build_supabase_project_budgets_stop_extra_tables(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed_urls: list[str] = []
+
+    class _Response:
+        def __init__(self, payload: object) -> None:
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> object:
+            return self._payload
+
+    def _fake_get(url: str, *, headers: dict[str, str], timeout: float) -> _Response:
+        observed_urls.append(url)
+        if url == "https://abc123.supabase.co/rest/v1/":
+            return _Response({"paths": {"/assets": {}, "/observations": {}, "/users": {}}})
+        if url == "https://abc123.supabase.co/rest/v1/assets?select=*&limit=1&offset=0":
+            return _Response([{"domain": "one.example"}])
+        raise AssertionError(f"unexpected URL {url}")
+
+    config = tmp_path / "supabase-projects.local.json"
+    config.write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+                        "max_tables": 2,
+                        "max_rows": 1,
+                        "max_candidates": 10,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_SUPABASE_ABC123_READ_KEY", "test-read-key")
+    monkeypatch.setattr("forge.automation_target_feed.httpx.get", _fake_get)
+
+    payload = build_target_feed(
+        sources=["supabase"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+        supabase_config_path=config,
+    )
+
+    assert observed_urls == [
+        "https://abc123.supabase.co/rest/v1/",
+        "https://abc123.supabase.co/rest/v1/assets?select=*&limit=1&offset=0",
+    ]
+    assert payload["counts"]["by_source"]["supabase"] == 1
+    assert payload["source_errors"] == [
+        {"source": "supabase", "error": "abc123:project_table_limit_reached:2:1"},
+        {"source": "supabase", "error": "abc123:assets:row_limit_reached:1"},
+        {"source": "supabase", "error": "abc123:project_row_limit_reached:1:1"},
+    ]
+    discovery = payload["supabase_table_discovery"][0]
+    assert discovery["max_tables_per_project"] == 2
+    assert discovery["max_rows_per_project"] == 1
+    assert discovery["max_candidates_per_project"] == 10
+    assert discovery["scanned_tables"] == ["assets"]
+    assert discovery["scanned_table_rows"] == {"assets": 1}
+    assert discovery["omitted_table_count"] == 2
+    assert discovery["omitted_reason"] == "project_row_limit_reached"
 
 
 def test_feed_build_supabase_uses_greedy_default_limit_for_minimal_project(

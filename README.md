@@ -346,9 +346,10 @@ env vars or a Forge connector-secret reference, never in committed files. The
 minimal operator shape is `project_ref` plus `key_env`; Forge derives
 `https://<project_ref>.supabase.co`, discovers exposed table paths from the
 read-only Data API root, and pages through all returned columns with
-`select=*`. The default greedy cap is 100,000 rows per table and 1,000 exposed
-tables per configured project; rows are harvested one page at a time, and key
-hints such as `username` or `handle` preserve canonical username targets.
+`select=*`. The default greedy cap is 100,000 rows per table, 1,000 exposed
+tables per configured project, 100,000 total rows per project, and 100,000
+candidate feed entries per project; rows are harvested one page at a time, and
+key hints such as `username` or `handle` preserve canonical username targets.
 Use the no-secret helper instead of hand-editing when you only have a project
 ref and env var name:
 
@@ -366,16 +367,20 @@ configured entries unless `--replace` is explicit.
     {
       "project_ref": "abc123",
       "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
-      "limit": 100000
+      "limit": 100000,
+      "max_tables": 1000,
+      "max_rows": 100000,
+      "max_candidates": 100000
     }
   ]
 }
 ```
 
-Optional `url`, `tables`, `target_columns`, and `limit` still work for tighter
-scopes. Use `tables: ["*"]` or omit `tables` to process every exposed table, and
-use `target_columns: ["*"]` or omit `target_columns` to process every returned
-column. Forge only turns normalized target-like values into feed entries.
+Optional `url`, `tables`, `target_columns`, `limit`, `max_tables`, `max_rows`,
+and `max_candidates` still work for tighter scopes. Use `tables: ["*"]` or omit
+`tables` to process every exposed table, and use `target_columns: ["*"]` or omit
+`target_columns` to process every returned column. Forge only turns normalized
+target-like values into feed entries.
 If a project is set to all tables but the REST OpenAPI root does not expose
 table paths to the supplied key, JSON reports `blocked_table_discovery` with a
 local next action instead of silently skipping the project.

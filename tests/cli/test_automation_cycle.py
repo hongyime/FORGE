@@ -612,6 +612,9 @@ def test_automation_status_summarizes_supabase_project_key_gate(
     assert payload["supabase_sync"]["projects"][0]["tables"] == ["*"]
     assert payload["supabase_sync"]["projects"][0]["target_columns"] == ["*"]
     assert payload["supabase_sync"]["projects"][0]["limit"] == 100000
+    assert payload["supabase_sync"]["projects"][0]["max_tables"] == 1000
+    assert payload["supabase_sync"]["projects"][0]["max_rows"] == 100000
+    assert payload["supabase_sync"]["projects"][0]["max_candidates"] == 100000
     assert payload["supabase_sync"]["next_actions"][0] == [
         "set",
         "FORGE_SUPABASE_ABC123_READ_KEY=<owned Supabase read-only key>",
@@ -654,6 +657,9 @@ def test_automation_status_recommends_supabase_feed_build_when_key_env_present(
     assert payload["supabase_sync"]["ready_count"] == 1
     assert payload["supabase_sync"]["projects"][0]["requested_all_tables"] is True
     assert payload["supabase_sync"]["projects"][0]["requested_all_columns"] is True
+    assert payload["supabase_sync"]["projects"][0]["max_tables"] == 1000
+    assert payload["supabase_sync"]["projects"][0]["max_rows"] == 100000
+    assert payload["supabase_sync"]["projects"][0]["max_candidates"] == 100000
     assert payload["supabase_sync"]["next_actions"][0] == [
         "forge",
         "automation",

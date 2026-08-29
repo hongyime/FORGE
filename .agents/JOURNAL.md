@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-08-29: B735 added Supabase project-level table, row, and candidate budgets so all-table/all-column sync cannot expand to every discovered table times the per-table cap.
 - 2026-08-29: B734 added queue_import_item_limit so autonomous source queues cap rows/items per CTI, discovery, and validation artifact instead of only capping queued file count.
 - 2026-08-29: B733 gave discovery artifact imports bounded dry-run, limit, no-write, file-size, and count contracts so ProjectDiscovery/Censys/runZero queues have safer primitives.
 - 2026-08-29: B732 gave command-review a top-level ready/attention status so daily-use automation supervisors no longer special-case that command.

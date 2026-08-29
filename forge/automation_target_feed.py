@@ -54,6 +54,8 @@ _MAX_VALUES_PER_FILE = 5000
 _SUPABASE_PAGE_SIZE = 1000
 _MAX_SUPABASE_TABLE_ROWS = 100000
 _MAX_SUPABASE_DISCOVERED_TABLES = 1000
+_MAX_SUPABASE_PROJECT_ROWS = 100000
+_MAX_SUPABASE_PROJECT_CANDIDATES = 100000
 _DEFAULT_SUPABASE_CONFIG = Path("imports") / "supabase-projects.local.json"
 _DEFAULT_DISCOVERED_INPUTS_REGISTRY = Path("imports") / "discovered-inputs.local.json"
 _SPECIFIC_INPUT_REGISTRY_FILENAMES = {
@@ -1388,6 +1390,17 @@ def _load_supabase_projects_config(
         tables = _string_list(raw_project.get("tables")) or ["*"]
         target_columns = _string_list(raw_project.get("target_columns")) or ["*"]
         limit = _coerce_supabase_limit(raw_project.get("limit"))
+        max_tables = _coerce_supabase_table_budget(
+            raw_project.get("max_tables", raw_project.get("table_limit"))
+        )
+        max_rows = _coerce_supabase_project_budget(
+            raw_project.get("max_rows", raw_project.get("project_row_limit")),
+            default=_MAX_SUPABASE_PROJECT_ROWS,
+        )
+        max_candidates = _coerce_supabase_project_budget(
+            raw_project.get("max_candidates", raw_project.get("candidate_limit")),
+            default=_MAX_SUPABASE_PROJECT_CANDIDATES,
+        )
         label = project_ref or str(index)
         if not url.startswith("https://") or ".supabase." not in url:
             errors.append(f"project_invalid:{label}:url")
@@ -1407,6 +1420,9 @@ def _load_supabase_projects_config(
                 "tables": tables,
                 "target_columns": target_columns,
                 "limit": limit,
+                "max_tables": max_tables,
+                "max_rows": max_rows,
+                "max_candidates": max_candidates,
             }
         )
     return projects, errors
@@ -1430,6 +1446,30 @@ def _coerce_supabase_limit(value: object) -> int:
     if limit <= 0:
         return _MAX_SUPABASE_TABLE_ROWS
     return min(limit, _MAX_SUPABASE_TABLE_ROWS)
+
+
+def _coerce_supabase_table_budget(value: object) -> int:
+    if isinstance(value, str) and value.strip().lower() in {"all", "max", "*"}:
+        return _MAX_SUPABASE_DISCOVERED_TABLES
+    try:
+        limit = int(value) if value is not None else _MAX_SUPABASE_DISCOVERED_TABLES
+    except (TypeError, ValueError):
+        return _MAX_SUPABASE_DISCOVERED_TABLES
+    if limit <= 0:
+        return _MAX_SUPABASE_DISCOVERED_TABLES
+    return min(limit, _MAX_SUPABASE_DISCOVERED_TABLES)
+
+
+def _coerce_supabase_project_budget(value: object, *, default: int) -> int:
+    if isinstance(value, str) and value.strip().lower() in {"all", "max", "*"}:
+        return default
+    try:
+        limit = int(value) if value is not None else default
+    except (TypeError, ValueError):
+        return default
+    if limit <= 0:
+        return default
+    return min(limit, default)
 
 
 def _parse_secret_ref(ref: str) -> dict[str, Any] | None:
@@ -1565,6 +1605,8 @@ def _supabase_discovery_summary(
     scanned_tables: list[str] | None = None,
     scanned_table_rows: dict[str, int] | None = None,
     scanned_table_pages: dict[str, int] | None = None,
+    omitted_table_count: int = 0,
+    omitted_reason: str = "",
     errors: list[str] | None = None,
 ) -> dict[str, object]:
     requested_all_tables = _wants_all_supabase_tables(requested_tables)
@@ -1583,6 +1625,13 @@ def _supabase_discovery_summary(
         "scanned_table_rows": dict(scanned_table_rows or {}),
         "scanned_table_pages": dict(scanned_table_pages or {}),
         "row_limit_per_table": int(project["limit"]),
+        "max_tables_per_project": int(project.get("max_tables") or _MAX_SUPABASE_DISCOVERED_TABLES),
+        "max_rows_per_project": int(project.get("max_rows") or _MAX_SUPABASE_PROJECT_ROWS),
+        "max_candidates_per_project": int(
+            project.get("max_candidates") or _MAX_SUPABASE_PROJECT_CANDIDATES
+        ),
+        "omitted_table_count": int(omitted_table_count),
+        "omitted_reason": omitted_reason,
         "errors": list(errors or []),
     }
     if requested_all_tables and not scanned_tables:
@@ -1601,14 +1650,19 @@ def _harvest_supabase_table(
     columns: list[str],
     source_group: str,
     first_seen_at: str,
+    row_budget: int,
+    candidate_budget: int,
 ) -> tuple[list[FeedCandidate], list[str], int, int]:
-    row_limit = int(project["limit"])
+    row_limit = min(int(project["limit"]), max(0, int(row_budget)))
+    candidate_limit = max(0, int(candidate_budget))
     select_param = "*" if _wants_all_supabase_columns(columns) else ",".join(columns)
     candidates: list[FeedCandidate] = []
     errors: list[str] = []
     row_count = 0
     page_count = 0
     limit_reached = False
+    if row_limit <= 0 or candidate_limit <= 0:
+        return candidates, errors, row_count, page_count
     offset = 0
     while offset < row_limit:
         page_size = min(_SUPABASE_PAGE_SIZE, row_limit - offset)
@@ -1633,21 +1687,28 @@ def _harvest_supabase_table(
         rows_to_harvest = dict_rows[:remaining]
         row_count += len(rows_to_harvest)
         for row in rows_to_harvest:
-            candidates.extend(
-                _harvest_supabase_row(
-                    row,
-                    columns=columns,
-                    source_group=source_group,
-                    first_seen_at=first_seen_at,
-                )
+            row_candidates = _harvest_supabase_row(
+                row,
+                columns=columns,
+                source_group=source_group,
+                first_seen_at=first_seen_at,
             )
-        if row_count >= row_limit:
+            remaining_candidates = candidate_limit - len(candidates)
+            candidates.extend(row_candidates[:remaining_candidates])
+            if len(candidates) >= candidate_limit:
+                limit_reached = True
+                break
+        if row_count >= row_limit or len(candidates) >= candidate_limit:
             limit_reached = True
             break
         if len(page) < page_size:
             break
         offset += page_size
-    if limit_reached:
+    if len(candidates) >= candidate_limit:
+        errors.append(
+            f"{project['project_ref']}:{table_name}:candidate_limit_reached:{candidate_limit}"
+        )
+    elif limit_reached:
         errors.append(f"{project['project_ref']}:{table_name}:row_limit_reached:{row_limit}")
     return candidates, errors, row_count, page_count
 
@@ -1749,10 +1810,42 @@ def _extract_supabase_source(
             tables = raw_tables
             discovery_errors = []
             discovery_status = "configured"
+        project_errors: list[str] = []
+        max_tables = int(project["max_tables"])
+        omitted_table_count = max(0, len(tables) - max_tables)
+        if omitted_table_count:
+            project_errors.append(
+                f"{project_ref}:project_table_limit_reached:{max_tables}:{omitted_table_count}"
+            )
+            errors.extend(project_errors)
+        tables_to_scan = tables[:max_tables]
         scanned_tables: list[str] = []
         scanned_table_rows: dict[str, int] = {}
         scanned_table_pages: dict[str, int] = {}
-        for table in tables:
+        project_row_count = 0
+        project_candidate_count = 0
+        omitted_reason = "project_table_limit_reached" if omitted_table_count else ""
+        for table in tables_to_scan:
+            if project_row_count >= int(project["max_rows"]):
+                omitted_reason = "project_row_limit_reached"
+                remaining = max(0, len(tables_to_scan) - len(scanned_tables))
+                omitted_table_count += remaining
+                project_errors.append(
+                    f"{project_ref}:project_row_limit_reached:{project['max_rows']}:"
+                    f"{remaining}"
+                )
+                errors.append(project_errors[-1])
+                break
+            if project_candidate_count >= int(project["max_candidates"]):
+                omitted_reason = "project_candidate_limit_reached"
+                remaining = max(0, len(tables_to_scan) - len(scanned_tables))
+                omitted_table_count += remaining
+                project_errors.append(
+                    f"{project_ref}:project_candidate_limit_reached:"
+                    f"{project['max_candidates']}:{remaining}"
+                )
+                errors.append(project_errors[-1])
+                break
             table_name = str(table).strip()
             source_group = f"supabase:{project_ref}:{table_name}"
             if not _safe_supabase_identifier(table_name):
@@ -1765,15 +1858,23 @@ def _extract_supabase_source(
                 columns=columns,
                 source_group=source_group,
                 first_seen_at=first_seen_at,
+                row_budget=int(project["max_rows"]) - project_row_count,
+                candidate_budget=int(project["max_candidates"]) - project_candidate_count,
             )
             errors.extend(row_errors)
             scanned_tables.append(table_name)
             scanned_table_rows[table_name] = row_count
             scanned_table_pages[table_name] = page_count
+            project_row_count += row_count
+            project_candidate_count += len(table_candidates)
             candidates.extend(table_candidates)
             if row_count == 0:
                 continue
             source_group_counts[source_group] = row_count
+            if project_row_count >= int(project["max_rows"]):
+                omitted_reason = "project_row_limit_reached"
+            if project_candidate_count >= int(project["max_candidates"]):
+                omitted_reason = "project_candidate_limit_reached"
         discovery_summaries.append(
             _supabase_discovery_summary(
                 project=project,
@@ -1784,7 +1885,9 @@ def _extract_supabase_source(
                 scanned_tables=scanned_tables,
                 scanned_table_rows=scanned_table_rows,
                 scanned_table_pages=scanned_table_pages,
-                errors=discovery_errors,
+                omitted_table_count=omitted_table_count,
+                omitted_reason=omitted_reason,
+                errors=[*discovery_errors, *project_errors],
             )
         )
     return candidates, errors, source_group_counts, discovery_summaries

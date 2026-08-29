@@ -1091,6 +1091,15 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
                 "tables": tables,
                 "target_columns": columns,
                 "limit": _supabase_readiness_limit(raw_project.get("limit")),
+                "max_tables": _supabase_readiness_table_limit(
+                    raw_project.get("max_tables", raw_project.get("table_limit"))
+                ),
+                "max_rows": _supabase_readiness_project_limit(
+                    raw_project.get("max_rows", raw_project.get("project_row_limit"))
+                ),
+                "max_candidates": _supabase_readiness_project_limit(
+                    raw_project.get("max_candidates", raw_project.get("candidate_limit"))
+                ),
             }
         )
     status_counts: dict[str, int] = {}
@@ -1152,6 +1161,26 @@ def _supabase_sync_readiness(*, config_path: Path) -> dict[str, Any]:
 
 
 def _supabase_readiness_limit(value: Any) -> int:
+    try:
+        limit = int(value) if value is not None else 100000
+    except (TypeError, ValueError):
+        return 100000
+    if limit <= 0:
+        return 100000
+    return min(limit, 100000)
+
+
+def _supabase_readiness_table_limit(value: Any) -> int:
+    try:
+        limit = int(value) if value is not None else 1000
+    except (TypeError, ValueError):
+        return 1000
+    if limit <= 0:
+        return 1000
+    return min(limit, 1000)
+
+
+def _supabase_readiness_project_limit(value: Any) -> int:
     try:
         limit = int(value) if value is not None else 100000
     except (TypeError, ValueError):
