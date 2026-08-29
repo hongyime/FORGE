@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,6 +9,7 @@ from typer.models import ArgumentInfo, OptionInfo
 
 from forge.utils.kill_chain_options import (
     normalize_kill_chain_max_iter,
+    normalize_kill_chain_max_runtime_minutes,
     normalize_kill_chain_synthesis_depth,
     normalize_kill_chain_validation_batch_limit,
 )
@@ -47,6 +48,7 @@ class KillChainRuntimeOptions:
     parallel_workers: int
     synthesis_depth_limit: int
     pending_validation_batch_limit: int
+    max_runtime_minutes: int
 
 
 ScopeManifestLoader = Callable[[str], dict[str, Any]]
@@ -80,6 +82,7 @@ def normalize_kill_chain_runtime_options(
     auto_run_detected: object,
     go_hard: object,
     include_offensive_prereqs: object,
+    max_runtime_minutes: object = None,
     env: MutableMapping[str, str] | None = None,
 ) -> KillChainRuntimeOptions:
     env_map = os.environ if env is None else env
@@ -155,6 +158,12 @@ def normalize_kill_chain_runtime_options(
         env_map.get("FORGE_KILL_CHAIN_VALIDATION_BATCH_LIMIT"),
         default=16,
     )
+    normalized_max_runtime_minutes = normalize_kill_chain_max_runtime_minutes(
+        env_map.get("FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES")
+        if is_typer_default(max_runtime_minutes) or max_runtime_minutes is None
+        else max_runtime_minutes,
+        default=25,
+    )
 
     return KillChainRuntimeOptions(
         related_seed=normalized_related_seed,
@@ -188,6 +197,7 @@ def normalize_kill_chain_runtime_options(
         parallel_workers=parallel_workers,
         synthesis_depth_limit=synthesis_depth_limit,
         pending_validation_batch_limit=pending_validation_batch_limit,
+        max_runtime_minutes=normalized_max_runtime_minutes,
     )
 
 
@@ -207,6 +217,25 @@ def prime_kill_chain_attack_mode_env(
     env_map.setdefault("FORGE_ATTACK_MODE_AUTO", "1")
     env_map.setdefault("FORGE_KEYSCAN_ASSUME_YES", "1")
     env_map.setdefault("FORGE_POST_LATERAL_ASSUME_YES", "1")
+
+
+def scope_manifest_policy_flag(
+    scope_manifest_metadata: Mapping[str, Any] | None,
+    *keys: str,
+    default: bool = False,
+) -> bool:
+    """Return an explicit boolean policy flag from loaded scope-manifest metadata."""
+    if not isinstance(scope_manifest_metadata, Mapping):
+        return default
+    raw_manifest = scope_manifest_metadata.get("raw")
+    raw_manifest_dict = raw_manifest if isinstance(raw_manifest, Mapping) else {}
+    raw_policy = raw_manifest_dict.get("policy")
+    raw_policy_dict = raw_policy if isinstance(raw_policy, Mapping) else {}
+    for source in (raw_policy_dict, raw_manifest_dict, scope_manifest_metadata):
+        for key in keys:
+            if key in source:
+                return bool(source.get(key))
+    return default
 
 
 def load_kill_chain_scope_manifest_metadata(
@@ -252,4 +281,5 @@ __all__ = [
     "normalize_kill_chain_runtime_options",
     "normalize_roe_id",
     "prime_kill_chain_attack_mode_env",
+    "scope_manifest_policy_flag",
 ]

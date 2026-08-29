@@ -13,9 +13,11 @@ ENGAGEMENT_SECTION_TITLES = {
     "emails": "Recent Emails",
     "email_intelligence": "Email Intelligence",
     "account_existence": "Account Existence",
+    "cti_observations": "CTI / OSINT Observations",
     "engagement_seeds": "Engagement Seeds",
     "seed_runs": "Recent Seed Runs",
     "engagement_runs": "Recent Engagement Runs",
+    "target_resume_candidate": "Target Resume Review Candidate",
     "distributed_tasks": "Distributed Task Queue",
     "services": "Recent Services",
     "key_scanner_findings": "Recent Key Findings",
@@ -33,6 +35,7 @@ ENGAGEMENT_SECTION_TITLES = {
     "monitoring_alert_routes": "Monitoring Alert Routes",
     "monitoring_alert_suppressions": "Monitoring Alert Suppressions",
     "remediation_items": "Remediation Workflow",
+    "exposure_duration_metrics": "Exposure Duration Metrics",
     "retention_policies": "Retention Policies",
     "retention_runs": "Retention Runs",
     "retention_run_items": "Retention Run Items",
@@ -158,6 +161,29 @@ def _overview_table_row(
         report_degraded,
         report_prior,
     ) = _overview_report_note(item, report_count=report_count)
+    resume_candidate = item.get("target_resume_candidate") or {}
+    resume_reason = str(resume_candidate.get("reason") or "")
+    resume_status = str(resume_candidate.get("status") or "")
+    resume_pending = int(resume_candidate.get("pending_work_total") or 0)
+    resume_ready = bool(resume_candidate.get("resume_ready"))
+    resume_blockers = [
+        str(item) for item in (resume_candidate.get("resume_blockers") or [])[:3]
+    ]
+    resume_review = "1" if resume_reason else "0"
+    if resume_reason:
+        resume_note = f"{resume_reason} \N{MIDDLE DOT} {resume_status}"
+        if resume_pending:
+            resume_note = f"{resume_note} \N{MIDDLE DOT} pending {resume_pending}"
+        if resume_blockers:
+            resume_note = f"{resume_note} \N{MIDDLE DOT} blocked: {', '.join(resume_blockers)}"
+        resume_label = "ready" if resume_ready else "blocked"
+        resume_class = "pill" if resume_ready else "pill warn"
+        resume_html = (
+            f"<span class='{resume_class}'>{html.escape(resume_label)}</span>"
+            f"<div class='tiny muted'>{html.escape(resume_note)}</div>"
+        )
+    else:
+        resume_html = "<span class='pill'>ok</span>"
     return (
         "<tr class='eng-row'"
         f" data-status='{html.escape(str(status))}'"
@@ -168,7 +194,8 @@ def _overview_table_row(
         f" data-report-raw='{report_raw_export}'"
         f" data-report-fallback='{report_fallback}'"
         f" data-report-degraded='{report_degraded}'"
-        f" data-report-prior='{report_prior}'>"
+        f" data-report-prior='{report_prior}'"
+        f" data-resume-review='{resume_review}'>"
         f"<td><a class='eng-link' href='{html.escape(detail_href)}'>{html.escape(item['id'])}</a></td>"
         f"<td><strong>{html.escape(item['name'])}</strong><div class='tiny muted'>{html.escape(row_meta)}</div></td>"
         f"<td><span class='mono tiny'>{html.escape(seed_text)}</span></td>"
@@ -179,6 +206,7 @@ def _overview_table_row(
         f"<td class='right'>{int(item['counts'].get('services', 0))}</td>"
         f"<td class='right'>{report_count}<div class='tiny muted'>{html.escape(report_note)}</div></td>"
         f"<td>{graph_badge}</td>"
+        f"<td>{resume_html}</td>"
         f"<td class='tiny'>{html.escape(item['latest_audit'] or item['updated_at'] or '-')}</td>"
         f"<td class='tiny mono'>{html.escape(item['slug'])}</td>"
         "</tr>"
@@ -202,6 +230,7 @@ def render_overview_page(
     total_hosts = sum(int(item["counts"].get("hosts", 0)) for item in engagements)
     total_emails = sum(int(item["counts"].get("emails", 0)) for item in engagements)
     total_services = sum(int(item["counts"].get("services", 0)) for item in engagements)
+    total_resume_reviews = sum(1 for item in engagements if item.get("target_resume_candidate"))
     total_critical = sum(
         int(item["severity_summary"].get("CRITICAL", 0))
         for item in engagements
@@ -257,6 +286,7 @@ def render_overview_page(
       <div class="stat"><div class="label">High</div><div class="value">{total_high}</div></div>
       <div class="stat"><div class="label">Reports</div><div class="value">{total_reports}</div></div>
       <div class="stat"><div class="label">Graphs</div><div class="value">{total_graphs}</div></div>
+      <div class="stat"><div class="label">Resume Review</div><div class="value">{total_resume_reviews}</div></div>
       <div class="stat"><div class="label">Hosts</div><div class="value">{total_hosts}</div></div>
       <div class="stat"><div class="label">Emails</div><div class="value">{total_emails}</div></div>
       <div class="stat"><div class="label">Services</div><div class="value">{total_services}</div></div>
@@ -288,6 +318,7 @@ def render_overview_page(
             <option value="RAW_EXPORT">Raw export fallback</option>
             <option value="FALLBACK">Fallback reason</option>
             <option value="DEGRADED">Write degraded</option>
+            <option value="RESUME_REVIEW">Resume review</option>
           </select>
           <input id="updated-after-filter" class="search" type="date" onchange="filterRows()" oninput="filterRows()" title="Updated on or after">
           <input id="updated-before-filter" class="search" type="date" onchange="filterRows()" oninput="filterRows()" title="Updated on or before">
@@ -315,12 +346,13 @@ def render_overview_page(
               <th class="right">Services</th>
               <th class="right">Reports</th>
               <th>Graph</th>
+              <th>Run Review</th>
               <th>Latest audit</th>
               <th>Slug</th>
             </tr>
           </thead>
           <tbody>
-            {''.join(rows) if rows else '<tr><td colspan="12"><div class="empty">No engagement databases were found.</div></td></tr>'}
+            {''.join(rows) if rows else '<tr><td colspan="13"><div class="empty">No engagement databases were found.</div></td></tr>'}
           </tbody>
         </table>
       </div>
@@ -411,7 +443,8 @@ def render_overview_page(
           (reportStateFilter === 'PRIOR' && row.dataset.reportPrior === '1') ||
           (reportStateFilter === 'RAW_EXPORT' && row.dataset.reportRaw === '1') ||
           (reportStateFilter === 'FALLBACK' && row.dataset.reportFallback === '1') ||
-          (reportStateFilter === 'DEGRADED' && row.dataset.reportDegraded === '1');
+          (reportStateFilter === 'DEGRADED' && row.dataset.reportDegraded === '1') ||
+          (reportStateFilter === 'RESUME_REVIEW' && row.dataset.resumeReview === '1');
         const dateRangeMatch =
           (!updatedAfterValue || (updatedMs > 0 && !Number.isNaN(updatedAfterMs) && updatedMs >= updatedAfterMs)) &&
           (!updatedBeforeValue || (updatedMs > 0 && !Number.isNaN(updatedBeforeMs) && updatedMs <= updatedBeforeMs));
@@ -453,10 +486,28 @@ def render_engagement_evidence_sections(
     render_table: Callable[[str, list[dict[str, str]]], str],
 ) -> str:
     """Render ordered evidence tables for an engagement detail page."""
-    return "".join(
-        render_table(title, sections.get(key, []))
-        for key, title in ENGAGEMENT_SECTION_TITLES.items()
-    )
+    rendered_sections: list[str] = []
+    empty_titles: list[str] = []
+    for key, title in ENGAGEMENT_SECTION_TITLES.items():
+        rows = sections.get(key, [])
+        if rows:
+            rendered_sections.append(render_table(title, rows))
+        else:
+            empty_titles.append(title)
+    if empty_titles:
+        empty_items = "".join(f"<li>{html.escape(title)}</li>" for title in empty_titles)
+        rendered_sections.append(
+            '<section class="panel empty-section-summary">'
+            '<div class="panel-head"><h3>Empty Evidence Sections</h3></div>'
+            '<div class="panel-body">'
+            '<details class="empty-section-details">'
+            f"<summary>{len(empty_titles)} sections have no rows in this engagement</summary>"
+            f"<ul>{empty_items}</ul>"
+            "</details>"
+            "</div>"
+            "</section>"
+        )
+    return "".join(rendered_sections)
 
 
 def render_engagement_detail_page(

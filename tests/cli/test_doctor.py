@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import sqlite3
 from types import SimpleNamespace
 
@@ -113,9 +115,9 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert rows["Free/Local Baseline"].status == "OK"
     assert rows["Secrets: gitleaks"].status == "OK"
     assert rows["Secrets: trufflehog"].status == "OPTIONAL"
-    assert "go install github.com/trufflesecurity/trufflehog/v3@latest" in rows[
-        "Secrets: trufflehog"
-    ].remediation
+    assert "python bootstrap.py setup" in rows["Secrets: trufflehog"].remediation
+    assert "TruffleHog release binary" in rows["Secrets: trufflehog"].remediation
+    assert "forge connectors install-plan --json" in rows["Secrets: trufflehog"].remediation
     assert rows["Connector Catalog"].status == "WARN"
     assert "free-first" in rows["Connector Catalog"].details
     assert "optional paid hidden by default" in rows["Connector Catalog"].details
@@ -124,7 +126,7 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert "planned fail-closed" in rows["Connector Catalog"].details
     assert "missing free-first binaries" in rows["Connector Catalog"].details
     assert "forge connectors list --json" in rows["Connector Catalog"].remediation
-    assert "Install missing local binaries" in rows["Connector Catalog"].remediation
+    assert "forge connectors install-plan --json" in rows["Connector Catalog"].remediation
     assert rows["Connector Action Plan"].status == "WARN"
     assert "free runnable:" in rows["Connector Action Plan"].details
     assert "missing binaries:" in rows["Connector Action Plan"].details
@@ -132,7 +134,12 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert "catalog-only:" in rows["Connector Action Plan"].details
     assert "active-validation gated:" in rows["Connector Action Plan"].details
     assert "paid hidden:" in rows["Connector Action Plan"].details
-    assert "forge connectors run --connector ID" in rows["Connector Action Plan"].remediation
+    assert "forge connectors run-plan --json" in rows["Connector Action Plan"].remediation
+    assert rows["CTI/OSINT Policy"].status == "OK"
+    assert "offline-import" in rows["CTI/OSINT Policy"].details
+    assert "live/API-style" in rows["CTI/OSINT Policy"].details
+    assert "operator-opt-in gated" in rows["CTI/OSINT Policy"].details
+    assert "forge connectors policy-summary --json" in rows["CTI/OSINT Policy"].remediation
     action_payload = json.loads(doctor_payload_json(checks))
     action_by_id = {item["id"]: item for item in action_payload["action_plan"]}
     assert {
@@ -140,19 +147,75 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
         "run_free_connectors",
         "configure_optional_keys",
         "review_catalog_only",
+        "review_cti_osint_policy",
         "keep_active_validation_fail_closed",
         "review_paid_adapters",
     } <= set(action_by_id)
     assert action_by_id["install_free_binaries"]["status"] == "attention"
     assert "trufflehog" in action_by_id["install_free_binaries"]["summary"]
+    assert action_by_id["install_free_binaries"]["command"] == (
+        "forge connectors install-plan --json"
+    )
+    assert action_by_id["install_free_binaries"]["execution_policy"] == (
+        "plan_only_no_commands_executed"
+    )
+    assert int(action_by_id["install_free_binaries"]["total_count"]) >= 1
+    assert action_by_id["install_free_binaries"]["selected_count"] == action_by_id[
+        "install_free_binaries"
+    ]["total_count"]
+    assert action_by_id["install_free_binaries"]["omitted_count"] == "0"
     assert action_by_id["run_free_connectors"]["status"] == "ready"
     assert "projectdiscovery_subfinder" in action_by_id["run_free_connectors"]["summary"]
+    assert action_by_id["run_free_connectors"]["command"] == (
+        "forge connectors run-plan --json"
+    )
+    assert action_by_id["run_free_connectors"]["execution_policy"] == (
+        "plan_only_no_connectors_executed"
+    )
+    assert int(action_by_id["run_free_connectors"]["total_count"]) >= int(
+        action_by_id["run_free_connectors"]["selected_count"]
+    )
+    assert int(action_by_id["run_free_connectors"]["omitted_count"]) >= 1
     assert action_by_id["configure_optional_keys"]["status"] == "optional"
     assert "FORGE_SHODAN_API_KEY" in action_by_id["configure_optional_keys"]["summary"]
+    assert action_by_id["configure_optional_keys"]["command"] == (
+        "forge connectors secret-set --engagement N --connector ID --name ENV_NAME --value-env ENV"
+    )
+    assert action_by_id["configure_optional_keys"]["execution_policy"] == (
+        "operator_initiated_secret_setup_value_env_only"
+    )
+    assert int(action_by_id["configure_optional_keys"]["total_count"]) >= 1
+    assert action_by_id["configure_optional_keys"]["selected_count"] == action_by_id[
+        "configure_optional_keys"
+    ]["total_count"]
+    assert action_by_id["review_cti_osint_policy"]["status"] == "review"
+    assert action_by_id["review_cti_osint_policy"]["command"] == (
+        "forge connectors policy-summary --json"
+    )
+    assert action_by_id["review_cti_osint_policy"]["execution_policy"] == (
+        "data_only_catalog_no_provider_execution"
+    )
+    assert action_by_id["review_cti_osint_policy"]["total_count"] == "48"
+    assert action_by_id["review_cti_osint_policy"]["selected_count"] == "48"
+    assert action_by_id["review_cti_osint_policy"]["offline_import_count"] == "23"
+    assert action_by_id["review_cti_osint_policy"]["live_or_api_count"] == "25"
+    assert action_by_id["review_cti_osint_policy"][
+        "operator_opt_in_gated_count"
+    ] == "21"
     assert action_by_id["keep_active_validation_fail_closed"]["status"] == "gated"
+    assert action_by_id["keep_active_validation_fail_closed"]["execution_policy"] == (
+        "operator_decision_no_commands_executed"
+    )
+    assert int(action_by_id["keep_active_validation_fail_closed"]["total_count"]) >= 1
+    assert action_by_id["keep_active_validation_fail_closed"]["selected_count"] == "0"
     assert "approval, roe_id, scope_manifest, and live_gate" in action_by_id[
         "keep_active_validation_fail_closed"
     ]["command"]
+    assert int(action_by_id["review_paid_adapters"]["total_count"]) >= 1
+    assert action_by_id["review_paid_adapters"]["selected_count"] == "0"
+    assert action_by_id["review_paid_adapters"]["execution_policy"] == (
+        "data_only_catalog_paid_hidden_no_provider_execution"
+    )
     assert action_payload["summary"]["action_count"] >= 6
     connector_plan_check = next(
         check for check in action_payload["checks"] if check["component"] == "Connector Action Plan"
@@ -160,6 +223,9 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert connector_plan_check["action_items"]
     assert rows["Connector Secret Store"].status == "MISSING"
     assert "FORGE_ENGAGEMENT_KEY" in rows["Connector Secret Store"].details
+    assert "forge connectors secret-key-plan --json" in rows[
+        "Connector Secret Store"
+    ].remediation
     assert rows["Deployment Hardening"].status == "OK"
     assert "local profile" in rows["Deployment Hardening"].details
     assert rows["Retention Policies"].status == "OK"
@@ -179,6 +245,29 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert "hibp-secret" not in details
 
 
+def test_collect_doctor_checks_omits_free_binary_install_action_when_none_missing(
+    tmp_path,
+) -> None:
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        env={},
+        which=lambda name: f"C:/tools/{name}.exe",
+        provider_discovery=_provider_discovery,
+    )
+
+    rows = _rows(checks)
+    assert rows["Connector Action Plan"].status == "OK"
+    assert "missing binaries: 0 (none)" in rows["Connector Action Plan"].details
+    action_by_id = {
+        item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]
+    }
+    assert "install_free_binaries" not in action_by_id
+    assert action_by_id["run_free_connectors"]["status"] == "ready"
+    assert action_by_id["run_free_connectors"]["command"] == (
+        "forge connectors run-plan --json"
+    )
+
+
 def test_collect_doctor_checks_warns_when_free_first_connectors_are_not_executable(
     tmp_path,
 ) -> None:
@@ -195,8 +284,40 @@ def test_collect_doctor_checks_warns_when_free_first_connectors_are_not_executab
     assert "wired operator paths" in row.details
     assert "catalog-only" in row.details
     assert "projectdiscovery_subfinder" in row.details
-    assert "gitleaks" in row.remediation
+    assert "gitleaks_local" in row.details
     assert "forge connectors list --json" in row.remediation
+    assert "forge connectors install-plan --json" in row.remediation
+
+
+def test_collect_doctor_checks_uses_connector_binary_search_paths(tmp_path) -> None:
+    tool_dir = tmp_path / "tools"
+    tool_dir.mkdir()
+    subfinder = tool_dir / ("subfinder.exe" if os.name == "nt" else "subfinder")
+    subfinder.write_text("", encoding="utf-8")
+    detect_secrets = tool_dir / ("detect-secrets.exe" if os.name == "nt" else "detect-secrets")
+    detect_secrets.write_text("", encoding="utf-8")
+
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        env={"PATH": "", "FORGE_CONNECTOR_BIN_DIRS": str(tool_dir)},
+        which=shutil.which,
+        provider_discovery=_provider_discovery,
+    )
+
+    rows = _rows(checks)
+    assert rows["ProjectDiscovery: subfinder"].status == "OK"
+    assert os.path.normcase(str(subfinder)) in os.path.normcase(
+        rows["ProjectDiscovery: subfinder"].details
+    )
+    assert rows["Secrets: detect-secrets"].status == "OK"
+    assert os.path.normcase(str(detect_secrets)) in os.path.normcase(
+        rows["Secrets: detect-secrets"].details
+    )
+    assert "projectdiscovery_subfinder" not in rows["Connector Catalog"].details
+    missing_fragment = rows["Connector Action Plan"].details.split("missing binaries:", 1)[1].split(
+        ";", 1
+    )[0]
+    assert "subfinder" not in missing_fragment
 
 
 def test_collect_doctor_checks_reports_active_validation_plugin_manifests(
@@ -351,7 +472,78 @@ def test_collect_doctor_checks_reports_stored_connector_rows_without_key(
     assert "FORGE_ENGAGEMENT_KEY is missing" in row.details
     assert "1 stored connector secret row(s)" in row.details
     assert "decryptability not checked" in row.details
+    assert "forge connectors secret-key-plan --json" in row.remediation
+    action_by_id = {
+        item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]
+    }
+    assert action_by_id["setup_connector_secret_key"]["command"] == (
+        "forge connectors secret-key-plan --json"
+    )
+    assert action_by_id["setup_connector_secret_key"]["execution_policy"] == (
+        "plan_only_no_commands_executed"
+    )
+    assert int(action_by_id["setup_connector_secret_key"]["total_count"]) >= int(
+        action_by_id["setup_connector_secret_key"]["selected_count"]
+    )
+    assert int(action_by_id["setup_connector_secret_key"]["omitted_count"]) >= 0
     assert raw_secret not in row.details
+
+
+def test_collect_doctor_checks_reports_persistent_connector_secret_key_hint(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "forge.doctor.connector_secret_key_plan",
+        lambda **_kwargs: {
+            "execution_policy": "plan_only_no_commands_executed",
+            "total_count": 4,
+            "selected_count": 4,
+            "omitted_count": 0,
+            "persistent_key_hint": {
+                "source": "user",
+                "key_configured": True,
+                "key_length": 44,
+                "key_fingerprint": "sha256:abc123",
+            },
+            "commands": {
+                "powershell_reload_persistent_env": (
+                    "$env:FORGE_ENGAGEMENT_KEY=[Environment]::GetEnvironmentVariable("
+                    "'FORGE_ENGAGEMENT_KEY','User')"
+                )
+            },
+        },
+    )
+
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        env={},
+        which=lambda _name: None,
+        provider_discovery=_provider_discovery,
+    )
+
+    row = _rows(checks)["Connector Secret Store"]
+    assert row.status == "WARN"
+    assert "missing from this process" in row.details
+    assert "user-level Windows environment key appears configured" in row.details
+    assert "sha256:abc123" in row.details
+    assert "Restart this shell/service" in row.remediation
+    assert "powershell_reload_persistent_env" not in row.remediation
+    assert "$env:FORGE_ENGAGEMENT_KEY=" in row.remediation
+    action_by_id = {
+        item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]
+    }
+    assert action_by_id["reload_connector_secret_key_env"]["command"].startswith(
+        "$env:FORGE_ENGAGEMENT_KEY="
+    )
+    assert action_by_id["reload_connector_secret_key_env"]["status"] == "ready"
+    assert action_by_id["reload_connector_secret_key_env"]["execution_policy"] == (
+        "plan_only_no_commands_executed"
+    )
+    assert action_by_id["reload_connector_secret_key_env"]["total_count"] == "4"
+    assert action_by_id["reload_connector_secret_key_env"]["selected_count"] == "4"
+    assert action_by_id["reload_connector_secret_key_env"]["omitted_count"] == "0"
+    assert "abc123" not in action_by_id["reload_connector_secret_key_env"]["command"]
 
 
 def test_doctor_payload_json_is_machine_readable_and_actionable() -> None:
@@ -362,6 +554,18 @@ def test_doctor_payload_json_is_machine_readable_and_actionable() -> None:
                 "OPTIONAL",
                 "not in PATH",
                 "Install with go install.",
+                (
+                    {
+                        "id": "review_connectors",
+                        "status": "review",
+                        "command": "forge connectors run-plan --json",
+                    },
+                    {
+                        "id": "set_env",
+                        "status": "manual",
+                        "command": "set FORGE_OFFLINE_STRICT=1",
+                    },
+                ),
             ),
             DoctorCheck("Paid LLM Backends", "OK", "disabled"),
         ]
@@ -369,8 +573,41 @@ def test_doctor_payload_json_is_machine_readable_and_actionable() -> None:
     data = json.loads(payload)
 
     assert data["schema"] == "forge.doctor.v1"
+    assert data["schema_version"] == "forge.doctor.v1"
+    assert data["execution_policy"] == (
+        "read_only_environment_readiness_no_commands_executed"
+    )
+    assert data["status"] == "attention"
+    assert data["total_count"] == 2
+    assert data["selected_count"] == 2
+    assert data["omitted_count"] == 0
     assert data["summary"]["check_count"] == 2
     assert data["summary"]["attention_count"] == 1
+    assert data["summary"]["action_count"] == 2
+    action_by_id = {item["id"]: item for item in data["action_plan"]}
+    assert action_by_id["review_connectors"]["command_args"] == [
+        "forge",
+        "connectors",
+        "run-plan",
+        "--json",
+    ]
+    assert action_by_id["set_env"]["command_args"] == []
+    check_action_by_id = {
+        item["id"]: item for item in data["checks"][0]["action_items"]
+    }
+    assert check_action_by_id["review_connectors"]["command_args"] == [
+        "forge",
+        "connectors",
+        "run-plan",
+        "--json",
+    ]
+    assert data["checks"][0]["id"] == "projectdiscovery_nuclei"
+    assert data["checks"][0]["message"] == "not in PATH"
+    assert data["checks"][0]["next_action"] == "forge connectors run-plan --json"
+    assert data["checks"][0]["next_actions"] == [
+        "forge connectors run-plan --json",
+        "set FORGE_OFFLINE_STRICT=1",
+    ]
     assert data["checks"][0]["remediation"] == "Install with go install."
     assert "secret values are never printed" in data["secret_material_policy"]
 
@@ -427,7 +664,13 @@ def test_collect_doctor_checks_flags_paid_live_and_weak_web_auth(tmp_path) -> No
     )
 
     rows = _rows(checks)
+    assert rows["Offline Strict"].status == "OFF"
+    assert "FORGE_OFFLINE_STRICT=1" in rows["Offline Strict"].remediation
     assert rows["Safe Mode"].status == "WARN"
+    assert "full mode active" in rows["Safe Mode"].details
+    assert "FORGE_SAFE_MODE=1" in rows["Safe Mode"].details
+    assert "written ROE" in rows["Safe Mode"].remediation
+    assert rows["Safe Mode"].action_items
     assert rows["Web UI Auth"].status == "ERROR"
     assert rows["Paid LLM Backends"].status == "WARN"
     assert rows["Active Validation"].status == "WARN"
@@ -435,14 +678,51 @@ def test_collect_doctor_checks_flags_paid_live_and_weak_web_auth(tmp_path) -> No
     assert rows["LLM Providers"].status == "MISSING"
     action_by_id = {item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]}
     assert action_by_id["review_paid_llm_backends"]["status"] == "attention"
+    assert action_by_id["review_paid_llm_backends"]["execution_policy"] == (
+        "operator_decision_no_commands_executed"
+    )
+    assert action_by_id["review_paid_llm_backends"]["total_count"] == "1"
+    assert action_by_id["review_paid_llm_backends"]["selected_count"] == "0"
+    assert action_by_id["review_paid_llm_backends"]["omitted_count"] == "1"
+    assert action_by_id["review_offline_strict"]["status"] == "review"
+    assert action_by_id["review_offline_strict"]["command"] == (
+        "set FORGE_OFFLINE_STRICT=1"
+    )
+    assert action_by_id["review_offline_strict"]["execution_policy"] == (
+        "operator_decision_no_commands_executed"
+    )
+    assert action_by_id["review_offline_strict"]["total_count"] == "1"
+    assert action_by_id["review_offline_strict"]["selected_count"] == "0"
+    assert action_by_id["review_offline_strict"]["omitted_count"] == "1"
+    assert action_by_id["review_safe_mode"]["status"] == "attention"
+    assert action_by_id["review_safe_mode"]["command"] == "set FORGE_SAFE_MODE=1"
+    assert action_by_id["review_safe_mode"]["command_args"] == []
+    assert action_by_id["review_safe_mode"]["execution_policy"] == (
+        "operator_decision_no_commands_executed"
+    )
+    assert action_by_id["review_safe_mode"]["total_count"] == "1"
+    assert action_by_id["review_safe_mode"]["selected_count"] == "0"
+    assert action_by_id["review_safe_mode"]["omitted_count"] == "1"
     assert "FORGE_ALLOW_PAID_BACKENDS enabled" in action_by_id[
         "review_paid_llm_backends"
     ]["summary"]
     assert action_by_id["enable_live_validation_only_after_roe"]["status"] == "attention"
+    assert action_by_id["enable_live_validation_only_after_roe"]["execution_policy"] == (
+        "dry_run_or_methods_review_no_live_validation"
+    )
+    assert action_by_id["enable_live_validation_only_after_roe"]["total_count"] == "1"
+    assert action_by_id["enable_live_validation_only_after_roe"]["selected_count"] == "1"
+    assert action_by_id["enable_live_validation_only_after_roe"]["omitted_count"] == "0"
     assert "approval, ROE, scope" in action_by_id[
         "enable_live_validation_only_after_roe"
     ]["summary"]
     assert action_by_id["run_live_provider_probes_if_intended"]["status"] == "attention"
+    assert action_by_id["run_live_provider_probes_if_intended"]["execution_policy"] == (
+        "operator_initiated_live_probe_no_default_execution"
+    )
+    assert action_by_id["run_live_provider_probes_if_intended"]["total_count"] == "1"
+    assert action_by_id["run_live_provider_probes_if_intended"]["selected_count"] == "0"
+    assert action_by_id["run_live_provider_probes_if_intended"]["omitted_count"] == "1"
     assert "no provider backend detected" in action_by_id[
         "run_live_provider_probes_if_intended"
     ]["summary"]
@@ -474,11 +754,20 @@ def test_collect_doctor_checks_defaults_to_static_provider_readiness(tmp_path) -
     assert "live-provider-probes" in row.remediation
     action_by_id = {item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]}
     assert action_by_id["run_live_provider_probes_if_intended"]["status"] == "optional"
+    assert action_by_id["run_live_provider_probes_if_intended"]["execution_policy"] == (
+        "operator_initiated_live_probe_no_default_execution"
+    )
     assert "static provider signal detected" in action_by_id[
         "run_live_provider_probes_if_intended"
     ]["summary"]
     assert action_by_id["review_paid_llm_backends"]["status"] == "ready"
+    assert action_by_id["review_paid_llm_backends"]["execution_policy"] == (
+        "operator_decision_no_commands_executed"
+    )
     assert action_by_id["enable_live_validation_only_after_roe"]["status"] == "gated"
+    assert action_by_id["enable_live_validation_only_after_roe"]["execution_policy"] == (
+        "dry_run_or_methods_review_no_live_validation"
+    )
     assert called is False
 
     live = collect_doctor_checks(
@@ -492,6 +781,9 @@ def test_collect_doctor_checks_defaults_to_static_provider_readiness(tmp_path) -
         item["id"]: item for item in json.loads(doctor_payload_json(live))["action_plan"]
     }
     assert live_action_by_id["run_live_provider_probes_if_intended"]["status"] == "ready"
+    assert live_action_by_id["run_live_provider_probes_if_intended"]["execution_policy"] == (
+        "operator_initiated_live_probe_no_default_execution"
+    )
     assert called is True
 
 
@@ -509,6 +801,50 @@ def test_collect_doctor_checks_reports_static_provider_key_gate(tmp_path) -> Non
     assert "FORGE_ALLOW_PAID_BACKENDS is disabled" in row.details
     assert "openai-secret-should-not-print" not in row.details
     assert "openai-secret-should-not-print" not in row.remediation
+
+
+def test_collect_doctor_checks_reports_openrouter_free_only_key(tmp_path) -> None:
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        env={"OPENROUTER_API_KEY": "openrouter-secret-should-not-print"},
+        which=lambda _name: None,
+        provider_discovery=None,
+    )
+
+    rows = _rows(checks)
+    row = rows["LLM Providers"]
+    assert row.status == "OK"
+    assert "openrouter_free_only_key" in row.details
+    assert "paid API env option" not in row.details
+    assert "openrouter-secret-should-not-print" not in row.details
+    assert "openrouter-secret-should-not-print" not in row.remediation
+
+    action_by_id = {
+        item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]
+    }
+    provider_action = action_by_id["run_live_provider_probes_if_intended"]
+    assert provider_action["status"] == "optional"
+    assert "zero-price/free models" in provider_action["summary"]
+    assert provider_action["command"] == "forge doctor --live-provider-probes"
+    assert action_by_id["review_paid_llm_backends"]["status"] == "ready"
+
+
+def test_collect_doctor_checks_counts_openrouter_as_paid_when_gate_enabled(tmp_path) -> None:
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        env={
+            "OPENROUTER_API_KEY": "openrouter-secret-should-not-print",
+            "FORGE_ALLOW_PAID_BACKENDS": "1",
+        },
+        which=lambda _name: None,
+        provider_discovery=None,
+    )
+
+    row = _rows(checks)["LLM Providers"]
+    assert row.status == "OK"
+    assert "1 paid API env option" in row.details
+    assert "openrouter_free_only_key" not in row.details
+    assert "openrouter-secret-should-not-print" not in row.details
 
 
 def test_collect_doctor_checks_flags_incomplete_production_deployment_hardening(
@@ -596,7 +932,11 @@ def test_collect_doctor_checks_accepts_hardened_production_deployment(tmp_path) 
     assert "customer-acme" not in row.details
 
 
-def test_collect_doctor_checks_warns_on_workspace_access_drift(tmp_path) -> None:
+def test_collect_doctor_checks_warns_on_workspace_access_drift(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
     db_root = tmp_path / "engagements"
     db_root.mkdir()
     con = sqlite3.connect(db_root / "1001.db")
@@ -628,10 +968,55 @@ def test_collect_doctor_checks_warns_on_workspace_access_drift(tmp_path) -> None
     assert "local membership missing=1" in row.details
     assert "control membership missing=1" in row.details
     assert "missing index=1" in row.details
-    assert "workspace_memberships" in row.remediation
+    assert "forge workspaces backfill-memberships --json" in row.remediation
 
 
-def test_collect_doctor_checks_accepts_ready_workspace_access(tmp_path) -> None:
+def test_collect_doctor_checks_workspace_access_includes_legacy_dashboard_dbs(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "configured"
+    legacy_root = tmp_path / ".forge_data" / "engagements"
+    for db_path, engagement_id, name in (
+        (data_dir / "engagements" / "1001.db", 1001, "Configured"),
+        (legacy_root / "2002.db", 2002, "Legacy"),
+    ):
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        con = sqlite3.connect(db_path)
+        try:
+            apply_schema(con)
+            run_migrations(con)
+            con.execute(
+                """
+                INSERT INTO engagements
+                    (id, name, workspace_id, scope_json, status, operator)
+                VALUES
+                    (?, ?, 'default', '["acme.example"]', 'ACTIVE', 'doctor-test')
+                """,
+                (engagement_id, name),
+            )
+            con.commit()
+        finally:
+            con.close()
+    monkeypatch.chdir(tmp_path)
+
+    checks = collect_doctor_checks(
+        config=_cfg(data_dir),
+        which=lambda _name: None,
+        provider_discovery=_provider_discovery,
+    )
+
+    row = _rows(checks)["Workspace Access"]
+    assert row.status == "WARN"
+    assert "2 engagement(s) across 2/2 DB" in row.details
+    assert "includes repo-local legacy dashboard DBs" in row.details
+    assert "local membership missing=2" in row.details
+    assert "control membership missing=2" in row.details
+    assert "missing index=2" in row.details
+
+
+def test_collect_doctor_checks_accepts_ready_workspace_access(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
     db_root = tmp_path / "engagements"
     db_root.mkdir()
     db_path = db_root / "1001.db"
@@ -998,7 +1383,7 @@ def test_collect_doctor_checks_reports_ready_tph_target_import_bridge(tmp_path) 
 
     def fake_task_query(task_name: str, timeout_s: float) -> dict[str, str]:
         assert task_name == r"\FORGE Import theprawnhunter Targets"
-        assert timeout_s == 1.5
+        assert timeout_s == 3.0
         return {
             "status": "running",
             "last_result": "0x41301",
@@ -1066,6 +1451,46 @@ def test_collect_doctor_checks_warns_on_enabled_tph_bridge_without_task_or_auth(
     assert "TPH_MONITOR_KEY" in row.remediation
 
 
+def test_collect_doctor_checks_treats_disabled_tph_task_as_off_by_default(
+    tmp_path,
+) -> None:
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    for name in (
+        "import_tph_targets.ps1",
+        "run_tph_target_import_task.ps1",
+        "install_tph_target_import_task.ps1",
+    ):
+        (scripts_dir / name).write_text("# fixture\n", encoding="utf-8")
+    tph_repo = tmp_path / "theprawnhunter"
+    tph_repo.mkdir()
+    tph_env = tph_repo / ".env"
+    tph_env.write_text("MONITOR_API_KEY=secret-never-print\n", encoding="utf-8")
+    (tph_repo / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        env={
+            "FORGE_TPH_TARGET_IMPORT_SCRIPT_DIR": str(scripts_dir),
+            "FORGE_TPH_ENV_PATH": str(tph_env),
+        },
+        which=lambda _name: None,
+        provider_discovery=_provider_discovery,
+        scheduled_task_query=lambda _task_name, _timeout_s: {
+            "status": "disabled",
+            "last_result": "1",
+            "last_run_time": "2026-08-20 11:05:09",
+            "next_run_time": "N/A",
+        },
+    )
+
+    row = _rows(checks)["TPH Target Import Bridge"]
+    assert row.status == "OFF"
+    assert "task=disabled" in row.details
+    assert "target-import task is installed but paused" in row.remediation
+    assert "secret-never-print" not in doctor_payload_json(checks)
+
+
 def test_collect_doctor_checks_reports_ready_remediation_status_import_task(
     tmp_path,
 ) -> None:
@@ -1083,7 +1508,7 @@ def test_collect_doctor_checks_reports_ready_remediation_status_import_task(
     )
 
     def fake_task_query(task_name: str, timeout_s: float) -> dict[str, str]:
-        assert timeout_s == 1.5
+        assert timeout_s == 3.0
         if task_name != r"\FORGE Import Remediation Ticket Statuses":
             return {"status": "missing", "task_name": task_name}
         return {
@@ -1253,7 +1678,150 @@ def test_collect_doctor_checks_warns_on_due_monitoring_schedules(tmp_path) -> No
     assert "1/1 enabled policy" in row.details
     assert "1 due/overdue" in row.details
     assert "1 open alert" in row.details
-    assert "forge monitoring run-due --json" in row.remediation
+    assert "forge monitoring due-plan --json" in row.remediation
+    assert "forge monitoring run-due --dry-run --limit 50 --json" in row.remediation
+    assert "forge monitoring run-due --limit 50 --json" in row.remediation
+    assert "forge monitoring worker --run-limit 50" in row.remediation
+    assert "--all" in row.remediation
+    action_by_id = {item["id"]: item for item in row.action_items}
+    assert action_by_id["review_due_monitoring"]["status"] == "attention"
+    assert action_by_id["review_due_monitoring"]["command"] == (
+        "forge monitoring due-plan --json"
+    )
+    assert action_by_id["review_due_monitoring"]["total_count"] == "1"
+    assert action_by_id["review_due_monitoring"]["selected_count"] == "1"
+    assert action_by_id["review_due_monitoring"]["omitted_count"] == "0"
+    payload_action_by_id = {
+        item["id"]: item for item in json.loads(doctor_payload_json(checks))["action_plan"]
+    }
+    assert payload_action_by_id["review_due_monitoring"]["command_args"] == [
+        "forge",
+        "monitoring",
+        "due-plan",
+        "--json",
+    ]
+    assert payload_action_by_id["review_due_monitoring"]["execution_policy"] == (
+        "plan_only_no_monitoring_executed"
+    )
+    assert action_by_id["dry_run_capped_due_monitoring"]["status"] == "ready"
+    assert action_by_id["dry_run_capped_due_monitoring"]["command"] == (
+        "forge monitoring run-due --dry-run --limit 50 --json"
+    )
+    assert action_by_id["dry_run_capped_due_monitoring"]["total_count"] == "1"
+    assert action_by_id["dry_run_capped_due_monitoring"]["selected_count"] == "1"
+    assert action_by_id["dry_run_capped_due_monitoring"]["omitted_count"] == "0"
+    assert payload_action_by_id["dry_run_capped_due_monitoring"]["command_args"] == [
+        "forge",
+        "monitoring",
+        "run-due",
+        "--dry-run",
+        "--limit",
+        "50",
+        "--json",
+    ]
+    assert payload_action_by_id["dry_run_capped_due_monitoring"]["execution_policy"] == (
+        "dry_run_no_monitoring_executed"
+    )
+    assert action_by_id["run_capped_due_monitoring"]["status"] == "ready"
+    assert action_by_id["run_capped_due_monitoring"]["command"] == (
+        "forge monitoring run-due --limit 50 --json"
+    )
+    assert action_by_id["run_capped_due_monitoring"]["total_count"] == "1"
+    assert action_by_id["run_capped_due_monitoring"]["selected_count"] == "1"
+    assert action_by_id["run_capped_due_monitoring"]["omitted_count"] == "0"
+    assert payload_action_by_id["run_capped_due_monitoring"]["execution_policy"] == (
+        "executes_due_monitoring_policies"
+    )
+
+
+def test_collect_doctor_checks_uses_due_plan_total_for_monitoring_summary(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    db_root = tmp_path / "engagements"
+    db_root.mkdir()
+    con = sqlite3.connect(db_root / "1001.db")
+    try:
+        apply_schema(con)
+        run_migrations(con)
+        con.executescript(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (1001, 'Acme Monitoring', '["acme.example"]', 'ACTIVE', 'doctor-test');
+
+            INSERT INTO monitoring_snapshots
+                (id, engagement_id, policy_id, snapshot_kind, state_hash, state_json, summary_json)
+            VALUES
+                (11, 1001, 7, 'manual', 'sha256:baseline', '{}', '{}');
+
+            INSERT INTO monitoring_policies
+                (id, engagement_id, name, enabled, schedule_interval_minutes, mode,
+                 last_snapshot_id, last_run_at, next_run_at)
+            VALUES
+                (7, 1001, 'Hourly passive', 1, 60, 'passive',
+                 11, '2026-07-09T09:00:00Z', '2000-01-01T00:00:00Z');
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    def _fake_due_plan(_data_dir, *, now=None, limit=None, include_empty_db_results=True):
+        assert now
+        assert limit == 0
+        assert include_empty_db_results is False
+        return {
+            "db_count": 101,
+            "engagement_count": 101,
+            "due_policy_count": 101,
+            "planned_policy_count": 0,
+            "limited_policy_count": 101,
+            "estimated_capped_invocations": 3,
+            "stale_backlog": {
+                "enabled": True,
+                "oldest_overdue_days": 4.96,
+            },
+            "errors": [],
+        }
+
+    monkeypatch.setattr("forge.doctor.monitoring_due_plan_for_data_dir", _fake_due_plan)
+
+    checks = collect_doctor_checks(
+        config=_cfg(tmp_path),
+        which=lambda _name: None,
+        provider_discovery=_provider_discovery,
+    )
+
+    row = _rows(checks)["Monitoring Schedules"]
+    assert row.status == "WARN"
+    assert "1/1 enabled policy" in row.details
+    assert "1 due/overdue" in row.details
+    assert "due-plan total 101 due/overdue across 101 engagement(s) in 101 DB(s)" in row.details
+    assert "oldest due backlog 4.96 day(s) overdue" in row.details
+    assert "estimated capped run-due batch(es): 3" in row.details
+    assert "forge monitoring run-due --dry-run --limit 50 --json" in row.remediation
+    action_by_id = {item["id"]: item for item in row.action_items}
+    assert action_by_id["review_due_monitoring"]["summary"] == (
+        "101 due/overdue monitoring policy(ies)"
+    )
+    assert action_by_id["review_due_monitoring"]["total_count"] == "101"
+    assert action_by_id["review_due_monitoring"]["selected_count"] == "101"
+    assert action_by_id["review_due_monitoring"]["omitted_count"] == "0"
+    assert action_by_id["review_due_monitoring"]["estimated_batch_count"] == "3"
+    assert action_by_id["dry_run_capped_due_monitoring"]["command"] == (
+        "forge monitoring run-due --dry-run --limit 50 --json"
+    )
+    assert action_by_id["dry_run_capped_due_monitoring"]["total_count"] == "101"
+    assert action_by_id["dry_run_capped_due_monitoring"]["selected_count"] == "50"
+    assert action_by_id["dry_run_capped_due_monitoring"]["omitted_count"] == "51"
+    assert action_by_id["dry_run_capped_due_monitoring"]["estimated_batch_count"] == "3"
+    assert action_by_id["run_capped_due_monitoring"]["command"] == (
+        "forge monitoring run-due --limit 50 --json"
+    )
+    assert action_by_id["run_capped_due_monitoring"]["total_count"] == "101"
+    assert action_by_id["run_capped_due_monitoring"]["selected_count"] == "50"
+    assert action_by_id["run_capped_due_monitoring"]["omitted_count"] == "51"
+    assert action_by_id["run_capped_due_monitoring"]["estimated_batch_count"] == "3"
 
 
 def test_collect_doctor_checks_warns_on_unrouted_monitoring_alerts(tmp_path) -> None:
@@ -1670,3 +2238,40 @@ def test_root_doctor_command_supports_json(monkeypatch) -> None:
     assert payload["checks"][0]["component"] == "Connector Catalog"
     assert payload["checks"][0]["remediation"] == "Run connectors list."
     assert captured["live_provider_probes"] is True
+
+
+def test_root_doctor_fix_safe_labels_local_mutation(monkeypatch) -> None:
+    import forge.automation_cycle as cycle_module  # noqa: PLC0415
+    import forge.doctor as doctor_module  # noqa: PLC0415
+    from forge.cli import app as forge_app  # noqa: PLC0415
+
+    def fake_collect_doctor_checks(**_kwargs):
+        return [DoctorCheck("Connector Catalog", "OK", "1 free-first", "")]
+
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_doctor_checks",
+        fake_collect_doctor_checks,
+    )
+    monkeypatch.setattr(
+        cycle_module,
+        "doctor_fix_safe",
+        lambda: {
+            "schema_version": "forge.doctor_safe_fix.v1",
+            "execution_policy": "local_safe_fixes_no_live_or_provider_commands",
+            "actions": [],
+            "total_count": 0,
+            "selected_count": 0,
+            "omitted_count": 0,
+        },
+    )
+
+    result = CliRunner().invoke(forge_app, ["doctor", "--fix-safe", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert (
+        payload["execution_policy"]
+        == "local_safe_fixes_plus_read_only_environment_readiness_no_live_commands"
+    )
+    assert payload["safe_fix"]["schema_version"] == "forge.doctor_safe_fix.v1"

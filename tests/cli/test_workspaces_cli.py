@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 
 import typer
 from typer.testing import CliRunner
 
+from forge.db.control import connect_control_db
 from forge.workspaces_cli import register_workspace_commands
 
 
@@ -182,3 +184,150 @@ def test_workspace_cli_manages_memberships_with_confirmation(tmp_path, monkeypat
     ]
     assert "workspace_upsert" in event_types
     assert all(item["source"] == "cli" for item in audit_payload["items"])
+
+
+def test_workspace_backfill_memberships_dry_run_does_not_write(tmp_path, monkeypatch) -> None:
+    data_dir = tmp_path / ".forge_data"
+    db_path = data_dir / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True)
+    con = sqlite3.connect(db_path)
+    try:
+        con.executescript(
+            """
+            CREATE TABLE engagements (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                workspace_id TEXT NOT NULL DEFAULT 'default',
+                scope_json TEXT NOT NULL DEFAULT '[]',
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                operator TEXT NOT NULL
+            );
+            CREATE TABLE workspace_memberships (
+                workspace_id TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'operator',
+                permissions_json TEXT NOT NULL DEFAULT '[]',
+                PRIMARY KEY (workspace_id, subject)
+            );
+            INSERT INTO engagements
+                (id, name, workspace_id, scope_json, status, operator)
+            VALUES
+                (1001, 'Acme Legacy', 'default', '["acme.example"]', 'ACTIVE', 'legacy-op');
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        _app(),
+        ["workspaces", "backfill-memberships", "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["dry_run"] is True
+    assert payload["action_counts"] == {"would_update": 1}
+    con = sqlite3.connect(db_path)
+    try:
+        assert con.execute("SELECT COUNT(*) FROM workspace_memberships").fetchone()[0] == 0
+    finally:
+        con.close()
+
+
+def test_workspace_backfill_memberships_apply_repairs_membership_and_index(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    db_path = data_dir / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True)
+    con = sqlite3.connect(db_path)
+    try:
+        con.executescript(
+            """
+            CREATE TABLE engagements (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                scope_json TEXT NOT NULL DEFAULT '[]',
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                operator TEXT NOT NULL
+            );
+            INSERT INTO engagements
+                (id, name, scope_json, status, operator)
+            VALUES
+                (1001, 'Acme Legacy', '["acme.example"]', 'ACTIVE', 'legacy-op');
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("FORGE_OPERATOR", "admin-op")
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        _app(),
+        ["workspaces", "backfill-memberships", "--apply", "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["dry_run"] is False
+    assert payload["action_counts"] == {"updated": 1}
+    assert payload["local_membership_count"] == 1
+    assert payload["control_membership_count"] == 1
+    assert payload["control_index_count"] == 1
+    assert payload["schema_update_count"] == 1
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT workspace_id, subject, role, permissions_json
+            FROM workspace_memberships
+            WHERE workspace_id='default' AND subject='legacy-op'
+            """
+        ).fetchone()
+    finally:
+        con.close()
+    assert row[:3] == ("default", "legacy-op", "operator")
+    assert "engagements:read" in json.loads(row[3])
+    control = connect_control_db(data_dir)
+    try:
+        member = control.execute(
+            """
+            SELECT role, permissions_json
+            FROM workspace_memberships
+            WHERE workspace_id='default' AND subject='legacy-op'
+            """
+        ).fetchone()
+        index = control.execute(
+            "SELECT workspace_id, operator FROM engagement_index WHERE engagement_id=1001"
+        ).fetchone()
+        audit = control.execute(
+            """
+            SELECT event_type, actor_subject
+            FROM control_audit_events
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        control.close()
+    assert member["role"] == "operator"
+    assert "engagements:read" in json.loads(member["permissions_json"])
+    assert tuple(index) == ("default", "legacy-op")
+    assert tuple(audit) == ("workspace_membership_backfill", "admin-op")
+
+    second = CliRunner().invoke(
+        _app(),
+        ["workspaces", "backfill-memberships", "--json"],
+    )
+    assert second.exit_code == 0, second.output
+    second_payload = json.loads(second.output)
+    assert second_payload["action_counts"] == {"skipped": 1}
+    assert second_payload["local_membership_count"] == 0
+    assert second_payload["control_membership_count"] == 0
+    assert second_payload["control_index_count"] == 0

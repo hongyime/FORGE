@@ -38,10 +38,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 REPO = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(REPO))
 os.chdir(REPO)
 FORGE_EXE = REPO / ".venv" / "Scripts" / "forge.exe"
+
+pytestmark = pytest.mark.e2e
 
 TEST_MATRIX: list[dict[str, Any]] = [
     {
@@ -101,6 +105,19 @@ TEST_MATRIX: list[dict[str, Any]] = [
         "note": "deliberately vulnerable — should surface findings",
     },
 ]
+
+
+def test_real_target_harness_matrix_is_well_formed() -> None:
+    """Keep the opt-in real-target E2E harness visible to pytest."""
+    assert TEST_MATRIX
+    ids = [entry["id"] for entry in TEST_MATRIX]
+    assert len(ids) == len(set(ids))
+    for entry in TEST_MATRIX:
+        assert str(entry["seed"]).strip()
+        assert entry["type"] in {"domain", "email", "username", "phone"}
+        assert isinstance(entry["flags"], list)
+        assert isinstance(entry["success"], dict)
+        assert entry["success"]
 
 
 def prep_engagement(eng_id: int, seed: str) -> None:

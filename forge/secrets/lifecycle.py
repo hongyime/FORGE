@@ -383,6 +383,11 @@ def secret_prevention_workflow_plan(
     if not _table_exists(con, "secret_lifecycle_items"):
         return {
             "schema": "forge.secret_prevention.v1",
+            "schema_version": "forge.secret_prevention.v1",
+            "execution_policy": "plan_only_secret_prevention_no_commands_executed",
+            "total_count": 0,
+            "selected_count": 0,
+            "omitted_count": 0,
             "engagement_id": int(engagement_id),
             "workflow_filter": requested_workflow or "all",
             "lifecycle_sync": lifecycle_sync,
@@ -500,6 +505,11 @@ def secret_prevention_workflow_plan(
 
     return {
         "schema": "forge.secret_prevention.v1",
+        "schema_version": "forge.secret_prevention.v1",
+        "execution_policy": "plan_only_secret_prevention_no_commands_executed",
+        "total_count": len(commands),
+        "selected_count": len(commands),
+        "omitted_count": 0,
         "engagement_id": int(engagement_id),
         "workflow_filter": requested_workflow or "all",
         "lifecycle_sync": lifecycle_sync,

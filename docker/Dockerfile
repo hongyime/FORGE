@@ -76,8 +76,10 @@ COPY pyproject.toml README.md ./
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY forge ./forge
+COPY forge-autopilot.sh forge-autopilot.bat ./
 
-RUN python -m pip install ".[artifacts,graph]" \
+RUN chmod +x forge-autopilot.sh \
+    && python -m pip install ".[artifacts,graph]" \
     && python -m playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/* \
     && python -m pip check

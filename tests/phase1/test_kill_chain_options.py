@@ -4,6 +4,7 @@ import pytest
 
 from forge.utils.kill_chain_options import (
     normalize_kill_chain_max_iter,
+    normalize_kill_chain_max_runtime_minutes,
     normalize_kill_chain_synthesis_depth,
     normalize_kill_chain_validation_batch_limit,
 )
@@ -12,6 +13,7 @@ from forge.utils.kill_chain_runtime import (
     normalize_kill_chain_runtime_options,
     normalize_roe_id,
     prime_kill_chain_attack_mode_env,
+    scope_manifest_policy_flag,
 )
 
 
@@ -32,6 +34,7 @@ def _runtime_options(**overrides: object):
         "parallel_fanout": 4,
         "report_provider": None,
         "report_max_loops": None,
+        "max_runtime_minutes": None,
         "auto_run_detected": True,
         "go_hard": False,
         "include_offensive_prereqs": False,
@@ -69,6 +72,31 @@ def test_kill_chain_validation_batch_budget_is_bounded() -> None:
     for value in ("0", "65", "not-int"):
         with pytest.raises(ValueError):
             normalize_kill_chain_validation_batch_limit(value)
+
+
+def test_kill_chain_max_runtime_budget_is_bounded() -> None:
+    assert normalize_kill_chain_max_runtime_minutes(None) == 25
+    assert normalize_kill_chain_max_runtime_minutes("") == 25
+    assert normalize_kill_chain_max_runtime_minutes("1440") == 1440
+
+    for value in ("0", "1441", "not-int"):
+        with pytest.raises(ValueError):
+            normalize_kill_chain_max_runtime_minutes(value)
+
+
+def test_kill_chain_runtime_reads_max_runtime_env() -> None:
+    options = _runtime_options(env={"FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES": "40"})
+
+    assert options.max_runtime_minutes == 40
+
+
+def test_kill_chain_runtime_prefers_explicit_max_runtime_over_env() -> None:
+    options = _runtime_options(
+        env={"FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES": "40"},
+        max_runtime_minutes=15,
+    )
+
+    assert options.max_runtime_minutes == 15
 
 
 def test_kill_chain_runtime_go_hard_applies_profile_defaults() -> None:
@@ -115,6 +143,49 @@ def test_kill_chain_runtime_attack_env_is_explicitly_primed_after_validation() -
 def test_kill_chain_runtime_rejects_negative_report_loop_budget() -> None:
     with pytest.raises(ValueError, match="--report-max-loops must be zero or greater"):
         _runtime_options(report_max_loops=-1)
+
+
+def test_scope_manifest_policy_flag_reads_explicit_policy_block() -> None:
+    metadata = {
+        "raw": {
+            "policy": {
+                "destructive_actions_allowed": True,
+                "post_exploitation_allowed": True,
+            }
+        }
+    }
+
+    assert scope_manifest_policy_flag(
+        metadata,
+        "destructive_actions_allowed",
+        "allow_destructive_actions",
+    ) is True
+    assert scope_manifest_policy_flag(
+        metadata,
+        "post_exploitation_allowed",
+        "allow_post_exploitation",
+    ) is True
+    assert scope_manifest_policy_flag(metadata, "unknown_flag") is False
+
+
+def test_scope_manifest_policy_flag_accepts_top_level_aliases() -> None:
+    metadata = {
+        "raw": {
+            "allow_destructive_actions": True,
+            "allow_post_exploitation": True,
+        }
+    }
+
+    assert scope_manifest_policy_flag(
+        metadata,
+        "destructive_actions_allowed",
+        "allow_destructive_actions",
+    ) is True
+    assert scope_manifest_policy_flag(
+        metadata,
+        "post_exploitation_allowed",
+        "allow_post_exploitation",
+    ) is True
 
 
 def test_normalize_roe_id_collapses_whitespace_and_bounds_length() -> None:

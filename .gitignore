@@ -33,6 +33,16 @@ htmlcov/
 
 # Generated outputs
 reports/
+imports/target-feed.json
+imports/supabase-projects.local.json
+imports/autostart.local.json
+imports/*.local.json
+imports/*observations.local.json
+imports/*threatfox*
+imports/*urlhaus*
+imports/*misp*
+imports/*stix*
+imports/*taxii*
 chunks/
 downloads/
 archive/
@@ -65,6 +75,7 @@ data/*.db
 .forge_data/
 
 # Binary bundles
+tools/bin/
 *.tar.gz
 *.zip
 vendor/tor/
@@ -76,6 +87,7 @@ Thumbs.db
 templates/
 .env.*
 .next/
+
 
 
 # AI / editor dot directories (managed via sourcerepo)

@@ -23,10 +23,12 @@ forge_primary_secret.key
 /archive
 /data
 /downloads
+/imports
 /latest_logs
 /archived_logs
 /manifests
 /reports
+/tools/bin
 
 *.db
 *.sqlite

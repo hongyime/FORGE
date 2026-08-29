@@ -23,9 +23,54 @@ import os
 import socket
 import uuid
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
+
+
+_TAXONOMY_MARKERS = {
+    "integration",
+    "e2e",
+    "functional",
+    "unit",
+    "chaos",
+    "slow",
+}
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Apply stable test-type markers from repository layout.
+
+    The repo has dedicated directories for integration/e2e-style tests, but
+    individual modules historically did not all declare matching pytest marks.
+    Directory-based marks keep selection reliable without editing every file.
+    """
+    for item in items:
+        parts = _item_path_parts(item)
+        assigned = False
+        if "integration" in parts:
+            item.add_marker(pytest.mark.integration)
+            assigned = True
+        if "e2e" in parts:
+            item.add_marker(pytest.mark.e2e)
+            assigned = True
+        if {"cli", "webui"} & parts:
+            item.add_marker(pytest.mark.functional)
+            assigned = True
+        if not assigned and not _has_any_marker(item, _TAXONOMY_MARKERS):
+            item.add_marker(pytest.mark.unit)
+
+
+def _item_path_parts(item: pytest.Item) -> set[str]:
+    raw_path = getattr(item, "path", None) or getattr(item, "fspath", "")
+    return {part.lower() for part in Path(str(raw_path)).parts}
+
+
+def _has_any_marker(item: pytest.Item, names: set[str]) -> bool:
+    return any(item.get_closest_marker(name) is not None for name in names)
 
 
 # ---------------------------------------------------------------------------

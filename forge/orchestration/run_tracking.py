@@ -142,6 +142,8 @@ def engagement_run_terminal_entry(
         final_metadata.update(prereq_metadata)
     if run_succeeded:
         error = None
+    elif report_ready and bool(base_metadata.get("runtime_budget_exhausted")):
+        error = f"runtime budget exhausted with pending recursive work: {pending_total}"
     elif report_ready:
         error = f"max iterations exhausted with pending recursive work: {pending_total}"
     else:

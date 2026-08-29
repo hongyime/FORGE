@@ -47,6 +47,10 @@ def test_list_payload_bounds_limit_and_builds_summary(monkeypatch) -> None:
         calls["jobs"] = (con, kwargs)
         return [{"id": 1, "status": "queued"}]
 
+    def fake_job_count(con: object, **kwargs: Any) -> int:
+        calls["job_count"] = (con, kwargs)
+        return 3
+
     def fake_runs(con: object, **kwargs: Any) -> list[dict[str, Any]]:
         calls["runs"] = (con, kwargs)
         return [{"id": 10, "status": "blocked"}, {"id": 11, "status": "completed"}]
@@ -62,6 +66,7 @@ def test_list_payload_bounds_limit_and_builds_summary(monkeypatch) -> None:
         }
 
     monkeypatch.setattr(routes, "list_active_validation_jobs", fake_jobs)
+    monkeypatch.setattr(routes, "count_active_validation_jobs", fake_job_count)
     monkeypatch.setattr(routes, "list_active_validation_runs", fake_runs)
     monkeypatch.setattr(routes, "active_validation_control_coverage", fake_coverage)
     monkeypatch.setattr(routes, "list_active_validation_methods", lambda: [{"id": "fixture_replay"}])
@@ -84,6 +89,10 @@ def test_list_payload_bounds_limit_and_builds_summary(monkeypatch) -> None:
         con,
         {"engagement_id": 1001, "status": "queued", "limit": 500},
     )
+    assert calls["job_count"] == (
+        con,
+        {"engagement_id": 1001, "status": "queued"},
+    )
     assert calls["runs"] == (
         con,
         {"engagement_id": 1001, "job_id": 7, "limit": 500},
@@ -99,6 +108,11 @@ def test_list_payload_bounds_limit_and_builds_summary(monkeypatch) -> None:
         "attack_mapping_count": 2,
         "control_family_count": 3,
     }
+    assert payload["schema_version"] == "forge.active_validation.list.v1"
+    assert payload["execution_policy"] == "read_only_active_validation_inventory_no_commands_executed"
+    assert payload["total_count"] == 3
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 2
     assert payload["methods"] == [{"id": "fixture_replay"}]
     assert payload["graph_scenarios"] == [
         {"target_ref": "cloud:bucket:public", "method": "control_simulation"}

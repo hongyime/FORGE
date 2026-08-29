@@ -204,11 +204,16 @@ def graph_ownership_set(
     finally:
         con.close()
     result = {
+        "schema_version": "forge.asset_graph.ownership_set.v1",
+        "execution_policy": "writes_asset_graph_ownership_claim",
         "engagement_id": int(engagement),
         "entity_key": entity_key,
         "entity_id": int(entity_id),
         "claim_id": int(claim_id),
         "owner": owner,
+        "total_count": 1,
+        "selected_count": 1,
+        "omitted_count": 0,
     }
     if json_output:
         console.print(json.dumps(result, sort_keys=True))

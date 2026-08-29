@@ -59,6 +59,26 @@ def test_report_backend_summary_renders_lineage_counts_and_escapes() -> None:
     assert ("a" * 140) not in html
 
 
+def test_report_backend_summary_shortens_long_diagnostics() -> None:
+    html = render_report_backend_summary(
+        {
+            "fallback_reason": (
+                "GGUF model not found: C:/Users/bryan/.cache/forge/models/"
+                "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+            ),
+            "report_write_error": (
+                "Usage: forge recon subdomains [OPTIONS]\n"
+                "Try 'forge recon subdomains --help' for help. ┌─ Error"
+            ),
+        }
+    )
+
+    assert "GGUF model not found; configure an LLM provider/model" in html
+    assert "C:/Users/bryan" not in html
+    assert "Command failed before completion" in html
+    assert "--help&#x27; for help" not in html
+
+
 def test_report_callout_renders_preview_or_empty_state() -> None:
     empty = render_report_callout([], {"provider": "raw_export"})
     assert "No markdown executive report is available yet" in empty
@@ -90,6 +110,13 @@ def test_report_preview_renderer_escapes_link_and_body() -> None:
     assert "report&lt;script&gt;.md" in html
     assert "../report.md?x=&lt;1&gt;" in html
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+
+
+def test_report_preview_renderer_bounds_large_inline_preview() -> None:
+    html = render_report_preview(name="report.md", href="../report.md", preview="x" * 3000)
+
+    assert "Preview truncated in the dashboard" in html
+    assert "x" * 3000 not in html
 
 
 def test_report_history_renders_prior_families_and_escapes() -> None:
@@ -126,6 +153,25 @@ def test_report_history_renders_prior_families_and_escapes() -> None:
     assert ("b" * 140) not in html
 
 
+def test_report_history_sanitizes_gguf_fallback_paths() -> None:
+    html = render_report_history(
+        [
+            {"artifact_name": "latest.md"},
+            {
+                "artifact_name": "older.json",
+                "fallback_reason": (
+                    "GGUF model not found: C:/Users/bryan/.cache/forge/models/"
+                    "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+                ),
+            },
+        ]
+    )
+
+    assert "GGUF model not found; configure an LLM provider/model" in html
+    assert "C:/Users/bryan" not in html
+    assert "qwen2.5-1.5b-instruct-q4_k_m.gguf" not in html
+
+
 def test_table_renderer_handles_empty_rows_and_escapes_cells() -> None:
     empty = render_table("Scope <Rows>", [])
     assert "Scope &lt;Rows&gt;" in empty
@@ -140,8 +186,11 @@ def test_table_renderer_handles_empty_rows_and_escapes_cells() -> None:
     )
 
     assert "<th>Title</th>" in html
-    assert "<td>XSS &lt;script&gt;</td>" in html
-    assert "<td>LOW &amp; informational</td>" in html
+    assert '<div class="table-scroll">' in html
+    assert "<table class='responsive-table'>" in html
+    assert '<td data-label="Title">XSS &lt;script&gt;</td>' in html
+    assert ">XSS &lt;script&gt;</td>" in html
+    assert ">LOW &amp; informational</td>" in html
 
 
 def test_artifact_card_renderer_escapes_artifact_metadata() -> None:
@@ -348,3 +397,39 @@ def test_dashboard_report_rendering_wrappers_preserve_compatibility(tmp_path: Pa
         size_label=_format_size(stat.st_size),
         modified_label=_format_dt(datetime.fromtimestamp(stat.st_mtime).isoformat()),
     )
+
+
+def test_dashboard_artifact_card_wrapper_handles_missing_artifact(tmp_path: Path) -> None:
+    from forge.reporting.dashboard import _render_artifact_card
+
+    page_path = tmp_path / "reports" / "dashboard" / "engagements" / "index.html"
+    artifact = tmp_path / "reports" / "missing.md"
+    page_path.parent.mkdir(parents=True)
+
+    assert _render_artifact_card(page_path, artifact, "report") == render_artifact_card(
+        kind="report",
+        name="missing.md",
+        href="../../missing.md",
+        size_label="0 B",
+        modified_label="",
+    )
+
+
+def test_dashboard_base_styles_wrap_long_report_values() -> None:
+    from forge.reporting.dashboard import _base_styles
+
+    styles = _base_styles()
+
+    assert ".table-scroll" in styles
+    assert "overflow-x:auto" in styles
+    assert "overflow-wrap:anywhere" in styles
+    assert ".graph-node{" in styles
+    assert ".graph-node span" in styles
+    assert "max-width:180px;min-width:0" in styles
+    assert ".panel-body ul" in styles
+    assert ".panel-body li" in styles
+    assert ".summary-line,.summary-line *" in styles
+    assert ".input-chip-details" in styles
+    assert ".fallback-note" in styles
+    assert "table.responsive-table td::before" in styles
+    assert "@media (max-width: 640px)" in styles

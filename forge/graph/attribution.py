@@ -542,11 +542,19 @@ def import_asset_attribution_records(
         except Exception as exc:  # noqa: BLE001
             errors.append({"index": index, "error": str(exc)})
 
+    processed_count = len(imported) + len(errors)
+    imported_count = len(imported)
+    error_count = len(errors)
     return {
+        "schema_version": "forge.asset_graph.attribution_import.v1",
+        "execution_policy": "writes_asset_graph_attribution_records",
+        "total_count": processed_count,
+        "selected_count": imported_count,
+        "omitted_count": error_count,
         "engagement_id": int(engagement_id),
-        "processed_count": len(imported) + len(errors),
-        "imported_count": len(imported),
-        "error_count": len(errors),
+        "processed_count": processed_count,
+        "imported_count": imported_count,
+        "error_count": error_count,
         "entity_count": len(entity_ids),
         "relationship_count": len(relationship_ids),
         "ownership_claim_count": len(claim_ids),

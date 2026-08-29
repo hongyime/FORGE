@@ -58,6 +58,7 @@ def _callbacks(
         format_dt=lambda value: f"fmt:{value}" if value else "",
         safe_json_loads=json.loads,
         truncate=lambda value, limit: str(value or "")[:limit],
+        redact_error=lambda value, limit: str(value or "")[:limit],
         summarize_run_audit_manifest=summarize_manifest,
     )
 
@@ -174,6 +175,60 @@ def test_latest_engagement_run_builds_policy_manifest_and_status_payload(
             "verify": True,
         }
     ]
+
+
+def test_latest_engagement_run_uses_error_redactor() -> None:
+    con = _connect()
+    con.executescript(
+        """
+        CREATE TABLE engagement_runs (
+            id INTEGER PRIMARY KEY,
+            engagement_id INTEGER,
+            run_kind TEXT,
+            status TEXT,
+            seed_value TEXT,
+            seed_type TEXT,
+            seed_count INTEGER,
+            max_iterations INTEGER,
+            current_iteration INTEGER,
+            resume_enabled INTEGER,
+            dry_run INTEGER,
+            attack_mode INTEGER,
+            error TEXT,
+            metadata_json TEXT,
+            started_at TEXT,
+            completed_at TEXT,
+            updated_at TEXT
+        );
+        """
+    )
+    con.execute(
+        """
+        INSERT INTO engagement_runs VALUES (
+            1, 1001, 'kill_chain', 'failed', 'app.example', 'url',
+            1, 1, 1, 1, 0, 1,
+            'abandoned before explicit completion', '{}', '', '', ''
+        )
+        """
+    )
+    callbacks = _callbacks()
+    callbacks = RunSummaryCallbacks(
+        table_exists=callbacks.table_exists,
+        fetch_rows=callbacks.fetch_rows,
+        format_dt=callbacks.format_dt,
+        safe_json_loads=callbacks.safe_json_loads,
+        truncate=callbacks.truncate,
+        redact_error=lambda value, _limit: str(value).replace(
+            "abandoned before explicit completion",
+            "interrupted before finalization",
+        ),
+        summarize_run_audit_manifest=callbacks.summarize_run_audit_manifest,
+    )
+
+    summary = latest_engagement_run(con, 1001, callbacks=callbacks)
+
+    assert summary is not None
+    assert summary["error"] == "interrupted before finalization"
 
 
 def test_run_policy_summary_defaults_and_effective_statuses() -> None:
@@ -299,12 +354,58 @@ def test_engagement_run_section_row_formats_policy_status_and_manifest() -> None
         "Attack": "yes",
         "Live": "probe=yes tools=no active=yes creds=no",
         "ROE": "ROE-ACME-2026",
+        "ROE Source": "latest run metadata / scope manifest",
         "ROE Missing": "no",
         "Destructive": "no",
         "Post-Ex": "no",
+        "Policy Source": "latest run metadata",
         "Started": "fmt:2026-08-12T01:00:00",
         "Completed": "",
         "Error": "e" * 96,
         "Manifest": "abc123",
         "Manifest OK": "mismatch",
     }
+
+
+def test_engagement_run_section_row_accepts_error_redactor() -> None:
+    con = _connect()
+    con.executescript(
+        """
+        CREATE TABLE engagement_runs (
+            id INTEGER PRIMARY KEY,
+            run_kind TEXT,
+            status TEXT,
+            seed_value TEXT,
+            seed_type TEXT,
+            seed_count INTEGER,
+            max_iterations INTEGER,
+            current_iteration INTEGER,
+            resume_enabled INTEGER,
+            dry_run INTEGER,
+            attack_mode INTEGER,
+            error TEXT,
+            metadata_json TEXT,
+            started_at TEXT,
+            completed_at TEXT
+        );
+        """
+    )
+    con.execute(
+        """
+        INSERT INTO engagement_runs VALUES (
+            9, 'kill_chain', 'failed', 'app.example', 'url', 1, 1, 1,
+            1, 0, 1, 'abandoned before explicit completion', '{}', '', ''
+        )
+        """
+    )
+    row = con.execute("SELECT * FROM engagement_runs").fetchone()
+
+    formatted = engagement_run_section_row(
+        row,
+        redact_error=lambda value, _limit: str(value).replace(
+            "abandoned before explicit completion",
+            "interrupted before finalization",
+        ),
+    )
+
+    assert formatted["Error"] == "interrupted before finalization"

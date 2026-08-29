@@ -52,3 +52,13 @@ def normalize_kill_chain_validation_batch_limit(value: object, *, default: int =
         maximum=64,
         label="validation_batch_limit",
     )
+
+
+def normalize_kill_chain_max_runtime_minutes(value: object, *, default: int = 25) -> int:
+    return _normalize_bounded_int(
+        value,
+        default=default,
+        minimum=1,
+        maximum=1440,
+        label="max_runtime_minutes",
+    )

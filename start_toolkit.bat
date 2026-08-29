@@ -29,14 +29,16 @@ echo   1. Kill-Chain      (any seed: domain/IP/email/phone/handle/name)
 echo   2. Interactive Menu (TUI engagement browser)
 echo   3. Health check     (versions, engagements, LLM providers)
 echo   4. Regenerate report on existing engagement
+echo   5. Autopilot       (import feed, resume backlog, monitor, dashboard)
 echo   Q. Quit
 echo.
-set /p CHOICE="Select [1-4 / Q]: "
+set /p CHOICE="Select [1-5 / Q]: "
 
 if /i "%CHOICE%"=="1" ( call forge-kill-chain.bat & exit /b 0 )
 if /i "%CHOICE%"=="2" ( .venv\Scripts\forge.exe menu & goto _end )
 if /i "%CHOICE%"=="3" ( call forge-status.bat & exit /b 0 )
 if /i "%CHOICE%"=="4" ( call forge-report.bat & exit /b 0 )
+if /i "%CHOICE%"=="5" ( call forge-autopilot.bat & exit /b 0 )
 if /i "%CHOICE%"=="Q" ( exit /b 0 )
 
 echo Unknown choice - launching Menu by default.

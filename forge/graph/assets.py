@@ -3096,9 +3096,15 @@ def sync_engagement_asset_graph(
         """,
         (int(engagement_id), int(engagement_id), int(engagement_id)),
     ).fetchone()
+    node_count = int(totals["nodes"] or 0)
     return {
+        "schema_version": "forge.asset_graph.sync.v1",
+        "execution_policy": "writes_canonical_asset_graph_tables",
+        "total_count": node_count,
+        "selected_count": node_count,
+        "omitted_count": 0,
         "engagement_id": int(engagement_id),
-        "node_count": int(totals["nodes"] or 0),
+        "node_count": node_count,
         "edge_count": int(totals["edges"] or 0),
         "ownership_claim_count": int(totals["ownership_claims"] or 0),
         "source_counts": source_counts,
@@ -3443,7 +3449,10 @@ def resolve_ownership_conflict(
             """,
             (int(engagement_id), *superseded_ids),
         )
+    considered_count = len(selected_ids) + len(superseded_ids)
     return {
+        "schema_version": "forge.asset_graph.ownership_resolve.v1",
+        "execution_policy": "writes_asset_graph_ownership_resolution",
         "engagement_id": int(engagement_id),
         "entity_id": entity_id,
         "entity_key": selected["entity_key"],
@@ -3452,6 +3461,9 @@ def resolve_ownership_conflict(
         "selected_claim_ids": selected_ids,
         "superseded_claim_ids": superseded_ids,
         "superseded_status": superseded_status,
+        "total_count": considered_count,
+        "selected_count": len(selected_ids),
+        "omitted_count": len(superseded_ids),
         "owner": resolve_asset_owner(con, int(engagement_id), entity_key=str(selected["entity_key"])),
         "claims": ownership_claims_for_entity(
             con,
@@ -4585,6 +4597,16 @@ def list_asset_graph(
     if entity_key:
         where += " AND entity_key=?"
         params.append(entity_key)
+    total_node_count = int(
+        con.execute(
+            f"""
+            SELECT COUNT(*) AS count
+            FROM asset_entities
+            {where}
+            """,
+            tuple(params),
+        ).fetchone()["count"]
+    )
     params.append(max(1, int(limit)))
     nodes = [
         {
@@ -4671,6 +4693,11 @@ def list_asset_graph(
         limit=max(1, int(limit)),
     )
     return {
+        "schema_version": "forge.asset_graph.list.v1",
+        "execution_policy": "read_only_asset_graph_inventory_no_commands_executed",
+        "total_count": total_node_count,
+        "selected_count": len(nodes),
+        "omitted_count": max(0, total_node_count - len(nodes)),
         "engagement_id": int(engagement_id),
         "nodes": nodes,
         "edges": edges,

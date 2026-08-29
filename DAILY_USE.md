@@ -9,6 +9,7 @@ Single-page operator cheatsheet.
 | Windows | macOS/Linux | Action |
 |---|---|---|
 | `start_toolkit.bat` | `./start_toolkit.sh` | Top menu (recommended) |
+| `forge-autopilot.bat` | `./forge-autopilot.sh` | Build/import target feed, start new targets, resume backlog, run monitoring, refresh dashboard |
 | `forge-kill-chain.bat` | `./forge-kill-chain.sh` | Interactive kill-chain (prompts for every option) |
 | `forge-menu.bat` | `./forge-menu.sh` | Direct TUI |
 | `forge-status.bat` | `./forge-status.sh` | Health check |
@@ -16,12 +17,210 @@ Single-page operator cheatsheet.
 
 All launcher files set `FORGE_NO_TOR=1` (skips Tor bootstrap — 10× speedup).
 
+Autopilot order is feed-build -> target import/start -> resume backlog ->
+monitoring -> dashboard. Rehearse the full non-mutating loop with:
+
+```text
+forge-autopilot.bat --dry-run --feed-build
+forge-autopilot.bat --apply --roe-id ROE-ID --feed-build
+```
+
+Use `--feed-source all` for the full feed-build input set; this is the default.
+Use `--skip-feed-build` to keep the older behavior of consuming only an existing
+`imports/target-feed.json`. The streamlined daily CLI path is:
+
+```text
+forge automation status --json
+forge automation status --quick --json
+forge automation cycle --json
+forge automation cycle --apply --engagement N --json
+forge automation cycle --apply --live --docker-probe-mode compose-dependency --engagement N --json
+forge doctor --fix-safe --json
+forge automation feed-build --json
+forge automation feed-build --apply --json
+forge automation defaults --json
+forge automation limits --json
+forge automation self-heal-plan --json
+forge automation cycle --live --json
+forge automation guarded-autostart --json   # lower-level guard probe
+forge automation command-review --json
+forge doctor --json
+forge targets import --feed-file imports/target-feed.json --dry-run --limit 100 --json
+forge targets resume-run --dry-run --json
+forge connectors run-plan --json
+forge report quality-audit --json
+forge monitoring exposure-metrics --json
+forge remediation review-queue --engagement N --json
+forge connectors import-discovery --engagement N --connector asset_delta_import --report-file assets.json --target DOMAIN --dry-run --limit 1000 --json
+forge connectors import-discovery --engagement N --connector projectdiscovery_cloud --report-file pd-cloud-export.json --target DOMAIN --dry-run --limit 1000 --json
+forge connectors import-validation --engagement N --connector burp_dast_xml --report-file REPORT.xml --dry-run --json
+```
+
+`forge automation cycle --apply --live` writes the target feed once, then hands
+off to guarded-autostart with `--skip-feed-build`; standalone startup hooks still
+let guarded-autostart run the launcher feed-build phase itself.
+Live startup queue consumption is bounded by `queue_limit` in
+`imports/autostart.local.json`, or by `--queue-limit N`. Each queued
+CTI/discovery/validation artifact is also passed an explicit `--limit` from
+`queue_import_item_limit` (default 1000); deferred ready inputs remain pending
+for the next cycle. CTI queue imports add `--promote-targets` only when
+`queue_promote_targets` is true, and individual queue items can override it
+with `promote_targets`.
+Use `--min-start-source-count 2` on autopilot, or set
+`min_start_source_count: 2` in `imports/autostart.local.json`, to import
+single-source targets but reserve live scan starts for targets seen by at least
+two independent source groups.
+
+Optional Supabase live extraction is read-only and uses ignored local config at
+`imports/supabase-projects.local.json`; put keys in env vars named by `key_env`,
+or point `key_secret_ref` at a Forge connector-secret URI such as
+`forge-secret://1001/supabase_table_import/READ_KEY`. Minimal env-based project
+entries only need `project_ref` and `key_env`; secret-store entries need
+`project_ref` and `key_secret_ref`. Forge derives the Supabase URL, discovers
+exposed tables from `/rest/v1/`, and pages through all columns with `select=*`.
+Default greedy Supabase bounds are 100,000 rows per table, 1,000 discovered
+tables, 100,000 total rows, and 100,000 candidate feed entries per configured
+project; optional `url`, `tables`, `target_columns`, `limit`, `max_tables`,
+`max_rows`, and `max_candidates` can still narrow that behavior. Rows are
+harvested one page at a time, and key hints preserve values such as bare
+usernames as canonical username targets. Feed
+JSON includes `supabase_table_discovery`, so a project that cannot expose table
+paths reports `blocked_table_discovery` with a local next action. When
+artifact/feed scans find Supabase hostnames, `feed-build --apply` appends them
+to the ignored local Supabase config as pending entries with generated
+`key_env` names; they are only database-read after that env var is set locally.
+When you know an owned project ref and the local env var name, add it without
+storing any key material:
+
+```powershell
+forge automation supabase-add abc123 FORGE_SUPABASE_ABC123_READ_KEY --apply --json
+```
+
+The command defaults to dry-run, upgrades pending discoveries, and preserves
+configured refs unless you pass `--replace`.
+The same apply run maintains ignored `imports/discovered-inputs.local.json` with
+new no-key/free CTI, discovery-export, ProjectDiscovery Cloud, and Burp/JUnit
+DAST artifact hints found in scanned artifacts. It also writes source-specific
+ignored queue files such as `imports/threatfox-inputs.local.json`,
+`imports/urlhaus-inputs.local.json`,
+`imports/projectdiscovery-cloud-imports.local.json`,
+`imports/censys-imports.local.json`, `imports/runzero-imports.local.json`,
+`imports/asset-delta-imports.local.json`, and
+`imports/burp-dast-imports.local.json`, so later runs have durable per-source
+backlogs instead of one-time transient observations.
+To add a known local input straight to the correct source queue:
+
+```powershell
+forge automation input-add --connector abusech_threatfox --file threatfox.json --apply --json
+forge automation input-add --connector projectdiscovery_cloud --file pd-cloud-export.json --apply --json
+forge automation input-add --connector burp_dast_xml --file burp-results.xml --target https://app.example --apply --json
+```
+
+This writes only queue metadata, dedupes, and defaults to dry-run.
+ThreatFox and URLhaus direct refresh are free-account/keyed and explicit:
+
+```powershell
+forge automation cti-refresh --provider threatfox --key-env FORGE_THREATFOX_AUTH_KEY --days 1 --apply --json
+forge automation cti-refresh --provider urlhaus --key-env FORGE_URLHAUS_AUTH_KEY --limit 1000 --apply --json
+```
+
+Dry-run does not call the network or require the key. Apply writes the provider
+artifact (`imports/threatfox-observations.local.json` or
+`imports/urlhaus-observations.local.json`) and queues it for `automation cycle`.
+MISP, STIX/TAXII, and private CTI feeds stay on the local artifact queue path
+unless their required auth/endpoint/export is configured. For no-key operation,
+drop local CTI exports under `imports/` or queue them with `forge automation
+input-add`.
+Local CTI/connector feed extraction is passive and bounded: JSON is parsed
+structurally, while JSONL/CSV/XML/TXT/LOG plus local GZ/ZIP drops are scanned
+only for normalized target-like values. Local CTI feed extraction reads ignored
+drops such as
+`imports/threatfox-observations.local.json`,
+`imports/urlhaus-observations.local.json`,
+`imports/misp-observations.local.json`,
+`imports/stix-observations.local.json`, and
+`imports/taxii-observations.local.json`. Filenames must contain `threatfox`,
+`urlhaus`, `misp`, `stix`, or `taxii`, and target-like values are harvested from
+keys such as `ioc`, `iocs`, `domains`, `urls`, `ips`, `emails`, and `targets`.
+Failed source-queue imports are marked `failed`, keep redacted failure metadata,
+back off for at least 15 minutes with exponential delay capped at 6 hours, and
+block after 5 failures until the entry or artifact is fixed.
+Queued imports run unattended when an engagement is available from the queue
+entry, `--engagement`, local `imports/autostart.local.json` `engagement_id`, or
+`FORGE_DEFAULT_ENGAGEMENT_ID`.
+Use `self-heal-plan` before any Docker/startup automation; it is read-only and
+checks resources, Docker readiness, packaged Go tools, locks, and the exact
+bounded autopilot commands. Use `automation cycle --apply --live` for startup
+hooks so source queues are handled first; `guarded-autostart` stays the
+lower-level dry-run/read-only guard and only runs bounded autopilot with
+`--apply` when
+ignored local `imports/autostart.local.json` explicitly has `enabled: true` and
+`apply_enabled: true`. Stale or dead-PID guarded-autostart locks are replaced
+in apply mode, active locks block, launcher banners hide ROE values, and the
+production Compose file includes conservative CPU/RAM caps. Apply-mode
+guarded-autostart writes a bounded redacted JSONL history under the Forge data
+dir; dry-run remains non-mutating. Docker probes summarize container
+state/health and block unhealthy startup.
+
+Docker startup can invoke the same guard by opting into the autostart profile:
+
+```bash
+docker compose -f docker/docker-compose.yml --profile autostart up -d
+```
+
+For hosts that need the 1024 MB profile, review the generated config with:
+
+```bash
+docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.yml --profile autostart config
+```
+
+That example caps API, web UI, worker, Postgres, Redis, and guarded autostart at
+960 MiB total. `forge automation limits --json` reports the same low-memory
+profile fields and review command. Provide secrets through your normal local
+env source before starting containers.
+
+The extra `forge-guarded-autostart` service runs a controlled loop with lower
+default caps (`FORGE_AUTOSTART_CPUS=0.25`,
+`FORGE_AUTOSTART_MEM_LIMIT=1536m`), startup delay
+`FORGE_AUTOSTART_STARTUP_DELAY_SECONDS=300`, and cadence
+`FORGE_AUTOSTART_EVERY_SECONDS=9300`, with outer cycle timeout
+`FORGE_AUTOSTART_TIMEOUT_SECONDS=9000`, while the guarded Forge memory gate
+remains `1024` MB. The timeout prevents a hung cycle from blocking later
+guarded attempts. It enters through
+`forge automation cycle --apply --live`, so it classifies inbox drops, consumes
+ready source queues, and then still requires `FORGE_ROE_ID`, local
+`imports/autostart.local.json`, Docker/resource health, cooldown/backoff, and a
+free lock before live target/resume/monitoring work. It mounts ignored `tools/bin/` into
+`/app/tools/bin` by default; set `FORGE_HOST_CONNECTOR_BIN_DIR` if your
+ProjectDiscovery/Go binaries live somewhere else.
+
+Install the Windows startup hook with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install_guarded_autostart_task.ps1 -EveryMinutes 30 -StartupDelayMinutes 5 -TimeoutMinutes 150
+```
+
+The task runs hidden at logon and on cadence, but still delegates every live
+decision to `forge automation cycle --apply --live --json`.
+If Task Scheduler is denied, the installer falls back to a user-level HKCU Run
+startup entry that runs at logon without admin rights.
+Use `forge automation status --json` to inspect current readiness plus guarded
+autostart history, including recent blocked/failed runs and blocker counts,
+without opening the local JSONL log by hand.
+
+Burp/JUnit DAST XML import is local evidence intake only. Rehearse with
+`--dry-run --json`; applied imports add scoped active-validation evidence rows
+without running scanners or creating reportable vulnerability findings.
+`forge remediation review-queue --engagement N --json` is also local-only: it
+surfaces owner, SLA, ticket state, latest ticket sync status, retest state, and
+validation proof freshness from existing rows.
+
 ---
 
 ## The one command
 
 ```text
-forge kill-chain <seed> --engagement <N>
+forge kill-chain <seed> [--engagement <N>]
 ```
 
 `<seed>` can be **anything**:
@@ -39,18 +238,18 @@ kill-chain auto-detects the type and routes to the right initial fan-out.
 
 ---
 
-## The 6 flags
+## Core flags
 
 ```text
 forge kill-chain <seed>
-  --engagement N        # required
+  --engagement N        # optional for kill-chain; auto-derived when omitted
   --max-iter 7          # loop cap, default 7, breaks early on stable
   --tor                 # route every subcommand through Tor
   --dry-run             # log intended actions, no outbound calls
   --attack-mode         # ACTIVE: port scan + cred validate (requires ROE live)
   --roe-id ROE-123      # ROE / written-authorization reference
   --scope-manifest ./roe-scope.json  # required for sensitive live execution
-  --skip-cloud          # skip 7-service cloud discovery
+  --skip-cloud          # skip 6-service cloud discovery
   --skip-keyscan        # skip GitHub keyscan (protects token quota)
 ```
 
@@ -135,6 +334,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup_forge_windows_local.ps1
 | "seed cannot classify" | Wrap full names in quotes; use `+` prefix for phones; use `@` prefix for usernames |
 | Empty name-search results | Search engines are rate-limiting; retry with `--tor` |
 | Report generation fails | Check `FORGE_LLM_PROVIDER=auto` in `.env`; falls back to template automatically |
+| OpenRouter should stay free | Leave `FORGE_ALLOW_PAID_BACKENDS` unset; Forge only enables OpenRouter when `/models?sort=newest` proves a capable zero-price/free model |
 | Keyscan hits GitHub 429 | Set a burn-account `FORGE_GITHUB_TOKEN` in `.env` |
 | Shodan hits 429 | Increase `FORGE_SHODAN_REQUEST_DELAY_SECONDS` and `FORGE_SHODAN_RATE_LIMIT_BACKOFF_SECONDS` |
 | crt.sh hits 429 | Increase `FORGE_CRTSH_REQUEST_DELAY_SECONDS` and `FORGE_CRTSH_RATE_LIMIT_BACKOFF_SECONDS` |

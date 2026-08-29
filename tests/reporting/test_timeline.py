@@ -137,3 +137,45 @@ def test_operational_timeline_events_limit_and_dashboard_wrapper_compatibility()
     from forge.reporting.dashboard import _operational_timeline_events
 
     assert _operational_timeline_events(sections) == events
+
+
+def test_operational_timeline_sanitizes_report_fallback_paths() -> None:
+    events = operational_timeline_events(
+        {},
+        report_history=[
+            {
+                "generated_at": "2026-08-12T12:00:00Z",
+                "artifact_name": "engagement_1001_report.json",
+                "fallback_reason": (
+                    "GGUF model not found: C:/Users/bryan/.cache/forge/models/"
+                    "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+                ),
+            }
+        ],
+    )
+
+    assert events[0]["status"] == (
+        "GGUF model not found; configure an LLM provider/model or regenerate after local model setup."
+    )
+    assert "C:/Users/bryan" not in str(events)
+    assert "qwen2.5-1.5b-instruct-q4_k_m.gguf" not in str(events)
+
+
+def test_operational_timeline_sanitizes_scope_manifest_assignments() -> None:
+    events = operational_timeline_events(
+        {
+            "audit_log": [
+                {
+                    "When": "2026-08-12T09:00:00Z",
+                    "Action": "failed",
+                    "Result": (
+                        "scope_manifest=C:/Users/bryan/OneDrive/01 TOOLKITS/"
+                        "forgetoolkit/scope.json status=denied"
+                    ),
+                }
+            ]
+        }
+    )
+
+    assert events[0]["summary"] == "scope_manifest=[redacted] status=denied"
+    assert "TOOLKITS" not in str(events)

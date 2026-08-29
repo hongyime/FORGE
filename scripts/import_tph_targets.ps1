@@ -5,6 +5,7 @@ param(
     [string]$RoeId = "",
     [int]$Limit = 100,
     [int]$MaxIter = 3,
+    [int]$MaxRuntimeMinutes = 25,
     [int]$StartLimit = 3,
     [int]$WaitSeconds = 180,
     [switch]$DryRun,
@@ -178,6 +179,7 @@ $args = @(
     "--auth-header-env", "TPH_MONITOR_KEY",
     "--limit", [string]$Limit,
     "--max-iter", [string]$MaxIter,
+    "--max-runtime-minutes", [string]$MaxRuntimeMinutes,
     "--start-limit", [string]$StartLimit
 )
 if ($RoeId) {

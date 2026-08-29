@@ -37,6 +37,21 @@ def test_artifact_payload_preserves_dashboard_file_contract(tmp_path: Path) -> N
     assert "T" in seen_dates[0]
 
 
+def test_artifact_payload_marks_missing_artifact_without_crashing(tmp_path: Path) -> None:
+    root_page = tmp_path / "dashboard" / "engagements" / "acme" / "index.html"
+    artifact = tmp_path / "reports" / "missing.md"
+    root_page.parent.mkdir(parents=True)
+
+    assert artifact_payload(root_page, artifact, kind="report") == {
+        "name": "missing.md",
+        "kind": "report",
+        "href": "../../../reports/missing.md",
+        "size_bytes": 0,
+        "size_label": "0 B",
+        "modified_at": "",
+    }
+
+
 def test_relative_href_and_size_labels_match_dashboard_expectations(tmp_path: Path) -> None:
     root_page = tmp_path / "dashboard" / "index.html"
     report = tmp_path / "reports" / "engagement_1001_report.md"

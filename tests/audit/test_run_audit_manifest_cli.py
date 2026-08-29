@@ -54,6 +54,11 @@ def test_audit_manifest_verify_cli_reports_ok_and_tamper(
     )
     assert ok.exit_code == 0, ok.output
     ok_payload = json.loads(ok.output)
+    assert ok_payload["schema_version"] == "forge.audit.manifest_verify.v1"
+    assert ok_payload["execution_policy"] == "read_only_audit_manifest_verification_no_writes"
+    assert ok_payload["total_count"] == 1
+    assert ok_payload["selected_count"] == 1
+    assert ok_payload["omitted_count"] == 0
     assert ok_payload["engagement_id"] == 1001
     assert ok_payload["run_id"] == run_id
     assert ok_payload["ok"] is True
@@ -76,6 +81,11 @@ def test_audit_manifest_verify_cli_reports_ok_and_tamper(
     )
     assert exported.exit_code == 0, exported.output
     export_payload = json.loads(exported.output)
+    assert export_payload["schema_version"] == "forge.audit.manifest_export.v1"
+    assert export_payload["execution_policy"] == "writes_local_audit_manifest_bundle"
+    assert export_payload["total_count"] == 1
+    assert export_payload["selected_count"] == 1
+    assert export_payload["omitted_count"] == 0
     assert export_payload["engagement_id"] == 1001
     assert export_payload["run_id"] == run_id
     assert export_payload["path"] == str(export_path)
@@ -114,6 +124,8 @@ def test_audit_manifest_verify_cli_reports_ok_and_tamper(
     )
     assert signed.exit_code == 0, signed.output
     signed_payload = json.loads(signed.output)
+    assert signed_payload["schema_version"] == "forge.audit.manifest_export.v1"
+    assert signed_payload["selected_count"] == 1
     assert signed_payload["signature_present"] is True
     assert "signature.json" in signed_payload["files"]
     with zipfile.ZipFile(signed_path) as archive:
@@ -146,6 +158,12 @@ def test_audit_manifest_verify_cli_reports_ok_and_tamper(
     )
     assert remote_export.exit_code == 0, remote_export.output
     remote_payload = json.loads(remote_export.output)
+    assert remote_payload["schema_version"] == "forge.audit.manifest_export.v1"
+    assert (
+        remote_payload["execution_policy"]
+        == "writes_local_and_configured_remote_audit_manifest_bundle"
+    )
+    assert remote_payload["selected_count"] == 1
     assert remote_payload["remote_store"]["scope"] == "customer-acme"
     stored_path = Path(remote_payload["remote_store"]["storage_path"])
     receipt_path = Path(remote_payload["remote_store"]["receipt_path"])
@@ -188,6 +206,14 @@ def test_audit_manifest_verify_cli_reports_ok_and_tamper(
     )
     assert verify_signed.exit_code == 0, verify_signed.output
     verify_payload = json.loads(verify_signed.output)
+    assert verify_payload["schema_version"] == "forge.audit.manifest_bundle_verify.v1"
+    assert (
+        verify_payload["execution_policy"]
+        == "read_only_audit_bundle_signature_verification_no_writes"
+    )
+    assert verify_payload["total_count"] == 1
+    assert verify_payload["selected_count"] == 1
+    assert verify_payload["omitted_count"] == 0
     assert verify_payload["ok"] is True
     assert verify_payload["signer_id"] == "cli-test"
 
@@ -205,7 +231,10 @@ def test_audit_manifest_verify_cli_reports_ok_and_tamper(
         ],
     )
     assert verify_wrong_key.exit_code == 2, verify_wrong_key.output
-    assert json.loads(verify_wrong_key.output)["reason"] == "signature mismatch"
+    wrong_key_payload = json.loads(verify_wrong_key.output)
+    assert wrong_key_payload["schema_version"] == "forge.audit.manifest_bundle_verify.v1"
+    assert wrong_key_payload["selected_count"] == 1
+    assert wrong_key_payload["reason"] == "signature mismatch"
 
     missing_key = runner.invoke(
         app,
@@ -237,5 +266,7 @@ def test_audit_manifest_verify_cli_reports_ok_and_tamper(
     )
     assert tampered.exit_code == 2, tampered.output
     tampered_payload = json.loads(tampered.output)
+    assert tampered_payload["schema_version"] == "forge.audit.manifest_verify.v1"
+    assert tampered_payload["selected_count"] == 1
     assert tampered_payload["ok"] is False
     assert tampered_payload["reason"] == "manifest hash mismatch"

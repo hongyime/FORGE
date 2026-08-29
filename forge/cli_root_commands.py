@@ -53,11 +53,17 @@ def register_root_operator_commands(app: typer.Typer, *, console: Console) -> No
                 "model-server and SaaS model-list probes."
             ),
         ),
+        fix_safe: bool = typer.Option(
+            False,
+            "--fix-safe",
+            help="Create/repair local ignored config and queue files only; no live/provider actions.",
+        ),
     ) -> None:
         """Operator setup, dependency, key, and provider-readiness check."""
         run_doctor_command(
             json_output=json_output,
             live_provider_probes=live_provider_probes,
+            fix_safe=fix_safe,
             console=console,
         )
 

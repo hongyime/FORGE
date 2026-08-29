@@ -160,6 +160,7 @@ def test_remediation_review_queue_prioritizes_operator_attention(tmp_path: Path)
     assert queue["summary"]["sla_overdue"] == 1
     assert queue["summary"]["missing_owner"] == 1
     assert queue["summary"]["missing_ticket"] == 1
+    assert queue["summary"]["ticket_missing_or_failed"] == 1
     assert queue["summary"]["risk_acceptance_review_due"] == 1
     assert queue["summary"]["risk_acceptance_expired"] == 1
     assert queue["summary"]["retest_pending"] == 1
@@ -167,9 +168,61 @@ def test_remediation_review_queue_prioritizes_operator_attention(tmp_path: Path)
     assert queue["returned_count"] == 3
     assert queue["truncated"] is True
     assert [item["id"] for item in queue["items"]] == [10, 21, 23]
+    assert queue["items"][0]["ticket_state"] == "linked"
+    assert queue["items"][0]["validation_proof_freshness"]["freshness"] == "not_requested"
     assert queue["items"][0]["queue_reason_labels"] == ["SLA overdue"]
     assert "metadata" not in queue["items"][1]
     assert "do-not-return" not in json.dumps(queue, sort_keys=True)
+
+
+def test_remediation_review_queue_supports_legacy_missing_risk_expiry(
+    tmp_path: Path,
+) -> None:
+    con = sqlite3.connect(tmp_path / "legacy-engagement.db")
+    con.row_factory = sqlite3.Row
+    try:
+        con.executescript(
+            """
+            CREATE TABLE remediation_items (
+                id INTEGER PRIMARY KEY,
+                engagement_id INTEGER,
+                finding_table TEXT,
+                finding_ref TEXT,
+                title TEXT,
+                severity TEXT,
+                owner TEXT,
+                sla_due_at TEXT,
+                status TEXT,
+                retest_status TEXT,
+                ticket_ref TEXT,
+                metadata_json TEXT,
+                updated_at TEXT
+            );
+            INSERT INTO remediation_items
+                (id, engagement_id, finding_table, finding_ref, title, severity,
+                 owner, sla_due_at, status, retest_status, ticket_ref,
+                 metadata_json, updated_at)
+            VALUES
+                (1, 1001, 'manual', 'legacy-accepted', 'Legacy accepted risk',
+                 'LOW', 'appsec', NULL, 'risk_accepted', 'not_requested',
+                 'SEC-1', '{}', '2026-08-01T00:00:00Z');
+            """
+        )
+
+        queue = remediation_review_queue(
+            con,
+            engagement_id=1001,
+            now="2026-08-11T00:00:00Z",
+            limit=10,
+        )
+    finally:
+        con.close()
+
+    assert queue["summary"]["total"] == 1
+    assert queue["summary"]["attention_required"] == 1
+    assert queue["summary"]["risk_acceptance_missing_expiry"] == 1
+    assert queue["items"][0]["risk_acceptance_expires_at"] == ""
+    assert queue["items"][0]["queue_reasons"] == ["risk_acceptance_missing_expiry"]
 
 
 def test_draft_remediation_from_asset_graph_candidates_is_idempotent_and_reviewable(
@@ -361,12 +414,14 @@ def test_remediation_review_queue_surfaces_latest_failed_ticket_sync(
 
     assert failed_queue["summary"]["attention_required"] == 1
     assert failed_queue["summary"]["ticket_sync_failed"] == 1
+    assert failed_queue["summary"]["ticket_missing_or_failed"] == 1
     assert failed_queue["summary"]["missing_ticket"] == 0
     item = failed_queue["items"][0]
     event = item["latest_ticket_event"]
     assert item["id"] == 10
-    assert item["queue_reasons"] == ["ticket_sync_failed"]
-    assert item["queue_reason_labels"] == ["ticket sync failed"]
+    assert item["ticket_state"] == "failed"
+    assert item["queue_reasons"] == ["ticket_missing_or_failed", "ticket_sync_failed"]
+    assert item["queue_reason_labels"] == ["ticket missing or failed", "ticket sync failed"]
     assert event["connector"] == "webhook"
     assert event["status"] == "failed"
     assert event["attempt_count"] == 2
@@ -378,7 +433,45 @@ def test_remediation_review_queue_surfaces_latest_failed_ticket_sync(
 
     assert delivered_queue["summary"]["attention_required"] == 0
     assert delivered_queue["summary"]["ticket_sync_failed"] == 0
-    assert delivered_queue["items"] == []
+    assert delivered_queue["summary"]["ticket_missing_or_failed"] == 0
+
+
+def test_remediation_review_queue_flags_stale_validation_proof(tmp_path: Path) -> None:
+    con = _build_db(tmp_path / "engagement.db")
+    try:
+        con.execute("UPDATE remediation_items SET status='resolved' WHERE id=10")
+        con.execute(
+            """
+            INSERT INTO remediation_items
+                (id, engagement_id, finding_table, finding_ref, title, severity,
+                 owner, sla_due_at, status, retest_status, ticket_ref, metadata_json,
+                 retested_at, updated_at)
+            VALUES
+                (30, 1001, 'manual', 'stale-proof', 'Recheck old proof', 'HIGH',
+                 'appsec', NULL, 'resolved', 'passed', 'SEC-30',
+                 '{"active_validation_retest":{"latest_job_id":77,"latest_run_id":88,
+                   "latest_result":"simulated_pass","latest_retest_status":"passed",
+                   "applied_at":"2026-07-01T00:00:00Z"}}',
+                 '2026-07-01T00:00:00Z', '2026-07-01T00:00:00Z')
+            """
+        )
+        con.commit()
+
+        queue = remediation_review_queue(
+            con,
+            engagement_id=1001,
+            now="2026-08-01T00:00:00Z",
+        )
+    finally:
+        con.close()
+
+    assert queue["summary"]["attention_required"] == 1
+    assert queue["summary"]["validation_proof_stale"] == 1
+    item = queue["items"][0]
+    assert item["id"] == 30
+    assert item["queue_reasons"] == ["validation_proof_stale"]
+    assert item["validation_proof_freshness"]["freshness"] == "stale"
+    assert item["validation_proof_freshness"]["age_days"] == 31
 
 
 def test_propagate_asset_owners_assigns_missing_remediation_owner_from_graph(

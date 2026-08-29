@@ -20,6 +20,7 @@ import json
 from typing import Any
 from unittest.mock import patch
 
+import httpx
 import pytest
 
 from forge.core.errors import ProviderUnavailableError
@@ -28,6 +29,10 @@ from forge.providers.bedrock_anthropic import BedrockAnthropicProvider
 from forge.providers.claude_code import (
     ClaudeCodeProvider,
     claude_code_available,
+)
+from forge.providers.discovery import (
+    _pick_default_from_model_list,
+    _probe_openai_compatible_saas,
 )
 
 
@@ -60,6 +65,161 @@ class _FakeBedrockClient:
         if self._raise is not None:
             raise self._raise
         return {"body": _FakeBedrockBody(self._payload)}
+
+
+def test_openrouter_free_only_picker_prefers_capable_zero_priced_model() -> None:
+    payload = {
+        "data": [
+            {"id": "tiny/weak:free", "pricing": {"prompt": "0", "completion": "0"}},
+            {"id": "qwen/qwen3-coder:free", "pricing": {"prompt": "0", "completion": "0"}},
+            {
+                "id": "anthropic/claude-haiku",
+                "pricing": {"prompt": "0.0000008", "completion": "0.000004"},
+            },
+        ]
+    }
+
+    model, pricing = _pick_default_from_model_list(
+        payload,
+        "anthropic/claude-haiku",
+        "openrouter",
+        free_only=True,
+    )
+
+    assert model == "qwen/qwen3-coder:free"
+    assert pricing["qwen/qwen3-coder:free"] == (0.0, 0.0)
+
+
+def test_openrouter_free_only_picker_prefers_newest_capable_zero_priced_model() -> None:
+    payload = {
+        "data": [
+            {
+                "id": "qwen/qwen3-coder-old:free",
+                "created": 1710000000,
+                "pricing": {"prompt": "0", "completion": "0"},
+            },
+            {
+                "id": "deepseek/deepseek-chat-new:free",
+                "created": 1790000000,
+                "pricing": {"prompt": "0", "completion": "0"},
+            },
+            {
+                "id": "tiny/weak-newest:free",
+                "created": 1800000000,
+                "pricing": {"prompt": "0", "completion": "0"},
+            },
+        ]
+    }
+
+    model, _pricing = _pick_default_from_model_list(
+        payload,
+        "anthropic/claude-haiku",
+        "openrouter",
+        free_only=True,
+    )
+
+    assert model == "deepseek/deepseek-chat-new:free"
+
+
+def test_openrouter_free_only_picker_skips_when_free_model_not_proven() -> None:
+    payload = {
+        "data": [
+            {
+                "id": "anthropic/claude-haiku",
+                "pricing": {"prompt": "0.0000008", "completion": "0.000004"},
+            }
+        ]
+    }
+
+    model, _pricing = _pick_default_from_model_list(
+        payload,
+        "anthropic/claude-haiku",
+        "openrouter",
+        free_only=True,
+    )
+
+    assert model is None
+
+
+def test_openrouter_free_only_picker_requires_numeric_zero_pricing() -> None:
+    payload = {
+        "data": [
+            {"id": "qwen/qwen3-coder:free"},
+            {"id": "deepseek/deepseek-chat:free", "pricing": {"prompt": "unknown"}},
+        ]
+    }
+
+    model, pricing = _pick_default_from_model_list(
+        payload,
+        "qwen/qwen3-coder:free",
+        "openrouter",
+        free_only=True,
+    )
+
+    assert model is None
+    assert pricing == {}
+
+
+def test_openrouter_free_only_picker_rejects_only_weak_free_models() -> None:
+    payload = {
+        "data": [
+            {"id": "tiny/weak:free", "pricing": {"prompt": "0", "completion": "0"}},
+            {"id": "unknown/free:free", "pricing": {"prompt": "0", "completion": "0"}},
+        ]
+    }
+
+    model, _pricing = _pick_default_from_model_list(
+        payload,
+        "qwen/qwen3-coder:free",
+        "openrouter",
+        free_only=True,
+    )
+
+    assert model is None
+
+
+@pytest.mark.asyncio
+async def test_openrouter_probe_allows_free_only_backend_without_paid_gate(monkeypatch) -> None:
+    payload = {
+        "data": [
+            {"id": "qwen/qwen3-coder:free", "pricing": {"prompt": "0", "completion": "0"}}
+        ]
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == "Bearer test-openrouter-key"
+        assert str(request.url) == "https://openrouter.ai/api/v1/models?sort=newest"
+        return httpx.Response(200, json=payload)
+
+    real_async_client = httpx.AsyncClient
+
+    class _Client:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self._client = real_async_client(
+                transport=httpx.MockTransport(handler),
+                timeout=kwargs.get("timeout", 5.0),
+            )
+
+        async def __aenter__(self) -> httpx.AsyncClient:
+            return self._client
+
+        async def __aexit__(self, *_args: Any) -> None:
+            await self._client.aclose()
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter-key")
+    monkeypatch.delenv("FORGE_ALLOW_PAID_BACKENDS", raising=False)
+    monkeypatch.setattr("forge.providers.discovery.httpx.AsyncClient", _Client)
+
+    backend = await _probe_openai_compatible_saas(
+        "openrouter",
+        env_key=("OPENROUTER_API_KEY",),
+        endpoint="https://openrouter.ai/api/v1",
+        default_model="anthropic/claude-haiku",
+    )
+
+    assert backend is not None
+    assert backend.model_id == "qwen/qwen3-coder:free"
+    assert backend.extra["free_only"] is True
 
 
 # ---------------------------------------------------------------------------

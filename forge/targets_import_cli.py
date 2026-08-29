@@ -1,12 +1,24 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Optional
 
 import typer
 from rich.console import Console
 
-from forge.targets_import import import_targets
+from forge.targets_import import DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES, import_targets
+from forge.targets_resume_candidates import (
+    DEFAULT_RESUME_CANDIDATE_LIMIT,
+    DEFAULT_RESUME_LOCK_STALE_MINUTES,
+    DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
+    backfill_target_resume_scope_manifests,
+    collect_target_resume_candidates,
+    collect_target_resume_lock_status,
+    collect_target_resume_plan,
+    execute_target_resume_plan,
+    redact_target_resume_candidate_payload,
+)
 
 console = Console(stderr=True)
 
@@ -38,7 +50,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
         start: bool = typer.Option(
             False,
             "--start",
-            help="Start the passive kill-chain for each imported target.",
+            help="Start the scoped kill-chain for each imported target.",
         ),
         dry_run: bool = typer.Option(
             False,
@@ -48,17 +60,39 @@ def register_target_import_commands(app: typer.Typer) -> None:
         limit: Optional[int] = typer.Option(
             None,
             "--limit",
-            help="Maximum feed items to import after dedupe. Default 100, max 1000.",
+            help="Maximum feed items to import after dedupe. Default 100, max 100000.",
         ),
         max_iter: int = typer.Option(
             3,
             "--max-iter",
-            help="Passive kill-chain max iterations when --start is used.",
+            help="Kill-chain max iterations when --start is used.",
+        ),
+        max_runtime_minutes: int = typer.Option(
+            DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES,
+            "--max-runtime-minutes",
+            envvar="FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES",
+            help=(
+                "Soft kill-chain runtime budget per started target. The import "
+                "parent also enforces this budget plus a short shutdown grace."
+            ),
         ),
         start_limit: Optional[int] = typer.Option(
             None,
             "--start-limit",
-            help="Maximum new passive kill-chain runs to launch during this import.",
+            help="Maximum new kill-chain runs to launch during this import.",
+        ),
+        min_start_source_count: int = typer.Option(
+            1,
+            "--min-start-source-count",
+            help=(
+                "Minimum independent source count required before --start may launch "
+                "a live kill-chain run for a feed item."
+            ),
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable import results.",
         ),
     ) -> None:
         """Import generic sanitized target feeds into one engagement per target."""
@@ -72,7 +106,9 @@ def register_target_import_commands(app: typer.Typer) -> None:
                 dry_run=dry_run,
                 limit=limit,
                 max_iter=max_iter,
+                max_runtime_minutes=max_runtime_minutes,
                 start_limit=start_limit,
+                min_start_source_count=min_start_source_count,
             )
         except Exception as exc:
             raise typer.BadParameter(str(exc)) from exc
@@ -80,6 +116,26 @@ def register_target_import_commands(app: typer.Typer) -> None:
         created = sum(1 for item in results if item.created)
         reused = sum(1 for item in results if item.engagement_id is not None and not item.created)
         started = sum(1 for item in results if item.started)
+        if json_output:
+            payload = {
+                "schema_version": "forge.targets_import.v1",
+                "execution_policy": (
+                    "dry_run_no_engagement_writes_or_starts"
+                    if dry_run
+                    else "imports_targets_and_may_start_kill_chain"
+                ),
+                "dry_run": bool(dry_run),
+                "start_requested": bool(start),
+                "total_count": len(results),
+                "selected_count": len(results),
+                "omitted_count": 0,
+                "created_count": created,
+                "reused_count": reused,
+                "started_count": started,
+                "results": [_target_import_result_payload(item) for item in results],
+            }
+            typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+            return
         if dry_run:
             console.print(f"[green]DRY RUN:[/green] {len(results)} target(s) parsed and deduped.")
             return
@@ -93,3 +149,299 @@ def register_target_import_commands(app: typer.Typer) -> None:
                 f"target={result.target_type}:{result.target_value} "
                 f"manifest={result.scope_manifest}"
             )
+
+    @app.command("resume-candidates")
+    def targets_resume_candidates(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help=(
+                "FORGE data directory to scan. Defaults to the configured data dir "
+                "plus repo-local legacy dashboard DBs."
+            ),
+        ),
+        limit: Optional[int] = typer.Option(
+            DEFAULT_RESUME_CANDIDATE_LIMIT,
+            "--limit",
+            help="Maximum candidate rows to return. Use 0 for none.",
+        ),
+        reason: Optional[str] = typer.Option(
+            None,
+            "--reason",
+            help="Only return a specific reason such as pending_recursive_work or watchdog_timeout.",
+        ),
+        include_completed: bool = typer.Option(
+            False,
+            "--include-completed",
+            help="Include completed latest runs only when classification is non-standard.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON. Accepted for parity; output is JSON by default.",
+        ),
+        redact_paths: bool = typer.Option(
+            False,
+            "--redact-paths",
+            help="Redact local DB and scope-manifest paths for review/report output.",
+        ),
+    ) -> None:
+        """Report failed/cancelled latest-run candidates without starting work."""
+        _ = json_output
+        payload = collect_target_resume_candidates(
+            data_dir=data_dir,
+            limit=limit,
+            reason=reason,
+            include_completed=include_completed,
+        )
+        if redact_paths:
+            payload = redact_target_resume_candidate_payload(payload)
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+    @app.command("backfill-scope-manifests")
+    def targets_backfill_scope_manifests(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help=(
+                "FORGE data directory to scan. Defaults to the configured data dir "
+                "plus repo-local legacy dashboard DBs."
+            ),
+        ),
+        limit: Optional[int] = typer.Option(
+            DEFAULT_RESUME_CANDIDATE_LIMIT,
+            "--limit",
+            help="Maximum candidate rows to inspect. Use 0 for none.",
+        ),
+        reason: Optional[str] = typer.Option(
+            None,
+            "--reason",
+            help="Only inspect a specific resume reason such as pending_recursive_work.",
+        ),
+        roe_id: Optional[str] = typer.Option(
+            None,
+            "--roe-id",
+            help="ROE id to use only when a candidate is missing one.",
+        ),
+        apply: bool = typer.Option(
+            False,
+            "--apply",
+            help="Write recovered scope manifests and update latest-run metadata.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON.",
+        ),
+    ) -> None:
+        """Plan or recover missing scope manifests for resume candidates."""
+        payload = backfill_target_resume_scope_manifests(
+            data_dir=data_dir,
+            limit=limit,
+            reason=reason,
+            apply=apply,
+            roe_id=roe_id,
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+            return
+        mode = "APPLIED" if apply else "DRY RUN"
+        console.print(
+            f"[green]{mode}:[/green] inspected={payload['planned_count']} "
+            f"actions={payload['action_counts']}"
+        )
+
+    @app.command("resume-plan")
+    def targets_resume_plan(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help=(
+                "FORGE data directory to scan. Defaults to the configured data dir "
+                "plus repo-local legacy dashboard DBs."
+            ),
+        ),
+        limit: Optional[int] = typer.Option(
+            DEFAULT_RESUME_CANDIDATE_LIMIT,
+            "--limit",
+            help="Maximum candidate rows to inspect. Use 0 for none.",
+        ),
+        reason: Optional[str] = typer.Option(
+            None,
+            "--reason",
+            help="Only plan a specific resume reason such as pending_recursive_work.",
+        ),
+        max_iter: Optional[int] = typer.Option(
+            None,
+            "--max-iter",
+            help="Override the planned resume command max iterations.",
+        ),
+        max_runtime_minutes: int = typer.Option(
+            DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
+            "--max-runtime-minutes",
+            help="Append this per-run soft runtime budget to every planned command.",
+        ),
+        redact_paths: bool = typer.Option(
+            False,
+            "--redact-paths",
+            help="Redact local DB and scope-manifest paths for review/report output.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON. Accepted for parity; output is JSON by default.",
+        ),
+    ) -> None:
+        """Plan sequential resume commands without starting work."""
+        _ = json_output
+        payload = collect_target_resume_plan(
+            data_dir=data_dir,
+            limit=limit,
+            reason=reason,
+            max_iter=max_iter,
+            max_runtime_minutes=max_runtime_minutes,
+            redact_paths=redact_paths,
+        )
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+    def _target_import_result_payload(result: object) -> dict[str, object]:
+        scope_manifest = getattr(result, "scope_manifest", None)
+        return {
+            "engagement_id": getattr(result, "engagement_id", None),
+            "target_type": str(getattr(result, "target_type", "")),
+            "target_value": str(getattr(result, "target_value", "")),
+            "target_key": str(getattr(result, "target_key", "")),
+            "scope_manifest": str(scope_manifest) if scope_manifest is not None else None,
+            "created": bool(getattr(result, "created", False)),
+            "started": bool(getattr(result, "started", False)),
+            "dry_run": bool(getattr(result, "dry_run", False)),
+            "source_count": int(getattr(result, "source_count", 1)),
+            "priority": int(getattr(result, "priority", 60)),
+            "scan_eligible": bool(getattr(result, "scan_eligible", True)),
+            "scan_eligibility_reason": str(
+                getattr(result, "scan_eligibility_reason", "eligible")
+            ),
+            "start_skipped_reason": str(getattr(result, "start_skipped_reason", "")),
+        }
+
+    @app.command("resume-lock-status")
+    def targets_resume_lock_status(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help="FORGE data directory containing target_imports/resume_batches.",
+        ),
+        stale_lock_minutes: int = typer.Option(
+            DEFAULT_RESUME_LOCK_STALE_MINUTES,
+            "--stale-lock-minutes",
+            help="Age threshold used to classify an existing resume lock as stale.",
+        ),
+        redact_paths: bool = typer.Option(
+            False,
+            "--redact-paths",
+            help="Redact local data and lock paths from JSON output.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON. Accepted for parity; output is JSON by default.",
+        ),
+    ) -> None:
+        """Inspect the resume-run batch lock without modifying it."""
+        _ = json_output
+        payload = collect_target_resume_lock_status(
+            data_dir=data_dir,
+            stale_lock_minutes=stale_lock_minutes,
+            redact_paths=redact_paths,
+        )
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+    @app.command("resume-run")
+    def targets_resume_run(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help=(
+                "FORGE data directory to scan. Defaults to the configured data dir "
+                "plus repo-local legacy dashboard DBs."
+            ),
+        ),
+        limit: Optional[int] = typer.Option(
+            DEFAULT_RESUME_CANDIDATE_LIMIT,
+            "--limit",
+            help="Maximum candidate rows to inspect. Use 0 for none.",
+        ),
+        reason: Optional[str] = typer.Option(
+            None,
+            "--reason",
+            help="Only run a specific resume reason such as pending_recursive_work.",
+        ),
+        max_iter: Optional[int] = typer.Option(
+            None,
+            "--max-iter",
+            help="Override the resume command max iterations.",
+        ),
+        max_runtime_minutes: int = typer.Option(
+            DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
+            "--max-runtime-minutes",
+            help="Append this per-run soft runtime budget to every command.",
+        ),
+        batch_id: Optional[str] = typer.Option(
+            None,
+            "--batch-id",
+            help="Optional stable id for the resume batch ledger filename.",
+        ),
+        stop_on_failure: bool = typer.Option(
+            True,
+            "--stop-on-failure/--continue-on-failure",
+            help="Stop after the first failed child process by default.",
+        ),
+        max_parallel: int = typer.Option(
+            1,
+            "--max-parallel",
+            help="Maximum child resume processes to run at once. Default 1 preserves sequential execution.",
+        ),
+        dry_run: bool = typer.Option(
+            False,
+            "--dry-run",
+            help="Re-check and report the batch without writing a ledger or launching child processes.",
+        ),
+        redact_paths: bool = typer.Option(
+            False,
+            "--redact-paths",
+            help="Redact local paths in dry-run JSON output. Live resume-run blocks when set.",
+        ),
+        break_stale_lock: bool = typer.Option(
+            False,
+            "--break-stale-lock",
+            help="Remove an existing resume lock only when age/dead-PID checks classify it stale.",
+        ),
+        stale_lock_minutes: int = typer.Option(
+            DEFAULT_RESUME_LOCK_STALE_MINUTES,
+            "--stale-lock-minutes",
+            help="Age threshold used with --break-stale-lock.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON. Accepted for parity; output is JSON by default.",
+        ),
+    ) -> None:
+        """Execute ready resume candidates with a durable ledger."""
+        _ = json_output
+        payload = execute_target_resume_plan(
+            data_dir=data_dir,
+            limit=limit,
+            reason=reason,
+            max_iter=max_iter,
+            max_runtime_minutes=max_runtime_minutes,
+            batch_id=batch_id,
+            stop_on_failure=stop_on_failure,
+            max_parallel=max_parallel,
+            dry_run=dry_run,
+            redact_paths=redact_paths,
+            break_stale_lock=break_stale_lock,
+            stale_lock_minutes=stale_lock_minutes,
+        )
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))

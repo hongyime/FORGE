@@ -15,6 +15,26 @@ def _read(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
+def _read_env_example(relative_path: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in _read(relative_path).splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        values[key] = value
+    return values
+
+
+def _memory_mib(value: str) -> int:
+    normalized = value.strip().lower()
+    if normalized.endswith("m"):
+        return int(normalized[:-1])
+    if normalized.endswith("g"):
+        return int(normalized[:-1]) * 1024
+    return int(normalized) // (1024 * 1024)
+
+
 def _helm_binary() -> str | None:
     configured = os.environ.get("HELM_BIN", "").strip()
     if configured:
@@ -38,6 +58,8 @@ def test_runtime_dockerfile_matches_project_packaging() -> None:
     assert "requirements.lock" not in dockerfile
     assert "COPY pyproject.toml README.md ./" in dockerfile
     assert "COPY forge ./forge" in dockerfile
+    assert "COPY forge-autopilot.sh forge-autopilot.bat ./" in dockerfile
+    assert "chmod +x forge-autopilot.sh" in dockerfile
     assert 'python -m pip install ".[artifacts,graph]"' in dockerfile
     assert "USER forge" in dockerfile
     assert 'CMD ["forge", "--help"]' in dockerfile
@@ -56,13 +78,69 @@ def test_production_compose_uses_repo_root_runtime_build_and_hardened_services()
     assert "forge-api:" in compose
     assert "forge-webui:" in compose
     assert "forge-worker:" in compose
+    assert "forge-guarded-autostart:" in compose
     assert "postgres:" in compose
     assert "redis:" in compose
     assert "read_only: true" in compose
+    assert 'cpus: "${FORGE_CONTAINER_CPUS:-0.75}"' in compose
+    assert 'mem_limit: "${FORGE_CONTAINER_MEM_LIMIT:-768m}"' in compose
+    assert 'cpus: "${FORGE_POSTGRES_CPUS:-0.50}"' in compose
+    assert 'mem_limit: "${FORGE_POSTGRES_MEM_LIMIT:-512m}"' in compose
+    assert 'cpus: "${FORGE_REDIS_CPUS:-0.25}"' in compose
+    assert 'mem_limit: "${FORGE_REDIS_MEM_LIMIT:-128m}"' in compose
     assert "cap_drop:" in compose
     assert "no-new-privileges:true" in compose
     assert "127.0.0.1:${FORGE_WEB_PORT:-8080}:8080" in compose
     assert "127.0.0.1:${FORGE_API_PORT:-8000}:8000" in compose
+
+
+def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
+    compose = _read("docker/docker-compose.yml")
+
+    assert "forge-guarded-autostart:" in compose
+    assert 'profiles: ["autostart"]' in compose
+    assert "restart: unless-stopped" in compose
+    assert 'cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"' in compose
+    assert 'mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-1536m}"' in compose
+    assert "/bin/sh" in compose
+    assert "while true; do" in compose
+    assert 'sleep "$${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"' in compose
+    assert 'timeout --preserve-status "$${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}"' in compose
+    assert 'sleep "$${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"' in compose
+    assert "|| true" in compose
+    assert "automation" in compose
+    assert "cycle" in compose
+    assert "--autostart-config" in compose
+    assert "/app/imports/autostart.local.json" in compose
+    assert "--docker-probe-mode" in compose
+    assert "compose-dependency" in compose
+    assert "--apply" in compose
+    assert "--live" in compose
+    assert "--json" in compose
+    assert 'FORGE_ROE_ID: "${FORGE_ROE_ID:-}"' in compose
+    assert 'FORGE_AUTOSTART_STARTUP_DELAY_SECONDS: "${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"' in compose
+    assert 'FORGE_AUTOSTART_TIMEOUT_SECONDS: "${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}"' in compose
+    assert 'FORGE_AUTOSTART_EVERY_SECONDS: "${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"' in compose
+    assert "../imports:/app/imports:rw" in compose
+    assert "../reports:/app/reports:rw" in compose
+    assert "${FORGE_HOST_CONNECTOR_BIN_DIR:-../tools/bin}:/app/tools/bin:ro" in compose
+
+
+def test_low_memory_env_profile_keeps_autostart_stack_under_1024_mib() -> None:
+    env_values = _read_env_example("docker/low-memory.env.example")
+
+    forge_service_mib = _memory_mib(env_values["FORGE_CONTAINER_MEM_LIMIT"])
+    total_mib = (
+        forge_service_mib * 3
+        + _memory_mib(env_values["FORGE_POSTGRES_MEM_LIMIT"])
+        + _memory_mib(env_values["FORGE_REDIS_MEM_LIMIT"])
+        + _memory_mib(env_values["FORGE_AUTOSTART_MEM_LIMIT"])
+    )
+
+    assert env_values["FORGE_CONTAINER_CPUS"] == "0.25"
+    assert env_values["FORGE_AUTOSTART_CPUS"] == "0.10"
+    assert total_mib == 960
+    assert total_mib <= 1024
 
 
 def test_production_compose_matches_doctor_hardening_contract() -> None:
@@ -102,11 +180,19 @@ def test_dockerignore_excludes_local_state_and_secret_material() -> None:
         "/.forge_data",
         "/reports",
         "/downloads",
+        "/imports",
+        "/tools/bin",
         "*.db",
         "*.jsonl",
         "forge/reporting/webui/node_modules",
     ]:
         assert pattern in dockerignore
+
+
+def test_gitignore_keeps_local_tool_binaries_untracked_for_bind_mounts() -> None:
+    gitignore = _read(".gitignore")
+
+    assert "tools/bin/" in gitignore
 
 
 def test_reverse_proxy_examples_match_loopback_compose_ports_and_security_headers() -> None:
@@ -135,6 +221,15 @@ def test_systemd_unit_wraps_existing_hardened_compose_stack() -> None:
     assert "docker compose -f /opt/forge/docker/docker-compose.yml config --quiet" in unit
     assert "docker compose -f /opt/forge/docker/docker-compose.yml up -d --remove-orphans" in unit
     assert "docker compose -f /opt/forge/docker/docker-compose.yml down" in unit
+    assert "COMPOSE_PROFILES=autostart" in unit
+
+
+def test_readme_autostart_sample_matches_1024_mb_memory_gate() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert '"min_free_memory_mb": 1024' in readme
+    assert '"min_free_memory_mb": 2048' not in readme
+    assert "FORGE_AUTOSTART_MEM_LIMIT=1536m" in readme
 
 
 def test_helm_chart_pins_production_hardening_contract() -> None:

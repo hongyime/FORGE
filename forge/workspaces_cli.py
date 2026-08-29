@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -21,6 +22,10 @@ from forge.db.control import (
     upsert_membership,
     upsert_workspace,
     verify_control_audit_chain,
+)
+from forge.workspace_backfill import (
+    DEFAULT_WORKSPACE_BACKFILL_LIMIT,
+    backfill_workspace_memberships,
 )
 from forge.webui.rbac import ROLE_PERMISSIONS, permissions_for_roles
 
@@ -296,6 +301,51 @@ def register_workspace_commands(app: typer.Typer) -> None:
         console.print(table)
         status = "valid" if verification.get("valid") else "invalid"
         console.print(f"Hash chain: {status} checked={verification.get('checked', 0)}")
+
+    @app.command("backfill-memberships")
+    def backfill_memberships_command(
+        data_dir: Optional[str] = typer.Option(
+            None,
+            "--data-dir",
+            help=(
+                "FORGE data directory to scan. Defaults to the configured data dir "
+                "plus repo-local legacy dashboard DBs."
+            ),
+        ),
+        limit: Optional[int] = typer.Option(
+            DEFAULT_WORKSPACE_BACKFILL_LIMIT,
+            "--limit",
+            help="Maximum engagement DBs to inspect. Use 0 for none.",
+        ),
+        role: str = typer.Option(
+            "operator",
+            "--role",
+            help="Workspace role to seed for missing operator memberships.",
+        ),
+        apply: bool = typer.Option(
+            False,
+            "--apply",
+            help="Write missing local/control memberships and refresh control index rows.",
+        ),
+        json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+    ) -> None:
+        """Plan or seed missing workspace membership/index rows for legacy engagements."""
+        normalized_role = _role(role)
+        payload = backfill_workspace_memberships(
+            data_dir=None if data_dir is None else Path(data_dir),
+            limit=limit,
+            apply=apply,
+            role=normalized_role,
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, sort_keys=True))
+            return
+        mode = "APPLIED" if apply else "DRY RUN"
+        console.print(
+            f"[bold]{mode}[/bold] workspace backfill "
+            f"dbs={payload['scanned_db_count']}/{payload['db_count']} "
+            f"actions={payload['action_counts']}"
+        )
 
 
 def _workspace_id(value: str) -> str:

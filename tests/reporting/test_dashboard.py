@@ -15,6 +15,7 @@ from forge.monitoring.delivery import add_monitoring_alert_suppression, upsert_m
 from forge.remediation.workflow import upsert_monitoring_alert_remediation
 from forge.reporting.dashboard import (
     _asset_graph_fix_candidate_section_row,
+    _redact_dashboard_error,
     _relation_evidence_preview,
     _reportable_vulnerability_rows,
     generate_dashboard,
@@ -51,6 +52,53 @@ def test_relation_evidence_preview_surfaces_did_artifact_metadata_without_secret
     assert "source=https://id.acme.example/.well-known/did" in preview
     assert "never-render-this" not in preview
     assert "token" not in preview
+
+
+def test_dashboard_error_redaction_removes_terminal_help_noise() -> None:
+    raw = (
+        "osint harvest --help' for help.\n"
+        "\u250c\u2500 Error \u2500\u2500\u2500 Bad option --linkedin "
+        "scope_manifest=DO-NOT-LEAK token=SECRET"
+    )
+
+    cleaned = _redact_dashboard_error(raw, 200)
+
+    assert "Command failed before completion" in cleaned
+    assert "--help" not in cleaned
+    assert "\u250c" not in cleaned
+    assert "DO-NOT-LEAK" not in cleaned
+    assert "SECRET" not in cleaned
+
+
+def test_dashboard_error_redaction_removes_scope_manifest_paths_with_spaces() -> None:
+    raw = (
+        "failed scope_manifest=C:/Users/bryan/OneDrive/01 TOOLKITS/forgetoolkit/"
+        "target_imports/scope.json url=https://app.acme.example/admin"
+    )
+
+    cleaned = _redact_dashboard_error(raw, 240)
+
+    assert "scope_manifest=[redacted]" in cleaned
+    assert "TOOLKITS" not in cleaned
+    assert "scope.json" not in cleaned
+    assert "url=[redacted-url]" in cleaned
+
+
+def test_dashboard_error_redaction_handles_malformed_subdomain_help_text() -> None:
+    cleaned = _redact_dashboard_error(
+        "option on subdomains --help' for help. \u250c\u2500 Error invalid option",
+        200,
+    )
+
+    assert "Command failed before completion" in cleaned
+    assert "on subdomains --help" not in cleaned
+
+
+def test_dashboard_error_redaction_renames_abandoned_runs() -> None:
+    assert (
+        _redact_dashboard_error("abandoned before explicit completion")
+        == "interrupted before finalization"
+    )
 
 
 def test_asset_graph_fix_candidate_row_surfaces_permission_risk_factors() -> None:
@@ -563,7 +611,7 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
             VALUES
                 (1001, 'kill_chain', 'completed', 'acme.example', 'domain', 2, 3,
                  2, 1, 0, 0, NULL,
-                 '{"phase":"completed","roe_id":"ROE-ACME-2026-07","live_execution_policy":{"scope_gate":"engagement_scope_json_root_domains","roe_id":"ROE-ACME-2026-07","roe_present":true,"roe_missing":false,"live_probing_allowed":true,"tool_execution_allowed":true,"active_recon_allowed":false,"credential_validation_allowed":false,"destructive_actions_allowed":false,"post_exploitation_allowed":false,"requires_explicit_roe":false}}',
+                 '{"phase":"completed","roe_id":"ROE-ACME-2026-07","live_execution_policy":{"scope_gate":"engagement_scope_json_root_domains","roe_id":"ROE-ACME-2026-07","roe_present":true,"roe_missing":false,"scope_manifest_source":"C:/secret/scope.json","live_probing_allowed":true,"tool_execution_allowed":true,"active_recon_allowed":false,"credential_validation_allowed":false,"destructive_actions_allowed":false,"post_exploitation_allowed":false,"requires_explicit_roe":false}}',
                  '2026-07-09T09:00:00', '2026-07-09T09:44:12', '2026-07-09T09:44:12')
             """
         )
@@ -1049,12 +1097,20 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert detail_payload["sections"]["engagement_runs"][0]["Manifest"] == manifest_hash[:12]
     assert detail_payload["sections"]["engagement_runs"][0]["Manifest OK"] == "yes"
     assert detail_payload["sections"]["engagement_runs"][0]["ROE"] == "ROE-ACME-2026-07"
+    assert (
+        detail_payload["sections"]["engagement_runs"][0]["ROE Source"]
+        == "latest run metadata / scope manifest"
+    )
     assert detail_payload["sections"]["engagement_runs"][0]["ROE Missing"] == "no"
     assert detail_payload["sections"]["engagement_runs"][0]["Live"] == (
         "probe=yes tools=yes active=no creds=no"
     )
     assert detail_payload["sections"]["engagement_runs"][0]["Destructive"] == "no"
     assert detail_payload["sections"]["engagement_runs"][0]["Post-Ex"] == "no"
+    assert (
+        detail_payload["sections"]["engagement_runs"][0]["Policy Source"]
+        == "latest run metadata"
+    )
     assert not any(
         row["Action"] == "scheduled_task_scope_denied"
         for row in detail_payload["sections"]["audit_log"]
@@ -1195,6 +1251,77 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in detail_html
     assert '"scope_manifest":' not in detail_html
     assert manifest_hash[:12] in detail_html
+
+
+def test_generate_dashboard_surfaces_resume_candidate_review_without_manifest_path(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO engagement_runs
+                (engagement_id, run_kind, status, seed_value, seed_type, seed_count,
+                 max_iterations, current_iteration, resume_enabled, dry_run, attack_mode,
+                 error, metadata_json, started_at, completed_at, updated_at)
+            VALUES
+                (1001, 'kill_chain', 'failed', 'https://portal.acme.example/login',
+                 'url', 1, 1, 1, 1, 0, 0,
+                 'max iterations exhausted with pending recursive work: 4',
+                 '{"roe_id":"ROE-ACME-2026-07","scope_manifest":"C:/secret/scope.json","pending_counts":{"artifact_queue":4},"report_path":"reports/engagement_1001_kill_chain.md","api_token":"DO-NOT-LEAK"}',
+                 '2026-07-09T10:00:00', '2026-07-09T10:30:00', '2026-07-09T10:30:00')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    output_path = reports_dir / "dashboard.html"
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
+
+    site_root = reports_dir / "dashboard"
+    site_html = (site_root / "index.html").read_text(encoding="utf-8")
+    overview_payload = json.loads(
+        (site_root / "data" / "engagements.json").read_text(encoding="utf-8")
+    )
+    detail_payload = json.loads(
+        (
+            site_root
+            / "data"
+            / "engagements"
+            / "engagement-1001-acme-example.json"
+        ).read_text(encoding="utf-8")
+    )
+    serialized_overview = json.dumps(overview_payload, sort_keys=True)
+    serialized_detail = json.dumps(detail_payload, sort_keys=True)
+
+    assert "Resume Review" in site_html
+    assert "data-resume-review='1'" in site_html
+    assert "pending_recursive_work" in site_html
+    candidate = overview_payload["items"][0]["target_resume_candidate"]
+    assert candidate["reason"] == "pending_recursive_work"
+    assert candidate["status"] == "failed"
+    assert candidate["pending_work_total"] == 4
+    assert candidate["roe_present"] is True
+    assert candidate["scope_present"] is False
+    assert candidate["resume_ready"] is False
+    assert candidate["resume_blockers"] == ["scope_file_missing"]
+    assert "scope_manifest" not in serialized_overview
+    assert "C:/secret/scope.json" not in serialized_detail
+    assert "DO-NOT-LEAK" not in serialized_detail
+    rows = detail_payload["sections"]["target_resume_candidate"]
+    assert rows[0]["Reason"] == "pending_recursive_work"
+    assert rows[0]["Pending"] == "4"
+    assert rows[0]["Ready"] == "no"
+    assert rows[0]["Blockers"] == "scope_file_missing"
 
 
 def test_generate_dashboard_excludes_report_prefix_collisions(tmp_path: Path) -> None:

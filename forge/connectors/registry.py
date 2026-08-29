@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from forge.connectors.binaries import connector_binary_search_paths, resolve_connector_binary
 
 WhichResolver = Callable[[str], str | None]
 
@@ -46,6 +47,41 @@ _CONNECTOR_PLUGIN_DIR_ENV_VARS = (
     "FORGE_CONNECTOR_PLUGIN_DIR",
     "FORGE_CONNECTOR_PLUGIN_DIRS",
 )
+_LOCAL_BINARY_INSTALL_GUIDANCE: dict[str, dict[str, str]] = {
+    "detect-secrets": {
+        "installer": "pipx",
+        "command": "pipx install detect-secrets",
+        "notes": "Python local secret-baseline scanner.",
+    },
+    "gitleaks": {
+        "installer": "go",
+        "command": "go install github.com/zricethezav/gitleaks/v8@latest",
+        "notes": "Local secret scanner; alternatively install with winget id Gitleaks.Gitleaks.",
+    },
+    "katana": {
+        "installer": "go",
+        "command": "go install github.com/projectdiscovery/katana/cmd/katana@latest",
+        "notes": "ProjectDiscovery crawl-based URL discovery.",
+    },
+    "nuclei": {
+        "installer": "go",
+        "command": "go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
+        "notes": "ProjectDiscovery template-based exposure checks; pin templates before use.",
+    },
+    "subfinder": {
+        "installer": "go",
+        "command": "go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+        "notes": "ProjectDiscovery passive subdomain discovery.",
+    },
+    "trufflehog": {
+        "installer": "release",
+        "command": "python bootstrap.py setup",
+        "notes": (
+            "Local secret scanner; bootstrap downloads the official checksum-checked "
+            "TruffleHog release binary when a platform asset is available."
+        ),
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -180,6 +216,39 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         execution_paths=("forge connectors run",),
     ),
     ConnectorDefinition(
+        id="projectdiscovery_cloud",
+        label="ProjectDiscovery Cloud Export Import",
+        domain="discovery",
+        cost_profile="free_local",
+        safety="passive_offline",
+        description=(
+            "Offline ProjectDiscovery Cloud asset/finding/template export import; "
+            "live cloud sync remains operator-keyed and is not required for the baseline."
+        ),
+        capabilities=(
+            "cloud_export_import",
+            "asset_inventory_import",
+            "nuclei_finding_import",
+            "template_inventory",
+            "provider_provenance",
+        ),
+        outputs=("hosts", "services", "engagement_seeds", "asset_graph", "vulnerability_findings"),
+        input_formats=("projectdiscovery_cloud_json",),
+        execution_paths=("forge connectors import-discovery",),
+    ),
+    ConnectorDefinition(
+        id="burp_dast_xml",
+        label="Burp DAST XML Import",
+        domain="validation",
+        cost_profile="free_local",
+        safety="passive_offline",
+        description="Offline Burp Suite/JUnit XML import as scoped active-validation evidence.",
+        capabilities=("dast_artifact_import", "junit_xml_import", "proof_capture"),
+        outputs=("active_validation_jobs", "active_validation_runs"),
+        input_formats=("burp_issue_xml", "junit_xml"),
+        execution_paths=("forge connectors import-validation",),
+    ),
+    ConnectorDefinition(
         id="projectdiscovery_katana",
         label="ProjectDiscovery Katana",
         domain="discovery",
@@ -222,6 +291,30 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         execution_paths=("forge connectors import-discovery",),
     ),
     ConnectorDefinition(
+        id="asset_delta_import",
+        label="Asset Delta Artifact Import",
+        domain="discovery",
+        cost_profile="free_local",
+        safety="passive_offline",
+        description="Offline Censys/runZero-style asset delta import with scoped topology and fingerprint provenance.",
+        capabilities=("asset_delta_import", "fingerprint_depth", "topology_relationships", "report_ingest"),
+        outputs=("hosts", "services", "engagement_seeds", "asset_graph"),
+        input_formats=("asset_delta_json", "asset_delta_csv"),
+        execution_paths=("forge connectors import-discovery",),
+    ),
+    ConnectorDefinition(
+        id="runzero_asset_export",
+        label="runZero Asset Export Import",
+        domain="discovery",
+        cost_profile="free_local",
+        safety="passive_offline",
+        description="Offline runZero-style asset export import without API credentials.",
+        capabilities=("asset_inventory_import", "service_inventory", "fingerprint_depth", "topology_relationships"),
+        outputs=("hosts", "services", "engagement_seeds", "asset_graph"),
+        input_formats=("runzero_asset_json", "runzero_asset_csv"),
+        execution_paths=("forge connectors import-discovery",),
+    ),
+    ConnectorDefinition(
         id="urlscan_search",
         label="urlscan Search Import",
         domain="discovery",
@@ -232,6 +325,66 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         outputs=("hosts", "services", "crawl_results", "engagement_seeds", "asset_graph"),
         required_gates=("provider_rate_limit",),
         execution_paths=("forge connectors import-discovery",),
+    ),
+    ConnectorDefinition(
+        id="abusech_threatfox",
+        label="abuse.ch ThreatFox",
+        domain="threat_intelligence",
+        cost_profile="free_no_key",
+        safety="passive_api",
+        description="Cataloged passive IOC enrichment for domains, IPs, URLs, hashes, malware families, and provenance.",
+        capabilities=("ioc_enrichment", "malware_family_enrichment", "provider_provenance"),
+        outputs=("cti_observations", "indicator_confidence", "asset_graph"),
+        required_gates=("provider_rate_limit", "scope_manifest_seed_promotion"),
+        execution_paths=("forge connectors import-cti",),
+    ),
+    ConnectorDefinition(
+        id="abusech_urlhaus",
+        label="abuse.ch URLHaus",
+        domain="threat_intelligence",
+        cost_profile="free_no_key",
+        safety="passive_api",
+        description="Cataloged passive malicious URL/domain enrichment with normalized provenance and confidence.",
+        capabilities=("malicious_url_enrichment", "domain_enrichment", "provider_provenance"),
+        outputs=("cti_observations", "indicator_confidence", "reports"),
+        required_gates=("provider_rate_limit", "scope_manifest_seed_promotion"),
+        execution_paths=("forge connectors import-cti",),
+    ),
+    ConnectorDefinition(
+        id="stix_taxii_import",
+        label="STIX/TAXII Import",
+        domain="threat_intelligence",
+        cost_profile="free_local",
+        safety="passive_offline",
+        description="Cataloged STIX bundle normalization and explicit TAXII import planning; polling is disabled until configured.",
+        capabilities=("stix_import", "tlp_preservation", "source_reliability", "provider_provenance"),
+        outputs=("cti_observations", "stix_bundle", "taxii_manifest"),
+        input_formats=("stix_bundle", "taxii_manifest"),
+        execution_paths=("forge connectors import-cti",),
+    ),
+    ConnectorDefinition(
+        id="misp_event_import",
+        label="MISP Event Import",
+        domain="threat_intelligence",
+        cost_profile="free_local",
+        safety="passive_offline",
+        description="Offline MISP event and attribute normalization with sanitized provenance.",
+        capabilities=("misp_event_import", "ioc_enrichment", "tlp_preservation", "provider_provenance"),
+        outputs=("cti_observations", "misp_event", "indicator_confidence"),
+        input_formats=("misp_event_json",),
+        execution_paths=("forge connectors import-cti",),
+    ),
+    ConnectorDefinition(
+        id="supabase_table_import",
+        label="Supabase Table Export Import",
+        domain="threat_intelligence",
+        cost_profile="free_local",
+        safety="passive_offline",
+        description="Offline Supabase table export normalization for generic target/indicator rows.",
+        capabilities=("table_export_import", "target_normalization", "provider_provenance"),
+        outputs=("cti_observations", "indicator_confidence", "engagement_seeds"),
+        input_formats=("supabase_table_json", "supabase_table_csv"),
+        execution_paths=("forge connectors import-cti",),
     ),
     ConnectorDefinition(
         id="hibp_pwned_passwords",
@@ -582,7 +735,7 @@ def connector_plugin_manifest_statuses(
 def connector_statuses(
     *,
     env: Mapping[str, str] | None = None,
-    which: WhichResolver = shutil.which,
+    which: WhichResolver | None = None,
     domain: str = "",
     include_paid: bool = False,
     stored_secrets: Mapping[str, Collection[str]] | None = None,
@@ -590,6 +743,7 @@ def connector_statuses(
     plugin_dirs: Sequence[str | Path] = (),
 ) -> list[dict[str, Any]]:
     environ = env if env is not None else os.environ
+    resolver = which or (lambda name: resolve_connector_binary(name, env=environ))
     secret_map = stored_secrets or {}
     secret_status_map = stored_secret_statuses or {}
     domain_filter = normalize_connector_domain(domain, plugin_dirs=plugin_dirs)
@@ -602,7 +756,7 @@ def connector_statuses(
         rows.append(
             connector.to_dict(
                 env=environ,
-                which=which,
+                which=resolver,
                 stored_secret_names=(
                     set(secret_map.get(connector.id, ()))
                     | set(secret_status_map.get(connector.id, {}))
@@ -662,6 +816,224 @@ def connector_summary(statuses: list[dict[str, Any]] | None = None) -> dict[str,
         "planned_fail_closed_count": execution_counts.get("planned_fail_closed", 0),
         "secret_material_policy": "Connector readiness reports env var names only; secret values are never returned.",
     }
+
+
+def connector_install_plan(
+    statuses: list[dict[str, Any]] | None = None,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Return a read-only local binary install plan; commands are not executed."""
+    environ = env if env is not None else os.environ
+    rows = statuses if statuses is not None else connector_statuses(env=environ)
+    by_binary: dict[str, set[str]] = {}
+    for row in rows:
+        for binary in row.get("missing_binaries", []):
+            name = str(binary or "").strip()
+            if not name:
+                continue
+            if resolve_connector_binary(name, env=environ):
+                continue
+            by_binary.setdefault(name, set()).add(str(row.get("id") or "unknown"))
+
+    items: list[dict[str, Any]] = []
+    for binary in sorted(by_binary):
+        guidance = _LOCAL_BINARY_INSTALL_GUIDANCE.get(binary, {})
+        items.append(
+            {
+                "binary": binary,
+                "connector_ids": sorted(by_binary[binary]),
+                "installer": guidance.get("installer", "manual"),
+                "command": guidance.get("command", ""),
+                "notes": guidance.get(
+                    "notes",
+                    "Install this binary with your OS package manager and rerun doctor.",
+                ),
+            }
+        )
+    return {
+        "schema_version": "forge.connector_install_plan.v1",
+        "execution_policy": "plan_only_no_commands_executed",
+        "missing_binary_count": len(items),
+        "total_count": len(items),
+        "selected_count": len(items),
+        "omitted_count": 0,
+        "binary_search_paths": connector_binary_search_paths(env=environ),
+        "items": items,
+    }
+
+
+def connector_run_plan(
+    statuses: list[dict[str, Any]] | None = None,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Return a read-only free-first connector run plan; commands are not executed."""
+    environ = env if env is not None else os.environ
+    rows = statuses if statuses is not None else connector_statuses(env=environ)
+    runnable = [
+        row
+        for row in rows
+        if str(row.get("cost_profile") or "") in {"free_local", "free_no_key", "free_tier_key"}
+        and str(row.get("readiness") or "") in {"available", "configured"}
+        and bool(row.get("runner_supported"))
+    ]
+    items: list[dict[str, Any]] = []
+    for row in sorted(runnable, key=lambda item: str(item.get("id") or "")):
+        connector_id = str(row.get("id") or "").strip()
+        execution_paths = [
+            str(path).strip()
+            for path in row.get("execution_paths", [])
+            if str(path).strip()
+        ]
+        command_template = _connector_run_command_template(row)
+        notes = "Replace placeholders before running; this plan does not execute connectors."
+        if str(row.get("id") or "") == "artifact_passive_parsers":
+            notes = (
+                "Place local artifacts under data/artifacts, data/evidence, data/mobile, "
+                "or data/uploads before running; this plan does not execute connectors."
+            )
+        items.append(
+            {
+                "connector_id": connector_id,
+                "domain": str(row.get("domain") or ""),
+                "cost_profile": str(row.get("cost_profile") or ""),
+                "readiness": str(row.get("readiness") or ""),
+                "execution_paths": execution_paths,
+                "command_template": command_template,
+                "requires_engagement": "--engagement" in command_template,
+                "requires_target": "--target" in command_template or "SEED" in command_template,
+                "notes": notes,
+            }
+        )
+    return {
+        "schema_version": "forge.connector_run_plan.v1",
+        "execution_policy": "plan_only_no_commands_executed",
+        "total_count": len(rows),
+        "selected_count": len(items),
+        "omitted_count": max(0, len(rows) - len(items)),
+        "runnable_count": len(items),
+        "items": items,
+        "secret_material_policy": "Connector run plans report connector IDs and placeholders only; secret values are never returned.",
+    }
+
+
+def _connector_run_command_template(row: Mapping[str, Any]) -> list[str]:
+    connector_id = str(row.get("id") or "ID").strip() or "ID"
+    execution_paths = [
+        str(path).strip()
+        for path in row.get("execution_paths", [])
+        if str(path).strip()
+    ]
+    primary = execution_paths[0] if execution_paths else "forge connectors run"
+    command = primary.split()
+    if primary == "forge connectors run":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--connector",
+                connector_id,
+                "--target",
+                "DOMAIN_OR_URL",
+                "--dry-run",
+            ]
+        )
+    elif primary == "forge connectors import-cti":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--connector",
+                connector_id,
+                "--report-file",
+                "PATH_TO_OFFLINE_EXPORT",
+                "--dry-run",
+                "--json",
+            ]
+        )
+    elif primary == "forge connectors import-discovery":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--connector",
+                connector_id,
+                "--report-file",
+                "PATH_TO_DISCOVERY_EXPORT",
+                "--target",
+                "DOMAIN_OR_URL",
+                "--json",
+            ]
+        )
+    elif primary == "forge connectors import-validation":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--connector",
+                connector_id,
+                "--report-file",
+                "PATH_TO_BURP_OR_JUNIT_XML",
+                "--target",
+                "https://DOMAIN_OR_URL/",
+                "--dry-run",
+                "--json",
+            ]
+        )
+    elif primary == "forge connectors run-secrets":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--connector",
+                connector_id,
+                "--source-path",
+                "PATH_TO_REPOSITORY",
+                "--domain",
+                "DOMAIN",
+                "--dry-run",
+                "--json",
+            ]
+        )
+    elif primary == "forge connectors run-identity":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--connector",
+                connector_id,
+                "--domain",
+                "DOMAIN",
+                "--dry-run",
+                "--json",
+            ]
+        )
+    elif primary == "forge remediation sync-tickets":
+        command.extend(["--data-dir", "FORGE_DATA_DIR", "--json"])
+    elif primary == "forge standards import-stix":
+        command.extend(
+            [
+                "--engagement",
+                "N",
+                "--bundle-file",
+                "PATH_TO_STIX_BUNDLE",
+                "--dry-run",
+                "--json",
+            ]
+        )
+    elif primary == "forge kill-chain artifact intake":
+        command = [
+            "forge",
+            "kill-chain",
+            "SEED",
+            "--engagement",
+            "N",
+            "--dry-run",
+        ]
+    else:
+        command.extend(["--connector", connector_id])
+    return command
 
 
 def _load_connector_plugin_manifest(

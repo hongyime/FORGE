@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import platform
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -20,20 +21,24 @@ from rich.console import Console
 from rich.table import Table
 
 from forge.config import ForgeConfig
+from forge.connectors.binaries import resolve_connector_binary
 from forge.connectors.registry import (
     connector_plugin_dirs,
     connector_plugin_manifest_statuses,
+    connector_run_plan,
     connector_statuses,
     connector_summary,
 )
-from forge.connectors.secrets import connector_secret_readiness
+from forge.connectors.secrets import connector_secret_key_plan, connector_secret_readiness
 from forge.db.control import connect_control_db, verify_control_audit_chain
 from forge.db.direct_connect import direct_connect
 from forge.db.schema import SCHEMA_VERSION
 from forge.engagement_ids import numeric_engagement_db_files
 from forge.graph.assets import list_asset_graph
 from forge.monitoring.delivery import count_unrouted_monitoring_alerts
+from forge.monitoring.runner import monitoring_due_plan_for_data_dir
 from forge.remediation.workflow import remediation_review_queue
+from forge.utils.intel import provider_catalog_policy_summary
 
 
 @dataclass(frozen=True)
@@ -51,6 +56,8 @@ WhichResolver = Callable[[str], str | None]
 DiscoveryRunner = Callable[[float], Any]
 ScheduledTaskQuery = Callable[[str, float], dict[str, str]]
 
+_SCHEDULED_TASK_QUERY_TIMEOUT_S = 3.0
+
 
 _STATUS_STYLE = {
     "OK": "green",
@@ -62,6 +69,10 @@ _STATUS_STYLE = {
 }
 
 _ATTENTION_STATUSES = {"OPTIONAL", "WARN", "MISSING", "ERROR"}
+
+
+def _connector_which_resolver(which: WhichResolver, env: Mapping[str, str]) -> WhichResolver:
+    return (lambda name: resolve_connector_binary(name, env=env)) if which is shutil.which else which
 
 _CORE_BINARIES: tuple[tuple[str, str], ...] = (
     ("git", "repo evidence, hooks, and optional GitHub workflows"),
@@ -113,6 +124,7 @@ _LLM_API_ENV_OPTIONS: tuple[tuple[str, ...], ...] = (
     ("GEMINI_API_KEY",),
     ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"),
 )
+_OPENROUTER_ENV_OPTION: tuple[str, ...] = ("OPENROUTER_API_KEY",)
 
 _BINARY_REMEDIATION: dict[str, str] = {
     "git": "Install Git and ensure `git` is on PATH.",
@@ -123,7 +135,12 @@ _BINARY_REMEDIATION: dict[str, str] = {
     "nuclei": "Install with `go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest` and pin templates.",
     "katana": "Install with `go install github.com/projectdiscovery/katana/cmd/katana@latest`.",
     "gitleaks": "Install Gitleaks and run `gitleaks detect --source . --redact --exit-code 1`.",
-    "trufflehog": "Install with `go install github.com/trufflesecurity/trufflehog/v3@latest`.",
+    "trufflehog": (
+        "Run `python bootstrap.py setup` to install the checksum-checked "
+        "TruffleHog release binary, or place a TruffleHog binary on PATH/"
+        "FORGE_CONNECTOR_BIN_DIRS; `forge connectors install-plan --json` "
+        "shows the current search paths."
+    ),
     "detect-secrets": "Install with `pipx install detect-secrets` or your Python tool manager.",
     "ollama": "Install Ollama and start a local model server, or use another discovered LLM backend.",
 }
@@ -289,11 +306,13 @@ def collect_doctor_checks(
         checks.append(_remediation_ticket_events_check(cfg.data_dir))
         checks.append(_remediation_review_queue_check(cfg.data_dir))
 
+    connector_which = _connector_which_resolver(which, environ)
     checks.extend(_binary_checks("Binary", _CORE_BINARIES, which))
-    checks.extend(_binary_checks("ProjectDiscovery", _PROJECT_DISCOVERY_BINARIES, which))
-    checks.extend(_binary_checks("Secrets", _SECRET_BINARIES, which))
+    checks.extend(_binary_checks("ProjectDiscovery", _PROJECT_DISCOVERY_BINARIES, connector_which))
+    checks.extend(_binary_checks("Secrets", _SECRET_BINARIES, connector_which))
     checks.extend(_binary_checks("LLM CLI", _LLM_BINARIES, which))
     checks.append(_connector_catalog_check(environ, which, cfg.data_dir if cfg is not None else None))
+    checks.append(_cti_osint_policy_check())
     checks.append(
         _connector_action_plan_check(
             environ,
@@ -301,7 +320,13 @@ def collect_doctor_checks(
             cfg.data_dir if cfg is not None else None,
         )
     )
-    checks.append(_connector_secret_store_check(environ, cfg.data_dir if cfg is not None else None))
+    checks.append(
+        _connector_secret_store_check(
+            environ,
+            cfg.data_dir if cfg is not None else None,
+            detect_persistent_key=env is None,
+        )
+    )
     checks.extend(_external_provider_checks(environ))
     checks.append(_paid_backend_check(environ))
     checks.append(_active_validation_check(environ))
@@ -338,13 +363,19 @@ def doctor_payload(checks: Sequence[DoctorCheck]) -> dict[str, Any]:
     for check in checks:
         status_counts[check.status] = status_counts.get(check.status, 0) + 1
     action_plan = [
-        dict(item)
+        _doctor_action_payload(item)
         for check in checks
         for item in check.action_items
         if isinstance(item, Mapping)
     ]
     return {
         "schema": "forge.doctor.v1",
+        "schema_version": "forge.doctor.v1",
+        "execution_policy": "read_only_environment_readiness_no_commands_executed",
+        "status": _doctor_status_label(status_counts),
+        "total_count": len(checks),
+        "selected_count": len(checks),
+        "omitted_count": 0,
         "summary": {
             "check_count": len(checks),
             "status_counts": dict(sorted(status_counts.items())),
@@ -354,22 +385,143 @@ def doctor_payload(checks: Sequence[DoctorCheck]) -> dict[str, Any]:
             "action_count": len(action_plan),
         },
         "action_plan": action_plan,
-        "checks": [
-            {
-                "component": check.component,
-                "status": check.status,
-                "details": check.details,
-                "remediation": check.remediation,
-                "action_items": [dict(item) for item in check.action_items],
-            }
-            for check in checks
-        ],
+        "checks": [_doctor_check_payload(check) for check in checks],
         "secret_material_policy": "Doctor reports env var names and paths only; secret values are never printed.",
     }
 
 
 def doctor_payload_json(checks: Sequence[DoctorCheck]) -> str:
     return json.dumps(doctor_payload(checks), sort_keys=True)
+
+
+def _doctor_status_label(status_counts: Mapping[str, int]) -> str:
+    if int(status_counts.get("ERROR") or 0) > 0:
+        return "error"
+    if any(int(status_counts.get(status) or 0) > 0 for status in _ATTENTION_STATUSES):
+        return "attention"
+    return "ready"
+
+
+def _doctor_check_payload(check: DoctorCheck) -> dict[str, Any]:
+    action_items = [
+        _doctor_action_payload(item)
+        for item in check.action_items
+        if isinstance(item, Mapping)
+    ]
+    return {
+        "id": _doctor_check_id(check.component),
+        "component": check.component,
+        "status": check.status,
+        "message": check.details,
+        "details": check.details,
+        "remediation": check.remediation,
+        "next_action": _doctor_check_next_action(action_items, check.remediation),
+        "next_actions": [
+            str(item.get("command") or "")
+            for item in action_items
+            if str(item.get("command") or "")
+        ],
+        "action_items": action_items,
+    }
+
+
+def _doctor_check_id(component: str) -> str:
+    return (
+        component.strip()
+        .lower()
+        .replace(":", "")
+        .replace("/", "_")
+        .replace(" ", "_")
+        .replace("-", "_")
+    )
+
+
+def _doctor_check_next_action(
+    action_items: Sequence[Mapping[str, Any]],
+    remediation: str,
+) -> str:
+    for item in action_items:
+        command = str(item.get("command") or "")
+        if command:
+            return command
+    return remediation
+
+
+_DOCTOR_ACTION_METADATA: dict[str, dict[str, str]] = {
+    "validate_plugin_manifests": {
+        "execution_policy": "local_manifest_validation_no_plugin_code_execution",
+    },
+    "install_free_binaries": {
+        "execution_policy": "plan_only_no_commands_executed",
+    },
+    "run_free_connectors": {
+        "execution_policy": "plan_only_no_connectors_executed",
+    },
+    "configure_optional_keys": {
+        "execution_policy": "operator_initiated_secret_setup_value_env_only",
+    },
+    "review_catalog_only": {
+        "execution_policy": "data_only_catalog_no_provider_execution",
+    },
+    "review_cti_osint_policy": {
+        "execution_policy": "data_only_catalog_no_provider_execution",
+    },
+    "keep_active_validation_fail_closed": {
+        "execution_policy": "operator_decision_no_commands_executed",
+    },
+    "review_paid_adapters": {
+        "execution_policy": "data_only_catalog_paid_hidden_no_provider_execution",
+    },
+    "review_due_monitoring": {
+        "execution_policy": "plan_only_no_monitoring_executed",
+    },
+    "dry_run_capped_due_monitoring": {
+        "execution_policy": "dry_run_no_monitoring_executed",
+    },
+    "run_capped_due_monitoring": {
+        "execution_policy": "executes_due_monitoring_policies",
+    },
+    "review_paid_llm_backends": {
+        "execution_policy": "operator_decision_no_commands_executed",
+        "total_count": "1",
+        "selected_count": "0",
+        "omitted_count": "1",
+    },
+    "enable_live_validation_only_after_roe": {
+        "execution_policy": "dry_run_or_methods_review_no_live_validation",
+        "total_count": "1",
+        "selected_count": "1",
+        "omitted_count": "0",
+    },
+    "run_live_provider_probes_if_intended": {
+        "execution_policy": "operator_initiated_live_probe_no_default_execution",
+        "total_count": "1",
+        "selected_count": "0",
+        "omitted_count": "1",
+    },
+}
+
+
+def _doctor_action_payload(item: Mapping[str, Any]) -> dict[str, Any]:
+    payload = dict(item)
+    action_id = str(payload.get("id") or "")
+    for key, value in _DOCTOR_ACTION_METADATA.get(action_id, {}).items():
+        payload.setdefault(key, value)
+    if "command_args" not in payload:
+        payload["command_args"] = _doctor_command_args(payload.get("command"))
+    return payload
+
+
+def _doctor_command_args(command: Any) -> list[str]:
+    text = str(command or "").strip()
+    if not text or text.startswith("$") or text.lower().startswith("set "):
+        return []
+    if not text.startswith("forge "):
+        return []
+    try:
+        return shlex.split(text, posix=False)
+    except ValueError:
+        return []
 
 
 def run_doctor(
@@ -408,6 +560,30 @@ def _config_checks(cfg: ForgeConfig) -> list[DoctorCheck]:
                 if cfg.offline_strict
                 else "disabled; passive providers may use network when commands run"
             ),
+            (
+                ""
+                if cfg.offline_strict
+                else (
+                    "Set FORGE_OFFLINE_STRICT=1 for lab/offline runs that must fail "
+                    "closed on outbound sockets; leave it unset only when passive "
+                    "network providers are intentionally allowed."
+                )
+            ),
+            ()
+            if cfg.offline_strict
+            else (
+                {
+                    "id": "review_offline_strict",
+                    "priority": "20",
+                    "status": "review",
+                    "summary": "decide whether passive provider network access should be fail-closed",
+                    "command": "set FORGE_OFFLINE_STRICT=1",
+                    "execution_policy": "operator_decision_no_commands_executed",
+                    "total_count": "1",
+                    "selected_count": "0",
+                    "omitted_count": "1",
+                },
+            ),
         ),
         DoctorCheck(
             "Safe Mode",
@@ -415,7 +591,35 @@ def _config_checks(cfg: ForgeConfig) -> list[DoctorCheck]:
             (
                 "legacy high-risk modules disabled"
                 if cfg.safe_mode
-                else "offensive legacy modules enabled; prefer FORGE_SAFE_MODE=1 for ASM"
+                else (
+                    "full mode active: legacy Phase 3/5 modules are importable; "
+                    "set FORGE_SAFE_MODE=1 for safe/core or production ASM"
+                )
+            ),
+            (
+                ""
+                if cfg.safe_mode
+                else (
+                    "Keep FORGE_SAFE_MODE=0 only when legacy offensive modules are "
+                    "intentionally in scope with written ROE."
+                )
+            ),
+            ()
+            if cfg.safe_mode
+            else (
+                {
+                    "id": "review_safe_mode",
+                    "priority": "21",
+                    "status": "attention",
+                    "summary": (
+                        "decide whether legacy high-risk modules should remain importable"
+                    ),
+                    "command": "set FORGE_SAFE_MODE=1",
+                    "execution_policy": "operator_decision_no_commands_executed",
+                    "total_count": "1",
+                    "selected_count": "0",
+                    "omitted_count": "1",
+                },
             ),
         ),
     ]
@@ -505,7 +709,7 @@ def _web_auth_checks(cfg: ForgeConfig) -> list[DoctorCheck]:
 
 
 def _workspace_access_check(data_dir: Path) -> DoctorCheck:
-    db_paths = numeric_engagement_db_files(data_dir)
+    db_paths = numeric_engagement_db_files(data_dir, include_legacy=True)
     if not db_paths:
         return DoctorCheck(
             "Workspace Access",
@@ -625,19 +829,24 @@ def _workspace_access_check(data_dir: Path) -> DoctorCheck:
         _sample_problem("unusable index", unusable_index),
     ]
     problems = [part for part in problem_parts if part]
+    legacy_note = (
+        "; includes repo-local legacy dashboard DBs"
+        if any(_is_legacy_engagement_db(path, data_dir) for path in db_paths)
+        else ""
+    )
     base = (
         f"{engagement_count} engagement(s) across {checked}/{len(db_paths)} DB(s); "
-        f"{indexed_count} usable control index row(s){suffix}"
+        f"{indexed_count} usable control index row(s){suffix}{legacy_note}"
     )
     if problems:
         return DoctorCheck(
             "Workspace Access",
             "WARN",
-            _clip(f"{base}; " + "; ".join(problems), limit=260),
+            _clip(f"{base}; " + "; ".join(problems), limit=420),
             (
-                "Backfill intended operator rows in workspace_memberships for both the "
-                "engagement DB and control DB, then run a web engagement list or the next "
-                "Forge engagement command to refresh engagement_index."
+                "Run `forge workspaces backfill-memberships --json` to plan missing "
+                "operator workspace rows and control index repairs, then rerun with "
+                "`--apply` when the plan matches the intended operator access."
             ),
         )
     return DoctorCheck(
@@ -645,6 +854,14 @@ def _workspace_access_check(data_dir: Path) -> DoctorCheck:
         "OK",
         f"{base}; operator workspace memberships ready",
     )
+
+
+def _is_legacy_engagement_db(db_path: Path, data_dir: Path) -> bool:
+    try:
+        db_path.resolve().relative_to((data_dir / "engagements").resolve())
+    except ValueError:
+        return True
+    return False
 
 
 def _control_audit_check(data_dir: Path) -> DoctorCheck:
@@ -839,7 +1056,23 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
             _clip(f"{checked - len(stale)}/{len(db_paths)} ready; " + "; ".join(stale), limit=260),
             "Open stale engagement DBs with Forge so migrations add monitoring schedule tables.",
         )
-    if policy_count == 0 and engagement_count > 0:
+
+    due_plan: dict[str, Any] | None = None
+    due_plan_error = ""
+    try:
+        due_plan = monitoring_due_plan_for_data_dir(
+            data_dir,
+            now=now,
+            limit=0,
+            include_empty_db_results=False,
+        )
+    except Exception as exc:  # noqa: BLE001 - doctor must keep reporting sampled readiness.
+        due_plan_error = _clip(str(exc), limit=80)
+    total_due_count = due_count
+    if due_plan:
+        total_due_count = int(due_plan.get("due_policy_count") or 0)
+
+    if policy_count == 0 and engagement_count > 0 and not total_due_count:
         return DoctorCheck(
             "Monitoring Schedules",
             "OPTIONAL",
@@ -849,9 +1082,41 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
             ),
             (
                 "Create a monitoring policy through the API/UI, then run "
-                "`forge monitoring run-due` from cron or `forge monitoring worker`."
+                "`forge monitoring run-due --limit 50` from cron or "
+                "`forge monitoring worker --run-limit 50`."
             ),
         )
+
+    due_plan_details: list[str] = []
+    if due_plan:
+        due_plan_db_count = int(due_plan.get("db_count") or 0)
+        due_plan_engagement_count = int(due_plan.get("engagement_count") or 0)
+        due_plan_errors = due_plan.get("errors") if isinstance(due_plan.get("errors"), list) else []
+        if len(db_paths) > 50 or total_due_count != due_count:
+            due_plan_details.append(
+                f"due-plan total {total_due_count} due/overdue across "
+                f"{due_plan_engagement_count} engagement(s) in {due_plan_db_count} DB(s)"
+            )
+        if total_due_count:
+            stale_backlog = (
+                due_plan.get("stale_backlog")
+                if isinstance(due_plan.get("stale_backlog"), dict)
+                else {}
+            )
+            if stale_backlog.get("enabled"):
+                due_plan_details.append(
+                    "oldest due backlog "
+                    f"{stale_backlog.get('oldest_overdue_days', 0)} day(s) overdue"
+                )
+            estimated_batches = int(due_plan.get("estimated_capped_invocations") or 0)
+            if estimated_batches:
+                due_plan_details.append(
+                    f"estimated capped run-due batch(es): {estimated_batches}"
+                )
+        if due_plan_errors:
+            due_plan_details.append(f"{len(due_plan_errors)} due-plan error(s)")
+    elif due_plan_error:
+        due_plan_details.append(f"due-plan total unavailable: {due_plan_error}")
 
     details = (
         f"{enabled_count}/{policy_count} enabled policy(ies); {due_count} due/overdue; "
@@ -861,6 +1126,8 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
         f"{active_suppression_count} active suppression(s); "
         f"{no_baseline_count} enabled policy(ies) without a baseline{suffix}"
     )
+    if due_plan_details:
+        details = f"{details}; " + "; ".join(due_plan_details)
     if unrouted_alert_count:
         return DoctorCheck(
             "Monitoring Schedules",
@@ -875,12 +1142,59 @@ def _monitoring_schedule_check(data_dir: Path) -> DoctorCheck:
             details,
             "Run `forge monitoring deliver-alerts --json` and inspect failed delivery rows.",
         )
-    if due_count:
+    if total_due_count:
+        capped_selected_count = min(50, max(0, int(total_due_count)))
+        capped_omitted_count = max(0, int(total_due_count) - capped_selected_count)
+        estimated_batches = (
+            int(due_plan.get("estimated_capped_invocations") or 0)
+            if due_plan
+            else (1 if total_due_count else 0)
+        )
         return DoctorCheck(
             "Monitoring Schedules",
             "WARN",
             details,
-            "Run `forge monitoring run-due --json` from cron or start `forge monitoring worker`.",
+            (
+                "Review due work first with `forge monitoring due-plan --json`, rehearse with "
+                "`forge monitoring run-due --dry-run --limit 50 --json`, then run "
+                "`forge monitoring run-due --limit 50 --json` from cron or start "
+                "`forge monitoring worker --run-limit 50`; use `--all` only for an intentional full-backlog apply."
+            ),
+            (
+                {
+                    "id": "review_due_monitoring",
+                    "priority": "45",
+                    "status": "attention",
+                    "summary": f"{total_due_count} due/overdue monitoring policy(ies)",
+                    "command": "forge monitoring due-plan --json",
+                    "total_count": str(total_due_count),
+                    "selected_count": str(total_due_count),
+                    "omitted_count": "0",
+                    "estimated_batch_count": str(estimated_batches),
+                },
+                {
+                    "id": "dry_run_capped_due_monitoring",
+                    "priority": "46",
+                    "status": "ready",
+                    "summary": "rehearse bounded due monitoring work without writes",
+                    "command": "forge monitoring run-due --dry-run --limit 50 --json",
+                    "total_count": str(total_due_count),
+                    "selected_count": str(capped_selected_count),
+                    "omitted_count": str(capped_omitted_count),
+                    "estimated_batch_count": str(estimated_batches),
+                },
+                {
+                    "id": "run_capped_due_monitoring",
+                    "priority": "47",
+                    "status": "ready",
+                    "summary": "apply reviewed due monitoring work in bounded batches",
+                    "command": "forge monitoring run-due --limit 50 --json",
+                    "total_count": str(total_due_count),
+                    "selected_count": str(capped_selected_count),
+                    "omitted_count": str(capped_omitted_count),
+                    "estimated_batch_count": str(estimated_batches),
+                },
+            ),
         )
     return DoctorCheck("Monitoring Schedules", "OK", details)
 
@@ -917,7 +1231,7 @@ def _target_import_bridge_check(
     scripts_ready = all(script_status.values())
 
     task_query = scheduled_task_query or _default_scheduled_task_query
-    task_info = task_query(task_name, 1.5)
+    task_info = task_query(task_name, _SCHEDULED_TASK_QUERY_TIMEOUT_S)
     task_status = str(task_info.get("status") or "unavailable").lower()
     task_found = task_status in {"ready", "running", "queued", "disabled"}
     bridge_configured = (
@@ -952,6 +1266,17 @@ def _target_import_bridge_check(
             "OFF",
             details,
             "Set FORGE_TPH_TARGET_IMPORT_ENABLED=1 after configuring theprawnhunter scheduled imports.",
+        )
+    if task_status == "disabled" and not explicitly_enabled:
+        return DoctorCheck(
+            "TPH Target Import Bridge",
+            "OFF",
+            details,
+            (
+                "The scheduled target-import task is installed but paused. Set "
+                "FORGE_TPH_TARGET_IMPORT_ENABLED=1 and enable/reinstall the task when "
+                "automatic imports should run."
+            ),
         )
     if not scripts_ready:
         return DoctorCheck(
@@ -1061,7 +1386,7 @@ def _remediation_ticket_status_import_check(
         )
 
     task_query = scheduled_task_query or _default_scheduled_task_query
-    task_info = task_query(task_name, 1.5)
+    task_info = task_query(task_name, _SCHEDULED_TASK_QUERY_TIMEOUT_S)
     task_status = str(task_info.get("status") or "unavailable").lower()
     details = (
         f"scripts task_runner={script_status['task_runner']} installer={script_status['installer']}; "
@@ -1718,6 +2043,7 @@ def _connector_catalog_check(
     which: WhichResolver,
     data_dir: Path | None,
 ) -> DoctorCheck:
+    connector_which = _connector_which_resolver(which, env)
     plugin_dirs = connector_plugin_dirs(data_dir=data_dir, env=env)
     plugin_manifest_rows = connector_plugin_manifest_statuses(plugin_dirs)
     invalid_plugin_rows = [
@@ -1743,13 +2069,13 @@ def _connector_catalog_check(
         )
     statuses = connector_statuses(
         env=env,
-        which=which,
+        which=connector_which,
         include_paid=False,
         plugin_dirs=plugin_dirs,
     )
     paid_statuses = connector_statuses(
         env=env,
-        which=which,
+        which=connector_which,
         include_paid=True,
         plugin_dirs=plugin_dirs,
     )
@@ -1788,11 +2114,7 @@ def _connector_catalog_check(
         if missing_connectors
         else ""
     )
-    remediation_suffix = (
-        f" Install missing local binaries: {missing_binaries}."
-        if missing_binaries
-        else ""
-    )
+    remediation_suffix = " Run `forge connectors install-plan --json` for safe local binary install guidance." if missing_binaries else ""
     return DoctorCheck(
         "Connector Catalog",
         "WARN" if missing else "OK",
@@ -1813,6 +2135,52 @@ def _connector_catalog_check(
             "approval, roe_id, scope_manifest, and live_gate; "
             "add `--include-paid` only when licensed adapters are intentionally in scope."
             f"{remediation_suffix}"
+        ),
+    )
+
+
+def _cti_osint_policy_check() -> DoctorCheck:
+    summary = provider_catalog_policy_summary()
+    offline = len(summary.get("offline_import_provider_ids", []))
+    live_or_api = len(summary.get("live_or_api_provider_ids", []))
+    manual = len(summary.get("manual_opt_in_provider_ids", []))
+    unsafe_text = int(summary.get("safety_tier_counts", {}).get("catalog_unsafe_text", 0) or 0)
+    blocked_sensitive = int(summary.get("safety_tier_counts", {}).get("blocked_sensitive", 0) or 0)
+    operator_opt_in = int(
+        summary.get("required_gate_counts", {}).get("operator_opt_in", 0) or 0
+    )
+    return DoctorCheck(
+        "CTI/OSINT Policy",
+        "OK",
+        (
+            f"{int(summary.get('total_count') or 0)} provider/source families; "
+            f"{int(summary.get('default_enabled_count') or 0)} default-visible; "
+            f"{offline} offline-import; {live_or_api} live/API-style; "
+            f"{manual} manual opt-in; {operator_opt_in} operator-opt-in gated; "
+            f"{unsafe_text} unsafe-text catalog; {blocked_sensitive} blocked-sensitive"
+        ),
+        (
+            "Run `forge connectors policy-summary --json` before wiring live fetchers; "
+            "keep CTI/OSINT ingestion on offline import unless explicit provider approval, "
+            "rate limits, terms review, and scope gates are in place."
+        ),
+        (
+            {
+                "id": "review_cti_osint_policy",
+                "priority": "42",
+                "status": "review",
+                "summary": (
+                    f"{offline} offline import source(s), {live_or_api} live/API-style source(s), "
+                    f"{operator_opt_in} operator-opt-in gated source(s)"
+                ),
+                "command": "forge connectors policy-summary --json",
+                "total_count": str(int(summary.get("total_count") or 0)),
+                "selected_count": str(int(summary.get("default_enabled_count") or 0)),
+                "omitted_count": str(int(summary.get("opt_in_count") or 0)),
+                "offline_import_count": str(offline),
+                "live_or_api_count": str(live_or_api),
+                "operator_opt_in_gated_count": str(operator_opt_in),
+            },
         ),
     )
 
@@ -1867,6 +2235,7 @@ def _connector_action_items(
     catalog_only: Sequence[Mapping[str, Any]],
     active_validation_gated: Sequence[Mapping[str, Any]],
     paid_hidden: Sequence[Mapping[str, Any]],
+    run_plan: Mapping[str, Any] | None = None,
     invalid_plugin_count: int = 0,
 ) -> tuple[dict[str, str], ...]:
     items: list[dict[str, str]] = []
@@ -1878,17 +2247,35 @@ def _connector_action_items(
                 "status": "blocked",
                 "summary": f"{invalid_plugin_count} invalid connector plugin manifest(s)",
                 "command": "forge connectors plugin-validate --json",
+                "total_count": str(invalid_plugin_count),
+                "selected_count": "0",
+                "omitted_count": str(invalid_plugin_count),
             }
         )
         return tuple(items)
-    items.append(
-        {
-            "id": "install_free_binaries",
-            "priority": "10",
-            "status": "attention" if missing_binary else "ready",
-            "summary": _connector_missing_binary_label(missing_binary),
-            "command": "install missing local binaries; rerun forge doctor --json",
-        }
+    if missing_binary:
+        items.append(
+            {
+                "id": "install_free_binaries",
+                "priority": "10",
+                "status": "attention",
+                "summary": _connector_missing_binary_label(missing_binary),
+                "command": "forge connectors install-plan --json",
+                "total_count": str(len(missing_binary)),
+                "selected_count": str(len(missing_binary)),
+                "omitted_count": "0",
+            }
+        )
+    run_total_count = int(
+        (run_plan or {}).get(
+            "total_count",
+            len(free_runnable) + len(missing_binary) + len(paid_hidden),
+        )
+        or 0
+    )
+    run_selected_count = int((run_plan or {}).get("selected_count", len(free_runnable)) or 0)
+    run_omitted_count = int(
+        (run_plan or {}).get("omitted_count", len(missing_binary) + len(paid_hidden)) or 0
     )
     items.append(
         {
@@ -1896,7 +2283,10 @@ def _connector_action_items(
             "priority": "20",
             "status": "ready" if free_runnable else "attention",
             "summary": _connector_bucket_label(free_runnable),
-            "command": "forge connectors list --json",
+            "command": "forge connectors run-plan --json",
+            "total_count": str(run_total_count),
+            "selected_count": str(run_selected_count),
+            "omitted_count": str(run_omitted_count),
         }
     )
     items.append(
@@ -1905,7 +2295,13 @@ def _connector_action_items(
             "priority": "30",
             "status": "optional" if optional_key else "ready",
             "summary": _connector_optional_key_label(optional_key),
-            "command": "forge connectors secrets set --engagement N --connector ID --name ENV_NAME",
+            "command": (
+                "forge connectors secret-set --engagement N --connector ID "
+                "--name ENV_NAME --value-env ENV"
+            ),
+            "total_count": str(len(optional_key)),
+            "selected_count": str(len(optional_key)),
+            "omitted_count": "0",
         }
     )
     items.append(
@@ -1915,6 +2311,9 @@ def _connector_action_items(
             "status": "review" if catalog_only else "ready",
             "summary": _connector_bucket_label(catalog_only),
             "command": "forge connectors list --json",
+            "total_count": str(len(catalog_only)),
+            "selected_count": str(len(catalog_only)),
+            "omitted_count": "0",
         }
     )
     items.append(
@@ -1924,6 +2323,9 @@ def _connector_action_items(
             "status": "gated",
             "summary": _connector_bucket_label(active_validation_gated),
             "command": "require approval, roe_id, scope_manifest, and live_gate before live validation",
+            "total_count": str(len(active_validation_gated)),
+            "selected_count": "0",
+            "omitted_count": str(len(active_validation_gated)),
         }
     )
     items.append(
@@ -1933,6 +2335,9 @@ def _connector_action_items(
             "status": "hidden" if paid_hidden else "none",
             "summary": _connector_bucket_label(paid_hidden),
             "command": "forge connectors list --include-paid --json",
+            "total_count": str(len(paid_hidden)),
+            "selected_count": "0",
+            "omitted_count": str(len(paid_hidden)),
         }
     )
     return tuple(items)
@@ -1943,6 +2348,7 @@ def _connector_action_plan_check(
     which: WhichResolver,
     data_dir: Path | None,
 ) -> DoctorCheck:
+    connector_which = _connector_which_resolver(which, env)
     plugin_dirs = connector_plugin_dirs(data_dir=data_dir, env=env)
     plugin_manifest_rows = connector_plugin_manifest_statuses(plugin_dirs)
     invalid_plugin_rows = [
@@ -1967,19 +2373,20 @@ def _connector_action_plan_check(
                 catalog_only=(),
                 active_validation_gated=(),
                 paid_hidden=(),
+                run_plan=None,
                 invalid_plugin_count=len(invalid_plugin_rows),
             ),
         )
 
     statuses = connector_statuses(
         env=env,
-        which=which,
+        which=connector_which,
         include_paid=False,
         plugin_dirs=plugin_dirs,
     )
     paid_statuses = connector_statuses(
         env=env,
-        which=which,
+        which=connector_which,
         include_paid=True,
         plugin_dirs=plugin_dirs,
     )
@@ -2014,6 +2421,7 @@ def _connector_action_plan_check(
         for row in paid_statuses
         if str(row.get("cost_profile") or "") == "optional_paid"
     ]
+    run_plan = connector_run_plan(statuses, env=env)
     status = "WARN" if missing_binary else "OK"
     return DoctorCheck(
         "Connector Action Plan",
@@ -2028,9 +2436,9 @@ def _connector_action_plan_check(
             f"paid hidden: {len(paid_hidden)} ({_connector_bucket_label(paid_hidden)})"
         ),
         (
-            "Run free runnable connectors first with `forge connectors run --connector ID`; "
+            "Review free runnable connector templates first with `forge connectors run-plan --json`; "
             "install missing binaries before expecting local execution; configure optional keys "
-            "through env vars or `forge connectors secrets set` only when the free tier is intended; "
+                "through env vars or `forge connectors secret-set --value-env ENV` only when the free tier is intended; "
             "treat catalog-only rows as import/review guidance, not executable adapters; keep "
             "active-validation plugins gated by approval, ROE, scope manifest, and live gate; "
             "review paid adapters only with `forge connectors list --include-paid --json`."
@@ -2042,6 +2450,7 @@ def _connector_action_plan_check(
             catalog_only=catalog_only,
             active_validation_gated=active_validation_gated,
             paid_hidden=paid_hidden,
+            run_plan=run_plan,
         ),
     )
 
@@ -2049,6 +2458,8 @@ def _connector_action_plan_check(
 def _connector_secret_store_check(
     env: Mapping[str, str],
     data_dir: Path | None = None,
+    *,
+    detect_persistent_key: bool = True,
 ) -> DoctorCheck:
     key_len = len(str(env.get("FORGE_ENGAGEMENT_KEY", "")).strip())
     inventory = (
@@ -2106,6 +2517,51 @@ def _connector_secret_store_check(
                 f"value not printed{suffix}"
             ),
         )
+    key_plan = connector_secret_key_plan() if detect_persistent_key else connector_secret_key_plan(environ=env)
+    key_plan_total_count = str(int(key_plan.get("total_count") or 0))
+    key_plan_selected_count = str(int(key_plan.get("selected_count") or 0))
+    key_plan_omitted_count = str(int(key_plan.get("omitted_count") or 0))
+    key_plan_execution_policy = str(key_plan.get("execution_policy") or "")
+    persistent_hint = key_plan.get("persistent_key_hint", {})
+    if persistent_hint.get("key_configured"):
+        source = str(persistent_hint.get("source") or "persistent")
+        length = int(persistent_hint.get("key_length") or 0)
+        fingerprint = str(persistent_hint.get("key_fingerprint") or "")
+        reload_command = str(
+            (key_plan.get("commands") or {}).get("powershell_reload_persistent_env") or ""
+        )
+        reload_guidance = (
+            f"run `{reload_command}` in this PowerShell process"
+            if reload_command
+            else "set this process env from `forge connectors secret-key-plan --json`"
+        )
+        return DoctorCheck(
+            "Connector Secret Store",
+            "WARN",
+            (
+                "FORGE_ENGAGEMENT_KEY is missing from this process, but a "
+                f"{source}-level Windows environment key appears configured "
+                f"(length={length}, fingerprint={fingerprint}); encrypted connector "
+                f"store is unavailable until this shell/service reloads env{suffix}"
+            ),
+            (
+                "Restart this shell/service or "
+                f"{reload_guidance}; secret material is not printed."
+            ),
+            (
+                {
+                    "id": "reload_connector_secret_key_env",
+                    "priority": "35",
+                    "status": "ready",
+                    "command": reload_command or "forge connectors secret-key-plan --json",
+                    "summary": "load persistent FORGE_ENGAGEMENT_KEY into this process without printing it",
+                    "execution_policy": key_plan_execution_policy,
+                    "total_count": key_plan_total_count,
+                    "selected_count": key_plan_selected_count,
+                    "omitted_count": key_plan_omitted_count,
+                },
+            ),
+        )
     return DoctorCheck(
         "Connector Secret Store",
         "MISSING",
@@ -2113,7 +2569,23 @@ def _connector_secret_store_check(
             "FORGE_ENGAGEMENT_KEY is missing or shorter than 32 chars; "
             f"encrypted connector store is disabled{suffix}"
         ),
-        "Set FORGE_ENGAGEMENT_KEY to a random value of at least 32 characters before `forge connectors secret-set`.",
+        (
+            "Run `forge connectors secret-key-plan --json` for non-secret setup "
+            "commands, then set FORGE_ENGAGEMENT_KEY before `forge connectors secret-set`."
+        ),
+        (
+            {
+                "id": "setup_connector_secret_key",
+                "priority": "35",
+                "status": "attention",
+                "command": "forge connectors secret-key-plan --json",
+                "summary": "generate or load FORGE_ENGAGEMENT_KEY without printing secret material",
+                "execution_policy": key_plan_execution_policy,
+                "total_count": key_plan_total_count,
+                "selected_count": key_plan_selected_count,
+                "omitted_count": key_plan_omitted_count,
+            },
+        ),
     )
 
 
@@ -2533,15 +3005,33 @@ def _static_provider_readiness_check(env: Mapping[str, str], which: WhichResolve
                 ),
             )
 
+    paid_allowed = _truthy(env.get("FORGE_ALLOW_PAID_BACKENDS", ""))
     paid_env_configured = [
         " + ".join(option)
         for option in _LLM_API_ENV_OPTIONS
-        if all(str(env.get(name, "")).strip() for name in option)
+        if option != _OPENROUTER_ENV_OPTION
+        and all(str(env.get(name, "")).strip() for name in option)
     ]
-    if paid_env_configured and _truthy(env.get("FORGE_ALLOW_PAID_BACKENDS", "")):
-        detected.append(f"{len(paid_env_configured)} paid API env option(s)")
+    openrouter_key_configured = all(
+        str(env.get(name, "")).strip() for name in _OPENROUTER_ENV_OPTION
+    )
+    paid_provider_count = len(paid_env_configured) + (
+        1 if openrouter_key_configured and paid_allowed else 0
+    )
+    if paid_provider_count and paid_allowed:
+        detected.append(f"{paid_provider_count} paid API env option(s)")
+    if openrouter_key_configured and not paid_allowed:
+        detected.append("openrouter_free_only_key")
 
     if detected:
+        provider_action_status = "optional"
+        provider_action_summary = "static provider signal detected; live probes disabled by default"
+        provider_action_command = "forge doctor --live-provider-probes"
+        if openrouter_key_configured and not paid_allowed:
+            provider_action_summary = (
+                "OpenRouter key present; live probe will only accept capable zero-price/free models"
+            )
+            provider_action_command = "forge doctor --live-provider-probes"
         return DoctorCheck(
             "LLM Providers",
             "OK",
@@ -2560,9 +3050,9 @@ def _static_provider_readiness_check(env: Mapping[str, str], which: WhichResolve
                 {
                     "id": "run_live_provider_probes_if_intended",
                     "priority": "70",
-                    "status": "optional",
-                    "summary": "static provider signal detected; live probes disabled by default",
-                    "command": "forge doctor --live-provider-probes",
+                    "status": provider_action_status,
+                    "summary": provider_action_summary,
+                    "command": provider_action_command,
                 },
             ),
         )

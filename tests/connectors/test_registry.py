@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -9,8 +10,11 @@ import typer
 from typer.testing import CliRunner
 
 from forge.connectors.cli import register_connector_commands
+from forge.connectors.binaries import resolve_connector_binary
 from forge.connectors.registry import (
+    connector_install_plan,
     connector_plugin_manifest_statuses,
+    connector_run_plan,
     connector_statuses,
     connector_summary,
 )
@@ -87,6 +91,16 @@ def test_connector_registry_reports_free_first_readiness_without_secret_values()
     assert by_id["projectdiscovery_nuclei"]["execution_paths"] == ["forge connectors run"]
     assert by_id["projectdiscovery_nuclei"]["execution_status"] == "wired_operator_path"
     assert "templates_pinned" in by_id["projectdiscovery_nuclei"]["required_gates"]
+    assert by_id["burp_dast_xml"]["readiness"] == "available"
+    assert by_id["burp_dast_xml"]["execution_paths"] == ["forge connectors import-validation"]
+    assert by_id["burp_dast_xml"]["safety"] == "passive_offline"
+    assert "active_validation_runs" in by_id["burp_dast_xml"]["outputs"]
+    assert by_id["projectdiscovery_cloud"]["readiness"] == "available"
+    assert by_id["projectdiscovery_cloud"]["execution_paths"] == [
+        "forge connectors import-discovery"
+    ]
+    assert by_id["projectdiscovery_cloud"]["safety"] == "passive_offline"
+    assert "vulnerability_findings" in by_id["projectdiscovery_cloud"]["outputs"]
     assert by_id["shodan_host_lookup"]["readiness"] == "configured"
     assert by_id["shodan_host_lookup"]["execution_paths"] == [
         "forge connectors import-discovery"
@@ -165,6 +179,31 @@ def test_connector_registry_can_filter_optional_paid_connectors() -> None:
     assert statuses
     assert all(row["cost_profile"] != "optional_paid" for row in statuses)
     assert any(row["cost_profile"] == "free_local" for row in statuses)
+
+
+def test_connector_registry_default_resolver_checks_configured_tool_dirs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    tool_dir = tmp_path / "tools"
+    tool_dir.mkdir()
+    suffix = ".exe" if os.name == "nt" else ""
+    binary = tool_dir / f"subfinder{suffix}"
+    binary.write_text("", encoding="utf-8")
+    if os.name != "nt":
+        binary.chmod(0o755)
+    monkeypatch.setenv("PATH", "")
+
+    injected_env = {"PATH": "", "FORGE_CONNECTOR_BIN_DIRS": str(tool_dir)}
+    statuses = connector_statuses(env=injected_env)
+    row = {item["id"]: item for item in statuses}["projectdiscovery_subfinder"]
+
+    resolved = resolve_connector_binary("subfinder", env=injected_env)
+    assert os.path.normcase(str(Path(resolved or "").resolve())) == os.path.normcase(
+        str(binary.resolve())
+    )
+    assert row["readiness"] == "available"
+    assert row["missing_binaries"] == []
 
 
 def test_connector_registry_validates_domain_filters() -> None:
@@ -382,6 +421,383 @@ def test_connector_cli_outputs_json_and_domain_filter() -> None:
     assert "unknown connector domain: not_a_domain" in unknown_result.output
 
 
+def test_connector_install_plan_reports_missing_binaries_without_execution(tmp_path: Path) -> None:
+    tool_dir = tmp_path / "tools"
+    tool_dir.mkdir()
+    suffix = ".exe" if os.name == "nt" else ""
+    subfinder = tool_dir / f"subfinder{suffix}"
+    subfinder.write_text("", encoding="utf-8")
+    if os.name != "nt":
+        subfinder.chmod(0o755)
+    statuses = [
+        {
+            "id": "projectdiscovery_subfinder",
+            "missing_binaries": ["subfinder"],
+        },
+        {
+            "id": "synthetic_connector",
+            "missing_binaries": ["forge-test-missing-bin"],
+        },
+    ]
+    plan = connector_install_plan(statuses, env={"FORGE_CONNECTOR_BIN_DIRS": str(tool_dir)})
+
+    assert plan["schema_version"] == "forge.connector_install_plan.v1"
+    assert plan["execution_policy"] == "plan_only_no_commands_executed"
+    assert plan["total_count"] == 1
+    assert plan["selected_count"] == 1
+    assert plan["omitted_count"] == 0
+    assert isinstance(plan["binary_search_paths"], list)
+    assert str(tool_dir) in plan["binary_search_paths"]
+    by_binary = {item["binary"]: item for item in plan["items"]}
+    assert "subfinder" not in by_binary
+    assert by_binary["forge-test-missing-bin"]["installer"] == "manual"
+    assert by_binary["forge-test-missing-bin"]["command"] == ""
+    assert "OS package manager" in by_binary["forge-test-missing-bin"]["notes"]
+    assert by_binary["forge-test-missing-bin"]["connector_ids"] == ["synthetic_connector"]
+
+
+def test_connector_install_plan_cli_outputs_json_without_running_installers() -> None:
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+
+    result = CliRunner().invoke(app, ["connectors", "install-plan", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.connector_install_plan.v1"
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["total_count"] == payload["missing_binary_count"]
+    assert payload["selected_count"] == payload["missing_binary_count"]
+    assert payload["omitted_count"] == 0
+    assert isinstance(payload["items"], list)
+
+
+def test_connector_run_plan_reports_free_runnable_commands_without_execution() -> None:
+    statuses = [
+        {
+            "id": "projectdiscovery_subfinder",
+            "domain": "asset_discovery",
+            "cost_profile": "free_local",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors run"],
+        },
+        {
+            "id": "artifact_passive_parsers",
+            "domain": "passive_parser",
+            "cost_profile": "free_local",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge kill-chain artifact intake"],
+        },
+        {
+            "id": "paid_hidden",
+            "domain": "identity",
+            "cost_profile": "optional_paid",
+            "readiness": "configured",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors run"],
+        },
+        {
+            "id": "missing_local",
+            "domain": "asset_discovery",
+            "cost_profile": "free_local",
+            "readiness": "missing_binary",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors run"],
+        },
+        {
+            "id": "abusech_threatfox",
+            "domain": "threat_intelligence",
+            "cost_profile": "free_no_key",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors import-cti"],
+        },
+        {
+            "id": "urlscan_search",
+            "domain": "discovery",
+            "cost_profile": "free_no_key",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors import-discovery"],
+        },
+        {
+            "id": "burp_dast_xml",
+            "domain": "validation",
+            "cost_profile": "free_local",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors import-validation"],
+        },
+        {
+            "id": "gitleaks_local",
+            "domain": "secrets",
+            "cost_profile": "free_local",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors run-secrets"],
+        },
+        {
+            "id": "hibp_pwned_passwords",
+            "domain": "identity_exposure",
+            "cost_profile": "free_no_key",
+            "readiness": "available",
+            "runner_supported": True,
+            "execution_paths": ["forge connectors run-identity"],
+        },
+    ]
+
+    plan = connector_run_plan(statuses)
+
+    assert plan["schema_version"] == "forge.connector_run_plan.v1"
+    assert plan["execution_policy"] == "plan_only_no_commands_executed"
+    assert plan["total_count"] == 9
+    assert plan["selected_count"] == 7
+    assert plan["omitted_count"] == 2
+    assert plan["runnable_count"] == 7
+    by_id = {item["connector_id"]: item for item in plan["items"]}
+    assert by_id["artifact_passive_parsers"]["command_template"] == [
+        "forge",
+        "kill-chain",
+        "SEED",
+        "--engagement",
+        "N",
+        "--dry-run",
+    ]
+    assert by_id["artifact_passive_parsers"]["requires_engagement"] is True
+    assert by_id["artifact_passive_parsers"]["requires_target"] is True
+    assert "data/artifacts" in by_id["artifact_passive_parsers"]["notes"]
+    assert by_id["projectdiscovery_subfinder"]["command_template"] == [
+        "forge",
+        "connectors",
+        "run",
+        "--engagement",
+        "N",
+        "--connector",
+        "projectdiscovery_subfinder",
+        "--target",
+        "DOMAIN_OR_URL",
+        "--dry-run",
+    ]
+    assert by_id["projectdiscovery_subfinder"]["requires_engagement"] is True
+    assert by_id["projectdiscovery_subfinder"]["requires_target"] is True
+    assert by_id["abusech_threatfox"]["command_template"] == [
+        "forge",
+        "connectors",
+        "import-cti",
+        "--engagement",
+        "N",
+        "--connector",
+        "abusech_threatfox",
+        "--report-file",
+        "PATH_TO_OFFLINE_EXPORT",
+        "--dry-run",
+        "--json",
+    ]
+    assert by_id["urlscan_search"]["command_template"] == [
+        "forge",
+        "connectors",
+        "import-discovery",
+        "--engagement",
+        "N",
+        "--connector",
+        "urlscan_search",
+        "--report-file",
+        "PATH_TO_DISCOVERY_EXPORT",
+        "--target",
+        "DOMAIN_OR_URL",
+        "--json",
+    ]
+    assert by_id["burp_dast_xml"]["command_template"] == [
+        "forge",
+        "connectors",
+        "import-validation",
+        "--engagement",
+        "N",
+        "--connector",
+        "burp_dast_xml",
+        "--report-file",
+        "PATH_TO_BURP_OR_JUNIT_XML",
+        "--target",
+        "https://DOMAIN_OR_URL/",
+        "--dry-run",
+        "--json",
+    ]
+    assert by_id["gitleaks_local"]["command_template"] == [
+        "forge",
+        "connectors",
+        "run-secrets",
+        "--engagement",
+        "N",
+        "--connector",
+        "gitleaks_local",
+        "--source-path",
+        "PATH_TO_REPOSITORY",
+        "--domain",
+        "DOMAIN",
+        "--dry-run",
+        "--json",
+    ]
+    assert by_id["hibp_pwned_passwords"]["command_template"] == [
+        "forge",
+        "connectors",
+        "run-identity",
+        "--engagement",
+        "N",
+        "--connector",
+        "hibp_pwned_passwords",
+        "--domain",
+        "DOMAIN",
+        "--dry-run",
+        "--json",
+    ]
+
+
+def test_connector_run_plan_cli_outputs_json_without_running_connectors() -> None:
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+
+    result = CliRunner().invoke(app, ["connectors", "run-plan", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.connector_run_plan.v1"
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["total_count"] >= payload["selected_count"] >= 0
+    assert payload["omitted_count"] == payload["total_count"] - payload["selected_count"]
+    assert isinstance(payload["items"], list)
+    assert "DOMAIN_OR_URL" in result.output
+
+
+def test_connector_secret_key_plan_outputs_no_secret_material(monkeypatch) -> None:
+    monkeypatch.delenv("FORGE_ENGAGEMENT_KEY", raising=False)
+    monkeypatch.setattr(
+        "forge.connectors.secrets._persistent_key_hint",
+        lambda: {"source": "", "key_configured": False, "key_length": 0, "key_fingerprint": ""},
+    )
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+
+    result = CliRunner().invoke(app, ["connectors", "secret-key-plan", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.connector_secret_key_plan.v1"
+    assert payload["execution_policy"] == "plan_only_no_commands_executed"
+    assert payload["total_count"] == 4
+    assert payload["selected_count"] == 3
+    assert payload["omitted_count"] == 1
+    assert payload["key_configured"] is False
+    assert payload["secret_material_printed"] is False
+    assert payload["key_fingerprint"] == ""
+    assert payload["persistent_key_hint"]["key_configured"] is False
+    assert "FORGE_ENGAGEMENT_KEY" in payload["commands"]["powershell_user_env"]
+    assert "0123456789abcdef" not in result.output
+
+
+def test_connector_secret_key_plan_reports_existing_key_fingerprint(monkeypatch) -> None:
+    monkeypatch.setenv("FORGE_ENGAGEMENT_KEY", "k" * 48)
+    monkeypatch.setattr(
+        "forge.connectors.secrets._persistent_key_hint",
+        lambda: {
+            "source": "user",
+            "key_configured": True,
+            "key_length": 44,
+            "key_fingerprint": "sha256:persistent",
+        },
+    )
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+
+    result = CliRunner().invoke(app, ["connectors", "secret-key-plan", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["key_configured"] is True
+    assert payload["selected_count"] == 3
+    assert payload["omitted_count"] == 1
+    assert payload["key_length"] == 48
+    assert payload["key_fingerprint"].startswith("sha256:")
+    assert payload["persistent_key_hint"]["key_configured"] is False
+    assert "k" * 32 not in result.output
+
+
+def test_connector_secret_key_plan_reports_persistent_key_hint(monkeypatch) -> None:
+    monkeypatch.delenv("FORGE_ENGAGEMENT_KEY", raising=False)
+    monkeypatch.setattr(
+        "forge.connectors.secrets._persistent_key_hint",
+        lambda: {
+            "source": "user",
+            "key_configured": True,
+            "key_length": 44,
+            "key_fingerprint": "sha256:abc123",
+        },
+    )
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+
+    result = CliRunner().invoke(app, ["connectors", "secret-key-plan", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["key_configured"] is False
+    assert payload["selected_count"] == 4
+    assert payload["omitted_count"] == 0
+    assert payload["persistent_key_hint"] == {
+        "source": "user",
+        "key_configured": True,
+        "key_length": 44,
+        "key_fingerprint": "sha256:abc123",
+    }
+    assert payload["commands"]["powershell_reload_persistent_env"] == (
+        "$env:FORGE_ENGAGEMENT_KEY=[Environment]::GetEnvironmentVariable("
+        "'FORGE_ENGAGEMENT_KEY','User')"
+    )
+    assert "abc123" not in payload["commands"]["powershell_reload_persistent_env"]
+
+
+def test_connector_secret_key_plan_plain_output_reports_persistent_reload(monkeypatch) -> None:
+    monkeypatch.delenv("FORGE_ENGAGEMENT_KEY", raising=False)
+    monkeypatch.setattr(
+        "forge.connectors.secrets._persistent_key_hint",
+        lambda: {
+            "source": "user",
+            "key_configured": True,
+            "key_length": 44,
+            "key_fingerprint": "sha256:abc123",
+        },
+    )
+    app = typer.Typer()
+    connectors_app = typer.Typer()
+    register_connector_commands(connectors_app)
+    app.add_typer(connectors_app, name="connectors")
+
+    result = CliRunner().invoke(app, ["connectors", "secret-key-plan"])
+
+    assert result.exit_code == 0, result.output
+    assert "Persistent Windows key detected" in result.output
+    assert "source=user" in result.output
+    assert "length=44" in result.output
+    assert "sha256:abc123" in result.output
+    assert "$env:FORGE_ENGAGEMENT_KEY=" in result.output
+    assert "GetEnvironmentVariable('FORGE_ENGAGEMENT_KEY','User')" in "".join(
+        result.output.split()
+    )
+    assert "secret material is printed" in result.output
+    assert "0123456789abcdef" not in result.output
+
+
 def test_connector_cli_loads_default_data_dir_plugin_manifests(
     tmp_path: Path,
     monkeypatch,
@@ -475,9 +891,13 @@ def test_connector_cli_plugin_validate_reports_invalid_json(
 
     assert result.exit_code == 1
     payload = json.loads(result.output)
+    assert payload["summary"]["schema_version"] == "forge.connector.plugin_validation.v1"
     assert payload["summary"]["valid_count"] == 1
     assert payload["summary"]["invalid_count"] == 1
     assert payload["summary"]["execution_policy"].startswith("data_only_catalog")
+    assert payload["summary"]["total_count"] == 2
+    assert payload["summary"]["selected_count"] == 2
+    assert payload["summary"]["omitted_count"] == 0
     invalid = next(row for row in payload["items"] if row["status"] == "invalid")
     assert "paid_opt_in" in invalid["error"]
     assert "write_permission" in invalid["error"]
@@ -520,7 +940,11 @@ def test_connector_cli_plugin_validate_accepts_active_validation_catalog_manifes
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["summary"]["schema_version"] == "forge.connector.plugin_validation.v1"
     assert payload["summary"]["valid_count"] == 1
+    assert payload["summary"]["total_count"] == 1
+    assert payload["summary"]["selected_count"] == 1
+    assert payload["summary"]["omitted_count"] == 0
     item = payload["items"][0]
     assert item["domain"] == "active_validation"
     assert item["required_gates"] == ["approval", "roe_id", "scope_manifest", "live_gate"]
@@ -537,6 +961,10 @@ def test_root_cli_registers_connectors_catalog() -> None:
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.connector_catalog.v1"
+    assert payload["execution_policy"] == "data_only_catalog_no_connectors_executed"
+    assert payload["total_count"] >= payload["selected_count"] >= 0
+    assert payload["omitted_count"] == payload["total_count"] - payload["selected_count"]
     ids = {row["id"] for row in payload["connectors"]}
     assert "remediation_jsonl" in ids
     assert "remediation_jira" not in ids
@@ -1767,6 +2195,45 @@ def test_projectdiscovery_nuclei_fails_closed_without_pinned_templates(
     assert result["template_count"] == 0
 
 
+def test_connector_runner_default_resolver_checks_configured_tool_dirs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    con = _build_connector_db(tmp_path / "engagement.db")
+    tool_dir = tmp_path / "tools"
+    tool_dir.mkdir()
+    suffix = ".exe" if os.name == "nt" else ""
+    binary = tool_dir / f"subfinder{suffix}"
+    binary.write_text("", encoding="utf-8")
+    if os.name != "nt":
+        binary.chmod(0o755)
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setenv("FORGE_CONNECTOR_BIN_DIRS", str(tool_dir))
+    calls: list[list[str]] = []
+
+    def fake_process(args, _timeout):
+        calls.append(list(args))
+        return subprocess.CompletedProcess(list(args), 0, '{"host":"www.acme.example"}\n', "")
+
+    try:
+        result = run_connector(
+            con,
+            ConnectorRunConfig(
+                connector_id="projectdiscovery_subfinder",
+                engagement_id=1001,
+                target="acme.example",
+            ),
+            process_runner=fake_process,
+        )
+    finally:
+        con.close()
+
+    assert result["status"] == "completed"
+    assert os.path.normcase(str(Path(calls[0][0]).resolve())) == os.path.normcase(
+        str(binary.resolve())
+    )
+
+
 def test_gitleaks_local_runner_executes_and_imports_redacted_lifecycle(
     tmp_path: Path,
 ) -> None:
@@ -2263,6 +2730,11 @@ def test_connector_cli_exports_secret_prevention_plan_without_values(
     commands = payload["workflows"][0]["commands"]
     tools = {command["tool"] for command in commands}
     assert payload["schema"] == "forge.secret_prevention.v1"
+    assert payload["schema_version"] == "forge.secret_prevention.v1"
+    assert payload["execution_policy"] == "plan_only_secret_prevention_no_commands_executed"
+    assert payload["total_count"] == payload["summary"]["command_count"]
+    assert payload["selected_count"] == payload["summary"]["command_count"]
+    assert payload["omitted_count"] == 0
     assert payload["workflow_filter"] == "push"
     assert payload["summary"]["finding_count"] == 1
     assert "trufflehog" in tools

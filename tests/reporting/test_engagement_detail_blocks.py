@@ -47,6 +47,33 @@ def test_render_engagement_chip_block_escapes_values_and_empty_state() -> None:
     assert render_engagement_chip_block([], empty_html=EMPTY_SCOPE_BLOCK) == EMPTY_SCOPE_BLOCK
 
 
+def test_render_engagement_chip_block_collapses_large_input_sets() -> None:
+    html = render_engagement_chip_block(
+        [f"https://app{i}.acme.example/really/long/path" for i in range(5)],
+        empty_html=EMPTY_SEED_BLOCK,
+        preview_limit=2,
+    )
+
+    assert '<div class="chips input-chip-preview">' in html
+    assert "<summary>Show 3 more</summary>" in html
+    assert '<details class="input-chip-details">' in html
+    assert "https://app4.acme.example/really/long/path" in html
+
+
+def test_render_engagement_chip_block_caps_hidden_dom_weight() -> None:
+    html = render_engagement_chip_block(
+        [f"https://app{i}.acme.example/really/long/path" for i in range(20)],
+        empty_html=EMPTY_SEED_BLOCK,
+        preview_limit=2,
+        hidden_render_limit=3,
+    )
+
+    assert "<summary>Show 18 more</summary>" in html
+    assert "15 additional entries omitted from this static page" in html
+    assert "https://app4.acme.example/really/long/path" in html
+    assert "https://app5.acme.example/really/long/path" not in html
+
+
 def test_engagement_input_blocks_builds_metadata_and_input_chips() -> None:
     calls: list[tuple[str, str, bool]] = []
 

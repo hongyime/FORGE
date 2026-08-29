@@ -11,6 +11,7 @@ from forge.active_validation.methods import list_active_validation_methods
 from forge.active_validation.runner import (
     active_validation_control_coverage,
     approve_active_validation_job,
+    count_active_validation_jobs,
     create_active_validation_job,
     get_active_validation_job,
     list_active_validation_jobs,
@@ -57,10 +58,16 @@ def active_validation_list_payload(
     limit: int = 100,
 ) -> dict[str, Any]:
     row_limit = max(1, min(int(limit or 100), 500))
+    normalized_status = str(status or "").strip()
+    total_jobs = count_active_validation_jobs(
+        con,
+        engagement_id=engagement_id,
+        status=normalized_status,
+    )
     jobs = list_active_validation_jobs(
         con,
         engagement_id=engagement_id,
-        status=str(status or "").strip(),
+        status=normalized_status,
         limit=row_limit,
     )
     runs = list_active_validation_runs(
@@ -79,6 +86,11 @@ def active_validation_list_payload(
         limit=min(row_limit, 10),
     )
     return {
+        "schema_version": "forge.active_validation.list.v1",
+        "execution_policy": "read_only_active_validation_inventory_no_commands_executed",
+        "total_count": total_jobs,
+        "selected_count": len(jobs),
+        "omitted_count": max(0, total_jobs - len(jobs)),
         "engagement_id": engagement_id,
         "jobs": jobs,
         "runs": runs,

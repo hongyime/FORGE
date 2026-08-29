@@ -72,6 +72,7 @@ def test_cli_registry_preserves_public_and_hidden_groups() -> None:
         "monitoring",
         "remediation",
         "active-validation",
+        "automation",
         "connectors",
         "standards",
         "workspaces",
@@ -97,9 +98,15 @@ def test_cli_registry_registers_modular_command_groups() -> None:
     assert {"create", "approve", "run", "list", "methods", "coverage"}.issubset(
         _command_names(apps.active_validation_app)
     )
-    assert {"list", "plugin-validate", "secret-set", "secret-list"}.issubset(
-        _command_names(apps.connectors_app)
-    )
+    assert {
+        "list",
+        "install-plan",
+        "plugin-validate",
+        "import-validation",
+        "secret-key-plan",
+        "secret-set",
+        "secret-list",
+    }.issubset(_command_names(apps.connectors_app))
     assert {"import-stix", "export-stix"}.issubset(_command_names(apps.standards_app))
     assert {
         "review-queue",
@@ -109,10 +116,25 @@ def test_cli_registry_registers_modular_command_groups() -> None:
         "apply-retest-run",
         "sync-tickets",
     }.issubset(_command_names(apps.remediation_app))
-    assert {"list", "upsert", "members", "member-set", "member-delete"}.issubset(
+    assert {"list", "upsert", "members", "member-set", "member-delete", "backfill-memberships"}.issubset(
         _command_names(apps.workspaces_app)
     )
-    assert {"import"}.issubset(_command_names(apps.targets_app))
+    assert {
+        "policy",
+        "run",
+        "command-review",
+        "defaults",
+        "status",
+        "cycle",
+        "feed-build",
+        "self-heal-plan",
+    }.issubset(_command_names(apps.automation_app))
+    assert {"import", "resume-candidates", "resume-plan", "resume-run"}.issubset(
+        _command_names(apps.targets_app)
+    )
+    assert {"status", "due-plan", "run-due", "deliver-alerts", "worker"}.issubset(
+        _command_names(apps.monitoring_app)
+    )
 
 
 def test_root_operator_commands_register_outside_cli_entrypoint() -> None:
@@ -271,6 +293,7 @@ def test_readme_public_commands_include_all_public_modular_subcommands() -> None
         "active-validation": apps.active_validation_app,
         "connectors": apps.connectors_app,
         "standards": apps.standards_app,
+        "automation": apps.automation_app,
         "workspaces": apps.workspaces_app,
         "retention": apps.retention_app,
     }
@@ -299,8 +322,29 @@ def test_readme_public_commands_document_operator_defaults_from_cli_help() -> No
     assert "llama_cpp" in report_help.output
     assert "local Qwen" in report_help.output
     assert "forge report generate --engagement N [--provider auto|template|llama_cpp]" in public_block
-    assert "Phase 6 defaults to local `llama_cpp`; `auto` is opt-in" in public_block
-    assert "--report-provider {llama_cpp,auto,template,...}" in readme
+    assert (
+        "forge report quality-audit [--reports-dir reports] "
+        "[--top N|--top-limit N] [--json]"
+    ) in public_block
+    assert (
+        "forge report stale-plan [--reports-dir reports] [--limit N] [--json]"
+    ) in public_block
+    assert (
+        "forge report stale-run [--reports-dir reports] [--limit N] "
+        "[--provider auto|template] [--dry-run] [--json]"
+    ) in public_block
+    assert (
+        "forge report long-run-plan [--reports-dir reports] "
+        "[--long-run-seconds N] [--limit N] [--json]"
+    ) in public_block
+    assert (
+        "forge report policy-plan [--reports-dir reports] [--limit N] [--json]"
+    ) in public_block
+    assert (
+        "forge connectors run-plan [--domain NAME] [--json]"
+    ) in public_block
+    assert "Phase 6 defaults to `auto`; use `llama_cpp` for explicit local GGUF" in public_block
+    assert "--report-provider {auto,template,llama_cpp,...}" in readme
 
     demo_help = runner.invoke(forge_app, ["demo", "proof-pack", "--help"])
     assert demo_help.exit_code == 0, demo_help.output

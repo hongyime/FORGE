@@ -74,6 +74,8 @@ Continuation order for future agents:
 git clone <repo> forge-toolkit
 cd forge-toolkit
 setup.bat        # picks safe/default or scoped active-assessment mode
+forge-autopilot.bat --dry-run  # optional all-in-one feed/resume/monitor/dashboard rehearsal
+forge-autopilot.bat --apply --roe-id ROE-ID  # explicit live all-in-one path
 ```
 
 ```bash
@@ -85,9 +87,16 @@ cd forge-toolkit
 
 Bootstrap creates `.venv` for FORGE runtime deps, installs external OSINT CLIs
 into per-tool venvs under local FORGE state, installs `phonenumbers` in the
-runtime, and detects installed LLM CLIs (Kiro / Claude / Codex / Gemini) for
-the Phase 6 report. Per-tool OSINT venvs prevent GHunt, Maigret, and
-theHarvester dependency pins from colliding with the main runtime.
+runtime, best-effort installs free/local connector CLIs for full mode
+(`subfinder`, `katana`, `nuclei`, `gitleaks`, `trufflehog`, and `detect-secrets`), reports
+manual TruffleHog setup guidance through the connector install plan, and detects
+installed LLM CLIs (Kiro / Claude / Codex / Gemini) for the Phase 6 report.
+Per-tool OSINT venvs prevent GHunt, Maigret, and theHarvester dependency pins
+from colliding with the main runtime.
+Connector binary resolution checks PATH plus `FORGE_CONNECTOR_BIN_DIR(S)`, the
+FORGE venv Scripts/bin directory, `%LOCALAPPDATA%\FORGE\tools\bin`, and
+`~/go/bin`; `forge connectors install-plan --json` prints the exact current
+search paths and any remaining missing tools.
 
 Local workspace verification:
 
@@ -154,6 +163,7 @@ Every run produces a Markdown report + Maltego workspace/GraphML artifacts + evi
 |---|---|---|
 | `--engagement N` / `-e N` | kill-chain auto-derives when omitted; existing-engagement commands usually require it | Engagement ID (scopes findings + audit log) |
 | `--max-iter N` | `7` | Spider iterations. Loop breaks early on stable snapshot; capped at `10` |
+| `--max-runtime-minutes N` | `25` | Soft wall-clock budget before graceful finalization; also configurable with `FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES` |
 | `--tor` | off | Route supported subcommands through the vendored Tor bundle for transport privacy only; not for rate-limit bypass |
 | `--dry-run` | off | Log every intended action, execute nothing outbound |
 | `--attack-mode` / `--no-attack-mode` | on | **SCOPED ACTIVE ASSESSMENT**: bounded live checks plus read-only proof-bound credential/resource validation. Live execution requires `--roe-id`/`FORGE_ROE_ID` and `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; pass `--no-attack-mode` for passive-only |
@@ -166,7 +176,7 @@ Useful advanced flags:
 - `--related-seed VALUE` can be repeated for multi-seed runs.
 - `--resume/--no-resume` defaults on and skips completed fan-outs for the engagement.
 - `--parallel-fanout N` defaults to `4` and is capped at `8`.
-- `--report-provider {llama_cpp,auto,template,...}` forces the Phase 6 backend; omitted uses `llama_cpp`.
+- `--report-provider {auto,template,llama_cpp,...}` forces the Phase 6 backend; omitted uses `auto`.
 - `--report-max-loops N` defaults to Phase 6's `5`; set `0` to disable retries.
 - `--auto-run-detected/--no-auto-run-detected` defaults on; live execution still requires `--roe-id`/`FORGE_ROE_ID` and `--scope-manifest`/`FORGE_SCOPE_MANIFEST`.
 - `--go-hard` overrides normal launch budget with `max-iter=20`, `parallel-fanout=8`, larger Common Crawl limits, identity workers, and deep subdomain enumeration.
@@ -217,7 +227,7 @@ Final phase (once, after loop stabilises):
 - vuln passive (offline CVE fingerprint)
 - exploit-reference correlation (offline NVD + Exploit-DB metadata join; no exploitation)
 - graph build (Networkx attack-path) + Maltego workspace/GraphML export
-- report generate (Phase 6 defaults to local `llama_cpp`; `auto` is opt-in for provider cascade; deterministic template fallback is forced if no report artifact is produced)
+- report generate (Phase 6 defaults to `auto` provider cascade; local `llama_cpp` remains an explicit/offline fallback; deterministic template fallback is forced if no report artifact is produced)
 - prereq detection (prompts operator for extras when TTY, auto-runs when `--auto-run-detected` was set)
 
 ---
@@ -228,7 +238,12 @@ Final phase (once, after loop stabilises):
 forge kill-chain <seed> --engagement N     # THE spider workflow
 forge menu                                  # Interactive TUI engagement browser
 forge kb {sync,status,fetch-breach}         # Phase 0 knowledge-base ETL
-forge report generate --engagement N [--provider auto|template|llama_cpp]  # Phase 6 defaults to local `llama_cpp`; `auto` is opt-in
+forge report generate --engagement N [--provider auto|template|llama_cpp]  # Phase 6 defaults to `auto`; use `llama_cpp` for explicit local GGUF
+forge report quality-audit [--reports-dir reports] [--top N|--top-limit N] [--json]  # Read-only report health and operator action plan
+forge report stale-plan [--reports-dir reports] [--limit N] [--json]  # Read-only stale latest-report regeneration command plan
+forge report stale-run [--reports-dir reports] [--limit N] [--provider auto|template] [--dry-run] [--json]  # Bounded sequential stale-report regeneration
+forge report long-run-plan [--reports-dir reports] [--long-run-seconds N] [--limit N] [--json]  # Read-only long-run review plan
+forge report policy-plan [--reports-dir reports] [--limit N] [--json]  # Read-only latest-run policy flag explanation plan
 forge graph build --engagement N            # Attack-path export; default --format json
 forge graph sync-assets --engagement N      # Rebuild canonical asset/ownership graph tables
 forge graph ownership list --engagement N   # List asset ownership claims
@@ -238,32 +253,336 @@ forge graph attribution import --engagement N --file attributions.json|csv
 forge audit manifest-verify --engagement N
 forge audit manifest-export --engagement N [--sign] [--remote-store]
 forge audit manifest-bundle-verify --bundle PATH
-forge targets import --feed-url URL|--feed-file PATH
-forge monitoring status|run-due|deliver-alerts|worker
+forge targets import --feed-url URL|--feed-file PATH [--dry-run] [--json] [--limit N] [--start] [--roe-id ROE] [--min-start-source-count N]
+forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--redact-paths] [--json]  # Default also scans repo-local legacy dashboard DBs
+forge targets resume-plan [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--data-dir PATH] [--redact-paths] [--json]
+forge targets resume-lock-status [--data-dir PATH] [--stale-lock-minutes N] [--redact-paths] [--json]
+forge targets resume-run [--dry-run] [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--max-parallel N] [--batch-id ID] [--continue-on-failure] [--data-dir PATH] [--break-stale-lock] [--stale-lock-minutes N] [--redact-paths] [--json]
+forge targets backfill-scope-manifests [--apply] [--limit N] [--reason REASON] [--data-dir PATH] [--json]
+forge monitoring status|due-plan [--include-empty-db-results]|exposure-metrics|run-due|deliver-alerts|worker
 forge remediation review-queue|propagate-owners|draft-from-asset-graph|request-retest|apply-retest-run|handoff-plan|integration-runbook|import-ticket-statuses|sync-tickets
 forge active-validation preview|create|approve|run|list|methods|coverage
+forge automation policy [--json]          # Show the operator-approved wildcard automation policy defaults
+forge automation run [--apply] [--json]   # Emit the automation execution plan; records apply intent without launching live actions
+forge automation command-review [--json]  # Read-only command count and consolidation review
+forge automation defaults [--json]        # Read-only tunable defaults, presets, and disabled local config template
+forge automation limits [--json]          # Read-only effective resource/run/provider limits
+forge automation status [--engagement N] [--json]  # Read-only feed, queue, blocker, and next-action status
+forge automation cycle [--apply] [--live] [--queue-limit N] [--docker-probe-mode host-compose|compose-dependency|disabled] [--engagement N] [--json]  # Daily feed, queue, and optional guarded live loop
+forge automation feed-build [--output imports/target-feed.json] [--apply] [--json] [--source all|supabase|reports|db|cti|connectors] [--supabase-config PATH] [--limit N]
+forge automation supabase-add PROJECT_REF KEY_ENV [--config imports/supabase-projects.local.json] [--apply] [--replace] [--json]
+forge automation input-add --connector CONNECTOR_ID --file ARTIFACT [--imports-dir imports] [--engagement N] [--target URL] [--apply] [--json]
+forge automation cti-refresh --provider threatfox|urlhaus [--key-env ENV] [--days 1-7] [--limit N] [--imports-dir imports] [--engagement N] [--apply] [--json]
+forge automation self-heal-plan [--json] [--probe-docker] [--min-free-memory-mb N] [--min-free-disk-gb N] [--max-parallel N]
+forge automation guarded-autostart [--config imports/autostart.local.json] [--apply] [--docker-probe-mode host-compose|compose-dependency|disabled] [--json]
 forge connectors list [--domain NAME] [--engagement N] [--include-paid]  # Free-first connector/plugin catalog
+forge connectors install-plan [--json]       # Print missing local binary install guidance; does not execute commands
+forge connectors run-plan [--domain NAME] [--json]  # Print free-first connector run guidance; does not execute commands
 forge connectors run --engagement N --connector projectdiscovery_subfinder|projectdiscovery_httpx|projectdiscovery_katana|projectdiscovery_nuclei --target DOMAIN_OR_URL [--dry-run] [--max-results N]
-forge connectors import-discovery --engagement N --connector shodan_host_lookup|censys_lookup|urlscan_search --report-file REPORT.json [--target DOMAIN]
+forge connectors import-discovery --engagement N --connector shodan_host_lookup|censys_lookup|urlscan_search|asset_delta_import|runzero_asset_export|projectdiscovery_cloud --report-file REPORT.json|REPORT.csv [--target DOMAIN] [--dry-run] [--limit N]
+forge connectors import-validation --engagement N --connector burp_dast_xml --report-file REPORT.xml [--target URL_PREFIX] [--dry-run] [--limit N] [--json]
+forge connectors import-cti --engagement N --connector abusech_threatfox|abusech_urlhaus|misp_event_import|supabase_table_import|stix_taxii_import --report-file OBSERVATIONS.json|csv|gz|zip [--dry-run] [--limit N] [--since ISO] [--until ISO] [--min-confidence 0.0-1.0] [--max-tlp clear|green|amber|red] [--fail-on-empty] [--promote-targets]
 forge connectors run-identity --engagement N --connector hibp_pwned_passwords [--domain DOMAIN] [--offline-corpus PATH]
 forge connectors run-secrets --engagement N --connector gitleaks_local|trufflehog_local --source-path PATH --domain DOMAIN
 forge connectors import-secrets --engagement N --connector gitleaks_local|trufflehog_local --report-file REPORT.json --domain DOMAIN
 forge connectors secret-prevention-plan --engagement N [--workflow pre-commit|pull_request|push] [--json]
+forge connectors secret-key-plan [--json]   # Non-secret FORGE_ENGAGEMENT_KEY setup/reload guidance
 forge connectors secret-set --engagement N --connector ID --name NAME --value-env ENV
 forge connectors secret-list --engagement N [--connector ID]
+forge connectors policy-summary [--json]
 forge connectors plugin-validate [--plugin-dir PATH] [--json]
 forge standards import-stix|export-stix --engagement N --bundle-file bundle.json [--json]
-forge workspaces list|upsert|members|member-set|member-delete|audit
+forge workspaces list|upsert|members|member-set|member-delete|audit|backfill-memberships
 forge demo proof-pack [--engagement 9901]
 forge retention preview|apply --engagement N
 forge dashboard                             # Generate the static local operator dashboard
-forge doctor [--json] [--live-provider-probes]  # Operator setup, dependency, key, and provider-readiness checks
+forge doctor [--json] [--live-provider-probes] [--fix-safe]  # Operator setup, readiness checks, and safe local repairs
 forge scaffold                              # Emit obfuscated directory tree
 forge clean --engagement N [--confirm]      # Securely wipe engagement artifacts
 ```
 
-`forge targets import` consumes sanitized `target-feed.v1` feeds from scheduled
-workflows such as theprawnhunter. Feed items can use canonical target types
+`forge automation cycle` is the daily-use loop. Dry-run mode plans feed-build,
+source queue consumption, and optional guarded live startup without writing.
+`--apply` writes the local feed and consumes ready local/no-key source queues.
+`--live` additionally invokes guarded-autostart, so target import/start, resume,
+monitoring, and dashboard refresh still pass through ROE, memory, disk, Docker,
+cooldown, backoff, and single-instance gates. `forge automation status` is the
+read-only view of feed presence, queue readiness, blocked inputs, resume and
+monitoring backlog, report review drift, guarded-autostart history, and next
+actions. Use `forge automation status --quick --json` for startup/supervisor
+health checks that need feed/queue/autostart readiness without the slower
+resume, monitoring, and report backlog inventories.
+For live startup, ready source-queue imports are bounded by
+`queue_limit` in `imports/autostart.local.json` unless `--queue-limit N`
+overrides it; each queued CTI/discovery/validation artifact is also passed an
+explicit `--limit` from `queue_import_item_limit` (default 1000), and deferred
+items stay pending for the next cycle. CTI queue imports only add
+`--promote-targets` when `queue_promote_targets` is true, and an individual
+queue item can override that with `promote_targets`.
+When `cycle --apply --live` hands off to guarded-autostart, the guarded launcher
+uses the feed already written by the cycle and skips its own feed-build phase to
+avoid duplicate source reads.
+Autopilot and guarded autostart accept `--min-start-source-count N` /
+`min_start_source_count` so operators can import every target while reserving
+live scan starts for targets confirmed by multiple source groups.
+
+`forge automation feed-build` remains the lower-level feed builder. It builds
+the daily local `imports/target-feed.json` handoff for `forge targets import`.
+It merges and dedupes by canonical target key across current engagement DB
+seeds, `reports/dashboard/data/*.json`, report metadata JSON under `reports/`,
+CTI observation drops, connector outputs under `imports/`, and explicitly
+configured read-only Supabase REST tables. Local CTI/connector feed mining is
+bounded and passive: JSON is parsed structurally, while JSONL/CSV/XML/TXT/LOG
+and local GZ/ZIP drops are scanned only for normalized target-like values. The
+command is dry-run by default; `--apply` writes the feed atomically. Use
+`--source all` for the full loop, or repeat `--source` for a subset. JSON
+reports total/selected/omitted/new/duplicate counts plus per-source and
+per-source-group counts, preserving provenance such as `report_family:<id>` and
+`supabase:<project_ref>:<table>`. Supabase runs also include a
+`supabase_table_discovery` block showing each project as `discovered`,
+`configured`, `blocked_key`, or `blocked_table_discovery`.
+
+Live Supabase feed extraction is read-only and local-config only. Store owned
+project settings in ignored `imports/supabase-projects.local.json`; keep keys in
+env vars or a Forge connector-secret reference, never in committed files.
+Env-based entries use `project_ref` plus `key_env`; secret-store entries use
+`project_ref` plus `key_secret_ref` with the shape
+`forge-secret://ENGAGEMENT_ID/CONNECTOR_ID/SECRET_NAME`, for example
+`forge-secret://1001/supabase_table_import/READ_KEY`. Forge derives
+`https://<project_ref>.supabase.co`, discovers exposed table paths from the
+read-only Data API root, and pages through all returned columns with
+`select=*`. The default greedy cap is 100,000 rows per table, 1,000 exposed
+tables per configured project, 100,000 total rows per project, and 100,000
+candidate feed entries per project; rows are harvested one page at a time, and
+key hints such as `username` or `handle` preserve canonical username targets.
+Use the no-secret helper instead of hand-editing when you only have a project
+ref and env var name:
+
+```powershell
+forge automation supabase-add abc123 FORGE_SUPABASE_ABC123_READ_KEY --apply --json
+```
+
+The helper writes only local config metadata. It refuses key-looking values,
+upgrades `pending_key` discoveries to `configured`, and preserves already
+configured entries unless `--replace` is explicit.
+
+```json
+{
+  "projects": [
+    {
+      "project_ref": "abc123",
+      "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+      "limit": 100000,
+      "max_tables": 1000,
+      "max_rows": 100000,
+      "max_candidates": 100000
+    }
+  ]
+}
+```
+
+Optional `url`, `tables`, `target_columns`, `limit`, `max_tables`, `max_rows`,
+and `max_candidates` still work for tighter scopes. Use `tables: ["*"]` or omit
+`tables` to process every exposed table, and use `target_columns: ["*"]` or omit
+`target_columns` to process every returned column. Forge only turns normalized
+target-like values into feed entries.
+For secret-store mode, store the key with `forge connectors secret-set` and put
+only the resulting URI shape in `key_secret_ref`; `automation status` validates
+that URI shape without decrypting or printing the secret value.
+If a project is set to all tables but the REST OpenAPI root does not expose
+table paths to the supplied key, JSON reports `blocked_table_discovery` with a
+local next action instead of silently skipping the project.
+Supabase hostnames found in scanned artifacts are appended to
+`imports/supabase-projects.local.json` as `status: "pending_key"` entries on
+`feed-build --apply`, using a generated `key_env` such as
+`FORGE_SUPABASE_ABC123_READ_KEY`. Those pending refs are maintained for future
+runs, but Forge only database-reads projects after you provide the matching
+owned read-only key locally.
+
+`feed-build --apply` also maintains ignored
+`imports/discovered-inputs.local.json` as a reusable input backlog and writes
+source-specific local queues for the same entries. Supabase keeps its own
+credential-bearing config file; CTI and artifact imports get their own ignored
+queue files such as `imports/threatfox-inputs.local.json`,
+`imports/urlhaus-inputs.local.json`,
+`imports/projectdiscovery-cloud-imports.local.json`,
+`imports/censys-imports.local.json`, `imports/runzero-imports.local.json`,
+`imports/asset-delta-imports.local.json`, and
+`imports/burp-dast-imports.local.json`. Artifact scans append newly observed
+no-key/free input hints for CTI marker drops, ProjectDiscovery Cloud exports,
+Censys/runZero/asset-delta discovery artifacts, and Burp/JUnit DAST XML
+validation artifacts. Dry-run reports the same `discovered_inputs` and
+`new_discovered_inputs` without writing. This lets the loop grow outward from
+accepted artifacts while keeping live/keyed reads gated until the matching local
+credential or import file exists.
+To queue a known local input directly without hand-editing those files:
+
+```powershell
+forge automation input-add --connector abusech_threatfox --file threatfox.json --apply --json
+forge automation input-add --connector projectdiscovery_cloud --file pd-cloud-export.json --apply --json
+forge automation input-add --connector burp_dast_xml --file burp-results.xml --target https://app.example --apply --json
+```
+
+The command writes only queue metadata, dedupes existing entries, and defaults
+to dry-run. Relative `--file` values are resolved under `imports/`; absolute
+paths are allowed for local artifacts outside the imports tree.
+
+ThreatFox recent-IOC refresh is free-account/keyed, not no-key. Forge can
+refresh ThreatFox or URLhaus directly only when explicitly applied with a local
+env var holding a free abuse.ch Auth-Key:
+
+```powershell
+forge automation cti-refresh --provider threatfox --key-env FORGE_THREATFOX_AUTH_KEY --days 1 --apply --json
+forge automation cti-refresh --provider urlhaus --key-env FORGE_URLHAUS_AUTH_KEY --limit 1000 --apply --json
+```
+
+Dry-run does not call the network or require the key. Apply writes the provider
+artifact (`imports/threatfox-observations.local.json` or
+`imports/urlhaus-observations.local.json`) and queues it for the next
+`automation cycle`. MISP, STIX/TAXII, and private CTI feeds remain local
+artifact/queue inputs unless you configure their required account key, endpoint,
+or export yourself. For no-key operation, drop local CTI exports under
+`imports/` or queue them with `forge automation input-add`.
+
+Source queue execution is bounded for unattended runs. Failed local imports are
+marked `failed`, keep a redacted last error and return code, wait at least 15
+minutes before retrying, use exponential backoff capped at 6 hours, and block
+after 5 failures until the queue entry or artifact is fixed.
+
+Local CTI feed extraction is also file-based. Drop JSON directly under
+`imports/` with a filename containing `threatfox`, `urlhaus`, `misp`, `stix`,
+or `taxii`; Forge harvests scoped target-like strings from keys such as `ioc`,
+`iocs`, `domains`, `urls`, `ips`, `emails`, `targets`, `seeds`, `host`, and
+`cloud_ref`. Local observation drops are ignored, including
+`imports/threatfox-observations.local.json`,
+`imports/urlhaus-observations.local.json`,
+`imports/misp-observations.local.json`, `imports/stix-observations.local.json`,
+and `imports/taxii-observations.local.json`. Raw CTI exports whose names
+contain those provider markers are ignored too, so downloaded `.json`, `.csv`,
+`.gz`, or `.zip` imports stay local.
+
+`forge automation defaults --json` exposes the operator-tunable defaults
+without writing files: automation policy defaults, the wildcard scope template,
+guarded-autostart defaults, conservative/current/aggressive startup presets,
+memory/cadence/log/feed/OpenRouter options, and a disabled local
+`imports/autostart.local.json` template. Its command plan prefers
+`forge automation cycle` for startup/daily operation and keeps
+`guarded-autostart` as a lower-level readiness probe. It returns secret
+variable names and placeholders only, never secret values.
+
+`forge automation self-heal-plan` is the read-only preflight for any future
+Docker/startup autopilot. It reports resource guardrails, Docker compose
+readiness, resume-lock paths, packaged Go tool availability, and exact
+dry-run/apply command arrays without installing services or starting live work.
+Use `--probe-docker` only when a read-only `docker compose ps --format json`
+check is intended; the probe summarizes container state/health and blocks
+startup when Compose reports unhealthy, starting, exited, dead, or paused
+services. Auto-start remains fail-closed: live work requires an explicit ROE,
+resource thresholds, a single-instance lock, and the normal scoped feed/import
+gates.
+
+`forge automation cycle --apply --live` is the preferred Docker or OS startup
+entrypoint because it classifies inbox drops and consumes ready local source
+queues before handing off to guarded live work. `forge automation
+guarded-autostart` remains the lower-level fail-closed guard. Without `--apply`
+it evaluates the ignored local
+`imports/autostart.local.json` config, runs read-only readiness probes, and
+returns the same bounded command plan.
+With `--apply`, it still refuses live autopilot unless the config contains both
+`enabled: true` and `apply_enabled: true`, Docker/resource/tool guardrails pass,
+no guarded-autostart lock exists, cooldown/backoff windows have expired, and no
+ready source queues would be bypassed.
+When allowed, it runs a bounded autopilot dry-run first, then the live autopilot
+command, records state under the Forge data dir, and removes its single-instance
+lock. Stale or dead-PID guarded-autostart locks are replaced in apply mode,
+active locks remain blockers, and autopilot child process timeouts use the
+contained process-tree runner. Apply-mode runs append a bounded redacted JSONL
+history at `FORGE_DATA_DIR/automation/guarded-autostart.jsonl`; dry-run remains
+non-mutating. Direct `forge-autopilot` launcher banners only print whether an
+ROE is present, not the ROE value.
+The production Compose file ships with conservative, env-overridable CPU/RAM
+caps for API, web UI, worker, Postgres, and Redis services so Docker startup has
+bounded defaults on small machines.
+Docker-started autopilot is available as an opt-in Compose profile:
+
+```bash
+docker compose -f docker/docker-compose.yml --profile autostart up -d
+```
+
+Small hosts can review the bounded 1024 MB profile with:
+
+```bash
+docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.yml --profile autostart config
+```
+
+`docker/low-memory.env.example` caps API, web UI, worker, Postgres, Redis, and
+guarded autostart at 960 MiB total. `forge automation limits --json` reports
+the same low-memory profile fields and review command. Keep secrets in your
+normal local env source before starting containers.
+
+The `forge-guarded-autostart` service runs a controlled loop with lower default
+caps (`FORGE_AUTOSTART_CPUS=0.25`, `FORGE_AUTOSTART_MEM_LIMIT=1536m`), startup
+delay `FORGE_AUTOSTART_STARTUP_DELAY_SECONDS=300`, cadence
+`FORGE_AUTOSTART_EVERY_SECONDS=9300`, an outer cycle timeout
+`FORGE_AUTOSTART_TIMEOUT_SECONDS=9000`, and the guarded Forge memory gate still
+defaults to `1024` MB. The timeout keeps a hung container cycle from blocking
+future guarded attempts. It reads
+`/app/imports/autostart.local.json`, enters through
+`forge automation cycle --apply --live`, and only writes through the mounted
+`imports/`, `reports/`, and `/data` paths. That means Docker startup consumes
+ready local source queues before guarded-autostart launches target import,
+resume, monitoring, or dashboard work. Local Go scanner binaries should be
+placed in ignored `tools/bin/` or mounted by setting
+`FORGE_HOST_CONNECTOR_BIN_DIR`; the container sees them at `/app/tools/bin`,
+which the self-heal probe checks before live startup. Docker health inside this
+container is delegated to Compose `depends_on` service health rather than a
+Docker socket probe. It still fails closed unless the local config,
+`FORGE_ROE_ID`, resource gates, cooldown/backoff, and single-instance lock all
+pass.
+
+On Windows, install the startup-safe task with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install_guarded_autostart_task.ps1 -EveryMinutes 30 -StartupDelayMinutes 5 -TimeoutMinutes 150
+```
+
+The task runs hidden at logon after the delay and then on the configured
+cadence. It calls `forge automation cycle --apply --live --json`, so ready
+local source queues are consumed before live work still fails closed on
+`imports/autostart.local.json`, `FORGE_ROE_ID`, resource checks, Docker health,
+cooldown/backoff, and the single-instance lock.
+If Task Scheduler registration is denied, the installer falls back to a
+user-level HKCU Run startup entry that runs at logon without admin rights.
+
+Minimal local autostart config:
+
+```json
+{
+  "enabled": true,
+  "apply_enabled": false,
+  "roe_id_env": "FORGE_ROE_ID",
+  "engagement_id": 1001,
+  "min_free_memory_mb": 1024,
+  "min_free_disk_gb": 5,
+  "resume_limit": 10,
+  "max_parallel": 2,
+  "monitor_limit": 10,
+  "start_limit": 2,
+  "max_runtime_minutes": 10,
+  "cooldown_minutes": 60,
+  "failure_backoff_minutes": 120,
+  "log_max_entries": 25,
+  "feed_sources": ["all"]
+}
+```
+
+`engagement_id` lets unattended source-queue imports run without editing each
+queue entry. Explicit `--engagement` wins, then `engagement_id` from this local
+config, then `FORGE_DEFAULT_ENGAGEMENT_ID`.
+
+`forge targets import` consumes sanitized `target-feed.v1` feeds from
+`feed-build` or scheduled workflows such as theprawnhunter. Feed items can use
+canonical target types
 `domain`, `subdomain`, `url`, `apk_url`, `email`, `phone`, `username`, `name`,
 `company`, `ipv4`, `ipv6`, and `cloud_ref`, plus aliases such as `auto`,
 `artifact_url`, `host`, `ip`, `handle`, `telephone`, `person`, and
@@ -274,13 +593,154 @@ plain web URLs. Each imported engagement is also enrolled into the default
 `Target import seed exposure` passive monitoring policy with a baseline snapshot
 so scheduled monitoring can diff future exposure state without a separate setup
 step.
+The default import slice is 100 items, with an explicit bounded max of 100,000;
+local feed files are capped at 64 MiB so the daily merged feed can be reread
+without accepting unbounded input.
+With `--start`, the importer launches the normal scoped `forge kill-chain`
+defaults for each new target, including attack mode, resume, and detected
+follow-on execution; `--roe-id` and the generated narrow scope manifest are
+still required before any live launch. Generated target-import scope manifests
+also include an explicit policy block for destructive and post-exploitation
+permission metadata, so dashboard/report policy flags are sourced from the
+target-specific ROE manifest rather than a global process default.
+`forge report policy-plan` explains historical dashboard `*_no` policy counts
+as generated latest-run metadata. Its JSON includes the dashboard timestamp,
+source, meaning, and per-sample reasons so old/dry/non-live summaries are not
+confused with current operator defaults.
+
+`forge connectors import-validation` ingests local Burp Suite issue XML or
+JUnit-style DAST XML as scoped active-validation evidence. It is offline only:
+no network request, subprocess, scanner execution, or vulnerability-finding
+write occurs. Use `--dry-run --json` first. Applied imports write sanitized
+`active_validation_jobs` and `active_validation_runs` rows, reject XML
+DOCTYPE/ENTITY payloads, cap XML size, strip sensitive URL query parameters,
+skip out-of-scope URLs, avoid request/response body persistence, and dedupe
+repeated imports by artifact hash plus target/title/proof type.
+
+`forge targets resume-candidates` is read-only. It scans the latest
+`kill_chain` row in each local engagement DB, classifies failed or cancelled
+runs such as `pending_recursive_work`, `watchdog_timeout`, `abandoned`, and
+`stale_run_recovery`, and emits JSON for operator review without resuming,
+starting, or mutating any engagement. The payload includes `resume_ready`,
+`resume_blockers`, aggregate blocker counts, and a `resume_command` array only
+when ROE, scope manifest, and resume gates are present. Static dashboards also
+surface these latest-run candidates as a compact `Resume Review` overview
+column and detail section without exposing raw scope-manifest paths. Use
+`--redact-paths` when exporting candidate JSON for review outside the local
+operator shell.
+`forge targets resume-plan` is read-only and turns ready candidates into a
+manual command plan with an explicit per-run
+`--max-runtime-minutes` budget. It does not execute, enqueue, or parallelize
+resumes; blocked candidates are summarized by blocker so operators can backfill
+or fix gates first. Use `--redact-paths` for report/review output that should
+hide local DB and scope-manifest paths; omit it when copying commands to run
+manually on the same machine.
+`forge targets resume-lock-status` is read-only and reports whether an existing
+resume batch lock is missing, active, stale by age, or stale because its owner
+PID is dead. Use `--redact-paths` before sharing output outside the local
+operator shell.
+`forge targets resume-run` is the explicit executor for that plan. With
+`--dry-run`, it re-checks the same candidates and reports the would-run batch
+without creating the batch lock, writing the ledger, or launching child
+processes. `--dry-run --break-stale-lock` also reports whether the current lock
+would be breakable, but still does not remove it. `--dry-run --redact-paths`
+also hides local DB, scope-manifest, ledger, and lock paths in the JSON output.
+Without `--dry-run`, it re-checks
+each latest run before launching,
+holds a batch lock, writes a JSONL ledger under
+`target_imports/resume_batches`, and starts one child
+`forge kill-chain ... --resume` process at a time by default. Use
+`--max-parallel N` for a bounded parallel batch; the same batch lock is held and
+ledger writes remain serialized. Re-running after a candidate is already
+completed skips it instead of launching duplicate work. Resume-run only removes
+a stale lock when `--break-stale-lock` is explicit, and active owner PIDs are
+not breakable by age alone.
+JSON includes `total_count`, `selected_count`, and `omitted_count`, matching
+resume-plan, so bounded rehearsals cannot be mistaken for the full backlog.
+`forge targets backfill-scope-manifests` is also dry-run by default; with
+`--apply`, it only writes recovered narrow scope manifests and updates the
+latest-run metadata for blocked resume candidates. It does not start or resume
+kill-chain runs.
+
+`forge workspaces backfill-memberships` is dry-run by default. With `--apply`,
+it seeds missing operator memberships in legacy engagement DBs and the control
+DB, refreshes control index rows, and appends a redacted control-audit event;
+it does not launch scans or change engagement findings.
+
+`forge connectors import-cti` is offline-only. It accepts FORGE's neutral
+observation JSON plus common downloaded/exported JSON or CSV shapes from
+abuse.ch ThreatFox (`data` IOC rows or CSV columns), abuse.ch URLHaus (`url`
+rows or CSV columns), MISP event/attribute JSON (`Event.Attribute` or
+`response.Attribute` rows), Supabase table exports containing neutral
+target/indicator columns or common URL/domain/IP/email/username columns, and
+STIX indicator bundles (`objects`). Imported CTI rows are stored as analyst
+inventory with
+sanitized source/provenance and are not reportable findings unless a later
+independent scoped workflow validates promoted seeds. Supabase import is file
+based only; FORGE does not poll Supabase or persist API keys in this path. MISP
+Unix timestamps are normalized to UTC ISO timestamps before time-window filters.
+Local `.gz` report files
+are decompressed before the same JSON/CSV parsing path; local `.zip` files use
+the first supported JSON, CSV, or GZ member by sorted archive name and reject
+archives without a supported report member. Local report files and decompressed
+content are capped at 100 MB before parsing. Import JSON output records
+`result_schema_version`, `report_container_format`, and, for ZIP imports, the
+selected `report_member`. Use `--dry-run` to parse,
+sanitize, and scope-check seed promotion candidates without writing
+observations, seeds, or audit rows; dry-run reports new observations separately
+from existing or repeated observations with `would_persist_count` and
+`would_duplicate_count`. Use `--limit N` to process a bounded prefix of large
+offline exports; results include `total_item_count`, `processed_item_count`,
+and `limited_item_count`. Use `--min-confidence F` to skip normalized
+observations below a chosen confidence threshold; skipped low-confidence rows
+are counted with `filtered_count`. Use `--max-tlp LEVEL` to skip observations
+above the TLP level an operator is allowed to retain or preview. JSON output
+also includes summary dictionaries for parsed indicator types, parsed TLP
+levels, rejected sensitive observation types, target-feed-compatible types, and
+skipped reasons. Sensitive rows such as phone, person, private-message, and
+breach-record observations are rejected by default and are reported only as
+bounded type counts, not values. Rows containing command/script/install-like
+text are also surfaced only through `unsafe_text_item_count`; FORGE treats those
+snippets as unsafe text, never as commands to execute or persist. Use
+`--fail-on-empty` in automation to exit non-zero when no observations survive
+normalization and filters; duplicate-only re-imports still count as accepted
+because the file matched known observations. Use `--since ISO` and
+`--until ISO` to bound imports by observation time.
+
+`forge connectors policy-summary --json` exposes the internal CTI/OSINT provider
+catalog policy summary for operator review and tests. It reports only aggregate
+counts and provider IDs:
+default-visible sources, manual/policy-controlled sources, offline import
+sources, live/API-style sources, blocked-sensitive backlog sources, categories,
+safety tiers, collection methods, and required gate counts. CTI sources such as
+additional abuse.ch feeds, OTX, urlscan, VirusTotal, OpenCTI, OpenIOC,
+IODEF/RID, VERIS, report-derived IOC imports, phishing triage exports, and
+standards are represented alongside social/real-time/general OSINT backlog
+entries from public source lists. Public admin snippet archives such as
+`ukr.pw` are represented as catalog-only unsafe text for redacted webserver,
+firewall/VPN/proxy, database/mail/file-service, and cloud-bootstrap workflow
+ideas. Use it as the source-selection map for CTI/OSINT lists; do not treat
+public tool lists, config snippets, install notes, or provider notes as runnable
+commands.
 
 `forge monitoring status --json` is the read-only operator check for scheduled
 monitoring: it reports stale DB schemas, enabled/idle policy counts,
 due/overdue policies, open alerts, unrouted open alerts, failed alert-delivery
 rows, suppressed delivery rows, and active alert suppressions without running
-jobs or delivering alerts. `forge monitoring run-due` and
-`forge monitoring worker` create scheduled snapshots and diff exposure state.
+jobs or delivering alerts. `forge monitoring exposure-metrics --json` is the
+read-only exposure-duration summary: it computes first seen, last seen, open
+days, recurrence, and MTTR from local findings, monitoring changes, validation
+runs, and remediation rows without creating snapshots or migrations. `forge
+monitoring due-plan --json` is the bounded read-only apply preview for due
+policies; it reports policy IDs, modes, timing, sanitized refresh shape, default
+capped batch estimates, stale backlog age, policy composition, and safe
+next-action commands with `plan_only_no_commands_executed`. Empty DB result rows
+are omitted by default; use `--include-empty-db-results` when troubleshooting
+per-DB planning. `forge monitoring run-due --limit 50` and `forge monitoring
+worker --run-limit 50`
+create scheduled snapshots and diff exposure state in bounded batches; pass
+`--all` only when intentionally applying the full due backlog in one invocation
+or worker tick.
 Policies can opt into the built-in no-network refresh path with metadata
 `{"refresh": {"type": "seed_exposure"}}`;
 the runner then promotes non-failed seeds into monitored exposure state before
@@ -423,7 +883,10 @@ Keyed connector setup can use `forge connectors secret-set --value-env ENV` or
 under `FORGE_ENGAGEMENT_KEY`; `forge connectors secret-list --json` returns only
 secret names, source refs, metadata, timestamps, and a key fingerprint. Secret
 values are never accepted as command-line literals, printed, or written to
-audit rows. The same redacted contract is exposed in live mode through
+audit rows. If Windows has a persistent user/machine key but the current shell
+has not inherited it, `forge connectors secret-key-plan --json` includes a
+process-only PowerShell reload command that copies the existing key into the
+current process without printing it. The same redacted contract is exposed in live mode through
 `GET|POST /api/engagements/{engagement}/connector-secrets` behind
 `connectors:read`/`connectors:write`, and the React engagement detail route
 includes connector-secret controls for operator setup. Live readiness is also
@@ -463,6 +926,15 @@ probes are disabled by default;
 use
 `forge doctor --live-provider-probes` only when local/SaaS provider probing is
 intentionally allowed.
+OpenRouter is the exception to the paid-backend gate only when
+`OPENROUTER_API_KEY` is set and the live model list proves a zero-price/free
+model. In free-only mode Forge requests OpenRouter's newest model list and
+selects the newest capable zero-priced family it recognizes, such as Qwen,
+DeepSeek, Llama, Gemma, or Mistral. If pricing metadata cannot be fetched or no
+capable free model is advertised, Forge skips OpenRouter instead of falling
+back to a paid or weak default. Set
+`FORGE_ALLOW_PAID_BACKENDS=1` only when you intentionally want keyed/paid SaaS
+LLM backends considered.
 Set `FORGE_DEPLOYMENT_PROFILE=production` for self-host/shared exposure; doctor
 then expects JWT web auth, scope-manifest enforcement, safe mode, append-only
 remote audit bundle storage, a strong web bootstrap credential, non-dev
@@ -477,6 +949,16 @@ web UI, and worker containers as the non-root image user, uses Postgres and
 Redis, binds app ports to loopback for reverse-proxy/TLS exposure, and stores
 remote audit bundles under `/remote-audit` unless an external mounted/file URI
 is supplied.
+Add `--profile autostart` when Docker itself should attempt the guarded
+autopilot loop at stack startup. The profile is separate from API/web/worker,
+uses conservative CPU/RAM caps, sleeps between attempts, and still requires the
+local guarded-autostart gates before any live target import, resume, monitoring,
+or dashboard refresh is attempted. Set
+`FORGE_HOST_CONNECTOR_BIN_DIR` to your local ProjectDiscovery/Go binary
+directory, or copy those binaries into ignored `tools/bin/`, before expecting
+the Docker autostart gate to pass packaged-tool checks. In `/etc/forge/forge.env`
+for the systemd wrapper, set `COMPOSE_PROFILES=autostart` when Linux service
+startup should include that guarded loop profile.
 For Linux hosts, `docker/systemd/forge-compose.service` wraps the same compose
 file with a preflight `config --quiet` check and an `/etc/forge/forge.env`
 environment file. Install it only after `/opt/forge/docker/docker-compose.yml`
@@ -511,7 +993,7 @@ Use `forge doctor --json` for automation; the payload includes per-check
 status, details, remediation hints, and a top-level `action_plan` that groups
 connector and provider setup into exact machine-readable IDs:
 `install_free_binaries`, `run_free_connectors`, `configure_optional_keys`,
-`review_catalog_only`, `keep_active_validation_fail_closed`,
+`review_catalog_only`, `review_cti_osint_policy`, `keep_active_validation_fail_closed`,
 `review_paid_adapters`, `run_live_provider_probes_if_intended`,
 `review_paid_llm_backends`, and `enable_live_validation_only_after_roe`,
 without printing secret values.
@@ -582,10 +1064,16 @@ already-stored SHA-1/NTLM password hashes against the HIBP k-anonymity range API
 or an operator-supplied offline corpus, stores only pwned-count metadata and
 remediation items, and never returns or audits plaintext passwords or full
 hashes. `forge connectors import-discovery` is the first Shodan/Censys/urlscan
-provider report path; it accepts operator-supplied JSON, scope-gates observed
-hostnames/IPs and urlscan page/task URLs, persists in-scope hosts/services/seeds
-with provider provenance, queues sanitized urlscan URLs for recursive crawling,
-and keeps raw report bodies/API keys out of connector results and audit rows.
+provider report path and also accepts free/local `asset_delta_import`,
+`runzero_asset_export`, and `projectdiscovery_cloud` artifacts; it ingests
+operator-supplied JSON/CSV or ProjectDiscovery Cloud JSON exports, scope-gates
+observed hostnames/IPs, urlscan page/task URLs, and cloud-export findings,
+persists in-scope hosts/services/seeds with provider provenance, projects
+fingerprint depth and topology relationships into the asset graph, imports
+scoped nuclei-style ProjectDiscovery Cloud findings/templates into the same
+local finding path as deterministic nuclei runs, queues sanitized urlscan URLs
+for recursive crawling, and keeps raw report bodies/API keys out of connector
+results and audit rows.
 
 Run `forge demo proof-pack --force` to generate a repeatable local demo
 engagement. The proof pack writes a sanitized engagement DB plus template report
@@ -627,6 +1115,11 @@ Failed ticket/SOAR/SIEM handoffs are now queue reasons too: the latest
 `remediation_ticket_events` status per item is summarized with connector,
 attempt count, redacted destination/error text, and a `ticket sync failed`
 review reason until a later delivered event clears it.
+The same local-only closed-loop view now derives ticket state and validation
+proof freshness from remediation rows, ticket events, and active-validation
+retest metadata, so the dashboard can flag missing/failed tickets, stale proof,
+and completed retests that lack proof without calling ticket APIs or rerunning
+validation.
 The same panel now exposes graph-owner propagation for unowned remediation
 items, with an explicit overwrite toggle for owner replacements.
 Graph-derived fix candidates can be drafted into normal owner/SLA/review-queue
@@ -735,7 +1228,7 @@ the root CLI entry point focused on command handlers while preserving
 | wayback_cdx | archive.org CDX API with domain-wide match | F | historical URLs → subdomains, old pages, static asset URLs |
 | commoncrawl_cdx | Common Crawl CDXJ latest-index lookup | F | recent crawl URLs → subdomains, static assets, artifact URLs |
 | crawler | Playwright (SPA-aware) + httpx | F | rendered HTML + tech-stack |
-| cloud_scan | httpx probes on 7 service families | F | Supabase/Firebase/Amplify/GCP/Vercel/Netlify posture |
+| cloud_scan | httpx probes on 6 service families | F | Supabase/Firebase/Amplify/GCP/Vercel/Netlify posture |
 | key_scanner | GitHub Code Search API | F/K | leaked secrets (needs `FORGE_GITHUB_TOKEN`) |
 | xposed | XposedOrNot | F | breach names per email |
 | hibp | Have-I-Been-Pwned public API | F | domain-level breach names |
@@ -759,13 +1252,13 @@ the root CLI entry point focused on command handlers while preserving
 | `FORGE_CONTROL_TOMBSTONE_RETENTION_DAYS` | Days to keep missing control-index rows before purging; default `30`, set `off` to disable |
 | `FORGE_OPERATOR` | Callsign recorded in every `audit_log` entry |
 | `FORGE_NO_TOR` | `1` skips Tor daemon startup (10× speedup on offline commands) |
-| `FORGE_SAFE_MODE` | `1` keeps legacy high-risk modules disabled; keep enabled for the authorized ASM workflow |
+| `FORGE_SAFE_MODE` | `1` keeps legacy high-risk modules disabled for safe/core or production ASM; use `0` only when full legacy offensive modules are intentionally in scope with written ROE |
 | `FORGE_ROE_ID` | Optional ROE / written-authorization reference recorded on kill-chain runs |
 | `FORGE_SCOPE_MANIFEST` | Optional ROE/scope JSON manifest; required for live `--attack-mode` or `--auto-run-detected` |
 | `FORGE_REQUIRE_SCOPE_MANIFEST` | `1` requires a scope manifest for every non-dry-run kill-chain launch |
 | `FORGE_DEPLOYMENT_PROFILE` | Set `production` before self-host/shared exposure; `forge doctor` then enforces the Deployment Hardening checklist |
 | `FORGE_ENV` | Runtime profile; use `production` with `FORGE_DEPLOYMENT_PROFILE=production` so web debug/dev behavior stays off |
-| `FORGE_TPH_TARGET_IMPORT_ENABLED` | `1` tells doctor the optional theprawnhunter target-import bridge is expected to be installed and healthy |
+| `FORGE_TPH_TARGET_IMPORT_ENABLED` | `1` tells doctor the optional theprawnhunter target-import bridge is expected to be installed and healthy; an installed but disabled scheduled task is otherwise reported as paused/OFF |
 | `FORGE_TPH_TARGET_IMPORT_API_URL` | Target feed URL for the theprawnhunter bridge; default `http://127.0.0.1:8011/monitor/targets/export` |
 | `FORGE_TPH_ENV_PATH` / `FORGE_TPH_COMPOSE_PATH` | Paths doctor checks for theprawnhunter monitor key source and Docker Compose app; values are not read for secrets |
 | `FORGE_TPH_TARGET_IMPORT_TASK_NAME` | Windows scheduled-task name for the TPH target import bridge |
@@ -782,7 +1275,9 @@ the root CLI entry point focused on command handlers while preserving
 | `FORGE_CONNECTOR_PLUGIN_DIRS` | Optional semicolon/comma-separated directories of data-only `forge.connector.plugin.v1` connector manifests; default local path is `FORGE_DATA_DIR/connector_plugins` |
 | `FORGE_ACTIVE_VALIDATION_ENABLE_LIVE` | Optional CLI live gate for approved, scope-bound active-validation methods; API live runs still require the `active_validation:live` permission and explicit `allow_live` request |
 | `FORGE_OFFLINE_STRICT` | `1` disables all outbound sockets process-wide |
-| `FORGE_LLM_PROVIDER` | Optional Phase 6 provider override. Unset defaults to `llama_cpp`; set `auto` to cascade through configured LLM CLI/API backends, then local/template fallbacks; set `template` for deterministic no-LLM reporting |
+| `FORGE_LLM_PROVIDER` | Optional Phase 6 provider override. Unset defaults to `auto`, cascading through configured LLM CLI/API backends, then local/template fallbacks; set `llama_cpp` for explicit local GGUF; set `template` for deterministic no-LLM reporting |
+| `OPENROUTER_API_KEY` | Optional OpenRouter key. Without `FORGE_ALLOW_PAID_BACKENDS=1`, Forge only enables OpenRouter when `/models?sort=newest` proves a capable zero-price/free model; otherwise it skips the backend |
+| `FORGE_ALLOW_PAID_BACKENDS` | Optional `1` gate for keyed/paid SaaS LLM provider discovery. Leave unset for free/local-first operation |
 | `FORGE_ENGAGEMENT_KEY` | At-rest encryption master secret for engagement credentials and connector secrets; set at least 32 characters before storing encrypted values |
 | `FORGE_AUDIT_BUNDLE_REMOTE_URI` | Optional absolute mounted path or `file://` URI for append-only remote audit manifest bundle storage |
 | `FORGE_AUDIT_BUNDLE_REMOTE_SCOPE` | Required customer/workspace scope label when `FORGE_AUDIT_BUNDLE_REMOTE_URI` is set |

@@ -10,6 +10,20 @@ from typing import Any, Callable
 
 from forge.audit.manifest import summarize_run_audit_manifest
 
+_SENSITIVE_RUN_METADATA_KEYS = {
+    "api_key",
+    "apikey",
+    "authorization",
+    "cookie",
+    "credential",
+    "password",
+    "scope_manifest",
+    "scope_manifest_json",
+    "scope_manifest_payload",
+    "secret",
+    "token",
+}
+
 
 @dataclass(frozen=True)
 class RunSummaryCallbacks:
@@ -21,6 +35,7 @@ class RunSummaryCallbacks:
     format_dt: Callable[[str], str]
     safe_json_loads: Callable[[str], Any]
     truncate: Callable[[Any, int], str]
+    redact_error: Callable[[Any, int], str]
     summarize_run_audit_manifest: Callable[..., dict[str, Any]]
 
 
@@ -74,6 +89,7 @@ def default_run_summary_callbacks() -> RunSummaryCallbacks:
         format_dt=_format_dt,
         safe_json_loads=_safe_json_loads,
         truncate=_truncate,
+        redact_error=_truncate,
         summarize_run_audit_manifest=summarize_run_audit_manifest,
     )
 
@@ -140,6 +156,35 @@ def run_policy_summary(
             policy_dict.get("scope_gate") or "engagement_scope_json_root_domains"
         ),
     }
+
+
+def safe_run_metadata(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    clean: dict[str, Any] = {}
+    for raw_key, raw_value in value.items():
+        key = str(raw_key or "").strip()
+        normalized = key.lower()
+        if (
+            not key
+            or normalized in _SENSITIVE_RUN_METADATA_KEYS
+            or normalized.startswith("scope_manifest")
+            or normalized.endswith("_enc")
+            or any(marker in normalized for marker in ("password", "secret", "token"))
+        ):
+            continue
+        clean[key] = _safe_run_metadata_value(raw_value)
+    return clean
+
+
+def _safe_run_metadata_value(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, list):
+        return [_safe_run_metadata_value(item) for item in value[:50]]
+    if isinstance(value, dict):
+        return safe_run_metadata(value)
+    return str(value)
 
 
 def annotate_audit_manifest_bundle(
@@ -236,8 +281,8 @@ def latest_engagement_run(
         "dry_run": bool(row["dry_run"]),
         "attack_mode": bool(row["attack_mode"]),
         **policy_summary,
-        "error": callbacks.truncate(row["error"], 160),
-        "metadata": metadata if isinstance(metadata, dict) else {},
+        "error": callbacks.redact_error(row["error"], 160),
+        "metadata": safe_run_metadata(metadata),
         "audit_manifest": callbacks.summarize_run_audit_manifest(
             con,
             db_path=db_path,
@@ -258,6 +303,7 @@ def engagement_run_section_row(
     safe_json_loads: Callable[[str], Any] = _safe_json_loads,
     format_dt: Callable[[str], str] = _format_dt,
     truncate: Callable[[Any, int], str] = _truncate,
+    redact_error: Callable[[Any, int], str] | None = None,
 ) -> dict[str, str]:
     metadata = safe_json_loads(str(row["metadata_json"] or "{}"))
     policy = run_policy_summary(
@@ -285,12 +331,14 @@ def engagement_run_section_row(
         "Attack": "yes" if row["attack_mode"] else "no",
         "Live": " ".join(live_bits),
         "ROE": policy["roe_id"] or "-",
+        "ROE Source": "latest run metadata / scope manifest",
         "ROE Missing": "yes" if policy["roe_missing"] else "no",
         "Destructive": "yes" if policy["destructive_actions_allowed"] else "no",
         "Post-Ex": "yes" if policy["post_exploitation_allowed"] else "no",
+        "Policy Source": "latest run metadata",
         "Started": format_dt(str(row["started_at"] or "")),
         "Completed": format_dt(str(row["completed_at"] or "")),
-        "Error": truncate(row["error"], 96),
+        "Error": (redact_error or truncate)(row["error"], 96),
     }
     result["Manifest"] = str(manifest.get("short_hash") or "-")
     result["Manifest OK"] = "yes" if manifest.get("verified") is True else manifest_status

@@ -72,6 +72,7 @@ def register_standards_commands(app: typer.Typer) -> None:
             raise typer.BadParameter(str(exc)) from exc
 
         result = {
+            "schema_version": "forge.standards.stix_export.v1",
             "engagement_id": int(engagement),
             "status": "exported",
             "source": "vulnerability_findings",
@@ -81,6 +82,9 @@ def register_standards_commands(app: typer.Typer) -> None:
             ),
             "finding_count": len(rows),
             "object_count": len(stix_bundle.get("objects", [])),
+            "total_count": len(rows),
+            "selected_count": len(stix_bundle.get("objects", [])),
+            "omitted_count": max(0, len(rows) - len(stix_bundle.get("objects", []))),
             "media_type": "application/stix+json;version=2.1",
             "network_calls": False,
             "execution_policy": "local_only; exports stored reportable metadata only",
@@ -144,12 +148,18 @@ def register_standards_commands(app: typer.Typer) -> None:
             status = "no_matches"
         result = {
             **preview,
+            "schema_version": "forge.standards.stix_import.v1",
             "status": status,
             "source": "local_stix_bundle",
             "bundle_file": str(bundle_file),
             "processed_finding_count": processed,
+            "total_count": int(preview.get("stix_cve_count", 0) or 0),
+            "selected_count": int(preview.get("matched_finding_count", 0) or 0),
+            "omitted_count": len(preview.get("unmatched_stix_cve_ids", []) or []),
             "execution_policy": (
-                "local_only; CVE-matched enrichment; no new findings are created"
+                "dry_run_local_stix_match_preview_no_writes"
+                if dry_run
+                else "local_only; CVE-matched enrichment; no new findings are created"
             ),
         }
         if json_output:

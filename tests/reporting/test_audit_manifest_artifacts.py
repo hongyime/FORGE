@@ -37,6 +37,7 @@ def test_audit_and_report_files_keep_engagement_prefix_boundary(tmp_path: Path) 
     _write(reports_dir / "audit_10010.json")
     _write(reports_dir / "audit_1001.html")
     _write(reports_dir / "engagement_10010.md")
+    _write(reports_dir / "engagement_1001_stats.json")
     _write(reports_dir / "engagement_1001.graphml")
 
     assert audit_files("1001", reports_dir) == expected_audit

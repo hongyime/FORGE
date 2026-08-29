@@ -191,6 +191,13 @@ def test_asset_graph_api_rebuild_read_and_claim_routes(tmp_path: Path, monkeypat
     assert rebuild.json()["status"] == "rebuilt"
     assert rebuild.json()["node_count"] >= 2
     assert graph.status_code == 200, graph.text
+    assert graph.json()["schema_version"] == "forge.asset_graph.list.v1"
+    assert graph.json()["execution_policy"] == "read_only_asset_graph_inventory_no_commands_executed"
+    assert graph.json()["selected_count"] == len(graph.json()["nodes"])
+    assert graph.json()["omitted_count"] == max(
+        0,
+        graph.json()["total_count"] - len(graph.json()["nodes"]),
+    )
     assert graph.json()["attack_path_summary"]["scoring_model"] == "forge.asset_graph.v1"
     assert "critical_assets" in graph.json()
     assert "minimal_fix_set_candidates" in graph.json()

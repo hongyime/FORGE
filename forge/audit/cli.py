@@ -84,6 +84,11 @@ def _manifest_verify(
         con.close()
 
     payload = {
+        "schema_version": "forge.audit.manifest_verify.v1",
+        "execution_policy": "read_only_audit_manifest_verification_no_writes",
+        "total_count": 1,
+        "selected_count": 1,
+        "omitted_count": 0,
         "engagement_id": engagement_id,
         "run_id": int(selected_run_id),
         "ok": result.ok,
@@ -197,6 +202,15 @@ def _manifest_export(
             raise typer.Exit(1) from exc
 
     payload = {
+        "schema_version": "forge.audit.manifest_export.v1",
+        "execution_policy": (
+            "writes_local_audit_manifest_bundle"
+            if not remote_store
+            else "writes_local_and_configured_remote_audit_manifest_bundle"
+        ),
+        "total_count": 1,
+        "selected_count": 1,
+        "omitted_count": 0,
         "engagement_id": engagement_id,
         "run_id": selected_run_id,
         "path": str(bundle.path),
@@ -244,6 +258,11 @@ def _manifest_bundle_verify(
     signing_key = _signing_key(sign=True, env_name=signing_key_env)
     result = verify_run_audit_manifest_bundle_signature(bundle, signing_key=signing_key)
     payload = {
+        "schema_version": "forge.audit.manifest_bundle_verify.v1",
+        "execution_policy": "read_only_audit_bundle_signature_verification_no_writes",
+        "total_count": 1,
+        "selected_count": 1,
+        "omitted_count": 0,
         "bundle": str(bundle),
         "ok": result.ok,
         "reason": result.reason,

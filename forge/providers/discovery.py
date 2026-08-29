@@ -189,18 +189,24 @@ async def _probe_openai_compatible_saas(
     default_model: str,
     require_paid_gate: bool = True,
 ) -> DiscoveredBackend | None:
-    if require_paid_gate and not _is_paid_allowed():
+    paid_allowed = _is_paid_allowed()
+    free_only = backend_name == "openrouter" and not paid_allowed
+    if require_paid_gate and not paid_allowed and not free_only:
         return None
     api_key = _env_first(*env_key)
     if not api_key:
         return None
-    # Optionally fetch live model list; fall back to default_model on error.
+    # Optionally fetch live model list; fall back to default_model on error
+    # except for OpenRouter free-only mode, where we require proof of a free model.
     chosen_model = default_model
     pricing: dict[str, tuple[float | None, float | None]] = {}
     try:
         async with httpx.AsyncClient(timeout=DEFAULT_MODEL_LIST_TIMEOUT_S) as client:
+            model_list_url = f"{endpoint}/models"
+            if backend_name == "openrouter" and free_only:
+                model_list_url = f"{model_list_url}?sort=newest"
             resp = await client.get(
-                f"{endpoint}/models",
+                model_list_url,
                 headers={"Authorization": f"Bearer {api_key}"},
             )
             if 200 <= resp.status_code < 300:
@@ -209,10 +215,16 @@ async def _probe_openai_compatible_saas(
                     payload,
                     default_model,
                     backend_name,
+                    free_only=free_only,
                 )
+                if free_only and chosen_model is None:
+                    return None
     except (httpx.HTTPError, json.JSONDecodeError, ValueError, TypeError):
-        pass
+        if free_only:
+            return None
 
+    if free_only and chosen_model == default_model:
+        return None
     in_per_m, out_per_m = pricing.get(chosen_model, (None, None))
     info = ModelInfo(
         model_id=chosen_model,
@@ -230,15 +242,63 @@ async def _probe_openai_compatible_saas(
         extra={
             "env_var": env_key[0],
             "models_fetched": bool(pricing),
+            "free_only": free_only,
         },
     )
+
+
+def _openrouter_model_is_free(
+    model_id: str,
+    pricing: dict[str, tuple[float | None, float | None]],
+) -> bool:
+    input_price, output_price = pricing.get(model_id, (None, None))
+    return input_price == 0.0 and output_price == 0.0
+
+
+def _openrouter_model_capability_rank(model_id: str) -> int:
+    lowered = str(model_id or "").lower()
+    if any(marker in lowered for marker in ("tiny", "weak", "toy", "test")):
+        return -1
+    ranked_families = (
+        ("qwen", 90),
+        ("deepseek", 85),
+        ("llama", 80),
+        ("gemma", 75),
+        ("mistral", 70),
+        ("kimi", 68),
+        ("phi", 65),
+    )
+    for marker, rank in ranked_families:
+        if marker in lowered:
+            return rank
+    return -1
+
+
+def _model_created_sort_key(model_entry: dict[str, Any]) -> int:
+    for key in ("created", "created_at", "created_date"):
+        value = model_entry.get(key)
+        if isinstance(value, (int, float)):
+            return int(value)
+        if isinstance(value, str) and value.strip():
+            text = value.strip()
+            if text.isdigit():
+                return int(text)
+            try:
+                from datetime import datetime  # noqa: PLC0415
+
+                return int(datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp())
+            except ValueError:
+                continue
+    return 0
 
 
 def _pick_default_from_model_list(
     payload: Any,
     fallback_model: str,
     backend_name: str,
-) -> tuple[str, dict[str, tuple[float | None, float | None]]]:
+    *,
+    free_only: bool = False,
+) -> tuple[str | None, dict[str, tuple[float | None, float | None]]]:
     """Pick a sensible default model + extract pricing if available.
 
     Returns ``(model_id, {model_id: (input_per_m, output_per_m)})``. Pricing
@@ -246,10 +306,11 @@ def _pick_default_from_model_list(
     """
     pricing: dict[str, tuple[float | None, float | None]] = {}
     candidates: list[str] = []
+    candidate_entries: dict[str, dict[str, Any]] = {}
 
     data = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(data, list):
-        return fallback_model, pricing
+        return None if free_only else fallback_model, pricing
 
     for entry in data:
         if not isinstance(entry, dict):
@@ -258,6 +319,7 @@ def _pick_default_from_model_list(
         if not isinstance(mid, str):
             continue
         candidates.append(mid)
+        candidate_entries[mid] = entry
         # OpenRouter returns ``pricing.prompt`` / ``pricing.completion`` in
         # $/token (NOT $/M-token), so multiply by 1e6.
         pr = entry.get("pricing")
@@ -270,7 +332,24 @@ def _pick_default_from_model_list(
                 pass
 
     if not candidates:
-        return fallback_model, pricing
+        return None if free_only else fallback_model, pricing
+    if backend_name == "openrouter" and free_only:
+        capable_free_candidates = [
+            mid
+            for mid in candidates
+            if _openrouter_model_is_free(mid, pricing)
+            and _openrouter_model_capability_rank(mid) >= 0
+        ]
+        if not capable_free_candidates:
+            return None, pricing
+        capable_free_candidates.sort(
+            key=lambda mid: (
+                _model_created_sort_key(candidate_entries.get(mid, {})),
+                _openrouter_model_capability_rank(mid),
+            ),
+            reverse=True,
+        )
+        return capable_free_candidates[0], pricing
 
     # Prefer cheap fast models per backend:
     preference: dict[str, list[str]] = {

@@ -1,3 +1,4 @@
+import os
 import re
 import shutil
 import subprocess
@@ -16,6 +17,7 @@ def _read_launcher(name: str) -> str:
 
 def test_windows_launchers_use_project_virtualenv() -> None:
     launchers = (
+        "forge-autopilot.bat",
         "forge-kill-chain.bat",
         "forge-menu.bat",
         "forge-report.bat",
@@ -32,6 +34,141 @@ def test_report_launcher_uses_windows_native_latest_report_listing() -> None:
     assert "| head" not in text
     assert ".venv\\scripts\\python.exe -c" in text
     assert "reports[:3]" in text
+
+
+def test_status_windows_launcher_uses_consolidated_automation_status() -> None:
+    text = _read_launcher("forge-status.bat")
+
+    assert ".venv\\scripts\\forge.exe automation status --quick --json" in text
+    assert "kb status" not in text
+    assert ".forge_data/engagements" not in text
+
+
+def test_autopilot_launcher_runs_start_resume_monitor_dashboard() -> None:
+    text = _read_launcher("forge-autopilot.bat")
+    assert "automation feed-build" in text
+    assert "--skip-feed-build" in text
+    assert "--feed-source" in text
+    assert "targets import" in text
+    assert "--start-limit" in text
+    assert "--min-start-source-count" in text
+    assert "targets resume-run" in text
+    assert "--max-parallel" in text
+    assert "monitoring run-due" in text
+    assert "dashboard" in text
+    assert "--dry-run" in text
+    assert "roe_id_present" in text
+    assert "echo   roe_id=%roe_id%" not in text
+
+
+def test_autopilot_windows_launcher_defaults_to_dry_run_and_fails_fast_on_feed_apply() -> None:
+    text = _read_launcher("forge-autopilot.bat")
+
+    assert 'set "dry_run=1"' in text
+    assert 'if /i "%~1"=="--apply" set "dry_run=0"' in text
+    assert "failed in apply mode; stopping before stale feed import/resume/monitoring" in text
+    assert "exit /b !exit_code!" in text
+    assert 'set "start_limit=2"' in text
+    assert 'set "min_start_source_count=1"' in text
+    assert 'set "max_runtime_minutes=10"' in text
+    assert 'set "resume_limit=10"' in text
+    assert 'set "max_parallel=2"' in text
+    assert 'set "monitor_limit=10"' in text
+
+
+def test_autopilot_windows_launcher_can_run_from_packaged_path_runtime() -> None:
+    text = _read_launcher("forge-autopilot.bat")
+
+    assert "where python >nul 2>nul" in text
+    assert "where forge >nul 2>nul" in text
+    assert 'set "python=python"' in text
+    assert "use the packaged docker image" in text
+    assert re.search(r"(?m)^\s*pause\s*$", text) is None
+
+
+def test_autopilot_windows_apply_requires_roe_before_python_call(tmp_path: Path) -> None:
+    if sys.platform != "win32":
+        pytest.skip("cmd launcher behavior is Windows-specific")
+
+    launcher = tmp_path / "forge-autopilot.bat"
+    launcher.write_text((REPO_ROOT / "forge-autopilot.bat").read_text(encoding="utf-8"), encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python_log = tmp_path / "python.log"
+    (bin_dir / "python.bat").write_text(
+        f"@echo off\r\necho %*>>\"{python_log}\"\r\nexit /b 0\r\n",
+        encoding="utf-8",
+    )
+    (bin_dir / "forge.bat").write_text("@echo off\r\nexit /b 0\r\n", encoding="utf-8")
+
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env.pop("FORGE_ROE_ID", None)
+    result = subprocess.run(
+        ["cmd", "/c", str(launcher), "--apply", "--skip-dashboard"],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "--apply requires --roe-id or FORGE_ROE_ID" in result.stdout
+    assert not python_log.exists()
+
+
+def test_autopilot_windows_apply_stops_after_feed_build_failure(tmp_path: Path) -> None:
+    if sys.platform != "win32":
+        pytest.skip("cmd launcher behavior is Windows-specific")
+
+    launcher = tmp_path / "forge-autopilot.bat"
+    launcher.write_text((REPO_ROOT / "forge-autopilot.bat").read_text(encoding="utf-8"), encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python_log = tmp_path / "python.log"
+    forge_pkg = tmp_path / "forge"
+    forge_pkg.mkdir()
+    (forge_pkg / "__init__.py").write_text("", encoding="utf-8")
+    (forge_pkg / "cli.py").write_text(
+        "\n".join(
+            [
+                "from pathlib import Path",
+                "import sys",
+                f"Path({str(python_log)!r}).write_text(' '.join(sys.argv[1:]) + '\\n', encoding='utf-8')",
+                "if sys.argv[1:3] == ['automation', 'feed-build']:",
+                "    raise SystemExit(7)",
+                "raise SystemExit(0)",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (bin_dir / "forge.bat").write_text("@echo off\r\nexit /b 0\r\n", encoding="utf-8")
+
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env["PYTHONPATH"] = str(tmp_path)
+    env.pop("FORGE_ROE_ID", None)
+    result = subprocess.run(
+        ["cmd", "/c", str(launcher), "--apply", "--roe-id", "ROE-TEST", "--skip-dashboard"],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+    calls = python_log.read_text(encoding="utf-8").lower().splitlines()
+
+    assert result.returncode == 7
+    assert "failed in apply mode; stopping before stale feed import/resume/monitoring" in result.stdout
+    assert len(calls) == 1
+    assert "automation feed-build" in calls[0]
+    assert "targets import" not in "\n".join(calls)
+    assert "targets resume-run" not in "\n".join(calls)
+    assert "monitoring run-due" not in "\n".join(calls)
 
 
 def test_powershell_stack_helper_uses_docker_compose_dev_file() -> None:
@@ -228,6 +365,8 @@ def test_tph_import_runner_reports_feed_reachability_diagnostics() -> None:
         "wait-targetfeed -url $feedurl -headers $headers -timeoutseconds "
         "$waitseconds -tphenvpath $tphenvpath"
     ) in text
+    assert "[int]$maxruntimeminutes = 25" in text
+    assert '"--max-runtime-minutes", [string]$maxruntimeminutes' in text
 
 
 def test_tph_import_task_parallelizes_watchdog_db_scans() -> None:
@@ -251,9 +390,15 @@ def test_tph_task_installer_uses_timeout_as_whole_task_budget() -> None:
         REPO_ROOT / "scripts" / "install_tph_target_import_task.ps1"
     ).read_text(encoding="utf-8").lower()
     assert "[int]$everyminutes = 60" in text
+    assert "[int]$maxruntimeminutes = 25" in text
     assert "[int]$watchdoghelpertimeoutseconds = 120" in text
     assert "[int]$timeoutrecoveryhelperseconds = 10" in text
     assert "[int]$stalehelperfileminutes = 360" in text
+    assert "$childtimeoutgraceseconds = 120" in text
+    assert "$effectivestartlimit = if ($start) { [math]::max(1, $startlimit) } else { 0 }" in text
+    assert "$budgetedruntimeminutes = [int][math]::floor($runtimeseconds / 60)" in text
+    assert "scheduled import budget cannot fit startlimit=$startlimit within timeoutminutes=$timeoutminutes" in text
+    assert "-maxruntimeminutes $effectivemaxruntimeminutes" in text
     assert "-watchdoghelpertimeoutseconds $watchdoghelpertimeoutseconds" in text
     assert "-timeoutrecoveryhelperseconds $timeoutrecoveryhelperseconds" in text
     assert "-stalehelperfileminutes $stalehelperfileminutes" in text
@@ -262,7 +407,25 @@ def test_tph_task_installer_uses_timeout_as_whole_task_budget() -> None:
     assert "$interval = [math]::max([math]::max(5, $everyminutes), $executionlimitminutes)" in text
     assert "requested interval $everyminutes minute(s) was raised to $interval minute(s)" in text
     assert "-executiontimelimit (new-timespan -minutes $executionlimitminutes)" in text
+    assert "requested max runtime $maxruntimeminutes minute(s) was lowered to $effectivemaxruntimeminutes minute(s)" in text
+    assert "max runtime per started target: $effectivemaxruntimeminutes minute(s)" in text
     assert "timeout recovery helper: $timeoutrecoveryhelperseconds second(s)" in text
+
+
+def test_tph_import_task_runner_fits_child_runtime_to_task_budget() -> None:
+    text = (
+        REPO_ROOT / "scripts" / "run_tph_target_import_task.ps1"
+    ).read_text(encoding="utf-8").lower()
+    assert "[int]$maxruntimeminutes = 25" in text
+    assert "$childtimeoutgraceseconds = 120" in text
+    assert "function get-effectivechildruntimeminutes" in text
+    assert "scheduled import budget cannot fit startlimit=$starts within timeoutminutes=$timeoutminutes" in text
+    assert '"-maxruntimeminutes", [string]$maxruntimeminutes' in text
+    assert "$effectivestartlimit = if ($start) { [math]::max(1, $startlimit) } else { 0 }" in text
+    assert "$effectivemaxruntimeminutes = get-effectivechildruntimeminutes `" in text
+    assert "$args[$maxruntimeindex + 1] = [string]$effectivemaxruntimeminutes" in text
+    assert "requested_max_runtime_minutes=$maxruntimeminutes" in text
+    assert "effective_max_runtime_minutes=$effectivemaxruntimeminutes" in text
 
 
 def test_remediation_ticket_status_import_task_defaults_to_dry_run() -> None:
@@ -304,3 +467,55 @@ def test_remediation_ticket_status_import_installer_is_budgeted_and_apply_gated(
     assert "-multipleinstances ignorenew" in text
     assert "mode: $(if ($apply -and -not $dryrun) { 'apply' } else { 'dry-run' })" in text
     assert "close policy: $closepolicy" in text
+
+
+def test_guarded_autostart_task_installer_uses_safe_hidden_apply_runner() -> None:
+    installer = (
+        REPO_ROOT / "scripts" / "install_guarded_autostart_task.ps1"
+    ).read_text(encoding="utf-8").lower()
+    runner = (
+        REPO_ROOT / "scripts" / "run_guarded_autostart_task.ps1"
+    ).read_text(encoding="utf-8").lower()
+
+    assert "register-scheduledtask" in installer
+    assert "hkcu:\\software\\microsoft\\windows\\currentversion\\run" in installer
+    assert "installed hkcu run startup entry instead" in installer
+    assert "$fallbackargument" in installer
+    assert "-loop -everyminutes $interval -startupdelayminutes $startupdelayminutes" in installer
+    assert "runs a single guarded loop at user logon" in installer
+    assert "[int]$timeoutminutes = 150" in installer
+    assert "new-scheduledtasktrigger -atlogon" in installer
+    assert "repetitioninterval" in installer
+    assert "-multipleinstances ignorenew" in installer
+    assert "-priority 7" in installer
+    assert "new-scheduledtaskprincipal" in installer
+    assert "-logontype interactive" in installer
+    assert "-runlevel limited" in installer
+    assert "run_guarded_autostart_task.ps1" in installer
+    assert "windowstyle hidden" in installer
+    assert "mode: cycle apply/live" in installer
+
+    assert '"automation"' in runner
+    assert '"cycle"' in runner
+    assert '"--autostart-config"' in runner
+    assert '"--apply"' in runner
+    assert '"--live"' in runner
+    assert '"--json"' in runner
+    assert "function convertto-processargument" in runner
+    assert "$argumenttext = join-processarguments $arguments" in runner
+    assert "[switch]$loop" in runner
+    assert "local\\forge_guarded_autostart_loop" in runner
+    assert "loop already running; exiting" in runner
+    assert "loop sleeping seconds=$sleepseconds" in runner
+    assert "-argumentlist $argumenttext" in runner
+    assert "-windowstyle hidden" in runner
+    assert "redirectstandardoutput" in runner
+    assert "forge_guarded_autostart.stdout.log" in runner
+    assert "forge_guarded_autostart.stderr.log" in runner
+    assert "function stop-processtree" in runner
+    assert "system32\\taskkill.exe" in runner
+    assert "/pid $rootprocessid /t /f" in runner
+    assert "stop-processtree -rootprocessid $process.id" in runner
+    assert "timed out process_tree_root_id=$($process.id)" in runner
+    assert "return 124" in runner
+    assert "exit (invoke-automationcycle)" in runner

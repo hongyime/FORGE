@@ -4,8 +4,10 @@ import base64
 import hashlib
 import json
 import os
+import platform
 import re
 import sqlite3
+import subprocess
 from collections.abc import Mapping
 from typing import Any
 
@@ -18,6 +20,7 @@ SECRET_MATERIAL_POLICY = (
     "Connector secrets are encrypted at rest with FORGE_ENGAGEMENT_KEY; "
     "list/audit outputs never include plaintext values."
 )
+SECRET_KEY_PLAN_SCHEMA_VERSION = "forge.connector_secret_key_plan.v1"
 
 _SECRET_NAME_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _SECRET_KEYWORDS = ("secret", "token", "password", "credential", "apikey", "api_key", "key")
@@ -115,6 +118,112 @@ def store_connector_secret(
         connector_id=connector,
         secret_name=name,
     )
+
+
+def connector_secret_key_plan(
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Return non-secret setup guidance for FORGE_ENGAGEMENT_KEY."""
+
+    env = environ if environ is not None else os.environ
+    key_material = str(env.get("FORGE_ENGAGEMENT_KEY", "")).strip()
+    configured = len(key_material) >= 32
+    persistent_hint = (
+        _persistent_key_hint()
+        if not configured and environ is None
+        else {"source": "", "key_configured": False, "key_length": 0, "key_fingerprint": ""}
+    )
+    persistent_reload_command = _persistent_key_reload_command(persistent_hint)
+    commands = {
+        "powershell_user_env": (
+            "$k=[Convert]::ToBase64String("
+            "[Security.Cryptography.RandomNumberGenerator]::GetBytes(32)); "
+            "[Environment]::SetEnvironmentVariable('FORGE_ENGAGEMENT_KEY',$k,'User')"
+        ),
+        "powershell_process_env": (
+            "$env:FORGE_ENGAGEMENT_KEY=[Convert]::ToBase64String("
+            "[Security.Cryptography.RandomNumberGenerator]::GetBytes(32))"
+        ),
+        "posix_shell": (
+            "export FORGE_ENGAGEMENT_KEY=$(python -c "
+            "\"import secrets; print(secrets.token_urlsafe(48))\")"
+        ),
+        "powershell_reload_persistent_env": persistent_reload_command,
+    }
+    total_count = len(commands)
+    selected_count = sum(1 for command in commands.values() if str(command).strip())
+    return {
+        "schema_version": SECRET_KEY_PLAN_SCHEMA_VERSION,
+        "execution_policy": "plan_only_no_commands_executed",
+        "total_count": total_count,
+        "selected_count": selected_count,
+        "omitted_count": total_count - selected_count,
+        "key_configured": configured,
+        "key_length": len(key_material),
+        "key_fingerprint": _key_fingerprint(key_material) if configured else "",
+        "persistent_key_hint": persistent_hint,
+        "minimum_length": 32,
+        "secret_material_printed": False,
+        "commands": commands,
+        "notes": [
+            "Commands generate the key inside the target shell and do not echo the value.",
+            "The reload command copies an existing Windows User/Machine key into only the current PowerShell process.",
+            "Restart shells or services after setting a persistent user/service environment variable.",
+        ],
+    }
+
+
+def _persistent_key_hint() -> dict[str, Any]:
+    if platform.system().lower() != "windows":
+        return {"source": "", "key_configured": False, "key_length": 0, "key_fingerprint": ""}
+    for source in ("User", "Machine"):
+        value = _windows_persistent_env_value(source)
+        if len(value) >= 32:
+            return {
+                "source": source.lower(),
+                "key_configured": True,
+                "key_length": len(value),
+                "key_fingerprint": _key_fingerprint(value),
+            }
+    return {"source": "", "key_configured": False, "key_length": 0, "key_fingerprint": ""}
+
+
+def _persistent_key_reload_command(persistent_hint: Mapping[str, Any]) -> str:
+    if not persistent_hint.get("key_configured"):
+        return ""
+    source = str(persistent_hint.get("source") or "").strip().lower()
+    if source not in {"user", "machine"}:
+        return ""
+    scope = "User" if source == "user" else "Machine"
+    return (
+        "$env:FORGE_ENGAGEMENT_KEY=[Environment]::GetEnvironmentVariable("
+        f"'FORGE_ENGAGEMENT_KEY','{scope}')"
+    )
+
+
+def _windows_persistent_env_value(scope: str) -> str:
+    try:
+        completed = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                (
+                    "[Environment]::GetEnvironmentVariable("
+                    "'FORGE_ENGAGEMENT_KEY','" + scope + "')"
+                ),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    if completed.returncode != 0:
+        return ""
+    return str(completed.stdout or "").strip()
 
 
 def list_connector_secrets(
@@ -327,6 +436,10 @@ def _master_key_material() -> str:
 def _key_hint() -> str:
     digest = hashlib.sha256(_master_key_material().encode("utf-8")).hexdigest()
     return f"sha256:{digest[:12]}"
+
+
+def _key_fingerprint(key_material: str) -> str:
+    return f"sha256:{hashlib.sha256(str(key_material).encode('utf-8')).hexdigest()[:12]}"
 
 
 def _secret_context(

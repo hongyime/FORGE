@@ -110,6 +110,27 @@ def test_active_validation_method_registry_documents_safe_modes() -> None:
     assert "read_only_live" in methods["fix_verification"]["supported_modes"]
 
 
+def test_active_validation_methods_cli_outputs_catalog_contract() -> None:
+    app = typer.Typer()
+    active_validation_app = typer.Typer()
+    register_active_validation_commands(active_validation_app)
+    app.add_typer(active_validation_app, name="active-validation")
+
+    result = CliRunner().invoke(app, ["active-validation", "methods", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.active_validation.methods.v1"
+    assert payload["execution_policy"] == "data_only_method_catalog_no_validation_executed"
+    assert payload["total_count"] == len(payload["methods"])
+    assert payload["selected_count"] == len(payload["methods"])
+    assert payload["omitted_count"] == 0
+    assert {item["id"] for item in payload["methods"]} >= {
+        "fixture_replay",
+        "http_reachability",
+    }
+
+
 def test_active_validation_migration_adds_v39_tables(tmp_path: Path) -> None:
     con = sqlite3.connect(tmp_path / "legacy.db")
     try:
@@ -451,6 +472,11 @@ def test_active_validation_preview_is_state_free_and_scope_gated(tmp_path: Path)
         con.close()
 
     assert dry_preview["schema"] == "forge.active_validation.preview.v1"
+    assert dry_preview["schema_version"] == "forge.active_validation.preview.v1"
+    assert dry_preview["execution_policy"] == "preview_only_no_state_or_network_execution"
+    assert dry_preview["total_count"] == 1
+    assert dry_preview["selected_count"] == 1
+    assert dry_preview["omitted_count"] == 0
     assert dry_preview["status"] == "planned"
     assert dry_preview["plan"] == {
         "will_create_job": False,
@@ -540,7 +566,11 @@ def test_active_validation_control_simulation_lab_records_control_outcomes(
             job_id=int(failed_job["id"]),
             operator="delta-one",
         )
-        coverage = active_validation_control_coverage(con, engagement_id=1001)
+        coverage = active_validation_control_coverage(
+            con,
+            engagement_id=1001,
+            now="2026-07-20T00:00:00Z",
+        )
     finally:
         con.close()
 
@@ -669,6 +699,11 @@ def test_active_validation_control_coverage_groups_methods_and_states(
     assert lab_run["result"] == "simulated_pass"
     assert blocked_run["status"] == "blocked"
     assert coverage["schema"] == "forge.active_validation.coverage.v1"
+    assert coverage["schema_version"] == "forge.active_validation.coverage.v1"
+    assert coverage["execution_policy"] == "read_only_active_validation_coverage_no_commands_executed"
+    assert coverage["total_count"] == 4
+    assert coverage["selected_count"] == 4
+    assert coverage["omitted_count"] == 0
     assert coverage["summary"]["job_count"] == 4
     assert coverage["summary"]["run_count"] == 3
     assert coverage["summary"]["states"] == {
@@ -677,14 +712,33 @@ def test_active_validation_control_coverage_groups_methods_and_states(
         "passed": 1,
         "planned": 1,
     }
+    assert coverage["summary"]["proof_type_count"] == 4
+    assert coverage["summary"]["proof_types"] == {
+        "control_simulation": 1,
+        "fixture_evidence": 1,
+        "reachability_observation": 1,
+        "retest_evidence": 1,
+    }
+    assert coverage["summary"]["proof_freshness"] == {
+        "fresh": 3,
+        "unrun": 1,
+    }
+    assert coverage["summary"]["fresh_proof_count"] == 3
+    assert coverage["summary"]["stale_proof_count"] == 0
+    assert coverage["summary"]["unrun_count"] == 1
+    assert coverage["summary"]["retest_pending_count"] == 1
     attack = {row["id"]: row for row in coverage["attack_mappings"]}
     controls = {row["id"]: row for row in coverage["control_families"]}
     methods = {row["id"]: row for row in coverage["methods"]}
     assert attack["TA0043"]["states"] == {"blocked": 1, "failed": 1, "passed": 1}
+    assert attack["TA0043"]["proof_freshness"] == {"fresh": 3}
     assert attack["TA0007"]["states"] == {"passed": 1, "planned": 1}
+    assert attack["TA0007"]["proof_freshness"] == {"fresh": 1, "unrun": 1}
     assert controls["MITRE ATT&CK control coverage"]["states"] == {"planned": 1}
     assert controls["Remediation retest"]["states"] == {"failed": 1}
+    assert controls["Remediation retest"]["proof_types"] == {"retest_evidence": 1}
     assert methods["fix_verification"]["states"] == {"failed": 1}
+    assert methods["fixture_replay"]["proof_kind"] == "fixture_evidence"
 
 
 def test_active_validation_coverage_cli_outputs_json(tmp_path: Path, monkeypatch) -> None:
@@ -723,9 +777,67 @@ def test_active_validation_coverage_cli_outputs_json(tmp_path: Path, monkeypatch
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.active_validation.coverage.v1"
+    assert payload["execution_policy"] == "read_only_active_validation_coverage_no_commands_executed"
+    assert payload["total_count"] == 1
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 0
     assert payload["summary"]["job_count"] == 1
     assert payload["summary"]["states"] == {"passed": 1}
     assert payload["attack_mappings"][0]["methods"] == ["fixture_replay"]
+
+
+def test_active_validation_list_cli_reports_bounded_job_counts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    con = _build_db(data_dir / "engagements" / "1001.db")
+    try:
+        create_active_validation_job(
+            con,
+            engagement_id=1001,
+            target_ref="fixture://list/one",
+            target_kind="fixture",
+            method="fixture_replay",
+            mode="lab",
+            approved=True,
+            requested_by="delta-one",
+            approved_by="lead",
+        )
+        create_active_validation_job(
+            con,
+            engagement_id=1001,
+            target_ref="fixture://list/two",
+            target_kind="fixture",
+            method="fixture_replay",
+            mode="lab",
+            approved=True,
+            requested_by="delta-one",
+            approved_by="lead",
+        )
+    finally:
+        con.close()
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+    app = typer.Typer()
+    active_validation_app = typer.Typer()
+    register_active_validation_commands(active_validation_app)
+    app.add_typer(active_validation_app, name="active-validation")
+
+    result = CliRunner().invoke(
+        app,
+        ["active-validation", "list", "--engagement", "1001", "--limit", "1", "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.active_validation.jobs.v1"
+    assert payload["execution_policy"] == "read_only_active_validation_jobs_no_commands_executed"
+    assert payload["total_count"] == 2
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 1
+    assert payload["status_filter"] == "all"
+    assert len(payload["jobs"]) == 1
 
 
 def test_remediation_retest_request_links_active_validation_job_and_safe_lab_pass(
@@ -1683,6 +1795,10 @@ def test_active_validation_static_dashboard_sections(tmp_path: Path, monkeypatch
         and row["Coverage"] == "TA0043"
         and "planned=1" in row["States"]
         and "passed=3" in row["States"]
+        and "reachability_observation=2" in row["Proof Types"]
+        and "retest_evidence=2" in row["Proof Types"]
+        and "fresh=" in row["Proof Freshness"]
+        and "unrun=1" in row["Proof Freshness"]
         for row in coverage_rows
     )
     assert any(
@@ -1742,6 +1858,8 @@ def test_active_validation_static_dashboard_sections(tmp_path: Path, monkeypatch
     assert "Remediation retest" in detail_html
     assert "planned=1" in detail_html
     assert "passed=3" in detail_html
+    assert "Proof Types" in detail_html
+    assert "Proof Freshness" in detail_html
     assert "Active Validation Jobs" in detail_html
     assert "Active Validation Runs" in detail_html
     assert "dashboard-token-never-render" not in json.dumps(payload, sort_keys=True)

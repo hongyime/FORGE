@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from forge.reporting.audit_manifest_artifacts import is_report_metadata_sidecar
+
 _REPORT_EXPORT_ORDER = {
     ".md": 0,
     ".html": 1,
@@ -30,6 +32,13 @@ def _format_report_datetime(value: str) -> str:
 
 def report_export_sort_key(path: Path) -> tuple[int, str]:
     return (_REPORT_EXPORT_ORDER.get(path.suffix.lower(), 99), path.name.lower())
+
+
+def _safe_stat_mtime(path: Path) -> float:
+    try:
+        return float(path.stat().st_mtime)
+    except OSError:
+        return 0.0
 
 
 def report_export_descriptor(path: Path, *, raw_export: bool) -> dict[str, str]:
@@ -64,6 +73,8 @@ def report_family_groups(report_files: list[Path]) -> list[tuple[str, list[Path]
     family_mtimes: dict[str, float] = {}
     family_has_json: dict[str, bool] = {}
     for artifact in report_files:
+        if is_report_metadata_sidecar(artifact):
+            continue
         try:
             stat = artifact.stat()
         except OSError:
@@ -140,7 +151,7 @@ def report_history_payload(report_files: list[Path]) -> list[dict[str, Any]]:
     for family_stem, family_files in report_family_groups(report_files):
         json_candidates = [path for path in family_files if path.suffix.lower() == ".json"]
         json_candidates.sort(
-            key=lambda artifact: (artifact.stat().st_mtime, artifact.name.lower()),
+            key=lambda artifact: (_safe_stat_mtime(artifact), artifact.name.lower()),
             reverse=True,
         )
         parsed_payload: dict[str, Any] | None = None
@@ -168,10 +179,7 @@ def report_history_payload(report_files: list[Path]) -> list[dict[str, Any]]:
         findings_checksum = _report_payload_value(payload, lineage, "findings_checksum")
         raw_export = provider == "raw_export"
         render_backend = upstream_provider if raw_export and upstream_provider else rendered_provider
-        latest_mtime = max(
-            (path.stat().st_mtime for path in family_files),
-            default=0.0,
-        )
+        latest_mtime = max((_safe_stat_mtime(path) for path in family_files), default=0.0)
         generated_at = _format_report_datetime(_report_payload_value(payload, lineage, "generated_at"))
         if not generated_at and latest_mtime:
             generated_at = _format_report_datetime(datetime.fromtimestamp(latest_mtime).isoformat())

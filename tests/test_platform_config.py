@@ -45,11 +45,12 @@ class TestPlatformSettingsDefaults:
     def test_llm_provider_default(self) -> None:
         # Isolate from operator .env — the test verifies the CODE default
         # regardless of what an operator has configured. `.env` has shipped
-        # with FORGE_LLM_PROVIDER=auto since 2026-07-06.
+        # with FORGE_LLM_PROVIDER=auto since 2026-07-06. Auto is now also
+        # the code default so Codex/CLI backends are tried before local GGUF.
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("FORGE_LLM_PROVIDER", None)
             settings = PlatformSettings(_env_file=None)
-        assert settings.llm_provider == "llama_cpp"
+        assert settings.llm_provider == "auto"
 
     def test_llm_model_path_defaults_to_none(self) -> None:
         settings = PlatformSettings()
@@ -236,7 +237,7 @@ class TestPlatformSettingsNoEnvFileLoading:
                 os.environ.pop("FORGE_LLM_PROVIDER", None)
                 settings = PlatformSettings()
             # If .env was loaded, this would be "should_not_load"
-            assert settings.llm_provider == "llama_cpp"
+            assert settings.llm_provider == "auto"
         finally:
             os.chdir(original_cwd)
 

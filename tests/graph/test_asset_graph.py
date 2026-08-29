@@ -350,9 +350,19 @@ def test_sync_engagement_asset_graph_projects_existing_evidence_idempotently(tmp
         con.close()
 
     assert first == second
+    assert first["schema_version"] == "forge.asset_graph.sync.v1"
+    assert first["execution_policy"] == "writes_canonical_asset_graph_tables"
+    assert first["total_count"] == first["node_count"]
+    assert first["selected_count"] == first["node_count"]
+    assert first["omitted_count"] == 0
     assert first["source_counts"]["active_validation"] == 1
     assert first["node_count"] >= 15
     assert first["edge_count"] >= 12
+    assert graph["schema_version"] == "forge.asset_graph.list.v1"
+    assert graph["execution_policy"] == "read_only_asset_graph_inventory_no_commands_executed"
+    assert graph["total_count"] >= first["node_count"]
+    assert graph["selected_count"] == len(graph["nodes"])
+    assert graph["omitted_count"] == max(0, graph["total_count"] - len(graph["nodes"]))
     assert {
         "seed:domain:acme.example",
         "seed:subdomain:app.acme.example",
@@ -738,6 +748,22 @@ def test_sync_engagement_asset_graph_projects_existing_evidence_idempotently(tmp
     assert "user:pass" not in graph_blob
     assert "token=never" not in graph_blob
     assert "[REDACTED]" in graph_blob
+
+
+def test_asset_graph_list_reports_limited_node_counts(tmp_path: Path) -> None:
+    con = _build_db(tmp_path / "engagement.db")
+    try:
+        sync_engagement_asset_graph(con, 1001)
+        graph = list_asset_graph(con, 1001, limit=2)
+    finally:
+        con.close()
+
+    assert graph["schema_version"] == "forge.asset_graph.list.v1"
+    assert graph["execution_policy"] == "read_only_asset_graph_inventory_no_commands_executed"
+    assert graph["total_count"] > 2
+    assert graph["selected_count"] == 2
+    assert graph["omitted_count"] == graph["total_count"] - 2
+    assert len(graph["nodes"]) == 2
 
 
 def test_asset_graph_promotes_aws_sts_validation_to_account_context(tmp_path: Path) -> None:
@@ -1366,6 +1392,11 @@ def test_asset_attribution_import_maps_subsidiary_third_party_and_cloud_org(
         for edge in graph["edges"]
     }
 
+    assert result["schema_version"] == "forge.asset_graph.attribution_import.v1"
+    assert result["execution_policy"] == "writes_asset_graph_attribution_records"
+    assert result["total_count"] == 3
+    assert result["selected_count"] == 3
+    assert result["omitted_count"] == 0
     assert result["processed_count"] == 3
     assert result["imported_count"] == 3
     assert result["error_count"] == 0
@@ -1418,6 +1449,11 @@ def test_graph_sync_assets_cli_outputs_json(tmp_path: Path, monkeypatch) -> None
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.asset_graph.sync.v1"
+    assert payload["execution_policy"] == "writes_canonical_asset_graph_tables"
+    assert payload["total_count"] == payload["node_count"]
+    assert payload["selected_count"] == payload["node_count"]
+    assert payload["omitted_count"] == 0
     assert payload["node_count"] == 1
     assert payload["source_counts"]["cloud"] == 1
     assert payload["source_counts"]["active_validation"] == 0
@@ -1465,6 +1501,11 @@ def test_graph_attribution_import_cli_outputs_json(tmp_path: Path, monkeypatch) 
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["schema_version"] == "forge.asset_graph.attribution_import.v1"
+    assert payload["execution_policy"] == "writes_asset_graph_attribution_records"
+    assert payload["total_count"] == 1
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 0
     assert payload["processed_count"] == 1
     assert payload["imported_count"] == 1
     assert payload["ownership_claim_count"] == 1
@@ -1534,7 +1575,24 @@ def test_graph_ownership_resolve_cli_outputs_json(tmp_path: Path, monkeypatch) -
     assert first.exit_code == 0, first.output
     assert second.exit_code == 0, second.output
     assert resolved.exit_code == 0, resolved.output
+    first_payload = json.loads(first.output)
+    assert first_payload["schema_version"] == "forge.asset_graph.ownership_set.v1"
+    assert first_payload["execution_policy"] == "writes_asset_graph_ownership_claim"
+    assert first_payload["total_count"] == 1
+    assert first_payload["selected_count"] == 1
+    assert first_payload["omitted_count"] == 0
+    second_payload = json.loads(second.output)
+    assert second_payload["schema_version"] == "forge.asset_graph.ownership_set.v1"
+    assert second_payload["execution_policy"] == "writes_asset_graph_ownership_claim"
+    assert second_payload["total_count"] == 1
+    assert second_payload["selected_count"] == 1
+    assert second_payload["omitted_count"] == 0
     payload = json.loads(resolved.output)
+    assert payload["schema_version"] == "forge.asset_graph.ownership_resolve.v1"
+    assert payload["execution_policy"] == "writes_asset_graph_ownership_resolution"
+    assert payload["total_count"] == 2
+    assert payload["selected_count"] == 1
+    assert payload["omitted_count"] == 1
     assert payload["selected_owner"] == "app-team"
     assert payload["owner"]["owner_ref"] == "app-team"
     assert payload["owner"]["conflict"] is False

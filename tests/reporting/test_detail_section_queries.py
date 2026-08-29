@@ -335,6 +335,11 @@ def _callbacks(
             "local": str(row["local_path"]),
             "origin": str(row["discovered_from"]),
         },
+        cti_observation_row=lambda row: {
+            "provider": str(row["provider"]),
+            "indicator": str(row["indicator_value"]),
+            "reportable": "no",
+        },
         cloud_asset_row=lambda row: {
             "asset": str(row["display_identifier"] or row["identifier"]),
             "type": str(row["asset_type"]),
@@ -1937,6 +1942,7 @@ def test_missing_tables_return_empty_sections() -> None:
     assert inventory_sections(con, 1001, limit=10, callbacks=_callbacks()) == {
         "hosts": [],
         "emails": [],
+        "cti_observations": [],
     }
     assert engagement_run_section_rows(
         con,

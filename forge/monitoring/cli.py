@@ -10,10 +10,12 @@ from rich.console import Console
 from forge.config import ForgeConfig
 from forge.monitoring.runner import (
     deliver_monitoring_alerts_for_data_dir,
+    monitoring_due_plan_for_data_dir,
     monitoring_status_for_data_dir,
     run_due_monitoring_for_data_dir,
     run_monitoring_worker,
 )
+from forge.monitoring.exposure_metrics import exposure_metrics_for_data_dir
 
 console = Console(stderr=True)
 
@@ -56,6 +58,58 @@ def register_monitoring_commands(app: typer.Typer) -> None:
             f"errors={len(result['errors'])}"
         )
 
+    @app.command("due-plan")
+    def due_plan(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help="FORGE data directory. Defaults to FORGE_DATA_DIR.",
+        ),
+        now: Optional[str] = typer.Option(
+            None,
+            "--now",
+            help="Override scheduler clock for deterministic plan checks/tests.",
+        ),
+        limit: int = typer.Option(
+            50,
+            "--limit",
+            min=0,
+            help="Maximum due policy rows to include in the plan.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON.",
+        ),
+        include_empty_db_results: bool = typer.Option(
+            False,
+            "--include-empty-db-results",
+            help="Include DB result rows with no planned policies.",
+        ),
+    ) -> None:
+        cfg = ForgeConfig.load()
+        root = data_dir or cfg.data_dir
+        result = monitoring_due_plan_for_data_dir(
+            root,
+            now=now,
+            limit=limit,
+            include_empty_db_results=include_empty_db_results,
+        )
+        if json_output:
+            typer.echo(json.dumps(result, sort_keys=True))
+            return
+        stale = result.get("stale_backlog") if isinstance(result.get("stale_backlog"), dict) else {}
+        console.print(
+            "[bold]Monitoring due plan[/bold] "
+            f"dbs={result['db_count']} ready_dbs={result['schema_ready_db_count']} "
+            f"engagements={result['engagement_count']} due={result['due_policy_count']} "
+            f"planned={result['planned_policy_count']} "
+            f"limited={result['limited_policy_count']} "
+            f"batches={result.get('estimated_capped_invocations', 0)} "
+            f"stale_days={stale.get('oldest_overdue_days', 0)} "
+            f"errors={len(result['errors'])}"
+        )
+
     @app.command("run-due")
     def run_due(
         data_dir: Optional[Path] = typer.Option(
@@ -73,6 +127,22 @@ def register_monitoring_commands(app: typer.Typer) -> None:
             "--operator",
             help="Operator name stored in monitoring audit rows.",
         ),
+        limit: int = typer.Option(
+            50,
+            "--limit",
+            min=0,
+            help="Maximum due policy rows to execute in this invocation.",
+        ),
+        all_policies: bool = typer.Option(
+            False,
+            "--all",
+            help="Execute every currently due policy instead of applying --limit.",
+        ),
+        dry_run: bool = typer.Option(
+            False,
+            "--dry-run",
+            help="Report the bounded due run without writing snapshots, alerts, audit rows, or schedules.",
+        ),
         json_output: bool = typer.Option(
             False,
             "--json",
@@ -81,14 +151,22 @@ def register_monitoring_commands(app: typer.Typer) -> None:
     ) -> None:
         cfg = ForgeConfig.load()
         root = data_dir or cfg.data_dir
-        result = run_due_monitoring_for_data_dir(root, now=now, operator=operator)
+        execution_limit = None if all_policies else limit
+        result = run_due_monitoring_for_data_dir(
+            root,
+            now=now,
+            operator=operator,
+            limit=execution_limit,
+            dry_run=dry_run,
+        )
         if json_output:
             typer.echo(json.dumps(result, sort_keys=True))
             return
         console.print(
             "[bold]Monitoring due run[/bold] "
             f"dbs={result['db_count']} engagements={result['engagement_count']} "
-            f"runs={result['run_count']} changes={result['change_count']} "
+            f"due={result['due_count']} runs={result['run_count']} "
+            f"limited={result['limited_policy_count']} changes={result['change_count']} "
             f"alerts={result['alert_count']} errors={len(result['errors'])}"
         )
 
@@ -150,6 +228,47 @@ def register_monitoring_commands(app: typer.Typer) -> None:
             f"errors={len(result['errors'])}"
         )
 
+    @app.command("exposure-metrics")
+    def exposure_metrics(
+        data_dir: Optional[Path] = typer.Option(
+            None,
+            "--data-dir",
+            help="FORGE data directory. Defaults to FORGE_DATA_DIR.",
+        ),
+        now: Optional[str] = typer.Option(
+            None,
+            "--now",
+            help="Override clock for deterministic exposure-duration metrics/tests.",
+        ),
+        limit: Optional[int] = typer.Option(
+            None,
+            "--limit",
+            min=0,
+            help="Maximum exposure metric rows per engagement. Omit for all rows.",
+        ),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON.",
+        ),
+    ) -> None:
+        cfg = ForgeConfig.load()
+        root = data_dir or cfg.data_dir
+        result = exposure_metrics_for_data_dir(root, now=now, limit=limit)
+        if json_output:
+            typer.echo(json.dumps(result, sort_keys=True))
+            return
+        console.print(
+            "[bold]Exposure duration metrics[/bold] "
+            f"dbs={result['db_count']} ready_dbs={result['schema_ready_db_count']} "
+            f"engagements={result['engagement_count']} "
+            f"total={result['total_count']} selected={result['selected_count']} "
+            f"open={result['open_count']} recurrent={result['recurrent_count']} "
+            f"mttr_samples={result['mttr_sample_count']} "
+            f"mean_mttr_hours={result['mean_mttr_hours']} "
+            f"errors={len(result['errors'])}"
+        )
+
     @app.command("worker")
     def worker(
         data_dir: Optional[Path] = typer.Option(
@@ -179,6 +298,17 @@ def register_monitoring_commands(app: typer.Typer) -> None:
             "--operator",
             help="Operator name stored in monitoring audit rows.",
         ),
+        run_limit: int = typer.Option(
+            50,
+            "--run-limit",
+            min=0,
+            help="Maximum due policy rows to execute per worker tick.",
+        ),
+        all_policies: bool = typer.Option(
+            False,
+            "--all",
+            help="Execute every due policy each worker tick instead of applying --run-limit.",
+        ),
         deliver_jsonl: Optional[Path] = typer.Option(
             None,
             "--deliver-jsonl",
@@ -202,11 +332,13 @@ def register_monitoring_commands(app: typer.Typer) -> None:
     ) -> None:
         cfg = ForgeConfig.load()
         root = data_dir or cfg.data_dir
+        execution_limit = None if all_policies else run_limit
         if not json_output:
             bound = f" iterations={iterations}" if iterations is not None else " until interrupted"
+            limit_label = "all" if execution_limit is None else str(execution_limit)
             console.print(
                 "[bold]Monitoring worker[/bold] "
-                f"data_dir={root} poll={poll_seconds}s{bound}"
+                f"data_dir={root} poll={poll_seconds}s run_limit={limit_label}{bound}"
             )
         result = run_monitoring_worker(
             root,
@@ -221,6 +353,7 @@ def register_monitoring_commands(app: typer.Typer) -> None:
             + (("webhook",) if webhook_url else ()),
             jsonl_path=deliver_jsonl,
             webhook_url=webhook_url,
+            run_limit=execution_limit,
         )
         if json_output:
             typer.echo(json.dumps(result, sort_keys=True))
@@ -228,7 +361,8 @@ def register_monitoring_commands(app: typer.Typer) -> None:
         console.print(
             "[bold]Monitoring worker stopped[/bold] "
             f"reason={result['stopped_reason']} ticks={result['tick_count']} "
-            f"runs={result['run_count']} changes={result['change_count']} "
+            f"due={result['due_count']} runs={result['run_count']} "
+            f"limited={result['limited_policy_count']} changes={result['change_count']} "
             f"alerts={result['alert_count']} unrouted={result['delivery_unrouted_count']} "
             f"errors={result['error_count']}"
         )

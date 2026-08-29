@@ -61,6 +61,14 @@ __all__ = [
     "load_patterns",
     # Module 2-J
     "run_key_scanner",
+    # Shared CTI/OSINT observation normalization
+    "OsintObservation",
+    "OsintProviderCatalogEntry",
+    "classify_public_artifact_text",
+    "normalize_observation",
+    "observation_to_target_feed_item",
+    "provider_catalog",
+    "provider_catalog_policy_summary",
     # Shared
     "PasteMonitor",
 ]
@@ -86,6 +94,25 @@ def __getattr__(name: str):  # lazy imports
         "run_scavenger": ("forge.utils.intel.scavenger", "run_scavenger"),
         "load_patterns": ("forge.utils.intel.scavenger", "load_patterns"),
         "run_key_scanner": ("forge.utils.intel.secret_finder", "run_key_scanner"),
+        "OsintObservation": ("forge.utils.intel.observations", "OsintObservation"),
+        "OsintProviderCatalogEntry": (
+            "forge.utils.intel.observations",
+            "OsintProviderCatalogEntry",
+        ),
+        "classify_public_artifact_text": (
+            "forge.utils.intel.observations",
+            "classify_public_artifact_text",
+        ),
+        "normalize_observation": ("forge.utils.intel.observations", "normalize_observation"),
+        "observation_to_target_feed_item": (
+            "forge.utils.intel.observations",
+            "observation_to_target_feed_item",
+        ),
+        "provider_catalog": ("forge.utils.intel.observations", "provider_catalog"),
+        "provider_catalog_policy_summary": (
+            "forge.utils.intel.observations",
+            "provider_catalog_policy_summary",
+        ),
         "PasteMonitor": ("forge.utils.intel.paste_monitor", "PasteMonitor"),
     }
     if name in _MAP:

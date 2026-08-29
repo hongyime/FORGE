@@ -4,6 +4,7 @@ param(
     [string]$TphEnvPath = "X:\01 REPOSITORIES\theprawnhunter\.env",
     [int]$Limit = 100,
     [int]$MaxIter = 1,
+    [int]$MaxRuntimeMinutes = 25,
     [int]$StartLimit = 1,
     [int]$WaitSeconds = 60,
     [int]$TimeoutMinutes = 45,
@@ -30,6 +31,7 @@ $stdoutPath = Join-Path $scheduledDir "forge_tph_import.stdout.log"
 $stderrPath = Join-Path $scheduledDir "forge_tph_import.stderr.log"
 $taskBudgetMinutes = [Math]::Max(1, $TimeoutMinutes)
 $taskDeadline = (Get-Date).AddMinutes($taskBudgetMinutes)
+$childTimeoutGraceSeconds = 120
 
 function Write-TaskLog {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -47,6 +49,25 @@ function Get-RemainingTaskBudgetMilliseconds {
 function Get-RemainingTaskBudgetSeconds {
     param([int]$ReserveSeconds = 0)
     return [Math]::Max(0, [int][Math]::Floor((Get-RemainingTaskBudgetMilliseconds -ReserveSeconds $ReserveSeconds) / 1000))
+}
+
+function Get-EffectiveChildRuntimeMinutes {
+    param(
+        [Parameter(Mandatory = $true)][int]$RequestedMinutes,
+        [Parameter(Mandatory = $true)][int]$Starts,
+        [Parameter(Mandatory = $true)][int]$ReserveSeconds
+    )
+    if ($Starts -le 0) {
+        return [Math]::Max(1, $RequestedMinutes)
+    }
+    $availableSeconds = ([Math]::Max(1, $TimeoutMinutes) * 60) - [Math]::Max(0, $ReserveSeconds)
+    $perStartSeconds = [Math]::Floor($availableSeconds / [Math]::Max(1, $Starts))
+    $runtimeSeconds = $perStartSeconds - $childTimeoutGraceSeconds
+    $effectiveMinutes = [int][Math]::Floor($runtimeSeconds / 60)
+    if ($effectiveMinutes -lt 1) {
+        throw "scheduled import budget cannot fit StartLimit=$Starts within TimeoutMinutes=$TimeoutMinutes; lower StartLimit or increase TimeoutMinutes"
+    }
+    return [Math]::Min([Math]::Max(1, $RequestedMinutes), $effectiveMinutes)
 }
 
 function Get-Win32Processes {
@@ -740,6 +761,7 @@ $args = @(
     "-TphEnvPath", (Quote-WindowsProcessArgument $TphEnvPath),
     "-Limit", [string]$Limit,
     "-MaxIter", [string]$MaxIter,
+    "-MaxRuntimeMinutes", [string]$MaxRuntimeMinutes,
     "-StartLimit", [string]$StartLimit,
     "-WaitSeconds", [string]$WaitSeconds
 )
@@ -754,13 +776,22 @@ $timeoutCleanupReserveSeconds = [Math]::Max(
     45,
     [Math]::Max(1, $StopGraceSeconds) + [Math]::Max(1, $TimeoutRecoveryHelperSeconds) + 30
 )
+$effectiveStartLimit = if ($Start) { [Math]::Max(1, $StartLimit) } else { 0 }
+$effectiveMaxRuntimeMinutes = Get-EffectiveChildRuntimeMinutes `
+    -RequestedMinutes $MaxRuntimeMinutes `
+    -Starts $effectiveStartLimit `
+    -ReserveSeconds $timeoutCleanupReserveSeconds
+$maxRuntimeIndex = $args.IndexOf("-MaxRuntimeMinutes")
+if ($maxRuntimeIndex -ge 0 -and ($maxRuntimeIndex + 1) -lt $args.Count) {
+    $args[$maxRuntimeIndex + 1] = [string]$effectiveMaxRuntimeMinutes
+}
 $timeout = Get-RemainingTaskBudgetMilliseconds -ReserveSeconds $timeoutCleanupReserveSeconds
 if ($timeout -lt 1000) {
     Write-TaskLog "import skipped: no remaining task budget after startup and cleanup reserve"
     exit 124
 }
 $startedAfter = (Get-Date).ToUniversalTime().AddMinutes(-1).ToString("yyyy-MM-ddTHH:mm:ss")
-Write-TaskLog "starting import start=$([bool]$Start) limit=$Limit start_limit=$StartLimit max_iter=$MaxIter task_timeout_minutes=$TimeoutMinutes import_timeout_seconds=$([Math]::Floor($timeout / 1000))"
+Write-TaskLog "starting import start=$([bool]$Start) limit=$Limit start_limit=$StartLimit max_iter=$MaxIter requested_max_runtime_minutes=$MaxRuntimeMinutes effective_max_runtime_minutes=$effectiveMaxRuntimeMinutes task_timeout_minutes=$TimeoutMinutes import_timeout_seconds=$([Math]::Floor($timeout / 1000))"
 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
 $startInfo.FileName = "powershell.exe"
 $startInfo.Arguments = ($args -join " ")

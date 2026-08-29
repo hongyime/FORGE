@@ -20,6 +20,7 @@ from forge.active_validation.methods import get_active_validation_method
 from forge.active_validation.runner import active_validation_control_coverage
 from forge.audit.manifest import summarize_run_audit_manifest
 from forge.graph.assets import list_asset_graph, ownership_conflicts_for_engagement
+from forge.monitoring.exposure_metrics import exposure_metrics_for_engagement
 from forge.opsec.scope_gate import scope_entries_from_payload
 from forge.reporting.engagement_detail_blocks import (
     EngagementGraphBlocks,
@@ -180,6 +181,7 @@ from forge.reporting.run_summaries import (
     run_policy_summary as build_run_policy_summary,
 )
 from forge.reporting.evidence_provenance import evidence_provenance_section_rows
+from forge.reporting.display_sanitization import sanitize_report_display_text
 from forge.reporting.page_composition import (
     render_engagement_detail_page,
     render_engagement_evidence_sections,
@@ -200,6 +202,10 @@ from forge.reporting.report_rendering import (
 )
 from forge.reporting.timeline import operational_timeline_events
 from forge.remediation.workflow import remediation_review_queue, risk_acceptance_review_status
+from forge.targets_resume_candidates import (
+    TargetResumeCandidate,
+    target_resume_candidate_for_db,
+)
 from forge.utils.cloud_asset_graph_metadata import stored_cloud_asset_graph_metadata
 from forge.utils.artifact_url_sanitizer import strip_sensitive_url_query
 from forge.utils.cloud_exposure_gate import (
@@ -315,24 +321,18 @@ _DASHBOARD_SECRET_ASSIGNMENT_RE = re.compile(
     r"private[_-]?key|raw[_-]?(?:secret|token)|refresh[_-]?token|secret|"
     r"scope_manifest(?:_json|_payload)?|token)\b\s*[:=]\s*[^,\s;]+"
 )
-_DASHBOARD_SCOPE_MANIFEST_ASSIGNMENT_RE = re.compile(
-    r"(?i)\b(scope_manifest(?:_json|_payload)?)\b\s*[:=]\s*"
-    r"(?:\{[^;]*\}|\[[^;]*\]|\"[^\"]*\"|'[^']*'|[^,\s;]+)"
-)
 _DASHBOARD_URL_RE = re.compile(r"https?://[^\s,;]+", re.IGNORECASE)
 
 
 def _redact_dashboard_error(value: Any, limit: int = 140) -> str:
-    text = str(value or "").strip()
-    text = _DASHBOARD_SCOPE_MANIFEST_ASSIGNMENT_RE.sub(
-        lambda match: f"{match.group(1)}=[redacted]",
-        text,
-    )
+    text = sanitize_report_display_text(value)
     text = _DASHBOARD_SECRET_ASSIGNMENT_RE.sub(
         lambda match: f"{match.group(1)}=[redacted]",
         text,
     )
-    return _truncate(_DASHBOARD_URL_RE.sub("[redacted-url]", text), limit)
+    text = _DASHBOARD_URL_RE.sub("[redacted-url]", text)
+    text = " ".join(text.split())
+    return _truncate(text, limit)
 
 
 def _safe_json_loads(value: str) -> Any:
@@ -340,6 +340,56 @@ def _safe_json_loads(value: str) -> Any:
         return json.loads(value)
     except Exception:  # noqa: BLE001
         return None
+
+
+def _row_value(row: sqlite3.Row, key: str) -> Any:
+    try:
+        if key in row.keys():
+            return row[key]
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _remediation_ticket_state(row: sqlite3.Row) -> str:
+    if str(_row_value(row, "ticket_ref") or _row_value(row, "ticket_url") or "").strip():
+        return "linked"
+    return "missing"
+
+
+def _remediation_validation_proof_label_from_metadata(
+    metadata: dict[str, Any],
+    *,
+    retest_status: str,
+    retested_at: str,
+) -> str:
+    retest = metadata.get("active_validation_retest")
+    if not isinstance(retest, dict):
+        retest = {}
+    latest_status = str(retest.get("latest_retest_status") or "").strip()
+    latest_result = str(retest.get("latest_result") or "").strip()
+    latest_run = str(retest.get("latest_run_id") or "").strip()
+    proof_time = str(
+        retest.get("latest_completed_at")
+        or retest.get("latest_run_completed_at")
+        or retest.get("completed_at")
+        or retested_at
+        or ""
+    ).strip()
+    has_request = bool(str(retest.get("latest_job_id") or "").strip()) or retest_status in {
+        "pending",
+        "passed",
+        "failed",
+        "blocked",
+    }
+    if not has_request and not any((latest_status, latest_result, latest_run, proof_time)):
+        return "not requested"
+    if not any((latest_status, latest_result, latest_run, proof_time)):
+        return "missing"
+    parts = [part for part in (latest_status, latest_result, f"run {latest_run}" if latest_run else "") if part]
+    if proof_time:
+        parts.append(_format_dt(proof_time))
+    return _truncate(" ".join(parts) or "recorded", 120)
 
 
 def _is_sensitive_metadata_key(key: Any) -> bool:
@@ -608,6 +658,7 @@ def _run_summary_callbacks() -> RunSummaryCallbacks:
         format_dt=_format_dt,
         safe_json_loads=_safe_json_loads,
         truncate=_truncate,
+        redact_error=_redact_dashboard_error,
         summarize_run_audit_manifest=summarize_run_audit_manifest,
     )
 
@@ -1514,6 +1565,28 @@ def _account_existence_section_row(row: sqlite3.Row) -> dict[str, str]:
     }
 
 
+def _cti_observation_section_row(row: sqlite3.Row) -> dict[str, str]:
+    tags = _safe_json_loads(str(row["tags_json"] or "[]"))
+    if not isinstance(tags, list):
+        tags = []
+    return {
+        "Provider": str(row["provider"] or ""),
+        "Type": str(row["indicator_type"] or ""),
+        "Indicator": str(row["indicator_value"] or ""),
+        "Confidence": str(row["confidence"] or ""),
+        "TLP": str(row["tlp"] or ""),
+        "Method": str(row["collection_method"] or ""),
+        "Reliability": str(row["source_reliability"] or ""),
+        "Provenance": _truncate(row["provenance"], 120),
+        "Source": _truncate(row["source_url"], 120),
+        "Artifact Hash": _truncate(row["raw_artifact_hash"], 24),
+        "Tags": _truncate(", ".join(str(tag) for tag in tags if str(tag).strip()), 120),
+        "Reportable": "no",
+        "Observed": _format_dt(str(row["observed_at"] or "")),
+        "Imported": _format_dt(str(row["created_at"] or "")),
+    }
+
+
 def _engagement_seed_section_row(row: sqlite3.Row) -> dict[str, str]:
     metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
     synthesis = metadata.get("synthesis") if isinstance(metadata, dict) else {}
@@ -1581,7 +1654,7 @@ def _seed_run_section_row(row: sqlite3.Row) -> dict[str, str]:
         "Out": str(row["output_count"] or ""),
         "Started": _format_dt(str(row["started_at"] or "")),
         "Completed": _format_dt(str(row["completed_at"] or "")),
-        "Error": _truncate(row["error"], 96),
+        "Error": _redact_dashboard_error(row["error"], 96),
     }
 
 
@@ -1701,6 +1774,7 @@ def _engagement_run_section_row(
         safe_json_loads=_safe_json_loads,
         format_dt=_format_dt,
         truncate=_truncate,
+        redact_error=_redact_dashboard_error,
     )
 
 
@@ -1766,6 +1840,7 @@ def _detail_section_query_callbacks() -> DetailSectionQueryCallbacks:
         vulnerability_row_is_reportable=_vulnerability_row_is_reportable,
         reportable_cloud_validation_index=_reportable_cloud_validation_index,
         artifact_queue_row=_artifact_queue_section_row,
+        cti_observation_row=_cti_observation_section_row,
         cloud_asset_row=_cloud_asset_section_row,
         cloud_validation_row=_cloud_validation_section_row,
         normalized_cloud_asset_type_sql=_normalized_cloud_asset_type_sql,
@@ -1853,6 +1928,14 @@ def _remediation_item_section_row(row: sqlite3.Row) -> dict[str, str]:
         str(row["status"] or ""),
         str(row["risk_acceptance_expires_at"] or ""),
     )
+    metadata = _safe_json_loads(str(_row_value(row, "metadata_json") or "{}"))
+    if not isinstance(metadata, dict):
+        metadata = {}
+    proof_label = _remediation_validation_proof_label_from_metadata(
+        metadata,
+        retest_status=str(row["retest_status"] or ""),
+        retested_at=str(_row_value(row, "retested_at") or ""),
+    )
     return {
         "Severity": str(row["severity"] or ""),
         "Status": str(row["status"] or ""),
@@ -1863,7 +1946,9 @@ def _remediation_item_section_row(row: sqlite3.Row) -> dict[str, str]:
         "Finding": _truncate(f"{row['finding_table']}:{row['finding_ref']}", 120),
         "Title": _truncate(str(row["title"] or ""), 140),
         "Retest": str(row["retest_status"] or ""),
+        "Ticket State": _remediation_ticket_state(row),
         "Ticket": _truncate(str(row["ticket_ref"] or row["ticket_url"] or ""), 120),
+        "Validation Proof Freshness": proof_label,
         "Updated": _format_dt(str(row["updated_at"] or "")),
     }
 
@@ -1871,6 +1956,14 @@ def _remediation_item_section_row(row: sqlite3.Row) -> dict[str, str]:
 def _remediation_review_queue_section_row(item: dict[str, Any]) -> dict[str, str]:
     labels = item.get("queue_reason_labels") if isinstance(item.get("queue_reason_labels"), list) else []
     ticket_event = item.get("latest_ticket_event") if isinstance(item.get("latest_ticket_event"), dict) else {}
+    proof = (
+        item.get("validation_proof_freshness")
+        if isinstance(item.get("validation_proof_freshness"), dict)
+        else {}
+    )
+    proof_label = str(proof.get("freshness") or "").strip().replace("_", " ")
+    if proof.get("age_days") is not None:
+        proof_label = f"{proof_label} ({proof['age_days']}d)"
     ticket_sync = ""
     if ticket_event:
         ticket_sync = " ".join(
@@ -1889,10 +1982,12 @@ def _remediation_review_queue_section_row(item: dict[str, Any]) -> dict[str, str
         "Owner": str(item.get("owner") or ""),
         "SLA": _format_dt(str(item.get("sla_due_at") or "")),
         "Retest": str(item.get("retest_status") or ""),
+        "Ticket State": str(item.get("ticket_state") or ""),
         "Ticket": _truncate(str(item.get("ticket_label") or ""), 120),
         "Ticket Sync": _truncate(ticket_sync, 120),
         "Sync Attempts": str(ticket_event.get("attempt_count") or "") if ticket_event else "",
         "Sync Error": _truncate(str(ticket_event.get("last_error") or ""), 180),
+        "Validation Proof Freshness": _truncate(proof_label, 120),
         "Finding": _truncate(f"{item.get('finding_table') or 'manual'}:{item.get('finding_ref') or ''}", 120),
         "Title": _truncate(str(item.get("title") or ""), 140),
         "Updated": _format_dt(str(item.get("updated_at") or "")),
@@ -1991,6 +2086,25 @@ def _monitoring_alert_section_row(row: sqlite3.Row) -> dict[str, str]:
         row,
         formatters=_detail_row_formatters(),
     )
+
+
+def _exposure_duration_metric_section_row(item: dict[str, Any]) -> dict[str, str]:
+    open_days = item.get("open_days")
+    mttr_hours = item.get("mttr_hours")
+    return {
+        "Key": _safe_dashboard_source_url(item.get("key"), 160),
+        "Title": _truncate(item.get("title"), 120),
+        "Severity": str(item.get("severity") or "INFO"),
+        "State": "open" if item.get("is_open") else "closed",
+        "First Seen": _format_dt(str(item.get("first_seen") or "")),
+        "Last Seen": _format_dt(str(item.get("last_seen") or "")),
+        "Closed": _format_dt(str(item.get("closed_at") or "")) or "-",
+        "Open Days": "-" if open_days is None else str(open_days),
+        "Recurrence": str(item.get("recurrence") or 0),
+        "MTTR Hours": "-" if mttr_hours is None else str(mttr_hours),
+        "Proof": ", ".join(str(value) for value in item.get("proof_types") or []) or "-",
+        "Sources": ", ".join(str(value) for value in item.get("source_kinds") or []) or "-",
+    }
 
 
 def _retention_days_label(value: Any) -> str:
@@ -2386,6 +2500,14 @@ def _active_validation_coverage_section_rows(
             if not isinstance(item, dict):
                 continue
             states = item.get("states") if isinstance(item.get("states"), dict) else {}
+            proof_types = (
+                item.get("proof_types") if isinstance(item.get("proof_types"), dict) else {}
+            )
+            proof_freshness = (
+                item.get("proof_freshness")
+                if isinstance(item.get("proof_freshness"), dict)
+                else {}
+            )
             rows.append(
                 {
                     "Type": label,
@@ -2396,6 +2518,22 @@ def _active_validation_coverage_section_rows(
                         ", ".join(
                             f"{state}={int(count or 0)}"
                             for state, count in sorted(states.items())
+                        ),
+                        160,
+                    )
+                    or "-",
+                    "Proof Types": _truncate(
+                        ", ".join(
+                            f"{proof_type}={int(count or 0)}"
+                            for proof_type, count in sorted(proof_types.items())
+                        ),
+                        160,
+                    )
+                    or "-",
+                    "Proof Freshness": _truncate(
+                        ", ".join(
+                            f"{freshness}={int(count or 0)}"
+                            for freshness, count in sorted(proof_freshness.items())
                         ),
                         160,
                     )
@@ -2569,6 +2707,16 @@ def _detail_sections(
             callbacks=_detail_section_query_callbacks(),
         )
     )
+    exposure_metrics = exposure_metrics_for_engagement(
+        con,
+        engagement_id,
+        limit=SECTION_LIMIT,
+    )
+    sections["exposure_duration_metrics"] = [
+        _exposure_duration_metric_section_row(item)
+        for item in exposure_metrics.get("metrics", [])
+        if isinstance(item, dict)
+    ]
 
     sections.update(
         retention_sections(
@@ -2670,12 +2818,13 @@ def _base_styles() -> str:
     .subtle,.muted{color:var(--muted)}
     .hero-meta{text-align:right;min-width:180px}
     .hero-meta .stamp{font-size:12px;color:var(--muted)}
-    .chips{display:flex;flex-wrap:wrap;gap:8px}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;min-width:0;max-width:100%}
     .chip{
       display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;
+      max-width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;word-break:break-word;
       border:1px solid var(--border);background:rgba(255,255,255,.03);color:var(--text)
     }
-    .chip code{background:none;padding:0;color:var(--accent-strong)}
+    .chip code{background:none;padding:0;color:var(--accent-strong);white-space:normal;overflow-wrap:anywhere}
     .stats{
       display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
       gap:12px;margin:18px 0 24px;
@@ -2689,7 +2838,7 @@ def _base_styles() -> str:
     .stat .value{margin-top:6px;font-size:28px;font-weight:700;letter-spacing:-.03em}
     .panel{
       border:1px solid var(--border);border-radius:18px;background:rgba(17,23,42,.92);
-      box-shadow:var(--shadow);overflow:hidden;
+      box-shadow:var(--shadow);min-width:0;
     }
     .panel-head{
       display:flex;justify-content:space-between;gap:12px;align-items:center;
@@ -2697,12 +2846,16 @@ def _base_styles() -> str:
     }
     .panel-head h2,.panel-head h3{margin:0;font-size:15px;letter-spacing:.02em}
     .panel-body{padding:18px}
+    .panel-body ul{padding-left:18px;min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+    .panel-body li{min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+    .table-scroll{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden}
     table{width:100%;border-collapse:collapse}
     th{
       color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
       text-align:left;padding:12px 12px 10px;border-bottom:1px solid var(--border);
       background:rgba(255,255,255,.02);position:sticky;top:0;
     }
+    th,td{overflow-wrap:anywhere;word-break:break-word;min-width:0}
     td{padding:11px 12px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
     tbody tr:hover{background:rgba(255,255,255,.025)}
     .right{text-align:right}
@@ -2710,6 +2863,7 @@ def _base_styles() -> str:
     .tiny{font-size:12px}
     .pill{
       display:inline-block;padding:3px 8px;border-radius:999px;border:1px solid var(--border);
+      max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word;
       background:rgba(255,255,255,.04);font-size:11px;color:var(--text)
     }
     .pill.ok{color:var(--good);border-color:rgba(119,214,138,.35)}
@@ -2733,14 +2887,14 @@ def _base_styles() -> str:
       padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid var(--border)
     }
     .meta .k{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
-    .meta .v{font-size:14px;word-break:break-word}
+    .meta .v{display:block;font-size:14px;overflow-wrap:anywhere;word-break:break-word}
     .section-stack{display:flex;flex-direction:column;gap:16px}
     .artifact-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
     .artifact{
       padding:14px;border-radius:14px;border:1px solid var(--border);
-      background:rgba(255,255,255,.03)
+      background:rgba(255,255,255,.03);min-width:0
     }
-    .artifact strong{display:block;margin-bottom:6px}
+    .artifact strong,.artifact a{display:block;margin-bottom:6px;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
     .artifact-kind{
       display:inline-flex;align-items:center;padding:3px 8px;margin-bottom:8px;border-radius:999px;
       border:1px solid var(--border);background:rgba(255,255,255,.05);font-size:11px;text-transform:uppercase;
@@ -2751,14 +2905,19 @@ def _base_styles() -> str:
     }
     .route-card{
       padding:18px;border-radius:16px;border:1px solid var(--border);
-      background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015))
+      background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015));
+      min-width:0;overflow-wrap:anywhere;word-break:break-word
+    }
+    .route-card strong,.route-card a,.route-card p{
+      max-width:100%;min-width:0;overflow-wrap:anywhere;word-break:break-word
     }
     .route-card h3{margin:0 0 10px;font-size:14px;letter-spacing:.03em}
     .route-card p{margin:0}
     .timeline{display:flex;flex-direction:column;gap:12px}
     .timeline-item{
       display:grid;grid-template-columns:120px 1fr;gap:14px;padding:14px;border-radius:14px;
-      border:1px solid var(--border);background:rgba(255,255,255,.03)
+      border:1px solid var(--border);background:rgba(255,255,255,.03);
+      min-width:0;overflow-wrap:anywhere;word-break:break-word
     }
     .timeline-item .time{color:var(--muted);font-size:12px}
     .timeline-item strong{display:block;margin-bottom:4px}
@@ -2781,14 +2940,15 @@ def _base_styles() -> str:
       position:relative;z-index:1;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start
     }
     .graph-node{
-      max-width:180px;padding:10px 12px;border-radius:14px;
+      max-width:180px;min-width:0;padding:10px 12px;border-radius:14px;
       border:1px solid rgba(102,217,194,.26);background:rgba(102,217,194,.10);
-      box-shadow:0 14px 34px rgba(0,0,0,.18)
+      box-shadow:0 14px 34px rgba(0,0,0,.18);
+      overflow-wrap:anywhere;word-break:break-word
     }
-    .graph-node span{display:block;font-size:12px;line-height:1.4}
+    .graph-node span{display:block;font-size:12px;line-height:1.4;min-width:0;overflow-wrap:anywhere;word-break:break-word}
     .report-callout{display:flex;flex-direction:column;gap:10px}
-    .report-callout .title{display:flex;justify-content:space-between;gap:12px;align-items:center}
-    .report-callout .title strong{font-size:14px}
+    .report-callout .title{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;min-width:0}
+    .report-callout .title strong,.report-callout .title a{font-size:14px;min-width:0;overflow-wrap:anywhere;word-break:break-word}
     .lane-grid{
       display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px
     }
@@ -2797,6 +2957,14 @@ def _base_styles() -> str:
     }
     .lane .eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
     .lane .figure{margin-top:8px;font-size:26px;font-weight:700;letter-spacing:-.03em}
+    .input-chip-details{margin-top:10px}
+    .input-chip-details summary{
+      cursor:pointer;color:var(--accent-strong);font-weight:600;overflow-wrap:anywhere
+    }
+    .input-chip-details .chips{margin-top:10px;max-height:280px;overflow:auto;padding-right:4px}
+    .input-chip-omitted{margin-top:10px}
+    .fallback-note{min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+    .fallback-note summary{cursor:pointer;color:var(--muted);overflow-wrap:anywhere;word-break:break-word}
     pre{
       margin:10px 0 0;padding:14px;border-radius:12px;background:#09101f;border:1px solid var(--border);
       color:#dfe8f8;overflow:auto;white-space:pre-wrap;word-break:break-word;font:12px/1.45 "Cascadia Code","JetBrains Mono",Consolas,monospace;
@@ -2806,15 +2974,35 @@ def _base_styles() -> str:
       padding:18px;border:1px dashed var(--border);border-radius:14px;color:var(--muted);
       background:rgba(255,255,255,.02)
     }
+    .empty-section-details summary{
+      cursor:pointer;color:var(--muted);font-weight:600;overflow-wrap:anywhere
+    }
+    .empty-section-details ul{margin:12px 0 0;columns:2;column-gap:28px}
     .toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
     .backlink{display:inline-flex;align-items:center;gap:8px;color:var(--accent-strong);font-weight:600}
     .summary-line{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .summary-line,.summary-line *{min-width:0;overflow-wrap:anywhere;word-break:break-word}
     .hide{display:none}
     @media (max-width: 820px){
       .hero{flex-direction:column;align-items:flex-start}
       .hero-meta{text-align:left}
       .shell{padding:18px 14px 32px}
       .timeline-item{grid-template-columns:1fr}
+      .table-scroll{overflow:visible}
+      table.responsive-table,table.responsive-table thead,table.responsive-table tbody,table.responsive-table tr,table.responsive-table th,table.responsive-table td{display:block}
+      table.responsive-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+      table.responsive-table tr{margin:0 0 12px;padding:12px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.025)}
+      table.responsive-table td{display:grid;grid-template-columns:minmax(92px,34%) minmax(0,1fr);gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+      table.responsive-table td:last-child{border-bottom:0}
+      table.responsive-table td::before{content:attr(data-label);color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;overflow-wrap:anywhere}
+    }
+    @media (max-width: 640px){
+      .hero{padding:18px}
+      .hero h1{font-size:28px}
+      .grid,.route-grid{grid-template-columns:minmax(0,1fr)}
+      .artifact-list,.meta-list{grid-template-columns:minmax(0,1fr)}
+      .empty-section-details ul{columns:1}
+      th,td{padding:9px 10px}
     }
     """
 
@@ -2846,13 +3034,19 @@ def _render_table(title: str, rows: list[dict[str, str]]) -> str:
 
 def _render_artifact_card(page_path: Path, artifact: Path, kind: str) -> str:
     href = _relative_href(page_path, artifact)
-    stat = artifact.stat()
+    try:
+        stat = artifact.stat()
+        size_bytes = int(stat.st_size)
+        modified_label = _format_dt(datetime.fromtimestamp(stat.st_mtime).isoformat())
+    except OSError:
+        size_bytes = 0
+        modified_label = ""
     return render_artifact_card(
         kind=kind,
         name=artifact.name,
         href=href,
-        size_label=_format_size(stat.st_size),
-        modified_label=_format_dt(datetime.fromtimestamp(stat.st_mtime).isoformat()),
+        size_label=_format_size(size_bytes),
+        modified_label=modified_label,
     )
 
 
@@ -3094,12 +3288,82 @@ def _enrich_engagement_dashboard_summary(
 
 
 def _dashboard_engagement_summary(db_path: Path, reports_dir: Path) -> dict[str, Any]:
-    return dashboard_engagement_summary(
+    engagement = dashboard_engagement_summary(
         db_path,
         reports_dir,
         engagement_summary=_engagement_summary,
         callbacks=_engagement_enrichment_callbacks(),
     )
+    candidate = target_resume_candidate_for_db(db_path)
+    if candidate is not None:
+        safe_candidate = _dashboard_resume_candidate_payload(candidate)
+        engagement["target_resume_candidate"] = safe_candidate
+        engagement.setdefault("sections", {})["target_resume_candidate"] = [
+            _dashboard_resume_candidate_section_row(safe_candidate)
+        ]
+    return engagement
+
+
+def _dashboard_resume_candidate_payload(
+    candidate: TargetResumeCandidate,
+) -> dict[str, Any]:
+    return {
+        "run_id": candidate.run_id,
+        "status": candidate.status,
+        "reason": candidate.reason,
+        "seed_value": _truncate(candidate.seed_value, 160),
+        "seed_type": candidate.seed_type,
+        "current_iteration": candidate.current_iteration,
+        "max_iterations": candidate.max_iterations,
+        "resume_enabled": candidate.resume_enabled,
+        "attack_mode": candidate.attack_mode,
+        "roe_present": bool(candidate.roe_id.strip()),
+        "report_available": candidate.report_path_exists,
+        "scope_present": candidate.scope_manifest_exists,
+        "resume_ready": candidate.resume_ready,
+        "resume_blockers": [
+            _dashboard_resume_blocker_label(item)
+            for item in candidate.resume_blockers[:8]
+        ],
+        "pending_work_total": candidate.pending_work_total,
+        "completed_at": candidate.completed_at,
+        "updated_at": candidate.updated_at,
+        "error_summary": _redact_dashboard_error(candidate.error_summary, 240),
+    }
+
+
+def _dashboard_resume_candidate_section_row(
+    candidate: dict[str, Any],
+) -> dict[str, str]:
+    return {
+        "Run": str(candidate.get("run_id") or ""),
+        "Status": str(candidate.get("status") or ""),
+        "Reason": str(candidate.get("reason") or ""),
+        "Seed": _safe_dashboard_source_url(candidate.get("seed_value"), 160),
+        "Type": str(candidate.get("seed_type") or ""),
+        "Iteration": (
+            f"{int(candidate.get('current_iteration') or 0)}/"
+            f"{int(candidate.get('max_iterations') or 0)}"
+        ),
+        "Pending": str(int(candidate.get("pending_work_total") or 0)),
+        "Resume": "yes" if candidate.get("resume_enabled") else "no",
+        "Attack": "yes" if candidate.get("attack_mode") else "no",
+        "ROE": "yes" if candidate.get("roe_present") else "no",
+        "Scope": "yes" if candidate.get("scope_present") else "no",
+        "Ready": "yes" if candidate.get("resume_ready") else "no",
+        "Blockers": ", ".join(str(item) for item in candidate.get("resume_blockers") or []),
+        "Report": "yes" if candidate.get("report_available") else "no",
+        "Error": str(candidate.get("error_summary") or ""),
+        "Updated": _format_dt(str(candidate.get("updated_at") or "")),
+    }
+
+
+def _dashboard_resume_blocker_label(value: str) -> str:
+    labels = {
+        "scope_manifest_missing": "scope_missing",
+        "scope_manifest_file_missing": "scope_file_missing",
+    }
+    return labels.get(str(value), str(value))
 
 
 def generate_dashboard(

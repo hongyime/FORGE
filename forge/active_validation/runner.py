@@ -30,6 +30,7 @@ _VALID_TARGET_KINDS = {
     "other",
 }
 _VALID_MODES = {"dry_run", "lab", "read_only_live"}
+_PROOF_FRESH_DAYS = 14
 _FORBIDDEN_METADATA_KEYS = {
     "api_key",
     "apikey",
@@ -268,6 +269,87 @@ def _coverage_bucket(
             "latest_job_ids": [],
         }
     return rows[key]
+
+
+def _parse_validation_time(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        try:
+            parsed = datetime.strptime(text, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _proof_type(job: Mapping[str, Any], method_config: Mapping[str, Any]) -> str:
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), Mapping) else {}
+    for key in ("proof_type", "proof_kind", "evidence_type"):
+        value = metadata.get(key) if isinstance(metadata, Mapping) else ""
+        text = str(value or "").strip().lower()
+        if text:
+            return text[:80]
+    return str(method_config.get("proof_kind") or "unknown").strip().lower()[:80] or "unknown"
+
+
+def _latest_run_completed_at(run: Mapping[str, Any] | None) -> str:
+    if run is None:
+        return ""
+    return str(run.get("completed_at") or run.get("started_at") or run.get("created_at") or "")
+
+
+def _proof_age_days(run: Mapping[str, Any] | None, *, observed_at: datetime) -> float | None:
+    timestamp = _parse_validation_time(_latest_run_completed_at(run))
+    if timestamp is None:
+        return None
+    seconds = max(0.0, (observed_at - timestamp).total_seconds())
+    return round(seconds / 86400.0, 3)
+
+
+def _proof_freshness(job: Mapping[str, Any], run: Mapping[str, Any] | None, *, observed_at: datetime) -> str:
+    if run is None:
+        return "unrun"
+    state = _coverage_state(job, run)
+    if state in {"planned", "approved", "unrun"}:
+        return "unrun"
+    age_days = _proof_age_days(run, observed_at=observed_at)
+    if age_days is None:
+        return "unknown"
+    return "fresh" if age_days <= _PROOF_FRESH_DAYS else "stale"
+
+
+def _coverage_matrix_fields(
+    job: Mapping[str, Any],
+    latest_run: Mapping[str, Any] | None,
+    method_config: Mapping[str, Any],
+    *,
+    observed_at: datetime,
+) -> dict[str, Any]:
+    return {
+        "proof_type": _proof_type(job, method_config),
+        "latest_run_status": str(latest_run.get("status") or "") if latest_run else "",
+        "latest_run_result": str(latest_run.get("result") or "") if latest_run else "",
+        "latest_run_completed_at": _latest_run_completed_at(latest_run),
+        "proof_age_days": _proof_age_days(latest_run, observed_at=observed_at),
+        "proof_freshness": _proof_freshness(job, latest_run, observed_at=observed_at),
+        "retest_pending": str(job.get("method") or "") == "fix_verification"
+        or str(job.get("status") or "") == "retest_pending",
+    }
+
+
+def _record_coverage_matrix(row: dict[str, Any], matrix: Mapping[str, Any]) -> None:
+    proof_type = str(matrix.get("proof_type") or "unknown")
+    freshness = str(matrix.get("proof_freshness") or "unknown")
+    row.setdefault("proof_types", {})
+    row["proof_types"][proof_type] = int(row["proof_types"].get(proof_type, 0)) + 1
+    row.setdefault("proof_freshness", {})
+    row["proof_freshness"][freshness] = int(row["proof_freshness"].get(freshness, 0)) + 1
 
 
 def _append_unique(values: list[Any], value: Any, *, limit: int = 20) -> None:
@@ -1025,6 +1107,11 @@ def preview_active_validation_job(
     evidence["proof_summary"] = active_validation_proof_summary(evidence)
     return {
         "schema": "forge.active_validation.preview.v1",
+        "schema_version": "forge.active_validation.preview.v1",
+        "execution_policy": "preview_only_no_state_or_network_execution",
+        "total_count": 1,
+        "selected_count": 1,
+        "omitted_count": 0,
         "engagement_id": int(engagement_id),
         "status": status,
         "result": result,
@@ -1425,8 +1512,10 @@ def active_validation_control_coverage(
     con: sqlite3.Connection,
     *,
     engagement_id: int,
+    now: str | None = None,
 ) -> dict[str, Any]:
     _ensure_rows(con)
+    observed_at = _parse_validation_time(now) or datetime.now(UTC).replace(microsecond=0)
     job_rows = con.execute(
         """
         SELECT id, engagement_id, target_ref, target_kind, method, mode, status,
@@ -1458,14 +1547,38 @@ def active_validation_control_coverage(
     control_rows: dict[str, dict[str, Any]] = {}
     method_rows: dict[str, dict[str, Any]] = {}
     states: dict[str, int] = {}
+    proof_types: dict[str, int] = {}
+    proof_freshness: dict[str, int] = {}
     mapped_job_count = 0
+    fresh_proof_count = 0
+    stale_proof_count = 0
+    unrun_count = 0
+    retest_pending_count = 0
     jobs = [_job_payload(row) for row in job_rows]
     for job in jobs:
         method_id = str(job.get("method") or "")
         method_config = _method_config_payload(method_id)
         latest_run = latest_runs.get(int(job["id"]))
         state = _coverage_state(job, latest_run)
+        matrix = _coverage_matrix_fields(
+            job,
+            latest_run,
+            method_config,
+            observed_at=observed_at,
+        )
         states[state] = states.get(state, 0) + 1
+        proof_type = str(matrix["proof_type"])
+        freshness = str(matrix["proof_freshness"])
+        proof_types[proof_type] = proof_types.get(proof_type, 0) + 1
+        proof_freshness[freshness] = proof_freshness.get(freshness, 0) + 1
+        if freshness == "fresh":
+            fresh_proof_count += 1
+        elif freshness == "stale":
+            stale_proof_count += 1
+        elif freshness == "unrun":
+            unrun_count += 1
+        if bool(matrix["retest_pending"]):
+            retest_pending_count += 1
         attack_mappings = [
             str(item)
             for item in method_config.get("attack_mappings", [])
@@ -1488,9 +1601,11 @@ def active_validation_control_coverage(
         method_row["implementation_status"] = str(
             method_config.get("implementation_status") or ""
         )
+        method_row["proof_kind"] = str(method_config.get("proof_kind") or "")
         method_row["job_count"] += 1
         method_row["run_count"] += 1 if latest_run is not None else 0
         method_row["states"][state] = int(method_row["states"].get(state, 0)) + 1
+        _record_coverage_matrix(method_row, matrix)
         _append_unique(method_row["latest_job_ids"], int(job["id"]))
 
         for mapping in attack_mappings:
@@ -1502,6 +1617,7 @@ def active_validation_control_coverage(
             attack_row["job_count"] += 1
             attack_row["run_count"] += 1 if latest_run is not None else 0
             attack_row["states"][state] = int(attack_row["states"].get(state, 0)) + 1
+            _record_coverage_matrix(attack_row, matrix)
             _append_unique(attack_row["methods"], method_id)
             _append_unique(attack_row["latest_job_ids"], int(job["id"]))
 
@@ -1514,11 +1630,17 @@ def active_validation_control_coverage(
             control_row["job_count"] += 1
             control_row["run_count"] += 1 if latest_run is not None else 0
             control_row["states"][state] = int(control_row["states"].get(state, 0)) + 1
+            _record_coverage_matrix(control_row, matrix)
             _append_unique(control_row["methods"], method_id)
             _append_unique(control_row["latest_job_ids"], int(job["id"]))
 
     return {
         "schema": "forge.active_validation.coverage.v1",
+        "schema_version": "forge.active_validation.coverage.v1",
+        "execution_policy": "read_only_active_validation_coverage_no_commands_executed",
+        "total_count": len(jobs),
+        "selected_count": len(jobs),
+        "omitted_count": 0,
         "engagement_id": int(engagement_id),
         "summary": {
             "job_count": len(jobs),
@@ -1528,6 +1650,13 @@ def active_validation_control_coverage(
             "control_family_count": len(control_rows),
             "states": dict(sorted(states.items())),
             "method_count": len(method_rows),
+            "proof_type_count": len(proof_types),
+            "proof_types": dict(sorted(proof_types.items())),
+            "proof_freshness": dict(sorted(proof_freshness.items())),
+            "fresh_proof_count": fresh_proof_count,
+            "stale_proof_count": stale_proof_count,
+            "unrun_count": unrun_count,
+            "retest_pending_count": retest_pending_count,
         },
         "attack_mappings": sorted(attack_rows.values(), key=lambda row: str(row["id"])),
         "control_families": sorted(control_rows.values(), key=lambda row: str(row["id"])),
@@ -1574,6 +1703,30 @@ def list_active_validation_jobs(
         tuple(params),
     ).fetchall()
     return [_job_payload(row) for row in rows]
+
+
+def count_active_validation_jobs(
+    con: sqlite3.Connection,
+    *,
+    engagement_id: int,
+    status: str = "",
+) -> int:
+    _ensure_rows(con)
+    where = "WHERE engagement_id=?"
+    params: list[Any] = [engagement_id]
+    normalized_status = str(status or "").strip()
+    if normalized_status:
+        where += " AND status=?"
+        params.append(normalized_status)
+    row = con.execute(
+        f"""
+        SELECT COUNT(*) AS count
+        FROM active_validation_jobs
+        {where}
+        """,
+        tuple(params),
+    ).fetchone()
+    return int(row["count"] if row is not None else 0)
 
 
 def list_active_validation_runs(

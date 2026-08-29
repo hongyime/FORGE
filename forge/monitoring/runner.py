@@ -13,7 +13,9 @@ from forge.db.validation import validate_canonical_schema
 from forge.engagement_ids import numeric_engagement_db_files
 from forge.monitoring.continuous import (
     MonitoringRefreshFn,
+    due_monitoring_policy_rows,
     monitoring_refresh_from_policy,
+    monitoring_policy_payload,
     run_due_monitoring_policies,
 )
 from forge.monitoring.delivery import (
@@ -22,6 +24,9 @@ from forge.monitoring.delivery import (
 )
 
 SleepFn = Callable[[float], None]
+
+MONITORING_DUE_PLAN_SCHEMA_VERSION = "forge.monitoring.due_plan.v1"
+DEFAULT_MONITORING_EXECUTION_LIMIT = 50
 
 _MONITORING_STATUS_TABLES: frozenset[str] = frozenset(
     {
@@ -320,11 +325,438 @@ def monitoring_status_for_data_dir(data_dir: Path, *, now: str | None = None) ->
         ):
             totals[key] += int(result[key])
     return {
+        "schema_version": "forge.monitoring.status.v1",
+        "execution_policy": "read_only_monitoring_inventory_no_commands_executed",
         "data_dir": str(data_dir.resolve()),
         "observed_at": observed_at,
+        "total_count": totals["db_count"],
+        "selected_count": totals["db_count"],
+        "omitted_count": 0,
         **totals,
         "db_results": db_results,
         "errors": errors,
+    }
+
+
+def _monitoring_refresh_plan(metadata: dict[str, Any]) -> dict[str, Any]:
+    refresh = metadata.get("refresh") if isinstance(metadata, dict) else None
+    if not isinstance(refresh, dict):
+        return {
+            "configured": True,
+            "type": "seed_exposure",
+            "connector_ids": [],
+            "target_count": 0,
+            "source_path_count": 0,
+            "template_count": 0,
+            "report_file_configured": False,
+            "dry_run": False,
+            "allow_live": False,
+        }
+
+    connector_value = (
+        refresh.get("connector_ids")
+        or refresh.get("connectors")
+        or refresh.get("connector_id")
+        or refresh.get("connector")
+    )
+    target_value = (
+        refresh.get("targets")
+        or refresh.get("target")
+        or refresh.get("domains")
+        or refresh.get("domain")
+    )
+    source_path_value = (
+        refresh.get("source_paths")
+        or refresh.get("source_path")
+        or refresh.get("paths")
+        or refresh.get("path")
+    )
+    template_value = (
+        refresh.get("template_paths")
+        or refresh.get("templates")
+        or refresh.get("template")
+        or refresh.get("nuclei_templates")
+    )
+    report_files = (
+        refresh.get("report_files")
+        or refresh.get("report_paths")
+        or refresh.get("provider_reports")
+        or refresh.get("import_files")
+    )
+    has_single_report_file = bool(
+        str(
+            refresh.get("report_file")
+            or refresh.get("report_path")
+            or refresh.get("provider_report")
+            or refresh.get("import_file")
+            or ""
+        ).strip()
+    )
+    return {
+        "configured": True,
+        "type": str(refresh.get("type") or refresh.get("kind") or "").strip().lower(),
+        "connector_ids": _monitoring_plan_string_list(connector_value),
+        "target_count": len(_monitoring_plan_string_list(target_value)),
+        "source_path_count": len(_monitoring_plan_string_list(source_path_value)),
+        "template_count": len(_monitoring_plan_string_list(template_value)),
+        "report_file_configured": has_single_report_file
+        or bool(report_files if isinstance(report_files, dict) else False),
+        "dry_run": bool(refresh.get("dry_run") or refresh.get("preview")),
+        "allow_live": bool(refresh.get("allow_live")),
+    }
+
+
+def _monitoring_plan_string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item).strip()[:120] for item in value if str(item).strip()]
+    if isinstance(value, str):
+        return [value.strip()[:120]] if value.strip() else []
+    return [str(value).strip()[:120]] if str(value).strip() else []
+
+
+def _due_plan_policy_payload(
+    row: sqlite3.Row,
+    *,
+    engagement_name: str,
+    now: str,
+) -> dict[str, Any]:
+    policy = monitoring_policy_payload(row)
+    metadata = policy.get("metadata") if isinstance(policy.get("metadata"), dict) else {}
+    return {
+        "engagement_id": int(policy["engagement_id"]),
+        "engagement_name": engagement_name,
+        "policy_id": int(policy["id"]),
+        "policy_name": str(policy["name"]),
+        "mode": str(policy["mode"]),
+        "schedule_interval_minutes": int(policy["schedule_interval_minutes"]),
+        "last_snapshot_id": policy["last_snapshot_id"],
+        "missing_baseline": policy["last_snapshot_id"] is None,
+        "last_run_at": str(policy["last_run_at"]),
+        "next_run_at": str(policy["next_run_at"]),
+        "due_at": now,
+        "refresh": _monitoring_refresh_plan(metadata),
+        "execution_policy": "plan_only_no_commands_executed",
+    }
+
+
+def _parse_monitoring_time(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _monitoring_time_text(value: Any) -> str:
+    parsed = _parse_monitoring_time(value)
+    if parsed is None:
+        return ""
+    return parsed.isoformat().replace("+00:00", "Z")
+
+
+def _due_plan_policy_summary(policies: list[dict[str, Any]]) -> dict[str, Any]:
+    refresh_type_counts: dict[str, int] = {}
+    mode_counts: dict[str, int] = {}
+    interval_counts: dict[str, int] = {}
+    missing_baseline_count = 0
+    for policy in policies:
+        refresh = policy.get("refresh") if isinstance(policy.get("refresh"), dict) else {}
+        refresh_type = str(refresh.get("type") or "unknown")
+        mode = str(policy.get("mode") or "unknown")
+        interval = str(policy.get("schedule_interval_minutes") or "unknown")
+        refresh_type_counts[refresh_type] = refresh_type_counts.get(refresh_type, 0) + 1
+        mode_counts[mode] = mode_counts.get(mode, 0) + 1
+        interval_counts[interval] = interval_counts.get(interval, 0) + 1
+        if policy.get("missing_baseline"):
+            missing_baseline_count += 1
+    return {
+        "refresh_type_counts": dict(sorted(refresh_type_counts.items())),
+        "mode_counts": dict(sorted(mode_counts.items())),
+        "schedule_interval_minutes_counts": dict(sorted(interval_counts.items())),
+        "missing_baseline_count": missing_baseline_count,
+    }
+
+
+def _due_plan_time_summary(
+    policies: list[dict[str, Any]],
+    *,
+    observed_at: str,
+) -> dict[str, Any]:
+    next_runs = [
+        parsed
+        for policy in policies
+        if (parsed := _parse_monitoring_time(policy.get("next_run_at"))) is not None
+    ]
+    last_runs = [
+        parsed
+        for policy in policies
+        if (parsed := _parse_monitoring_time(policy.get("last_run_at"))) is not None
+    ]
+    observed = _parse_monitoring_time(observed_at) or datetime.now(UTC)
+    oldest_due = min(next_runs) if next_runs else None
+    newest_due = max(next_runs) if next_runs else None
+    overdue_seconds = (
+        max(0.0, (observed - oldest_due).total_seconds()) if oldest_due is not None else 0.0
+    )
+    stale_enabled = overdue_seconds >= 24 * 60 * 60
+    return {
+        "oldest_due_at": _monitoring_time_text(oldest_due),
+        "newest_due_at": _monitoring_time_text(newest_due),
+        "oldest_last_run_at": _monitoring_time_text(min(last_runs) if last_runs else None),
+        "stale_backlog": {
+            "enabled": stale_enabled,
+            "oldest_overdue_seconds": int(overdue_seconds),
+            "oldest_overdue_days": round(overdue_seconds / 86400, 2) if overdue_seconds else 0.0,
+            "reason": "oldest_due_over_24h" if stale_enabled else "",
+        },
+    }
+
+
+def _due_plan_action_plan(
+    *,
+    due_policy_count: int,
+    limited_policy_count: int,
+    default_execution_limit: int,
+) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = [
+        {
+            "id": "review_due_monitoring",
+            "status": "review",
+            "command": ["forge", "monitoring", "due-plan", "--json"],
+            "summary": f"review {due_policy_count} due monitoring policy(ies)",
+        }
+    ]
+    if due_policy_count:
+        actions.append(
+            {
+                "id": "dry_run_capped_due_monitoring",
+                "status": "ready",
+                "command": [
+                    "forge",
+                    "monitoring",
+                    "run-due",
+                    "--dry-run",
+                    "--limit",
+                    str(default_execution_limit),
+                    "--json",
+                ],
+                "summary": "rehearse the bounded due run without writing snapshots, alerts, or schedules",
+            }
+        )
+        actions.append(
+            {
+                "id": "run_capped_due_monitoring",
+                "status": "ready",
+                "command": [
+                    "forge",
+                    "monitoring",
+                    "run-due",
+                    "--limit",
+                    str(default_execution_limit),
+                    "--json",
+                ],
+                "summary": "apply reviewed due work in a bounded batch",
+            }
+        )
+    if limited_policy_count:
+        actions.append(
+            {
+                "id": "run_all_due_monitoring_explicit",
+                "status": "explicit",
+                "command": ["forge", "monitoring", "run-due", "--all", "--json"],
+                "summary": "intentional full-backlog apply; bypasses the default cap",
+            }
+        )
+    return actions
+
+
+def monitoring_due_plan_for_db(
+    db_path: Path,
+    *,
+    now: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Return due monitoring policies for one engagement DB without mutating it."""
+    observed_at = str(now or _utc_timestamp())
+    max_items = max(0, int(limit)) if limit is not None else None
+    con = _open_engagement_db_read_only(db_path)
+    try:
+        tables = _table_names(con)
+        missing_tables = sorted(_MONITORING_STATUS_TABLES - tables)
+        if missing_tables:
+            return {
+                "db_path": str(db_path.resolve()),
+                "schema_ready": False,
+                "missing_tables": missing_tables,
+                "engagement_count": _count_rows(con, "engagements") if "engagements" in tables else 0,
+                "due_policy_count": 0,
+                "planned_policy_count": 0,
+                "limited_policy_count": 0,
+                "policies": [],
+                "errors": [],
+                "execution_policy": "plan_only_no_commands_executed",
+            }
+
+        engagement_rows = con.execute(
+            """
+            SELECT id, name
+            FROM engagements
+            ORDER BY id
+            """
+        ).fetchall()
+        policies: list[dict[str, Any]] = []
+        due_policy_count = 0
+        for engagement in engagement_rows:
+            due_rows = due_monitoring_policy_rows(
+                con,
+                int(engagement["id"]),
+                now=observed_at,
+            )
+            due_policy_count += len(due_rows)
+            if max_items is not None and len(policies) >= max_items:
+                continue
+            remaining = None if max_items is None else max_items - len(policies)
+            selected_rows = due_rows if remaining is None else due_rows[:remaining]
+            policies.extend(
+                _due_plan_policy_payload(
+                    row,
+                    engagement_name=str(engagement["name"] or ""),
+                    now=observed_at,
+                )
+                for row in selected_rows
+            )
+        return {
+            "db_path": str(db_path.resolve()),
+            "schema_ready": True,
+            "missing_tables": [],
+            "engagement_count": len(engagement_rows),
+            "due_policy_count": due_policy_count,
+            "planned_policy_count": len(policies),
+            "limited_policy_count": max(0, due_policy_count - len(policies)),
+            "policies": policies,
+            "errors": [],
+            "execution_policy": "plan_only_no_commands_executed",
+        }
+    finally:
+        con.close()
+
+
+def monitoring_due_plan_for_data_dir(
+    data_dir: Path,
+    *,
+    now: str | None = None,
+    limit: int | None = None,
+    include_empty_db_results: bool = False,
+) -> dict[str, Any]:
+    """Return a read-only plan of due monitoring work across engagement DBs."""
+    observed_at = str(now or _utc_timestamp())
+    max_items = max(0, int(limit)) if limit is not None else None
+    db_results: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    all_due_policies: list[dict[str, Any]] = []
+    totals = {
+        "db_count": 0,
+        "schema_ready_db_count": 0,
+        "stale_db_count": 0,
+        "engagement_count": 0,
+        "due_policy_count": 0,
+        "planned_policy_count": 0,
+        "limited_policy_count": 0,
+    }
+    for db_path in numeric_engagement_db_files(data_dir):
+        totals["db_count"] += 1
+        try:
+            result = monitoring_due_plan_for_db(
+                db_path,
+                now=observed_at,
+                limit=None,
+            )
+        except (OSError, sqlite3.Error, RuntimeError) as exc:
+            errors.append({"db_path": str(db_path.resolve()), "error": str(exc)})
+            continue
+        full_policies = list(result.get("policies") or [])
+        all_due_policies.extend(full_policies)
+        planned_policies = full_policies
+        if max_items is not None:
+            remaining = max(0, max_items - totals["planned_policy_count"])
+            planned_policies = full_policies[:remaining]
+        result = {
+            **result,
+            "policies": planned_policies,
+            "planned_policy_count": len(planned_policies),
+            "limited_policy_count": max(
+                0,
+                int(result.get("due_policy_count") or 0) - len(planned_policies),
+            ),
+        }
+        if (
+            include_empty_db_results
+            or result.get("policies")
+            or not result.get("schema_ready")
+            or result.get("errors")
+        ):
+            db_results.append(result)
+        if result["schema_ready"]:
+            totals["schema_ready_db_count"] += 1
+        else:
+            totals["stale_db_count"] += 1
+        for key in ("engagement_count", "due_policy_count", "planned_policy_count"):
+            totals[key] += int(result[key])
+    totals["limited_policy_count"] = max(
+        0,
+        int(totals["due_policy_count"]) - int(totals["planned_policy_count"]),
+    )
+    default_execution_limit = DEFAULT_MONITORING_EXECUTION_LIMIT
+    estimated_capped_invocations = (
+        (int(totals["due_policy_count"]) + default_execution_limit - 1)
+        // default_execution_limit
+        if default_execution_limit and int(totals["due_policy_count"])
+        else 0
+    )
+    time_summary = _due_plan_time_summary(all_due_policies, observed_at=observed_at)
+    due_policy_count = int(totals["due_policy_count"])
+    planned_policy_count = int(totals["planned_policy_count"])
+    limited_policy_count = int(totals["limited_policy_count"])
+    stale_backlog = (
+        time_summary.get("stale_backlog")
+        if isinstance(time_summary.get("stale_backlog"), dict)
+        else {}
+    )
+    return {
+        "result_schema_version": MONITORING_DUE_PLAN_SCHEMA_VERSION,
+        "schema_version": MONITORING_DUE_PLAN_SCHEMA_VERSION,
+        "data_dir": str(data_dir.resolve()),
+        "observed_at": observed_at,
+        **totals,
+        "total_count": due_policy_count,
+        "total_due_count": due_policy_count,
+        "selected_count": planned_policy_count,
+        "omitted_count": limited_policy_count,
+        "oldest_due_age_seconds": int(
+            stale_backlog.get("oldest_overdue_seconds") or 0
+        ),
+        "default_execution_limit": default_execution_limit,
+        "estimated_capped_invocations": estimated_capped_invocations,
+        "policy_summary": _due_plan_policy_summary(all_due_policies),
+        **time_summary,
+        "action_plan": _due_plan_action_plan(
+            due_policy_count=int(totals["due_policy_count"]),
+            limited_policy_count=int(totals["limited_policy_count"]),
+            default_execution_limit=default_execution_limit,
+        ),
+        "include_empty_db_results": include_empty_db_results,
+        "db_results": db_results,
+        "errors": errors,
+        "execution_policy": "plan_only_no_commands_executed",
     }
 
 
@@ -334,8 +766,10 @@ def run_due_monitoring_for_db(
     now: str | None = None,
     operator: str = "monitoring-scheduler",
     refresh_fn: MonitoringRefreshFn | None = None,
+    limit: int | None = None,
 ) -> dict[str, Any]:
     resolved_refresh_fn = refresh_fn or monitoring_refresh_from_policy
+    max_items = max(0, int(limit)) if limit is not None else None
     con = _open_engagement_db(db_path)
     try:
         engagement_rows = con.execute(
@@ -348,18 +782,24 @@ def run_due_monitoring_for_db(
         engagement_results: list[dict[str, Any]] = []
         run_count = 0
         due_count = 0
+        limited_count = 0
         alert_count = 0
         change_count = 0
         for engagement in engagement_rows:
+            remaining = None
+            if max_items is not None:
+                remaining = max(0, max_items - run_count)
             result = run_due_monitoring_policies(
                 con,
                 engagement_id=int(engagement["id"]),
                 now=now,
                 operator=operator,
                 refresh_fn=resolved_refresh_fn,
+                max_policies=remaining,
             )
             run_count += int(result["run_count"])
             due_count += int(result["due_count"])
+            limited_count += int(result.get("limited_policy_count") or 0)
             for run in result["runs"]:
                 alert_count += len(run["alerts"])
                 change_count += len(run["changes"])
@@ -375,6 +815,7 @@ def run_due_monitoring_for_db(
             "engagement_count": len(engagement_rows),
             "due_count": due_count,
             "run_count": run_count,
+            "limited_policy_count": limited_count,
             "change_count": change_count,
             "alert_count": alert_count,
             "engagements": engagement_results,
@@ -390,7 +831,45 @@ def run_due_monitoring_for_data_dir(
     now: str | None = None,
     operator: str = "monitoring-scheduler",
     refresh_fn: MonitoringRefreshFn | None = None,
+    limit: int | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
+    max_items = max(0, int(limit)) if limit is not None else None
+    if dry_run:
+        plan = monitoring_due_plan_for_data_dir(data_dir, now=now, limit=max_items)
+        due_count = int(plan.get("due_policy_count") or 0)
+        planned_count = int(plan.get("planned_policy_count") or 0)
+        limited_count = int(plan.get("limited_policy_count") or 0)
+        return {
+            "result_schema_version": "forge.monitoring.run_due.v1",
+            "schema_version": "forge.monitoring.run_due.v1",
+            "execution_policy": "dry_run_no_monitoring_executed",
+            "status": _run_due_status(
+                dry_run=True,
+                due_count=due_count,
+                selected_count=planned_count,
+                errors=plan.get("errors") or [],
+            ),
+            "dry_run": True,
+            "data_dir": str(data_dir.resolve()),
+            "observed_at": plan.get("observed_at"),
+            "db_count": int(plan.get("db_count") or 0),
+            "engagement_count": int(plan.get("engagement_count") or 0),
+            "due_count": due_count,
+            **_run_due_count_aliases(
+                due_count=due_count,
+                selected_count=planned_count,
+                limited_count=limited_count,
+            ),
+            "run_count": 0,
+            "planned_policy_count": planned_count,
+            "limited_policy_count": limited_count,
+            "change_count": 0,
+            "alert_count": 0,
+            "execution_limit": max_items,
+            "db_results": plan.get("db_results") or [],
+            "errors": plan.get("errors") or [],
+        }
     db_results: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     totals = {
@@ -398,28 +877,88 @@ def run_due_monitoring_for_data_dir(
         "engagement_count": 0,
         "due_count": 0,
         "run_count": 0,
+        "limited_policy_count": 0,
         "change_count": 0,
         "alert_count": 0,
     }
     for db_path in numeric_engagement_db_files(data_dir):
         totals["db_count"] += 1
+        remaining = None
+        if max_items is not None:
+            remaining = max(0, max_items - totals["run_count"])
         try:
             result = run_due_monitoring_for_db(
                 db_path,
                 now=now,
                 operator=operator,
                 refresh_fn=refresh_fn,
+                limit=remaining,
             )
         except (OSError, sqlite3.Error, RuntimeError) as exc:
             errors.append({"db_path": str(db_path.resolve()), "error": str(exc)})
             continue
         db_results.append(result)
-        for key in ("engagement_count", "due_count", "run_count", "change_count", "alert_count"):
+        for key in (
+            "engagement_count",
+            "due_count",
+            "run_count",
+            "limited_policy_count",
+            "change_count",
+            "alert_count",
+        ):
             totals[key] += int(result[key])
     return {
+        "result_schema_version": "forge.monitoring.run_due.v1",
+        "schema_version": "forge.monitoring.run_due.v1",
+        "execution_policy": "executes_due_monitoring_policies",
+        "status": _run_due_status(
+            dry_run=False,
+            due_count=int(totals["due_count"]),
+            selected_count=int(totals["run_count"]),
+            errors=errors,
+        ),
+        "dry_run": False,
         **totals,
+        **_run_due_count_aliases(
+            due_count=int(totals["due_count"]),
+            selected_count=int(totals["run_count"]),
+            limited_count=int(totals["limited_policy_count"]),
+        ),
+        "execution_limit": max_items,
         "db_results": db_results,
         "errors": errors,
+    }
+
+
+def _run_due_status(
+    *,
+    dry_run: bool,
+    due_count: int,
+    selected_count: int,
+    errors: list[Any],
+) -> str:
+    if errors and int(selected_count) <= 0:
+        return "failed"
+    if errors:
+        return "completed_with_errors"
+    if int(due_count) <= 0:
+        return "idle"
+    if dry_run:
+        return "dry_run"
+    return "completed"
+
+
+def _run_due_count_aliases(
+    *,
+    due_count: int,
+    selected_count: int,
+    limited_count: int,
+) -> dict[str, int]:
+    return {
+        "total_count": int(due_count),
+        "total_due_count": int(due_count),
+        "selected_count": int(selected_count),
+        "omitted_count": int(limited_count),
     }
 
 
@@ -553,6 +1092,7 @@ def run_monitoring_worker(
     stdout: TextIO | None = None,
     sleep_fn: SleepFn = time.sleep,
     refresh_fn: MonitoringRefreshFn | None = None,
+    run_limit: int | None = None,
 ) -> dict[str, Any]:
     """Run due continuous-monitoring policies repeatedly for local service use."""
     interval = int(poll_seconds)
@@ -568,6 +1108,7 @@ def run_monitoring_worker(
         "engagement_scan_count": 0,
         "due_count": 0,
         "run_count": 0,
+        "limited_policy_count": 0,
         "change_count": 0,
         "alert_count": 0,
         "delivery_count": 0,
@@ -586,6 +1127,7 @@ def run_monitoring_worker(
                 now=now,
                 operator=operator,
                 refresh_fn=refresh_fn,
+                limit=run_limit,
             )
             tick_payload = {
                 "tick": tick_number,
@@ -611,7 +1153,13 @@ def run_monitoring_worker(
             totals["tick_count"] += 1
             totals["db_scan_count"] += int(result["db_count"])
             totals["engagement_scan_count"] += int(result["engagement_count"])
-            for key in ("due_count", "run_count", "change_count", "alert_count"):
+            for key in (
+                "due_count",
+                "run_count",
+                "limited_policy_count",
+                "change_count",
+                "alert_count",
+            ):
                 totals[key] += int(result[key])
             totals["error_count"] += len(result["errors"])
 
@@ -626,6 +1174,7 @@ def run_monitoring_worker(
         "data_dir": str(data_dir.resolve()),
         "poll_seconds": interval,
         "operator": operator,
+        "run_limit": max(0, int(run_limit)) if run_limit is not None else None,
         "stopped_reason": stopped_reason,
         **totals,
         "ticks": tick_results,

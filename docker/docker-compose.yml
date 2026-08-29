@@ -52,6 +52,8 @@ x-forge-service: &forge-service
   restart: unless-stopped
   init: true
   user: "1000:1000"
+  cpus: "${FORGE_CONTAINER_CPUS:-0.75}"
+  mem_limit: "${FORGE_CONTAINER_MEM_LIMIT:-768m}"
   read_only: true
   cap_drop:
     - ALL
@@ -71,6 +73,8 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    cpus: "${FORGE_POSTGRES_CPUS:-0.50}"
+    mem_limit: "${FORGE_POSTGRES_MEM_LIMIT:-512m}"
     environment:
       POSTGRES_DB: forge
       POSTGRES_USER: forge
@@ -89,6 +93,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    cpus: "${FORGE_REDIS_CPUS:-0.25}"
+    mem_limit: "${FORGE_REDIS_MEM_LIMIT:-128m}"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -168,6 +174,48 @@ services:
         condition: service_healthy
     deploy:
       replicas: ${FORGE_WORKER_REPLICAS:-1}
+
+  forge-guarded-autostart:
+    <<: *forge-service
+    build: *forge-build
+    profiles: ["autostart"]
+    restart: unless-stopped
+    cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"
+    mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-1536m}"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        sleep "$${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
+        while true; do
+          timeout --preserve-status "$${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}" \
+          python -m forge.cli automation cycle \
+            --autostart-config /app/imports/autostart.local.json \
+            --docker-probe-mode compose-dependency \
+            --apply \
+            --live \
+            --json || true
+          sleep "$${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
+        done
+    environment:
+      <<: *forge-env
+      FORGE_ROE_ID: "${FORGE_ROE_ID:-}"
+      FORGE_AUTOSTART_STARTUP_DELAY_SECONDS: "${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
+      FORGE_AUTOSTART_TIMEOUT_SECONDS: "${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}"
+      FORGE_AUTOSTART_EVERY_SECONDS: "${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
+    volumes:
+      - forge-data:/data
+      - forge-plugins:/plugins:ro
+      - forge-remote-audit:/remote-audit
+      - forge-models:/home/forge/.cache/forge/models:ro
+      - ../imports:/app/imports:rw
+      - ../reports:/app/reports:rw
+      - ${FORGE_HOST_CONNECTOR_BIN_DIR:-../tools/bin}:/app/tools/bin:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   forge-data:

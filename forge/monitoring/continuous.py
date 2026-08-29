@@ -2391,11 +2391,16 @@ def run_due_monitoring_policies(
     now: str | None = None,
     operator: str = "monitoring-scheduler",
     refresh_fn: MonitoringRefreshFn | None = None,
+    max_policies: int | None = None,
 ) -> dict[str, Any]:
     """Create scheduled snapshots for enabled monitoring policies that are due."""
     policies = due_monitoring_policy_rows(con, engagement_id, now=now)
+    if max_policies is not None:
+        selected_policies = policies[: max(0, int(max_policies))]
+    else:
+        selected_policies = policies
     runs: list[dict[str, Any]] = []
-    for policy_row in policies:
+    for policy_row in selected_policies:
         policy_id = int(policy_row["id"])
         policy_payload = monitoring_policy_payload(policy_row)
         refresh = _run_refresh_before_snapshot(
@@ -2453,6 +2458,7 @@ def run_due_monitoring_policies(
         )
     return {
         "due_count": len(policies),
+        "limited_policy_count": max(0, len(policies) - len(selected_policies)),
         "run_count": len(runs),
         "runs": runs,
     }

@@ -38,7 +38,10 @@ def _format_artifact_datetime(value: str) -> str:
 
 
 def relative_href(source_page: Path, target_path: Path) -> str:
-    rel = os.path.relpath(target_path, start=source_page.parent)
+    try:
+        rel = os.path.relpath(target_path, start=source_page.parent)
+    except (OSError, ValueError):
+        rel = target_path.name
     return rel.replace("\\", "/")
 
 
@@ -49,14 +52,19 @@ def artifact_payload(
     kind: str,
     format_dt: Callable[[str], str] = _format_artifact_datetime,
 ) -> dict[str, Any]:
-    stat = artifact.stat()
-    modified_at = format_dt(datetime.fromtimestamp(stat.st_mtime).isoformat())
+    try:
+        stat = artifact.stat()
+        size_bytes = int(stat.st_size)
+        modified_at = format_dt(datetime.fromtimestamp(stat.st_mtime).isoformat())
+    except OSError:
+        size_bytes = 0
+        modified_at = ""
     return {
         "name": artifact.name,
         "kind": kind,
         "href": relative_href(root_page, artifact),
-        "size_bytes": int(stat.st_size),
-        "size_label": format_size(int(stat.st_size)),
+        "size_bytes": size_bytes,
+        "size_label": format_size(size_bytes),
         "modified_at": modified_at,
     }
 

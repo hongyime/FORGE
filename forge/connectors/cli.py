@@ -10,11 +10,14 @@ from rich.console import Console
 from rich.table import Table
 
 from forge.config import ForgeConfig
+from forge.connectors.cti import CtiObservationImportConfig, import_cti_observations
 from forge.connectors.discovery import DiscoveryReportImportConfig, import_discovery_report
 from forge.connectors.identity import IdentityExposureRunConfig, run_identity_exposure_connector
 from forge.connectors.registry import (
+    connector_install_plan,
     connector_plugin_dirs,
     connector_plugin_manifest_statuses,
+    connector_run_plan,
     connector_statuses,
     connector_summary,
 )
@@ -26,15 +29,21 @@ from forge.connectors.runner import (
 )
 from forge.connectors.secrets import (
     SECRET_MATERIAL_POLICY,
+    connector_secret_key_plan,
     connector_secret_readiness,
     list_connector_secrets,
     store_connector_secret,
+)
+from forge.connectors.validation_import import (
+    ValidationArtifactImportConfig,
+    import_validation_artifact,
 )
 from forge.db.direct_connect import direct_connect
 from forge.db.migrations import run_migrations
 from forge.db.validation import validate_canonical_schema
 from forge.secrets.importers import SecretScanImportConfig, import_secret_scan_report
 from forge.secrets.lifecycle import secret_prevention_workflow_plan
+from forge.utils.intel import provider_catalog_policy_summary
 
 console = Console(stderr=True)
 
@@ -87,7 +96,19 @@ def register_connector_commands(app: typer.Typer) -> None:
             summary["engagement_id"] = int(engagement)
             summary["secret_store_connector_count"] = len(stored_secret_statuses)
         if json_output:
-            typer.echo(json.dumps({"connectors": rows, "summary": summary}, sort_keys=True))
+            payload = {
+                "schema_version": "forge.connector_catalog.v1",
+                "execution_policy": "data_only_catalog_no_connectors_executed",
+                "total_count": int(summary.get("connector_count", len(rows)) or 0),
+                "selected_count": len(rows),
+                "omitted_count": max(
+                    0,
+                    int(summary.get("connector_count", len(rows)) or 0) - len(rows),
+                ),
+                "connectors": rows,
+                "summary": summary,
+            }
+            typer.echo(json.dumps(payload, sort_keys=True))
             return
 
         table = Table(show_header=True, header_style="bold magenta")
@@ -124,6 +145,155 @@ def register_connector_commands(app: typer.Typer) -> None:
             "[/dim]"
         )
 
+    @app.command("install-plan")
+    def install_plan(
+        include_paid: bool = typer.Option(
+            False,
+            "--include-paid/--free-first-only",
+            help="Include optional paid adapters when calculating missing local binaries.",
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Print missing local binary install guidance without executing commands."""
+        rows = connector_statuses(include_paid=include_paid, env=os.environ)
+        plan = connector_install_plan(rows, env=os.environ)
+        if json_output:
+            typer.echo(json.dumps(plan, sort_keys=True))
+            return
+
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Binary", width=18)
+        table.add_column("Installer", width=12)
+        table.add_column("Connectors", width=34)
+        table.add_column("Command")
+        for item in plan["items"]:
+            table.add_row(
+                str(item["binary"]),
+                str(item["installer"]),
+                ", ".join(str(connector) for connector in item["connector_ids"]),
+                str(item["command"] or item["notes"]),
+            )
+        console.print(table)
+        console.print(
+            "[dim]Install plan only; no command was executed. Rerun "
+            "`forge doctor --json` after installing tools.[/dim]"
+        )
+
+    @app.command("run-plan")
+    def run_plan(
+        domain: str = typer.Option("", "--domain", help="Filter by connector domain."),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Print free-first connector run guidance without executing connectors."""
+        rows = connector_statuses(domain=domain, include_paid=False, env=os.environ)
+        plan = connector_run_plan(rows, env=os.environ)
+        if json_output:
+            typer.echo(json.dumps(plan, sort_keys=True))
+            return
+
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Connector", width=30)
+        table.add_column("Domain", width=18)
+        table.add_column("Readiness", width=16)
+        table.add_column("Command template")
+        for item in plan["items"]:
+            table.add_row(
+                str(item["connector_id"]),
+                str(item["domain"]),
+                str(item["readiness"]),
+                " ".join(str(part) for part in item["command_template"]),
+            )
+        console.print(table)
+        console.print(
+            "[dim]Run plan only; no connector was executed. Replace placeholders "
+            "before running any command.[/dim]"
+        )
+
+    @app.command("secret-key-plan")
+    def secret_key_plan(
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Print non-secret FORGE_ENGAGEMENT_KEY setup guidance."""
+        plan = connector_secret_key_plan()
+        if json_output:
+            typer.echo(json.dumps(plan, sort_keys=True))
+            return
+        status = "configured" if plan["key_configured"] else "missing"
+        console.print(
+            "[bold]Connector secret key[/bold] "
+            f"status={status} length={plan['key_length']} "
+            f"fingerprint={plan['key_fingerprint'] or '-'}"
+        )
+        persistent_hint = plan.get("persistent_key_hint") or {}
+        if persistent_hint.get("key_configured"):
+            console.print(
+                "[yellow]Persistent Windows key detected[/yellow] "
+                f"source={persistent_hint.get('source') or 'persistent'} "
+                f"length={persistent_hint.get('key_length') or 0} "
+                f"fingerprint={persistent_hint.get('key_fingerprint') or '-'}"
+            )
+            reload_command = str(
+                (plan.get("commands") or {}).get("powershell_reload_persistent_env") or ""
+            )
+            if reload_command:
+                console.print(f"[dim]Current PowerShell reload:[/dim] {reload_command}")
+        console.print(
+            "[dim]No secret material is printed. Use the JSON output for "
+            "platform-specific setup commands.[/dim]"
+        )
+
+    @app.command("policy-summary")
+    def policy_summary(
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Summarize CTI/OSINT source policy without running providers."""
+        summary = provider_catalog_policy_summary()
+        if json_output:
+            typer.echo(json.dumps(summary, sort_keys=True))
+            return
+
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Policy", width=28)
+        table.add_column("Count", width=10)
+        table.add_column("Providers")
+        rows = [
+            (
+                "total",
+                summary.get("total_count", 0),
+                summary.get("default_provider_ids", []),
+            ),
+            (
+                "offline_import",
+                len(summary.get("offline_import_provider_ids", [])),
+                summary.get("offline_import_provider_ids", []),
+            ),
+            (
+                "live_or_api",
+                len(summary.get("live_or_api_provider_ids", [])),
+                summary.get("live_or_api_provider_ids", []),
+            ),
+            (
+                "manual_opt_in",
+                len(summary.get("manual_opt_in_provider_ids", [])),
+                summary.get("manual_opt_in_provider_ids", []),
+            ),
+            (
+                "operator_opt_in_gate",
+                summary.get("required_gate_counts", {}).get("operator_opt_in", 0),
+                [],
+            ),
+        ]
+        for label, count, providers in rows:
+            provider_text = ", ".join(str(item) for item in list(providers)[:8])
+            if isinstance(providers, list) and len(providers) > 8:
+                provider_text = f"{provider_text}, +{len(providers) - 8}"
+            table.add_row(str(label), str(count), provider_text or "-")
+        console.print(table)
+        console.print(
+            "[dim]Catalog policy summary only; no provider is contacted and no "
+            "third-party command is executed.[/dim]"
+        )
+
     @app.command("plugin-validate")
     def plugin_validate(
         plugin_dir: list[Path] | None = typer.Option(
@@ -156,7 +326,11 @@ def register_connector_commands(app: typer.Typer) -> None:
             "invalid_count": sum(1 for row in rows if row["status"] == "invalid"),
             "plugin_dirs": [str(path) for path in resolved_plugin_dirs],
             "schema": "forge.connector.plugin.v1",
+            "schema_version": "forge.connector.plugin_validation.v1",
             "execution_policy": "data_only_catalog; no plugin code is imported or executed",
+            "total_count": len(rows),
+            "selected_count": len(rows),
+            "omitted_count": 0,
         }
         if json_output:
             typer.echo(json.dumps({"items": rows, "summary": summary}, sort_keys=True))
@@ -397,6 +571,18 @@ def register_connector_commands(app: typer.Typer) -> None:
         connector: str = typer.Option("shodan_host_lookup", "--connector"),
         report_file: Path = typer.Option(..., "--report-file", exists=True, dir_okay=False),
         target: str = typer.Option("", "--target", help="Optional scoped domain/IP target filter."),
+        dry_run: bool = typer.Option(
+            False,
+            "--dry-run",
+            help="Parse and scope-check the report without writing discovery evidence.",
+        ),
+        limit: int | None = typer.Option(
+            None,
+            "--limit",
+            min=1,
+            max=10000,
+            help="Maximum number of hosts, findings, and templates to process.",
+        ),
         operator: str = typer.Option("connector-import", "--operator"),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
@@ -415,6 +601,8 @@ def register_connector_commands(app: typer.Typer) -> None:
                     report_path=report_file,
                     target=target,
                     operator=operator,
+                    dry_run=dry_run,
+                    limit=limit,
                 ),
             )
         except (FileNotFoundError, LookupError, ValueError) as exc:
@@ -433,6 +621,180 @@ def register_connector_commands(app: typer.Typer) -> None:
             f"urls={result.get('persisted_url_seed_count', 0)} "
             f"crawl={result.get('persisted_crawl_result_count', 0)} "
             f"skipped={result['skipped_count']}"
+        )
+
+    @app.command("import-validation")
+    def import_validation(
+        engagement: int = typer.Option(..., "--engagement", "-e"),
+        connector: str = typer.Option("burp_dast_xml", "--connector"),
+        report_file: Path = typer.Option(
+            ...,
+            "--report-file",
+            exists=True,
+            dir_okay=False,
+            help="Offline Burp/JUnit XML artifact.",
+        ),
+        target: str = typer.Option("", "--target", help="Optional scoped URL prefix filter."),
+        dry_run: bool = typer.Option(
+            False,
+            "--dry-run",
+            help="Parse and scope-check the XML without writing active-validation evidence.",
+        ),
+        limit: int | None = typer.Option(
+            None,
+            "--limit",
+            min=1,
+            max=10000,
+            help="Maximum number of XML evidence items to process.",
+        ),
+        operator: str = typer.Option("connector-import", "--operator"),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        cfg = ForgeConfig.load()
+        db_path = cfg.engagement_db_path(str(engagement))
+        con = direct_connect(db_path)
+        con.row_factory = sqlite3.Row
+        try:
+            run_migrations(con)
+            validate_canonical_schema(con)
+            result = import_validation_artifact(
+                con,
+                ValidationArtifactImportConfig(
+                    connector_id=connector,
+                    engagement_id=int(engagement),
+                    report_path=report_file,
+                    target=target,
+                    operator=operator,
+                    dry_run=dry_run,
+                    limit=limit,
+                ),
+            )
+        except (FileNotFoundError, LookupError, OSError, ValueError) as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        finally:
+            con.close()
+        if json_output:
+            typer.echo(json.dumps(result, sort_keys=True))
+            return
+        console.print(
+            "[bold]Validation artifact import[/bold] "
+            f"{result['connector_id']} status={result['status']} "
+            f"parsed={result['parsed_count']} "
+            f"runs={result['persisted_run_count']} "
+            f"would_persist={result.get('would_persist_count', 0)} "
+            f"skipped={result['skipped_count']}"
+        )
+
+    @app.command("import-cti")
+    def import_cti(
+        engagement: int = typer.Option(..., "--engagement", "-e"),
+        connector: str = typer.Option("stix_taxii_import", "--connector"),
+        report_file: Path = typer.Option(
+            ...,
+            "--report-file",
+            exists=True,
+            dir_okay=False,
+            help="Offline CTI export file in JSON or CSV format.",
+        ),
+        provider: str = typer.Option("", "--provider", help="Override provider label."),
+        source_url: str = typer.Option("", "--source-url", help="Safe provenance URL or feed ID."),
+        collection_method: str = typer.Option("offline_import", "--collection-method"),
+        promote_targets: bool = typer.Option(
+            False,
+            "--promote-targets",
+            help="Promote target-feed-compatible observations into scoped engagement seeds.",
+        ),
+        dry_run: bool = typer.Option(
+            False,
+            "--dry-run",
+            help="Parse and normalize the CTI file without writing observations, seeds, or audit rows.",
+        ),
+        limit: int | None = typer.Option(
+            None,
+            "--limit",
+            min=1,
+            max=100000,
+            help="Maximum number of CTI items to process from the offline file.",
+        ),
+        min_confidence: float | None = typer.Option(
+            None,
+            "--min-confidence",
+            min=0.0,
+            max=1.0,
+            help="Skip normalized observations below this confidence threshold.",
+        ),
+        max_tlp: str = typer.Option(
+            "",
+            "--max-tlp",
+            help="Skip observations above this TLP level: clear, green, amber, or red.",
+        ),
+        since: str = typer.Option(
+            "",
+            "--since",
+            help="Skip observations observed before this ISO timestamp.",
+        ),
+        until: str = typer.Option(
+            "",
+            "--until",
+            help="Skip observations observed after this ISO timestamp.",
+        ),
+        fail_on_empty: bool = typer.Option(
+            False,
+            "--fail-on-empty",
+            help="Exit non-zero when no observations survive normalization and filters.",
+        ),
+        operator: str = typer.Option("connector-import", "--operator"),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        cfg = ForgeConfig.load()
+        db_path = cfg.engagement_db_path(str(engagement))
+        con = direct_connect(db_path)
+        con.row_factory = sqlite3.Row
+        try:
+            run_migrations(con)
+            validate_canonical_schema(con)
+            result = import_cti_observations(
+                con,
+                CtiObservationImportConfig(
+                    connector_id=connector,
+                    engagement_id=int(engagement),
+                    report_path=report_file,
+                    provider=provider,
+                    source_url=source_url,
+                    collection_method=collection_method,
+                    promote_targets=promote_targets,
+                    operator=operator,
+                    dry_run=dry_run,
+                    limit=limit,
+                    min_confidence=min_confidence,
+                    max_tlp=max_tlp,
+                    since=since,
+                    until=until,
+                    fail_on_empty=fail_on_empty,
+                ),
+            )
+        except (FileNotFoundError, LookupError, ValueError) as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        finally:
+            con.close()
+        if json_output:
+            typer.echo(json.dumps(result, sort_keys=True))
+            return
+        console.print(
+            "[bold]CTI observation import[/bold] "
+            f"{result['connector_id']} status={result['status']} "
+            f"persisted={result['persisted_count']} "
+            f"would_persist={result.get('would_persist_count', 0)} "
+            f"duplicates={result['duplicate_count']} "
+            f"would_duplicate={result.get('would_duplicate_count', 0)} "
+            f"promoted={result['promoted_seed_count']} "
+            f"would_promote={result.get('would_promote_seed_count', 0)} "
+            f"skipped={result['skipped_count']} "
+            f"filtered={result.get('filtered_count', 0)} "
+            f"max_tlp={result.get('max_tlp') or ''} "
+            f"since={result.get('since') or ''} "
+            f"until={result.get('until') or ''} "
+            f"limited={result.get('limited_item_count', 0)}"
         )
 
     @app.command("run-secrets")

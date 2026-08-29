@@ -1,0 +1,2455 @@
+from __future__ import annotations
+
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+import typer
+from typer.testing import CliRunner
+
+import forge.automation_cycle as automation_cycle_module
+from forge.automation_cli import register_automation_commands
+from forge.automation_cycle import automation_cycle, automation_status, doctor_fix_safe
+
+
+@pytest.fixture(autouse=True)
+def stub_resume_backlog(monkeypatch) -> None:
+    def fake_resume_plan(**_kwargs) -> dict[str, object]:
+        return {
+            "total_count": 0,
+            "total_resume_ready_count": 0,
+            "planned_count": 0,
+            "skipped_count": 0,
+            "omitted_count": 0,
+            "estimated_serial_runtime_minutes": 0,
+            "total_reason_counts": {},
+            "skipped_blocker_counts": {},
+        }
+
+    monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fake_resume_plan)
+
+
+@pytest.fixture(autouse=True)
+def stub_report_review(monkeypatch) -> None:
+    def fake_report_audit(**_kwargs) -> dict[str, object]:
+        return {
+            "total_count": 0,
+            "selected_count": 0,
+            "omitted_count": 0,
+            "engagement_count": 0,
+            "report_file_count": 0,
+            "report_family_count": 0,
+            "dashboard_refresh_failure_count": 0,
+            "historical_dashboard_refresh_failure_count": 0,
+            "latest_fallback_reason_counts": {},
+            "resume_review_count": 0,
+            "failed_run_count": 0,
+            "long_run_count": 0,
+            "operator_action_plan": [],
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module,
+        "collect_report_quality_audit",
+        fake_report_audit,
+    )
+
+
+def test_automation_status_reports_ready_and_blocked_queue_items(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "pd-cloud-export.json").write_text("{}", encoding="utf-8")
+    (imports_dir / "projectdiscovery-cloud-imports.local.json").write_text(
+        json.dumps(
+            {
+                "inputs": [
+                    {"value": "pd-cloud-export.json", "status": "pending"},
+                    {"value": "missing.json", "status": "pending"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        engagement=1001,
+    )
+
+    assert payload["schema_version"] == "forge.automation_status.v1"
+    assert payload["execution_policy"] == "read_only_status_no_commands_executed"
+    assert payload["status"] == "blocked"
+    assert payload["queues"]["total"] == 2
+    assert payload["queues"]["ready"] == 1
+    assert payload["queues"]["blocked"] == 1
+    assert payload["queues"]["ignored"] == 0
+    assert payload["queues"]["total_count"] == 2
+    assert payload["queues"]["ready_count"] == 1
+    assert payload["queues"]["blocked_count"] == 1
+    assert payload["queues"]["ignored_count"] == 0
+    assert payload["scan_policy"]["multi_source_target_threshold"] == 2
+    assert payload["ready_inputs"][0]["command"][:6] == [
+        "forge",
+        "connectors",
+        "import-discovery",
+        "--engagement",
+        "1001",
+        "--connector",
+    ]
+    assert "forge automation cycle --apply --engagement N --json" in payload[
+        "next_actions"
+    ]
+    assert (
+        "forge automation cycle --apply --live --docker-probe-mode "
+        "compose-dependency --engagement N --json"
+    ) in payload["next_actions"]
+    assert payload["blocked_inputs"][0]["reason"].startswith("local_artifact_missing")
+
+
+def test_automation_status_ignores_empty_scaffolds_and_control_references(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox-observations.local.json").write_text(
+        json.dumps({"schema_version": "forge.cti_observations.local.v1", "data": []}),
+        encoding="utf-8",
+    )
+    (imports_dir / "real-threatfox.json").write_text(
+        json.dumps({"data": [{"ioc": "bad.example"}]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "threatfox-inputs.local.json").write_text(
+        json.dumps(
+            {
+                "inputs": [
+                    {"value": "threatfox-observations.local.json", "status": "pending"},
+                    {"value": "threatfox-inputs.local.json", "status": "pending"},
+                    {"value": "real-threatfox.json", "status": "pending"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        engagement=None,
+    )
+
+    assert payload["queues"]["total"] == 3
+    assert payload["queues"]["ignored"] == 2
+    assert payload["queues"]["blocked"] == 1
+    assert {item["reason"] for item in payload["ignored_inputs"]} == {
+        "empty_local_scaffold",
+        "local_control_file_reference",
+    }
+    assert payload["blocked_inputs"][0]["value"] == "real-threatfox.json"
+    assert payload["blocked_inputs"][0]["reason"] == "engagement_required"
+
+
+def test_automation_status_uses_default_engagement_env_for_queue_readiness(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text(
+        json.dumps({"iocs": ["example.com"]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "threatfox-inputs.local.json").write_text(
+        json.dumps({"inputs": [{"value": "threatfox.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_DEFAULT_ENGAGEMENT_ID", "1001")
+
+    payload = automation_status(imports_dir=imports_dir)
+
+    assert payload["engagement"]["effective"] == 1001
+    assert payload["queues"]["ready"] == 1
+    assert payload["ready_inputs"][0]["engagement_id"] == 1001
+
+
+def test_automation_status_uses_autostart_engagement_for_queue_readiness(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "autostart.local.json").write_text(
+        json.dumps({"engagement_id": 1002}),
+        encoding="utf-8",
+    )
+    (imports_dir / "urlhaus.json").write_text(
+        json.dumps({"urls": ["https://queued.example/path"]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "urlhaus-inputs.local.json").write_text(
+        json.dumps({"inputs": [{"value": "urlhaus.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_DEFAULT_ENGAGEMENT_ID", raising=False)
+
+    payload = automation_status(imports_dir=imports_dir)
+
+    assert payload["paths"]["autostart_config"] == str(imports_dir / "autostart.local.json")
+    assert payload["engagement"]["effective"] == 1002
+    assert payload["queues"]["ready"] == 1
+    assert payload["ready_inputs"][0]["engagement_id"] == 1002
+
+
+def test_automation_status_summarizes_existing_target_feed_scanability(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "autostart.local.json").write_text(
+        json.dumps({"min_start_source_count": 2}),
+        encoding="utf-8",
+    )
+    feed_path = imports_dir / "target-feed.json"
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [
+                    {
+                        "target_type": "domain",
+                        "target_value": "single.example",
+                        "source_groups": ["connector:single"],
+                        "source_count": 1,
+                        "priority": 100,
+                        "scan_eligible": True,
+                        "scan_eligibility_reason": "eligible",
+                    },
+                    {
+                        "target_type": "domain",
+                        "target_value": "shared.example",
+                        "source_groups": ["db", "report_family:shared"],
+                        "source_count": 2,
+                        "priority": 90,
+                        "scan_eligible": True,
+                        "scan_eligibility_reason": "eligible",
+                    },
+                    {
+                        "target_type": "ip",
+                        "target_value": "0.0.0.0",
+                        "source_groups": ["db", "report_family:noise"],
+                        "source_count": 2,
+                        "priority": 10,
+                        "scan_eligible": False,
+                        "scan_eligibility_reason": "non_global_ip",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=feed_path,
+        data_dir=tmp_path / "data",
+        engagement=None,
+    )
+
+    scan = payload["target_feed_scan"]
+    assert scan["exists"] is True
+    assert scan["total_count"] == 3
+    assert scan["eligible_count"] == 2
+    assert scan["startable_count"] == 1
+    assert scan["eligible_below_start_threshold_count"] == 1
+    assert scan["min_start_source_count"] == 2
+    assert scan["ineligible_count"] == 1
+    assert scan["high_priority_count"] == 2
+    assert scan["ineligible_reasons"] == {"non_global_ip": 1}
+    assert scan["top_targets"][0]["target_value"] == "single.example"
+    assert scan["top_startable_targets"][0]["target_value"] == "shared.example"
+    assert payload["scan_policy"]["min_start_source_count"] == 2
+    assert payload["autostart_probe"]["status"] == "blocked"
+    assert payload["next_actions"] == [
+        "forge automation self-heal-plan --json --docker-probe-mode compose-dependency",
+        "resolve autostart blockers before running cycle --apply --live",
+    ]
+
+
+def test_automation_status_summarizes_due_monitoring_without_running_it(
+    tmp_path: Path, monkeypatch
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_due_plan(data_dir: Path, *, limit: int | None = None) -> dict[str, object]:
+        calls.append({"data_dir": data_dir, "limit": limit})
+        return {
+            "total_due_count": 101,
+            "planned_policy_count": 0,
+            "limited_policy_count": 101,
+            "default_execution_limit": 50,
+            "estimated_capped_invocations": 3,
+            "oldest_due_age_seconds": 90000,
+            "stale_backlog": {"enabled": True, "oldest_overdue_days": 1.04},
+            "policy_summary": {"mode_counts": {"passive": 101}},
+            "action_plan": [
+                {"command": ["forge", "monitoring", "due-plan", "--json"]},
+                {
+                    "command": [
+                        "forge",
+                        "monitoring",
+                        "run-due",
+                        "--dry-run",
+                        "--limit",
+                        "50",
+                        "--json",
+                    ]
+                },
+            ],
+            "errors": [],
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module, "monitoring_due_plan_for_data_dir", fake_due_plan
+    )
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert calls == [{"data_dir": tmp_path / "data", "limit": 0}]
+    assert payload["monitoring_due"]["execution_policy"] == (
+        "read_only_monitoring_due_summary_no_commands_executed"
+    )
+    assert payload["monitoring_due"]["status"] == "stale_due"
+    assert payload["monitoring_due"]["total_count"] == 101
+    assert payload["monitoring_due"]["selected_count"] == 0
+    assert payload["monitoring_due"]["omitted_count"] == 101
+    assert payload["monitoring_due"]["total_due_count"] == 101
+    assert payload["monitoring_due"]["estimated_capped_invocations"] == 3
+    assert payload["monitoring_due"]["next_actions"][0] == [
+        "forge",
+        "monitoring",
+        "due-plan",
+        "--json",
+    ]
+
+
+def test_automation_status_summarizes_resume_backlog_without_running_it(
+    tmp_path: Path, monkeypatch
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_resume_plan(**kwargs) -> dict[str, object]:
+        calls.append(kwargs)
+        return {
+            "total_count": 49,
+            "resume_ready_count": 0,
+            "total_resume_ready_count": 49,
+            "planned_count": 0,
+            "skipped_count": 0,
+            "omitted_count": 49,
+            "estimated_serial_runtime_minutes": 0,
+            "reason_counts": {},
+            "total_reason_counts": {"pending_recursive_work": 31, "watchdog_timeout": 7},
+            "skipped_blocker_counts": {},
+        }
+
+    monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fake_resume_plan)
+    monkeypatch.setattr(
+        automation_cycle_module,
+        "_resume_summary_include_legacy",
+        lambda _data_dir: True,
+    )
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert calls == [
+        {
+            "data_dir": tmp_path / "data",
+            "include_legacy": True,
+            "limit": 0,
+            "redact_paths": True,
+        }
+    ]
+    assert payload["resume_backlog"]["execution_policy"] == (
+        "read_only_resume_backlog_summary_no_commands_executed"
+    )
+    assert payload["resume_backlog"]["status"] == "ready"
+    assert payload["resume_backlog"]["total_count"] == 49
+    assert payload["resume_backlog"]["resume_ready_count"] == 49
+    assert payload["resume_backlog"]["reason_counts"] == {
+        "pending_recursive_work": 31,
+        "watchdog_timeout": 7,
+    }
+    assert payload["resume_backlog"]["next_actions"][0] == [
+        "forge",
+        "targets",
+        "resume-plan",
+        "--json",
+        "--redact-paths",
+        "--limit",
+        "20",
+    ]
+
+
+def test_automation_status_summarizes_cti_refresh_without_network(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    artifact = imports_dir / "threatfox-observations.local.json"
+    artifact.write_text(
+        json.dumps({"schema_version": "forge.cti_observations.local.v1", "data": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
+    monkeypatch.delenv("FORGE_URLHAUS_AUTH_KEY", raising=False)
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        engagement=1001,
+        quick=True,
+    )
+
+    assert payload["cti_refresh"]["execution_policy"] == (
+        "read_only_cti_refresh_readiness_no_network_or_writes"
+    )
+    assert payload["cti_refresh"]["status"] == "key_env_unset"
+    assert payload["cti_refresh"]["key_env"] == "FORGE_THREATFOX_AUTH_KEY"
+    assert payload["cti_refresh"]["key_env_present"] is False
+    assert payload["cti_refresh"]["artifact"]["exists"] is True
+    assert payload["cti_refresh"]["queue"]["input_count"] == 0
+    assert payload["cti_refresh"]["provider_count"] == 2
+    assert payload["cti_refresh"]["ready_count"] == 0
+    assert payload["cti_refresh"]["key_env_unset_count"] == 2
+    provider_names = [item["provider"] for item in payload["cti_refresh"]["providers"]]
+    assert provider_names == ["threatfox", "urlhaus"]
+    assert payload["cti_refresh"]["next_actions"] == [
+        ["set", "FORGE_THREATFOX_AUTH_KEY=<free abuse.ch Auth-Key>"],
+        ["set", "FORGE_URLHAUS_AUTH_KEY=<free abuse.ch Auth-Key>"],
+    ]
+
+
+def test_automation_status_recommends_cti_refresh_when_free_key_env_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_THREATFOX_AUTH_KEY", "free-test-auth-key")
+    monkeypatch.delenv("FORGE_URLHAUS_AUTH_KEY", raising=False)
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        engagement=1001,
+    )
+
+    assert payload["cti_refresh"]["status"] == "ready"
+    assert payload["cti_refresh"]["key_env_present"] is True
+    assert payload["cti_refresh"]["ready_count"] == 1
+    assert payload["cti_refresh"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "cti-refresh",
+        "--provider",
+        "threatfox",
+        "--engagement",
+        "1001",
+        "--apply",
+        "--json",
+    ]
+    assert payload["next_actions"][0] == (
+        "forge automation cti-refresh --provider threatfox "
+        "--engagement 1001 --apply --json"
+    )
+
+
+def test_automation_status_recommends_urlhaus_refresh_when_only_urlhaus_key_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
+    monkeypatch.setenv("FORGE_URLHAUS_AUTH_KEY", "free-urlhaus-auth-key")
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        engagement=1001,
+    )
+
+    assert payload["cti_refresh"]["status"] == "ready"
+    assert payload["cti_refresh"]["key_env_present"] is False
+    assert payload["cti_refresh"]["ready_count"] == 1
+    urlhaus = payload["cti_refresh"]["providers"][1]
+    assert urlhaus["provider"] == "urlhaus"
+    assert urlhaus["key_env_present"] is True
+    assert payload["cti_refresh"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "cti-refresh",
+        "--provider",
+        "urlhaus",
+        "--engagement",
+        "1001",
+        "--apply",
+        "--json",
+    ]
+    assert payload["next_actions"][0] == (
+        "forge automation cti-refresh --provider urlhaus "
+        "--engagement 1001 --apply --json"
+    )
+
+
+def test_automation_status_summarizes_supabase_not_configured(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        quick=True,
+    )
+
+    assert payload["supabase_sync"]["execution_policy"] == (
+        "read_only_supabase_sync_readiness_no_network_or_writes"
+    )
+    assert payload["supabase_sync"]["status"] == "not_configured"
+    assert payload["supabase_sync"]["configured_count"] == 0
+    assert payload["supabase_sync"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "supabase-add",
+        "PROJECT_REF",
+        "FORGE_SUPABASE_PROJECT_READ_KEY",
+        "--apply",
+        "--json",
+    ]
+
+
+def test_automation_status_next_actions_include_source_setup_gates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["next_actions"][:2] == [
+        "set FORGE_THREATFOX_AUTH_KEY=<free abuse.ch Auth-Key>",
+        (
+            "forge automation supabase-add PROJECT_REF "
+            "FORGE_SUPABASE_PROJECT_READ_KEY --apply --json"
+        ),
+    ]
+
+
+def test_automation_status_summarizes_supabase_project_key_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    monkeypatch.delenv("FORGE_SUPABASE_ABC123_READ_KEY", raising=False)
+    (imports_dir / "supabase-projects.local.json").write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        quick=True,
+    )
+
+    assert payload["supabase_sync"]["status"] == "key_env_unset"
+    assert payload["supabase_sync"]["ready_count"] == 0
+    assert payload["supabase_sync"]["key_env_unset_count"] == 1
+    assert payload["supabase_sync"]["all_tables_count"] == 1
+    assert payload["supabase_sync"]["all_columns_count"] == 1
+    assert payload["supabase_sync"]["projects"][0]["url"] == "https://abc123.supabase.co"
+    assert payload["supabase_sync"]["projects"][0]["tables"] == ["*"]
+    assert payload["supabase_sync"]["projects"][0]["target_columns"] == ["*"]
+    assert payload["supabase_sync"]["projects"][0]["limit"] == 100000
+    assert payload["supabase_sync"]["projects"][0]["max_tables"] == 1000
+    assert payload["supabase_sync"]["projects"][0]["max_rows"] == 100000
+    assert payload["supabase_sync"]["projects"][0]["max_candidates"] == 100000
+    assert payload["supabase_sync"]["next_actions"][0] == [
+        "set",
+        "FORGE_SUPABASE_ABC123_READ_KEY=<owned Supabase read-only key>",
+    ]
+
+
+def test_automation_status_recommends_supabase_feed_build_when_key_env_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
+    monkeypatch.setenv("FORGE_SUPABASE_ABC123_READ_KEY", "owned-read-key")
+    (imports_dir / "supabase-projects.local.json").write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["supabase_sync"]["status"] == "ready"
+    assert payload["supabase_sync"]["ready_count"] == 1
+    assert payload["supabase_sync"]["projects"][0]["requested_all_tables"] is True
+    assert payload["supabase_sync"]["projects"][0]["requested_all_columns"] is True
+    assert payload["supabase_sync"]["projects"][0]["max_tables"] == 1000
+    assert payload["supabase_sync"]["projects"][0]["max_rows"] == 100000
+    assert payload["supabase_sync"]["projects"][0]["max_candidates"] == 100000
+    assert payload["supabase_sync"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "feed-build",
+        "--source",
+        "supabase",
+        "--apply",
+        "--json",
+    ]
+    assert payload["next_actions"][0] == (
+        "forge automation feed-build --source supabase --apply --json"
+    )
+
+
+def test_automation_status_accepts_supabase_secret_store_ref(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
+    (imports_dir / "supabase-projects.local.json").write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_secret_ref": (
+                            "forge-secret://1001/supabase_table_import/READ_KEY"
+                        ),
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        quick=True,
+    )
+
+    project = payload["supabase_sync"]["projects"][0]
+    assert payload["supabase_sync"]["status"] == "ready"
+    assert payload["supabase_sync"]["ready_count"] == 1
+    assert payload["supabase_sync"]["key_env_unset_count"] == 0
+    assert payload["supabase_sync"]["secret_ref_configured_count"] == 1
+    assert project["credential_source"] == "secret_ref"
+    assert project["key_env"] == ""
+    assert project["key_env_present"] is False
+    assert project["key_secret_ref_present"] is True
+    assert project["key_secret_ref_valid"] is True
+    assert payload["supabase_sync"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "feed-build",
+        "--source",
+        "supabase",
+        "--apply",
+        "--json",
+    ]
+
+
+def test_automation_status_rejects_invalid_supabase_secret_store_ref(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "supabase-projects.local.json").write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_secret_ref": "forge-secret://bad-ref",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        quick=True,
+    )
+
+    project = payload["supabase_sync"]["projects"][0]
+    assert payload["supabase_sync"]["status"] == "invalid_config"
+    assert payload["supabase_sync"]["ready_count"] == 0
+    assert payload["supabase_sync"]["invalid_count"] == 1
+    assert payload["supabase_sync"]["secret_ref_configured_count"] == 1
+    assert project["credential_source"] == "secret_ref"
+    assert project["reason"] == "key_secret_ref_invalid"
+    assert project["key_secret_ref_valid"] is False
+    assert payload["supabase_sync"]["next_actions"][0][:6] == [
+        "forge",
+        "connectors",
+        "secret-set",
+        "--engagement",
+        "N",
+        "--connector",
+    ]
+
+
+def test_automation_status_resume_backlog_fails_closed(tmp_path: Path, monkeypatch) -> None:
+    def fail_resume_plan(**_kwargs):
+        raise RuntimeError("resume db unavailable")
+
+    monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fail_resume_plan)
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["resume_backlog"]["execution_policy"] == (
+        "read_only_resume_backlog_summary_failed"
+    )
+    assert payload["resume_backlog"]["status"] == "unknown"
+    assert payload["resume_backlog"]["total_count"] == 0
+    assert "resume db unavailable" in payload["resume_backlog"]["error"]
+
+
+def test_automation_status_summarizes_report_review_without_mutating(
+    tmp_path: Path, monkeypatch
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_report_audit(**kwargs) -> dict[str, object]:
+        calls.append(kwargs)
+        return {
+            "total_count": 128,
+            "selected_count": 2,
+            "omitted_count": 126,
+            "engagement_count": 581,
+            "report_file_count": 3573,
+            "report_family_count": 581,
+            "dashboard_refresh_failure_count": 0,
+            "historical_dashboard_refresh_failure_count": 0,
+            "latest_fallback_reason_counts": {},
+            "resume_review_count": 49,
+            "failed_run_count": 49,
+            "long_run_count": 3,
+            "operator_action_plan": [
+                {
+                    "id": "review_resume_plan",
+                    "total_count": 49,
+                    "commands": [
+                        [
+                            "forge",
+                            "targets",
+                            "resume-plan",
+                            "--json",
+                            "--redact-paths",
+                            "--limit",
+                            "49",
+                        ]
+                    ],
+                    "follow_up_commands": [
+                        [
+                            "forge",
+                            "targets",
+                            "resume-run",
+                            "--dry-run",
+                            "--redact-paths",
+                            "--json",
+                            "--limit",
+                            "49",
+                        ]
+                    ],
+                },
+                {
+                    "id": "review_long_runs",
+                    "total_count": 3,
+                    "follow_up_commands": [
+                        ["forge", "report", "long-run-plan", "--json", "--limit", "3"]
+                    ],
+                },
+            ],
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module,
+        "collect_report_quality_audit",
+        fake_report_audit,
+    )
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+    )
+
+    assert calls == [
+        {"reports_dir": tmp_path / "reports", "top_limit": 0, "redact_paths": True}
+    ]
+    assert payload["report_review"]["execution_policy"] == (
+        "read_only_report_review_summary_no_commands_executed"
+    )
+    assert payload["report_review"]["status"] == "review_due"
+    assert payload["report_review"]["report_file_count"] == 3573
+    assert payload["report_review"]["report_family_count"] == 581
+    assert payload["report_review"]["resume_review_count"] == 49
+    assert payload["report_review"]["long_run_count"] == 3
+    assert payload["report_review"]["operator_action_counts"] == {
+        "review_long_runs": 3,
+        "review_resume_plan": 49,
+    }
+    assert payload["report_review"]["next_actions"][0] == [
+        "forge",
+        "targets",
+        "resume-plan",
+        "--json",
+        "--redact-paths",
+        "--limit",
+        "49",
+    ]
+
+
+def test_automation_status_summarizes_autostart_history(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "autostart.local.json").write_text(
+        json.dumps({"failure_backoff_minutes": 2880}),
+        encoding="utf-8",
+    )
+    data_dir = tmp_path / "data"
+    state_dir = data_dir / "automation"
+    state_dir.mkdir(parents=True)
+    (state_dir / "guarded-autostart-state.json").write_text(
+        json.dumps(
+            {
+                "last_started_at": "2026-08-29T01:00:00+00:00",
+                "last_failed_at": "2026-08-29T01:00:00+00:00",
+                "last_status": "failed",
+                "last_returncode": 7,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (state_dir / "guarded-autostart.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "recorded_at": "2026-08-29T00:00:00+00:00",
+                        "mode": "apply",
+                        "status": "blocked",
+                        "blockers": ["cooldown_active"],
+                    }
+                ),
+                json.dumps(
+                    {
+                        "recorded_at": "2026-08-29T01:00:00+00:00",
+                        "mode": "apply",
+                        "status": "failed",
+                        "blockers": ["failure_backoff_active"],
+                    }
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=data_dir,
+    )
+
+    history = payload["autostart_history"]
+    assert history["execution_policy"] == "read_only_autostart_history_no_commands_executed"
+    assert history["status"] == "recent_failure"
+    assert history["failure_backoff_minutes"] == 2880
+    assert history["state_exists"] is True
+    assert history["log_exists"] is True
+    assert history["state_ref"] == "guarded-autostart-state.json"
+    assert history["log_ref"] == "guarded-autostart.jsonl"
+    assert history["last_status"] == "failed"
+    assert history["last_returncode"] == 7
+    assert history["recent_status_counts"] == {"blocked": 1, "failed": 1}
+    assert history["recent_mode_counts"] == {"apply": 2}
+    assert history["recent_blocker_counts"] == {
+        "cooldown_active": 1,
+        "failure_backoff_active": 1,
+    }
+    assert history["last_recorded_status"] == "failed"
+    assert history["last_recorded_blockers"] == ["failure_backoff_active"]
+    assert history["next_actions"] == [["forge", "automation", "self-heal-plan", "--json"]]
+
+
+def test_automation_status_autostart_history_ages_out_old_failures(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "autostart.local.json").write_text(
+        json.dumps({"failure_backoff_minutes": 1}),
+        encoding="utf-8",
+    )
+    data_dir = tmp_path / "data"
+    state_dir = data_dir / "automation"
+    state_dir.mkdir(parents=True)
+    (state_dir / "guarded-autostart-state.json").write_text(
+        json.dumps(
+            {
+                "last_failed_at": "2026-01-01T00:00:00+00:00",
+                "last_status": "failed",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=data_dir,
+    )
+
+    assert payload["autostart_history"]["status"] == "historical_failure"
+    assert payload["autostart_history"]["failure_backoff_minutes"] == 1
+    assert payload["autostart_history"]["next_actions"] == [
+        ["forge", "automation", "status", "--json"]
+    ]
+
+
+def test_automation_status_autostart_history_flags_unreadable_log(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    state_dir = data_dir / "automation"
+    state_dir.mkdir(parents=True)
+    (state_dir / "guarded-autostart.jsonl").write_text(
+        "{bad json}\n" + json.dumps({"status": "completed", "mode": "apply"}),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=data_dir,
+    )
+
+    assert payload["autostart_history"]["status"] == "log_attention"
+    assert payload["autostart_history"]["unreadable_line_count"] == 1
+    assert payload["autostart_history"]["recent_status_counts"] == {"completed": 1}
+
+
+def test_automation_status_label_ready_with_backlog_when_feed_exists(
+    tmp_path: Path, monkeypatch
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+
+    def fake_due_plan(_data_dir: Path, *, limit: int | None = None) -> dict[str, object]:
+        assert limit == 0
+        return {
+            "total_due_count": 1,
+            "planned_policy_count": 0,
+            "limited_policy_count": 1,
+            "default_execution_limit": 50,
+            "estimated_capped_invocations": 1,
+            "oldest_due_age_seconds": 60,
+            "stale_backlog": {},
+            "policy_summary": {},
+            "action_plan": [],
+            "errors": [],
+        }
+
+    monkeypatch.setattr(automation_cycle_module, "monitoring_due_plan_for_data_dir", fake_due_plan)
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["status"] == "ready_with_backlog"
+
+
+def test_automation_status_label_attention_for_autostart_log_errors(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    data_dir = tmp_path / "data"
+    state_dir = data_dir / "automation"
+    state_dir.mkdir(parents=True)
+    (state_dir / "guarded-autostart.jsonl").write_text("{bad json}\n", encoding="utf-8")
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=data_dir,
+    )
+
+    assert payload["status"] == "attention"
+    assert payload["autostart_history"]["status"] == "log_attention"
+
+
+def test_automation_status_report_review_fails_closed(tmp_path: Path, monkeypatch) -> None:
+    def fail_report_audit(**_kwargs):
+        raise RuntimeError("dashboard json unreadable")
+
+    monkeypatch.setattr(
+        automation_cycle_module,
+        "collect_report_quality_audit",
+        fail_report_audit,
+    )
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+    )
+
+    assert payload["report_review"]["execution_policy"] == (
+        "read_only_report_review_summary_failed"
+    )
+    assert payload["report_review"]["status"] == "unknown"
+    assert payload["report_review"]["total_count"] == 0
+    assert "dashboard json unreadable" in payload["report_review"]["error"]
+
+
+def test_automation_status_next_actions_include_backlog_dry_runs(
+    tmp_path: Path, monkeypatch
+) -> None:
+    def fake_resume_plan(**_kwargs) -> dict[str, object]:
+        return {
+            "total_count": 3,
+            "total_resume_ready_count": 3,
+            "planned_count": 0,
+            "skipped_count": 0,
+            "omitted_count": 3,
+            "estimated_serial_runtime_minutes": 0,
+            "total_reason_counts": {"watchdog_timeout": 3},
+            "skipped_blocker_counts": {},
+        }
+
+    def fake_due_plan(_data_dir: Path, *, limit: int | None = None) -> dict[str, object]:
+        assert limit == 0
+        return {
+            "total_due_count": 2,
+            "planned_policy_count": 0,
+            "limited_policy_count": 2,
+            "default_execution_limit": 50,
+            "estimated_capped_invocations": 1,
+            "oldest_due_age_seconds": 60,
+            "stale_backlog": {},
+            "policy_summary": {},
+            "action_plan": [
+                {
+                    "command": [
+                        "forge",
+                        "monitoring",
+                        "run-due",
+                        "--dry-run",
+                        "--limit",
+                        "50",
+                        "--json",
+                    ]
+                }
+            ],
+            "errors": [],
+        }
+
+    def fake_report_audit(**_kwargs) -> dict[str, object]:
+        return {
+            "total_count": 1,
+            "selected_count": 0,
+            "omitted_count": 1,
+            "engagement_count": 1,
+            "report_file_count": 2,
+            "report_family_count": 1,
+            "dashboard_refresh_failure_count": 0,
+            "historical_dashboard_refresh_failure_count": 0,
+            "latest_fallback_reason_counts": {},
+            "resume_review_count": 1,
+            "failed_run_count": 1,
+            "long_run_count": 0,
+            "operator_action_plan": [
+                {
+                    "id": "review_resume_plan",
+                    "total_count": 1,
+                    "commands": [["forge", "targets", "resume-plan", "--json"]],
+                    "follow_up_commands": [
+                        ["forge", "targets", "resume-run", "--dry-run", "--json"]
+                    ],
+                }
+            ],
+        }
+
+    monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fake_resume_plan)
+    monkeypatch.setattr(automation_cycle_module, "monitoring_due_plan_for_data_dir", fake_due_plan)
+    monkeypatch.setattr(automation_cycle_module, "collect_report_quality_audit", fake_report_audit)
+
+    payload = automation_status(
+        imports_dir=tmp_path / "imports",
+        output=tmp_path / "imports" / "target-feed.json",
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["status"] == "ready_needs_feed"
+    assert payload["next_actions"][:4] == [
+        "forge automation cycle --apply --live --docker-probe-mode compose-dependency --json",
+        "forge targets resume-plan --json --redact-paths --limit 20",
+        "forge monitoring run-due --dry-run --limit 50 --json",
+        "forge targets resume-plan --json",
+    ]
+
+
+def test_automation_status_quick_skips_slow_backlog_inventory(
+    tmp_path: Path, monkeypatch
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("slow backlog collector should not run in quick mode")
+
+    monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fail_if_called)
+    monkeypatch.setattr(automation_cycle_module, "monitoring_due_plan_for_data_dir", fail_if_called)
+    monkeypatch.setattr(automation_cycle_module, "collect_report_quality_audit", fail_if_called)
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        quick=True,
+    )
+
+    assert payload["quick"] is True
+    assert payload["execution_policy"] == "read_only_quick_status_no_backlog_inventory"
+    assert payload["status"] == "ready_unverified_backlog"
+    assert payload["resume_backlog"]["execution_policy"] == "read_only_quick_status_skipped"
+    assert payload["monitoring_due"]["execution_policy"] == "read_only_quick_status_skipped"
+    assert payload["report_review"]["execution_policy"] == "read_only_quick_status_skipped"
+    assert payload["next_actions"][:2] == [
+        "forge automation status --json",
+        "forge automation cycle --apply --live --docker-probe-mode compose-dependency --json",
+    ]
+
+
+def test_automation_status_reports_autostart_probe_blockers(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "autostart.local.json").write_text(
+        json.dumps({"enabled": True, "apply_enabled": True}),
+        encoding="utf-8",
+    )
+
+    def fake_guarded_autostart(**kwargs):
+        assert kwargs["apply"] is False
+        assert kwargs["skip_feed_build"] is True
+        assert kwargs["docker_probe_mode"] == "compose-dependency"
+        return {
+            "status": "blocked",
+            "execution_policy": "dry_run_no_autostart_or_live_commands_executed",
+            "blockers": ["docker_tool_mount_missing_runtime_tools:nuclei"],
+        }
+
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        engagement=1001,
+    )
+
+    assert payload["autostart_probe"] == {
+        "status": "blocked",
+        "execution_policy": "dry_run_no_autostart_or_live_commands_executed",
+        "config_path": str(imports_dir / "autostart.local.json"),
+        "blockers": ["docker_tool_mount_missing_runtime_tools:nuclei"],
+    }
+    assert payload["next_actions"] == [
+        "forge automation self-heal-plan --json --docker-probe-mode compose-dependency",
+        "resolve autostart blockers before running cycle --apply --live",
+    ]
+
+
+def test_automation_cycle_dry_run_plans_feed_and_queue_without_writes(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "burp-results.xml").write_text("<issues />", encoding="utf-8")
+    (imports_dir / "burp-dast-imports.local.json").write_text(
+        json.dumps({"inputs": [{"value": "burp-results.xml", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+    )
+
+    assert payload["execution_policy"] == "dry_run_no_writes_or_live_commands_executed"
+    assert payload["status"] == "planned_with_inputs"
+    assert payload["feed_written"] is False
+    assert payload["target_feed_scan"]["exists"] is True
+    assert payload["target_feed_scan"]["eligible_count"] == 0
+    assert payload["target_feed_scan"]["startable_count"] == 0
+    assert payload["target_feed_scan"]["min_start_source_count"] == 1
+    assert (
+        payload["scan_policy"]["new_targets"]
+        == "scan_immediately_when_cycle_runs_with_apply_live_and_roe_gates_pass"
+    )
+    assert payload["scan_policy"]["min_start_source_count"] == 1
+    assert not (imports_dir / "target-feed.json").exists()
+    assert payload["queue_runs"][0]["status"] == "planned"
+    queue = json.loads(
+        (imports_dir / "burp-dast-imports.local.json").read_text(encoding="utf-8")
+    )
+    assert queue["inputs"][0]["status"] == "pending"
+
+
+def test_automation_cycle_includes_monitoring_due_summary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    def fake_due_plan(_data_dir: Path, *, limit: int | None = None) -> dict[str, object]:
+        assert limit == 0
+        return {
+            "total_due_count": 0,
+            "planned_policy_count": 0,
+            "limited_policy_count": 0,
+            "default_execution_limit": 50,
+            "estimated_capped_invocations": 0,
+            "oldest_due_age_seconds": 0,
+            "stale_backlog": {},
+            "policy_summary": {},
+            "action_plan": [],
+            "errors": [],
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module, "monitoring_due_plan_for_data_dir", fake_due_plan
+    )
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=tmp_path / "imports" / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+    )
+
+    assert payload["monitoring_due"]["status"] == "idle"
+    assert payload["monitoring_due"]["total_count"] == 0
+    assert payload["monitoring_due"]["selected_count"] == 0
+    assert payload["monitoring_due"]["omitted_count"] == 0
+    assert payload["monitoring_due"]["total_due_count"] == 0
+    assert payload["monitoring_due"]["execution_policy"] == (
+        "read_only_monitoring_due_summary_no_commands_executed"
+    )
+
+
+def test_automation_cycle_includes_resume_backlog_summary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    def fake_resume_plan(**kwargs) -> dict[str, object]:
+        assert kwargs == {
+            "data_dir": tmp_path / "data",
+            "include_legacy": False,
+            "limit": 0,
+            "redact_paths": True,
+        }
+        return {
+            "total_count": 0,
+            "total_resume_ready_count": 0,
+            "planned_count": 0,
+            "skipped_count": 0,
+            "omitted_count": 0,
+            "estimated_serial_runtime_minutes": 0,
+            "total_reason_counts": {},
+            "skipped_blocker_counts": {},
+        }
+
+    monkeypatch.setattr(automation_cycle_module, "collect_target_resume_plan", fake_resume_plan)
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=tmp_path / "imports" / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+    )
+
+    assert payload["resume_backlog"]["status"] == "idle"
+    assert payload["resume_backlog"]["total_count"] == 0
+    assert payload["resume_backlog"]["execution_policy"] == (
+        "read_only_resume_backlog_summary_no_commands_executed"
+    )
+
+
+def test_automation_cycle_includes_report_review_summary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    def fake_report_audit(**kwargs) -> dict[str, object]:
+        assert kwargs == {
+            "reports_dir": tmp_path / "reports",
+            "top_limit": 0,
+            "redact_paths": True,
+        }
+        return {
+            "total_count": 1,
+            "selected_count": 0,
+            "omitted_count": 1,
+            "engagement_count": 1,
+            "report_file_count": 6,
+            "report_family_count": 1,
+            "dashboard_refresh_failure_count": 1,
+            "historical_dashboard_refresh_failure_count": 0,
+            "latest_fallback_reason_counts": {},
+            "resume_review_count": 0,
+            "failed_run_count": 0,
+            "long_run_count": 0,
+            "operator_action_plan": [],
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module,
+        "collect_report_quality_audit",
+        fake_report_audit,
+    )
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=tmp_path / "imports" / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+    )
+
+    assert payload["report_review"]["status"] == "dashboard_attention"
+    assert payload["report_review"]["total_count"] == 1
+    assert payload["report_review"]["dashboard_refresh_failure_count"] == 1
+    assert payload["report_review"]["execution_policy"] == (
+        "read_only_report_review_summary_no_commands_executed"
+    )
+
+
+def test_automation_cycle_includes_autostart_history_summary(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    state_dir = data_dir / "automation"
+    state_dir.mkdir(parents=True)
+    (state_dir / "guarded-autostart.jsonl").write_text(
+        json.dumps({"status": "completed", "mode": "apply"}),
+        encoding="utf-8",
+    )
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=tmp_path / "imports" / "target-feed.json",
+        source=["connectors"],
+        data_dir=data_dir,
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+    )
+
+    assert payload["autostart_history"]["status"] == "recent_success"
+    assert payload["autostart_history"]["recent_status_counts"] == {"completed": 1}
+    assert payload["autostart_history"]["execution_policy"] == (
+        "read_only_autostart_history_no_commands_executed"
+    )
+
+
+def test_automation_cycle_includes_cti_refresh_readiness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FORGE_THREATFOX_AUTH_KEY", "free-test-auth-key")
+    monkeypatch.delenv("FORGE_URLHAUS_AUTH_KEY", raising=False)
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=tmp_path / "imports" / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+    )
+
+    assert payload["cti_refresh"]["execution_policy"] == (
+        "read_only_cti_refresh_readiness_no_network_or_writes"
+    )
+    assert payload["cti_refresh"]["status"] == "ready"
+    assert payload["cti_refresh"]["key_env"] == "FORGE_THREATFOX_AUTH_KEY"
+    assert payload["cti_refresh"]["ready_count"] == 1
+    assert payload["cti_refresh"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "cti-refresh",
+        "--provider",
+        "threatfox",
+        "--engagement",
+        "1001",
+        "--apply",
+        "--json",
+    ]
+
+
+def test_automation_cycle_includes_supabase_sync_readiness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    monkeypatch.setenv("FORGE_SUPABASE_ABC123_READ_KEY", "owned-read-key")
+    (imports_dir / "supabase-projects.local.json").write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "key_env": "FORGE_SUPABASE_ABC123_READ_KEY",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=imports_dir,
+    )
+
+    assert payload["supabase_sync"]["execution_policy"] == (
+        "read_only_supabase_sync_readiness_no_network_or_writes"
+    )
+    assert payload["supabase_sync"]["status"] == "ready"
+    assert payload["supabase_sync"]["ready_count"] == 1
+    assert payload["supabase_sync"]["projects"][0]["requested_all_tables"] is True
+    assert payload["supabase_sync"]["projects"][0]["requested_all_columns"] is True
+
+
+def test_automation_cycle_classifies_inbox_into_source_queues(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    inbox = imports_dir / "inbox"
+    inbox.mkdir(parents=True)
+    (inbox / "runzero-assets.csv").write_text("id,name\n1,host\n", encoding="utf-8")
+
+    dry_run = automation_cycle(
+        apply=False,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=imports_dir,
+    )
+
+    assert dry_run["inbox"]["discovered_count"] == 1
+    assert dry_run["inbox"]["queue_update_plan"] == [
+        {
+            "config_path": str(imports_dir / "runzero-imports.local.json"),
+            "applied": False,
+            "pending_count": 1,
+            "appended_count": 0,
+        }
+    ]
+    assert not (imports_dir / "runzero-imports.local.json").exists()
+
+    applied = automation_cycle(
+        apply=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=imports_dir,
+        command_runner=lambda _command, _cwd: {"returncode": 0, "stdout": "{}", "stderr": ""},
+    )
+
+    assert applied["inbox"]["queue_updates"] == [
+        {
+            "config_path": str(imports_dir / "runzero-imports.local.json"),
+            "applied": True,
+            "pending_count": 0,
+            "appended_count": 1,
+        }
+    ]
+    queue = json.loads(
+        (imports_dir / "runzero-imports.local.json").read_text(encoding="utf-8")
+    )
+    assert queue["inputs"][0]["connector_id"] == "runzero_asset_export"
+    assert queue["inputs"][0]["value"] == str(Path("inbox") / "runzero-assets.csv")
+
+
+def test_automation_cycle_apply_runs_ready_queue_and_marks_imported(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text(
+        json.dumps({"iocs": ["example.com"]}),
+        encoding="utf-8",
+    )
+    queue_path = imports_dir / "threatfox-inputs.local.json"
+    queue_path.write_text(
+        json.dumps({"inputs": [{"value": "threatfox.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    commands: list[list[str]] = []
+
+    def _runner(command: list[str], _cwd: Path) -> dict[str, object]:
+        commands.append(command)
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    payload = automation_cycle(
+        apply=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        command_runner=_runner,
+    )
+
+    assert payload["execution_policy"] == "apply_local_feed_and_queue_imports"
+    assert payload["feed_written"] is True
+    assert commands == [
+        [
+            "forge",
+            "connectors",
+            "import-cti",
+            "--engagement",
+            "1001",
+            "--connector",
+            "abusech_threatfox",
+            "--report-file",
+            str(imports_dir / "threatfox.json"),
+            "--promote-targets",
+            "--limit",
+            "1000",
+            "--json",
+        ]
+    ]
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert queue["inputs"][0]["status"] == "imported"
+    assert queue["inputs"][0]["last_processed_at"]
+
+
+def test_automation_cycle_queue_limit_defers_extra_ready_items(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    inputs: list[dict[str, str]] = []
+    for index in range(3):
+        artifact = imports_dir / f"threatfox-{index}.json"
+        artifact.write_text(
+            json.dumps({"iocs": [f"queued-{index}.example"]}),
+            encoding="utf-8",
+        )
+        inputs.append({"value": artifact.name, "status": "pending"})
+    queue_path = imports_dir / "threatfox-inputs.local.json"
+    queue_path.write_text(json.dumps({"inputs": inputs}), encoding="utf-8")
+    commands: list[list[str]] = []
+
+    def _runner(command: list[str], _cwd: Path) -> dict[str, object]:
+        commands.append(command)
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    payload = automation_cycle(
+        apply=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        queue_limit=2,
+        command_runner=_runner,
+    )
+
+    assert payload["queue_execution"] == {
+        "queue_limit": 2,
+        "import_item_limit": 1000,
+        "promote_targets": True,
+        "ready_count": 3,
+        "selected_count": 2,
+        "deferred_count": 1,
+        "execution_order": "priority_desc_then_connector_then_value",
+    }
+    assert payload["queues"]["total_count"] == 3
+    assert payload["queues"]["ready_count"] == 3
+    assert payload["queues"]["blocked_count"] == 0
+    assert payload["queues"]["ignored_count"] == 0
+    assert payload["status"] == "queue_deferred"
+    assert len(commands) == 2
+    assert [run["status"] for run in payload["queue_runs"]] == ["completed", "completed"]
+    assert payload["deferred_ready_inputs"][0]["reason"] == "queue_limit_reached:2"
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert [item["status"] for item in queue["inputs"]] == [
+        "imported",
+        "imported",
+        "pending",
+    ]
+
+
+def test_automation_cycle_queue_import_limit_comes_from_autostart_or_item(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "pd.json").write_text(
+        json.dumps({"assets": [{"host": "one.example"}]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "runzero.csv").write_text(
+        "name,ip\none.example,198.51.100.8\n",
+        encoding="utf-8",
+    )
+    (imports_dir / "projectdiscovery-cloud-imports.local.json").write_text(
+        json.dumps({"inputs": [{"value": "pd.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "runzero-imports.local.json").write_text(
+        json.dumps(
+            {
+                "inputs": [
+                    {
+                        "value": "runzero.csv",
+                        "status": "pending",
+                        "limit": 25,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    autostart_config = imports_dir / "autostart.local.json"
+    autostart_config.write_text(
+        json.dumps({"queue_import_item_limit": 50}),
+        encoding="utf-8",
+    )
+    commands: list[list[str]] = []
+
+    def _runner(command: list[str], _cwd: Path) -> dict[str, object]:
+        commands.append(command)
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    payload = automation_cycle(
+        apply=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        autostart_config=autostart_config,
+        command_runner=_runner,
+    )
+
+    assert payload["queue_execution"]["import_item_limit"] == 50
+    by_connector = {
+        command[command.index("--connector") + 1]: command for command in commands
+    }
+    projectdiscovery = by_connector["projectdiscovery_cloud"]
+    runzero = by_connector["runzero_asset_export"]
+    assert projectdiscovery[projectdiscovery.index("--limit") + 1] == "50"
+    assert runzero[runzero.index("--limit") + 1] == "25"
+
+
+def test_automation_cycle_cti_promotion_can_be_disabled_per_queue_item(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text(
+        json.dumps({"iocs": ["queued.example"]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "threatfox-inputs.local.json").write_text(
+        json.dumps(
+            {
+                "inputs": [
+                    {
+                        "value": "threatfox.json",
+                        "status": "pending",
+                        "promote_targets": False,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    autostart_config = imports_dir / "autostart.local.json"
+    autostart_config.write_text(
+        json.dumps({"queue_promote_targets": True}),
+        encoding="utf-8",
+    )
+    commands: list[list[str]] = []
+
+    def _runner(command: list[str], _cwd: Path) -> dict[str, object]:
+        commands.append(command)
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    payload = automation_cycle(
+        apply=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        autostart_config=autostart_config,
+        command_runner=_runner,
+    )
+
+    assert payload["queue_execution"]["promote_targets"] is True
+    assert "--promote-targets" not in commands[0]
+    assert commands[0][commands[0].index("--limit") + 1] == "1000"
+
+
+def test_automation_cycle_failed_queue_item_gets_retry_backoff(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text(
+        json.dumps({"iocs": ["example.com"]}),
+        encoding="utf-8",
+    )
+    queue_path = imports_dir / "threatfox-inputs.local.json"
+    queue_path.write_text(
+        json.dumps({"inputs": [{"value": "threatfox.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+
+    def _runner(command: list[str], _cwd: Path) -> dict[str, object]:
+        return {"returncode": 9, "stdout": "", "stderr": "temporary parse failure"}
+
+    payload = automation_cycle(
+        apply=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        command_runner=_runner,
+    )
+
+    assert payload["status"] == "queue_failed"
+    assert payload["queue_runs"][0]["status"] == "failed"
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    item = queue["inputs"][0]
+    assert item["status"] == "failed"
+    assert item["failure_count"] == 1
+    assert item["last_returncode"] == 9
+    assert item["retry_after_at"]
+    assert item["last_error"] == "temporary parse failure"
+
+    blocked = automation_status(imports_dir=imports_dir, engagement=1001)["blocked_inputs"]
+    assert blocked[0]["reason"].startswith("retry_backoff_active:")
+
+
+def test_automation_status_blocks_queue_item_after_retry_limit(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text("{}", encoding="utf-8")
+    retry_after = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(
+        timespec="seconds"
+    )
+    (imports_dir / "threatfox-inputs.local.json").write_text(
+        json.dumps(
+            {
+                "inputs": [
+                    {
+                        "value": "threatfox.json",
+                        "status": "failed",
+                        "failure_count": 5,
+                        "retry_after_at": retry_after,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_status(imports_dir=imports_dir, engagement=1001)
+
+    assert payload["queues"]["ready"] == 0
+    assert payload["blocked_inputs"][0]["reason"] == "retry_limit_reached:5"
+
+
+def test_automation_cycle_live_reuses_built_feed_without_guarded_rebuild(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    seen: dict[str, object] = {}
+
+    def fake_guarded_autostart(**kwargs):
+        seen.update(kwargs)
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "ready",
+            "commands": {
+                "autopilot_dry_run": ["forge-autopilot.bat", "--skip-feed-build", "--dry-run"],
+                "autopilot_apply": ["forge-autopilot.bat", "--skip-feed-build"],
+            },
+        }
+
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        docker_probe_mode="compose-dependency",
+        command_runner=lambda _command, _cwd: {"returncode": 0, "stdout": "{}", "stderr": ""},
+    )
+
+    assert payload["execution_policy"] == "apply_with_live_guarded_autostart"
+    assert payload["status"] == "live_ready"
+    assert payload["feed_written"] is True
+    assert seen["skip_feed_build"] is True
+    assert seen["docker_probe_mode"] == "compose-dependency"
+    assert payload["autostart"]["commands"]["autopilot_dry_run"][1] == "--skip-feed-build"
+
+
+def test_automation_cycle_live_status_reports_guarded_blocker(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+
+    def fake_guarded_autostart(**_kwargs):
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "blocked",
+            "blockers": ["free_memory_below_threshold"],
+        }
+
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=False,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+    )
+
+    assert payload["execution_policy"] == "dry_run_no_writes_or_live_commands_executed"
+    assert payload["status"] == "live_blocked"
+    assert payload["autostart"]["blockers"] == ["free_memory_below_threshold"]
+
+
+def test_automation_cycle_live_status_reports_guarded_completion(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+
+    def fake_guarded_autostart(**_kwargs):
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "completed",
+            "returncode": 0,
+            "blockers": [],
+        }
+
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        command_runner=lambda _command, _cwd: {"returncode": 0, "stdout": "{}", "stderr": ""},
+    )
+
+    assert payload["execution_policy"] == "apply_with_live_guarded_autostart"
+    assert payload["status"] == "live_completed"
+    assert payload["autostart"]["status"] == "completed"
+
+
+def test_automation_cycle_live_consumes_ready_queue_before_guarded_autostart(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text(
+        json.dumps({"iocs": ["example.com"]}),
+        encoding="utf-8",
+    )
+    queue_path = imports_dir / "threatfox-inputs.local.json"
+    queue_path.write_text(
+        json.dumps({"inputs": [{"value": "threatfox.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    events: list[str] = []
+
+    def _runner(_command: list[str], _cwd: Path) -> dict[str, object]:
+        events.append("queue")
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    def fake_guarded_autostart(**_kwargs):
+        events.append("guarded")
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "ready",
+            "commands": {
+                "autopilot_dry_run": ["forge-autopilot.bat", "--skip-feed-build", "--dry-run"],
+                "autopilot_apply": ["forge-autopilot.bat", "--skip-feed-build"],
+            },
+        }
+
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        command_runner=_runner,
+    )
+
+    assert payload["execution_policy"] == "apply_with_live_guarded_autostart"
+    assert payload["status"] == "live_ready"
+    assert [run["status"] for run in payload["queue_runs"]] == ["completed"]
+    assert payload["autostart"]["status"] == "ready"
+    assert events == ["queue", "guarded"]
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert queue["inputs"][0]["status"] == "imported"
+
+
+def test_automation_cycle_rebuilds_feed_after_successful_queue_import_before_live(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text(
+        json.dumps({"iocs": ["fresh.example"]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "threatfox-inputs.local.json").write_text(
+        json.dumps({"inputs": [{"value": "threatfox.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    events: list[str] = []
+
+    def fake_build_target_feed(**kwargs):
+        events.append("feed")
+        selected = 1 if events.count("feed") == 1 else 2
+        return {
+            "schema_version": "target-feed.v1",
+            "counts": {
+                "selected": selected,
+                "total": selected,
+                "source_errors": [],
+            },
+            "source_errors": [],
+            "discovered_input_registry_update": {},
+            "source_input_registry_updates": [],
+            "items": [
+                {
+                    "target_type": "domain",
+                    "target_value": "fresh.example",
+                    "canonical_value": "fresh.example",
+                    "target_key": "domain:fresh.example",
+                    "source_kind": "cti_observation",
+                    "source_group": "cti_file:threatfox.json",
+                    "source_groups": ["cti_file:threatfox.json"],
+                    "source_count": selected,
+                    "priority": 90,
+                    "scan_eligible": True,
+                    "scan_eligibility_reason": "eligible",
+                    "confidence": 0.5,
+                    "first_seen_at": "2026-08-29T00:00:00+00:00",
+                    "provenance": "cti_file:threatfox.json",
+                }
+            ],
+        }
+
+    def fake_write_target_feed(_payload, _output_path):
+        events.append("write")
+
+    def _runner(_command: list[str], _cwd: Path) -> dict[str, object]:
+        events.append("queue")
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    def fake_guarded_autostart(**kwargs):
+        events.append("guarded")
+        assert kwargs["skip_feed_build"] is True
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "ready",
+            "commands": {},
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module, "build_target_feed", fake_build_target_feed
+    )
+    monkeypatch.setattr(
+        automation_cycle_module, "write_target_feed", fake_write_target_feed
+    )
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        command_runner=_runner,
+    )
+
+    assert events == ["feed", "write", "queue", "feed", "write", "guarded"]
+    assert payload["status"] == "live_ready"
+    assert payload["feed_rebuilt_after_queue_imports"] is True
+    assert payload["feed"]["counts"]["selected"] == 2
+    assert payload["autostart"]["status"] == "ready"
+
+
+def test_automation_cycle_consumes_feed_build_created_queue_before_live(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    events: list[str] = []
+
+    def fake_build_target_feed(**kwargs):
+        events.append("feed")
+        if events.count("feed") == 1:
+            (imports_dir / "pd-cloud.json").write_text(
+                json.dumps({"assets": [{"host": "edge.example"}]}),
+                encoding="utf-8",
+            )
+            (imports_dir / "projectdiscovery-cloud-imports.local.json").write_text(
+                json.dumps(
+                    {
+                        "inputs": [
+                            {
+                                "value": "pd-cloud.json",
+                                "status": "pending",
+                                "connector_id": "projectdiscovery_cloud",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+        selected = 1 if events.count("feed") == 1 else 2
+        return {
+            "schema_version": "target-feed.v1",
+            "counts": {
+                "selected": selected,
+                "total": selected,
+                "source_errors": [],
+            },
+            "source_errors": [],
+            "discovered_input_registry_update": {},
+            "source_input_registry_updates": [],
+            "items": [],
+        }
+
+    def fake_write_target_feed(_payload, _output_path):
+        events.append("write")
+
+    def _runner(command: list[str], _cwd: Path) -> dict[str, object]:
+        events.append("queue")
+        assert command[:3] == ["forge", "connectors", "import-discovery"]
+        assert command[command.index("--connector") + 1] == "projectdiscovery_cloud"
+        assert command[command.index("--limit") + 1] == "1000"
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    def fake_guarded_autostart(**kwargs):
+        events.append("guarded")
+        assert kwargs["skip_feed_build"] is True
+        return {
+            "schema_version": "forge.automation_guarded_autostart.v1",
+            "status": "ready",
+            "commands": {},
+        }
+
+    monkeypatch.setattr(
+        automation_cycle_module, "build_target_feed", fake_build_target_feed
+    )
+    monkeypatch.setattr(
+        automation_cycle_module, "write_target_feed", fake_write_target_feed
+    )
+    monkeypatch.setattr(
+        "forge.automation_cycle.run_guarded_autostart",
+        fake_guarded_autostart,
+    )
+
+    payload = automation_cycle(
+        apply=True,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        command_runner=_runner,
+    )
+
+    assert events == ["feed", "write", "queue", "feed", "write", "guarded"]
+    assert payload["status"] == "live_ready"
+    assert payload["queue_runs"][0]["connector_id"] == "projectdiscovery_cloud"
+    assert payload["feed_rebuilt_after_queue_imports"] is True
+    queue = json.loads(
+        (imports_dir / "projectdiscovery-cloud-imports.local.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert queue["inputs"][0]["status"] == "imported"
+
+
+def test_automation_cycle_uses_autostart_engagement_for_ready_queues(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox.json").write_text(
+        json.dumps({"iocs": ["example.com"]}),
+        encoding="utf-8",
+    )
+    queue_path = imports_dir / "threatfox-inputs.local.json"
+    queue_path.write_text(
+        json.dumps({"inputs": [{"value": "threatfox.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    autostart_config = imports_dir / "autostart.local.json"
+    autostart_config.write_text(json.dumps({"engagement_id": 1002}), encoding="utf-8")
+    commands: list[list[str]] = []
+
+    def _runner(command: list[str], _cwd: Path) -> dict[str, object]:
+        commands.append(command)
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    payload = automation_cycle(
+        apply=True,
+        output=imports_dir / "target-feed.json",
+        source=["cti"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        autostart_config=autostart_config,
+        command_runner=_runner,
+    )
+
+    assert payload["engagement"]["effective"] == 1002
+    assert commands[0][commands[0].index("--engagement") + 1] == "1002"
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert queue["inputs"][0]["status"] == "imported"
+
+
+def test_doctor_fix_safe_creates_and_repairs_local_files(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    broken = imports_dir / "burp-dast-imports.local.json"
+    broken.write_text("{not-json", encoding="utf-8")
+
+    payload = doctor_fix_safe(imports_dir=imports_dir)
+
+    assert payload["schema_version"] == "forge.doctor_safe_fix.v1"
+    assert (imports_dir / "inbox").is_dir()
+    assert (imports_dir / "supabase-projects.local.json").is_file()
+    assert (
+        json.loads((imports_dir / "discovered-inputs.local.json").read_text(encoding="utf-8"))[
+            "schema_version"
+        ]
+        == "forge.discovered_inputs.v1"
+    )
+    assert json.loads(broken.read_text(encoding="utf-8"))["inputs"] == []
+    assert broken.with_suffix(".json.bak").is_file()
+    assert payload["selected_count"] >= 2
+
+
+def test_doctor_fix_safe_prunes_ignored_queue_placeholders(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "threatfox-observations.local.json").write_text(
+        json.dumps({"schema_version": "forge.cti_observations.local.v1", "observations": []}),
+        encoding="utf-8",
+    )
+    (imports_dir / "real-threatfox.json").write_text(
+        json.dumps({"data": [{"ioc": "bad.example"}]}),
+        encoding="utf-8",
+    )
+    queue_path = imports_dir / "threatfox-inputs.local.json"
+    queue_path.write_text(
+        json.dumps(
+            {
+                "inputs": [
+                    {"value": "threatfox-observations.local.json", "status": "pending"},
+                    {"value": "threatfox-inputs.local.json", "status": "pending"},
+                    {"value": "real-threatfox.json", "status": "pending"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    registry_path = imports_dir / "discovered-inputs.local.json"
+    registry_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "forge.discovered_inputs.v1",
+                "inputs": [
+                    {"value": "threatfox-observations.local.json", "status": "accepted"},
+                    {"value": "threatfox-inputs.local.json", "status": "accepted"},
+                    {"value": "real-threatfox.json", "status": "accepted"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = doctor_fix_safe(imports_dir=imports_dir)
+
+    assert any(item["id"] == "prune_ignored_queue_items" for item in payload["actions"])
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert [item["value"] for item in queue["inputs"]] == ["real-threatfox.json"]
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert [item["value"] for item in registry["inputs"]] == ["real-threatfox.json"]
+
+
+def test_automation_cycle_cli_registers_status_and_cycle(tmp_path: Path) -> None:
+    app = typer.Typer()
+    automation_app = typer.Typer()
+    register_automation_commands(automation_app)
+    app.add_typer(automation_app, name="automation")
+    runner = CliRunner()
+
+    status_result = runner.invoke(
+        app,
+        [
+            "automation",
+            "status",
+            "--imports-dir",
+            str(tmp_path / "imports"),
+            "--data-dir",
+            str(tmp_path / "data"),
+            "--json",
+        ],
+    )
+    assert status_result.exit_code == 0, status_result.output
+    assert json.loads(status_result.output)["schema_version"] == "forge.automation_status.v1"
+
+    quick_status_result = runner.invoke(
+        app,
+        [
+            "automation",
+            "status",
+            "--imports-dir",
+            str(tmp_path / "imports"),
+            "--data-dir",
+            str(tmp_path / "data"),
+            "--quick",
+            "--json",
+        ],
+    )
+    assert quick_status_result.exit_code == 0, quick_status_result.output
+    quick_status_payload = json.loads(quick_status_result.output)
+    assert quick_status_payload["quick"] is True
+    assert quick_status_payload["execution_policy"] == (
+        "read_only_quick_status_no_backlog_inventory"
+    )
+
+    cycle_result = runner.invoke(
+        app,
+        [
+            "automation",
+            "cycle",
+            "--imports-dir",
+            str(tmp_path / "imports"),
+            "--reports-dir",
+            str(tmp_path / "reports"),
+            "--data-dir",
+            str(tmp_path / "data"),
+            "--source",
+            "connectors",
+            "--json",
+        ],
+    )
+    assert cycle_result.exit_code == 0, cycle_result.output
+    cycle_payload = json.loads(cycle_result.output)
+    assert cycle_payload["schema_version"] == "forge.automation_cycle.v1"
+    assert cycle_payload["target_feed_scan"]["min_start_source_count"] == 1

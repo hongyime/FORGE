@@ -1,0 +1,251 @@
+# Agent Journal
+
+- 2026-08-29: B739 refreshed and re-uploaded the autonomous target loop PostPlan HTML so the published plan matches the latest hardening commits through c4e30b4.
+- 2026-08-29: B738 added total_count/ready_count/blocked_count/ignored_count aliases to queue and guarded source-queue summaries for supervisor-friendly parsing.
+- 2026-08-29: B737 made CTI queue target promotion configurable through queue_promote_targets and per-item promote_targets while preserving the previous enabled default.
+- 2026-08-29: B736 added same-cycle coverage for feed-build-created source queues so cycle must consume them and rebuild the feed before guarded live startup.
+- 2026-08-29: B735 added Supabase project-level table, row, and candidate budgets so all-table/all-column sync cannot expand to every discovered table times the per-table cap.
+- 2026-08-29: B734 added queue_import_item_limit so autonomous source queues cap rows/items per CTI, discovery, and validation artifact instead of only capping queued file count.
+- 2026-08-29: B733 gave discovery artifact imports bounded dry-run, limit, no-write, file-size, and count contracts so ProjectDiscovery/Censys/runZero queues have safer primitives.
+- 2026-08-29: B732 gave command-review a top-level ready/attention status so daily-use automation supervisors no longer special-case that command.
+- 2026-08-29: B731 bounded Supabase target-feed harvesting to page-by-page capped processing and exposed per-table row/page telemetry so all-table/all-column sync stays observable under the 1024 MB startup profile.
+- 2026-08-29: B701 changed ThreatFox refresh from assumed no-key live sync to explicit free-account keyed refresh after current abuse.ch docs showed Auth-Key is required, keeping no-key CTI on local artifact queues.
+- 2026-08-29: B700 added dry-run-by-default no-secret `automation supabase-add` and `automation input-add` helpers so owned Supabase refs and local CTI/connector/Burp artifacts can be queued without manual JSON edits.
+- 2026-08-29: B699 verified provider discovery with live probes enabled but no OpenRouter key, proving Forge reports only detected local/subscription backends and keeps paid backends disabled.
+- 2026-08-29: B698 made the Windows HKCU fallback recurring within the login session via a single mutex-guarded loop when Task Scheduler remains unavailable.
+- 2026-08-29: B697 made feed-build source-only output distinguish current-source contributions from preserved existing feed items, avoiding misleading Supabase selected counts.
+- 2026-08-29: B696 made compose-dependency readiness honor persisted Windows tool-path env and made automation status probe autostart before recommending live cycle apply.
+- 2026-08-29: B695 changed automation status next actions to prefer the guarded live cycle path and refreshed HKCU startup after Task Scheduler remained denied.
+- 2026-08-29: B694 made startup more durable by honoring configured stale-lock recovery, giving Docker autostart memory headroom above the 1024 MB gate, and persisting non-secret local Docker/tool env knobs.
+- 2026-08-29: B693 fixed Windows scheduled/HKCU startup argument quoting so paths with spaces reach `automation cycle` intact during unattended launch.
+- 2026-08-29: B686 changed Docker autostart to enter through `automation cycle --apply --live` so source queues are consumed before guarded live phases, added Docker mount-specific tool readiness blockers, and aligned the aggressive defaults review with the 1024 MB gate.
+- 2026-08-29: B685 made the standalone tool audit match Docker autostart reality by accepting `FORGE_HOST_CONNECTOR_BIN_DIR`, locking the requested Go binary inventory in tests, and executing Windows launcher fail-closed behavior tests.
+- 2026-08-29: B684 closed the restarted autonomous-loop audit gaps: feed-build now covers corpus-scale reports and bounded non-JSON local artifacts, source queues back off failed imports, launchers fail closed before live phases without ROE, ProjectDiscovery templates persist as graph evidence, and Censys imports carry richer fingerprints/topology.
+- 2026-08-29: B683 made autonomous startup fail closed more rigorously: direct autopilot launchers are dry-run by default, Docker container health can be delegated to Compose, memory gates are cgroup-aware, and local imports/tool binaries are excluded from Docker build context.
+- 2026-08-28: B682 added an opt-in Docker Compose `autostart` profile and packaged-runtime launcher fallback so Docker startup can invoke guarded-autostart without crash loops or local-venv assumptions.
+- 2026-08-28: B681 added `target_feed_scan` to automation status/cycle output so Forge can self-report eligible, high-priority, and ineligible target counts before live startup consumes scan budget.
+- 2026-08-28: B680 made multi-source target corroboration operational for autonomous intake: eligible multi-source targets are prioritized for import/start, while non-global IP/URL-host artifacts are retained as evidence but cannot consume live scan budget.
+- 2026-08-28: B679 treats empty local scaffolds and Forge-maintained source queue/control files as non-actionable automation inputs; `doctor --fix-safe` prunes stale placeholders from both per-source queues and the shared discovered-input registry so future real drops can be accepted.
+- 2026-08-28: B667 exposed the automation/autostart defaults as a real read-only `forge automation defaults` command so operators can inspect tunables and disabled config templates before editing local config.
+- 2026-08-28: Final free-first audit marked the autonomous target loop backlog complete for no-key/local work; remaining 49 resume-review and 3 long-run rows are operator run backlog, not missing implementation.
+- 2026-08-28: B666 made startup automation more self-healing without changing dry-run semantics: Docker JSON health is checked read-only, unhealthy containers block startup, and apply-mode guarded autostart writes bounded redacted history.
+- 2026-08-28: B665 implemented ProjectDiscovery Cloud as a no-key offline export importer first; live ProjectDiscovery Cloud API sync remains plan-only/keyed while local assets, nuclei-style findings, template counts, and provenance are now ingestible.
+- 2026-08-28: B664 kept OpenRouter discovery free-first by requiring model-list proof of a zero-price/free model unless `FORGE_ALLOW_PAID_BACKENDS=1`; unknown or paid-only model lists now skip OpenRouter instead of using a paid fallback.
+- 2026-08-20: Disabled the local scheduled FORGE target-import task on request and chose a safe CTI/OSINT integration path: passive/catalog-only providers plus normalized observations, provenance, redaction, budgets, and no third-party command execution.
+- 2026-08-20: Added offline CTI observation import as the first wired CTI workflow path; seed promotion is explicit and scope-gated, while raw provider bodies and secrets remain out of persistent records.
+- 2026-08-20: Surfaced CTI observations only as non-reportable analyst inventory in report/dashboard exports; source/provenance strings are redacted and fallback artifact hashes use sanitized canonical observation fields instead of raw provider objects.
+- 2026-08-20: Extended CTI offline import to normalize common ThreatFox, URLHaus, and STIX indicator export shapes locally; live provider fetching remains out of scope until explicitly approved.
+- 2026-08-20: Added CTI import dry-run preview semantics with no observation, seed, or audit writes; real write counters stay zero and preview counts use `would_*` fields.
+- 2026-08-20: CTI dry-run previews now read existing observation keys and track in-file repeats so `would_persist_count` excludes duplicates without creating tables or writing audit rows.
+- 2026-08-20: Added explicit CTI import item limits for large offline exports; result metadata reports total, processed, and limited item counts.
+- 2026-08-20: Added CTI min-confidence filtering as an operator noise-control gate before persistence or dry-run would-persist accounting; it does not change reportability.
+- 2026-08-20: Added CTI max-TLP filtering as an operator data-handling gate before persistence or dry-run preview accounting; it does not change validation/reportability.
+- 2026-08-20: Added CTI observed-time window filtering for offline imports and dry-runs; out-of-window rows are filtered before persistence or promotion preview.
+- 2026-08-20: Added CSV as an offline CTI import format for provider exports; malformed JSON remains a hard JSON error and live provider fetching stays out of scope.
+- 2026-08-20: Added CTI import summary counts for indicator types, TLP levels, target-feed types, and skipped reasons so operators can triage offline imports without raw-provider inspection.
+- 2026-08-20: Added an opt-in CTI fail-on-empty automation gate that rejects files with no accepted observations while allowing duplicate-only re-imports.
+- 2026-08-20: Added local `.gz` CTI report-file support so compressed offline exports are decompressed before the same sanitized JSON/CSV import path.
+- 2026-08-20: Added constrained local `.zip` CTI report-file support with deterministic supported-member selection and no archive extraction to disk.
+- 2026-08-20: Added a shared decoded-size cap for local CTI report files, including plain, gzip, ZIP member, and nested gzip-in-ZIP inputs.
+- 2026-08-20: Added sanitized CTI report-read metadata so import JSON identifies plain/gzip/zip inputs and the selected ZIP member without storing report bodies.
+- 2026-08-20: Added a stable CTI import result schema marker for automation consuming `forge connectors import-cti --json`.
+- 2026-08-20: Added passive offline MISP event JSON import support through the existing sanitized CTI observation pipeline, with no MISP API polling.
+- 2026-08-20: Normalized MISP Unix timestamps to UTC ISO strings so offline MISP imports work with CTI observed-time filters.
+- 2026-08-20: Extended offline MISP import to accept common attribute-search exports such as response.Attribute through the existing sanitized CTI observation path.
+- 2026-08-20: Added file-only Supabase table export ingestion to the CTI observation path; live Supabase API polling and key storage remain out of scope.
+- 2026-08-20: CTI imports now report rejected sensitive observation categories only as aggregate type counts, not values.
+- 2026-08-20: CTI imports now report command/script/install-like source rows only as an unsafe-text count; command snippets remain non-executable and non-persistent.
+- 2026-08-20: Added an aggregate CTI/OSINT provider catalog policy summary so public source lists map to default, opt-in, offline, live/API-style, and gated categories without command material.
+- 2026-08-20: Expanded the CTI/OSINT provider catalog with default-visible CTI/social/source-list backlog entries while keeping them catalog data rather than runnable workflows.
+- 2026-08-20: Treated `ukr.pw` as unsafe public sysadmin snippet text and mapped it into default-visible catalog-only workflow ideas with redaction and no-execution metadata.
+- 2026-08-20: Bounded dashboard seed/scope chip rendering and added wrapping/scroll containers so bulk-imported engagements remain reviewable in generated reports.
+- 2026-08-20: Switched Phase 6 report generation defaults from local-only `llama_cpp` to `auto` so configured CLI/API providers are tried before local GGUF and template fallback.
+- 2026-08-20: Added read-only target resume-candidate reporting as JSON; candidate review remains separate from any live resume or kill-chain launch.
+- 2026-08-20: Surfaced sanitized target resume candidates in static dashboards and sanitized run-summary metadata to remove scope-manifest paths and token-like keys.
+- 2026-08-20: Exposed CTI/OSINT provider policy summary through a read-only connector CLI command; it reports aggregate counts/provider IDs only and does not contact providers.
+- 2026-08-20: Added CTI/OSINT policy summary to doctor readiness/action-plan output so source policy review is visible before live fetcher work.
+- 2026-08-20: Hardened generated dashboard graph/list wrapping and changed target-import starts to use normal scoped kill-chain defaults instead of passive-only suppressor flags.
+- 2026-08-20: Added a read-only report quality audit command so report inventory, fallback lineage, long runs, failed runs, and dashboard refresh failures are repeatable instead of ad hoc searches.
+- 2026-08-20: Made remediation review queue reads schema-compatible with legacy engagement DBs missing risk acceptance expiry fields so future dashboard refreshes do not fail on that column.
+- 2026-08-20: Added a kill-chain soft runtime budget that exits the spider loop at iteration boundaries and preserves graceful finalization/report closeout before external watchdog termination.
+- 2026-08-20: Hardened dashboard artifact payload/card rendering so missing or OS-invalid report artifact paths no longer abort static dashboard refresh.
+- 2026-08-20: Restored `forge targets resume-candidates --json` compatibility for the read-only resume-candidate workflow while keeping JSON as the default output.
+- 2026-08-20 15:31:25 +08:00 [PRAWN-E14/claude/session-start] branch=main head=0e89ae7 dirty=8
+- 2026-08-20: Accepted `forge report quality-audit --top-limit` as an alias for `--top` so audit automation can use the explicit internal option name.
+- 2026-08-20: Split report quality-audit dashboard refresh failures into current unresolved failures and historical pre-refresh evidence so old audit rows do not imply current dashboard breakage.
+- 2026-08-20: Added latest-report-only fallback/backend/write-error counts to report quality-audit so historical GGUF fallbacks do not masquerade as current latest-report degradation.
+- 2026-08-20: Aligned default target resume-candidate scanning with dashboard legacy DB inclusion while preserving narrow explicit `--data-dir` scans.
+- 2026-08-20: Aligned doctor Workspace Access with dashboard/resume legacy DB visibility while leaving scheduled-job checks scoped to the configured data dir.
+- 2026-08-20: Added a read-only connector install-plan command so doctor setup can point to safe missing-binary guidance without executing installers.
+- 2026-08-20: Aligned Connector Catalog doctor remediation with the read-only connector install-plan command instead of raw missing-binary installer prose.
+- 2026-08-20: Added resume readiness/blocker reporting plus dry-run-first scope-manifest backfill; locally recovered missing scope manifests for 49 historical failed target-import candidates without launching runs.
+- 2026-08-20: Surfaced resume readiness in static dashboards and recursively sanitized scope-manifest metadata paths from dashboard run summaries.
+- 2026-08-20: Added dry-run-first workspace membership/control-index backfill and locally repaired legacy workspace access drift so doctor reports Workspace Access OK.
+- 2026-08-20: Added non-secret connector secret-key setup planning and configured a local user-level FORGE_ENGAGEMENT_KEY without printing the key value.
+- 2026-08-20: Added a read-only monitoring due-plan before run-due so operators can inspect due scheduled work without creating snapshots, running refresh callbacks, or delivering alerts.
+- 2026-08-20: Aligned connector binary discovery across runtime, install-plan, and doctor; full bootstrap now best-effort installs bounded free/local connector tools while leaving TruffleHog as manual guidance.
+- 2026-08-20: Added target resume-plan/resume-run so historical failed target-import candidates can be planned read-only or resumed strictly sequentially with a ledger and lock.
+- 2026-08-20: Added non-secret Windows persistent FORGE_ENGAGEMENT_KEY detection so doctor distinguishes stale process env from missing connector secret-store setup.
+- 2026-08-20: Aligned Monitoring Schedules doctor output with the read-only due-plan total so bounded readiness sampling no longer understates the due monitoring backlog.
+- 2026-08-20: Made destructive/post-ex run-summary policy flags explicit scope-manifest policy metadata for target-import starts instead of hard-coded false values.
+- 2026-08-20: Added checksum-verified TruffleHog release installation to bootstrap and installed TruffleHog 3.97.0 locally so connector install-plan has no missing binaries.
+- 2026-08-20: Classified intentionally disabled TPH target-import scheduled tasks as paused/OFF in doctor unless the bridge is explicitly enabled by env.
+- 2026-08-20: Aligned ProjectDiscovery doctor rows and connector install-plan missing-binary guidance with env-aware connector binary resolution.
+- 2026-08-20: Added bounded monitoring run-due/worker apply limits with explicit --all overrides so due backlog execution is capped by default.
+- 2026-08-20: Reclassified engagement stats sidecars as report metadata so quality-audit latest backend counts reflect actual report families.
+- 2026-08-20: Added path-neutral latest fallback report repair samples to quality-audit so stale GGUF-missing reports can be regenerated deliberately.
+- 2026-08-20: Clarified Safe Mode doctor/env wording so full mode is treated as intentional ROE-backed posture rather than broken setup.
+- 2026-08-20: Surfaced value-safe Windows persistent FORGE_ENGAGEMENT_KEY reload guidance in secret-key-plan and doctor.
+- 2026-08-20: Made monitoring due-plan a clearer read-only operator plan with stale-backlog age, capped batch estimates, policy composition, and safe action commands.
+- 2026-08-20: Added quality-audit operator action-plan buckets for stale report regeneration samples, resume planning, long-run review, and policy flag explanations.
+- 2026-08-20: Added redacted resume-plan review output and pointed quality-audit resume review commands at that path-safe mode.
+- 2026-08-20: Added value-safe Connector Secret Store doctor action items so secret-key setup/reload appears in the top-level action plan.
+- 2026-08-20: Made quality-audit stale-report samples explicit with omitted counts/follow-up commands, made Offline Strict doctor actionable, and raised scheduled-task query timeout to reduce transient doctor noise.
+- 2026-08-20: Added read-only `forge report stale-plan` so stale latest-report repair commands have a dedicated plan command without regenerating reports.
+- 2026-08-20: Suppressed the no-op Connector Action Plan `install_free_binaries` doctor action when no connector binaries are missing.
+- 2026-08-20: Added read-only `forge report long-run-plan` so long-running failed runs have a dedicated review plan without resuming runs.
+- 2026-08-20: Pointed stale-report follow-up commands at `forge report stale-plan` instead of broad `quality-audit`.
+- 2026-08-20: Added read-only `forge report policy-plan` so latest-run policy flag counts include sampled evidence without mutating engagements.
+- 2026-08-20: Added read-only `forge connectors run-plan` and pointed doctor's `run_free_connectors` action to plan-only command templates.
+- 2026-08-20: Expanded connector run-plan templates for non-generic operator paths so plan-only guidance includes required placeholders.
+- 2026-08-21: Corrected connector operator guidance so artifact passive parsers use a valid dry-run kill-chain template and doctor points to run-plan first.
+- 2026-08-21: Added bounded sequential `forge report stale-run` so stale latest reports can be regenerated from the stale-plan backlog without manual command copying.
+- 2026-08-21: Surfaced `forge report stale-run --dry-run` from quality-audit stale-report actions so the new bounded runner is discoverable.
+- 2026-08-21: Fixed stale-run output placement to write regenerated report families under the selected reports directory and report dashboard refresh follow-ups.
+- 2026-08-21: Completed local template-only stale latest-report repair and dashboard refresh; current stale-plan is empty while generated artifacts remain ignored local data.
+- 2026-08-21: Added explicit total/selected/omitted metadata to limited target resume plans so review pages cannot be mistaken for the full backlog.
+- 2026-08-21: Added non-mutating `targets resume-run --dry-run` and centralized dashboard error cleanup so resume batches and generated reports can be reviewed without launching child processes or rendering raw terminal noise.
+- 2026-08-21: Quality-audit resume review now points operators from redacted `resume-plan` to `resume-run --dry-run`, keeping the default action path non-mutating until a deliberate live resume.
+- 2026-08-21: Added `monitoring run-due --dry-run` and surfaced it from due-plan/doctor so due monitoring can be rehearsed with the exact run command before any snapshot/alert/schedule writes.
+- 2026-08-21: Corrected Connector Action Plan optional-key guidance to the actual `forge connectors secret-set --value-env` command so doctor emits executable setup steps without secret values.
+- 2026-08-21: Added path-neutral resume review rehearsals and policy-plan source/reason metadata so operators can share dry-run review output and understand `*_no` counts without changing live defaults.
+- 2026-08-21: Quality-audit resume review now recommends the path-redacted dry-run rehearsal by default, keeping review output non-mutating and shareable.
+- 2026-08-21: Resume-run results now preserve resume-plan total/selected/omitted metadata so bounded dry-run/live batches cannot be mistaken for the full backlog.
+- 2026-08-21: Monitoring due-plan now exposes plan-compatible schema/count aliases so bounded due-monitoring reviews are easier for automation to consume without changing execution behavior.
+- 2026-08-21: Monitoring run-due dry-run/live results now expose matching plan-compatible schema/count aliases so reviewed and executed batches can be compared directly.
+- 2026-08-21: Doctor JSON now adds command_args arrays for executable Forge action commands while leaving env/prose guidance as non-executable command text.
+- 2026-08-21: Connector review plans now expose plan-compatible counts and policy-summary schema metadata for easier automation consumption.
+- 2026-08-21: Connector setup plans now expose plan-compatible execution/count metadata without executing installers or printing secret material.
+- 2026-08-21: Quality-audit action plans now distinguish total backlog, selected rows, samples, and omitted rows consistently for operator automation.
+- 2026-08-21: Long-run and policy follow-up plans now use row-based total/selected/omitted counts, with policy flag occurrence totals preserved separately.
+- 2026-08-21: Quality-audit policy action rows now expose `flag_total_count` to match dedicated policy-plan output without requiring recomputation from per-flag counts.
+- 2026-08-21: Doctor Safe Mode warnings now emit a structured non-executing review action so automation does not skip the `FORGE_SAFE_MODE` decision.
+- 2026-08-21: Doctor Monitoring Schedules actions now include explicit backlog and capped-batch counts so automation does not parse remediation prose.
+- 2026-08-21: Connector doctor actions now expose selected/omitted counts, with `run_free_connectors` aligned to the actual connector run-plan payload.
+- 2026-08-21: Connector Secret Store doctor actions now mirror secret-key-plan execution/count metadata while preserving the no-secret-output contract.
+- 2026-08-21: Offline Strict and Safe Mode doctor actions now declare non-executing operator-decision metadata instead of leaving count fields absent.
+- 2026-08-21: Paid backend, active-validation, and provider-probe doctor actions now declare execution/count semantics so automation can distinguish dry-run review from operator-gated live probes.
+- 2026-08-21: Doctor monitoring and connector action rows now declare execution policies across plan-only, dry-run, live apply, catalog-only, gated, and operator secret setup paths.
+- 2026-08-21: Connector policy-summary now carries the same plan-compatible execution/count metadata as the other connector review commands.
+- 2026-08-21: Report quality-audit and stale-plan payloads now expose top-level execution/count metadata for read-only automation review.
+- 2026-08-21: Resume-candidates now reports read-only execution policy and total/selected/omitted counts so bounded candidate pages are not mistaken for the whole backlog.
+- 2026-08-21: CTI import results now carry common schema/execution/count aliases for both dry-run review and write/audit paths.
+- 2026-08-21: Connector plugin validation summaries now carry schema/count aliases while remaining data-only manifest validation.
+- 2026-08-21: Connector catalog JSON now carries top-level schema/execution/count aliases while preserving the existing nested summary.
+- 2026-08-21: Doctor JSON now carries top-level read-only schema/execution/count aliases while preserving the legacy payload shape.
+- 2026-08-21: Monitoring status now carries read-only schema/execution/count aliases so it aligns with monitoring due-plan and run-due payloads.
+- 2026-08-21: Standards STIX import/export JSON now carries common schema/count aliases and explicitly labels dry-run imports as no-write.
+- 2026-08-21: B626 secret prevention workflow plans now expose schema_version, plan-only execution_policy, and total/selected/omitted command counts while preserving the value-free payload contract; verified with focused tests, Ruff, py_compile, diff check, and a temp-DB smoke with no raw secret leakage.
+- 2026-08-21: B627 active-validation methods, preview, and coverage JSON now expose common schema/execution/count aliases while keeping create/approve/run behavior unchanged and live validation unexecuted.
+- 2026-08-21: B628 active-validation list CLI/API payloads now report read-only schema/execution/count aliases with bounded job total/selected/omitted counts.
+- 2026-08-21: B629 audit manifest verification JSON now reports read-only schema/execution/count aliases for manifest and signed-bundle verification.
+- 2026-08-21: B630 audit manifest-export JSON now reports schema/execution/count aliases and distinguishes local bundle writes from explicit remote-store exports.
+- 2026-08-21: B631 asset graph list/API JSON now reports read-only schema/execution/count aliases with bounded node total/selected/omitted counts.
+- 2026-08-21: B632 asset graph sync JSON now reports schema/execution/count aliases and explicitly labels canonical graph-table writes.
+- 2026-08-21: B633 asset graph attribution import JSON now reports schema/execution/count aliases with processed/imported/error records mapped to total/selected/omitted counts.
+- 2026-08-21: B634 asset graph ownership set/resolve JSON now reports explicit local write policies and claim total/selected/omitted counts for created and superseded ownership claims.
+- 2026-08-21: B635 dashboard/report rendering now caps heavy seed/scope chips, bounds previews, shortens noisy diagnostics, adds responsive table labels, and labels latest-run policy/ROE sources without regenerating live reports.
+- 2026-08-21: B636 engagement detail dashboards now group no-row evidence sections behind one collapsible summary after populated tables, reducing sparse-page noise without regenerating reports.
+- 2026-08-21: B637 quality-audit stale-report actions now always surface a stale-run dry-run batch rehearsal before the live regeneration command.
+- 2026-08-21: B638 stale report repair run JSON now distinguishes dry-run previewed items from genuinely skipped items with `dry_run_count`.
+- 2026-08-21: B639 stale report repair dry-runs now support redacted path-neutral rehearsal output and block redacted live regeneration.
+- 2026-08-21: B640 stale report repair plans now support redacted path-neutral JSON output while remaining plan-only.
+- 2026-08-21: B641 report quality-audit now supports redacted path-neutral JSON output while remaining read-only.
+- 2026-08-21: B642 long-run-plan and policy-plan now support redacted path-neutral JSON output while remaining plan-only.
+- 2026-08-21: B643 target import start now exposes a runtime budget and enforces a parent-side child timeout while keeping full start capability available by default.
+- 2026-08-21: B644 scheduled target imports now fit started child runtime budgets to the watchdog task window instead of disabling start by default.
+- 2026-08-21: B645 report/dashboard display paths now share render-time sanitization for GGUF fallbacks, malformed CLI help, abandoned-run wording, and scope manifest assignments with spaces.
+- 2026-08-21: B646 target import and resume-run child kill-chain launches now use contained subprocess cleanup to terminate child process trees on timeout.
+- 2026-08-21 16:34:50 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
+- 2026-08-21 16:48:09 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
+- 2026-08-21 16:54:07 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
+- 2026-08-21 17:04:15 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
+- 2026-08-21: Recovery sessions should resume from repo state and handoffs instead of the oversized Codex thread; resume-run stale-lock breaking remains explicit and refuses active locks.
+- 2026-08-21: B647 pushed stale resume-lock recovery as ba0bf43; next sessions should continue product hardening from doctor/quality-audit backlog without resuming the oversized Codex thread.
+- 2026-08-21: B648 resume-lock hardening treats live PIDs as authoritative, protects lock ownership with per-run tokens, redacts lock metadata by allowlist, and documents the operator lock workflow.
+- 2026-08-21 20:30 +08: B649 records operator-approved wildcard/broad automation defaults as an explicit Forge policy surface and adds a read-only command-surface review so future automation growth is routed through presets/workflows instead of more memorized leaf commands.
+- 2026-08-21: B650 expands the automation wildcard scope template to include `*.net`, `*.org`, and `http://*.*.*/`; report freshness is currently artifact-clean, with stale-plan empty and remaining gaps tied to failed/long latest runs.
+- 2026-08-21: B651 makes test taxonomy enforceable in pytest config: importlib mode prevents duplicate basename collection failures, pythonpath is explicit, directory-based markers expose unit/functional/integration/e2e slices, and the real-target E2E harness now has a pytest-visible contract test.
+- 2026-08-21: B652 keeps resume-run sequential by default but adds bounded `--max-parallel` execution with one batch lock and serialized ledger writes; public third-party resume candidates remain dry-run/planned from this chat.
+- 2026-08-21: B653 adds `forge-autopilot` launchers as the daily all-in-one operator path: optional target-feed import/start, parallel resume, due monitoring, and dashboard refresh with a dry-run rehearsal mode.
+- 2026-08-21 22:36:37 +08:00 [PRAWN-E14/codex/session-start] branch=main head=efec6db dirty=0
+- 2026-08-22 08:38:33 +08:00 [PRAWN-E14/codex/session-start] branch=main head=8671f8d dirty=0
+- 2026-08-27: Created a PostPlan HTML plan for the free-first FORGE autonomous hardening backlog at https://nepckuwxuhgp.postplan.dev; primary implementation track excludes paid/API-key-required dependencies by default and treats the pasted OpenRouter key as exposed, omitted secret material.
+- 2026-08-27: B654 adds the autonomous target-feed builder and autopilot feed-build phase: local artifacts and optional read-only Supabase table selects merge into `target-feed.v1` with canonical dedupe, per-source-group provenance, dry-run defaults, local-only Supabase config, and no committed keys or live actions during verification.
+- 2026-08-27: B655 adds a read-only automation self-heal plan for resource-safe startup readiness; it blocks live auto-start when memory/disk/tool/Docker guardrails fail and records packaged Go binary status without running Docker mutations or live work.
+- 2026-08-27: B656 adds guarded-autostart as the only startup-safe autopilot entrypoint; it is dry-run by default, requires literal local double opt-in plus a configured ROE env var before apply, fails closed on unknown memory, redacts ROE/subprocess output, enforces self-heal blockers, uses a single-instance lock, and records cooldown/backoff state before any Docker/OS scheduler is wired to it.
+- 2026-08-27: B657 adds Burp/JUnit DAST XML import as free/local active-validation evidence intake only; scanner XML is parsed offline, scoped, sanitized, deduped, and never converted directly into reportable vulnerability findings.
+- 2026-08-27: Implementing exposure-duration metrics as a free/local read-only monitoring summary over existing Forge SQLite evidence; no schema migration or paid/API connector required.
+- 2026-08-28: Censys/runZero-style asset delta support is implemented as local JSON/CSV artifact import through import-discovery, preserving fingerprints/topology without requiring API keys.
+- 2026-08-28: Active-validation matrix now computes proof type and freshness from local job/run metadata, including imported Burp/JUnit artifact proof, without schema changes or live target calls.
+- 2026-08-28: Closed-loop remediation dashboard state is derived from local remediation/ticket/retest metadata first; ticket APIs, SOAR webhooks, and live validation remain explicit opt-in actions rather than dashboard refresh dependencies.
+- 2026-08-28: Startup automation remains fail-closed: Docker/OS hooks should call guarded-autostart, stale/dead guarded locks can self-recover in apply mode, active locks remain blockers, child timeouts kill process trees, and packaged Go binaries are preferred before PATH shims.
+- 2026-08-28: Updated the PostPlan roadmap as a redacted, free-first artifact at https://ylrghmdr8arh.postplan.dev; provider-specific live/API features stay plan-only until operator-owned credentials are supplied through env or Forge secret store.
+- 2026-08-28: `automation command-review` is the read-only source of truth for the daily-use command layer and now checks README/DAILY_USE coverage for automation, doctor, target resume, connector plan/run, and report review entrypoints.
+- 2026-08-28: B668 makes `feed_sources=["all"]` an enforceable autostart/launcher default, validates repeatable source subsets, preserves existing target-feed `source_group` provenance on merge, and keeps the local aggressive startup config ignored and gated by `FORGE_ROE_ID`, memory/Docker checks, and OpenRouter free-only defaults.
+- 2026-08-28: B669 enables live startup without admin by falling back from denied Task Scheduler registration to an HKCU Run entry for guarded-autostart, expands the guard timeout to cover whole autopilot batches, and fixes Dependabot alert 10 by pinning asyncssh to patched 2.23.1 while preserving local dependency compatibility.
+- 2026-08-28: Added ignored local Supabase/CTI feed scaffolds with no secrets or placeholder targets, documented CTI drop conventions, and lowered local guarded-autostart memory gate to 1024 MB after source setup; live startup remains fail-closed when resource checks fail.
+- 2026-08-28: Broadened local import ignore coverage for CTI provider-marker drops and added empty per-provider CTI scaffold files so future runs can populate accepted feed-build markers without hand-built JSON.
+- 2026-08-28: Amended Supabase feed requirements so project entries can be minimal (`project_ref` plus `key_env`), with Forge deriving URL, discovering exposed tables, and processing all returned columns by default.
+- 2026-08-28: Raised Supabase configured-project feed extraction to a greedy paginated default: up to 1,000 discovered tables and 100,000 rows per table, while still requiring explicit owned project config and key material before database reads.
+- 2026-08-28: B674 feed-build discovery expansion keeps target-feed as the target handoff and adds ignored local pending-input registries; free/local artifact hints may be queued automatically, while live/keyed reads remain gated by local credentials and ROE.
+- 2026-08-28: B675 clarified the discovered-input registry contract: keep the shared overview, but also maintain source-specific ignored local queue files for CTI, discovery exports, ProjectDiscovery Cloud, and Burp/JUnit validation artifacts; local queue files are never connector payloads.
+- 2026-08-28: B676 makes `forge automation cycle` the consolidated daily loop: feed-build, inbox classification, source queue consumption, and optional live guarded-autostart; `doctor --fix-safe` may repair ignored local scaffolds but live/provider/scanner actions still require explicit guarded apply.
+- 2026-08-28: B677 avoids duplicate source reads in the live parent cycle: `automation cycle --apply --live` hands guarded-autostart a prepared target feed with `--skip-feed-build`, while standalone startup hooks still run guarded launcher feed-build themselves.
+- 2026-08-28: B678 raises the target-feed file/read item bounds to match real daily feeds, adds JSON output for `targets import`, and treats the dashboard aggregate index as an intentional report-source skip rather than a feed-build error.
+- 2026-08-29: B687 lets unattended source queues use a default engagement from guarded autostart config or `FORGE_DEFAULT_ENGAGEMENT_ID`, and routes Windows startup through `automation cycle` so queued artifacts are handled before guarded live work.
+- 2026-08-29: B688 made `automation cycle --apply --live` the documented startup path, blocked direct guarded-autostart apply when ready source queues would be bypassed, aligned direct launcher defaults with guarded limits, and surfaced Supabase table discovery status in feed-build JSON.
+- 2026-08-29: B689 changed Supabase feed extraction to harvest REST pages incrementally and use key hints so all-column rows preserve bare usernames as canonical username targets.
+- 2026-08-29: B690 made OpenRouter free-only discovery request newest models and accept only capable numerically zero-priced free model families when paid backends are disabled.
+- 2026-08-29: B691 made self-heal/defaults command plans prefer `automation cycle` for startup/daily operation and leave direct guarded-autostart as a lower-level probe.
+- 2026-08-29: B692 made `automation status` resolve default engagement from local autostart config, matching `automation cycle`, and set ignored local autostart engagement to existing local engagement 1001.
+- 2026-08-29 03:58:58 +08:00 [PRAWN-E14/codex/session-start] branch=main head=39a92b7 dirty=0
+- 2026-08-29: B702 keeps guarded-autostart feed reuse but rebuilds the feed after successful local queue imports, and surfaces monitoring due backlog in `automation status`/`cycle` as read-only summary data.
+- 2026-08-29: B703 makes live-start source confirmation configurable with `--min-start-source-count`, importing broad targets while reserving scan budget for multi-source targets when local autostart sets the threshold to 2.
+- 2026-08-29: B704 makes automation status/cycle show threshold-aware startable target counts, so raw scan eligibility is not confused with live-start budget eligibility.
+- 2026-08-29: B705 bounds live-cycle queue imports with `queue_limit`, keeping startup from spending unbounded time on local artifact queues before guarded import/start/resume/monitoring.
+- 2026-08-29: B706 makes the Windows guarded-autostart timeout path terminate the process tree with taskkill before falling back to Stop-Process.
+- 2026-08-29: B707 changes Docker guarded-autostart to a low-resource controlled loop with startup delay and cadence, while keeping live execution behind Forge guard gates.
+- 2026-08-29: B708 makes compose-dependency Docker readiness report that app service health is delegated/not inspected and points operators to a host-compose probe for full container health.
+- 2026-08-29 05:25:06 +08:00 [PRAWN-E14/codex/session-start] branch=main head=faac599 dirty=0
+- 2026-08-29: B709 surfaces resume backlog in automation status/cycle as a redacted read-only summary and only includes legacy DBs when using the configured Forge data dir.
+- 2026-08-29: B710 makes command-review report daily-use layer completeness and downgrades command-surface pressure when the documented daily layer is complete.
+- 2026-08-29: B711 adds report_review to automation status/cycle so report/dashboard drift is visible in the daily loop without running report repair or resume commands.
+- 2026-08-29: B712 adds autostart_history to automation status/cycle so persisted guarded-autostart failures and blocker counts are visible without opening local logs.
+- 2026-08-29: B713 classifies guarded-autostart failures as historical after the configured backoff window so old failures do not masquerade as current blockers.
+- 2026-08-29: B714 makes automation status top-level next_actions include safe resume, monitoring, and report-review follow-ups when guarded live startup is not blocked.
+- 2026-08-29: B715 adds a top-level automation status label so machine/startup consumers can distinguish blocked, attention, ready-with-inputs, ready-needs-feed, ready-with-backlog, and ready states.
+- 2026-08-29: B716 adds automation status --quick for startup/supervisor checks that skip expensive backlog inventories while marking the result as backlog-unverified.
+- 2026-08-29: B717 makes autostart_history recommend self-heal only for recent failures; aged historical failures now point back to automation status review.
+- 2026-08-29: B718 makes quick automation status recommend a full status audit before guarded live cycle when backlog summaries were intentionally skipped.
+- 2026-08-29: B719 adds automation cycle status labels so startup/supervisor callers can distinguish planned, queued, blocked, deferred, failed, applied-local, and guarded-live outcomes without parsing nested payloads.
+- 2026-08-29: B720 keeps doctor JSON backward-compatible while adding daily-use aliases (`status`, `id`, `message`, `next_action`, `next_actions`) for simpler automation and supervisor parsing.
+- 2026-08-29: B721 defaults ThreatFox CTI refresh to `FORGE_THREATFOX_AUTH_KEY` and documents it as free/keyed, matching abuse.ch's Auth-Key requirement without storing secrets.
+- 2026-08-29: B722 exposes CTI refresh readiness in automation status/cycle so startup operators can see the free-key gate and safe refresh command without live network or writes.
+- 2026-08-29: B723 exposes Supabase sync readiness in automation status/cycle from local project_ref/key_env config only, preserving explicit owned-project gating and no network reads during status.
+- 2026-08-29: B724 adds monitoring run-due status labels so valid dry-runs and scheduler outcomes no longer serialize as `status=null`.
+- 2026-08-29: B725 makes source-readiness setup gates visible in full automation status next_actions while preserving quick-status and backlog-first ordering.
+- 2026-08-29: B726 treats OpenRouter as a free-only static provider signal by default; only an explicit paid-backend gate makes it count as paid API readiness.
+- 2026-08-29: B727 adds an outer timeout to the Docker guarded-autostart loop so a hung cycle cannot suppress later guarded attempts.
+- 2026-08-29: B728 standardizes monitoring-due automation summaries with total/selected/omitted count aliases while preserving existing due-plan fields.
+- 2026-08-29: B729 adds URLhaus as a free-keyed public CTI refresh provider and makes CTI readiness report both ThreatFox and URLhaus without exposing Auth-Key material.
+- 2026-08-29: B730 adds a read-only automation limits command so operators can inspect active resource/run/provider caps without parsing defaults or status payloads.
+- 2026-08-29 09:29:31 +08:00 [PRAWN-E14/codex/session-start] branch=main head=dccdbcb dirty=0
+- 2026-08-29: B740 closes resumed audit gaps by enforcing shared discovery import budgets, adding report quality status labels, making only explicit startup-critical Go tools block autostart, documenting a 960 MiB Docker low-memory profile, and routing status launchers through automation status.
+- 2026-08-29: B741 refreshes the autonomous target loop PostPlan draft to version 3 so the public HTML includes the B740 hardening checkpoint.
+- 2026-08-29: B742 adds direct queue alias regression coverage for automation status and guarded-autostart skipped/unavailable source-queue paths.
+- 2026-08-29: B743 exposes the 960 MiB Docker low-memory autostart profile through automation limits so operators can review 1024 MB startup caps from the daily CLI.
+- 2026-08-29: B744 refreshes the autonomous target loop PostPlan draft to version 4 so the public HTML includes the low-memory limits checkpoint.
+- 2026-08-29: B745 makes Supabase status honor valid Forge connector-secret references as configured credentials while keeping secret resolution inside feed-build.
+- 2026-08-29: B746 refreshes the autonomous target loop PostPlan draft to version 5 so the public HTML includes Supabase secret-store readiness.
+- 2026-08-29: Current supervisor verification after B746 shows live startup is correctly fail-closed only on `free_memory_below_threshold` at 542 MB free against the 1024 MB local gate.
