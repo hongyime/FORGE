@@ -15,6 +15,26 @@ def _read(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
+def _read_env_example(relative_path: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in _read(relative_path).splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        values[key] = value
+    return values
+
+
+def _memory_mib(value: str) -> int:
+    normalized = value.strip().lower()
+    if normalized.endswith("m"):
+        return int(normalized[:-1])
+    if normalized.endswith("g"):
+        return int(normalized[:-1]) * 1024
+    return int(normalized) // (1024 * 1024)
+
+
 def _helm_binary() -> str | None:
     configured = os.environ.get("HELM_BIN", "").strip()
     if configured:
@@ -104,6 +124,23 @@ def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
     assert "../imports:/app/imports:rw" in compose
     assert "../reports:/app/reports:rw" in compose
     assert "${FORGE_HOST_CONNECTOR_BIN_DIR:-../tools/bin}:/app/tools/bin:ro" in compose
+
+
+def test_low_memory_env_profile_keeps_autostart_stack_under_1024_mib() -> None:
+    env_values = _read_env_example("docker/low-memory.env.example")
+
+    forge_service_mib = _memory_mib(env_values["FORGE_CONTAINER_MEM_LIMIT"])
+    total_mib = (
+        forge_service_mib * 3
+        + _memory_mib(env_values["FORGE_POSTGRES_MEM_LIMIT"])
+        + _memory_mib(env_values["FORGE_REDIS_MEM_LIMIT"])
+        + _memory_mib(env_values["FORGE_AUTOSTART_MEM_LIMIT"])
+    )
+
+    assert env_values["FORGE_CONTAINER_CPUS"] == "0.25"
+    assert env_values["FORGE_AUTOSTART_CPUS"] == "0.10"
+    assert total_mib == 960
+    assert total_mib <= 1024
 
 
 def test_production_compose_matches_doctor_hardening_contract() -> None:

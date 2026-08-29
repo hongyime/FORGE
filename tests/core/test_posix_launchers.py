@@ -90,15 +90,20 @@ def test_kill_chain_launcher_builds_argv_without_eval() -> None:
     assert "FLAGS=" not in text
 
 
-def test_report_and_status_launchers_use_python_for_native_listing() -> None:
+def test_report_launcher_uses_python_for_native_listing() -> None:
     report = _read_launcher("forge-report.sh")
-    status = _read_launcher("forge-status.sh")
 
     assert '"$VENV_PYTHON" -c' in report
-    assert '"$VENV_PYTHON" -c' in status
     assert 'Path(".forge_data/engagements").glob("*.db")' in report
-    assert 'Path(".forge_data/engagements").glob("*.db")' in status
     assert "reports[:3]" in report
+
+
+def test_status_posix_launcher_uses_consolidated_automation_status() -> None:
+    status = _read_launcher("forge-status.sh")
+
+    assert '"$VENV_FORGE" automation status --quick --json' in status
+    assert "kb status" not in status
+    assert 'Path(".forge_data/engagements").glob("*.db")' not in status
 
 
 def test_autopilot_posix_launcher_runs_start_resume_monitor_dashboard() -> None:

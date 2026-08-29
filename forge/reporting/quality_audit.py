@@ -164,9 +164,18 @@ def collect_report_quality_audit(
         + len(dashboard_refresh_failures)
         + len(historical_dashboard_refresh_failures)
     )
+    status = _quality_audit_status(
+        latest_fallback_counts=latest_fallback_counts,
+        latest_report_write_error_counts=latest_report_write_error_counts,
+        dashboard_refresh_failure_count=len(dashboard_refresh_failures),
+        resume_review_count=resume_review_count,
+        long_run_count=len(long_runs),
+        failed_run_count=len(failed_runs),
+    )
 
     return {
         "schema_version": "forge.report_quality_audit.v1",
+        "status": status,
         "execution_policy": "read_only_report_inventory_no_commands_executed",
         "reports_dir": "<redacted>" if redact_paths else str(reports_root),
         "redact_paths": bool(redact_paths),
@@ -208,6 +217,26 @@ def collect_report_quality_audit(
         ],
         "operator_action_plan": operator_action_plan,
     }
+
+
+def _quality_audit_status(
+    *,
+    latest_fallback_counts: Counter[str],
+    latest_report_write_error_counts: Counter[str],
+    dashboard_refresh_failure_count: int,
+    resume_review_count: int,
+    long_run_count: int,
+    failed_run_count: int,
+) -> str:
+    if (
+        latest_fallback_counts
+        or latest_report_write_error_counts
+        or dashboard_refresh_failure_count > 0
+    ):
+        return "attention"
+    if resume_review_count > 0 or long_run_count > 0 or failed_run_count > 0:
+        return "ready_with_backlog"
+    return "ready"
 
 
 def collect_stale_report_repair_plan(

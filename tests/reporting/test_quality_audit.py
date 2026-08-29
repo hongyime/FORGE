@@ -105,6 +105,7 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
     )
 
     assert payload["schema_version"] == "forge.report_quality_audit.v1"
+    assert payload["status"] == "attention"
     assert payload["execution_policy"] == "read_only_report_inventory_no_commands_executed"
     assert payload["redact_paths"] is False
     assert payload["total_count"] == 5
@@ -294,6 +295,74 @@ def test_collect_report_quality_audit_reports_latest_fallbacks_separately(
     ]
     assert payload["report_backend_counts"] == {"template": 2}
     assert payload["latest_report_backend_counts"] == {"template": 1}
+    assert payload["status"] == "attention"
+
+
+def test_collect_report_quality_audit_status_ready_with_backlog(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    overview_path = reports_dir / "dashboard" / "data" / "engagements.json"
+    overview_payload = json.loads(overview_path.read_text(encoding="utf-8"))
+    overview_payload["items"][0]["report_summary"].pop("fallback_reason")
+    overview_path.write_text(json.dumps(overview_payload), encoding="utf-8")
+    detail_path = (
+        reports_dir
+        / "dashboard"
+        / "data"
+        / "engagements"
+        / "engagement-1001-acme.json"
+    )
+    detail_payload = json.loads(detail_path.read_text(encoding="utf-8"))
+    detail_payload["sections"]["recent_audit_log"] = []
+    detail_path.write_text(json.dumps(detail_payload), encoding="utf-8")
+
+    payload = collect_report_quality_audit(
+        reports_dir=reports_dir,
+        long_run_seconds=2700,
+        top_limit=5,
+    )
+
+    assert payload["latest_fallback_reason_counts"] == {}
+    assert payload["dashboard_refresh_failure_count"] == 0
+    assert payload["resume_review_count"] == 1
+    assert payload["long_run_count"] == 1
+    assert payload["failed_run_count"] == 1
+    assert payload["status"] == "ready_with_backlog"
+
+
+def test_collect_report_quality_audit_status_ready_for_clean_reports(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    overview_path = reports_dir / "dashboard" / "data" / "engagements.json"
+    overview_payload = json.loads(overview_path.read_text(encoding="utf-8"))
+    item = overview_payload["items"][0]
+    item.pop("target_resume_candidate")
+    item["run_summary"] = {"status": "completed", "resume_enabled": True}
+    item["report_summary"].pop("fallback_reason")
+    overview_path.write_text(json.dumps(overview_payload), encoding="utf-8")
+    detail_path = (
+        reports_dir
+        / "dashboard"
+        / "data"
+        / "engagements"
+        / "engagement-1001-acme.json"
+    )
+    detail_payload = json.loads(detail_path.read_text(encoding="utf-8"))
+    detail_payload["sections"]["recent_audit_log"] = []
+    detail_path.write_text(json.dumps(detail_payload), encoding="utf-8")
+
+    payload = collect_report_quality_audit(reports_dir=reports_dir, top_limit=5)
+
+    assert payload["latest_fallback_reason_counts"] == {}
+    assert payload["dashboard_refresh_failure_count"] == 0
+    assert payload["resume_review_count"] == 0
+    assert payload["long_run_count"] == 0
+    assert payload["failed_run_count"] == 0
+    assert payload["status"] == "ready"
 
 
 def test_collect_report_quality_audit_marks_stale_gguf_fallbacks_when_model_exists(

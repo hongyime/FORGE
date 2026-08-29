@@ -36,6 +36,14 @@ def test_report_launcher_uses_windows_native_latest_report_listing() -> None:
     assert "reports[:3]" in text
 
 
+def test_status_windows_launcher_uses_consolidated_automation_status() -> None:
+    text = _read_launcher("forge-status.bat")
+
+    assert ".venv\\scripts\\forge.exe automation status --quick --json" in text
+    assert "kb status" not in text
+    assert ".forge_data/engagements" not in text
+
+
 def test_autopilot_launcher_runs_start_resume_monitor_dashboard() -> None:
     text = _read_launcher("forge-autopilot.bat")
     assert "automation feed-build" in text

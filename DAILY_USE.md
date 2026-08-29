@@ -165,6 +165,16 @@ Docker startup can invoke the same guard by opting into the autostart profile:
 docker compose -f docker/docker-compose.yml --profile autostart up -d
 ```
 
+For hosts that need the 1024 MB profile, review the generated config with:
+
+```bash
+docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.yml --profile autostart config
+```
+
+That example caps API, web UI, worker, Postgres, Redis, and guarded autostart at
+960 MiB total. Provide secrets through your normal local env source before
+starting containers.
+
 The extra `forge-guarded-autostart` service runs a controlled loop with lower
 default caps (`FORGE_AUTOSTART_CPUS=0.25`,
 `FORGE_AUTOSTART_MEM_LIMIT=1536m`), startup delay

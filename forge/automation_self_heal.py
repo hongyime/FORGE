@@ -18,20 +18,104 @@ SELF_HEAL_PLAN_SCHEMA_VERSION = "forge.automation_self_heal_plan.v1"
 GUARDED_AUTOSTART_SCHEMA_VERSION = "forge.automation_guarded_autostart.v1"
 
 PACKAGED_GO_TOOLS: tuple[dict[str, Any], ...] = (
-    {"name": "nuclei", "binary": "nuclei.exe", "size_bytes": 189070848, "role": "templates"},
-    {"name": "gopls", "binary": "gopls.exe", "size_bytes": 43044352, "role": "developer"},
-    {"name": "gitleaks", "binary": "gitleaks.exe", "size_bytes": 13897728, "role": "secrets"},
-    {"name": "amass", "binary": "amass.exe", "size_bytes": 51906048, "role": "asset_discovery"},
-    {"name": "ffuf", "binary": "ffuf.exe", "size_bytes": 14524928, "role": "active_content"},
-    {"name": "gobuster", "binary": "gobuster.exe", "size_bytes": 14392320, "role": "active_content"},
-    {"name": "mapcidr", "binary": "mapcidr.exe", "size_bytes": 40351744, "role": "scope_planning"},
-    {"name": "tlsx", "binary": "tlsx.exe", "size_bytes": 41943552, "role": "tls_fingerprint"},
-    {"name": "uncover", "binary": "uncover.exe", "size_bytes": 41236480, "role": "provider_search"},
-    {"name": "naabu", "binary": "naabu.exe", "size_bytes": 46626304, "role": "active_ports"},
-    {"name": "dnsx", "binary": "dnsx.exe", "size_bytes": 38878208, "role": "dns_enrichment"},
-    {"name": "httpx", "binary": "httpx.exe", "size_bytes": 68553728, "role": "http_probe"},
-    {"name": "katana", "binary": "katana.exe", "size_bytes": 63511040, "role": "crawler"},
-    {"name": "subfinder", "binary": "subfinder.exe", "size_bytes": 39931392, "role": "subdomains"},
+    {
+        "name": "nuclei",
+        "binary": "nuclei.exe",
+        "size_bytes": 189070848,
+        "role": "templates",
+        "required_for_autostart": True,
+    },
+    {
+        "name": "gopls",
+        "binary": "gopls.exe",
+        "size_bytes": 43044352,
+        "role": "developer",
+        "required_for_autostart": False,
+    },
+    {
+        "name": "gitleaks",
+        "binary": "gitleaks.exe",
+        "size_bytes": 13897728,
+        "role": "secrets",
+        "required_for_autostart": True,
+    },
+    {
+        "name": "amass",
+        "binary": "amass.exe",
+        "size_bytes": 51906048,
+        "role": "asset_discovery",
+        "required_for_autostart": False,
+    },
+    {
+        "name": "ffuf",
+        "binary": "ffuf.exe",
+        "size_bytes": 14524928,
+        "role": "active_content",
+        "required_for_autostart": False,
+    },
+    {
+        "name": "gobuster",
+        "binary": "gobuster.exe",
+        "size_bytes": 14392320,
+        "role": "active_content",
+        "required_for_autostart": False,
+    },
+    {
+        "name": "mapcidr",
+        "binary": "mapcidr.exe",
+        "size_bytes": 40351744,
+        "role": "scope_planning",
+        "required_for_autostart": True,
+    },
+    {
+        "name": "tlsx",
+        "binary": "tlsx.exe",
+        "size_bytes": 41943552,
+        "role": "tls_fingerprint",
+        "required_for_autostart": False,
+    },
+    {
+        "name": "uncover",
+        "binary": "uncover.exe",
+        "size_bytes": 41236480,
+        "role": "provider_search",
+        "required_for_autostart": False,
+    },
+    {
+        "name": "naabu",
+        "binary": "naabu.exe",
+        "size_bytes": 46626304,
+        "role": "active_ports",
+        "required_for_autostart": False,
+    },
+    {
+        "name": "dnsx",
+        "binary": "dnsx.exe",
+        "size_bytes": 38878208,
+        "role": "dns_enrichment",
+        "required_for_autostart": False,
+    },
+    {
+        "name": "httpx",
+        "binary": "httpx.exe",
+        "size_bytes": 68553728,
+        "role": "http_probe",
+        "required_for_autostart": True,
+    },
+    {
+        "name": "katana",
+        "binary": "katana.exe",
+        "size_bytes": 63511040,
+        "role": "crawler",
+        "required_for_autostart": False,
+    },
+    {
+        "name": "subfinder",
+        "binary": "subfinder.exe",
+        "size_bytes": 39931392,
+        "role": "subdomains",
+        "required_for_autostart": True,
+    },
 )
 
 DEFAULT_AUTOSTART_CONFIG_PATH = Path("imports") / "autostart.local.json"
@@ -1033,6 +1117,7 @@ def _packaged_tool_status(root: Path) -> list[dict[str, Any]]:
                 "name": tool["name"],
                 "binary": tool["binary"],
                 "role": tool["role"],
+                "required_for_autostart": bool(tool.get("required_for_autostart")),
                 "expected_size_bytes": tool["size_bytes"],
                 "path": str(path) if path else "",
                 "available": path is not None,
@@ -1086,6 +1171,8 @@ def _docker_tool_mount_status(root: Path, *, required: bool = False) -> dict[str
             {
                 "name": tool["name"],
                 "binary": tool["binary"],
+                "role": tool["role"],
+                "required_for_autostart": bool(tool.get("required_for_autostart")),
                 "expected_size_bytes": tool["size_bytes"],
                 "path": str(path) if path else "",
                 "available": path is not None,
@@ -1094,20 +1181,36 @@ def _docker_tool_mount_status(root: Path, *, required: bool = False) -> dict[str
             }
         )
     missing = [row["name"] for row in rows if not row["available"]]
+    missing_required = [
+        row["name"]
+        for row in rows
+        if row["required_for_autostart"] and not row["available"]
+    ]
     size_mismatched = [
         row["name"]
         for row in rows
         if row["available"] and not row["size_matches_hint"]
     ]
+    size_mismatched_required = [
+        row["name"]
+        for row in rows
+        if (
+            row["required_for_autostart"]
+            and row["available"]
+            and not row["size_matches_hint"]
+        )
+    ]
     return {
-        "ok": not missing and not size_mismatched,
+        "ok": not missing_required and not size_mismatched_required,
         "required": bool(required),
         "configured_env": "FORGE_HOST_CONNECTOR_BIN_DIR" if configured else "",
         "mount_dir": str(mount_dir),
         "total_count": len(rows),
         "available_count": sum(1 for row in rows if row["available"]),
         "missing": missing,
+        "missing_required": missing_required,
         "size_mismatched": size_mismatched,
+        "size_mismatched_required": size_mismatched_required,
         "tools": rows,
     }
 
@@ -1283,26 +1386,30 @@ def _blockers(
     missing_runtime = [
         row["name"]
         for row in tool_rows
-        if not row["available"] and row["role"] != "developer"
+        if row.get("required_for_autostart") and not row["available"]
     ]
     if missing_runtime:
         blockers.append("missing_packaged_runtime_tools:" + ",".join(missing_runtime))
     mismatched_runtime = [
         row["name"]
         for row in tool_rows
-        if row["available"] and not row["size_matches_hint"] and row["role"] != "developer"
+        if (
+            row.get("required_for_autostart")
+            and row["available"]
+            and not row["size_matches_hint"]
+        )
     ]
     if mismatched_runtime:
         blockers.append("packaged_runtime_tool_size_mismatch:" + ",".join(mismatched_runtime))
     if docker_tool_mount_status["required"]:
-        if docker_tool_mount_status["missing"]:
+        if docker_tool_mount_status["missing_required"]:
             blockers.append(
                 "docker_tool_mount_missing_runtime_tools:"
-                + ",".join(docker_tool_mount_status["missing"])
+                + ",".join(docker_tool_mount_status["missing_required"])
             )
-        if docker_tool_mount_status["size_mismatched"]:
+        if docker_tool_mount_status["size_mismatched_required"]:
             blockers.append(
                 "docker_tool_mount_size_mismatch:"
-                + ",".join(docker_tool_mount_status["size_mismatched"])
+                + ",".join(docker_tool_mount_status["size_mismatched_required"])
             )
     return blockers

@@ -503,6 +503,16 @@ Docker-started autopilot is available as an opt-in Compose profile:
 docker compose -f docker/docker-compose.yml --profile autostart up -d
 ```
 
+Small hosts can review the bounded 1024 MB profile with:
+
+```bash
+docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.yml --profile autostart config
+```
+
+`docker/low-memory.env.example` caps API, web UI, worker, Postgres, Redis, and
+guarded autostart at 960 MiB total. Keep secrets in your normal local env source
+before starting containers.
+
 The `forge-guarded-autostart` service runs a controlled loop with lower default
 caps (`FORGE_AUTOSTART_CPUS=0.25`, `FORGE_AUTOSTART_MEM_LIMIT=1536m`), startup
 delay `FORGE_AUTOSTART_STARTUP_DELAY_SECONDS=300`, cadence

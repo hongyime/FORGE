@@ -111,9 +111,12 @@ def import_discovery_report(
         else []
     )
     item_limit = _normalize_import_limit(config.limit)
-    selected_hosts = imported_hosts[:item_limit]
-    selected_findings = imported_findings[:item_limit]
-    selected_templates = template_inventory[:item_limit]
+    selected_hosts, selected_findings, selected_templates = _select_discovery_items(
+        imported_hosts=imported_hosts,
+        imported_findings=imported_findings,
+        template_inventory=template_inventory,
+        item_limit=item_limit,
+    )
     total_count = len(imported_hosts) + len(imported_findings) + len(template_inventory)
     selected_count = len(selected_hosts) + len(selected_findings) + len(selected_templates)
     omitted_count = max(0, total_count - selected_count)
@@ -295,6 +298,24 @@ def _normalize_import_limit(value: int | None) -> int:
     if limit <= 0:
         return MAX_DISCOVERY_IMPORT_ITEMS
     return min(limit, MAX_DISCOVERY_IMPORT_ITEMS)
+
+
+def _select_discovery_items(
+    *,
+    imported_hosts: list[_ImportedHost],
+    imported_findings: list[dict[str, Any]],
+    template_inventory: list[dict[str, Any]],
+    item_limit: int,
+) -> tuple[list[_ImportedHost], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Spend one import budget across hosts, findings, and templates."""
+
+    remaining = max(0, int(item_limit))
+    selected_hosts = imported_hosts[:remaining]
+    remaining -= len(selected_hosts)
+    selected_findings = imported_findings[:remaining]
+    remaining -= len(selected_findings)
+    selected_templates = template_inventory[:remaining]
+    return selected_hosts, selected_findings, selected_templates
 
 
 def _read_discovery_report_text(path: Path) -> str:

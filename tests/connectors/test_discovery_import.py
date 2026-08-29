@@ -711,6 +711,57 @@ def test_projectdiscovery_cloud_export_imports_assets_findings_and_templates(
     assert "outside.example" not in blob
 
 
+def test_projectdiscovery_cloud_import_limit_caps_total_selected_items(
+    tmp_path: Path,
+) -> None:
+    con = _build_discovery_db(tmp_path / "engagement.db")
+    report = {
+        "assets": [
+            {
+                "ip": f"198.51.100.{80 + index}",
+                "hostnames": [f"edge{index}.acme.example"],
+                "services": [{"port": 443, "protocol": "tcp"}],
+            }
+            for index in range(2)
+        ],
+        "findings": [
+            {
+                "template_id": f"cve-2026-demo-{index}",
+                "matched_at": f"https://edge{index}.acme.example/admin",
+                "severity": "high",
+                "name": "Demo exposed panel",
+            }
+            for index in range(2)
+        ],
+        "templates": [
+            {"id": f"cve-2026-demo-{index}"}
+            for index in range(2)
+        ],
+    }
+
+    try:
+        result = import_discovery_report(
+            con,
+            DiscoveryReportImportConfig(
+                connector_id="projectdiscovery_cloud",
+                engagement_id=1001,
+                target="acme.example",
+                dry_run=True,
+                limit=3,
+            ),
+            report_text=json.dumps(report),
+        )
+    finally:
+        con.close()
+
+    assert result["total_count"] == 6
+    assert result["selected_count"] == 3
+    assert result["omitted_count"] == 3
+    assert result["selected_host_count"] == 2
+    assert result["selected_finding_count"] == 1
+    assert result["selected_template_count"] == 0
+
+
 def test_connector_cli_import_discovery_invokes_importer_with_config(
     tmp_path: Path,
     monkeypatch,
