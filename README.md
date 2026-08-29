@@ -417,7 +417,11 @@ Censys/runZero/asset-delta discovery artifacts, and Burp/JUnit DAST XML
 validation artifacts. Dry-run reports the same `discovered_inputs` and
 `new_discovered_inputs` without writing. This lets the loop grow outward from
 accepted artifacts while keeping live/keyed reads gated until the matching local
-credential or import file exists.
+credential or import file exists. Discovery-artifact next actions are
+dry-run-first and bounded with `--limit 1000`; feed-build JSON also reports
+local import scan caps in `source_scan_limits` and
+`discovered_input_scan_limits` so files omitted after the 200-file safety cap
+are visible.
 To queue a known local input directly without hand-editing those files:
 
 ```powershell

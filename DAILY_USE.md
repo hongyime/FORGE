@@ -111,7 +111,10 @@ ignored queue files such as `imports/threatfox-inputs.local.json`,
 `imports/censys-imports.local.json`, `imports/runzero-imports.local.json`,
 `imports/asset-delta-imports.local.json`, and
 `imports/burp-dast-imports.local.json`, so later runs have durable per-source
-backlogs instead of one-time transient observations.
+backlogs instead of one-time transient observations. Discovery-artifact
+next-actions are dry-run-first and bounded with `--limit 1000`; feed-build JSON
+reports `source_scan_limits` and `discovered_input_scan_limits` so files omitted
+after the 200-file safety cap are visible.
 To add a known local input straight to the correct source queue:
 
 ```powershell

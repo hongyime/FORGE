@@ -27,7 +27,6 @@ from urllib.parse import quote
 
 import httpx
 
-from forge.config import ForgeConfig
 from forge.connectors.secrets import resolve_connector_secret_value
 from forge.db.session import get_engagement_db
 from forge.engagement_ids import numeric_engagement_db_files
@@ -173,28 +172,28 @@ _DISCOVERABLE_INPUT_MARKERS = (
         "connector_id": "projectdiscovery_cloud",
         "status": "pending_local_import",
         "markers": ("projectdiscovery", "pd-cloud", "pd_cloud", "nuclei-cloud"),
-        "next_action": "forge connectors import-discovery --connector projectdiscovery_cloud --report-file <path> --json",
+        "next_action": "forge connectors import-discovery --connector projectdiscovery_cloud --report-file <path> --dry-run --limit 1000 --json",
     },
     {
         "input_kind": "discovery_artifact",
         "connector_id": "asset_delta_import",
         "status": "pending_local_import",
         "markers": ("asset-delta", "asset_delta", "asset delta"),
-        "next_action": "forge connectors import-discovery --connector asset_delta_import --report-file <path> --json",
+        "next_action": "forge connectors import-discovery --connector asset_delta_import --report-file <path> --dry-run --limit 1000 --json",
     },
     {
         "input_kind": "discovery_artifact",
         "connector_id": "runzero_asset_export",
         "status": "pending_local_import",
         "markers": ("runzero", "run0", "rumble"),
-        "next_action": "forge connectors import-discovery --connector runzero_asset_export --report-file <path> --json",
+        "next_action": "forge connectors import-discovery --connector runzero_asset_export --report-file <path> --dry-run --limit 1000 --json",
     },
     {
         "input_kind": "discovery_artifact",
         "connector_id": "censys_lookup",
         "status": "pending_local_import",
         "markers": ("censys",),
-        "next_action": "forge connectors import-discovery --connector censys_lookup --report-file <path> --json",
+        "next_action": "forge connectors import-discovery --connector censys_lookup --report-file <path> --dry-run --limit 1000 --json",
     },
     {
         "input_kind": "validation_artifact",
@@ -595,20 +594,27 @@ def _extract_dir_source(
     provenance_prefix: str,
     first_seen_at: str,
     confidence: float,
-) -> tuple[list[FeedCandidate], list[str]]:
+) -> tuple[list[FeedCandidate], list[str], dict[str, int]]:
     candidates: list[FeedCandidate] = []
     errors: list[str] = []
+    summary = {
+        "scanned_count": 0,
+        "matched_count": 0,
+        "omitted_count": 0,
+        "limit": _MAX_FILES_PER_DIR_SOURCE,
+    }
     if not imports_dir.is_dir():
-        return candidates, errors
+        return candidates, errors, summary
     scanned = 0
     for path in sorted(imports_dir.iterdir()):
-        if scanned >= _MAX_FILES_PER_DIR_SOURCE:
-            break
-        if not path.is_file():
+        if not path.is_file() or not filename_filter(path.name):
             continue
-        if not filename_filter(path.name):
+        if scanned >= _MAX_FILES_PER_DIR_SOURCE:
+            summary["omitted_count"] += 1
             continue
         scanned += 1
+        summary["scanned_count"] = scanned
+        summary["matched_count"] += 1
         source_group = f"{provenance_prefix}{path.name}"
         candidates_for_file, error = _harvest_file_candidates(
             path,
@@ -622,7 +628,7 @@ def _extract_dir_source(
             errors.append(f"{source_kind}_parse:{error}")
             continue
         candidates.extend(candidates_for_file)
-    return candidates, errors
+    return candidates, errors, summary
 
 
 def _all_candidate_keys(groups: dict[str, list[FeedCandidate]]) -> set[str]:
@@ -920,8 +926,14 @@ def _discover_input_registry_items(
     groups: dict[str, list[FeedCandidate]],
     discovered_supabase_projects: list[dict[str, str]],
     imports_dir: Path | None,
-) -> list[dict[str, object]]:
+) -> tuple[list[dict[str, object]], dict[str, int]]:
     discovered: dict[str, dict[str, object]] = {}
+    scan_summary = {
+        "scanned_count": 0,
+        "matched_count": 0,
+        "omitted_count": 0,
+        "limit": _MAX_FILES_PER_DIR_SOURCE,
+    }
     for project in discovered_supabase_projects:
         _add_discovered_input(
             discovered,
@@ -965,15 +977,21 @@ def _discover_input_registry_items(
     if root.is_dir():
         scanned = 0
         for path in sorted(root.iterdir()):
-            if scanned >= _MAX_FILES_PER_DIR_SOURCE:
-                break
             if not path.is_file():
                 continue
             if _is_local_input_control_file(path) or _is_empty_local_json_scaffold(path):
                 continue
+            if scanned >= _MAX_FILES_PER_DIR_SOURCE:
+                if _input_marker_hits(f"{path.name} {path.suffix}"):
+                    scan_summary["omitted_count"] += 1
+                continue
             scanned += 1
+            scan_summary["scanned_count"] = scanned
             haystack = f"{path.name} {path.suffix}"
-            for marker in _input_marker_hits(haystack):
+            marker_hits = _input_marker_hits(haystack)
+            if marker_hits:
+                scan_summary["matched_count"] += 1
+            for marker in marker_hits:
                 _add_discovered_input(
                     discovered,
                     input_kind=str(marker["input_kind"]),
@@ -989,7 +1007,7 @@ def _discover_input_registry_items(
             "source_groups": sorted(str(group) for group in item.get("source_groups", [])),
         }
         for item in sorted(discovered.values(), key=_input_registry_key)
-    ]
+    ], scan_summary
 
 
 def _is_local_input_control_file(path: Path) -> bool:
@@ -1493,7 +1511,7 @@ def _parse_secret_ref(ref: str) -> dict[str, Any] | None:
 def _resolve_supabase_key(
     project: dict[str, Any],
     *,
-    config: ForgeConfig | None = None,
+    data_dir: Path,
 ) -> str:
     key_env = str(project.get("key_env") or "").strip()
     if key_env:
@@ -1505,14 +1523,17 @@ def _resolve_supabase_key(
     parsed = _parse_secret_ref(str(project.get("key_secret_ref") or "").strip())
     if parsed is None:
         raise ValueError("secret_ref_invalid")
-    cfg = config or ForgeConfig.load()
-    with get_engagement_db(parsed["engagement_id"], config=cfg) as con:
+    db_path = Path(data_dir) / "engagements" / f"{parsed['engagement_id']}.db"
+    con = get_engagement_db(db_path)
+    try:
         key_value = resolve_connector_secret_value(
             con,
             engagement_id=parsed["engagement_id"],
             connector_id=parsed["connector_id"],
             secret_name=parsed["secret_name"],
         )
+    finally:
+        con.close()
     if not key_value.strip():
         raise ValueError("secret_ref_empty")
     return key_value.strip()
@@ -1761,6 +1782,8 @@ def _harvest_supabase_row(
 def _extract_supabase_source(
     config_path: Path | None,
     first_seen_at: str,
+    *,
+    data_dir: Path,
 ) -> tuple[list[FeedCandidate], list[str], dict[str, int], list[dict[str, object]]]:
     projects, errors = _load_supabase_projects_config(config_path)
     candidates: list[FeedCandidate] = []
@@ -1771,7 +1794,7 @@ def _extract_supabase_source(
         raw_tables = list(project["tables"])
         columns = list(project["target_columns"])
         try:
-            key_value = _resolve_supabase_key(project)
+            key_value = _resolve_supabase_key(project, data_dir=data_dir)
         except (LookupError, ValueError) as exc:
             errors.append(f"{project_ref}:{exc}")
             discovery_summaries.append(
@@ -1919,6 +1942,7 @@ def build_target_feed(
     groups: dict[str, list[FeedCandidate]] = {name: [] for name in SUPPORTED_SOURCES}
     source_group_counts: dict[str, int] = {}
     source_errors: list[dict[str, str]] = []
+    source_scan_limits: dict[str, dict[str, int]] = {}
     supabase_table_discovery: list[dict[str, object]] = []
 
     if "db" in active_offline:
@@ -1940,7 +1964,7 @@ def build_target_feed(
     cti_dir = imports_dir
     connectors_dir = imports_dir
     if "cti" in active_offline:
-        found, errors = _extract_dir_source(
+        found, errors, scan_summary = _extract_dir_source(
             cti_dir or Path("imports"),
             filename_filter=_is_cti_payload_filename,
             source_kind="cti_observation",
@@ -1949,6 +1973,7 @@ def build_target_feed(
             confidence=0.5,
         )
         groups["cti"] = found
+        source_scan_limits["cti"] = scan_summary
         for candidate in found:
             source_group_counts[candidate.source_group] = (
                 source_group_counts.get(candidate.source_group, 0) + 1
@@ -1956,7 +1981,7 @@ def build_target_feed(
         source_errors.extend({"source": "cti", "error": err} for err in errors)
 
     if "connectors" in active_offline:
-        found, errors = _extract_dir_source(
+        found, errors, scan_summary = _extract_dir_source(
             connectors_dir or Path("imports"),
             filename_filter=_is_connector_payload_filename,
             source_kind="connector_output",
@@ -1965,6 +1990,7 @@ def build_target_feed(
             confidence=0.5,
         )
         groups["connectors"] = found
+        source_scan_limits["connectors"] = scan_summary
         for candidate in found:
             source_group_counts[candidate.source_group] = (
                 source_group_counts.get(candidate.source_group, 0) + 1
@@ -1973,7 +1999,9 @@ def build_target_feed(
 
     if wants_supabase:
         found, errors, supabase_group_counts, supabase_table_discovery = _extract_supabase_source(
-            supabase_config_path, generated_at
+            supabase_config_path,
+            generated_at,
+            data_dir=Path(data_dir),
         )
         groups["supabase"] = found
         source_group_counts.update(supabase_group_counts)
@@ -1986,7 +2014,7 @@ def build_target_feed(
         for project in discovered_supabase_projects
         if project["project_ref"] not in existing_supabase_refs
     ]
-    discovered_inputs = _discover_input_registry_items(
+    discovered_inputs, discovered_input_scan_limits = _discover_input_registry_items(
         groups=groups,
         discovered_supabase_projects=discovered_supabase_projects,
         imports_dir=imports_dir,
@@ -2115,6 +2143,7 @@ def build_target_feed(
         "generated_at": generated_at,
         "counts": counts,
         "source_errors": source_errors,
+        "source_scan_limits": source_scan_limits,
         "supabase_table_discovery": supabase_table_discovery,
         "discovered_supabase_projects": discovered_supabase_projects,
         "new_discovered_supabase_projects": (
@@ -2131,6 +2160,7 @@ def build_target_feed(
             else len(appended_supabase_projects),
         },
         "discovered_inputs": discovered_inputs,
+        "discovered_input_scan_limits": discovered_input_scan_limits,
         "new_discovered_inputs": appended_inputs if apply else new_discovered_inputs,
         "discovered_input_registry_update": {
             "config_path": str(_discovered_inputs_registry_path(imports_dir)),

@@ -251,3 +251,4 @@
 - 2026-08-29: Current supervisor verification after B746 shows live startup is correctly fail-closed only on `free_memory_below_threshold` at 542 MB free against the 1024 MB local gate.
 - 2026-08-29: B747 tightens Supabase secret-store readiness from URI-shape validation to read-only connector-secret metadata existence checks, and registers Supabase read-key names with the connector secret store so documented refs are actionable without decrypting secrets.
 - 2026-08-29: B748 refreshes the autonomous target loop PostPlan draft to version 6 so the public HTML includes Supabase secret-ref metadata verification.
+- 2026-08-29: B749 makes feed-build Supabase secret refs honor the active data dir, reports local input scan-cap omissions, and keeps discovery-artifact next actions dry-run-first with a 1000-item cap.

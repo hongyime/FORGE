@@ -13,6 +13,8 @@ from typer.testing import CliRunner
 import forge.automation_cycle as automation_cycle_module
 from forge.automation_cli import register_automation_commands
 from forge.automation_target_feed import build_target_feed
+from forge.connectors.secrets import store_connector_secret
+from forge.db.session import get_engagement_db
 
 
 app = typer.Typer()
@@ -1508,6 +1510,18 @@ def test_feed_build_dry_run_reports_discovered_input_registry_without_write(
         "runzero_asset_export",
         "runzero-assets.csv",
     ) in discovered
+    next_actions = {
+        (item["connector_id"], item["value"]): item["next_action"]
+        for item in payload["discovered_inputs"]
+    }
+    assert next_actions[("projectdiscovery_cloud", "pd-cloud-export.json")] == (
+        "forge connectors import-discovery --connector projectdiscovery_cloud "
+        "--report-file <path> --dry-run --limit 1000 --json"
+    )
+    assert next_actions[("runzero_asset_export", "runzero-assets.csv")] == (
+        "forge connectors import-discovery --connector runzero_asset_export "
+        "--report-file <path> --dry-run --limit 1000 --json"
+    )
     assert payload["discovered_input_registry_update"] == {
         "config_path": str(imports_dir / "discovered-inputs.local.json"),
         "applied": False,
@@ -1604,6 +1618,48 @@ def test_feed_build_apply_appends_discovered_input_registry(
         for item in specific["inputs"]
     ] == ["threatfox-observations.local.json"]
     assert payload["counts"]["by_source"]["connectors"] == 0
+
+
+def test_feed_build_reports_omitted_local_input_files_after_scan_cap(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    for index in range(205):
+        (imports_dir / f"pd-cloud-{index:03}.json").write_text(
+            json.dumps({"assets": [{"host": f"host-{index}.example"}]}),
+            encoding="utf-8",
+        )
+
+    payload = build_target_feed(
+        sources=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+        apply=False,
+        supabase_config_path=imports_dir / "supabase-projects.local.json",
+    )
+
+    assert payload["source_scan_limits"]["connectors"] == {
+        "scanned_count": 200,
+        "matched_count": 200,
+        "omitted_count": 5,
+        "limit": 200,
+    }
+    assert payload["discovered_input_scan_limits"] == {
+        "scanned_count": 200,
+        "matched_count": 200,
+        "omitted_count": 5,
+        "limit": 200,
+    }
+    discovered_pd = [
+        item
+        for item in payload["discovered_inputs"]
+        if item["connector_id"] == "projectdiscovery_cloud"
+    ]
+    assert len(discovered_pd) == 200
 
 
 def test_feed_build_apply_writes_source_specific_input_registries(
@@ -1756,6 +1812,92 @@ def test_feed_build_supabase_selects_configured_columns_with_env_key(
         item["source_group"] == "supabase:abc123:targets"
         for item in payload["items"]
     )
+
+
+def test_feed_build_supabase_secret_ref_uses_selected_data_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data_dir = tmp_path / "selected-data"
+    monkeypatch.setenv("FORGE_ENGAGEMENT_KEY", "0123456789abcdef0123456789abcdef")
+    con = get_engagement_db(data_dir / "engagements" / "1001.db")
+    try:
+        con.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (1001, 'Supabase Feed Secret', '["abc123.supabase.co"]', 'ACTIVE', 'unit')
+            """
+        )
+        store_connector_secret(
+            con,
+            engagement_id=1001,
+            connector_id="supabase_table_import",
+            secret_name="READ_KEY",
+            secret_value="selected-data-read-key",
+            secret_ref="env:FORGE_SUPABASE_PROJECT_READ_KEY",
+            operator="unit-test",
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    observed: dict[str, object] = {}
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> list[dict[str, str]]:
+            return [{"domain": "SecretRef.Example"}]
+
+    def _fake_get(url: str, *, headers: dict[str, str], timeout: float) -> _Response:
+        observed["url"] = url
+        observed["headers"] = headers
+        observed["timeout"] = timeout
+        return _Response()
+
+    config = tmp_path / "imports" / "supabase-projects.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "projects": [
+                    {
+                        "project_ref": "abc123",
+                        "url": "https://abc123.supabase.co",
+                        "key_secret_ref": (
+                            "forge-secret://1001/supabase_table_import/READ_KEY"
+                        ),
+                        "tables": ["targets"],
+                        "target_columns": ["domain"],
+                        "limit": 2,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("forge.automation_target_feed.httpx.get", _fake_get)
+
+    payload = build_target_feed(
+        sources=["supabase"],
+        data_dir=data_dir,
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+        supabase_config_path=config,
+    )
+
+    assert observed["headers"] == {
+        "apikey": "selected-data-read-key",
+        "Authorization": "Bearer selected-data-read-key",
+        "Accept": "application/json",
+    }
+    assert observed["url"] == (
+        "https://abc123.supabase.co/rest/v1/targets?select=domain&limit=2&offset=0"
+    )
+    assert payload["source_errors"] == []
+    assert payload["items"][0]["canonical_value"] == "secretref.example"
 
 
 def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
