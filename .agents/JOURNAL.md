@@ -230,3 +230,4 @@
 - 2026-08-29: B727 adds an outer timeout to the Docker guarded-autostart loop so a hung cycle cannot suppress later guarded attempts.
 - 2026-08-29: B728 standardizes monitoring-due automation summaries with total/selected/omitted count aliases while preserving existing due-plan fields.
 - 2026-08-29: B729 adds URLhaus as a free-keyed public CTI refresh provider and makes CTI readiness report both ThreatFox and URLhaus without exposing Auth-Key material.
+- 2026-08-29: B730 adds a read-only automation limits command so operators can inspect active resource/run/provider caps without parsing defaults or status payloads.

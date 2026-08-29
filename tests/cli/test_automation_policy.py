@@ -9,6 +9,7 @@ from forge.automation_cli import register_automation_commands
 from forge.automation_policy import (
     approved_local_path,
     automation_defaults_review,
+    automation_limits_review,
     automation_run_plan,
     command_surface_review,
     forge_automation_policy,
@@ -91,6 +92,7 @@ def test_automation_command_review_reports_pressure_and_recommendations() -> Non
     daily = {item["id"]: item for item in payload["daily_use_layer"]}
     assert {
         "automation_defaults",
+        "automation_limits",
         "automation",
         "automation_status",
         "doctor",
@@ -101,6 +103,7 @@ def test_automation_command_review_reports_pressure_and_recommendations() -> Non
     }.issubset(daily)
     assert daily["automation"]["base_command"] == "forge automation cycle"
     assert daily["automation_status"]["base_command"] == "forge automation status"
+    assert daily["automation_limits"]["base_command"] == "forge automation limits"
     assert daily["doctor"]["documentation_status"] == "documented"
     assert payload["daily_use_status"]["status"] == "complete"
     assert payload["daily_use_status"]["documented_count"] == len(daily)
@@ -161,6 +164,50 @@ def test_automation_defaults_review_exposes_tunable_free_first_options() -> None
     ]
 
 
+def test_automation_limits_review_exposes_effective_limits(tmp_path) -> None:
+    config = tmp_path / "autostart.local.json"
+    config.write_text(
+        json.dumps(
+            {
+                "min_free_memory_mb": 1024,
+                "resume_limit": 25,
+                "max_parallel": 4,
+                "monitor_limit": 25,
+                "queue_limit": 10,
+                "start_limit": 5,
+                "min_start_source_count": 2,
+                "feed_sources": ["all"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = automation_limits_review(
+        autostart_defaults=DEFAULT_AUTOSTART_CONFIG,
+        autostart_config_path=str(config),
+    )
+
+    assert payload["schema_version"] == "forge.automation_limits_review.v1"
+    assert payload["execution_policy"] == "read_only_limits_no_commands_executed"
+    assert payload["status"] == "ready"
+    assert payload["autostart_config_exists"] is True
+    assert payload["autostart_config_source"] == "local_config"
+    assert payload["total_count"] == payload["selected_count"]
+    limits = {item["id"]: item for item in payload["limits"]}
+    assert limits["memory_gate"]["value"] == 1024
+    assert limits["resume_limit"]["value"] == 25
+    assert limits["max_parallel"]["value"] == 4
+    assert limits["monitor_limit"]["value"] == 25
+    assert limits["start_limit"]["value"] == 5
+    assert limits["min_start_source_count"]["value"] == 2
+    assert limits["feed_sources"]["value"] == ["all"]
+    assert limits["target_feed_import_cap"]["value"] == 100000
+    assert limits["monitoring_default_execution_limit"]["value"] == 50
+    assert limits["connector_max_result_limit"]["value"] == 5000
+    assert limits["openrouter_mode"]["value"] == "free_only"
+    assert limits["docker_autostart_timeout_seconds"]["value"] == 9000
+
+
 def test_automation_cli_json_commands() -> None:
     app = typer.Typer()
     automation_app = typer.Typer()
@@ -188,6 +235,11 @@ def test_automation_cli_json_commands() -> None:
     assert defaults_result.exit_code == 0, defaults_result.output
     defaults_payload = json.loads(defaults_result.output)
     assert defaults_payload["schema_version"] == "forge.automation_defaults_review.v1"
+
+    limits_result = runner.invoke(app, ["automation", "limits", "--json"])
+    assert limits_result.exit_code == 0, limits_result.output
+    limits_payload = json.loads(limits_result.output)
+    assert limits_payload["schema_version"] == "forge.automation_limits_review.v1"
     assert defaults_payload["autostart"]["config_path"] == "imports\\autostart.local.json"
 
     status_result = runner.invoke(

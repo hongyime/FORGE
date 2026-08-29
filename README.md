@@ -266,6 +266,7 @@ forge automation policy [--json]          # Show the operator-approved wildcard 
 forge automation run [--apply] [--json]   # Emit the automation execution plan; records apply intent without launching live actions
 forge automation command-review [--json]  # Read-only command count and consolidation review
 forge automation defaults [--json]        # Read-only tunable defaults, presets, and disabled local config template
+forge automation limits [--json]          # Read-only effective resource/run/provider limits
 forge automation status [--engagement N] [--json]  # Read-only feed, queue, blocker, and next-action status
 forge automation cycle [--apply] [--live] [--queue-limit N] [--docker-probe-mode host-compose|compose-dependency|disabled] [--engagement N] [--json]  # Daily feed, queue, and optional guarded live loop
 forge automation feed-build [--output imports/target-feed.json] [--apply] [--json] [--source all|supabase|reports|db|cti|connectors] [--supabase-config PATH] [--limit N]

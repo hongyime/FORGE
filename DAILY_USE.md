@@ -39,6 +39,7 @@ forge doctor --fix-safe --json
 forge automation feed-build --json
 forge automation feed-build --apply --json
 forge automation defaults --json
+forge automation limits --json
 forge automation self-heal-plan --json
 forge automation cycle --live --json
 forge automation guarded-autostart --json   # lower-level guard probe

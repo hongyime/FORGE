@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 import warnings
 from collections import Counter, defaultdict
@@ -11,11 +12,17 @@ SCHEMA_VERSION = "forge.automation_policy.v1"
 PLAN_SCHEMA_VERSION = "forge.automation_run_plan.v1"
 COMMAND_REVIEW_SCHEMA_VERSION = "forge.command_surface_review.v1"
 DEFAULTS_REVIEW_SCHEMA_VERSION = "forge.automation_defaults_review.v1"
+LIMITS_REVIEW_SCHEMA_VERSION = "forge.automation_limits_review.v1"
 DAILY_USE_LAYER: tuple[dict[str, str], ...] = (
     {
         "id": "automation_defaults",
         "command": "forge automation defaults --json",
         "purpose": "Expose free-first defaults and operator-tunable startup/profile options.",
+    },
+    {
+        "id": "automation_limits",
+        "command": "forge automation limits --json",
+        "purpose": "Expose effective run/resource/provider limits without running automation.",
     },
     {
         "id": "automation",
@@ -281,6 +288,98 @@ def automation_defaults_review(
             "paid_backends_default": "disabled",
             "secret_values_returned": False,
         },
+    }
+
+
+def automation_limits_review(
+    *,
+    autostart_defaults: dict[str, Any],
+    autostart_config_path: str,
+) -> dict[str, Any]:
+    config_path = Path(autostart_config_path)
+    config_source = "defaults"
+    config_errors: list[str] = []
+    config = dict(autostart_defaults)
+    if config_path.is_file():
+        try:
+            raw_payload = json.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            config_errors.append(f"autostart_config_unreadable:{type(exc).__name__}")
+        else:
+            if isinstance(raw_payload, dict):
+                for key in autostart_defaults:
+                    if key in raw_payload:
+                        config[key] = raw_payload[key]
+                config_source = "local_config"
+            else:
+                config_errors.append("autostart_config_invalid:not_object")
+    limits = [
+        _limit_item("memory_gate", config.get("min_free_memory_mb"), "MB", config_source),
+        _limit_item("disk_gate", config.get("min_free_disk_gb"), "GB", config_source),
+        _limit_item("resume_limit", config.get("resume_limit"), "runs", config_source),
+        _limit_item("max_parallel", config.get("max_parallel"), "workers", config_source),
+        _limit_item("monitor_limit", config.get("monitor_limit"), "policies", config_source),
+        _limit_item("queue_limit", config.get("queue_limit"), "inputs", config_source),
+        _limit_item("start_limit", config.get("start_limit"), "targets", config_source),
+        _limit_item(
+            "min_start_source_count",
+            config.get("min_start_source_count"),
+            "sources",
+            config_source,
+        ),
+        _limit_item(
+            "max_runtime_minutes",
+            config.get("max_runtime_minutes"),
+            "minutes_per_target",
+            config_source,
+        ),
+        _limit_item("cooldown_minutes", config.get("cooldown_minutes"), "minutes", config_source),
+        _limit_item(
+            "failure_backoff_minutes",
+            config.get("failure_backoff_minutes"),
+            "minutes",
+            config_source,
+        ),
+        _limit_item("log_max_entries", config.get("log_max_entries"), "entries", config_source),
+        _limit_item("feed_sources", config.get("feed_sources"), "sources", config_source),
+        _limit_item("docker_probe_mode", config.get("docker_probe_mode"), "mode", config_source),
+        _limit_item("target_feed_import_cap", 100000, "items", "hard_cap"),
+        _limit_item("monitoring_default_execution_limit", 50, "policies", "hard_cap"),
+        _limit_item("connector_max_result_limit", 5000, "results", "hard_cap"),
+        _limit_item("openrouter_mode", "free_only", "mode", "default"),
+        _limit_item("docker_container_cpus_default", "0.75", "cpus", "compose_default"),
+        _limit_item("docker_container_mem_limit_default", "768m", "memory", "compose_default"),
+        _limit_item("docker_autostart_cpus_default", "0.25", "cpus", "compose_default"),
+        _limit_item("docker_autostart_mem_limit_default", "1536m", "memory", "compose_default"),
+        _limit_item("docker_autostart_timeout_seconds", 9000, "seconds", "compose_default"),
+        _limit_item("docker_autostart_every_seconds", 9300, "seconds", "compose_default"),
+    ]
+    return {
+        "schema_version": LIMITS_REVIEW_SCHEMA_VERSION,
+        "execution_policy": "read_only_limits_no_commands_executed",
+        "status": "ready" if not config_errors else "attention",
+        "total_count": len(limits),
+        "selected_count": len(limits),
+        "omitted_count": 0,
+        "autostart_config_path": str(config_path),
+        "autostart_config_exists": config_path.is_file(),
+        "autostart_config_source": config_source,
+        "config_errors": config_errors,
+        "limits": limits,
+        "commands": {
+            "review_limits": ["forge", "automation", "limits", "--json"],
+            "review_defaults": ["forge", "automation", "defaults", "--json"],
+            "review_status": ["forge", "automation", "status", "--json"],
+        },
+    }
+
+
+def _limit_item(id: str, value: Any, unit: str, source: str) -> dict[str, Any]:
+    return {
+        "id": id,
+        "value": value,
+        "unit": unit,
+        "source": source,
     }
 
 

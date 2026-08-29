@@ -14,6 +14,7 @@ from forge.automation_cycle import (
     refresh_public_cti_input,
 )
 from forge.automation_policy import (
+    automation_limits_review,
     automation_defaults_review,
     automation_run_plan,
     command_surface_review,
@@ -99,6 +100,29 @@ def register_automation_commands(app: typer.Typer) -> None:
         console.print(f"autostart_config={payload['autostart']['config_path']}")
         for item in payload["tunables"]:
             console.print(f"- {item['id']}: default={item.get('default')}")
+
+    @app.command("limits")
+    def limits(
+        json_output: bool = typer.Option(False, "--json"),
+        autostart_config: Path = typer.Option(
+            DEFAULT_AUTOSTART_CONFIG_PATH,
+            "--autostart-config",
+            help="Local autostart config to read for effective limits.",
+        ),
+    ) -> None:
+        payload = automation_limits_review(
+            autostart_defaults=DEFAULT_AUTOSTART_CONFIG,
+            autostart_config_path=str(autostart_config),
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, sort_keys=True))
+            return
+        console.print(
+            "[bold]Automation limits[/bold] "
+            f"status={payload['status']} source={payload['autostart_config_source']}"
+        )
+        for item in payload["limits"]:
+            console.print(f"- {item['id']}: {item.get('value')} {item.get('unit')}")
 
     @app.command("status")
     def status(
