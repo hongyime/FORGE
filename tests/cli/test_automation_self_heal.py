@@ -623,6 +623,46 @@ def test_guarded_autostart_env_can_lower_container_memory_gate(
     assert "free_memory_below_threshold" not in payload["blockers"]
 
 
+def test_guarded_autostart_dry_run_does_not_enumerate_secret_env(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(json.dumps({"enabled": True, "apply_enabled": True}), encoding="utf-8")
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 8192)
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "gopls", "binary": "gopls.exe", "size_bytes": 1, "role": "developer"},),
+    )
+    monkeypatch.setattr(
+        "forge.automation_self_heal._docker_status",
+        lambda _root, *, probe, mode="host_compose": {
+            "ok": True,
+            "probed": probe,
+            "reason": "docker_compose_ps_ok",
+        },
+    )
+
+    def fail_if_called(_config: dict) -> tuple[str, ...]:
+        raise AssertionError("dry-run status path should not enumerate secret-like env vars")
+
+    monkeypatch.setattr(
+        "forge.automation_self_heal._autostart_sensitive_values",
+        fail_if_called,
+    )
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["status"] == "ready"
+    assert payload["runs"] == []
+
+
 def test_guarded_autostart_propagates_configured_feed_sources(
     tmp_path: Path,
     monkeypatch,

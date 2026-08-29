@@ -121,6 +121,7 @@ def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
     assert 'FORGE_AUTOSTART_STARTUP_DELAY_SECONDS: "${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"' in compose
     assert 'FORGE_AUTOSTART_TIMEOUT_SECONDS: "${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}"' in compose
     assert 'FORGE_AUTOSTART_EVERY_SECONDS: "${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"' in compose
+    assert 'FORGE_AUTOSTART_MIN_FREE_MEMORY_MB: "${FORGE_AUTOSTART_MIN_FREE_MEMORY_MB:-1024}"' in compose
     assert "../imports:/app/imports:rw" in compose
     assert "../reports:/app/reports:rw" in compose
     assert "${FORGE_HOST_CONNECTOR_BIN_DIR:-../tools/bin}:/app/tools/bin:ro" in compose

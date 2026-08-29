@@ -372,7 +372,6 @@ def run_guarded_autostart(
         config=config,
         skip_feed_build=skip_feed_build,
     )
-    sensitive_values = _autostart_sensitive_values(config)
     result: dict[str, Any] = {
         "schema_version": GUARDED_AUTOSTART_SCHEMA_VERSION,
         "execution_policy": (
@@ -401,6 +400,7 @@ def run_guarded_autostart(
     }
     if blockers or not apply or preflight_only:
         if apply and (blockers or not preflight_only):
+            sensitive_values = _autostart_sensitive_values(config)
             if blockers:
                 _write_autostart_state(
                     state_file,
@@ -419,6 +419,7 @@ def run_guarded_autostart(
         return result
 
     state_dir.mkdir(parents=True, exist_ok=True)
+    sensitive_values = _autostart_sensitive_values(config)
     try:
         _write_lock(lock_file, now)
     except FileExistsError:
