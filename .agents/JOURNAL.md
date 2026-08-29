@@ -256,3 +256,5 @@
 - 2026-08-29 11:03:21 +08:00 [PRAWN-E14/codex/session-start] branch=main head=991b1d7 dirty=5
 
 - 2026-08-29 B751: Autopilot dry-run is intentionally fully non-mutating: it may rehearse target import/start without ROE, but skips dashboard refresh because dashboard generation writes local artifacts; apply mode still requires ROE before live phases.
+
+- 2026-08-29 B752: Refreshed the autonomous target loop PostPlan draft to version 7 so the public HTML includes feed-input readiness, live autostart preflight hardening, and autopilot dry-run non-mutating behavior.
