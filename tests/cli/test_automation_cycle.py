@@ -2036,6 +2036,75 @@ def test_automation_cycle_live_reuses_built_feed_without_guarded_rebuild(
     assert payload["autostart"]["commands"]["autopilot_dry_run"][1] == "--skip-feed-build"
 
 
+def test_automation_cycle_apply_live_blocks_before_feed_and_queue_when_resources_low(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    config = imports_dir / "autostart.local.json"
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": True,
+                "failure_backoff_minutes": 0,
+                "cooldown_minutes": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (imports_dir / "pd-cloud-export.json").write_text("{}", encoding="utf-8")
+    (imports_dir / "projectdiscovery-cloud-imports.local.json").write_text(
+        json.dumps({"inputs": [{"value": "pd-cloud-export.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_ROE_ID", "ROE-TEST")
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 128)
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "gopls", "binary": "gopls.exe", "size_bytes": 1, "role": "developer"},),
+    )
+    monkeypatch.setattr(
+        "forge.automation_self_heal._docker_status",
+        lambda _root, *, probe, mode="host_compose": {
+            "ok": True,
+            "probed": probe,
+            "reason": "docker_compose_ps_ok",
+        },
+    )
+    monkeypatch.setattr(
+        automation_cycle_module,
+        "build_target_feed",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("feed build ran")),
+    )
+
+    def _runner(_command: list[str], _cwd: Path) -> dict:
+        raise AssertionError("queue command ran")
+
+    payload = automation_cycle(
+        apply=True,
+        live=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        autostart_config=config,
+        command_runner=_runner,
+    )
+
+    assert payload["status"] == "blocked"
+    assert payload["execution_policy"] == "blocked_live_preflight_no_feed_or_queue_writes"
+    assert payload["feed_written"] is False
+    assert payload["queue_runs"] == []
+    assert "free_memory_below_threshold" in payload["autostart"]["blockers"]
+    assert not (imports_dir / "target-feed.json").exists()
+
+
 def test_automation_cycle_live_status_reports_guarded_blocker(
     tmp_path: Path,
     monkeypatch,
@@ -2130,8 +2199,8 @@ def test_automation_cycle_live_consumes_ready_queue_before_guarded_autostart(
         events.append("queue")
         return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
 
-    def fake_guarded_autostart(**_kwargs):
-        events.append("guarded")
+    def fake_guarded_autostart(**kwargs):
+        events.append("guarded_preflight" if kwargs.get("preflight_only") else "guarded")
         return {
             "schema_version": "forge.automation_guarded_autostart.v1",
             "status": "ready",
@@ -2162,7 +2231,7 @@ def test_automation_cycle_live_consumes_ready_queue_before_guarded_autostart(
     assert payload["status"] == "live_ready"
     assert [run["status"] for run in payload["queue_runs"]] == ["completed"]
     assert payload["autostart"]["status"] == "ready"
-    assert events == ["queue", "guarded"]
+    assert events == ["guarded_preflight", "queue", "guarded"]
     queue = json.loads(queue_path.read_text(encoding="utf-8"))
     assert queue["inputs"][0]["status"] == "imported"
 
@@ -2225,7 +2294,7 @@ def test_automation_cycle_rebuilds_feed_after_successful_queue_import_before_liv
         return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
 
     def fake_guarded_autostart(**kwargs):
-        events.append("guarded")
+        events.append("guarded_preflight" if kwargs.get("preflight_only") else "guarded")
         assert kwargs["skip_feed_build"] is True
         return {
             "schema_version": "forge.automation_guarded_autostart.v1",
@@ -2256,7 +2325,7 @@ def test_automation_cycle_rebuilds_feed_after_successful_queue_import_before_liv
         command_runner=_runner,
     )
 
-    assert events == ["feed", "write", "queue", "feed", "write", "guarded"]
+    assert events == ["guarded_preflight", "feed", "write", "queue", "feed", "write", "guarded"]
     assert payload["status"] == "live_ready"
     assert payload["feed_rebuilt_after_queue_imports"] is True
     assert payload["feed"]["counts"]["selected"] == 2
@@ -2318,7 +2387,7 @@ def test_automation_cycle_consumes_feed_build_created_queue_before_live(
         return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
 
     def fake_guarded_autostart(**kwargs):
-        events.append("guarded")
+        events.append("guarded_preflight" if kwargs.get("preflight_only") else "guarded")
         assert kwargs["skip_feed_build"] is True
         return {
             "schema_version": "forge.automation_guarded_autostart.v1",
@@ -2349,7 +2418,7 @@ def test_automation_cycle_consumes_feed_build_created_queue_before_live(
         command_runner=_runner,
     )
 
-    assert events == ["feed", "write", "queue", "feed", "write", "guarded"]
+    assert events == ["guarded_preflight", "feed", "write", "queue", "feed", "write", "guarded"]
     assert payload["status"] == "live_ready"
     assert payload["queue_runs"][0]["connector_id"] == "projectdiscovery_cloud"
     assert payload["feed_rebuilt_after_queue_imports"] is True

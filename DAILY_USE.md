@@ -182,9 +182,11 @@ docker compose --env-file docker/low-memory.env.example -f docker/docker-compose
 ```
 
 That example caps API, web UI, worker, Postgres, Redis, and guarded autostart at
-960 MiB total. `forge automation limits --json` reports the same low-memory
-profile fields and review command. Provide secrets through your normal local
-env source before starting containers.
+960 MiB total, and lowers the container-local guarded-autostart memory gate to
+128 MB so a 256 MiB autostart container does not block itself forever.
+`forge automation limits --json` reports the same low-memory profile fields and
+review command. Provide secrets through your normal local env source before
+starting containers.
 
 The extra `forge-guarded-autostart` service runs a controlled loop with lower
 default caps (`FORGE_AUTOSTART_CPUS=0.25`,
@@ -194,10 +196,12 @@ default caps (`FORGE_AUTOSTART_CPUS=0.25`,
 `FORGE_AUTOSTART_TIMEOUT_SECONDS=9000`, while the guarded Forge memory gate
 remains `1024` MB. The timeout prevents a hung cycle from blocking later
 guarded attempts. It enters through
-`forge automation cycle --apply --live`, so it classifies inbox drops, consumes
-ready source queues, and then still requires `FORGE_ROE_ID`, local
-`imports/autostart.local.json`, Docker/resource health, cooldown/backoff, and a
-free lock before live target/resume/monitoring work. It mounts ignored `tools/bin/` into
+`forge automation cycle --apply --live`, so it runs a guarded preflight,
+classifies inbox drops, consumes ready source queues, and then still requires
+`FORGE_ROE_ID`, local `imports/autostart.local.json`, Docker/resource health,
+cooldown/backoff, and a free lock before live target/resume/monitoring work.
+Guarded autostart records blocked apply attempts in failure-backoff state and
+rechecks memory/Docker health after dry-run before live apply. It mounts ignored `tools/bin/` into
 `/app/tools/bin` by default; set `FORGE_HOST_CONNECTOR_BIN_DIR` if your
 ProjectDiscovery/Go binaries live somewhere else.
 

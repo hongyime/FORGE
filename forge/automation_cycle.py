@@ -239,6 +239,31 @@ def automation_cycle(
     )
     queue_import_item_limit = _autostart_queue_import_item_limit(selected_autostart_config)
     queue_promote_targets = _autostart_queue_promote_targets(selected_autostart_config)
+    if apply and live:
+        preflight = run_guarded_autostart(
+            config_path=selected_autostart_config,
+            data_dir=Path(cfg_data_dir),
+            apply=True,
+            skip_feed_build=True,
+            docker_probe_mode=docker_probe_mode,
+            preflight_only=True,
+        )
+        if str(preflight.get("status") or "") == "blocked":
+            return _blocked_live_cycle_preflight_payload(
+                apply=apply,
+                live=live,
+                feed_output=feed_output,
+                imports_dir=root_imports,
+                reports_dir=reports_dir or Path("reports"),
+                data_dir=Path(cfg_data_dir),
+                engagement=engagement,
+                effective_engagement=effective_engagement,
+                selected_queue_limit=selected_queue_limit,
+                queue_import_item_limit=queue_import_item_limit,
+                queue_promote_targets=queue_promote_targets,
+                min_start_source_count=min_start_source_count,
+                preflight=preflight,
+            )
     feed_payload = build_target_feed(
         sources=sources,
         data_dir=Path(cfg_data_dir),
@@ -390,6 +415,106 @@ def automation_cycle(
         "selected_count": (1 if feed_written else 0)
         + sum(1 for item in queue_runs if item["status"] in {"completed", "planned"}),
         "omitted_count": len(blocked_items) + len(ignored_items) + len(deferred_ready_items),
+    }
+
+
+def _blocked_live_cycle_preflight_payload(
+    *,
+    apply: bool,
+    live: bool,
+    feed_output: Path,
+    imports_dir: Path,
+    reports_dir: Path,
+    data_dir: Path,
+    engagement: int | None,
+    effective_engagement: int | None,
+    selected_queue_limit: int,
+    queue_import_item_limit: int,
+    queue_promote_targets: bool,
+    min_start_source_count: int,
+    preflight: dict[str, Any],
+) -> dict[str, Any]:
+    empty_counts = {
+        "total": 0,
+        "selected": 0,
+        "selected_existing_preserved": 0,
+        "selected_from_current_sources": 0,
+        "selected_includes_existing": False,
+        "existing_feed_items": 0,
+        "generated_candidate_total": 0,
+        "generated_unique_candidate_total": 0,
+        "omitted_duplicate": 0,
+        "omitted_by_limit": 0,
+        "new_vs_existing": 0,
+        "by_source": {"db": 0, "reports": 0, "cti": 0, "connectors": 0, "supabase": 0},
+        "by_source_group": {},
+        "per_group": {},
+    }
+    queue_items = _load_queue_items(imports_dir)
+    cti_refresh = _cti_refresh_readiness(
+        imports_dir=imports_dir,
+        engagement=effective_engagement,
+    )
+    supabase_sync = _supabase_sync_readiness(
+        config_path=imports_dir / "supabase-projects.local.json",
+        data_dir=data_dir,
+    )
+    return {
+        "schema_version": AUTOMATION_CYCLE_SCHEMA_VERSION,
+        "execution_policy": "blocked_live_preflight_no_feed_or_queue_writes",
+        "status": "blocked",
+        "apply_requested": bool(apply),
+        "live_requested": bool(live),
+        "generated_at": _now_iso(),
+        "feed_written": False,
+        "feed_rebuilt_after_queue_imports": False,
+        "feed": {
+            "output": str(feed_output),
+            "counts": empty_counts,
+            "source_errors": [],
+            "discovered_input_registry_update": {},
+            "source_input_registry_updates": [],
+        },
+        "target_feed_scan": _target_feed_scan_summary(
+            feed_path=feed_output,
+            min_start_source_count=min_start_source_count,
+        ),
+        "autostart_history": _autostart_history_summary(
+            data_dir=data_dir,
+            autostart_config=imports_dir / "autostart.local.json",
+        ),
+        "cti_refresh": cti_refresh,
+        "supabase_sync": supabase_sync,
+        "resume_backlog": _quick_skipped_summary("resume_backlog"),
+        "monitoring_due": _quick_skipped_summary("monitoring_due"),
+        "report_review": _quick_skipped_summary("report_review"),
+        "inbox": {"applied": False, "classified_count": 0},
+        "queues": _queue_summary(queue_items, [], [], []),
+        "queue_execution": {
+            "queue_limit": selected_queue_limit,
+            "import_item_limit": queue_import_item_limit,
+            "promote_targets": queue_promote_targets,
+            "ready_count": 0,
+            "selected_count": 0,
+            "deferred_count": 0,
+            "execution_order": "priority_desc_then_connector_then_value",
+        },
+        "engagement": {
+            "explicit": engagement,
+            "effective": effective_engagement,
+            "env": DEFAULT_ENGAGEMENT_ENV,
+        },
+        "scan_policy": _scan_policy(min_start_source_count=min_start_source_count),
+        "ready_inputs": [],
+        "selected_ready_inputs": [],
+        "deferred_ready_inputs": [],
+        "blocked_inputs": [],
+        "ignored_inputs": [],
+        "queue_runs": [],
+        "autostart": preflight,
+        "total_count": 1 + len(queue_items) + (1 if live else 0),
+        "selected_count": 0,
+        "omitted_count": len(queue_items) + (1 if live else 0),
     }
 
 

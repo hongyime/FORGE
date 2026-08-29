@@ -523,9 +523,11 @@ docker compose --env-file docker/low-memory.env.example -f docker/docker-compose
 ```
 
 `docker/low-memory.env.example` caps API, web UI, worker, Postgres, Redis, and
-guarded autostart at 960 MiB total. `forge automation limits --json` reports
-the same low-memory profile fields and review command. Keep secrets in your
-normal local env source before starting containers.
+guarded autostart at 960 MiB total, and lowers the container-local autostart
+memory gate to 128 MB so a 256 MiB guarded-autostart container does not block
+itself forever. `forge automation limits --json` reports the same low-memory
+profile fields and review command. Keep secrets in your normal local env source
+before starting containers.
 
 The `forge-guarded-autostart` service runs a controlled loop with lower default
 caps (`FORGE_AUTOSTART_CPUS=0.25`, `FORGE_AUTOSTART_MEM_LIMIT=1536m`), startup
@@ -536,9 +538,10 @@ defaults to `1024` MB. The timeout keeps a hung container cycle from blocking
 future guarded attempts. It reads
 `/app/imports/autostart.local.json`, enters through
 `forge automation cycle --apply --live`, and only writes through the mounted
-`imports/`, `reports/`, and `/data` paths. That means Docker startup consumes
-ready local source queues before guarded-autostart launches target import,
-resume, monitoring, or dashboard work. Local Go scanner binaries should be
+`imports/`, `reports/`, and `/data` paths. That means Docker startup runs a
+guarded preflight, then consumes ready local source queues before
+guarded-autostart launches target import, resume, monitoring, or dashboard work.
+Local Go scanner binaries should be
 placed in ignored `tools/bin/` or mounted by setting
 `FORGE_HOST_CONNECTOR_BIN_DIR`; the container sees them at `/app/tools/bin`,
 which the self-heal probe checks before live startup. Docker health inside this

@@ -298,6 +298,7 @@ def run_guarded_autostart(
     skip_feed_build: bool = False,
     docker_probe_mode: str | None = None,
     command_runner: Any | None = None,
+    preflight_only: bool = False,
 ) -> dict[str, Any]:
     root = Path(repo_root or Path.cwd())
     cfg_data_dir = data_dir or ForgeConfig.load().data_dir
@@ -392,13 +393,23 @@ def run_guarded_autostart(
         "commands": commands,
         "blockers": blockers,
         "status": "blocked" if blockers else "ready",
+        "preflight_only": bool(preflight_only),
         "runs": [],
         "total_count": len(commands),
         "selected_count": 0,
         "omitted_count": len(commands),
     }
-    if blockers or not apply:
-        if apply:
+    if blockers or not apply or preflight_only:
+        if apply and (blockers or not preflight_only):
+            if blockers:
+                _write_autostart_state(
+                    state_file,
+                    {
+                        "last_failed_at": _iso(now),
+                        "last_status": "blocked",
+                        "last_blockers": blockers,
+                    },
+                )
             _append_autostart_log(
                 log_file,
                 result,
@@ -439,6 +450,37 @@ def run_guarded_autostart(
             _write_autostart_state(
                 state_file,
                 {"last_failed_at": _iso(now), "last_status": "dry_run_failed"},
+            )
+            return result
+        live_self_heal = automation_self_heal_plan(
+            repo_root=root,
+            data_dir=cfg_data_dir,
+            min_free_memory_mb=int(config["min_free_memory_mb"]),
+            min_free_disk_gb=int(config["min_free_disk_gb"]),
+            max_parallel=int(config["max_parallel"]),
+            probe_docker=True,
+            docker_probe_mode=str(config["docker_probe_mode"]),
+        )
+        result["live_preflight_self_heal"] = live_self_heal
+        live_blockers = [str(item) for item in live_self_heal["blockers"]]
+        if live_blockers:
+            result["blockers"].extend(live_blockers)
+            result["status"] = "blocked"
+            result["selected_count"] = len(result["runs"])
+            result["omitted_count"] = max(0, len(commands) - len(result["runs"]))
+            _write_autostart_state(
+                state_file,
+                {
+                    "last_failed_at": _iso(now),
+                    "last_status": "blocked",
+                    "last_blockers": live_blockers,
+                },
+            )
+            _append_autostart_log(
+                log_file,
+                result,
+                max_entries=int(config["log_max_entries"]),
+                redactions=sensitive_values,
             )
             return result
         live = runner(_execution_command(commands["autopilot_apply"], config), root)
@@ -566,8 +608,20 @@ def _load_autostart_config(config_path: Path) -> tuple[dict[str, Any], list[str]
     for key in DEFAULT_AUTOSTART_CONFIG:
         if key in payload:
             config[key] = payload[key]
+    _apply_autostart_env_overrides(config)
     errors = _validate_autostart_config(config)
     return config, errors
+
+
+def _apply_autostart_env_overrides(config: dict[str, Any]) -> None:
+    overrides = {
+        "min_free_memory_mb": "FORGE_AUTOSTART_MIN_FREE_MEMORY_MB",
+        "min_free_disk_gb": "FORGE_AUTOSTART_MIN_FREE_DISK_GB",
+    }
+    for key, env_name in overrides.items():
+        value = os.environ.get(env_name, "").strip()
+        if value:
+            config[key] = value
 
 
 def _validate_autostart_config(config: dict[str, Any]) -> list[str]:

@@ -587,6 +587,42 @@ def test_guarded_autostart_apply_requires_config_apply_enabled(
     assert payload["runs"] == []
 
 
+def test_guarded_autostart_env_can_lower_container_memory_gate(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps({"enabled": True, "apply_enabled": False, "min_free_memory_mb": 1024}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_AUTOSTART_MIN_FREE_MEMORY_MB", "128")
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 256)
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "gopls", "binary": "gopls.exe", "size_bytes": 1, "role": "developer"},),
+    )
+    monkeypatch.setattr(
+        "forge.automation_self_heal._docker_status",
+        lambda _root, *, probe, mode="host_compose": {
+            "ok": True,
+            "probed": probe,
+            "reason": "docker_compose_ps_ok",
+        },
+    )
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+    )
+
+    assert payload["config"]["min_free_memory_mb"] == 128
+    assert payload["self_heal"]["resource_status"]["memory"]["minimum_mb"] == 128
+    assert "free_memory_below_threshold" not in payload["blockers"]
+
+
 def test_guarded_autostart_propagates_configured_feed_sources(
     tmp_path: Path,
     monkeypatch,
@@ -857,6 +893,65 @@ def test_guarded_autostart_apply_requires_roe_id_env(tmp_path: Path, monkeypatch
     assert payload["runs"] == []
 
 
+def test_guarded_autostart_blocked_apply_records_failure_backoff(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": True,
+                "failure_backoff_minutes": 60,
+                "cooldown_minutes": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_ROE_ID", "ROE-TEST")
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: 128)
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "gopls", "binary": "gopls.exe", "size_bytes": 1, "role": "developer"},),
+    )
+    monkeypatch.setattr(
+        "forge.automation_self_heal._docker_status",
+        lambda _root, *, probe, mode="host_compose": {
+            "ok": True,
+            "probed": probe,
+            "reason": "docker_compose_ps_ok",
+        },
+    )
+    data_dir = tmp_path / "data"
+
+    first = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=data_dir,
+        apply=True,
+    )
+    second = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=data_dir,
+        apply=True,
+    )
+
+    state = json.loads(
+        (data_dir / "automation" / "guarded-autostart-state.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert first["status"] == "blocked"
+    assert "free_memory_below_threshold" in first["blockers"]
+    assert state["last_status"] == "blocked"
+    assert state["last_failed_at"]
+    assert "failure_backoff_active" in second["blockers"]
+    assert second["runs"] == []
+
+
 def test_guarded_autostart_redacts_roe_id_from_command_plan(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -982,6 +1077,62 @@ def test_guarded_autostart_replaces_stale_dead_pid_lock(
     assert payload["lock_status"]["reason"] == "dead_pid"
     assert payload["lock_status"]["breakable"] is True
     assert not lock_file.exists()
+
+
+def test_guarded_autostart_rechecks_memory_before_live_apply(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config = tmp_path / "imports" / "autostart.local.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "apply_enabled": True,
+                "cooldown_minutes": 0,
+                "failure_backoff_minutes": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    memory_values = iter([8192, 128])
+    monkeypatch.setenv("FORGE_ROE_ID", "ROE-TEST")
+    monkeypatch.setattr("forge.automation_self_heal._free_memory_mb", lambda: next(memory_values))
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        ({"name": "gopls", "binary": "gopls.exe", "size_bytes": 1, "role": "developer"},),
+    )
+    monkeypatch.setattr(
+        "forge.automation_self_heal._docker_status",
+        lambda _root, *, probe, mode="host_compose": {
+            "ok": True,
+            "probed": probe,
+            "reason": "docker_compose_ps_ok",
+        },
+    )
+    commands: list[list[str]] = []
+
+    def _runner(command: list[str], _cwd: Path) -> dict:
+        commands.append(command)
+        return {"returncode": 0, "stdout_tail": "", "stderr_tail": ""}
+
+    payload = run_guarded_autostart(
+        config_path=config,
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+        apply=True,
+        command_runner=_runner,
+    )
+
+    assert payload["status"] == "blocked"
+    assert [run["id"] for run in payload["runs"]] == ["autopilot_dry_run"]
+    assert len(commands) == 1
+    assert commands[0][0].endswith("forge-autopilot.bat") or commands[0][0].endswith(
+        "forge-autopilot.sh"
+    )
+    assert "free_memory_below_threshold" in payload["blockers"]
+    assert payload["live_preflight_self_heal"]["resource_status"]["memory"]["free_mb"] == 128
 
 
 def test_guarded_autostart_uses_configured_stale_lock_minutes(
