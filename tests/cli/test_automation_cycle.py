@@ -85,6 +85,11 @@ def test_automation_status_reports_ready_and_blocked_queue_items(tmp_path: Path)
     assert payload["queues"]["total"] == 2
     assert payload["queues"]["ready"] == 1
     assert payload["queues"]["blocked"] == 1
+    assert payload["queues"]["ignored"] == 0
+    assert payload["queues"]["total_count"] == 2
+    assert payload["queues"]["ready_count"] == 1
+    assert payload["queues"]["blocked_count"] == 1
+    assert payload["queues"]["ignored_count"] == 0
     assert payload["scan_policy"]["multi_source_target_threshold"] == 2
     assert payload["ready_inputs"][0]["command"][:6] == [
         "forge",

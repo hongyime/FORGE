@@ -652,6 +652,55 @@ def test_guarded_autostart_can_skip_feed_build_for_parent_cycle(
     assert "--feed-source" not in dry_run
 
 
+def test_guarded_autostart_skip_feed_build_queue_aliases(tmp_path: Path) -> None:
+    payload = self_heal._direct_source_queue_status(
+        root=tmp_path,
+        config=self_heal.DEFAULT_AUTOSTART_CONFIG,
+        skip_feed_build=True,
+    )
+
+    assert payload["checked"] is False
+    assert payload["reason"] == "skip_feed_build"
+    assert payload["total"] == 0
+    assert payload["ready"] == 0
+    assert payload["blocked"] == 0
+    assert payload["ignored"] == 0
+    assert payload["total_count"] == 0
+    assert payload["ready_count"] == 0
+    assert payload["blocked_count"] == 0
+    assert payload["ignored_count"] == 0
+
+
+def test_guarded_autostart_unavailable_queue_aliases(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import forge.automation_cycle as automation_cycle
+
+    monkeypatch.setattr(
+        automation_cycle,
+        "_load_queue_items",
+        lambda _imports_dir: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    payload = self_heal._direct_source_queue_status(
+        root=tmp_path,
+        config=self_heal.DEFAULT_AUTOSTART_CONFIG,
+        skip_feed_build=False,
+    )
+
+    assert payload["checked"] is False
+    assert payload["reason"] == "queue_status_unavailable:RuntimeError"
+    assert payload["total"] == 0
+    assert payload["ready"] == 0
+    assert payload["blocked"] == 0
+    assert payload["ignored"] == 0
+    assert payload["total_count"] == 0
+    assert payload["ready_count"] == 0
+    assert payload["blocked_count"] == 0
+    assert payload["ignored_count"] == 0
+
+
 def test_guarded_autostart_propagates_min_start_source_count(
     tmp_path: Path,
     monkeypatch,
