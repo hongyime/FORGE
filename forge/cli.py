@@ -513,6 +513,12 @@ def kill_chain(
     # bypassed; every module still validates targets against the manifest.
     prime_kill_chain_attack_mode_env(runtime_options)
     module_timeout_seconds = _module_subprocess_timeout_seconds()
+    phone_fanout_batch_limit = _cli_int_env(
+        "FORGE_PHONE_FANOUT_BATCH_LIMIT",
+        10,
+        minimum=0,
+        maximum=100,
+    )
     identity_lookup_workers = _identity_lookup_max_workers()
     validation_workers = _validation_max_workers()
     artifact_processor_worker_cap = _artifact_processor_max_workers()
@@ -8075,6 +8081,7 @@ def kill_chain(
         already: set[str],
         *,
         normalizer: Optional[Callable[[str], str]] = None,
+        row_scan_limit: int | None = None,
         max_workers: int = 1,
         progress_label: str | None = None,
         progress_callback: Callable[[str, dict[str, object]], None] | None = None,
@@ -8089,8 +8096,13 @@ def kill_chain(
         con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
         try:
             try:
+                limit_sql = ""
+                params: tuple[object, ...] = (engagement_id, seed_type)
+                if row_scan_limit is not None:
+                    limit_sql = "LIMIT ?"
+                    params = (engagement_id, seed_type, max(0, int(row_scan_limit)))
                 rows = con.execute(
-                    """
+                    f"""
                     SELECT id, seed_value, COALESCE(source, ''), COALESCE(depth, 0)
                     FROM engagement_seeds
                     WHERE engagement_id=?
@@ -8106,8 +8118,9 @@ def kill_chain(
                         ELSE 9
                       END ASC,
                       id ASC
+                    {limit_sql}
                     """,
-                    (engagement_id, seed_type),
+                    params,
                 ).fetchall()
             except _sq.OperationalError:
                 return []
@@ -11206,9 +11219,15 @@ def kill_chain(
         # ─── Fan-out L: phone-seed recursive invocation ───────────────
         # Runs on operator-provided phone seeds and any newly-synthesised
         # phone pivots discovered later in the loop.
+        phone_row_scan_limit = (
+            max(100, phone_fanout_batch_limit * 20)
+            if phone_fanout_batch_limit > 0
+            else 0
+        )
         pending_phone_seed_rows = _load_prioritized_seed_rows(
             "phone",
             processed_phone_seeds,
+            row_scan_limit=phone_row_scan_limit,
             max_workers=parallel_workers,
             progress_label=f"{iteration}.L phone seed load prep",
             progress_callback=_record_batch_progress,
@@ -11224,7 +11243,17 @@ def kill_chain(
         )
         pending_phone_seeds = [seed_value for seed_value, _depth in pending_phone_seed_rows]
         if pending_phone_seeds:
-            phone_schedule_inputs = list(pending_phone_seeds)
+            omitted_phone_seeds = max(0, len(pending_phone_seeds) - phone_fanout_batch_limit)
+            phone_schedule_inputs = list(pending_phone_seeds[:phone_fanout_batch_limit])
+            if omitted_phone_seeds:
+                _log(
+                    f"{iteration}.L phone fan-out cap",
+                    (
+                        f"[dim]scheduled {len(phone_schedule_inputs)} of "
+                        f"{len(pending_phone_seeds)} prefetched phone seed(s); "
+                        f"omitted={omitted_phone_seeds} limit={phone_fanout_batch_limit}[/dim]"
+                    ),
+                )
             if len(phone_schedule_inputs) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.L phone schedule prep",
