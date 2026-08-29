@@ -247,3 +247,4 @@
 - 2026-08-29: B743 exposes the 960 MiB Docker low-memory autostart profile through automation limits so operators can review 1024 MB startup caps from the daily CLI.
 - 2026-08-29: B744 refreshes the autonomous target loop PostPlan draft to version 4 so the public HTML includes the low-memory limits checkpoint.
 - 2026-08-29: B745 makes Supabase status honor valid Forge connector-secret references as configured credentials while keeping secret resolution inside feed-build.
+- 2026-08-29: B746 refreshes the autonomous target loop PostPlan draft to version 5 so the public HTML includes Supabase secret-store readiness.
