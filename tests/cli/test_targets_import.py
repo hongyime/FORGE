@@ -2079,6 +2079,52 @@ def test_start_treats_exit_two_with_completed_db_run_as_success(
     assert results[0].started is True
 
 
+def test_start_treats_timeout_with_completed_db_run_as_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+
+    def _fake_run(command: list[str], **_: object) -> object:
+        db_path = cfg.engagement_db_path("1")
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                """
+                INSERT INTO engagement_runs
+                    (engagement_id, run_kind, status, seed_value, seed_type)
+                VALUES (1, 'kill_chain', 'completed', 'example.com', 'domain')
+                """
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return subprocess.CompletedProcess(
+            command,
+            124,
+            stdout="Kill-chain complete in 1200.0s\n",
+            stderr="target import child exceeded timeout_seconds=1320",
+        )
+
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert results[0].started is True
+
+
 def test_start_keeps_real_kill_chain_cli_exit_two_as_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

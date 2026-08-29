@@ -284,3 +284,5 @@
 - 2026-08-29: Autonomous phone fan-out must dispatch only strong phone candidates; weak date-like or impossible phone seeds are recorded as skipped seed-runs and marked processed instead of invoking `osint phone`.
 - 2026-08-29 18:54:49 +08:00 [PRAWN-E14/claude/session-start] branch=main head=97a5f12 dirty=0
 - 2026-08-29: Optional post-report prerequisite auto-runs must have a shorter timeout than general module children; labels beginning `prereq:` now use `FORGE_PREREQ_SUBPROCESS_TIMEOUT_SECONDS` defaulting to 120 seconds.
+- 2026-08-29: Target import should not fail a live cycle just because the kill-chain wrapper exits nonzero after the engagement DB already records the matching run as completed.
+- 2026-08-29 19:36:35 +08:00 [PRAWN-E14/claude/session-start] branch=main head=05f0d8d dirty=0

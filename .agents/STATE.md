@@ -3,6 +3,7 @@
 Current task: streamline autonomous live-safe daily operation around `forge automation cycle`, local input queues, and safe startup gates.
 
 Progress:
+- Completed B767 locally on 2026-08-29: target-import parent handling now treats any nonzero `kill-chain` child exit as successful when the engagement DB already confirms the matching kill-chain run completed. This covers hard child timeout cleanup after report/prereq closeout without failing the full autonomous cycle. Verification passed: focused target-import timeout/completed-run regressions plus helper and phone regressions (`8 passed`, existing sqlite timestamp warnings only), Ruff, `py_compile`, `git diff --check`, process-tree check, and pasted-key fragment scan showing only existing dummy test strings.
 - Completed B766 locally on 2026-08-29: the next user-approved live cycle completed target `138.221.222.159` / engagement `1008` through report timeout and template fallback, then stayed alive in post-report prerequisite auto-run (`prereq: cloud aws (Module 4)`) past the target runtime boundary. The over-time process tree was stopped. Optional prerequisite module children now use `FORGE_PREREQ_SUBPROCESS_TIMEOUT_SECONDS` (default 120 seconds, bounded 30..3600) when labels start with `prereq:`, so follow-on helpers fail closed instead of holding the hands-off loop. Verification passed: focused helper/prereq/phone regressions (`6 passed`), Ruff, `py_compile`, `git diff --check`, process-tree check, and pasted-key fragment scan showing only existing dummy test strings.
 - Completed B765 locally on 2026-08-29: user-approved hands-off live start exposed another phone fan-out guard gap. Engagement `1007` (`danbibleonys.taplink.ws`) reached `3.L phone fan-out (+17052023)` and stayed past the configured target runtime window; the active process tree was stopped to protect the host. Autonomous phone fan-out now requires E.164-like candidates, rejects impossible `phonenumbers` values and short NANP values, records weak candidates as skipped seed-runs, and marks them processed so future cycles do not redispatch them. Verification passed: focused live-branch phone regression plus subprocess timeout regressions (`8 passed`), Ruff, `py_compile`, `git diff --check`, process-tree check, and pasted-key fragment scan showing only existing dummy test strings.
 - In progress B764 on 2026-08-29: latest committed live run with B762/B763 returned instead of hanging, but still reported `live_failed` after target `wowcircle.com` / engagement `1006`; monitoring completed 25 due policies and the remaining stderr was an unhandled Windows `FileNotFoundError` from a subprocess launch path outside `_run_forge_module_subprocess`. `forge.subprocess_tree.run_contained_subprocess` now catches `OSError` from `subprocess.Popen` and returns a normal `CompletedProcess` with return code `127`, matching module-subprocess behavior. Verification passed: `tests\core\test_subprocess_tree.py` plus `tests\core\test_cli_helper_timeouts.py` (`6 passed`), Ruff on touched files, and `py_compile` for touched Forge modules. The previous live runs left engagements `1004`, `1005`, and `1006` marked running/stopped by operator/watchdog and should be treated as resume candidates rather than active processes.
@@ -463,12 +464,12 @@ Next steps:
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-08-29 18:54:49 +08:00
+- Updated: 2026-08-29 19:36:35 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: session-start
 - Branch: main
-- HEAD: 97a5f12
+- HEAD: 05f0d8d
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->

@@ -943,13 +943,13 @@ def _start_kill_chain(
     if proc.returncode == 0:
         return
     combined_output = f"{proc.stdout or ''}\n{proc.stderr or ''}"
-    if proc.returncode == 2 and "Kill-chain complete" in combined_output and "Report:" in combined_output:
-        return
-    if proc.returncode == 2 and _completed_kill_chain_run(
+    if _completed_kill_chain_run(
         engagement_db_path,
         engagement_id=engagement_id,
         seed=seed,
     ):
+        return
+    if proc.returncode == 2 and "Kill-chain complete" in combined_output and "Report:" in combined_output:
         return
     raise subprocess.CalledProcessError(
         proc.returncode,
