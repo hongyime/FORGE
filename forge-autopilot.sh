@@ -137,16 +137,19 @@ fi
 if [ "$SKIP_IMPORT" -ne 1 ]; then
     if [ ! -f "$FEED_FILE" ]; then
         printf '[IMPORT] skipped: feed file not found: %s\n' "$FEED_FILE"
-    elif [ -z "$ROE_ID" ]; then
+    elif [ -z "$ROE_ID" ] && [ "$DRY_RUN" -ne 1 ]; then
         printf '[IMPORT] skipped: --roe-id or FORGE_ROE_ID is required to start imported targets.\n'
         EXIT_CODE=1
     else
         printf '[IMPORT] importing target feed and starting new targets...\n'
-        set -- targets import --feed-file "$FEED_FILE" --roe-id "$ROE_ID" \
+        set -- targets import --feed-file "$FEED_FILE" \
             --limit "$LIMIT" --max-iter "$MAX_ITER" \
             --max-runtime-minutes "$MAX_RUNTIME_MINUTES" \
             --start-limit "$START_LIMIT" \
             --min-start-source-count "$MIN_START_SOURCE_COUNT" --start --json
+        if [ -n "$ROE_ID" ]; then
+            set -- "$@" --roe-id "$ROE_ID"
+        fi
         if [ "$DRY_RUN" -eq 1 ]; then
             set -- "$@" --dry-run
         fi
@@ -173,7 +176,9 @@ if [ "$SKIP_MONITORING" -ne 1 ]; then
     "$FORGE_PYTHON" -m forge.cli "$@" || EXIT_CODE=$?
 fi
 
-if [ "$SKIP_DASHBOARD" -ne 1 ]; then
+if [ "$SKIP_DASHBOARD" -ne 1 ] && [ "$DRY_RUN" -eq 1 ]; then
+    printf '\n[DASHBOARD] skipped in dry-run mode to avoid local writes.\n'
+elif [ "$SKIP_DASHBOARD" -ne 1 ]; then
     printf '\n[DASHBOARD] refreshing local dashboard...\n'
     "$FORGE_PYTHON" -m forge.cli dashboard || EXIT_CODE=$?
 fi

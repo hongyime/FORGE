@@ -153,9 +153,9 @@ if not "%DRY_RUN%"=="1" if "%ROE_ID%"=="" (
 if "%FEED_BUILD%"=="0" goto import_phase
 echo [FEED] building target feed...
 if "%DRY_RUN%"=="1" (
-    "%PYTHON%" -m forge.cli automation feed-build --output "%FEED_FILE%" %FEED_SOURCE_ARGS% --json
+    call "%PYTHON%" -m forge.cli automation feed-build --output "%FEED_FILE%" %FEED_SOURCE_ARGS% --json
 ) else (
-    "%PYTHON%" -m forge.cli automation feed-build --output "%FEED_FILE%" %FEED_SOURCE_ARGS% --apply --json
+    call "%PYTHON%" -m forge.cli automation feed-build --output "%FEED_FILE%" %FEED_SOURCE_ARGS% --apply --json
 )
 if errorlevel 1 (
     set "EXIT_CODE=%errorlevel%"
@@ -171,16 +171,20 @@ if not exist "%FEED_FILE%" (
     echo [IMPORT] skipped: feed file not found: %FEED_FILE%
     goto resume_phase
 )
-if "%ROE_ID%"=="" (
+if "%ROE_ID%"=="" if not "%DRY_RUN%"=="1" (
     echo [IMPORT] skipped: --roe-id or FORGE_ROE_ID is required to start imported targets.
     set "EXIT_CODE=1"
     goto resume_phase
 )
 echo [IMPORT] importing target feed and starting new targets...
 if "%DRY_RUN%"=="1" (
-    "%PYTHON%" -m forge.cli targets import --feed-file "%FEED_FILE%" --roe-id "%ROE_ID%" --limit "%LIMIT%" --max-iter "%MAX_ITER%" --max-runtime-minutes "%MAX_RUNTIME_MINUTES%" --start-limit "%START_LIMIT%" --min-start-source-count "%MIN_START_SOURCE_COUNT%" --start --dry-run --json
+    if "%ROE_ID%"=="" (
+        call "%PYTHON%" -m forge.cli targets import --feed-file "%FEED_FILE%" --limit "%LIMIT%" --max-iter "%MAX_ITER%" --max-runtime-minutes "%MAX_RUNTIME_MINUTES%" --start-limit "%START_LIMIT%" --min-start-source-count "%MIN_START_SOURCE_COUNT%" --start --dry-run --json
+    ) else (
+        call "%PYTHON%" -m forge.cli targets import --feed-file "%FEED_FILE%" --roe-id "%ROE_ID%" --limit "%LIMIT%" --max-iter "%MAX_ITER%" --max-runtime-minutes "%MAX_RUNTIME_MINUTES%" --start-limit "%START_LIMIT%" --min-start-source-count "%MIN_START_SOURCE_COUNT%" --start --dry-run --json
+    )
 ) else (
-    "%PYTHON%" -m forge.cli targets import --feed-file "%FEED_FILE%" --roe-id "%ROE_ID%" --limit "%LIMIT%" --max-iter "%MAX_ITER%" --max-runtime-minutes "%MAX_RUNTIME_MINUTES%" --start-limit "%START_LIMIT%" --min-start-source-count "%MIN_START_SOURCE_COUNT%" --start --json
+    call "%PYTHON%" -m forge.cli targets import --feed-file "%FEED_FILE%" --roe-id "%ROE_ID%" --limit "%LIMIT%" --max-iter "%MAX_ITER%" --max-runtime-minutes "%MAX_RUNTIME_MINUTES%" --start-limit "%START_LIMIT%" --min-start-source-count "%MIN_START_SOURCE_COUNT%" --start --json
 )
 if errorlevel 1 set "EXIT_CODE=%errorlevel%"
 
@@ -189,9 +193,9 @@ if "%SKIP_RESUME%"=="1" goto monitoring_phase
 echo.
 echo [RESUME] resuming ready paused/failed runs...
 if "%DRY_RUN%"=="1" (
-    "%PYTHON%" -m forge.cli targets resume-run --dry-run --json --limit "%RESUME_LIMIT%" --break-stale-lock --max-parallel "%MAX_PARALLEL%" --continue-on-failure
+    call "%PYTHON%" -m forge.cli targets resume-run --dry-run --json --limit "%RESUME_LIMIT%" --break-stale-lock --max-parallel "%MAX_PARALLEL%" --continue-on-failure
 ) else (
-    "%PYTHON%" -m forge.cli targets resume-run --json --limit "%RESUME_LIMIT%" --break-stale-lock --max-parallel "%MAX_PARALLEL%" --continue-on-failure
+    call "%PYTHON%" -m forge.cli targets resume-run --json --limit "%RESUME_LIMIT%" --break-stale-lock --max-parallel "%MAX_PARALLEL%" --continue-on-failure
 )
 if errorlevel 1 set "EXIT_CODE=%errorlevel%"
 
@@ -200,17 +204,22 @@ if "%SKIP_MONITORING%"=="1" goto dashboard_phase
 echo.
 echo [MONITORING] applying due monitoring batch...
 if "%DRY_RUN%"=="1" (
-    "%PYTHON%" -m forge.cli monitoring run-due --dry-run --limit "%MONITOR_LIMIT%" --json
+    call "%PYTHON%" -m forge.cli monitoring run-due --dry-run --limit "%MONITOR_LIMIT%" --json
 ) else (
-    "%PYTHON%" -m forge.cli monitoring run-due --limit "%MONITOR_LIMIT%" --json
+    call "%PYTHON%" -m forge.cli monitoring run-due --limit "%MONITOR_LIMIT%" --json
 )
 if errorlevel 1 set "EXIT_CODE=%errorlevel%"
 
 :dashboard_phase
 if "%SKIP_DASHBOARD%"=="1" goto done
+if "%DRY_RUN%"=="1" (
+    echo.
+    echo [DASHBOARD] skipped in dry-run mode to avoid local writes.
+    goto done
+)
 echo.
 echo [DASHBOARD] refreshing local dashboard...
-"%PYTHON%" -m forge.cli dashboard
+call "%PYTHON%" -m forge.cli dashboard
 if errorlevel 1 set "EXIT_CODE=%errorlevel%"
 
 :done

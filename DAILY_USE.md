@@ -9,7 +9,7 @@ Single-page operator cheatsheet.
 | Windows | macOS/Linux | Action |
 |---|---|---|
 | `start_toolkit.bat` | `./start_toolkit.sh` | Top menu (recommended) |
-| `forge-autopilot.bat` | `./forge-autopilot.sh` | Build/import target feed, start new targets, resume backlog, run monitoring, refresh dashboard |
+| `forge-autopilot.bat` | `./forge-autopilot.sh` | Build/import target feed, start new targets, resume backlog, run monitoring, refresh dashboard in apply mode |
 | `forge-kill-chain.bat` | `./forge-kill-chain.sh` | Interactive kill-chain (prompts for every option) |
 | `forge-menu.bat` | `./forge-menu.sh` | Direct TUI |
 | `forge-status.bat` | `./forge-status.sh` | Health check |
@@ -17,8 +17,9 @@ Single-page operator cheatsheet.
 
 All launcher files set `FORGE_NO_TOR=1` (skips Tor bootstrap — 10× speedup).
 
-Autopilot order is feed-build -> target import/start -> resume backlog ->
-monitoring -> dashboard. Rehearse the full non-mutating loop with:
+Autopilot apply order is feed-build -> target import/start -> resume backlog ->
+monitoring -> dashboard. Dry-run rehearses feed/import/resume/monitoring,
+allows `--start` without ROE, and skips dashboard refresh to avoid local writes:
 
 ```text
 forge-autopilot.bat --dry-run --feed-build
@@ -163,8 +164,9 @@ lower-level dry-run/read-only guard and only runs bounded autopilot with
 `--apply` when
 ignored local `imports/autostart.local.json` explicitly has `enabled: true` and
 `apply_enabled: true`. Stale or dead-PID guarded-autostart locks are replaced
-in apply mode, active locks block, launcher banners hide ROE values, and the
-production Compose file includes conservative CPU/RAM caps. Apply-mode
+in apply mode, active locks block, dry-run launchers skip dashboard writes,
+launcher banners hide ROE values, and the production Compose file includes
+conservative CPU/RAM caps. Apply-mode
 guarded-autostart writes a bounded redacted JSONL history under the Forge data
 dir; dry-run remains non-mutating. Docker probes summarize container
 state/health and block unhealthy startup.

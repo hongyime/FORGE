@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import shutil
@@ -59,6 +60,15 @@ def test_autopilot_launcher_runs_start_resume_monitor_dashboard() -> None:
     assert "--dry-run" in text
     assert "roe_id_present" in text
     assert "echo   roe_id=%roe_id%" not in text
+
+
+def test_autopilot_windows_launcher_success_phase_order() -> None:
+    text = _read_launcher("forge-autopilot.bat")
+
+    assert text.index("[feed] building target feed") < text.index("[import] importing target feed")
+    assert text.index("[import] importing target feed") < text.index("[resume] resuming ready")
+    assert text.index("[resume] resuming ready") < text.index("[monitoring] applying due")
+    assert text.index("[monitoring] applying due") < text.index("[dashboard] refreshing")
 
 
 def test_autopilot_windows_launcher_defaults_to_dry_run_and_fails_fast_on_feed_apply() -> None:
@@ -169,6 +179,59 @@ def test_autopilot_windows_apply_stops_after_feed_build_failure(tmp_path: Path) 
     assert "targets import" not in "\n".join(calls)
     assert "targets resume-run" not in "\n".join(calls)
     assert "monitoring run-due" not in "\n".join(calls)
+
+
+def test_autopilot_windows_dry_run_without_roe_rehearses_order_and_skips_dashboard(
+    tmp_path: Path,
+) -> None:
+    if sys.platform != "win32":
+        pytest.skip("cmd launcher behavior is Windows-specific")
+
+    launcher = tmp_path / "forge-autopilot.bat"
+    launcher.write_text(
+        (REPO_ROOT / "forge-autopilot.bat").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    imports = tmp_path / "imports"
+    imports.mkdir()
+    (imports / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python_log = tmp_path / "python.log"
+    (bin_dir / "python.bat").write_text(
+        f"@echo off\r\necho %*>>\"{python_log}\"\r\nexit /b 0\r\n",
+        encoding="utf-8",
+    )
+    (bin_dir / "forge.bat").write_text("@echo off\r\nexit /b 0\r\n", encoding="utf-8")
+
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env.pop("FORGE_ROE_ID", None)
+    result = subprocess.run(
+        ["cmd", "/c", str(launcher), "--skip-feed-build"],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+
+    calls = python_log.read_text(encoding="utf-8").lower().splitlines()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert len(calls) == 3
+    assert "targets import" in calls[0]
+    assert "--start --dry-run" in calls[0]
+    assert "--roe-id" not in calls[0]
+    assert "targets resume-run" in calls[1]
+    assert "--dry-run" in calls[1]
+    assert "monitoring run-due" in calls[2]
+    assert "--dry-run" in calls[2]
+    assert "dashboard" not in "\n".join(calls)
+    assert "skipped in dry-run mode" in result.stdout.lower()
 
 
 def test_powershell_stack_helper_uses_docker_compose_dev_file() -> None:

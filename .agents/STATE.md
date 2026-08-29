@@ -467,3 +467,7 @@ Next steps:
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
+
+- In progress B751 on 2026-08-29: completing Bohr launcher/end-to-end audit gaps. Target import dry-run start now permits missing ROE, autopilot dry-run skips dashboard writes, and launcher tests are being expanded to prove dry-run order without ROE. No live apply/provider/scanner/Docker mutation/secret persistence has been started.
+
+- Completed B751 locally on 2026-08-29: closed Bohr's autopilot launcher audit gaps. `targets import --start --dry-run` no longer requires ROE, Windows/POSIX autopilot dry-run rehearses import/resume/monitoring without ROE, dry-run dashboard refresh is skipped to avoid local writes, and Windows batch phase calls use `call` so PATH batch shims return to the launcher. Verification: focused autopilot/import tests passed (`4 passed, 1 skipped`), broader launcher/import suite passed except one unrelated PowerShell watchdog self-test timed out once then passed on rerun, Ruff, `py_compile`, `git diff --check`, and pasted-key fragment scan. No live provider/API call, scanner execution, target import/start apply, resume-run apply, monitoring apply, Docker mutation, scheduled-task mutation, ticket/webhook write, secret decrypt, or credential persistence was executed for this slice.

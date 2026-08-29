@@ -123,6 +123,15 @@ def test_autopilot_posix_launcher_runs_start_resume_monitor_dashboard() -> None:
     assert "roe_id=%s" not in text
 
 
+def test_autopilot_posix_launcher_success_phase_order() -> None:
+    text = _read_launcher("forge-autopilot.sh").lower()
+
+    assert text.index("[feed] building target feed") < text.index("[import] importing target feed")
+    assert text.index("[import] importing target feed") < text.index("[resume] resuming ready")
+    assert text.index("[resume] resuming ready") < text.index("[monitoring] applying due")
+    assert text.index("[monitoring] applying due") < text.index("[dashboard] refreshing")
+
+
 def test_autopilot_posix_launcher_defaults_to_dry_run_and_fails_fast_on_feed_apply() -> None:
     text = _read_launcher("forge-autopilot.sh")
 
@@ -224,3 +233,65 @@ def test_autopilot_posix_apply_stops_after_feed_build_failure(tmp_path: Path) ->
     assert "automation feed-build" in commands
     assert "targets resume-run" not in commands
     assert "monitoring run-due" not in commands
+
+
+def test_autopilot_posix_dry_run_without_roe_rehearses_order_and_skips_dashboard(
+    tmp_path: Path,
+) -> None:
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is not installed")
+    if os.name == "nt" and "system32" in str(Path(bash).parent).lower():
+        pytest.skip("WSL bash cannot execute Windows temp launcher paths")
+
+    launcher = tmp_path / "forge-autopilot.sh"
+    launcher.write_text(_read_launcher("forge-autopilot.sh"), encoding="utf-8")
+    launcher.chmod(0o755)
+    imports = tmp_path / "imports"
+    imports.mkdir()
+    (imports / "target-feed.json").write_text(
+        '{"schema_version":"target-feed.v1","items":[]}',
+        encoding="utf-8",
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "commands.log"
+    fake_python = bin_dir / "python"
+    fake_python3 = bin_dir / "python3"
+    fake_python.write_text(
+        f"#!/usr/bin/env sh\nprintf '%s\\n' \"$*\" >> '{log.as_posix()}'\nexit 0\n",
+        encoding="utf-8",
+    )
+    fake_python3.write_text(fake_python.read_text(encoding="utf-8"), encoding="utf-8")
+    fake_forge = bin_dir / "forge"
+    fake_forge.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
+    fake_python.chmod(0o755)
+    fake_python3.chmod(0o755)
+    fake_forge.chmod(0o755)
+
+    env = os.environ.copy()
+    env.pop("FORGE_ROE_ID", None)
+    env["PATH"] = f"{bin_dir.as_posix()}:{Path(bash).parent.as_posix()}:{env.get('PATH', '')}"
+    result = subprocess.run(
+        [bash, str(launcher), "--skip-feed-build"],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        env=env,
+        timeout=20,
+        check=False,
+    )
+
+    calls = log.read_text(encoding="utf-8").lower().splitlines()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert len(calls) == 3
+    assert "targets import" in calls[0]
+    assert "--start" in calls[0]
+    assert "--dry-run" in calls[0]
+    assert "--roe-id" not in calls[0]
+    assert "targets resume-run" in calls[1]
+    assert "--dry-run" in calls[1]
+    assert "monitoring run-due" in calls[2]
+    assert "--dry-run" in calls[2]
+    assert "dashboard" not in "\n".join(calls)
+    assert "skipped in dry-run mode" in result.stdout.lower()

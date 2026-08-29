@@ -74,7 +74,7 @@ Continuation order for future agents:
 git clone <repo> forge-toolkit
 cd forge-toolkit
 setup.bat        # picks safe/default or scoped active-assessment mode
-forge-autopilot.bat --dry-run  # optional all-in-one feed/resume/monitor/dashboard rehearsal
+forge-autopilot.bat --dry-run  # optional feed/import/resume/monitor rehearsal; skips dashboard writes
 forge-autopilot.bat --apply --roe-id ROE-ID  # explicit live all-in-one path
 ```
 
@@ -253,7 +253,7 @@ forge graph attribution import --engagement N --file attributions.json|csv
 forge audit manifest-verify --engagement N
 forge audit manifest-export --engagement N [--sign] [--remote-store]
 forge audit manifest-bundle-verify --bundle PATH
-forge targets import --feed-url URL|--feed-file PATH [--dry-run] [--json] [--limit N] [--start] [--roe-id ROE] [--min-start-source-count N]
+forge targets import --feed-url URL|--feed-file PATH [--dry-run] [--json] [--limit N] [--start] [--roe-id ROE] [--min-start-source-count N]  # --start requires ROE only outside dry-run
 forge targets resume-candidates [--limit N] [--reason REASON] [--data-dir PATH] [--redact-paths] [--json]  # Default also scans repo-local legacy dashboard DBs
 forge targets resume-plan [--limit N] [--reason REASON] [--max-iter N] [--max-runtime-minutes N] [--data-dir PATH] [--redact-paths] [--json]
 forge targets resume-lock-status [--data-dir PATH] [--stale-lock-minutes N] [--redact-paths] [--json]
@@ -505,8 +505,9 @@ lock. Stale or dead-PID guarded-autostart locks are replaced in apply mode,
 active locks remain blockers, and autopilot child process timeouts use the
 contained process-tree runner. Apply-mode runs append a bounded redacted JSONL
 history at `FORGE_DATA_DIR/automation/guarded-autostart.jsonl`; dry-run remains
-non-mutating. Direct `forge-autopilot` launcher banners only print whether an
-ROE is present, not the ROE value.
+non-mutating. Direct `forge-autopilot` launchers let `targets import --start`
+rehearse without ROE in dry-run, skip dashboard refresh in dry-run to avoid
+local writes, and only print whether an ROE is present, not the ROE value.
 The production Compose file ships with conservative, env-overridable CPU/RAM
 caps for API, web UI, worker, Postgres, and Redis services so Docker startup has
 bounded defaults on small machines.

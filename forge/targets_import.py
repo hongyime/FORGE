@@ -175,7 +175,7 @@ def import_targets(
     min_start_source_count: int = 1,
     config: ForgeConfig | None = None,
 ) -> list[TargetImportResult]:
-    if start and not str(roe_id or "").strip():
+    if start and not dry_run and not str(roe_id or "").strip():
         raise ValueError("--start requires --roe-id so live execution is authorized")
     cfg = config or ForgeConfig.load()
     items = load_target_feed(

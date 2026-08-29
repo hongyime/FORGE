@@ -320,6 +320,32 @@ def test_import_targets_prioritizes_multi_source_feed_items_before_limit(
     assert results[0].scan_eligible is True
 
 
+def test_import_targets_dry_run_start_does_not_require_roe(
+    tmp_path: Path,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id=None,
+        start=True,
+        dry_run=True,
+        limit=1,
+        max_iter=3,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert len(results) == 1
+    assert results[0].dry_run is True
+    assert results[0].started is False
+    assert results[0].start_skipped_reason == "dry_run"
+    assert not (cfg.data_dir / "engagements").exists()
+
+
 def test_import_feed_skips_allocator_id_with_existing_engagement(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
