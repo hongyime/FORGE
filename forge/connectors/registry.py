@@ -950,6 +950,8 @@ def _connector_run_command_template(row: Mapping[str, Any]) -> list[str]:
                 "--report-file",
                 "PATH_TO_OFFLINE_EXPORT",
                 "--dry-run",
+                "--limit",
+                "1000",
                 "--json",
             ]
         )
@@ -965,6 +967,8 @@ def _connector_run_command_template(row: Mapping[str, Any]) -> list[str]:
                 "--target",
                 "DOMAIN_OR_URL",
                 "--dry-run",
+                "--limit",
+                "1000",
                 "--json",
             ]
         )
@@ -980,6 +984,8 @@ def _connector_run_command_template(row: Mapping[str, Any]) -> list[str]:
                 "--target",
                 "https://DOMAIN_OR_URL/",
                 "--dry-run",
+                "--limit",
+                "1000",
                 "--json",
             ]
         )

@@ -545,7 +545,9 @@ def test_guarded_autostart_task_installer_uses_safe_hidden_apply_runner() -> Non
     assert "installed hkcu run startup entry instead" in installer
     assert "$fallbackargument" in installer
     assert "-loop -everyminutes $interval -startupdelayminutes $startupdelayminutes" in installer
+    assert "-failurebackoffminutes $failurebackoffminutes -maxconsecutivefailures $maxconsecutivefailures" in installer
     assert "runs a single guarded loop at user logon" in installer
+    assert "wrapper exits after $maxconsecutivefailures consecutive failures" in installer
     assert "[int]$timeoutminutes = 150" in installer
     assert "new-scheduledtasktrigger -atlogon" in installer
     assert "repetitioninterval" in installer
@@ -567,9 +569,13 @@ def test_guarded_autostart_task_installer_uses_safe_hidden_apply_runner() -> Non
     assert "function convertto-processargument" in runner
     assert "$argumenttext = join-processarguments $arguments" in runner
     assert "[switch]$loop" in runner
+    assert "[int]$failurebackoffminutes = 30" in runner
+    assert "[int]$maxconsecutivefailures = 3" in runner
     assert "local\\forge_guarded_autostart_loop" in runner
     assert "loop already running; exiting" in runner
     assert "loop sleeping seconds=$sleepseconds" in runner
+    assert "$consecutivefailures += 1" in runner
+    assert "loop exiting after max consecutive failures=$maxconsecutivefailures" in runner
     assert "-argumentlist $argumenttext" in runner
     assert "-windowstyle hidden" in runner
     assert "redirectstandardoutput" in runner

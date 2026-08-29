@@ -5,6 +5,8 @@ param(
     [switch]$Loop,
     [int]$EveryMinutes = 155,
     [int]$StartupDelayMinutes = 0,
+    [int]$FailureBackoffMinutes = 30,
+    [int]$MaxConsecutiveFailures = 3,
     [switch]$SelfTest
 )
 
@@ -118,13 +120,25 @@ if (-not $createdNew) {
 
 try {
     $delaySeconds = [Math]::Max(0, $StartupDelayMinutes) * 60
+    $consecutiveFailures = 0
     if ($delaySeconds -gt 0) {
         Write-TaskLog "loop startup delay seconds=$delaySeconds"
         Start-Sleep -Seconds $delaySeconds
     }
     while ($true) {
-        [void](Invoke-AutomationCycle)
-        $sleepSeconds = [Math]::Max(5, $EveryMinutes) * 60
+        $exitCode = Invoke-AutomationCycle
+        if ($exitCode -eq 0) {
+            $consecutiveFailures = 0
+            $sleepSeconds = [Math]::Max(5, $EveryMinutes) * 60
+        } else {
+            $consecutiveFailures += 1
+            Write-TaskLog "loop cycle failed exit_code=$exitCode consecutive_failures=$consecutiveFailures"
+            if ($consecutiveFailures -ge [Math]::Max(1, $MaxConsecutiveFailures)) {
+                Write-TaskLog "loop exiting after max consecutive failures=$MaxConsecutiveFailures last_exit_code=$exitCode"
+                exit $exitCode
+            }
+            $sleepSeconds = [Math]::Max(5, $FailureBackoffMinutes) * 60
+        }
         Write-TaskLog "loop sleeping seconds=$sleepSeconds"
         Start-Sleep -Seconds $sleepSeconds
     }

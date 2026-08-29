@@ -187,13 +187,15 @@ def test_self_heal_plan_can_delegate_docker_health_to_compose(
     assert docker_status["ok"] is True
     assert docker_status["probed"] is False
     assert docker_status["reason"] == "docker_health_delegated_to_compose_dependency"
-    assert docker_status["core_service_health_check"] == "delegated_not_inspected"
-    assert docker_status["compose_dependency_services"] == ["postgres", "redis"]
-    assert docker_status["not_inspected_services"] == [
-        "forge-api",
-        "forge-webui",
-        "forge-worker",
+    assert docker_status["core_service_health_check"] == "delegated_to_compose_dependencies"
+    assert docker_status["compose_dependency_services"] == [
+        "postgres:service_healthy",
+        "redis:service_healthy",
+        "forge-api:service_healthy",
+        "forge-webui:service_healthy",
+        "forge-worker:service_started",
     ]
+    assert docker_status["not_inspected_services"] == []
     assert "host-compose" in docker_status["next_action"]
 
 

@@ -107,13 +107,22 @@ def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
     assert 'sleep "$${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"' in compose
     assert 'timeout --preserve-status "$${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}"' in compose
     assert 'sleep "$${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"' in compose
-    assert "|| true" in compose
+    assert "failures=0" in compose
+    assert 'FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS: "${FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS:-1800}"' in compose
+    assert 'FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES: "${FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES:-3}"' in compose
+    assert 'sleep "$${FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS:-1800}"' in compose
+    assert 'exit "$$rc"' in compose
+    assert "|| true" not in compose
     assert "automation" in compose
     assert "cycle" in compose
     assert "--autostart-config" in compose
     assert "/app/imports/autostart.local.json" in compose
     assert "--docker-probe-mode" in compose
     assert "compose-dependency" in compose
+    assert "forge-api:" in compose
+    assert "forge-webui:" in compose
+    assert "forge-worker:" in compose
+    assert "condition: service_started" in compose
     assert "--apply" in compose
     assert "--live" in compose
     assert "--json" in compose
@@ -230,7 +239,8 @@ def test_readme_autostart_sample_matches_1024_mb_memory_gate() -> None:
 
     assert '"min_free_memory_mb": 1024' in readme
     assert '"min_free_memory_mb": 2048' not in readme
-    assert "FORGE_AUTOSTART_MEM_LIMIT=1536m" in readme
+    assert "docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.yml --profile autostart up -d" in readme
+    assert "FORGE_AUTOSTART_MEM_LIMIT=256m" in readme
 
 
 def test_helm_chart_pins_production_hardening_contract() -> None:

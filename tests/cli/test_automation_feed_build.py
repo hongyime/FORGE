@@ -1522,6 +1522,10 @@ def test_feed_build_dry_run_reports_discovered_input_registry_without_write(
         "forge connectors import-discovery --connector runzero_asset_export "
         "--report-file <path> --dry-run --limit 1000 --json"
     )
+    assert next_actions[("burp_dast_xml", "burp-results.xml")] == (
+        "forge connectors import-validation --connector burp_dast_xml "
+        "--report-file <path> --dry-run --limit 1000 --json"
+    )
     assert payload["discovered_input_registry_update"] == {
         "config_path": str(imports_dir / "discovered-inputs.local.json"),
         "applied": False,

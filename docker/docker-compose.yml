@@ -187,6 +187,7 @@ services:
       - -c
       - |
         sleep "$${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
+        failures=0
         while true; do
           timeout --preserve-status "$${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}" \
           python -m forge.cli automation cycle \
@@ -194,8 +195,20 @@ services:
             --docker-probe-mode compose-dependency \
             --apply \
             --live \
-            --json || true
-          sleep "$${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
+            --json
+          rc="$$?"
+          if [ "$$rc" -eq 0 ]; then
+            failures=0
+            sleep "$${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
+          else
+            failures=$$((failures + 1))
+            echo "forge guarded autostart cycle failed rc=$$rc consecutive_failures=$$failures" >&2
+            if [ "$$failures" -ge "$${FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES:-3}" ]; then
+              echo "forge guarded autostart exiting after consecutive failures=$$failures" >&2
+              exit "$$rc"
+            fi
+            sleep "$${FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS:-1800}"
+          fi
         done
     environment:
       <<: *forge-env
@@ -203,6 +216,8 @@ services:
       FORGE_AUTOSTART_STARTUP_DELAY_SECONDS: "${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
       FORGE_AUTOSTART_TIMEOUT_SECONDS: "${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}"
       FORGE_AUTOSTART_EVERY_SECONDS: "${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
+      FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS: "${FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS:-1800}"
+      FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES: "${FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES:-3}"
       FORGE_AUTOSTART_MIN_FREE_MEMORY_MB: "${FORGE_AUTOSTART_MIN_FREE_MEMORY_MB:-1024}"
     volumes:
       - forge-data:/data
@@ -217,6 +232,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      forge-api:
+        condition: service_healthy
+      forge-webui:
+        condition: service_healthy
+      forge-worker:
+        condition: service_started
 
 volumes:
   forge-data:

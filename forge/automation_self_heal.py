@@ -1329,9 +1329,15 @@ def _docker_status(root: Path, *, probe: bool, mode: str = "host_compose") -> di
             "ok": True,
             "probed": False,
             "reason": "docker_health_delegated_to_compose_dependency",
-            "core_service_health_check": "delegated_not_inspected",
-            "compose_dependency_services": ["postgres", "redis"],
-            "not_inspected_services": ["forge-api", "forge-webui", "forge-worker"],
+            "core_service_health_check": "delegated_to_compose_dependencies",
+            "compose_dependency_services": [
+                "postgres:service_healthy",
+                "redis:service_healthy",
+                "forge-api:service_healthy",
+                "forge-webui:service_healthy",
+                "forge-worker:service_started",
+            ],
+            "not_inspected_services": [],
             "next_action": (
                 "Run forge automation self-heal-plan --probe-docker "
                 "--docker-probe-mode host-compose --json on the host for container health."

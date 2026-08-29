@@ -514,29 +514,33 @@ bounded defaults on small machines.
 Docker-started autopilot is available as an opt-in Compose profile:
 
 ```bash
-docker compose -f docker/docker-compose.yml --profile autostart up -d
+docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.yml --profile autostart up -d
 ```
 
-Small hosts can review the bounded 1024 MB profile with:
+Small hosts can review the bounded 1024 MB profile before starting it with:
 
 ```bash
 docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.yml --profile autostart config
 ```
 
 `docker/low-memory.env.example` caps API, web UI, worker, Postgres, Redis, and
-guarded autostart at 960 MiB total, and lowers the container-local autostart
-memory gate to 128 MB so a 256 MiB guarded-autostart container does not block
-itself forever. `forge automation limits --json` reports the same low-memory
+guarded autostart at 960 MiB total, including `FORGE_AUTOSTART_MEM_LIMIT=256m`,
+and lowers the container-local autostart memory gate to 128 MB so the
+guarded-autostart container does not block itself forever. `forge automation limits --json` reports the same low-memory
 profile fields and review command. Keep secrets in your normal local env source
-before starting containers.
+before starting containers. Larger hosts can omit `--env-file` and use the
+Compose defaults.
 
 The `forge-guarded-autostart` service runs a controlled loop with lower default
 caps (`FORGE_AUTOSTART_CPUS=0.25`, `FORGE_AUTOSTART_MEM_LIMIT=1536m`), startup
 delay `FORGE_AUTOSTART_STARTUP_DELAY_SECONDS=300`, cadence
 `FORGE_AUTOSTART_EVERY_SECONDS=9300`, an outer cycle timeout
-`FORGE_AUTOSTART_TIMEOUT_SECONDS=9000`, and the guarded Forge memory gate still
-defaults to `1024` MB. The timeout keeps a hung container cycle from blocking
-future guarded attempts. It reads
+`FORGE_AUTOSTART_TIMEOUT_SECONDS=9000`, wrapper failure backoff
+`FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS=1800`, max consecutive wrapper failures
+`FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES=3`, and the guarded Forge memory gate
+still defaults to `1024` MB. The timeout keeps a hung container cycle from
+blocking future guarded attempts, and repeated wrapper-level failures make the
+container exit so Docker can surface the fault instead of silently spinning. It reads
 `/app/imports/autostart.local.json`, enters through
 `forge automation cycle --apply --live`, and only writes through the mounted
 `imports/`, `reports/`, and `/data` paths. That means Docker startup runs a

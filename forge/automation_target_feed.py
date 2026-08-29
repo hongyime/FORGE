@@ -144,28 +144,28 @@ _DISCOVERABLE_INPUT_MARKERS = (
         "connector_id": "abusech_threatfox",
         "status": "accepted_local_marker",
         "markers": ("threatfox",),
-        "next_action": "forge connectors import-cti --connector abusech_threatfox --report-file <path> --dry-run --json",
+        "next_action": "forge connectors import-cti --connector abusech_threatfox --report-file <path> --dry-run --limit 1000 --json",
     },
     {
         "input_kind": "cti_marker",
         "connector_id": "abusech_urlhaus",
         "status": "accepted_local_marker",
         "markers": ("urlhaus",),
-        "next_action": "forge connectors import-cti --connector abusech_urlhaus --report-file <path> --dry-run --json",
+        "next_action": "forge connectors import-cti --connector abusech_urlhaus --report-file <path> --dry-run --limit 1000 --json",
     },
     {
         "input_kind": "cti_marker",
         "connector_id": "misp_event_import",
         "status": "accepted_local_marker",
         "markers": ("misp",),
-        "next_action": "forge connectors import-cti --connector misp_event_import --report-file <path> --dry-run --json",
+        "next_action": "forge connectors import-cti --connector misp_event_import --report-file <path> --dry-run --limit 1000 --json",
     },
     {
         "input_kind": "cti_marker",
         "connector_id": "stix_taxii_import",
         "status": "accepted_local_marker",
         "markers": ("stix", "taxii"),
-        "next_action": "forge connectors import-cti --connector stix_taxii_import --report-file <path> --dry-run --json",
+        "next_action": "forge connectors import-cti --connector stix_taxii_import --report-file <path> --dry-run --limit 1000 --json",
     },
     {
         "input_kind": "discovery_artifact",
@@ -200,7 +200,7 @@ _DISCOVERABLE_INPUT_MARKERS = (
         "connector_id": "burp_dast_xml",
         "status": "pending_local_import",
         "markers": ("burp", "junit", "dast", "zap"),
-        "next_action": "forge connectors import-validation --connector burp_dast_xml --report-file <path> --dry-run --json",
+        "next_action": "forge connectors import-validation --connector burp_dast_xml --report-file <path> --dry-run --limit 1000 --json",
     },
 )
 

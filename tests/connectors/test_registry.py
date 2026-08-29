@@ -595,6 +595,8 @@ def test_connector_run_plan_reports_free_runnable_commands_without_execution() -
         "--report-file",
         "PATH_TO_OFFLINE_EXPORT",
         "--dry-run",
+        "--limit",
+        "1000",
         "--json",
     ]
     assert by_id["urlscan_search"]["command_template"] == [
@@ -610,6 +612,8 @@ def test_connector_run_plan_reports_free_runnable_commands_without_execution() -
         "--target",
         "DOMAIN_OR_URL",
         "--dry-run",
+        "--limit",
+        "1000",
         "--json",
     ]
     assert by_id["burp_dast_xml"]["command_template"] == [
@@ -625,6 +629,8 @@ def test_connector_run_plan_reports_free_runnable_commands_without_execution() -
         "--target",
         "https://DOMAIN_OR_URL/",
         "--dry-run",
+        "--limit",
+        "1000",
         "--json",
     ]
     assert by_id["gitleaks_local"]["command_template"] == [
@@ -681,11 +687,14 @@ def test_connector_run_plan_import_templates_are_dry_run_first() -> None:
     import_items = [
         item
         for item in payload["items"]
-        if any(path.startswith("forge connectors import-") for path in item["execution_paths"])
+        if (item["execution_paths"] or [""])[0].startswith("forge connectors import-")
     ]
     assert import_items
     for item in import_items:
         assert "--dry-run" in item["command_template"], item["connector_id"]
+        assert "--limit" in item["command_template"], item["connector_id"]
+        limit_index = item["command_template"].index("--limit")
+        assert item["command_template"][limit_index + 1] == "1000"
 
 
 def test_connector_secret_key_plan_outputs_no_secret_material(monkeypatch) -> None:
