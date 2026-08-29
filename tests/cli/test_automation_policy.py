@@ -224,15 +224,15 @@ def test_automation_limits_review_exposes_effective_limits(tmp_path) -> None:
     assert limits["openrouter_mode"]["value"] == "free_only"
     assert limits["docker_autostart_timeout_seconds"]["value"] == 9000
     assert limits["docker_low_memory_env_file"]["value"] == "docker/low-memory.env.example"
-    assert limits["docker_low_memory_total_mib"]["value"] == 960
+    assert limits["docker_low_memory_total_mib"]["value"] == 2624
     assert limits["docker_low_memory_total_mib"]["source"] == "compose_low_memory_profile"
     assert limits["docker_low_memory_service_mem_limits"]["value"] == {
-        "forge-api": "128m",
-        "forge-webui": "128m",
-        "forge-worker": "128m",
+        "forge-api": "256m",
+        "forge-webui": "256m",
+        "forge-worker": "256m",
         "postgres": "256m",
         "redis": "64m",
-        "forge-guarded-autostart": "256m",
+        "forge-guarded-autostart": "1536m",
     }
     assert payload["commands"]["review_low_memory_docker_config"] == [
         "docker",

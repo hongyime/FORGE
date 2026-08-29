@@ -291,3 +291,8 @@
 - 2026-08-29 20:18:45 +08:00 [PRAWN-E14/claude/session-start] branch=main head=a869843 dirty=0
 - 2026-08-29 20:40:08 +08:00 [PRAWN-E14/claude/session-start] branch=main head=a869843 dirty=6
 - 2026-08-29: Target-import parents should stop waiting as soon as the engagement DB confirms kill-chain completion; Docker guarded autostart must receive ignored local `.env` values so provider keys survive hands-off Docker restarts without committing secrets.
+- 2026-08-29 21:01:42 +08:00 [PRAWN-E14/claude/session-start] branch=main head=97348eb dirty=0
+- 2026-08-29 21:06:10 +08:00 [PRAWN-E14/codex/session-start] branch=main head=97348eb dirty=1
+- 2026-08-29: Docker-managed startup must validate real service health; Redis bus health checks now lazy-connect on first probe and pub/sub clients no longer impose idle socket read timeouts that caused noisy reconnect loops.
+- 2026-08-29 23:46:38 +08:00 [PRAWN-E14/codex/session-start] branch=main head=97348eb dirty=11
+- 2026-08-30 B769: Docker hands-off startup needs runtime health gates sized for actual constrained startup, not only nominal low-memory totals; production Compose now uses 256 MiB API/web/worker caps, 1536 MiB guarded autostart cap, longer API/web health probes, cgroup-aware memory checks that ignore reclaimable file cache and prefer finite Linux cgroup limits, and container-first `/app/tools/bin` tool validation while keeping local secrets in ignored env/config files only.

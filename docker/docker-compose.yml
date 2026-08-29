@@ -17,6 +17,7 @@ x-forge-env: &forge-env
   FORGE_DATA_DIR: /data
   FORGE_SAFE_MODE: "1"
   FORGE_REQUIRE_SCOPE_MANIFEST: "1"
+  FORGE_NO_TOR: "1"
   FORGE_WEB_ENABLED: "1"
   FORGE_WEB_HOST: 0.0.0.0
   FORGE_WEB_PORT: "8080"
@@ -51,7 +52,7 @@ x-forge-service: &forge-service
   image: "forge-toolkit:${FORGE_IMAGE_TAG:-local}"
   restart: unless-stopped
   init: true
-  user: "1000:1000"
+  user: "10001:10001"
   cpus: "${FORGE_CONTAINER_CPUS:-0.75}"
   mem_limit: "${FORGE_CONTAINER_MEM_LIMIT:-768m}"
   read_only: true
@@ -121,11 +122,11 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - 'python -c "import urllib.request, sys; urllib.request.urlopen(''http://localhost:8000/health'', timeout=3); sys.exit(0)" || exit 1'
-      interval: 10s
-      timeout: 5s
+        - 'python -c "import urllib.request, sys; urllib.request.urlopen(''http://localhost:8000/health'', timeout=15); sys.exit(0)" || exit 1'
+      interval: 15s
+      timeout: 20s
       retries: 5
-      start_period: 15s
+      start_period: 60s
     depends_on:
       postgres:
         condition: service_healthy
@@ -150,11 +151,11 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - 'python -c "import urllib.request, sys; urllib.request.urlopen(''http://localhost:8080/health'', timeout=3); sys.exit(0)" || exit 1'
-      interval: 10s
-      timeout: 5s
+        - 'python -c "import urllib.request, sys; urllib.request.urlopen(''http://localhost:8080/health'', timeout=15); sys.exit(0)" || exit 1'
+      interval: 15s
+      timeout: 20s
       retries: 5
-      start_period: 15s
+      start_period: 60s
     depends_on:
       postgres:
         condition: service_healthy

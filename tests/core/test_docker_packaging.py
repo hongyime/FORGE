@@ -82,6 +82,7 @@ def test_production_compose_uses_repo_root_runtime_build_and_hardened_services()
     assert "postgres:" in compose
     assert "redis:" in compose
     assert "read_only: true" in compose
+    assert 'user: "10001:10001"' in compose
     assert 'cpus: "${FORGE_CONTAINER_CPUS:-0.75}"' in compose
     assert 'mem_limit: "${FORGE_CONTAINER_MEM_LIMIT:-768m}"' in compose
     assert 'cpus: "${FORGE_POSTGRES_CPUS:-0.50}"' in compose
@@ -92,6 +93,10 @@ def test_production_compose_uses_repo_root_runtime_build_and_hardened_services()
     assert "no-new-privileges:true" in compose
     assert "127.0.0.1:${FORGE_WEB_PORT:-8080}:8080" in compose
     assert "127.0.0.1:${FORGE_API_PORT:-8000}:8000" in compose
+    assert "http://localhost:8000/health'', timeout=15" in compose
+    assert "http://localhost:8080/health'', timeout=15" in compose
+    assert "timeout: 20s" in compose
+    assert "start_period: 60s" in compose
 
 
 def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
@@ -137,7 +142,7 @@ def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
     assert "${FORGE_HOST_CONNECTOR_BIN_DIR:-../tools/bin}:/app/tools/bin:ro" in compose
 
 
-def test_low_memory_env_profile_keeps_autostart_stack_under_1024_mib() -> None:
+def test_low_memory_env_profile_keeps_autostart_stack_bounded() -> None:
     env_values = _read_env_example("docker/low-memory.env.example")
 
     forge_service_mib = _memory_mib(env_values["FORGE_CONTAINER_MEM_LIMIT"])
@@ -149,9 +154,10 @@ def test_low_memory_env_profile_keeps_autostart_stack_under_1024_mib() -> None:
     )
 
     assert env_values["FORGE_CONTAINER_CPUS"] == "0.25"
-    assert env_values["FORGE_AUTOSTART_CPUS"] == "0.10"
-    assert total_mib == 960
-    assert total_mib <= 1024
+    assert env_values["FORGE_AUTOSTART_CPUS"] == "0.25"
+    assert env_values["FORGE_AUTOSTART_MIN_FREE_MEMORY_MB"] == "128"
+    assert total_mib == 2624
+    assert total_mib <= 3072
 
 
 def test_production_compose_matches_doctor_hardening_contract() -> None:
@@ -163,6 +169,7 @@ def test_production_compose_matches_doctor_hardening_contract() -> None:
     assert "FORGE_ENV: production" in compose
     assert 'FORGE_SAFE_MODE: "1"' in compose
     assert 'FORGE_REQUIRE_SCOPE_MANIFEST: "1"' in compose
+    assert 'FORGE_NO_TOR: "1"' in compose
     assert 'FORGE_WEB_ENABLED: "1"' in compose
     assert "FORGE_WEB_AUTH: jwt" in compose
     assert "${FORGE_WEB_SECRET_KEY:?" in compose
@@ -241,7 +248,7 @@ def test_readme_autostart_sample_matches_1024_mb_memory_gate() -> None:
     assert '"min_free_memory_mb": 1024' in readme
     assert '"min_free_memory_mb": 2048' not in readme
     assert "docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.yml --profile autostart up -d" in readme
-    assert "FORGE_AUTOSTART_MEM_LIMIT=256m" in readme
+    assert "FORGE_AUTOSTART_MEM_LIMIT=1536m" in readme
 
 
 def test_helm_chart_pins_production_hardening_contract() -> None:

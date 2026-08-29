@@ -22,10 +22,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3.11=3.11.* \
-        python3.11-dev=3.11.* \
+        python3 \
+        python3-dev \
         python3-pip=24.* \
-        python3.11-venv=3.11.* \
+        python3-venv \
         libssl-dev=3.* \
         libffi-dev=3.* \
         libsqlite3-dev=3.* \
@@ -39,13 +39,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         krb5-user \
     && rm -rf /var/lib/apt/lists/*
 
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
-    && update-alternatives --install /usr/bin/python  python  /usr/bin/python3.11 1
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
 
-RUN python3.11 -m venv "$VIRTUAL_ENV" \
+RUN python3 -m venv "$VIRTUAL_ENV" \
     && python -m pip install --upgrade pip setuptools wheel
 
-RUN useradd --create-home --shell /bin/bash --uid 1000 forge \
+RUN useradd --create-home --shell /bin/bash --uid 10001 forge \
     && mkdir -p /app /data /plugins /remote-audit /ms-playwright \
         /home/forge/.cache/forge/models \
     && chown -R forge:forge /data /plugins /remote-audit /home/forge/.cache \

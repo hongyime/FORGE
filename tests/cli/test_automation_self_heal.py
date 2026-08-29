@@ -208,6 +208,32 @@ def test_cgroup_memory_limit_reduces_reported_free_memory(tmp_path: Path) -> Non
     assert self_heal._cgroup_available_memory_mb(cgroup) == 256
 
 
+def test_cgroup_memory_limit_discounts_reclaimable_file_cache(tmp_path: Path) -> None:
+    cgroup = tmp_path / "sys" / "fs" / "cgroup"
+    cgroup.mkdir(parents=True)
+    (cgroup / "memory.max").write_text(str(1024 * 1024 * 1024), encoding="utf-8")
+    (cgroup / "memory.current").write_text(str(960 * 1024 * 1024), encoding="utf-8")
+    (cgroup / "memory.stat").write_text(
+        f"anon {128 * 1024 * 1024}\ninactive_file {512 * 1024 * 1024}\n",
+        encoding="utf-8",
+    )
+
+    assert self_heal._cgroup_available_memory_mb(cgroup) == 576
+
+
+def test_linux_free_memory_prefers_finite_cgroup_over_sysconf_noise(monkeypatch) -> None:
+    monkeypatch.setattr(self_heal.os, "name", "posix")
+    monkeypatch.setattr(self_heal, "_cgroup_available_memory_mb", lambda: 1346)
+    monkeypatch.setattr(
+        self_heal.os,
+        "sysconf",
+        lambda key: 18_611 if key == "SC_AVPHYS_PAGES" else 4096,
+        raising=False,
+    )
+
+    assert self_heal._free_memory_mb() == 1346
+
+
 def test_self_heal_plan_finds_packaged_go_tools(tmp_path: Path, monkeypatch) -> None:
     bin_dir = tmp_path / "tools" / "bin"
     bin_dir.mkdir(parents=True)
@@ -490,6 +516,44 @@ def test_self_heal_plan_accepts_host_connector_bin_dir_for_docker_mount(
     assert payload["docker_tool_mount_status"]["mount_dir"] == str(mounted_bin)
     assert payload["docker_tool_mount_status"]["available_count"] == 1
     assert payload["docker_tool_mount_status"]["missing"] == []
+    assert payload["docker_tool_mount_status"]["missing_required"] == []
+    assert "docker_tool_mount_missing_runtime_tools:naabu" not in payload["blockers"]
+
+
+def test_self_heal_plan_prefers_container_tool_mount_when_host_env_is_not_container_path(
+    tmp_path: Path, monkeypatch
+) -> None:
+    container_bin = tmp_path / "tools" / "bin"
+    container_bin.mkdir(parents=True)
+    expected_size = 9
+    (container_bin / "naabu.exe").write_bytes(b"x" * expected_size)
+    monkeypatch.setenv("FORGE_HOST_CONNECTOR_BIN_DIR", r"C:\Users\bryan\go\bin")
+    monkeypatch.setattr(self_heal.Path, "home", lambda: tmp_path / "empty-home")
+    monkeypatch.setattr("forge.automation_self_heal.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "forge.automation_self_heal.PACKAGED_GO_TOOLS",
+        (
+            {
+                "name": "naabu",
+                "binary": "naabu.exe",
+                "size_bytes": expected_size,
+                "role": "active_ports",
+                "required_for_autostart": True,
+            },
+        ),
+    )
+
+    payload = automation_self_heal_plan(
+        repo_root=tmp_path,
+        data_dir=tmp_path / "data",
+        min_free_memory_mb=1,
+        min_free_disk_gb=1,
+        probe_docker=True,
+        docker_probe_mode="compose-dependency",
+    )
+
+    assert payload["docker_tool_mount_status"]["mount_dir"] == str(container_bin)
+    assert payload["docker_tool_mount_status"]["available_count"] == 1
     assert payload["docker_tool_mount_status"]["missing_required"] == []
     assert "docker_tool_mount_missing_runtime_tools:naabu" not in payload["blockers"]
 

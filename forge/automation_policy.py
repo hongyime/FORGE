@@ -15,12 +15,12 @@ DEFAULTS_REVIEW_SCHEMA_VERSION = "forge.automation_defaults_review.v1"
 LIMITS_REVIEW_SCHEMA_VERSION = "forge.automation_limits_review.v1"
 DOCKER_LOW_MEMORY_ENV_PATH = "docker/low-memory.env.example"
 DOCKER_LOW_MEMORY_PROFILE_LIMITS = {
-    "forge-api": "128m",
-    "forge-webui": "128m",
-    "forge-worker": "128m",
+    "forge-api": "256m",
+    "forge-webui": "256m",
+    "forge-worker": "256m",
     "postgres": "256m",
     "redis": "64m",
-    "forge-guarded-autostart": "256m",
+    "forge-guarded-autostart": "1536m",
 }
 DAILY_USE_LAYER: tuple[dict[str, str], ...] = (
     {

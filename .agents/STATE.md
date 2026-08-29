@@ -465,13 +465,13 @@ Next steps:
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-08-29 20:40:08 +08:00
+- Updated: 2026-08-29 23:46:38 +08:00
 - Machine: PRAWN-E14
-- Harness: claude
+- Harness: codex
 - Event: session-start
 - Branch: main
-- HEAD: a869843
-- Dirty files: 6
+- HEAD: 97348eb
+- Dirty files: 11
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
 
@@ -502,3 +502,4 @@ Next steps:
 - Completed B759 locally on 2026-08-29: added ROE-ready auto-live promotion and refreshed the PostPlan HTML with architecture and user-flow diagrams. Repo defaults remain safe (`auto_live_when_roe_ready=false`), but local ignored `imports/autostart.local.json` is set to `auto_live_when_roe_ready=true`, so `forge automation cycle --apply` promotes to guarded live only when the configured ROE env var is present; dry-run remains non-mutating and explicit `--live` still works. Verification passed: focused auto-live/policy/self-heal tests (`5 passed`), broader automation cycle/policy/self-heal tests (`104 passed`, existing sqlite timestamp warnings only), Ruff, `py_compile`, `git diff --check`, dry-run `automation cycle --json` smoke showing no auto-promotion without apply, `automation limits --json` smoke showing local auto-live true, and pasted-key fragment scan. PostPlan version 11 uploaded at https://ylrghmdr8arh.postplan.dev with raw HTML https://postplan.dev/d/ylrghmdr8arh/raw. No live provider/API call, scanner execution, target import/start apply, resume-run apply, monitoring apply, Docker mutation, scheduled-task mutation, ticket/webhook write, secret decrypt, or credential persistence was executed.
 
 - In progress B761 on 2026-08-29: second user-approved live start after B760 confirmed the dashboard split worked (`autopilot_apply` included `--skip-dashboard`) but still returned `live_failed` because target-import/kill-chain surfaced a Windows `FileNotFoundError` from the shared Forge module subprocess helper during optional prerequisite auto-run. The started target `2.2.3.6` / engagement `1003` completed, produced reports, refreshed dashboard review artifacts, and monitoring executed `25` due policies; the remaining failure was process-boundary handling for a missing optional child executable. Fix in progress: `_run_forge_module_subprocess` now catches `OSError` and returns a normal failed `CompletedProcess` with return code `127`, so optional prereq failures can be audited without crashing the completed kill-chain. Verification currently passed: focused subprocess/prereq/autostart/cycle tests (`102 passed, 4 existing sqlite timestamp warnings`), Ruff, `py_compile`, `git diff --check`, and pasted-key fragment scan. Supabase key env and CTI auth envs remain unset.
+- Completed B769 locally on 2026-08-30: Docker-managed hands-off startup now runs from a rebuilt persistent `forge-toolkit:local` image. Fixes include Ubuntu 24.04 distro Python packaging, UID/GID `10001`, BeautifulSoup in runtime deps, Redis bus lazy health connect with no idle pub/sub socket timeout, `FORGE_NO_TOR=1` in production Compose containers, container-first `/app/tools/bin` packaged Go tool checks, cgroup memory accounting that discounts reclaimable inactive file cache and trusts finite Linux cgroup limits over noisy Docker Desktop `sysconf`, low-memory profile caps of `256m` for API/web/worker plus `1536m` for guarded autostart, and slower-resource API/web healthcheck windows. Verification passed: focused Docker/Redis/autostart/policy tests (`58 passed, 1 skipped` for missing Helm), Ruff, `py_compile`, Docker Compose low-memory config render, `git diff --check`, API/web `/health` endpoints, and pasted-key fragment scan showing only dummy test literals. Docker stack is running on the rebuilt image; API and web UI are healthy, worker is running, and `forge-guarded-autostart` has launched `forge-autopilot.sh --apply` with `ROE-BRYAN-PERMANENT-2026` and `targets import --start` under Docker CPU/memory/time guards. Local ignored Supabase/OpenRouter/autostart secrets/config remain uncommitted.

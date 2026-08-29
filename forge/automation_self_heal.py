@@ -1148,12 +1148,13 @@ def _free_memory_mb() -> int | None:
                 return min(host_memory_mb, cgroup_memory_mb) if cgroup_memory_mb is not None else host_memory_mb
         except Exception:
             return cgroup_memory_mb
+    if cgroup_memory_mb is not None:
+        return cgroup_memory_mb
     if hasattr(os, "sysconf"):
         try:
             pages = os.sysconf("SC_AVPHYS_PAGES")
             page_size = os.sysconf("SC_PAGE_SIZE")
-            host_memory_mb = int((int(pages) * int(page_size)) / (1024 * 1024))
-            return min(host_memory_mb, cgroup_memory_mb) if cgroup_memory_mb is not None else host_memory_mb
+            return int((int(pages) * int(page_size)) / (1024 * 1024))
         except (OSError, ValueError, TypeError):
             return cgroup_memory_mb
     return cgroup_memory_mb
@@ -1163,11 +1164,30 @@ def _cgroup_available_memory_mb(cgroup_root: Path = Path("/sys/fs/cgroup")) -> i
     v2_max = _read_cgroup_memory_value(cgroup_root / "memory.max")
     v2_current = _read_cgroup_memory_value(cgroup_root / "memory.current")
     if v2_max is not None and v2_current is not None:
-        return max(0, int((v2_max - v2_current) / (1024 * 1024)))
+        v2_reclaimable = _read_cgroup_memory_stat_value(cgroup_root / "memory.stat", "inactive_file")
+        effective_current = max(0, v2_current - (v2_reclaimable or 0))
+        return max(0, int((v2_max - effective_current) / (1024 * 1024)))
     v1_max = _read_cgroup_memory_value(cgroup_root / "memory" / "memory.limit_in_bytes")
     v1_current = _read_cgroup_memory_value(cgroup_root / "memory" / "memory.usage_in_bytes")
     if v1_max is not None and v1_current is not None:
         return max(0, int((v1_max - v1_current) / (1024 * 1024)))
+    return None
+
+
+def _read_cgroup_memory_stat_value(path: Path, key: str) -> int | None:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    prefix = f"{key} "
+    for line in lines:
+        if not line.startswith(prefix):
+            continue
+        try:
+            value = int(line.removeprefix(prefix).strip())
+        except ValueError:
+            return None
+        return value if value > 0 else None
     return None
 
 
@@ -1241,7 +1261,10 @@ def _find_tool_path(binary: str, roots: list[Path]) -> Path | None:
 
 def _docker_tool_mount_status(root: Path, *, required: bool = False) -> dict[str, Any]:
     configured = str(_env_value("FORGE_HOST_CONNECTOR_BIN_DIR") or "").strip()
-    mount_dir = Path(configured) if configured else root / "tools" / "bin"
+    in_container_mount = root / "tools" / "bin"
+    mount_dir = in_container_mount if in_container_mount.exists() else (
+        Path(configured) if configured else in_container_mount
+    )
     rows: list[dict[str, Any]] = []
     for tool in PACKAGED_GO_TOOLS:
         if tool["role"] == "developer":

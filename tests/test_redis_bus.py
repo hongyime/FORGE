@@ -330,6 +330,23 @@ class TestRedisMessageBusHealthCheck:
         assert await redis_bus.health_check() is False
 
     @pytest.mark.asyncio
+    async def test_health_check_lazy_connects_first_probe(self) -> None:
+        mock_redis = AsyncMock()
+        mock_redis.ping = AsyncMock(return_value=True)
+
+        bus = RedisMessageBus(redis_url="redis://localhost:6379/0")
+
+        with patch("redis.asyncio.from_url", return_value=mock_redis) as from_url:
+            assert await bus.health_check() is True
+
+        from_url.assert_called_once_with(
+            "redis://localhost:6379/0",
+            decode_responses=True,
+            socket_connect_timeout=5.0,
+        )
+        assert bus.connected is True
+
+    @pytest.mark.asyncio
     async def test_health_check_returns_true_when_connected(
         self, redis_bus: RedisMessageBus
     ) -> None:

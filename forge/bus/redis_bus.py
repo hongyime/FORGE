@@ -121,7 +121,6 @@ class RedisMessageBus:
                 self._redis_url,
                 decode_responses=True,
                 socket_connect_timeout=5.0,
-                socket_timeout=5.0,
             )
             # Verify connectivity (redis-py overloads ping(); we always
             # use it asynchronously so the return is genuinely awaitable).
@@ -259,6 +258,13 @@ class RedisMessageBus:
 
     async def health_check(self) -> bool:
         """Return True if Redis is connected and responsive."""
+        if self._auto_connect_enabled and self._redis is None and not self._auto_connect_attempted:
+            self._auto_connect_attempted = True
+            try:
+                await self.connect()
+            except Exception as exc:
+                _LOG.debug("RedisMessageBus: lazy connect on health_check failed: %s", exc)
+
         if not self._connected or self._redis is None:
             return False
         try:
@@ -315,7 +321,6 @@ class RedisMessageBus:
                         self._redis_url,
                         decode_responses=True,
                         socket_connect_timeout=5.0,
-                        socket_timeout=5.0,
                     )
                     await self._redis.ping()  # type: ignore[misc]
                     self._connected = True
