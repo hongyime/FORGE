@@ -3,6 +3,7 @@
 Current task: streamline autonomous live-safe daily operation around `forge automation cycle`, local input queues, and safe startup gates.
 
 Progress:
+- In progress B762 on 2026-08-29: user-approved live automation start exposed a second hands-off reliability issue after B761 subprocess-missing-executable containment. The live cycle started target `39.109.199.34` as engagement `1004`, but `report generate` stayed active for about 12 minutes with little CPU and no cycle JSON result, blocking the supervised parent. The stuck process tree was stopped, and the current fix adds a report-specific child timeout: `FORGE_REPORT_GENERATE_SUBPROCESS_TIMEOUT_SECONDS` defaults to `300` seconds (bounded 30..86400) and only applies to `report generate`; other Forge module subprocesses keep the existing 900-second default. Verification so far: `tests\core\test_cli_helper_timeouts.py` (`2 passed`), Ruff on touched files, and `py_compile` for `forge\cli.py`/`forge\cli_helpers.py`. Supabase key env and CTI auth envs remain unset, so live cycles still use local/all-source feed inputs only.
 - Completed B750 locally: closed Meitner's startup/self-heal audit gaps. Low-memory Docker can now set `FORGE_AUTOSTART_MIN_FREE_MEMORY_MB=128` so a 256 MiB guarded-autostart container does not fail its own 1024 MB host gate; `automation cycle --apply --live` now runs guarded preflight before feed writes or queue imports; guarded-autostart records blocked apply attempts into failure-backoff state; and guarded-autostart rechecks memory/Docker health after dry-run before launching live apply. Verification passed on 2026-08-29: `tests\cli\test_automation_self_heal.py` plus `tests\cli\test_automation_cycle.py` (`93 passed, 4 existing sqlite timestamp warnings`), Ruff, `py_compile`, `git diff --check`, and exact pasted-key fragment scan. No live provider/API call, scanner execution, target import/start apply, resume-run apply, monitoring apply, Docker mutation, ticket/webhook write, scheduled-task mutation, secret decrypt, or credential persistence was executed for this slice.
 - Completed B749 locally: closed Volta's feed/input audit gaps. Supabase live feed-build secret resolution now uses the active `data_dir` instead of loading the default config path, so `automation status --data-dir X` and `feed-build --data-dir X --source supabase` agree on connector-secret refs. Local CTI/connector directory scans now report `source_scan_limits`, discovered-input scans report `discovered_input_scan_limits`, and ProjectDiscovery/Censys/runZero/asset-delta human next actions are dry-run-first with `--limit 1000`. Verification passed on 2026-08-29: `tests\cli\test_automation_feed_build.py` (`48 passed, 2 existing sqlite timestamp warnings`), Ruff, and `py_compile`. No live Supabase/CTI/provider API call, scanner execution, target import/start apply, resume-run apply, monitoring apply, Docker mutation, ticket/webhook write, scheduled-task mutation, or credential persistence was executed for this slice.
 - Completed B748 locally: refreshed `forge-autonomous-target-loop-plan.html` so the published autonomous target loop plan includes `566e464` / B747 Supabase secret-ref metadata verification. Re-uploaded the existing PostPlan draft `https://ylrghmdr8arh.postplan.dev` as version 6 with raw HTML at `https://postplan.dev/d/ylrghmdr8arh/raw`. Verification passed on 2026-08-29: plan-file pasted-key fragment scan and successful `npx postplan upload`. No live provider/API call, scanner execution, target import/start apply, resume-run apply, monitoring apply, Docker mutation, ticket/webhook write, scheduled-task mutation, secret decrypt, or credential persistence was executed for this slice.
@@ -458,12 +459,12 @@ Next steps:
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-08-29 16:20:59 +08:00
+- Updated: 2026-08-29 16:51:03 +08:00
 - Machine: PRAWN-E14
-- Harness: codex
+- Harness: claude
 - Event: session-start
 - Branch: main
-- HEAD: 32b1558
+- HEAD: 036a094
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->

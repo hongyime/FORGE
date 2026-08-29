@@ -188,6 +188,7 @@ from forge.cli_helpers import (  # noqa: F401, E402
     _scope_manifest_seed_targets,
     _scope_manifest_values,
     _sleep_provider_launch_delay,
+    _subprocess_timeout_seconds_for_module,
     _timeout_stream_text,
     _validate_scope_manifest_seed_values,
     _validation_max_workers,
@@ -1324,10 +1325,15 @@ def kill_chain(
         metadata: Optional[dict[str, object]] = None,
     ) -> int:
         run_handles: list[tuple[object, dict[str, object]]] = []
+        timeout_seconds = _subprocess_timeout_seconds_for_module(
+            cmd_argv,
+            label,
+            default_timeout_seconds=module_timeout_seconds,
+        )
         base_metadata: dict[str, object] = {
             "label": label,
             "command": "forge " + " ".join(cmd_argv),
-            "timeout_seconds": module_timeout_seconds,
+            "timeout_seconds": timeout_seconds,
         }
         if metadata:
             base_metadata.update(metadata)
@@ -1359,7 +1365,7 @@ def kill_chain(
         proc = _run_forge_module_subprocess(
             cmd_argv,
             tor_prefix=_tor_prefix,
-            timeout_seconds=module_timeout_seconds,
+            timeout_seconds=timeout_seconds,
         )
         if proc.returncode != 0:
             _log(label, f"[yellow]exit={proc.returncode}[/yellow] "
