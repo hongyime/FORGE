@@ -89,7 +89,7 @@
 <body>
 <main>
   <h1>FORGE Autonomous Target Loop Plan</h1>
-  <p>Updated 2026-08-28. Scope merges the original target-feed/autopilot plan, the later free-first connector/dashboard requests, the packaged Go tool requirement, and the robustness review. Secret material is intentionally omitted.</p>
+  <p>Updated 2026-08-29. Scope merges the original target-feed/autopilot plan, the later free-first connector/dashboard requests, the packaged Go tool requirement, and the robustness review. Secret material is intentionally omitted.</p>
 
   <section class="summary">
     <h2>Operating Rule</h2>
@@ -132,6 +132,15 @@
       <tr><td><code>9d5ce3a</code></td><td>Active-validation matrix proof type/freshness.</td><td>Active-validation/Burp/exposure tests, coverage smoke.</td></tr>
       <tr><td><code>faf5840</code></td><td>Closed-loop remediation dashboard freshness.</td><td>8 focused remediation/reporting tests, 41 remediation/web UI tests.</td></tr>
       <tr><td><code>fcb4919</code></td><td>Guarded autostart hardening.</td><td>23 self-heal/subprocess/launcher/docker tests, dry-run smoke.</td></tr>
+      <tr><td><code>ff85e57</code></td><td>Automation limits review.</td><td>Policy/CLI tests and limits smoke.</td></tr>
+      <tr><td><code>cd4db9c</code></td><td>URLhaus CTI refresh readiness/import queue.</td><td>Feed/cycle/self-heal tests and dry-run CTI smoke.</td></tr>
+      <tr><td><code>a8148ce</code></td><td>Bounded Supabase page harvesting.</td><td>Feed-build and automation regression tests.</td></tr>
+      <tr><td><code>1dbc8a2</code></td><td>Bounded discovery artifact imports.</td><td>Discovery/registry tests and dry-run ProjectDiscovery smoke.</td></tr>
+      <tr><td><code>bcfe082</code></td><td>Queued source import item caps.</td><td>Automation queue tests and dry-run queue-planning smoke.</td></tr>
+      <tr><td><code>039b049</code></td><td>Supabase project-level table/row/candidate budgets.</td><td>Supabase feed-build and automation-cycle tests.</td></tr>
+      <tr><td><code>f93b726</code></td><td>Same-cycle feed-created source queue coverage.</td><td>Automation-cycle regression tests.</td></tr>
+      <tr><td><code>c8dc31c</code></td><td>Configurable CTI queue target promotion.</td><td>Automation queue/policy/self-heal tests.</td></tr>
+      <tr><td><code>c4e30b4</code></td><td>Queue count aliases for supervisors.</td><td>Automation cycle/self-heal tests and status/cycle smokes.</td></tr>
     </tbody>
   </table>
 

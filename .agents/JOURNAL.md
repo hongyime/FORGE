@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-08-29: B739 refreshed and re-uploaded the autonomous target loop PostPlan HTML so the published plan matches the latest hardening commits through c4e30b4.
 - 2026-08-29: B738 added total_count/ready_count/blocked_count/ignored_count aliases to queue and guarded source-queue summaries for supervisor-friendly parsing.
 - 2026-08-29: B737 made CTI queue target promotion configurable through queue_promote_targets and per-item promote_targets while preserving the previous enabled default.
 - 2026-08-29: B736 added same-cycle coverage for feed-build-created source queues so cycle must consume them and rebuild the feed before guarded live startup.
