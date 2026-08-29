@@ -278,5 +278,6 @@
 - 2026-08-29 16:20:32 +08:00 [PRAWN-E14/claude/session-start] branch=main head=32b1558 dirty=0
 - 2026-08-29 16:20:59 +08:00 [PRAWN-E14/codex/session-start] branch=main head=32b1558 dirty=0
 - 2026-08-29 16:51:03 +08:00 [PRAWN-E14/claude/session-start] branch=main head=036a094 dirty=0
+- 2026-08-29: Missing executables launched through the contained subprocess helper must be ordinary command failures, not unhandled Python tracebacks; `run_contained_subprocess` now returns code `127` on `OSError` from `Popen`.
 - 2026-08-29: Noisy live targets can produce huge phone-like seed queues from page text; autonomous runs now cap phone fan-out before expensive scheduling with `FORGE_PHONE_FANOUT_BATCH_LIMIT` (default 10, bounded 0..100) so one target cannot monopolize low-resource startup.
 - 2026-08-29: Live guarded automation can be blocked by final report generation even after target execution completes; Forge now uses `FORGE_REPORT_GENERATE_SUBPROCESS_TIMEOUT_SECONDS` (default 300s, bounded 30..86400) for `report generate` module children so kill-chain closeout can fall back deterministically instead of hanging the hands-off loop.

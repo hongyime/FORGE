@@ -26,14 +26,22 @@ def run_contained_subprocess(
         popen_kwargs["creationflags"] = _windows_creation_flags()
     else:
         popen_kwargs["start_new_session"] = True
-    proc = subprocess.Popen(  # noqa: S603
-        args,
-        cwd=cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        **popen_kwargs,
-    )
+    try:
+        proc = subprocess.Popen(  # noqa: S603
+            args,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            **popen_kwargs,
+        )
+    except OSError as exc:
+        return subprocess.CompletedProcess(
+            args,
+            127,
+            "",
+            f"{type(exc).__name__}: {_coerce_stream_text(exc)}",
+        )
     try:
         stdout, stderr = proc.communicate(timeout=timeout)
         return subprocess.CompletedProcess(args, proc.returncode, stdout, stderr)

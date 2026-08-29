@@ -69,6 +69,25 @@ def test_run_contained_subprocess_accepts_cwd(
     assert captured["kwargs"]["cwd"] == "/tmp/forge"
 
 
+def test_run_contained_subprocess_returns_missing_executable_result(
+    monkeypatch,
+) -> None:
+    def fake_popen(_command: list[str], **_kwargs: object) -> _FakeProcess:
+        raise FileNotFoundError("missing executable")
+
+    monkeypatch.setattr(subprocess_tree.subprocess, "Popen", fake_popen)
+
+    result = subprocess_tree.run_contained_subprocess(
+        ["missing-tool"],
+        timeout_seconds=3,
+    )
+
+    assert result.args == ["missing-tool"]
+    assert result.returncode == 127
+    assert result.stdout == ""
+    assert "FileNotFoundError: missing executable" in result.stderr
+
+
 def test_run_contained_subprocess_terminates_tree_on_timeout(
     monkeypatch,
 ) -> None:
