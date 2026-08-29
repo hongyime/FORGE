@@ -248,3 +248,4 @@
 - 2026-08-29: B744 refreshes the autonomous target loop PostPlan draft to version 4 so the public HTML includes the low-memory limits checkpoint.
 - 2026-08-29: B745 makes Supabase status honor valid Forge connector-secret references as configured credentials while keeping secret resolution inside feed-build.
 - 2026-08-29: B746 refreshes the autonomous target loop PostPlan draft to version 5 so the public HTML includes Supabase secret-store readiness.
+- 2026-08-29: Current supervisor verification after B746 shows live startup is correctly fail-closed only on `free_memory_below_threshold` at 542 MB free against the 1024 MB local gate.
