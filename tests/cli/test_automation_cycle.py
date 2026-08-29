@@ -409,6 +409,7 @@ def test_automation_status_summarizes_cti_refresh_without_network(
         encoding="utf-8",
     )
     monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
+    monkeypatch.delenv("FORGE_URLHAUS_AUTH_KEY", raising=False)
 
     payload = automation_status(
         imports_dir=imports_dir,
@@ -426,8 +427,14 @@ def test_automation_status_summarizes_cti_refresh_without_network(
     assert payload["cti_refresh"]["key_env_present"] is False
     assert payload["cti_refresh"]["artifact"]["exists"] is True
     assert payload["cti_refresh"]["queue"]["input_count"] == 0
+    assert payload["cti_refresh"]["provider_count"] == 2
+    assert payload["cti_refresh"]["ready_count"] == 0
+    assert payload["cti_refresh"]["key_env_unset_count"] == 2
+    provider_names = [item["provider"] for item in payload["cti_refresh"]["providers"]]
+    assert provider_names == ["threatfox", "urlhaus"]
     assert payload["cti_refresh"]["next_actions"] == [
-        ["set", "FORGE_THREATFOX_AUTH_KEY=<free abuse.ch Auth-Key>"]
+        ["set", "FORGE_THREATFOX_AUTH_KEY=<free abuse.ch Auth-Key>"],
+        ["set", "FORGE_URLHAUS_AUTH_KEY=<free abuse.ch Auth-Key>"],
     ]
 
 
@@ -442,6 +449,7 @@ def test_automation_status_recommends_cti_refresh_when_free_key_env_present(
         encoding="utf-8",
     )
     monkeypatch.setenv("FORGE_THREATFOX_AUTH_KEY", "free-test-auth-key")
+    monkeypatch.delenv("FORGE_URLHAUS_AUTH_KEY", raising=False)
 
     payload = automation_status(
         imports_dir=imports_dir,
@@ -452,6 +460,7 @@ def test_automation_status_recommends_cti_refresh_when_free_key_env_present(
 
     assert payload["cti_refresh"]["status"] == "ready"
     assert payload["cti_refresh"]["key_env_present"] is True
+    assert payload["cti_refresh"]["ready_count"] == 1
     assert payload["cti_refresh"]["next_actions"][0] == [
         "forge",
         "automation",
@@ -465,6 +474,49 @@ def test_automation_status_recommends_cti_refresh_when_free_key_env_present(
     ]
     assert payload["next_actions"][0] == (
         "forge automation cti-refresh --provider threatfox "
+        "--engagement 1001 --apply --json"
+    )
+
+
+def test_automation_status_recommends_urlhaus_refresh_when_only_urlhaus_key_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "target-feed.json").write_text(
+        json.dumps({"schema_version": "target-feed.v1", "items": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORGE_THREATFOX_AUTH_KEY", raising=False)
+    monkeypatch.setenv("FORGE_URLHAUS_AUTH_KEY", "free-urlhaus-auth-key")
+
+    payload = automation_status(
+        imports_dir=imports_dir,
+        output=imports_dir / "target-feed.json",
+        data_dir=tmp_path / "data",
+        engagement=1001,
+    )
+
+    assert payload["cti_refresh"]["status"] == "ready"
+    assert payload["cti_refresh"]["key_env_present"] is False
+    assert payload["cti_refresh"]["ready_count"] == 1
+    urlhaus = payload["cti_refresh"]["providers"][1]
+    assert urlhaus["provider"] == "urlhaus"
+    assert urlhaus["key_env_present"] is True
+    assert payload["cti_refresh"]["next_actions"][0] == [
+        "forge",
+        "automation",
+        "cti-refresh",
+        "--provider",
+        "urlhaus",
+        "--engagement",
+        "1001",
+        "--apply",
+        "--json",
+    ]
+    assert payload["next_actions"][0] == (
+        "forge automation cti-refresh --provider urlhaus "
         "--engagement 1001 --apply --json"
     )
 
@@ -1319,6 +1371,7 @@ def test_automation_cycle_includes_cti_refresh_readiness(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("FORGE_THREATFOX_AUTH_KEY", "free-test-auth-key")
+    monkeypatch.delenv("FORGE_URLHAUS_AUTH_KEY", raising=False)
 
     payload = automation_cycle(
         apply=False,
@@ -1335,6 +1388,7 @@ def test_automation_cycle_includes_cti_refresh_readiness(
     )
     assert payload["cti_refresh"]["status"] == "ready"
     assert payload["cti_refresh"]["key_env"] == "FORGE_THREATFOX_AUTH_KEY"
+    assert payload["cti_refresh"]["ready_count"] == 1
     assert payload["cti_refresh"]["next_actions"][0] == [
         "forge",
         "automation",

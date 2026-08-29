@@ -463,7 +463,7 @@ def register_automation_commands(app: typer.Typer) -> None:
         provider: str = typer.Option(
             "threatfox",
             "--provider",
-            help="Public/free CTI provider to refresh. Currently: threatfox.",
+            help="Public/free CTI provider to refresh. Currently: threatfox, urlhaus.",
         ),
         imports_dir: Path = typer.Option(
             Path("imports"),
@@ -475,7 +475,7 @@ def register_automation_commands(app: typer.Typer) -> None:
             "--days",
             min=1,
             max=7,
-            help="ThreatFox recent IOC window in days.",
+            help="Recent IOC window in days where supported by the provider.",
         ),
         limit: int | None = typer.Option(
             None,
@@ -493,7 +493,7 @@ def register_automation_commands(app: typer.Typer) -> None:
         key_env: str = typer.Option(
             "",
             "--key-env",
-            help="Environment variable holding a free abuse.ch Auth-Key for --apply. Defaults to FORGE_THREATFOX_AUTH_KEY.",
+            help="Environment variable holding a free abuse.ch Auth-Key for --apply. Defaults per provider.",
         ),
         apply: bool = typer.Option(
             False,

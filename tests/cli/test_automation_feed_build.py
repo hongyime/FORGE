@@ -910,6 +910,114 @@ def test_cti_refresh_apply_defaults_to_threatfox_key_env(
     assert requests[0]["headers"] == {"Auth-Key": "free-test-auth-key"}
 
 
+def test_cti_refresh_dry_run_supports_urlhaus_without_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+
+    def fail_get(*_args, **_kwargs):
+        raise AssertionError("dry-run must not call URLhaus")
+
+    monkeypatch.setattr(automation_cycle_module.httpx, "get", fail_get)
+
+    result = runner.invoke(
+        app,
+        [
+            "cti-refresh",
+            "--provider",
+            "urlhaus",
+            "--imports-dir",
+            str(imports_dir),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["execution_policy"] == "dry_run_no_network_or_writes"
+    assert payload["provider"] == "urlhaus"
+    assert payload["source_url"] == automation_cycle_module.URLHAUS_RECENT_CSV_URL_REDACTED
+    assert payload["key_env"] == "FORGE_URLHAUS_AUTH_KEY"
+    assert payload["queue_update"]["connector_id"] == "abusech_urlhaus"
+    assert payload["queue_update"]["value"] == "urlhaus-observations.local.json"
+    assert not (imports_dir / "urlhaus-inputs.local.json").exists()
+
+
+def test_cti_refresh_apply_fetches_urlhaus_artifact_and_queues_input(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imports_dir = tmp_path / "imports"
+    monkeypatch.setenv("FORGE_URLHAUS_AUTH_KEY", "free-urlhaus-auth-key")
+
+    class FakeResponse:
+        text = (
+            "# URLhaus recent CSV\n"
+            "id,dateadded,url,url_status,threat,tags,urlhaus_link,reporter\n"
+            "1,2026-08-29 00:00:00,https://malware.example/payload.exe,online,"
+            "malware_download,test,https://urlhaus.abuse.ch/url/1/,analyst\n"
+            "2,2026-08-29 00:01:00,https://second.example/dropper,online,"
+            "malware_download,test,https://urlhaus.abuse.ch/url/2/,analyst\n"
+        )
+
+        def raise_for_status(self) -> None:
+            return None
+
+    requests: list[dict[str, object]] = []
+
+    def fake_get(url, *, timeout):
+        requests.append({"url": url, "timeout": timeout})
+        return FakeResponse()
+
+    monkeypatch.setattr(automation_cycle_module.httpx, "get", fake_get)
+
+    result = runner.invoke(
+        app,
+        [
+            "cti-refresh",
+            "--provider",
+            "urlhaus",
+            "--imports-dir",
+            str(imports_dir),
+            "--limit",
+            "1",
+            "--engagement",
+            "1001",
+            "--apply",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["execution_policy"] == (
+        "public_provider_read_local_artifact_and_queue_write"
+    )
+    assert payload["provider"] == "urlhaus"
+    assert payload["source_url"] == automation_cycle_module.URLHAUS_RECENT_CSV_URL_REDACTED
+    assert payload["downloaded_count"] == 1
+    assert requests == [
+        {
+            "url": automation_cycle_module.URLHAUS_RECENT_CSV_URL_TEMPLATE.format(
+                auth_key="free-urlhaus-auth-key"
+            ),
+            "timeout": 30.0,
+        }
+    ]
+    artifact = imports_dir / "urlhaus-observations.local.json"
+    saved = json.loads(artifact.read_text(encoding="utf-8"))
+    assert saved["provider"] == "abusech_urlhaus"
+    assert saved["source_url"] == automation_cycle_module.URLHAUS_RECENT_CSV_URL_REDACTED
+    assert saved["collection_method"] == "public_api_recent_urls"
+    assert saved["data"][0]["ioc"] == "https://malware.example/payload.exe"
+    queue = json.loads(
+        (imports_dir / "urlhaus-inputs.local.json").read_text(encoding="utf-8")
+    )
+    assert queue["inputs"][0]["value"] == "urlhaus-observations.local.json"
+    assert queue["inputs"][0]["engagement_id"] == 1001
+    assert payload["queue_update"]["connector_id"] == "abusech_urlhaus"
+
+
 def test_cti_refresh_apply_requires_key_env_value_without_writes(tmp_path: Path) -> None:
     imports_dir = tmp_path / "imports"
 
@@ -1016,7 +1124,7 @@ def test_cti_refresh_rejects_keyed_or_unimplemented_public_sources(
         [
             "cti-refresh",
             "--provider",
-            "urlhaus",
+            "misp",
             "--imports-dir",
             str(tmp_path / "imports"),
             "--json",
@@ -1024,7 +1132,7 @@ def test_cti_refresh_rejects_keyed_or_unimplemented_public_sources(
     )
 
     assert result.exit_code == 2
-    assert "unsupported_public_cti_provider:urlhaus" in result.output
+    assert "unsupported_public_cti_provider:misp" in result.output
 
 
 def test_feed_build_missing_and_malformed_sources_fail_soft(tmp_path: Path) -> None:

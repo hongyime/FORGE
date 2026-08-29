@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import subprocess
@@ -7,6 +9,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -68,6 +71,12 @@ DEFAULT_ENGAGEMENT_ENV = "FORGE_DEFAULT_ENGAGEMENT_ID"
 THREATFOX_RECENT_IOCS_URL = "https://threatfox-api.abuse.ch/api/v1/"
 THREATFOX_REFRESH_FILENAME = "threatfox-observations.local.json"
 DEFAULT_THREATFOX_KEY_ENV = "FORGE_THREATFOX_AUTH_KEY"
+URLHAUS_RECENT_CSV_URL_TEMPLATE = "https://urlhaus-api.abuse.ch/v2/files/exports/{auth_key}/recent.csv"
+URLHAUS_RECENT_CSV_URL_REDACTED = (
+    "https://urlhaus-api.abuse.ch/v2/files/exports/<AUTH_KEY>/recent.csv"
+)
+URLHAUS_REFRESH_FILENAME = "urlhaus-observations.local.json"
+DEFAULT_URLHAUS_KEY_ENV = "FORGE_URLHAUS_AUTH_KEY"
 
 
 def automation_status(
@@ -742,8 +751,61 @@ def _cti_refresh_readiness(
     key_env: str = DEFAULT_THREATFOX_KEY_ENV,
 ) -> dict[str, Any]:
     root_imports = Path(imports_dir)
-    artifact = root_imports / THREATFOX_REFRESH_FILENAME
-    queue_path = root_imports / SOURCE_QUEUE_FILES["abusech_threatfox"]["filename"]
+    providers = [
+        _cti_refresh_provider_readiness(
+            root_imports=root_imports,
+            provider="threatfox",
+            engagement=engagement,
+            key_env=key_env,
+        ),
+        _cti_refresh_provider_readiness(
+            root_imports=root_imports,
+            provider="urlhaus",
+            engagement=engagement,
+            key_env="",
+        ),
+    ]
+    threatfox = providers[0]
+    ready_count = sum(1 for item in providers if item["key_env_present"])
+    status = "ready" if ready_count else "key_env_unset"
+    if ready_count:
+        next_actions = [item["command"] for item in providers if item["key_env_present"]]
+    else:
+        next_actions = [
+            ["set", f"{item['key_env']}=<free abuse.ch Auth-Key>"]
+            for item in providers
+        ]
+    return {
+        "schema_version": "forge.cti_refresh_readiness.v1",
+        "execution_policy": "read_only_cti_refresh_readiness_no_network_or_writes",
+        "provider": "threatfox",
+        "status": status,
+        "requires_key_env": True,
+        "key_env": threatfox["key_env"],
+        "key_env_present": threatfox["key_env_present"],
+        "artifact": threatfox["artifact"],
+        "queue": threatfox["queue"],
+        "engagement": engagement,
+        "provider_count": len(providers),
+        "ready_count": ready_count,
+        "key_env_unset_count": len(providers) - ready_count,
+        "providers": providers,
+        "next_actions": next_actions,
+    }
+
+
+def _cti_refresh_provider_readiness(
+    *,
+    root_imports: Path,
+    provider: str,
+    engagement: int | None,
+    key_env: str,
+) -> dict[str, Any]:
+    provider_config = _public_cti_provider_config(provider)
+    if provider_config is None:
+        raise ValueError(f"unsupported_public_cti_provider:{provider}")
+    artifact = root_imports / provider_config["filename"]
+    queue_path = root_imports / SOURCE_QUEUE_FILES[provider_config["connector_id"]]["filename"]
     queue_count = 0
     if queue_path.is_file():
         try:
@@ -752,25 +814,24 @@ def _cti_refresh_readiness(
                 queue_count = len([item for item in raw_inputs if isinstance(item, dict)])
         except ValueError:
             queue_count = 0
-    env_name = _selected_threatfox_key_env(key_env)
+    env_name = _selected_public_cti_key_env(provider, key_env)
     env_present = bool(os.environ.get(env_name, "").strip())
-    status = "ready" if env_present else "key_env_unset"
     command = [
         "forge",
         "automation",
         "cti-refresh",
         "--provider",
-        "threatfox",
+        provider,
         "--apply",
         "--json",
     ]
     if engagement is not None:
         command[5:5] = ["--engagement", str(engagement)]
     return {
-        "schema_version": "forge.cti_refresh_readiness.v1",
-        "execution_policy": "read_only_cti_refresh_readiness_no_network_or_writes",
-        "provider": "threatfox",
-        "status": status,
+        "provider": provider,
+        "connector_id": provider_config["connector_id"],
+        "source_url": provider_config["source_url"],
+        "status": "ready" if env_present else "key_env_unset",
         "requires_key_env": True,
         "key_env": env_name,
         "key_env_present": env_present,
@@ -784,15 +845,7 @@ def _cti_refresh_readiness(
             "exists": queue_path.is_file(),
             "input_count": queue_count,
         },
-        "engagement": engagement,
-        "next_actions": [
-            command
-            if env_present
-            else [
-                "set",
-                f"{env_name}=<free abuse.ch Auth-Key>",
-            ]
-        ],
+        "command": command,
     }
 
 
@@ -859,25 +912,27 @@ def refresh_public_cti_input(
     apply: bool = False,
 ) -> dict[str, Any]:
     normalized_provider = str(provider or "").strip().lower()
-    if normalized_provider != "threatfox":
+    provider_config = _public_cti_provider_config(normalized_provider)
+    if provider_config is None:
         raise ValueError(f"unsupported_public_cti_provider:{normalized_provider}")
     safe_days = max(1, min(int(days), 7))
     safe_limit = _safe_positive_int(limit) if limit is not None else None
     root_imports = Path(imports_dir or "imports")
-    artifact = root_imports / THREATFOX_REFRESH_FILENAME
+    artifact = root_imports / provider_config["filename"]
+    auth_key_env = _selected_public_cti_key_env(normalized_provider, key_env)
     if not apply:
         queue_preview = {
             "schema_version": "forge.source_input_config.v1",
             "execution_policy": "dry_run_no_writes",
             "dry_run": True,
             "apply_requested": False,
-            "config_path": str(root_imports / SOURCE_QUEUE_FILES["abusech_threatfox"]["filename"]),
-            "connector_id": "abusech_threatfox",
+            "config_path": str(root_imports / SOURCE_QUEUE_FILES[provider_config["connector_id"]]["filename"]),
+            "connector_id": provider_config["connector_id"],
             "input_kind": "cti_marker",
-            "value": THREATFOX_REFRESH_FILENAME,
+            "value": provider_config["filename"],
             "engagement_id": engagement,
             "target": "",
-            "priority": _default_input_priority("abusech_threatfox"),
+            "priority": _default_input_priority(provider_config["connector_id"]),
             "status": "would_append",
             "changed": True,
             "next_action": "Run forge automation cycle --apply --source all --json.",
@@ -888,29 +943,31 @@ def refresh_public_cti_input(
             "dry_run": True,
             "apply_requested": False,
             "provider": normalized_provider,
-            "source_url": THREATFOX_RECENT_IOCS_URL,
+            "source_url": provider_config["source_url"],
             "days": safe_days,
             "limit": safe_limit,
-            "key_env": _selected_threatfox_key_env(key_env),
+            "key_env": auth_key_env,
             "requires_key_env": True,
             "artifact_path": str(artifact),
             "downloaded_count": 0,
             "written": False,
             "queue_update": queue_preview,
             "next_action": (
-                f"Set a free abuse.ch Auth-Key in {DEFAULT_THREATFOX_KEY_ENV}, then run "
-                "forge automation cti-refresh --provider threatfox --apply --json."
+                f"Set a free abuse.ch Auth-Key in {provider_config['default_key_env']}, then run "
+                f"forge automation cti-refresh --provider {normalized_provider} --apply --json."
             ),
         }
 
-    auth_key_env = _selected_threatfox_key_env(key_env)
     if not _env_var_name_valid(auth_key_env):
         raise ValueError("key_env_must_be_env_var_name_not_key_value")
     auth_key = os.environ.get(auth_key_env, "").strip()
     if not auth_key:
         raise ValueError(f"key_env_unset:{auth_key_env}")
 
-    payload = _fetch_threatfox_recent_iocs(days=safe_days, auth_key=auth_key)
+    if normalized_provider == "threatfox":
+        payload = _fetch_threatfox_recent_iocs(days=safe_days, auth_key=auth_key)
+    else:
+        payload = _fetch_urlhaus_recent_urls(auth_key=auth_key)
     raw_data = payload.get("data")
     data = raw_data if isinstance(raw_data, list) else []
     if safe_limit is not None:
@@ -922,7 +979,7 @@ def refresh_public_cti_input(
             "dry_run": False,
             "apply_requested": True,
             "provider": normalized_provider,
-            "source_url": THREATFOX_RECENT_IOCS_URL,
+            "source_url": provider_config["source_url"],
             "days": safe_days,
             "limit": safe_limit,
             "key_env": auth_key_env,
@@ -931,13 +988,16 @@ def refresh_public_cti_input(
             "downloaded_count": 0,
             "written": False,
             "queue_update": None,
-            "next_action": "No recent ThreatFox IOCs were returned; keep using local artifact queues.",
+            "next_action": (
+                f"No recent {provider_config['label']} IOCs were returned; "
+                "keep using local artifact queues."
+            ),
         }
     export_payload = {
         "schema_version": "forge.cti_observations.local.v1",
-        "provider": "abusech_threatfox",
-        "source_url": THREATFOX_RECENT_IOCS_URL,
-        "collection_method": "public_api_recent_iocs",
+        "provider": provider_config["connector_id"],
+        "source_url": provider_config["source_url"],
+        "collection_method": provider_config["collection_method"],
         "fetched_at": _now_iso(),
         "days": safe_days,
         "query_status": str(payload.get("query_status") or ""),
@@ -946,7 +1006,7 @@ def refresh_public_cti_input(
     root_imports.mkdir(parents=True, exist_ok=True)
     _write_json_atomic(artifact, export_payload)
     queue_update = configure_source_input(
-        connector_id="abusech_threatfox",
+        connector_id=provider_config["connector_id"],
         artifact=artifact,
         imports_dir=root_imports,
         engagement=engagement,
@@ -958,7 +1018,7 @@ def refresh_public_cti_input(
         "dry_run": False,
         "apply_requested": True,
         "provider": normalized_provider,
-        "source_url": THREATFOX_RECENT_IOCS_URL,
+        "source_url": provider_config["source_url"],
         "days": safe_days,
         "limit": safe_limit,
         "key_env": auth_key_env,
@@ -1106,8 +1166,39 @@ def _string_list(value: Any) -> list[str]:
     return [str(item).strip() for item in items if str(item).strip()]
 
 
+def _public_cti_provider_config(provider: str) -> dict[str, str] | None:
+    configs = {
+        "threatfox": {
+            "label": "ThreatFox",
+            "connector_id": "abusech_threatfox",
+            "filename": THREATFOX_REFRESH_FILENAME,
+            "source_url": THREATFOX_RECENT_IOCS_URL,
+            "default_key_env": DEFAULT_THREATFOX_KEY_ENV,
+            "collection_method": "public_api_recent_iocs",
+        },
+        "urlhaus": {
+            "label": "URLhaus",
+            "connector_id": "abusech_urlhaus",
+            "filename": URLHAUS_REFRESH_FILENAME,
+            "source_url": URLHAUS_RECENT_CSV_URL_REDACTED,
+            "default_key_env": DEFAULT_URLHAUS_KEY_ENV,
+            "collection_method": "public_api_recent_urls",
+        },
+    }
+    return configs.get(str(provider or "").strip().lower())
+
+
+def _selected_public_cti_key_env(provider: str, key_env: str) -> str:
+    if str(key_env or "").strip():
+        return str(key_env or "").strip()
+    config = _public_cti_provider_config(provider)
+    if config is None:
+        return DEFAULT_THREATFOX_KEY_ENV
+    return config["default_key_env"]
+
+
 def _selected_threatfox_key_env(key_env: str) -> str:
-    return str(key_env or "").strip() or DEFAULT_THREATFOX_KEY_ENV
+    return _selected_public_cti_key_env("threatfox", key_env)
 
 
 def _fetch_threatfox_recent_iocs(*, days: int, auth_key: str) -> dict[str, Any]:
@@ -1133,6 +1224,57 @@ def _fetch_threatfox_recent_iocs(*, days: int, auth_key: str) -> dict[str, Any]:
     elif not isinstance(raw_data, list):
         raise ValueError("threatfox_data_not_list")
     return payload
+
+
+def _fetch_urlhaus_recent_urls(*, auth_key: str) -> dict[str, Any]:
+    safe_auth_key = quote(str(auth_key or "").strip(), safe="")
+    url = URLHAUS_RECENT_CSV_URL_TEMPLATE.format(auth_key=safe_auth_key)
+    try:
+        response = httpx.get(url, timeout=30.0)
+        response.raise_for_status()
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"urlhaus_http:{type(exc).__name__}") from exc
+    data = _parse_urlhaus_recent_csv(response.text)
+    return {"query_status": "ok" if data else "no_result", "data": data}
+
+
+def _parse_urlhaus_recent_csv(text: str) -> list[dict[str, str]]:
+    lines = [
+        line
+        for line in str(text or "").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not lines:
+        return []
+    header = [item.strip().lower() for item in next(csv.reader([lines[0]]))]
+    if "url" not in header:
+        return _parse_urlhaus_plain_or_headerless_rows(lines)
+    rows: list[dict[str, str]] = []
+    for row in csv.DictReader(io.StringIO("\n".join(lines))):
+        normalized = {
+            str(key or "").strip().lower(): str(value or "").strip()
+            for key, value in row.items()
+            if key is not None
+        }
+        url_value = normalized.get("url", "")
+        if not url_value:
+            continue
+        normalized["ioc"] = url_value
+        normalized["ioc_type"] = "url"
+        rows.append(normalized)
+    return rows
+
+
+def _parse_urlhaus_plain_or_headerless_rows(lines: list[str]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for parsed in csv.reader(lines):
+        if not parsed:
+            continue
+        candidate = str(parsed[0] or "").strip()
+        if not candidate:
+            continue
+        rows.append({"url": candidate, "ioc": candidate, "ioc_type": "url"})
+    return rows
 
 
 def configure_source_input(
