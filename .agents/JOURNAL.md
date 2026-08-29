@@ -266,3 +266,5 @@
 - 2026-08-29 B755: Connector run-plan import commands must be dry-run-first, and exposure metrics/dashboard readers must tolerate legacy remediation schemas without requiring migrations before read-only dashboard generation.
 
 - 2026-08-29 B756: Refreshed the autonomous target loop PostPlan draft to version 9 so the public HTML includes the run-plan and exposure-metrics robustness fix.
+- 2026-08-29 B757: Daily-use import guidance must be both dry-run-first and explicitly bounded, and startup wrapper loops must back off then surface repeated wrapper-level failures instead of retrying forever.
+- 2026-08-29 B758: Refreshed the autonomous target loop PostPlan draft to version 10 so the public HTML includes bounded import guidance and startup wrapper backoff.

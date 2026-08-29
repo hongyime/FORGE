@@ -150,6 +150,7 @@
       <tr><td><code>e3b8bb0</code></td><td>Autopilot dry-run non-mutating contract.</td><td>Target-import and launcher tests, lint, compile, diff check, pasted-key fragment scan.</td></tr>
       <tr><td><code>fbe3c72</code></td><td>Docker autostart memory gate wiring.</td><td>Self-heal and Docker packaging tests, lint, compile, diff check, pasted-key fragment scan.</td></tr>
       <tr><td><code>3aa3312</code></td><td>Run-plan and exposure-metrics robustness.</td><td>Broad autonomous-loop suite, connector run-plan smoke, lint, compile, diff check, pasted-key fragment scan.</td></tr>
+      <tr><td><code>8c79823</code></td><td>Bounded import guidance and startup wrapper backoff.</td><td>Broad non-live autonomous-loop suite, low-memory Compose config render, connector/self-heal/status smokes, lint, compile, diff check, pasted-key fragment scan.</td></tr>
     </tbody>
   </table>
 
@@ -210,6 +211,7 @@
     <li>Dry-run remains default for feed-build/import/resume/monitoring/autostart planning.</li>
     <li>Live target actions require ROE, scoped manifests, normal Forge live gates, and explicit apply/start flags.</li>
     <li>Startup automation fails closed on low memory, low disk, Docker failure, active locks, cooldown/backoff, or missing local config.</li>
+    <li>Docker and Windows startup wrappers apply their own bounded failure backoff so repeated wrapper-level failures surface instead of silently retrying forever.</li>
   </ul>
 
   <h2>References</h2>
