@@ -933,6 +933,11 @@ def _start_kill_chain(
         command,
         timeout_seconds=timeout_seconds,
         timeout_stderr=f"target import child exceeded timeout_seconds={timeout_seconds}",
+        success_when=lambda: _completed_kill_chain_run(
+            engagement_db_path,
+            engagement_id=engagement_id,
+            seed=seed,
+        ),
     )
     if proc.stdout:
         sys.stdout.write(proc.stdout)

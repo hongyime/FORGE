@@ -5,6 +5,8 @@ import os
 import signal
 import subprocess
 import sys
+import time
+from collections.abc import Callable
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -16,6 +18,8 @@ def run_contained_subprocess(
     timeout_returncode: int = 124,
     timeout_stderr: str | None = None,
     cwd: str | Path | None = None,
+    success_when: Callable[[], bool] | None = None,
+    success_check_interval_seconds: float = 5.0,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command with captured text output and process-tree timeout cleanup."""
 
@@ -42,6 +46,33 @@ def run_contained_subprocess(
             "",
             f"{type(exc).__name__}: {_coerce_stream_text(exc)}",
         )
+    if success_when is None:
+        return _communicate_with_timeout(
+            proc,
+            args,
+            timeout=timeout,
+            timeout_returncode=timeout_returncode,
+            timeout_stderr=timeout_stderr,
+        )
+    return _communicate_until_success_or_timeout(
+        proc,
+        args,
+        timeout=timeout,
+        timeout_returncode=timeout_returncode,
+        timeout_stderr=timeout_stderr,
+        success_when=success_when,
+        check_interval_seconds=success_check_interval_seconds,
+    )
+
+
+def _communicate_with_timeout(
+    proc: subprocess.Popen[str],
+    args: list[str],
+    *,
+    timeout: float,
+    timeout_returncode: int,
+    timeout_stderr: str | None,
+) -> subprocess.CompletedProcess[str]:
     try:
         stdout, stderr = proc.communicate(timeout=timeout)
         return subprocess.CompletedProcess(args, proc.returncode, stdout, stderr)
@@ -57,6 +88,51 @@ def run_contained_subprocess(
             or _coerce_stream_text(stderr)
             or f"subprocess exceeded timeout_seconds={timeout:g}",
         )
+
+
+def _communicate_until_success_or_timeout(
+    proc: subprocess.Popen[str],
+    args: list[str],
+    *,
+    timeout: float,
+    timeout_returncode: int,
+    timeout_stderr: str | None,
+    success_when: Callable[[], bool],
+    check_interval_seconds: float,
+) -> subprocess.CompletedProcess[str]:
+    deadline = time.monotonic() + timeout
+    interval = max(0.25, min(float(check_interval_seconds), timeout))
+    pending_stdout = ""
+    pending_stderr = ""
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            _terminate_process_tree(proc)
+            stdout, stderr = proc.communicate()
+            return subprocess.CompletedProcess(
+                args,
+                timeout_returncode,
+                pending_stdout + _coerce_stream_text(stdout),
+                timeout_stderr
+                or pending_stderr
+                or _coerce_stream_text(stderr)
+                or f"subprocess exceeded timeout_seconds={timeout:g}",
+            )
+        try:
+            stdout, stderr = proc.communicate(timeout=min(interval, remaining))
+            return subprocess.CompletedProcess(args, proc.returncode, stdout, stderr)
+        except subprocess.TimeoutExpired as exc:
+            pending_stdout = _coerce_stream_text(exc.stdout) or pending_stdout
+            pending_stderr = _coerce_stream_text(exc.stderr) or pending_stderr
+            if success_when():
+                _terminate_process_tree(proc)
+                stdout, stderr = proc.communicate()
+                return subprocess.CompletedProcess(
+                    args,
+                    0,
+                    pending_stdout + _coerce_stream_text(stdout),
+                    pending_stderr + _coerce_stream_text(stderr),
+                )
 
 
 def _windows_creation_flags() -> int:

@@ -113,3 +113,37 @@ def test_run_contained_subprocess_terminates_tree_on_timeout(
     assert result.returncode == 124
     assert result.stdout == "partialstdout"
     assert result.stderr == "child timed out"
+
+
+def test_run_contained_subprocess_terminates_tree_when_success_predicate_passes(
+    monkeypatch,
+) -> None:
+    terminated: list[int] = []
+    checks = {"count": 0}
+
+    def fake_popen(command: list[str], **_kwargs: object) -> _FakeProcess:
+        return _FakeProcess(command, timeout=True)
+
+    def success_when() -> bool:
+        checks["count"] += 1
+        return True
+
+    monkeypatch.setattr(subprocess_tree.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        subprocess_tree,
+        "_terminate_process_tree",
+        lambda proc: terminated.append(proc.pid),
+    )
+
+    result = subprocess_tree.run_contained_subprocess(
+        ["forge", "kill-chain", "example.com"],
+        timeout_seconds=30,
+        success_when=success_when,
+        success_check_interval_seconds=0.25,
+    )
+
+    assert checks["count"] == 1
+    assert terminated == [4242]
+    assert result.returncode == 0
+    assert result.stdout == "partialstdout"
+    assert result.stderr == "stderr"

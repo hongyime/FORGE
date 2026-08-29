@@ -286,3 +286,8 @@
 - 2026-08-29: Optional post-report prerequisite auto-runs must have a shorter timeout than general module children; labels beginning `prereq:` now use `FORGE_PREREQ_SUBPROCESS_TIMEOUT_SECONDS` defaulting to 120 seconds.
 - 2026-08-29: Target import should not fail a live cycle just because the kill-chain wrapper exits nonzero after the engagement DB already records the matching run as completed.
 - 2026-08-29 19:36:35 +08:00 [PRAWN-E14/claude/session-start] branch=main head=05f0d8d dirty=0
+- 2026-08-29 19:56:53 +08:00 [PRAWN-E14/claude/session-start] branch=main head=a869843 dirty=0
+- 2026-08-29 19:57:11 +08:00 [PRAWN-E14/codex/session-start] branch=main head=a869843 dirty=0
+- 2026-08-29 20:18:45 +08:00 [PRAWN-E14/claude/session-start] branch=main head=a869843 dirty=0
+- 2026-08-29 20:40:08 +08:00 [PRAWN-E14/claude/session-start] branch=main head=a869843 dirty=6
+- 2026-08-29: Target-import parents should stop waiting as soon as the engagement DB confirms kill-chain completion; Docker guarded autostart must receive ignored local `.env` values so provider keys survive hands-off Docker restarts without committing secrets.

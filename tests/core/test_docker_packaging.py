@@ -102,6 +102,7 @@ def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
     assert "restart: unless-stopped" in compose
     assert 'cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"' in compose
     assert 'mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-1536m}"' in compose
+    assert "env_file:\n      - ../.env" in compose
     assert "/bin/sh" in compose
     assert "while true; do" in compose
     assert 'sleep "$${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"' in compose

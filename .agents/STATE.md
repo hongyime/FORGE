@@ -3,6 +3,7 @@
 Current task: streamline autonomous live-safe daily operation around `forge automation cycle`, local input queues, and safe startup gates.
 
 Progress:
+- Completed B768 locally on 2026-08-29: hands-off live start exposed that a completed `kill-chain` child can remain alive until the parent hard timeout even after the engagement DB records completion. `run_contained_subprocess` now supports an optional `success_when` predicate that terminates the contained process tree and returns success as soon as the DB completion predicate passes; target import wires this for live kill-chain starts. Docker guarded autostart now passes ignored `../.env` into the autostart container so local-only Supabase/OpenRouter env vars are available after Docker restart. Verification passed: `tests\core\test_docker_packaging.py tests\core\test_subprocess_tree.py tests\cli\test_targets_import.py` (`88 passed, 1 skipped`, existing sqlite timestamp warnings), Ruff, `py_compile`, Docker Compose low-memory config render, `git diff --check`, and pasted-key fragment scan showing only existing dummy test strings. The user-approved foreground live cycle is still running under the old process image and has completed engagements `1010` and `1011`; engagement `1012` is currently in progress.
 - Completed B767 locally on 2026-08-29: target-import parent handling now treats any nonzero `kill-chain` child exit as successful when the engagement DB already confirms the matching kill-chain run completed. This covers hard child timeout cleanup after report/prereq closeout without failing the full autonomous cycle. Verification passed: focused target-import timeout/completed-run regressions plus helper and phone regressions (`8 passed`, existing sqlite timestamp warnings only), Ruff, `py_compile`, `git diff --check`, process-tree check, and pasted-key fragment scan showing only existing dummy test strings.
 - Completed B766 locally on 2026-08-29: the next user-approved live cycle completed target `138.221.222.159` / engagement `1008` through report timeout and template fallback, then stayed alive in post-report prerequisite auto-run (`prereq: cloud aws (Module 4)`) past the target runtime boundary. The over-time process tree was stopped. Optional prerequisite module children now use `FORGE_PREREQ_SUBPROCESS_TIMEOUT_SECONDS` (default 120 seconds, bounded 30..3600) when labels start with `prereq:`, so follow-on helpers fail closed instead of holding the hands-off loop. Verification passed: focused helper/prereq/phone regressions (`6 passed`), Ruff, `py_compile`, `git diff --check`, process-tree check, and pasted-key fragment scan showing only existing dummy test strings.
 - Completed B765 locally on 2026-08-29: user-approved hands-off live start exposed another phone fan-out guard gap. Engagement `1007` (`danbibleonys.taplink.ws`) reached `3.L phone fan-out (+17052023)` and stayed past the configured target runtime window; the active process tree was stopped to protect the host. Autonomous phone fan-out now requires E.164-like candidates, rejects impossible `phonenumbers` values and short NANP values, records weak candidates as skipped seed-runs, and marks them processed so future cycles do not redispatch them. Verification passed: focused live-branch phone regression plus subprocess timeout regressions (`8 passed`), Ruff, `py_compile`, `git diff --check`, process-tree check, and pasted-key fragment scan showing only existing dummy test strings.
@@ -464,13 +465,13 @@ Next steps:
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-08-29 19:36:35 +08:00
+- Updated: 2026-08-29 20:40:08 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: session-start
 - Branch: main
-- HEAD: 05f0d8d
-- Dirty files: 0
+- HEAD: a869843
+- Dirty files: 6
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
 

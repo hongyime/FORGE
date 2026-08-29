@@ -1872,6 +1872,7 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
         *,
         timeout_seconds: int,
         timeout_stderr: str,
+        **_kwargs: object,
     ) -> object:
         calls.append(command)
         assert timeout_seconds == 25 * 60 + 120
@@ -2171,6 +2172,7 @@ def test_start_limit_caps_scoped_kill_chain_launches(
         *,
         timeout_seconds: int,
         timeout_stderr: str,
+        **_kwargs: object,
     ) -> object:
         calls.append(command)
         assert timeout_seconds == 25 * 60 + 120

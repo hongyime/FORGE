@@ -182,6 +182,8 @@ services:
     restart: unless-stopped
     cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"
     mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-1536m}"
+    env_file:
+      - ../.env
     command:
       - /bin/sh
       - -c
