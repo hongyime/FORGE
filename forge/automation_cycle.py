@@ -67,6 +67,8 @@ INBOX_DIRNAME = "inbox"
 QUEUE_MAX_FAILURES = 5
 QUEUE_RETRY_BASE_SECONDS = 15 * 60
 QUEUE_RETRY_MAX_SECONDS = 6 * 60 * 60
+DEFAULT_QUEUE_IMPORT_ITEM_LIMIT = 1000
+MAX_QUEUE_IMPORT_ITEM_LIMIT = 10000
 DEFAULT_ENGAGEMENT_ENV = "FORGE_DEFAULT_ENGAGEMENT_ID"
 THREATFOX_RECENT_IOCS_URL = "https://threatfox-api.abuse.ch/api/v1/"
 THREATFOX_REFRESH_FILENAME = "threatfox-observations.local.json"
@@ -97,11 +99,13 @@ def automation_status(
         explicit=engagement,
         autostart_config=autostart_config_path,
     )
+    queue_import_item_limit = _autostart_queue_import_item_limit(autostart_config_path)
     queue_items = _load_queue_items(root_imports)
     ready_items, blocked_items, ignored_items = _classify_queue_items(
         queue_items,
         imports_dir=root_imports,
         engagement=effective_engagement,
+        import_item_limit=queue_import_item_limit,
     )
     autostart_probe = _status_autostart_probe(
         autostart_config_path=autostart_config_path,
@@ -226,6 +230,7 @@ def automation_cycle(
         autostart_config=selected_autostart_config,
         live=live,
     )
+    queue_import_item_limit = _autostart_queue_import_item_limit(selected_autostart_config)
     feed_payload = build_target_feed(
         sources=sources,
         data_dir=Path(cfg_data_dir),
@@ -246,6 +251,7 @@ def automation_cycle(
         queue_items,
         imports_dir=root_imports,
         engagement=effective_engagement,
+        import_item_limit=queue_import_item_limit,
     )
     selected_ready_items, deferred_ready_items = _bounded_ready_queue_items(
         ready_items,
@@ -350,6 +356,7 @@ def automation_cycle(
         "queues": _queue_summary(queue_items, ready_items, blocked_items, ignored_items),
         "queue_execution": {
             "queue_limit": selected_queue_limit,
+            "import_item_limit": queue_import_item_limit,
             "ready_count": len(ready_items),
             "selected_count": len(selected_ready_items),
             "deferred_count": len(deferred_ready_items),
@@ -1625,6 +1632,7 @@ def _classify_queue_items(
     *,
     imports_dir: Path,
     engagement: int | None,
+    import_item_limit: int,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     ready: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
@@ -1667,6 +1675,10 @@ def _classify_queue_items(
             engagement=item_engagement,
             artifact=artifact,
             target=str(item.get("target") or ""),
+            import_item_limit=_queue_item_import_limit(
+                item,
+                default=import_item_limit,
+            ),
         )
         ready.append(
             {
@@ -1733,6 +1745,7 @@ def _queue_command(
     engagement: int,
     artifact: Path,
     target: str,
+    import_item_limit: int,
 ) -> list[str]:
     command = [
         "forge",
@@ -1749,6 +1762,8 @@ def _queue_command(
         command.extend(["--target", target])
     if command_kind == "import-cti":
         command.append("--promote-targets")
+    if command_kind in {"import-cti", "import-discovery", "import-validation"}:
+        command.extend(["--limit", str(import_item_limit)])
     command.append("--json")
     return command
 
@@ -2041,6 +2056,23 @@ def _autostart_queue_limit(path: Path | None) -> int:
     payload = _read_json_object(path) if path is not None and Path(path).is_file() else {}
     value = _safe_int(payload.get("queue_limit"), default=10)
     return max(0, min(value, 1000))
+
+
+def _autostart_queue_import_item_limit(path: Path | None) -> int:
+    payload = _read_json_object(path) if path is not None and Path(path).is_file() else {}
+    value = _safe_int(
+        payload.get("queue_import_item_limit", payload.get("import_item_limit")),
+        default=DEFAULT_QUEUE_IMPORT_ITEM_LIMIT,
+    )
+    return max(1, min(value, MAX_QUEUE_IMPORT_ITEM_LIMIT))
+
+
+def _queue_item_import_limit(item: dict[str, Any], *, default: int) -> int:
+    value = _safe_int(
+        item.get("limit", item.get("import_item_limit")),
+        default=default,
+    )
+    return max(1, min(value, MAX_QUEUE_IMPORT_ITEM_LIMIT))
 
 
 def _selected_queue_limit(

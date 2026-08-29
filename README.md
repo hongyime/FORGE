@@ -314,7 +314,9 @@ health checks that need feed/queue/autostart readiness without the slower
 resume, monitoring, and report backlog inventories.
 For live startup, ready source-queue imports are bounded by
 `queue_limit` in `imports/autostart.local.json` unless `--queue-limit N`
-overrides it; deferred items stay pending for the next cycle.
+overrides it; each queued CTI/discovery/validation artifact is also passed an
+explicit `--limit` from `queue_import_item_limit` (default 1000), and deferred
+items stay pending for the next cycle.
 When `cycle --apply --live` hands off to guarded-autostart, the guarded launcher
 uses the feed already written by the cycle and skips its own feed-build phase to
 avoid duplicate source reads.

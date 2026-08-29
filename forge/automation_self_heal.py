@@ -46,6 +46,7 @@ DEFAULT_AUTOSTART_CONFIG: dict[str, Any] = {
     "max_parallel": 2,
     "monitor_limit": 10,
     "queue_limit": 10,
+    "queue_import_item_limit": 1000,
     "start_limit": 2,
     "min_start_source_count": 1,
     "max_runtime_minutes": 10,
@@ -425,6 +426,7 @@ def _direct_source_queue_status(
             items,
             imports_dir=imports_dir,
             engagement=engagement,
+            import_item_limit=int(config["queue_import_item_limit"]),
         )
     except Exception as exc:  # noqa: BLE001
         return {
@@ -479,6 +481,7 @@ def _validate_autostart_config(config: dict[str, Any]) -> list[str]:
         "max_parallel": (1, 4),
         "monitor_limit": (0, 100),
         "queue_limit": (0, 1000),
+        "queue_import_item_limit": (1, 10000),
         "start_limit": (0, 20),
         "min_start_source_count": (1, 100),
         "max_runtime_minutes": (1, 60),

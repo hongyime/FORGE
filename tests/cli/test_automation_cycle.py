@@ -1541,6 +1541,8 @@ def test_automation_cycle_apply_runs_ready_queue_and_marks_imported(
             "--report-file",
             str(imports_dir / "threatfox.json"),
             "--promote-targets",
+            "--limit",
+            "1000",
             "--json",
         ]
     ]
@@ -1583,6 +1585,7 @@ def test_automation_cycle_queue_limit_defers_extra_ready_items(tmp_path: Path) -
 
     assert payload["queue_execution"] == {
         "queue_limit": 2,
+        "import_item_limit": 1000,
         "ready_count": 3,
         "selected_count": 2,
         "deferred_count": 1,
@@ -1598,6 +1601,71 @@ def test_automation_cycle_queue_limit_defers_extra_ready_items(tmp_path: Path) -
         "imported",
         "pending",
     ]
+
+
+def test_automation_cycle_queue_import_limit_comes_from_autostart_or_item(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    reports_dir = tmp_path / "reports"
+    imports_dir.mkdir()
+    (imports_dir / "pd.json").write_text(
+        json.dumps({"assets": [{"host": "one.example"}]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "runzero.csv").write_text(
+        "name,ip\none.example,198.51.100.8\n",
+        encoding="utf-8",
+    )
+    (imports_dir / "projectdiscovery-cloud-imports.local.json").write_text(
+        json.dumps({"inputs": [{"value": "pd.json", "status": "pending"}]}),
+        encoding="utf-8",
+    )
+    (imports_dir / "runzero-imports.local.json").write_text(
+        json.dumps(
+            {
+                "inputs": [
+                    {
+                        "value": "runzero.csv",
+                        "status": "pending",
+                        "limit": 25,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    autostart_config = imports_dir / "autostart.local.json"
+    autostart_config.write_text(
+        json.dumps({"queue_import_item_limit": 50}),
+        encoding="utf-8",
+    )
+    commands: list[list[str]] = []
+
+    def _runner(command: list[str], _cwd: Path) -> dict[str, object]:
+        commands.append(command)
+        return {"returncode": 0, "stdout": "{\"status\":\"completed\"}", "stderr": ""}
+
+    payload = automation_cycle(
+        apply=True,
+        engagement=1001,
+        output=imports_dir / "target-feed.json",
+        source=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=imports_dir,
+        autostart_config=autostart_config,
+        command_runner=_runner,
+    )
+
+    assert payload["queue_execution"]["import_item_limit"] == 50
+    by_connector = {
+        command[command.index("--connector") + 1]: command for command in commands
+    }
+    projectdiscovery = by_connector["projectdiscovery_cloud"]
+    runzero = by_connector["runzero_asset_export"]
+    assert projectdiscovery[projectdiscovery.index("--limit") + 1] == "50"
+    assert runzero[runzero.index("--limit") + 1] == "25"
 
 
 def test_automation_cycle_failed_queue_item_gets_retry_backoff(
