@@ -518,8 +518,10 @@ def command_surface_review(repo_root: Path | None = None) -> dict[str, Any]:
         group_counts,
         daily_use_complete=bool(daily_use_status["complete"]),
     )
+    status = "ready" if daily_use_status["complete"] else "attention"
     return {
         "schema_version": COMMAND_REVIEW_SCHEMA_VERSION,
+        "status": status,
         "execution_policy": "read_only_source_scan_no_commands_executed",
         "total_count": len(commands) + len(groups),
         "selected_count": len(commands) + len(groups),

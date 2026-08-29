@@ -80,6 +80,7 @@ def register_automation_commands(app: typer.Typer) -> None:
             return
         console.print(
             "[bold]Command surface[/bold] "
+            f"status={payload['status']} "
             f"groups={payload['group_count']} commands={payload['command_count']}"
         )
         for item in payload["recommendations"]:

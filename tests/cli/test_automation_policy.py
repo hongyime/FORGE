@@ -86,6 +86,7 @@ def test_automation_command_review_reports_pressure_and_recommendations() -> Non
     payload = command_surface_review()
 
     assert payload["schema_version"] == "forge.command_surface_review.v1"
+    assert payload["status"] == "ready"
     assert payload["execution_policy"] == "read_only_source_scan_no_commands_executed"
     assert payload["group_count"] >= 20
     assert payload["command_count"] >= 50
@@ -228,6 +229,7 @@ def test_automation_cli_json_commands() -> None:
     review_result = runner.invoke(app, ["automation", "command-review", "--json"])
     assert review_result.exit_code == 0, review_result.output
     review_payload = json.loads(review_result.output)
+    assert review_payload["status"] == "ready"
     assert review_payload["command_count"] >= 50
     assert review_payload["daily_use_layer"]
 
