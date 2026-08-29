@@ -74659,6 +74659,94 @@ def test_kill_chain_parallel_batches_d5_url_dry_run_finalize(
         assert metadata["mode"] == "dry_run"
 
 
+def test_kill_chain_skips_weak_phone_fanout_candidates(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _bootstrap_engagement(db_path)
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "authorized_seeds": ["acme.example", "+17052023"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    dispatched_phone_numbers: list[str] = []
+
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
+        del max_workers, progress_label, progress_callback
+        return [worker(item) for item in items]
+
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
+        del run_module, max_workers, progress_label, progress_callback
+        for spec in specs:
+            argv = [str(part) for part in spec.cmd_argv]
+            if argv[:2] == ["osint", "phone"]:
+                dispatched_phone_numbers.append(argv[argv.index("--number") + 1])
+        return [0] * len(specs)
+
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _fake_inprocess_batch)
+    monkeypatch.setattr("forge.cli._run_module_batch", _fake_module_batch)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=["+17052023"],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        skip_cloud=True,
+        skip_keyscan=True,
+        parallel_fanout=2,
+        report_provider="template",
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
+    )
+
+    assert "+17052023" not in dispatched_phone_numbers
+
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT sr.status, sr.error, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_l_seed_phone'
+              AND es.seed_value='+17052023'
+            ORDER BY sr.id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        con.close()
+
+    assert row is not None
+    status, error, metadata_json = row
+    metadata = json.loads(metadata_json or "{}")
+    assert status == "skipped"
+    assert error == "phone_fanout_invalid_candidate"
+    assert metadata["dispatch_gate"] == "phone_fanout_candidate_quality"
+
+
 def test_kill_chain_parallel_batches_module_seed_run_success_failure_finalize(
     tmp_path: Path,
     monkeypatch,

@@ -4574,6 +4574,26 @@ def kill_chain(
     def _normalize_username_value(value: str) -> str:
         return value.strip().lower().lstrip("@")
 
+    def _phone_seed_fanout_skip_reason(value: str) -> str:
+        candidate = str(value or "").strip()
+        if not re.fullmatch(r"\+\d{7,15}", candidate):
+            return "phone_fanout_requires_e164"
+        try:
+            import phonenumbers  # noqa: PLC0415
+
+            parsed = phonenumbers.parse(candidate, None)
+            national_number = str(getattr(parsed, "national_number", "") or "")
+            if int(getattr(parsed, "country_code", 0) or 0) == 1 and len(national_number) != 10:
+                return "phone_fanout_invalid_nanp_length"
+            if not phonenumbers.is_possible_number(parsed):
+                return "phone_fanout_impossible_number"
+        except ImportError:
+            if len(candidate.lstrip("+")) < 10:
+                return "phone_fanout_requires_10_digits_without_validator"
+        except Exception:  # noqa: BLE001 - malformed phone candidate
+            return "phone_fanout_unparseable"
+        return ""
+
     def _normalize_url_seed_value(value: str) -> str:
         return _canonical_http_url_value(value) or str(value or "").strip().lower()
 
@@ -11243,14 +11263,85 @@ def kill_chain(
         )
         pending_phone_seeds = [seed_value for seed_value, _depth in pending_phone_seed_rows]
         if pending_phone_seeds:
-            omitted_phone_seeds = max(0, len(pending_phone_seeds) - phone_fanout_batch_limit)
-            phone_schedule_inputs = list(pending_phone_seeds[:phone_fanout_batch_limit])
+            invalid_phone_seed_entries = [
+                (seed_value, seed_depth, skip_reason)
+                for seed_value, seed_depth in pending_phone_seed_rows
+                if (skip_reason := _phone_seed_fanout_skip_reason(seed_value))
+            ]
+            if invalid_phone_seed_entries:
+                _log(
+                    f"{iteration}.L phone fan-out guard",
+                    (
+                        f"[yellow]skipped={len(invalid_phone_seed_entries)} weak phone "
+                        "candidate(s) before autonomous dispatch[/yellow]"
+                    ),
+                )
+                prepared_invalid_phone_skips = _run_inprocess_batch(
+                    invalid_phone_seed_entries,
+                    lambda item: _prepare_one_shot_seed_run_entry(
+                        seed_value=str(item[0] or "").strip(),
+                        seed_type="phone",
+                        loop_name="fanout_l_seed_phone",
+                        source="discovered",
+                        depth=max(0, int(item[1] or 0)),
+                        confidence=0.4,
+                        start_metadata={
+                            "iteration": iteration,
+                            "dispatch_gate": "phone_fanout_candidate_quality",
+                            "skip_reason": str(item[2] or ""),
+                        },
+                        status="skipped",
+                        output_count=0,
+                        error="phone_fanout_invalid_candidate",
+                        finish_metadata={
+                            "iteration": iteration,
+                            "skipped_before_dispatch": True,
+                            "dispatch_gate": "phone_fanout_candidate_quality",
+                            "skip_reason": str(item[2] or ""),
+                        },
+                    ),
+                    max_workers=parallel_workers,
+                    progress_label=f"{iteration}.L phone invalid-skip prep",
+                    progress_callback=_record_batch_progress,
+                )
+                skipped_invalid_phone_values = [
+                    skipped_value
+                    for skipped_value in _run_inprocess_batch(
+                        prepared_invalid_phone_skips,
+                        _apply_one_shot_seed_run_entry,
+                        max_workers=1,
+                        progress_label=f"{iteration}.L phone invalid-skip finalize",
+                        progress_callback=_record_batch_progress,
+                    )
+                    if skipped_value
+                ]
+                prepared_invalid_processed_updates = _run_inprocess_batch(
+                    skipped_invalid_phone_values,
+                    lambda item: _prepare_processed_set_item(item, normalizer=_resume_normalize),
+                    max_workers=parallel_workers,
+                    progress_label=f"{iteration}.L phone invalid-skip processed-set prep",
+                    progress_callback=_record_batch_progress,
+                )
+                _run_inprocess_batch(
+                    prepared_invalid_processed_updates,
+                    lambda item: _apply_processed_set_item(item, processed_set=processed_phone_seeds),
+                    max_workers=1,
+                    progress_label=f"{iteration}.L phone invalid-skip processed-set update",
+                    progress_callback=_record_batch_progress,
+                )
+            eligible_phone_seeds = [
+                seed_value
+                for seed_value, _depth in pending_phone_seed_rows
+                if not _phone_seed_fanout_skip_reason(seed_value)
+            ]
+            omitted_phone_seeds = max(0, len(eligible_phone_seeds) - phone_fanout_batch_limit)
+            phone_schedule_inputs = list(eligible_phone_seeds[:phone_fanout_batch_limit])
             if omitted_phone_seeds:
                 _log(
                     f"{iteration}.L phone fan-out cap",
                     (
                         f"[dim]scheduled {len(phone_schedule_inputs)} of "
-                        f"{len(pending_phone_seeds)} prefetched phone seed(s); "
+                        f"{len(eligible_phone_seeds)} eligible prefetched phone seed(s); "
                         f"omitted={omitted_phone_seeds} limit={phone_fanout_batch_limit}[/dim]"
                     ),
                 )
