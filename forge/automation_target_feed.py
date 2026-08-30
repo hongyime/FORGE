@@ -30,6 +30,7 @@ import httpx
 from forge.connectors.secrets import resolve_connector_secret_value
 from forge.db.session import get_engagement_db
 from forge.engagement_ids import numeric_engagement_db_files
+from forge.automation_secret_auto_feed import auto_feed_secrets_to_target_feed
 from forge.targets_import import (
     MAX_TARGET_FEED_IMPORT_ITEMS,
     TARGET_FEED_SCHEMA_VERSION,
@@ -39,8 +40,8 @@ from forge.targets_import import (
     target_scan_eligible,
 )
 
-SUPPORTED_SOURCES = ("db", "reports", "cti", "connectors", "supabase")
-_OFFLINE_SOURCES = ("db", "reports", "cti", "connectors")
+SUPPORTED_SOURCES = ("db", "reports", "cti", "connectors", "supabase", "secrets_auto_feed")
+_OFFLINE_SOURCES = ("db", "reports", "cti", "connectors", "secrets_auto_feed")
 
 _MAX_FILES_PER_DIR_SOURCE = 200
 _MAX_REPORT_FILES = 5000
@@ -1915,6 +1916,50 @@ def _extract_supabase_source(
         )
     return candidates, errors, source_group_counts, discovery_summaries
 
+def _collect_secret_observations(groups: dict[str, list[FeedCandidate]]) -> list[dict[str, Any]]:
+    """Collect secret observations from connector outputs.
+    
+    Scans FeedCandidate groups for secret-like patterns in provenance
+    and extracts metadata for secrets auto-feeding.
+    
+    Args:
+        groups: Dict of source groups to FeedCandidate lists.
+    
+    Returns:
+        List of secret observation dicts with redacted values.
+    """
+    secret_observations = []
+    
+    # Scan connector outputs for secret patterns
+    for group, candidates in groups.items():
+        if not candidates:
+            continue
+        
+        for candidate in candidates:
+            # Look for secret observations in provenance
+            provenance = candidate.provenance or ""
+            
+            # Detect secret types from provenance patterns
+            if "gitleaks" in provenance.lower() or "trufflehog" in provenance.lower():
+                secret_observations.append({
+                    "secret_type": "detected_secret",
+                    "secret_value_redacted": candidate.target_value[:20] + "...",
+                    "source_group": group,
+                    "confidence": candidate.confidence,
+                })
+            elif candidate.target_type in ("email", "url", "domain", "ip"):
+                # URLs/emails/domains could contain secrets
+                if candidate.confidence >= 0.8:
+                    secret_observations.append({
+                        "secret_type": candidate.target_type,
+                        "secret_value_redacted": candidate.target_value,
+                        "source_group": group,
+                        "confidence": candidate.confidence,
+                    })
+    
+    return secret_observations
+
+
 
 def build_target_feed(
     *,
@@ -2006,6 +2051,44 @@ def build_target_feed(
         groups["supabase"] = found
         source_group_counts.update(supabase_group_counts)
         source_errors.extend({"source": "supabase", "error": err} for err in errors)
+
+    # === SECRETS AUTO-FEED (Loop: secrets/configs → target feed) ===
+    # Extract targets from discovered secrets and feed back into queue
+    secret_targets: list[FeedCandidate] = []
+    if "connectors" in active_offline or "cti" in active_offline:
+        try:
+            # Collect secret observations from connector outputs
+            secret_observations = _collect_secret_observations(groups)
+            existing_target_keys = _all_candidate_keys(groups)
+            
+            if secret_observations:
+                # Auto-feed discovered secrets into target feed
+                new_secret_targets = auto_feed_secrets_to_target_feed(
+                    secret_observations=secret_observations,
+                    existing_targets=existing_target_keys,
+                )
+                
+                # Convert to FeedCandidate format
+                from datetime import datetime
+                for target in new_secret_targets:
+                    secret_targets.append(FeedCandidate(
+                        target_type=target["target_type"],
+                        target_value=target["target"],
+                        source_group=target["source"],
+                        source_kind=target["provenance"]["secret_type"],
+                        provenance=target["source"],
+                        first_seen_at=target["provenance"]["extracted_at"],
+                        confidence=target["confidence"],
+                    ))
+                
+                groups["secrets_auto_feed"] = secret_targets
+                if secret_targets:
+                    source_group_counts["secrets_auto_feed"] = len(secret_targets)
+        except Exception as e:
+            source_errors.append({"source": "secrets_auto_feed", "error": str(e)})
+    
+    # === END SECRETS AUTO-FEED ===
+
 
     existing_supabase_refs = _existing_supabase_project_refs(supabase_config_path)
     discovered_supabase_projects = _discovered_supabase_project_refs(groups)
