@@ -296,3 +296,7 @@
 - 2026-08-29: Docker-managed startup must validate real service health; Redis bus health checks now lazy-connect on first probe and pub/sub clients no longer impose idle socket read timeouts that caused noisy reconnect loops.
 - 2026-08-29 23:46:38 +08:00 [PRAWN-E14/codex/session-start] branch=main head=97348eb dirty=11
 - 2026-08-30 B769: Docker hands-off startup needs runtime health gates sized for actual constrained startup, not only nominal low-memory totals; production Compose now uses 256 MiB API/web/worker caps, 1536 MiB guarded autostart cap, longer API/web health probes, cgroup-aware memory checks that ignore reclaimable file cache and prefer finite Linux cgroup limits, and container-first `/app/tools/bin` tool validation while keeping local secrets in ignored env/config files only.
+- 2026-08-30 B770: Linper/InfraHunter/InfraSpyder should influence Forge as free/local upgrades first: defensive persistence coverage, hunt-plan catalogs, suppression signatures, artifact spidering, and priority scoring; keyed live provider sync stays optional and disabled by default.
+- 2026-08-30 10:09:56 +08:00 [PRAWN-E14/claude/stop] branch=main head=731699e dirty=1
+- 2026-08-30 10:21:29 +08:00 [PRAWN-E14/claude/stop] branch=main head=731699e dirty=1
+- 2026-08-30 10:48:26 +08:00 [PRAWN-E14/claude/stop] branch=main head=770145c dirty=1
