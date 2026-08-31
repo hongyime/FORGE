@@ -1,0 +1,14 @@
+C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\rust_core\target\release\deps\serde-f00af828bdf41f05.d: C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\bryan\OneDrive\01\ TOOLKITS\forgetoolkit\rust_core\target\release\build\serde-441272a49bbad548\out/private.rs
+
+C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\rust_core\target\release\deps\libserde-f00af828bdf41f05.rlib: C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\bryan\OneDrive\01\ TOOLKITS\forgetoolkit\rust_core\target\release\build\serde-441272a49bbad548\out/private.rs
+
+C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\rust_core\target\release\deps\libserde-f00af828bdf41f05.rmeta: C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\bryan\OneDrive\01\ TOOLKITS\forgetoolkit\rust_core\target\release\build\serde-441272a49bbad548\out/private.rs
+
+C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs:
+C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs:
+C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs:
+C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs:
+C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs:
+C:\Users\bryan\OneDrive\01\ TOOLKITS\forgetoolkit\rust_core\target\release\build\serde-441272a49bbad548\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\Users\\bryan\\OneDrive\\01 TOOLKITS\\forgetoolkit\\rust_core\\target\\release\\build\\serde-441272a49bbad548\\out

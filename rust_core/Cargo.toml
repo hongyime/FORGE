@@ -1,0 +1,38 @@
+[package]
+name = "forge-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["FORGE Toolkit"]
+description = "Core offensive security modules - Rust implementation"
+
+[lib]
+name = "forge_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Cryptography
+aes-gcm = "0.10"
+base64 = "0.22"
+blake3 = "1.5"
+rand = "0.8"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+
+# Cross-platform FFI
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py312"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.release.package.forge-core]
+overflow-checks = false
+
+[features]
+default = []
+obfuscated = []
+stealth = []

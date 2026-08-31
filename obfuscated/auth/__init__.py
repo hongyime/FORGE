@@ -1,0 +1,1 @@
+"""Obfuscated auth spray optimizer."""

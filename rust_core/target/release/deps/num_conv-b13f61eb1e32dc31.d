@@ -1,0 +1,7 @@
+C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\rust_core\target\release\deps\num_conv-b13f61eb1e32dc31.d: C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\num-conv-0.2.2\src\lib.rs
+
+C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\rust_core\target\release\deps\libnum_conv-b13f61eb1e32dc31.rlib: C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\num-conv-0.2.2\src\lib.rs
+
+C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\rust_core\target\release\deps\libnum_conv-b13f61eb1e32dc31.rmeta: C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\num-conv-0.2.2\src\lib.rs
+
+C:\Users\bryan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\num-conv-0.2.2\src\lib.rs:

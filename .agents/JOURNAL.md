@@ -319,3 +319,14 @@
 - 2026-08-31: Started comprehensive Forge module audit across core, OSINT, active scanning, T1-T8, automation, monitoring, and remediation modules; output will be a durable report with severity-ranked findings and file:line evidence.
 - 2026-08-31 00:33:58 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=19
 - 2026-08-31 09:17:43 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=24
+- 2026-08-31 10:44:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=0
+- 2026-08-31 12:55:19 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=2
+- 2026-08-31 14:09:23 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=7
+- 2026-08-31 14:18:55 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=9
+- 2026-08-31 17:06:04 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=10
+- 2026-08-31: Rust core build resumed from `FORGE_RUST_HANDOFF.md`; decision is to produce a minimal PyO3 crypto-capable `forge_core.dll` first by pruning unused networking/parser/Windows crates and disabling release LTO, then treat full Rust offensive modules as future enhancement if needed.
+- 2026-08-31: Rust core release build completed; `forge_core.dll` exists, repo-root `forge_core.pyd` imports `aes_encrypt`, Rust tests pass, and Defender reported no matching detections.
+- 2026-08-31: Validated GLM obfuscation summary against actual commands; fixed `forge_loader.py` PyArmor class exposure, strengthened `tests/test_obfuscated.py`, re-enabled release LTO after dependency pruning, and corrected stale docs to avoid broad EDR/AV bypass claims.
+- 2026-08-31 17:26:01 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=11
+- 2026-08-31 17:37:35 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=12
+- 2026-08-31 17:43:50 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=12
