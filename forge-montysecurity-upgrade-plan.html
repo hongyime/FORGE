@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Forge Upgrade Plan: Linper, InfraHunter, InfraSpyder Review</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --panel: #121821;
+      --panel-2: #17202b;
+      --text: #e7eef8;
+      --muted: #9fb0c2;
+      --line: #263445;
+      --accent: #67d4ff;
+      --good: #78e09f;
+      --warn: #ffd166;
+      --bad: #ff6b6b;
+      --code: #0f1520;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 56px; }
+    header { padding: 18px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 22px; }
+    h1 { margin: 0 0 10px; font-size: clamp(28px, 4vw, 46px); line-height: 1.05; letter-spacing: 0; }
+    h2 { margin: 30px 0 12px; font-size: 24px; letter-spacing: 0; }
+    h3 { margin: 18px 0 8px; font-size: 17px; letter-spacing: 0; color: var(--accent); }
+    p { margin: 8px 0; color: var(--muted); }
+    a { color: var(--accent); }
+    code { background: var(--code); color: var(--text); padding: 2px 5px; border-radius: 4px; }
+    pre { background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 14px; overflow-x: auto; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .pill { border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 999px; padding: 6px 10px; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+    .card strong { color: var(--text); }
+    .status { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 12px; margin-left: 6px; border: 1px solid var(--line); }
+    .free { color: var(--good); }
+    .keyed { color: var(--warn); }
+    .no { color: var(--bad); }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 10px; text-align: left; vertical-align: top; }
+    th { background: var(--panel-2); color: var(--text); font-weight: 650; }
+    td { color: var(--muted); }
+    tr:last-child td { border-bottom: 0; }
+    .diagram { background: #0f1520; border: 1px solid var(--line); border-radius: 8px; padding: 16px; overflow-x: auto; }
+    .flow { display: grid; gap: 8px; }
+    .step { display: grid; grid-template-columns: 42px 1fr; gap: 10px; align-items: start; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+    .num { width: 30px; height: 30px; border-radius: 50%; background: var(--panel-2); display: grid; place-items: center; color: var(--accent); font-weight: 700; }
+    ul { margin: 8px 0 0 18px; padding: 0; color: var(--muted); }
+    li { margin: 5px 0; }
+    @media (max-width: 860px) { .grid, .grid-2 { grid-template-columns: 1fr; } main { width: min(100% - 22px, 1180px); padding-top: 22px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Forge Upgrade Plan From Linper, InfraHunter, and InfraSpyder</h1>
+    <p>This plan reviews the three MontySecurity repositories as technique references and maps the useful parts into Forge without adding paid dependencies or requiring new API keys by default.</p>
+    <div class="meta">
+      <span class="pill">Forge HEAD reviewed: 731699e</span>
+      <span class="pill">Mode: plan only</span>
+      <span class="pill">Default: free/local/dry-run first</span>
+      <span class="pill">Secrets redacted</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Source Review</h2>
+    <div class="grid">
+      <article class="card">
+        <h3>linper</h3>
+        <p><a href="https://github.com/montysecurity/linper">github.com/montysecurity/linper</a></p>
+        <p><strong>Useful pattern:</strong> enumerate capability first, then optionally act. It models persistence as method plus door, has dry-run/print, cleanup, limits, custom schedule, and countermeasure docs.</p>
+        <p><strong>Forge use:</strong> defensive persistence exposure checks, cleanup validation evidence, ATT&amp;CK mappings, and hardening report rows. Do not port offensive persistence install behavior.</p>
+      </article>
+      <article class="card">
+        <h3>InfraHunter</h3>
+        <p><a href="https://github.com/montysecurity/InfraHunter">github.com/montysecurity/InfraHunter</a></p>
+        <p><strong>Useful pattern:</strong> broad external search is converted into URL candidates, URLScan performs visual validation, screenshots are hashed, known-benign hashes are suppressed, and alerts are optionally pushed.</p>
+        <p><strong>Forge use:</strong> source-scored hunt plans, local artifact ingestion, deterministic visual/content suppression, and validation queues before target promotion.</p>
+      </article>
+      <article class="card">
+        <h3>InfraSpyder</h3>
+        <p><a href="https://github.com/montysecurity/InfraSpyder">github.com/montysecurity/InfraSpyder</a></p>
+        <p><strong>Useful pattern:</strong> search results become HTTP/HTTPS endpoint candidates, endpoints are probed, spider logs are pattern-filtered, and matching files are downloaded into per-host folders.</p>
+        <p><strong>Forge use:</strong> scoped open-directory artifact discovery using existing local binaries, per-host evidence folders, regex allowlists, disk caps, and feed promotion from downloaded artifacts.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>What Forge Already Has</h2>
+    <table>
+      <thead><tr><th>Area</th><th>Current Forge Capability</th><th>Upgrade Direction</th></tr></thead>
+      <tbody>
+        <tr><td>Autonomous loop</td><td><code>forge automation cycle</code>, feed build, queues, guarded live autostart, Docker/resource gates.</td><td>Add smarter prioritization and source-confidence gates before live scan fan-out.</td></tr>
+        <tr><td>Discovery imports</td><td>Offline ProjectDiscovery Cloud, Censys, runZero, URLScan, Shodan-style artifact parsers with graph provenance.</td><td>Add InfraHunter-style suppression and query/catalog planning.</td></tr>
+        <tr><td>Validation imports</td><td>Burp/JUnit XML to active-validation evidence, scoped and local-only.</td><td>Join with spider/download evidence freshness and retest status.</td></tr>
+        <tr><td>Metrics and remediation</td><td>Exposure duration, recurrence, MTTR, owner/SLA/ticket/retest review queue.</td><td>Rank work by recurrence, source count, proof age, and reachable validation.</td></tr>
+        <tr><td>Packaged tooling</td><td>ProjectDiscovery and Go binaries checked by self-heal plan, Docker runtime prefers packaged tools.</td><td>Use packaged <code>httpx</code>, <code>katana</code>, <code>nuclei</code>, <code>dnsx</code>, <code>naabu</code>, <code>gitleaks</code> before any PATH fallback.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Architecture Target</h2>
+    <div class="diagram">
+      <svg width="1060" height="430" viewBox="0 0 1060 430" role="img" aria-label="Forge upgraded autonomous loop architecture">
+        <defs>
+          <style>
+            .box{fill:#121821;stroke:#2d3b4f;stroke-width:1.5;rx:8}
+            .hot{fill:#17202b;stroke:#67d4ff;stroke-width:1.5;rx:8}
+            .txt{fill:#e7eef8;font:14px system-ui,sans-serif}
+            .muted{fill:#9fb0c2;font:12px system-ui,sans-serif}
+            .line{stroke:#67d4ff;stroke-width:1.5;fill:none;marker-end:url(#arrow)}
+          </style>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#67d4ff"></path>
+          </marker>
+        </defs>
+        <rect class="hot" x="20" y="30" width="210" height="86"></rect>
+        <text class="txt" x="36" y="60">Input Sources</text>
+        <text class="muted" x="36" y="84">Supabase, CTI, reports, exports</text>
+        <text class="muted" x="36" y="102">Burp/JUnit, PD, Censys/runZero</text>
+
+        <rect class="box" x="290" y="30" width="220" height="86"></rect>
+        <text class="txt" x="306" y="60">Feed Builder</text>
+        <text class="muted" x="306" y="84">normalize, dedupe, provenance</text>
+        <text class="muted" x="306" y="102">source count and confidence</text>
+
+        <rect class="box" x="570" y="30" width="220" height="86"></rect>
+        <text class="txt" x="586" y="60">Priority Gate</text>
+        <text class="muted" x="586" y="84">ROE, resource, scope, recurrence</text>
+        <text class="muted" x="586" y="102">two-source or owned-source rule</text>
+
+        <rect class="hot" x="830" y="30" width="210" height="86"></rect>
+        <text class="txt" x="846" y="60">Guarded Live Runner</text>
+        <text class="muted" x="846" y="84">bounded scans and monitoring</text>
+        <text class="muted" x="846" y="102">Docker CPU/RAM/backoff</text>
+
+        <rect class="box" x="20" y="176" width="210" height="90"></rect>
+        <text class="txt" x="36" y="207">Hunt Planner</text>
+        <text class="muted" x="36" y="231">query catalog, no-key local plans</text>
+        <text class="muted" x="36" y="249">keyed APIs stay opt-in</text>
+
+        <rect class="box" x="290" y="176" width="220" height="90"></rect>
+        <text class="txt" x="306" y="207">Validation Queue</text>
+        <text class="muted" x="306" y="231">httpx, katana, nuclei, Burp/JUnit</text>
+        <text class="muted" x="306" y="249">screenshots/body hashes/suppression</text>
+
+        <rect class="box" x="570" y="176" width="220" height="90"></rect>
+        <text class="txt" x="586" y="207">Artifact Spider</text>
+        <text class="muted" x="586" y="231">open-dir pattern match</text>
+        <text class="muted" x="586" y="249">disk/time/domain caps</text>
+
+        <rect class="box" x="830" y="176" width="210" height="90"></rect>
+        <text class="txt" x="846" y="207">Evidence Graph</text>
+        <text class="muted" x="846" y="231">assets, services, findings</text>
+        <text class="muted" x="846" y="249">topology and provenance</text>
+
+        <rect class="hot" x="290" y="322" width="220" height="76"></rect>
+        <text class="txt" x="306" y="352">Dashboards</text>
+        <text class="muted" x="306" y="376">exposure, remediation, proof freshness</text>
+
+        <rect class="box" x="570" y="322" width="220" height="76"></rect>
+        <text class="txt" x="586" y="352">Defensive Persistence Checks</text>
+        <text class="muted" x="586" y="376">Linper-inspired countermeasure coverage</text>
+
+        <path class="line" d="M230 73 H290"></path>
+        <path class="line" d="M510 73 H570"></path>
+        <path class="line" d="M790 73 H830"></path>
+        <path class="line" d="M125 116 V176"></path>
+        <path class="line" d="M230 221 H290"></path>
+        <path class="line" d="M510 221 H570"></path>
+        <path class="line" d="M790 221 H830"></path>
+        <path class="line" d="M935 266 C935 335 790 360 790 360"></path>
+        <path class="line" d="M570 360 H510"></path>
+      </svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>Improvement Plan</h2>
+    <table>
+      <thead><tr><th>Phase</th><th>Scope</th><th>Free / Immediate?</th><th>Deliverables</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>Hunt query catalog and run planner</td>
+          <td><span class="status free">yes</span></td>
+          <td>Add a local catalog of Shodan/Censys/URLScan-style hunts from InfraHunter/InfraSpyder patterns, but default to <code>plan_only_no_commands_executed</code>. Existing artifact imports can consume exports when keys are unavailable.</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>Validation-before-promotion scoring</td>
+          <td><span class="status free">yes</span></td>
+          <td>Promote targets faster when seen by two independent source groups or by an owned configured source, then prioritize by source count, proof freshness, recurrence, and reachable service evidence.</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>InfraHunter-style suppression</td>
+          <td><span class="status free">yes</span></td>
+          <td>Add deterministic known-noise signatures for screenshot hashes when available, HTTP title/body hashes, status patterns, and blank/default pages. Store suppression provenance in local JSON, not code-only constants.</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>InfraSpyder-style artifact spider</td>
+          <td><span class="status free">yes, ROE-gated live</span></td>
+          <td>Use packaged <code>katana</code>/<code>httpx</code> plus safe local download limits to find matching open-directory files, queue downloaded artifacts, and feed extracted targets back into <code>imports/target-feed.json</code>.</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td>Defensive persistence coverage</td>
+          <td><span class="status free">yes</span></td>
+          <td>Add a Linper-inspired hardening matrix for cron, systemd, rc.local, shell profiles, web roots, shadow readability, and Tripwire-style monitoring. Evidence remains defensive and scoped.</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td>Dashboard consolidation</td>
+          <td><span class="status free">yes</span></td>
+          <td>Show “why this target now” with source groups, validation state, suppression state, open days, recurrence, owner/SLA/ticket state, and next allowed action.</td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td>Optional live provider sync</td>
+          <td><span class="status keyed">only if keys exist</span></td>
+          <td>Shodan, Censys, URLScan, ProjectDiscovery Cloud live reads stay disabled by default. When configured, they inherit per-provider rate limits, backoff, and read-only scope gates.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>User Flow</h2>
+    <div class="flow">
+      <div class="step"><div class="num">1</div><div><strong>Artifacts land.</strong><p>Forge watches or scans <code>imports/</code>, reports, local connector outputs, Supabase configs, CTI drops, PD exports, Burp/JUnit XML, and downloaded files.</p></div></div>
+      <div class="step"><div class="num">2</div><div><strong>Feed build merges.</strong><p><code>forge automation feed-build --source all</code> normalizes targets, keeps provenance, preserves prior feed entries, and writes only under <code>--apply</code>.</p></div></div>
+      <div class="step"><div class="num">3</div><div><strong>Priority gate decides.</strong><p>Targets with two sources, owned-source proof, recurrence, fresh validation evidence, or live reachable services move ahead. One-source low-confidence items remain queued.</p></div></div>
+      <div class="step"><div class="num">4</div><div><strong>Guarded live runner acts.</strong><p>If ROE, scope, Docker health, memory, cooldown, and locks pass, Forge runs bounded local scanners and monitoring without operator babysitting.</p></div></div>
+      <div class="step"><div class="num">5</div><div><strong>Evidence loops back.</strong><p>New URLs, open-directory files, nuclei findings, CTI indicators, and validation proofs become graph evidence, remediation work, and new feed candidates.</p></div></div>
+      <div class="step"><div class="num">6</div><div><strong>Dashboard explains state.</strong><p>The UI shows current target priority, exposure duration, recurrence, proof freshness, suppression reason, owner/SLA/ticket state, and the next allowed automation action.</p></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>New Command Shape</h2>
+    <pre><code>forge connectors hunt-plan --catalog attacker-infra --json
+forge connectors hunt-plan --catalog open-directory --query "http.title:'Directory listing for'" --json
+forge connectors artifact-spider --engagement N --target https://host.example --patterns imports/patterns.local.txt --dry-run --limit 100 --json
+forge connectors artifact-spider --engagement N --target https://host.example --patterns imports/patterns.local.txt --apply --roe-id ROE-ID --scope-manifest roe.json --json
+forge hardening persistence-plan --engagement N --json
+forge hardening persistence-import --engagement N --report-file linper-countermeasure-export.json --dry-run --json
+forge automation cycle --apply --live --source all --json</code></pre>
+    <p>The commands above should reuse Forge’s existing dry-run/apply, ROE, scope, local queue, and Docker guard semantics. Live external provider APIs remain optional and keyed.</p>
+  </section>
+
+  <section>
+    <h2>Green-Light Backlog</h2>
+    <table>
+      <thead><tr><th>Priority</th><th>Task</th><th>Why</th><th>Tests</th></tr></thead>
+      <tbody>
+        <tr><td>P0</td><td>Add query/pattern catalog and hunt-plan output</td><td>Immediate value, no APIs required, no live scanning.</td><td>CLI JSON, catalog schema, command-review integration.</td></tr>
+        <tr><td>P0</td><td>Add target priority scoring to automation status/cycle</td><td>Makes autonomous startup smarter and less noisy.</td><td>Two-source promotion, owned-source promotion, recurrence ranking.</td></tr>
+        <tr><td>P1</td><td>Add suppression signature registry</td><td>Reduces repeated blank/default-page work, inspired by InfraHunter screenshot hashes.</td><td>Hash dedupe, suppression provenance, dashboard rows.</td></tr>
+        <tr><td>P1</td><td>Add scoped artifact-spider planner and dry-run runner</td><td>Turns open-directory evidence into artifacts and new feed entries using local tools.</td><td>ROE rejection, disk/time/item caps, pattern matching, queue write.</td></tr>
+        <tr><td>P1</td><td>Add defensive persistence hardening matrix</td><td>Turns Linper’s persistence doors into detection/remediation coverage.</td><td>ATT&amp;CK/control mapping, dashboard section, no offensive action execution.</td></tr>
+        <tr><td>P2</td><td>Live keyed provider adapters</td><td>Useful only when keys exist; should not block standalone Forge.</td><td>Mocked HTTP, rate limits, 429 backoff, no live CI calls.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Safety Boundaries</h2>
+    <ul>
+      <li>Do not port Linper persistence install, sudo hijack, reverse shell, stealth, or cleanup actions into Forge automation.</li>
+      <li>Use Linper only as a defensive coverage map for persistence indicators and hardening validation.</li>
+      <li>Keep Forge standalone: no new paid APIs, no required Shodan/Censys/URLScan credentials, no ProjectDiscovery Cloud key by default.</li>
+      <li>Live scanning must keep existing ROE, scope-manifest, memory, Docker health, cooldown, lock, and rate-limit gates.</li>
+      <li>All provider live sync tests must be mocked; CI must not call external APIs.</li>
+      <li>Downloaded artifacts must be bounded by host, byte count, file count, runtime, and allowlisted patterns.</li>
+      <li>Secrets and local configs remain ignored; PostPlan and committed state must not contain raw keys.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Decision Needed</h2>
+    <p>Recommended approval: green-light P0 and P1 only. That gives Forge the useful patterns from these repos while staying free, standalone, deterministic, and safe. P2 should wait until you deliberately provide provider keys and per-provider ROE/rate-limit choices.</p>
+  </section>
+</main>
+</body>
+</html>

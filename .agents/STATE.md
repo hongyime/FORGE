@@ -1,8 +1,43 @@
+# Current Codex Task: Forge comprehensive module audit
+
+**Status**: IN PROGRESS | Started 2026-08-31 00:12 +08:00
+
+## Objective
+
+Audit the requested Forge modules for missing validations/assertions, unhandled edge cases, TODO/FIXME/XXX comments, hardcoded values that should be config, missing error handling, missing scope/security checks, and incomplete placeholder implementations.
+
+## Requested Scope
+
+- Core: `forge/db/direct_connect.py`, `forge/audit/logger.py`, `forge/scope/manifest.py`, `forge/utils/bounded_worker_pool.py`
+- OSINT: `forge/phase0/*.py`, `forge/phase1/*.py`, `forge/phase2/*.py`, `forge/identity/*.py`
+- Active: `forge/phase4/*.py`
+- T1-T8: `forge/c2/*.py`, `forge/cloud/*.py`, `forge/post_exploitation/*.py`, `forge/auth/*.py`, `forge/kerberos/*.py`, `forge/hybrid/*.py`
+- Automation: `forge/automation/*.py`, `forge/monitoring/*.py`, `forge/remediation/*.py`
+
+## Audit Progress
+
+- Read prior `.agents/STATE.md` and noted T4-T8 placeholder API context.
+- Read `security-best-practices` and `bug-diagnosis` skills for audit framing.
+- Dirty worktree existed before this audit; do not revert unrelated changes.
+- Next: inventory requested files, scan for markers and risk patterns, manually inspect modules, review tests, and write the comprehensive report.
+
+---
+
 # Agent State
 
-## Current Task: Ready for Competitive Upgrade Implementation
+## Current Task: Add T4-T8 placeholder APIs and verify tests
 
-**Status**: READY | All backlog committed, specs complete, awaiting implementation start
+**Status**: DONE | Requested placeholder APIs added and T4-T8 tests pass
+
+## Latest Verification (2026-08-30)
+
+- Initial run: `pytest tests/test_spray_optimizer.py tests/test_mimikatz_backend.py tests/test_kerberos_ops.py tests/test_hybrid_ad_azure.py tests/test_c2_listener.py -v --tb=short`.
+- Initial result: FAILED, 42 passed / 52 failed / 94 collected. No import errors; failures were mostly missing or renamed public APIs plus one path type bug.
+- Revised decision: add explicitly requested placeholder APIs for missing implementation while keeping simple test name/type corrections for renamed methods and bad fixtures.
+- Edited the five requested test files and confirmed they compile with `python -m py_compile`.
+- Verification after fixes: `pytest tests/test_spray_optimizer.py tests/test_mimikatz_backend.py tests/test_kerberos_ops.py tests/test_hybrid_ad_azure.py tests/test_c2_listener.py -v` PASSED, 94 passed in 14.02s.
+- Added requested placeholder methods to KerberosOps, HybridADAzureAnalyzer, MimikatzBackend, and C2Listener; source and selected tests compile.
+- Final verification: `pytest tests/test_spray_optimizer.py tests/test_mimikatz_backend.py tests/test_kerberos_ops.py tests/test_hybrid_ad_azure.py tests/test_c2_listener.py -v --tb=line` PASSED, 94 passed in 10.40s.
 
 ---
 
@@ -116,12 +151,12 @@ All callbacks via CF Tunnel (zero public IP exposure).
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-08-30 19:20:00 +08:00
+- Updated: 2026-08-31 09:17:43 +08:00
 - Machine: PRAWN-E14
-- Harness: opencode
-- Event: backlog-cleanup
+- Harness: claude
+- Event: stop
 - Branch: main
-- HEAD: a149da3
-- Dirty files: 2 (.agents/JOURNAL.md, .agents/STATE.md)
-- Resume hint: Read .agents/STATE.md. Specs in docs/competitive_upgrade_do_now.spec.md. Start with T1 (CF Tunnel C2).
+- HEAD: 0f36a8d
+- Dirty files: 24
+- Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->

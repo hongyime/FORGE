@@ -307,3 +307,15 @@
 - 2026-08-30 17:41:27 +08:00 [PRAWN-E14/claude/stop] branch=main head=8f48c00 dirty=6
 - 2026-08-30 18:32:03 +08:00 [PRAWN-E14/claude/stop] branch=main head=8f48c00 dirty=6
 - 2026-08-30 18:51:18 +08:00 [PRAWN-E14/claude/stop] branch=main head=8f48c00 dirty=7
+- 2026-08-30 20:21:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=11
+- 2026-08-30 21:40:11 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=18
+- 2026-08-30 22:55:34 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=18
+- 2026-08-30 23:05:51 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=18
+- 2026-08-30: T4-T8 test repair should align tests to the currently implemented public APIs instead of adding placeholder compatibility methods for planned interfaces.
+- 2026-08-30 23:12:30 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=18
+- 2026-08-30: Revised T4-T8 repair direction: add inert placeholder APIs for genuinely missing methods and keep test-only fixes for renamed APIs and fixture type/field mistakes.
+- 2026-08-30 23:35:22 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=18
+- 2026-08-31 00:03:29 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=18
+- 2026-08-31: Started comprehensive Forge module audit across core, OSINT, active scanning, T1-T8, automation, monitoring, and remediation modules; output will be a durable report with severity-ranked findings and file:line evidence.
+- 2026-08-31 00:33:58 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=19
+- 2026-08-31 09:17:43 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=24
