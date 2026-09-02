@@ -3,869 +3,470 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FORGE Competitive Upgrade Plan - Offensive Capabilities</title>
+    <title>FORGE Competitive Upgrade Plan - Sep 01, 2026</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --bg-primary: #0a0e27;
+            --bg-secondary: #1a1f3a;
+            --bg-tertiary: #2d3359;
+            --text-primary: #e4e6eb;
+            --text-secondary: #b4b7c4;
+            --accent-blue: #5865f2;
+            --accent-green: #3ba55d;
+            --accent-red: #eb459e;
+            --accent-orange: #faa81a;
+            --border: #4752c4;
         }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
-            background: #0f0f14;
-            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             line-height: 1.6;
-            padding: 2rem;
         }
         
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
         
-        header {
-            border-bottom: 2px solid #2a2a35;
-            padding-bottom: 2rem;
-            margin-bottom: 2rem;
-        }
+        header { text-align: center; padding: 3rem 0; border-bottom: 1px solid var(--border); margin-bottom: 3rem; }
         
-        h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
+        h1 { font-size: 2.5rem; margin-bottom: 0.5rem; color: var(--accent-blue); }
+        .subtitle { font-size: 1.1rem; color: var(--text-secondary); }
+        .date { color: var(--accent-orange); font-weight: 500; }
         
-        .subtitle {
-            font-size: 1.1rem;
-            color: #888;
-            margin-bottom: 1rem;
-        }
-        
-        .meta {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.9rem;
-            color: #666;
-        }
-        
-        .meta span {
-            padding: 0.25rem 0.5rem;
-            background: #1a1a22;
-            border-radius: 4px;
-        }
-        
-        .section {
-            margin-bottom: 3rem;
-        }
+        section { margin-bottom: 3rem; }
         
         h2 {
             font-size: 1.8rem;
-            font-weight: 600;
             margin-bottom: 1.5rem;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            color: var(--accent-green);
+            border-bottom: 2px solid var(--accent-green);
+            padding-bottom: 0.5rem;
         }
         
-        h2::before {
-            content: '';
-            width: 4px;
-            height: 1.8rem;
-            background: #00d4ff;
-            border-radius: 2px;
-        }
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; }
         
-        h3 {
-            font-size: 1.3rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            color: #d0d0d0;
-        }
-        
-        .matrix-container {
-            overflow-x: auto;
+        .card {
+            background: var(--bg-secondary);
             border-radius: 8px;
-            background: #1a1a22;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
         }
+        
+        .card h4 { color: var(--accent-orange); margin-bottom: 0.75rem; font-size: 1.2rem; }
         
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.85rem;
-        }
-        
-        thead {
-            background: #252530;
-            position: sticky;
-            top: 0;
-        }
-        
-        th {
-            padding: 1rem;
-            text-align: left;
-            font-weight: 600;
-            color: #fff;
-            border-bottom: 2px solid #2a2a35;
-        }
-        
-        td {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid #2a2a35;
-        }
-        
-        tbody tr:hover {
-            background: #1f1f28;
-        }
-        
-        .strong {
-            color: #00d4ff;
-            font-weight: 600;
-        }
-        
-        .missing {
-            color: #ff6b6b;
-        }
-        
-        .partial {
-            color: #ffd93d;
-        }
-        
-        .upgrade-high {
-            background: #ff6b6b22;
-            color: #ff6b6b;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        
-        .upgrade-medium {
-            background: #ffd93d22;
-            color: #ffd93d;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        
-        .upgrade-low {
-            background: #6bcf7f22;
-            color: #6bcf7f;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        
-        .tier-card {
-            background: #1a1a22;
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            border-left: 4px solid #00d4ff;
-        }
-        
-        .tier-card.do-next {
-            border-left-color: #7c3aed;
-        }
-        
-        .tier-card.explore {
-            border-left-color: #ffd93d;
-        }
-        
-        .tier-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-        
-        .tier-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-        
-        .tier-badge.do-now {
-            background: #00d4ff22;
-            color: #00d4ff;
-        }
-        
-        .tier-badge.do-next {
-            background: #7c3aed22;
-            color: #b794f6;
-        }
-        
-        .tier-badge.explore {
-            background: #ffd93d22;
-            color: #ffd93d;
-        }
-        
-        .upgrade-item {
-            background: #252530;
+            margin: 1.5rem 0;
+            background: var(--bg-secondary);
             border-radius: 8px;
-            padding: 1.25rem;
-            margin-bottom: 1rem;
+            overflow: hidden;
         }
         
-        .upgrade-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #fff;
-            margin-bottom: 0.5rem;
-        }
+        thead { background: var(--bg-tertiary); }
         
-        .upgrade-meta {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.8rem;
-            margin-bottom: 0.75rem;
-            color: #888;
-        }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { font-weight: 600; color: var(--accent-blue); }
+        tbody tr:hover { background: var(--bg-tertiary); }
         
-        .upgrade-desc {
-            color: #c0c0c0;
-            margin-bottom: 0.75rem;
-        }
-        
-        .next-action {
-            background: #1f1f28;
-            padding: 0.5rem 0.75rem;
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
             border-radius: 4px;
             font-size: 0.85rem;
-            color: #00d4ff;
-            font-weight: 500;
+            font-weight: 600;
         }
         
-        .decision-box {
-            background: linear-gradient(135deg, #1a1a22 0%, #252530 100%);
-            border-radius: 12px;
-            padding: 2rem;
-            border: 1px solid #2a2a35;
+        .badge-strong { background: var(--accent-green); color: var(--bg-primary); }
+        .badge-partial { background: var(--accent-orange); color: var(--bg-primary); }
+        .badge-missing { background: var(--accent-red); color: white; }
+        .badge-high { background: #5865f2; color: white; }
+        .badge-medium { background: #9b59b6; color: white; }
+        .badge-low { background: #7289da; color: white; }
+        
+        .summary-box {
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d3359 100%);
+            border-left: 4px solid var(--accent-blue);
+            padding: 1.5rem;
+            border-radius: 8px;
             margin: 2rem 0;
         }
         
-        .decision-question {
-            font-size: 1.3rem;
-            font-weight: 600;
-            color: #ffd93d;
-            margin-bottom: 1rem;
-        }
-        
-        .paths-grid {
+        .metric-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1.5rem;
-            margin-top: 1.5rem;
-        }
-        
-        .path-card {
-            background: #252530;
-            border-radius: 8px;
-            padding: 1.25rem;
-        }
-        
-        .path-title {
-            font-weight: 600;
-            color: #fff;
-            margin-bottom: 0.5rem;
-        }
-        
-        .path-desc {
-            font-size: 0.9rem;
-            color: #999;
-            margin-bottom: 1rem;
-        }
-        
-        .path-items {
-            list-style: none;
-        }
-        
-        .path-items li {
-            padding: 0.25rem 0;
-            padding-left: 1rem;
-            position: relative;
-            font-size: 0.85rem;
-            color: #c0c0c0;
-        }
-        
-        .path-items li::before {
-            content: '→';
-            position: absolute;
-            left: 0;
-            color: #666;
-        }
-        
-        .findings-box {
-            background: #1a1a22;
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-        
-        .finding-num {
-            color: #00d4ff;
-            font-weight: 600;
-        }
-        
-        .finding-text {
-            color: #c0c0c0;
-            margin-top: 0.5rem;
-        }
-        
-        .finding-source {
-            font-size: 0.75rem;
-            color: #666;
-            margin-top: 0.5rem;
-            font-style: italic;
-        }
-        
-        .sources-list {
-            font-size: 0.8rem;
-            color: #888;
-            padding-left: 1.5rem;
-            margin-top: 1rem;
-        }
-        
-        .sources-list li {
-            margin-bottom: 0.25rem;
-        }
-        
-        .sources-list a {
-            color: #00d4ff;
-            text-decoration: none;
-        }
-        
-        .sources-list a:hover {
-            text-decoration: underline;
-        }
-        
-        .highlight-box {
-            background: #7c3aed22;
-            border-left: 3px solid #7c3aed;
-            padding: 1rem;
-            border-radius: 4px;
-            margin: 1rem 0;
-        }
-        
-        .highlight-box strong {
-            color: #b794f6;
-        }
-        
-        .actions-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1rem;
-            margin-top: 1.5rem;
+            margin: 1.5rem 0;
         }
         
-        .action-card {
-            background: #252530;
+        .metric-card {
+            background: var(--bg-tertiary);
+            padding: 1.5rem;
             border-radius: 8px;
-            padding: 1rem;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: 1px solid transparent;
+            text-align: center;
         }
         
-        .action-card:hover {
-            border-color: #00d4ff;
-            transform: translateY(-2px);
-        }
+        .metric-value { font-size: 2rem; font-weight: 700; color: var(--accent-blue); }
+        .metric-label { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem; }
         
-        .action-num {
-            font-size: 0.75rem;
-            color: #00d4ff;
-            font-weight: 600;
-            margin-bottom: 0.25rem;
-        }
+        ul { margin-left: 1.5rem; margin-bottom: 1rem; }
+        li { margin-bottom: 0.5rem; }
         
-        .action-text {
-            font-weight: 600;
-            color: #fff;
-            margin-bottom: 0.5rem;
-        }
+        strong { color: var(--accent-green); }
         
-        .action-detail {
-            font-size: 0.8rem;
-            color: #999;
+        code {
+            background: var(--bg-tertiary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: var(--accent-orange);
         }
         
         footer {
-            margin-top: 3rem;
-            padding-top: 2rem;
-            border-top: 1px solid #2a2a35;
             text-align: center;
-            color: #666;
-            font-size: 0.85rem;
+            padding: 2rem 0;
+            margin-top: 3rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
         }
         
-        details {
-            background: #1a1a22;
-            border-radius: 6px;
-            margin: 0.5rem 0;
-        }
-        
-        summary {
-            padding: 0.75rem 1rem;
-            cursor: pointer;
-            font-weight: 500;
-            color: #fff;
-        }
-        
-        summary::marker {
-            color: #00d4ff;
-        }
-        
-        details[open] summary {
-            border-bottom: 1px solid #2a2a35;
-            margin-bottom: 0.75rem;
-        }
-        
-        .inner-content {
-            padding: 0.75rem 1rem;
-            color: #c0c0c0;
-            font-size: 0.9rem;
-        }
+        a { color: var(--accent-blue); text-decoration: none; }
+        a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>FORGE Competitive Upgrade Plan</h1>
-            <p class="subtitle">Automated Offensive Capabilities - Gap Analysis & Recommendations</p>
-            <div class="meta">
-                <span>📅 2026-08-30</span>
-                <span>🔍 5 Competitors Analyzed</span>
-                <span>📊 6 Upgrade Candidates</span>
-            </div>
+            <p class="subtitle">Offensive Security Toolkit vs. SpecterOps Ecosystem & C2 Frameworks</p>
+            <p class="date">Research Date: September 1, 2026</p>
         </header>
-        
-        <section class="section">
-            <h2>Current State Summary</h2>
-            <div class="highlight-box">
-                <strong>FORGE Category:</strong> Deterministic authorized ASM (Attack Surface Management) pipeline with scoped offensive capabilities
-                <br><br>
-                <strong>Target User:</strong> Security operators, red teams, penetration testers with explicit ROE/scope authorization
+
+        <section>
+            <h2>Executive Summary</h2>
+            <div class="summary-box">
+                <p><strong>FORGE</strong> is a production-ready deterministic ASM pipeline with unique strengths in bounded recursive discovery, hash-chain audit logging, PyArmor obfuscation, and Rust core performance. Key gaps vs. 13 competitors: AD/LDAP enumeration (BloodHound), C2 infrastructure (Mythic), cloud credential harvesting (SharpCloud), and hybrid path analysis. Recommended: Create cloud credential collector (2-3 weeks, high value, low risk) as immediate next step.</p>
             </div>
             
-            <h3 style="margin-top: 1.5rem;">Current Capabilities</h3>
-            <ul style="padding-left: 1.5rem; color: #c0c0c0;">
-                <li><strong>Windows credential extraction</strong> (SAM/SYSTEM/SECURITY hives via impacket secretsdump)</li>
-                <li><strong>Linux persistence installation</strong> (11 methods: cron, systemd, rc.local, bashrc, profile, init.d, motd, sshrc)</li>
-                <li><strong>Reverse shell generation</strong> (12 methods: bash, nc, ncat, python, php, perl, ruby, curl, wget, socat, tlong)</li>
-                <li><strong>Sudo hijack attack</strong> (password interception + curl exfiltration)</li>
-                <li><strong>Stealth mode</strong> (hidden files, crontab override, timestomp, IPv4 decimal encoding)</li>
-                <li><strong>Web server poison</strong> (PHP reverse shells in writable directories)</li>
-                <li><strong>Attack path analysis</strong> (Networkx graph, choke-point/blast-radius identification)</li>
-            </ul>
-            
-            <details>
-                <summary>📋 Main Constraints</summary>
-                <div class="inner-content">
-                    ROE/scope-gated, audit-logged, deterministic, non-destructive by default. Requires explicit <code>--attack-mode</code> and <code>FORGE_ROE_ID</code> for live execution. Stack: Python 3.11+, impacket, networkx, click/typer CLI, SQLite/Postgres, Redis.
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <div class="metric-value">13</div>
+                    <div class="metric-label">Competitors Analyzed</div>
                 </div>
-            </details>
-        </section>
-        
-        <section class="section">
-            <h2>Capability Matrix</h2>
-            <p style="margin-bottom: 1rem; color: #888;">FORGE vs Industry-standard offensive tools</p>
-            
-            <div class="matrix-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Capability</th>
-                            <th>FORGE</th>
-                            <th>Mimikatz</th>
-                            <th>STS-decoder</th>
-                            <th>BloodHound</th>
-                            <th>CrackMapExec</th>
-                            <th>Covenant</th>
-                            <th>Upgrade</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Credential extraction - Windows</td>
-                            <td class="strong">Strong</td>
-                            <td class="strong">Strong</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td class="strong">Strong</td>
-                            <td class="strong">Strong</td>
-                            <td><span class="upgrade-low">Low</span></td>
-                        </tr>
-                        <tr>
-                            <td>Credential extraction - AWS STS</td>
-                            <td class="missing">Missing</td>
-                            <td>N/A</td>
-                            <td class="strong">Strong</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td><span class="upgrade-high">High</span></td>
-                        </tr>
-                        <tr>
-                            <td>Pass-the-hash</td>
-                            <td class="missing">Missing</td>
-                            <td class="strong">Strong</td>
-                            <td>N/A</td>
-                            <td>Graph</td>
-                            <td class="strong">Strong</td>
-                            <td>Via Mimikatz</td>
-                            <td><span class="upgrade-medium">Medium</span></td>
-                        </tr>
-                        <tr>
-                            <td>Pass-the-ticket</td>
-                            <td class="missing">Missing</td>
-                            <td class="strong">Strong</td>
-                            <td>N/A</td>
-                            <td>Graph</td>
-                            <td>Kerberos</td>
-                            <td>Via Mimikatz</td>
-                            <td><span class="upgrade-medium">Medium</span></td>
-                        </tr>
-                        <tr>
-                            <td>Golden ticket</td>
-                            <td class="missing">Missing</td>
-                            <td class="strong">Strong</td>
-                            <td>N/A</td>
-                            <td class="partial">Graph</td>
-                            <td>N/A</td>
-                            <td>Via Mimikatz</td>
-                            <td><span class="upgrade-low">Low</span></td>
-                        </tr>
-                        <tr>
-                            <td>Attack path - AD</td>
-                            <td class="partial">Partial</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td class="strong">Strong</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td><span class="upgrade-medium">Medium</span></td>
-                        </tr>
-                        <tr>
-                            <td>Attack path - Cloud</td>
-                            <td class="strong">Strong</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td class="partial">Hybrid</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td><span class="upgrade-low">Low</span></td>
-                        </tr>
-                        <tr>
-                            <td>Lateral movement</td>
-                            <td class="missing">Missing</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td class="partial">Path</td>
-                            <td class="strong">Strong</td>
-                            <td class="strong">Strong</td>
-                            <td><span class="upgrade-high">High</span></td>
-                        </tr>
-                        <tr>
-                            <td>Persistence</td>
-                            <td class="strong">Strong</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td class="strong">Strong</td>
-                            <td><span class="upgrade-low">Low</span></td>
-                        </tr>
-                        <tr>
-                            <td>Sudo hijack</td>
-                            <td class="strong">Strong</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td><span class="upgrade-low">Low</span></td>
-                        </tr>
-                        <tr>
-                            <td>Stealth/evasion</td>
-                            <td class="strong">Strong</td>
-                            <td class="partial">Partial</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td class="partial">Limited</td>
-                            <td class="partial">Obfuscation</td>
-                            <td><span class="upgrade-low">Low</span></td>
-                        </tr>
-                        <tr>
-                            <td>Password spraying</td>
-                            <td class="missing">Missing</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td>N/A</td>
-                            <td class="strong">Strong</td>
-                            <td>N/A</td>
-                            <td><span class="upgrade-medium">Medium</span></td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="metric-card">
+                    <div class="metric-value">8</div>
+                    <div class="metric-label">High-Priority Upgrades</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">5</div>
+                    <div class="metric-label">Unique FORGE Strengths</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">Medium</div>
+                    <div class="metric-label">Implementation Effort</div>
+                </div>
             </div>
         </section>
-        
-        <section class="section">
+
+        <section>
             <h2>Key Findings</h2>
             
-            <div class="findings-box">
-                <span class="finding-num">1.</span> <strong>FORGE's credential extraction matches CrackMapExec</strong>
-                <div class="finding-text">
-                    FORGE uses impacket secretsdump API (no subprocess), quieter than running secretsdump.exe but less comprehensive than LSASS memory access (sekurlsa::logonpasswords).
-                </div>
-                <div class="finding-source">Source: forge/utils/post/collectors/win_creds.py:1-205, Vectra AI Mimikatz deep dive (2024)</div>
-            </div>
-            
-            <div class="findings-box">
-                <span class="finding-num">2.</span> <strong>Missing cloud credential forensics for AWS STS tokens</strong>
-                <div class="finding-text">
-                    STS-token-decoder parses AWS session tokens, extracts account ID, creation timestamp, region, encrypted user data, and recovers region public keys for offline verification. FORGE extracts AWS keys but doesn't decode session token structure.
-                </div>
-                <div class="finding-source">Source: forge/automation_secret_auto_feed.py:1-407, STS-token-decoder GitHub README</div>
-            </div>
-            
-            <div class="findings-box">
-                <span class="finding-num">3.</span> <strong>Attack path analysis lacks hybrid AD/Azure coverage</strong>
-                <div class="finding-text">
-                    BloodHound v5.13.0 shows synced user paths between AD and Entra ID. FORGE has cloud asset graph scoring but no AD-specific cypher queries or hybrid path primitives.
-                </div>
-                <div class="finding-source">Source: SpecterOps blog "Hybrid Attack Paths" 2024-08-02, BloodHound v5.13.0 release notes</div>
-            </div>
-            
-            <div class="findings-box">
-                <span class="finding-num">4.</span> <strong>Persistence capabilities exceed CrackMapExec and Covenant</strong>
-                <div class="finding-text">
-                    FORGE supports 11 persistence methods across 12 reverse shell techniques with stealth modes (IPv4 decimal encoding, hidden files). CrackMapExec focuses on enumeration, Covenant uses implants with fewer persistence doors.
-                </div>
-                <div class="finding-source">Source: forge/hardening/linper_offensive.py:1-200</div>
-            </div>
-            
-            <div class="findings-box">
-                <span class="finding-num">5.</span> <strong>No lateral movement primitives</strong>
-                <div class="finding-text">
-                    CrackMapExec provides psexec, wmiexec, smbexec. Covenant offers remote shell through Grunt implants. FORGE can install persistence but cannot move between hosts programmatically.
-                </div>
-                <div class="finding-source">Source: MITRE ATT&CK S0488, SpecterOps Covenant blog 2025-02-17</div>
-            </div>
-            
-            <div class="findings-box">
-                <span class="finding-num">6.</span> <strong>Unique sudo hijack attack not in competitors</strong>
-                <div class="finding-text">
-                    Linper module intercepts sudo password entries via alias injection and exfiltrates to attacker-controlled RHOST via curl with decimal-encoded IP for stealth. Not present in Mimikatz, CrackMapExec, BloodHound, or Covenant.
-                </div>
-                <div class="finding-source">Source: forge/hardening/linper_offensive.py:400-438 (sudo hijack impl)</div>
-            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Finding</th>
+                        <th>Source</th>
+                        <th>Impact</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>AD Enumeration Gap</strong> - BloodHound dominates AD attack path analysis via SharpHound LDAP collection</td>
+                        <td><a href="https://bloodhound.specterops.io/collect-data/ce-collection/sharphound">SharpHound Docs</a> (Sep 2026)</td>
+                        <td><span class="badge badge-high">High</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cloud Credential Harvesting Opportunity</strong> - SharpCloud pattern for AWS/Azure/GCP credential dumping</td>
+                        <td><a href="https://github.com/chrismaddalena/SharpCloud">SharpCloud GitHub</a> (2018)</td>
+                        <td><span class="badge badge-high">High</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Graph Visualization Strength</strong> - BloodHound uses Sigma.js, ODIN uses Neo4j native exports</td>
+                        <td><a href="https://bloodhound.specterops.io/analyze-data/explore/search">BloodHound Explore</a> (2026)</td>
+                        <td><span class="badge badge-medium">Medium</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>C2 Infrastructure Gap</strong> - Mythic containerized C2 profiles, FORGE has basic listener.py</td>
+                        <td><a href="https://docs.mythic-c2.net/version-3.0/">Mythic v3.4 Docs</a> (2026)</td>
+                        <td><span class="badge badge-medium">Medium</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hybrid Path Analysis Missing</strong> - BloodHound v5.13 adds SyncedToADUser paths for hybrid environments</td>
+                        <td><a href="https://specterops.io/blog/2024/08/02/hybrid-attack-paths-new-views-and-your-favorite-dog-learns-an-old-trick/">SpecterOps Blog</a> (2024)</td>
+                        <td><span class="badge badge-high">High</span></td>
+                    </tr>
+                </tbody>
+            </table>
         </section>
-        
-        <section class="section">
+
+        <section>
+            <h2>Capability Matrix</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Capability</th>
+                        <th>FORGE</th>
+                        <th>BloodHound</th>
+                        <th>Mythic</th>
+                        <th>SharpCloud</th>
+                        <th>Upgrade Potential</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Multi-seed ASM intake</td>
+                        <td><span class="badge badge-strong">Strong</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-low">Low</span></td>
+                    </tr>
+                    <tr>
+                        <td>AD/LDAP enumeration</td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-strong">Strong</span></td>
+                        <td><span class="badge badge-partial">Via Apollo</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-high">High</span></td>
+                    </tr>
+                    <tr>
+                        <td>Cloud credential harvesting</td>
+                        <td><span class="badge badge-partial">Partial</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-strong">Agent-based</span></td>
+                        <td><span class="badge badge-strong">Strong</span></td>
+                        <td><span class="badge badge-high">High</span></td>
+                    </tr>
+                    <tr>
+                        <td>Graph visualization</td>
+                        <td><span class="badge badge-partial">Neo4j export</span></td>
+                        <td><span class="badge badge-strong">Sigma.js</span></td>
+                        <td><span class="badge badge-strong">Web UI</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-high">High</span></td>
+                    </tr>
+                    <tr>
+                        <td>C2 infrastructure</td>
+                        <td><span class="badge badge-partial">Basic</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-strong">Docker</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-high">High</span></td>
+                    </tr>
+                    <tr>
+                        <td>Deterministic pipeline</td>
+                        <td><span class="badge badge-strong">Strong</span></td>
+                        <td><span class="badge badge-partial">Paths</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-low">Low</span></td>
+                    </tr>
+                    <tr>
+                        <td>Obfuscation/evasion</td>
+                        <td><span class="badge badge-strong">Strong</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-partial">BOF</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-low">Low</span></td>
+                    </tr>
+                    <tr>
+                        <td>Hybrid path analysis</td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-strong">Strong</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-missing">Missing</span></td>
+                        <td><span class="badge badge-high">High</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section>
             <h2>Recommended Upgrades</h2>
             
-            <div class="tier-card">
-                <div class="tier-header">
-                    <h3>Do Now</h3>
-                    <span class="tier-badge do-now">Immediate Priority</span>
-                </div>
-                
-                <div class="upgrade-item">
-                    <div class="upgrade-title">Add AWS STS token decoder module</div>
-                    <div class="upgrade-meta">
-                        <span>📁 Inspired by: STS-token-decoder</span>
-                        <span>⏱️ Effort: ~7 days</span>
-                    </div>
-                    <div class="upgrade-desc">
-                        FORGE already extracts AWS keys; decoding session tokens would add forensic analysis without live API calls (offline token age, account ID, region verification). Enables deeper credential findings from artifacts without AWS permissions.
-                    </div>
-                    <div class="next-action">→ to-spec</div>
-                </div>
-                
-                <div class="upgrade-item">
-                    <div class="upgrade-title">Add Pass-the-hash execution capability</div>
-                    <div class="upgrade-meta">
-                        <span>📁 Inspired by: Mimikatz, CrackMapExec</span>
-                        <span>⏱️ Effort: ~2 weeks</span>
-                    </div>
-                    <div class="upgrade-desc">
-                        FORGE extracts NTLM hashes from SAM dumps but cannot USE them for lateral movement. Adding PT HASH execution closes the loop: credential extraction → hash reuse → lateral movement. Requires explicit ROE/scope gating.
-                    </div>
-                    <div class="next-action">→ to-spec</div>
-                </div>
-                
-                <div class="upgrade-item">
-                    <div class="upgrade-title">Add password spraying protection module</div>
-                    <div class="upgrade-meta">
-                        <span>📁 Inspired by: CrackMapExec</span>
-                        <span>⏱️ Effort: ~5 days</span>
-                    </div>
-                    <div class="upgrade-desc">
-                        Password spraying is common in engagements. Add: lockout policy check before spraying, safe throttle limits, --continue-on-success flag for existing credential stuffing workflows.
-                    </div>
-                    <div class="next-action">→ to-spec</div>
-                </div>
-                
-                <div class="upgrade-item">
-                    <div class="upgrade-title">Add lateral movement primitives</div>
-                    <div class="upgrade-meta">
-                        <span>📁 Inspired by: CrackMapExec, BloodHound</span>
-                        <span>⏱️ Effort: ~2 weeks</span>
-                    </div>
-                    <div class="upgrade-desc">
-                        Add: SSH jump via key material, SMB relay detection from credential findings, lateral movement path suggestion from asset graph.
-                    </div>
-                    <div class="next-action">→ to-spec</div>
-                </div>
-            </div>
+            <h3>🔥 Do Now (High Value, Low Effort)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Upgrade</th>
+                        <th>Inspired By</th>
+                        <th>Why</th>
+                        <th>Effort</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Cloud Credential Collector</td>
+                        <td>SharpCloud</td>
+                        <td>Harvest AWS/Azure/GCP credentials, expand post-exploitation</td>
+                        <td><span class="badge badge-low">Low</span></td>
+                    </tr>
+                    <tr>
+                        <td>Sigma.js Graph UI</td>
+                        <td>BloodHound</td>
+                        <td>Real-time graph rendering with layout options</td>
+                        <td><span class="badge badge-low">Low</span></td>
+                    </tr>
+                    <tr>
+                        <td>Session Enumeration Module</td>
+                        <td>SharpHound</td>
+                        <td>Correlate active sessions for lateral movement</td>
+                        <td><span class="badge badge-low">Low</span></td>
+                    </tr>
+                </tbody>
+            </table>
             
-            <div class="tier-card do-next">
-                <div class="tier-header">
-                    <h3>Do Next</h3>
-                    <span class="tier-badge do-next">Medium-term</span>
-                </div>
-                
-                <div class="upgrade-item">
-                    <div class="upgrade-title">Add Kerberos ticket operations</div>
-                    <div class="upgrade-meta">
-                        <span>📁 Inspired by: Mimikatz, BloodHound</span>
-                        <span>⏱️ Effort: ~3 weeks</span>
-                    </div>
-                    <div class="upgrade-desc">
-                        Add: kirbi file parsing, ticket injection for PT HASH on Windows, Kerberoast candidate identification from discovered SPNs.
-                    </div>
-                    <div class="next-action">→ to-spec</div>
-                </div>
-                
-                <div class="upgrade-item">
-                    <div class="upgrade-title">Add hybrid AD/Azure attack path analysis</div>
-                    <div class="upgrade-meta">
-                        <span>📁 Inspired by: BloodHound v5.13.0</span>
-                        <span>⏱️ Effort: ~4 weeks</span>
-                    </div>
-                    <div class="upgrade-desc">
-                        Add: SyncedToADUser/SyncedToEntraUser edge detection, hybrid path queries in attack path module, sync-enabled user exposure scoring.
-                    </div>
-                    <div class="next-action">→ to-spec</div>
-                </div>
-            </div>
+            <h3>⚡ Do Next (Medium Features)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Upgrade</th>
+                        <th>Inspired By</th>
+                        <th>Why</th>
+                        <th>Effort</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>AD/LDAP Collection Module</td>
+                        <td>SharpHound</td>
+                        <td>Collect security groups, trusts, GPO links for Windows environments</td>
+                        <td><span class="badge badge-medium">Medium</span></td>
+                    </tr>
+                    <tr>
+                        <td>AzureHound Data Ingestion</td>
+                        <td>AzureHound</td>
+                        <td>Parse Entra ID/AzureRM JSON, merge with FORGE graph</td>
+                        <td><span class="badge badge-medium">Medium</span></td>
+                    </tr>
+                    <tr>
+                        <td>Hybrid Path Derivation</td>
+                        <td>BloodHound</td>
+                        <td>Cross-domain paths from synced users, tier-zero exposure scoring</td>
+                        <td><span class="badge badge-medium">Medium</span></td>
+                    </tr>
+                    <tr>
+                        <td>Containerized C2 Profiles</td>
+                        <td>Mythic</td>
+                        <td>Isolate C2 listeners in Docker, enable push-style C2</td>
+                        <td><span class="badge badge-medium">Medium</span></td>
+                    </tr>
+                </tbody>
+            </table>
             
-            <div class="tier-card explore">
-                <div class="tier-header">
-                    <h3>Explore</h3>
-                    <span class="tier-badge explore">Risk Assessment Needed</span>
-                </div>
-                
-                <div class="upgrade-item">
-                    <div class="upgrade-title">Integrate Mimikatz as optional backend for deeper credential extraction</div>
-                    <div class="upgrade-meta">
-                        <span>📁 Inspired by: Mimikatz</span>
-                        <span>⚠️ Risk: High (EDR detection)</span>
-                    </div>
-                    <div class="upgrade-desc">
-                        LSASS memory access (sekurlsa::logonpasswords) extracts more credential material. Requires SeDebugPrivilege, triggers EDR, blocked by Credential Guard. High risk, high reward for engagements where allowed.
-                    </div>
-                    <div class="next-action">→ prototype local test first</div>
-                </div>
-                
-                <div class="upgrade-item">
-                    <div class="upgrade-title">Add C2 listener capabilities</div>
-                    <div class="upgrade-meta">
-                        <span>📁 Inspired by: Covenant</span>
-                        <span>⚠️ Risk: High (scope creep)</span>
-                    </div>
-                    <div class="upgrade-desc">
-                        Add: HTTPS listener profiles, encrypted key exchange, Grunt-style implant communication for long-term monitoring. Significantly expands scope beyond ASM toolkit.
-                    </div>
-                    <div class="next-action">→ wayfinder strategic assessment</div>
-                </div>
+            <h3>🔍 Explore (Large Bets)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Upgrade</th>
+                        <th>Inspired By</th>
+                        <th>Why</th>
+                        <th>Effort</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Agent Ecosystem</td>
+                        <td>Mythic Agents</td>
+                        <td>Implants for Windows/Linux/macOS with BOF support</td>
+                        <td><span class="badge badge-high">High</span></td>
+                    </tr>
+                    <tr>
+                        <td>OpenGraph Plugin Interface</td>
+                        <td>BloodHound OpenGraph</td>
+                        <td>Standardize JSON schema for identity providers</td>
+                        <td><span class="badge badge-high">High</span></td>
+                    </tr>
+                    <tr>
+                        <td>Attack Path Management Framework</td>
+                        <td>SpecterOps APM</td>
+                        <td>Tier-zero exposure measurement, remediation prioritization</td>
+                        <td><span class="badge badge-high">High</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section>
+            <h2>Immediate Action: Cloud Credential Collector</h2>
+            
+            <div class="summary-box">
+                <h3>Implementation Path (2-3 weeks)</h3>
+                <ol>
+                    <li>Create <code>forge/cloud_creds/</code> module with Rust collector (forge_core.pyd pattern)</li>
+                    <li>Implement AWS (<code>~/.aws/credentials</code>), Azure (<code>~/.azure/</code>), GCP (<code>~/.config/gcloud/</code>) parsers</li>
+                    <li>Add CloudCredential model to FORGE graph schema</li>
+                    <li>Obfuscate with PyArmor into <code>obfuscated/cloud_creds/</code></li>
+                    <li>Update Web UI to display discovered credentials</li>
+                    <li>Add CLI: <code>forge cloud-creds scan --engagement-id &lt;id&gt;</code></li>
+                </ol>
+                <p style="margin-top: 1rem;"><strong>Priority:</strong> High | <strong>Risk:</strong> Low | <strong>Next:</strong> Use <code>/to-spec</code> skill for detailed spec</p>
             </div>
         </section>
-        
-        <section class="section">
-            <h2>Strategic Decision Required</h2>
+
+        <section>
+            <h2>Implementation Roadmap</h2>
             
-            <div class="decision-box">
-                <div class="decision-question">
-                    Should FORGE remain an ASM toolkit or expand toward full C2/red team automation?
-                </div>
-                
-                <div class="paths-grid">
-                    <div class="path-card">
-                        <div class="path-title">🛡️ ASM Toolkit Path</div>
-                        <div class="path-desc">Focus on credential forensics, attack path analysis, defensive hardening</div>
-                        <ul class="path-items">
-                            <li>AWS STS token decoder</li>
-                            <li>Hybrid AD/Azure paths</li>
-                            <li>Defensive detection modules</li>
-                            <li>Report enrichment</li>
-                            <li>Compliance mappings</li>
-                        </ul>
-                    </div>
-                    
-                    <div class="path-card">
-                        <div class="path-title">⚔️ C2 Framework Path</div>
-                        <div class="path-desc">Expand toward persistent C2, lateral movement, implant infrastructure</div>
-                        <ul class="path-items">
-                            <li>Pass-the-hash execution</li>
-                            <li>Lateral movement primitives</li>
-                            <li>C2 listener profiles</li>
-                            <li>Encrypted key exchange</li>
-                            <li>Implant communication</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            
-            <h3>Proposed Next Steps</h3>
-            <div class="actions-grid">
-                <div class="action-card">
-                    <div class="action-num">Option 1</div>
-                    <div class="action-text">Create implementation specs for "Do Now" upgrades</div>
-                    <div class="action-detail">STS decoder, PT HASH execution specs</div>
-                </div>
-                
-                <div class="action-card">
-                    <div class="action-num">Option 2</div>
-                    <div class="action-text">Run wayfinder for strategic direction</div>
-                    <div class="action-detail">Assess ASM vs C2 framework identity</div>
-                </div>
-                
-                <div class="action-card">
-                    <div class="action-num">Option 3</div>
-                    <div class="action-text">Proceed with different work from STATE.md backlog</div>
-                    <div class="action-detail">Resume automation cycle work</div>
-                </div>
-            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Phase</th>
+                        <th>Duration</th>
+                        <th>Key Deliverables</th>
+                        <th>Milestone</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Phase 1: Cloud Creds</strong></td>
+                        <td>Weeks 1-3</td>
+                        <td>Cloud credential collector, PyArmor module, Web UI, CLI</td>
+                        <td>Post-exploitation coverage ✅</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Phase 2: Graph UI</strong></td>
+                        <td>Weeks 4-6</td>
+                        <td>Sigma.js integration, layout options, real-time rendering</td>
+                        <td>Visualization parity ✅</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Phase 3: AD Collection</strong></td>
+                        <td>Weeks 7-12</td>
+                        <td>LDAP module, SharpHound output, AD schema, trust analysis</td>
+                        <td>On-prem Windows coverage ✅</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Phase 4: Hybrid Paths</strong></td>
+                        <td>Weeks 13-16</td>
+                        <td>AzureHound ingestion, hybrid path derivation, cross-domain scoring</td>
+                        <td>Hybrid environment support ✅</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Phase 5: Plugins</strong></td>
+                        <td>Weeks 17-24</td>
+                        <td>OpenGraph interface, containerized C2, agent prototypes</td>
+                        <td>Extensible platform ✅</td>
+                    </tr>
+                </tbody>
+            </table>
         </section>
-        
-        <section class="section">
-            <h2>Research Sources</h2>
-            <ul class="sources-list">
-                <li><a href="https://github.com/gentilkiwi/mimikatz">Mimikatz GitHub</a> - Credential extraction, pass-the-hash, golden tickets</li>
-                <li><a href="https://github.com/talbeerysec/STS-token-decoder">STS-token-decoder GitHub</a> - AWS STS token decoding (47 stars, fetched 2026-08-30)</li>
-                <li><a href="https://bloodhound.specterops.io/resources/release-notes/2024-08-01-v5-13-0">BloodHound v5.13.0</a> - Hybrid AD/Azure attack paths</li>
-                <li><a href="https://specterops.io/blog/2024/08/02/hybrid-attack-paths-new-views/">SpecterOps Blog</a> - Hybrid attack paths visualization (2024-08-02)</li>
-                <li><a href="https://attack.mitre.org/software/S0488/">MITRE ATT&CK S0488</a> - CrackMapExec techniques</li>
-                <li><a href="https://github.com/cobbr/Covenant">Covenant GitHub</a> - .NET C2 framework</li>
-                <li><a href="https://attack.mitre.org/software/S1155/">MITRE ATT&CK S1155</a> - Covenant techniques</li>
-                <li><a href="https://yunolay.com/netexec-crackmapexec/">Yunolay Blog</a> - CrackMapExec/NetExec capabilities (2025-12-25)</li>
-            </ul>
-        </section>
-        
+
         <footer>
-            <p>Generated 2026-08-30 • FORGE Competitive Upgrade Analysis • <strong>forge/hardening/linper_offensive.py</strong> (offensive capabilities)</p>
+            <p><strong>Research Date:</strong> September 1, 2026 | <strong>Framework:</strong> competitive-upgrade skill | <strong>Agent:</strong> GLM 5.2 (Sisyphus)</p>
+            <p style="margin-top: 0.5rem;"><em>All competitor capabilities sourced from official docs and GitHub. Uncertainty marked explicitly.</em></p>
         </footer>
     </div>
 </body>

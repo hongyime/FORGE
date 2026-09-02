@@ -4,6 +4,7 @@ import asyncio
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -116,3 +117,98 @@ def progress_event_websocket_text(event: ProgressEvent) -> str:
 
 
 broker = ProgressBroker()
+
+
+ARTIFACT_ENQUEUED = "artifact:enqueued"
+ARTIFACT_STARTED = "artifact:started"
+ARTIFACT_COMPLETED = "artifact:completed"
+ARTIFACT_FAILED = "artifact:failed"
+
+
+def _artifact_timestamp() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def artifact_event(
+    event_type: str,
+    engagement_id: int,
+    artifact_id: str,
+    extra: dict[str, Any],
+    *,
+    timestamp: str | None = None,
+) -> ProgressEvent:
+    ts = timestamp if timestamp is not None else _artifact_timestamp()
+    payload: dict[str, Any] = {
+        "event_type": event_type,
+        "timestamp": ts,
+        "engagement_id": engagement_id,
+        "artifact_id": artifact_id,
+    }
+    for key, value in extra.items():
+        payload.setdefault(key, value)
+    return progress_event(engagement_id, event_type, payload)
+
+
+def artifact_enqueued_event(
+    engagement_id: int,
+    artifact_id: str,
+    name: str,
+    *,
+    timestamp: str | None = None,
+) -> ProgressEvent:
+    return artifact_event(
+        ARTIFACT_ENQUEUED,
+        engagement_id,
+        artifact_id,
+        {"name": name},
+        timestamp=timestamp,
+    )
+
+
+def artifact_started_event(
+    engagement_id: int,
+    artifact_id: str,
+    parser: str,
+    *,
+    timestamp: str | None = None,
+) -> ProgressEvent:
+    return artifact_event(
+        ARTIFACT_STARTED,
+        engagement_id,
+        artifact_id,
+        {"parser": parser},
+        timestamp=timestamp,
+    )
+
+
+def artifact_completed_event(
+    engagement_id: int,
+    artifact_id: str,
+    duration_ms: int,
+    *,
+    timestamp: str | None = None,
+) -> ProgressEvent:
+    return artifact_event(
+        ARTIFACT_COMPLETED,
+        engagement_id,
+        artifact_id,
+        {"duration_ms": int(duration_ms)},
+        timestamp=timestamp,
+    )
+
+
+def artifact_failed_event(
+    engagement_id: int,
+    artifact_id: str,
+    error_message: str,
+    retry_count: int,
+    *,
+    timestamp: str | None = None,
+) -> ProgressEvent:
+    return artifact_event(
+        ARTIFACT_FAILED,
+        engagement_id,
+        artifact_id,
+        {"error_message": error_message, "retry_count": int(retry_count)},
+        timestamp=timestamp,
+    )

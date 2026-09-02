@@ -264,6 +264,9 @@ markers = [
     "phase4: Phase 4 exploit correlation tests",
     "phase5: Phase 5 post-exploitation tests",
     "phase6: Phase 6 LLM reporting tests",
+    "upgrade: competitive upgrade integration tests (see docs/competitive_upgrades)",
+    "do_now: high-priority competitive upgrade tasks to execute immediately",
+    "explore: exploratory/spike tests for competitive upgrade research",
 ]
 
 # ── Coverage ──────────────────────────────────────────────────────────────────

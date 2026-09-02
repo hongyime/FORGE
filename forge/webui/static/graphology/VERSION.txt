@@ -1,0 +1,13 @@
+graphology 0.25.4
+Vendored: 2026-09-01
+Source: https://registry.npmjs.org/graphology/0.25.4
+GitHub: https://github.com/graphology/graphology
+License: MIT (see LICENSE.txt)
+
+Files:
+  graphology.umd.min.js       - Minified UMD bundle (production)
+  graphology.umd.min.js.map   - Source map for minified bundle
+  graphology.umd.js           - Non-minified UMD bundle
+  LICENSE.txt                 - MIT License
+
+Verify integrity against SHA256SUMS.txt.

@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FORGE Competitive Upgrade Plan</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101316;
+      --panel: #171c21;
+      --panel-2: #20262c;
+      --text: #edf2f4;
+      --muted: #a9b4bd;
+      --line: #34404a;
+      --accent: #58c4b8;
+      --accent-2: #f2c14e;
+      --risk: #ff6b6b;
+      --ok: #7bd88f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    main { max-width: 1180px; margin: 0 auto; padding: 40px 24px 64px; }
+    header { padding-bottom: 24px; border-bottom: 1px solid var(--line); margin-bottom: 28px; }
+    h1 { margin: 0 0 10px; font-size: clamp(2rem, 5vw, 4rem); line-height: 1; letter-spacing: 0; }
+    h2 { margin: 34px 0 14px; font-size: 1.45rem; letter-spacing: 0; }
+    h3 { margin: 22px 0 8px; font-size: 1.05rem; color: var(--accent); letter-spacing: 0; }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); }
+    .subtitle { max-width: 850px; color: var(--muted); font-size: 1.05rem; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .pill {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: .86rem;
+    }
+    .notice {
+      border-left: 4px solid var(--accent-2);
+      background: #211f17;
+      padding: 14px 16px;
+      margin: 20px 0;
+      color: #f3dfaa;
+    }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card strong { display: block; margin-bottom: 6px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+      font-size: .92rem;
+    }
+    th { background: var(--panel-2); color: var(--text); }
+    tr:last-child td { border-bottom: 0; }
+    code {
+      background: #0b0e10;
+      color: #d6f5ef;
+      border: 1px solid #243038;
+      border-radius: 4px;
+      padding: 1px 5px;
+      white-space: nowrap;
+    }
+    .tag { color: var(--ok); font-weight: 600; }
+    .risk { color: var(--risk); font-weight: 600; }
+    .muted { color: var(--muted); }
+    @media (max-width: 860px) {
+      main { padding: 28px 14px 48px; }
+      .grid { grid-template-columns: 1fr; }
+      table { display: block; overflow-x: auto; }
+      th, td { min-width: 180px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>FORGE Competitive Upgrade Plan</h1>
+    <p class="subtitle">Source-backed upgrade map comparing FORGE against SpecterOps/BloodHound, AzureHound, SharpHound, Nemesis, Mythic, Merlin, CrucibleC2, SharpSCCM, SharpCloud, StayKit, and Malleable C2. The output is intentionally product and defensive-engineering focused.</p>
+    <div class="meta">
+      <span class="pill">Research date: 2026-08-31</span>
+      <span class="pill">Repo: forge-toolkit</span>
+      <span class="pill">Gate focus: graph, validation, review, artifact analysis</span>
+      <span class="pill">Mode: no offensive execution implementation</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Current Repo Summary</h2>
+    <div class="grid">
+      <div class="card"><strong>Product category</strong>Deterministic authorized attack-surface management and assessment evidence pipeline.</div>
+      <div class="card"><strong>Target user</strong>Operators and security teams running scoped engagements that need repeatable evidence, reports, graph views, audit trails, and fallback exports.</div>
+      <div class="card"><strong>Core workflow</strong>Create or resume an engagement, run <code>forge kill-chain &lt;seed&gt; --engagement N</code>, recursively enrich scoped seeds, validate non-destructively, review findings, export reports and graph artifacts.</div>
+      <div class="card"><strong>Current capabilities</strong>Typed multi-seed intake, ProjectDiscovery connectors, passive artifact parsers, cloud audit modules, read-only active validation, asset graph ownership, reports, remediation, audit manifests, React/static dashboard surfaces.</div>
+      <div class="card"><strong>Stack</strong>Python 3.11, Typer/Click CLI, FastAPI, SQLite/Postgres paths, React reporting UI, Docker/Compose, optional Rust native core, external local scanner runners.</div>
+      <div class="card"><strong>Maturity</strong>Advanced internal-tool/MVP: broad working modules and tests, but still consolidating product paths, data quality, and deterministic release gates.</div>
+      <div class="card"><strong>Main constraint</strong>The repo must remain deterministic, scope-gated, audit-logged, and non-destructive. Upgrades should import, normalize, verify, and visualize evidence rather than add unbounded execution features.</div>
+    </div>
+    <div class="notice">Uncertainty: the requested <code>chrismaddalena/ODI</code> URL could not be verified as a live GitHub repository during research. SpecterOps' org page lists <code>chrismaddalena/ODIN</code> as automated network asset, email, and social profile discovery. Treat ODI as unresolved until the exact repo is confirmed.</div>
+  </section>
+
+  <section>
+    <h2>Research Capabilities</h2>
+    <table>
+      <thead><tr><th>Product</th><th>Source</th><th>Core Promise</th><th>Key Capabilities</th><th>Workflow Patterns</th><th>Integrations</th><th>Pricing/Gating</th><th>Trust Signals</th><th>Differentiators</th><th>Weaknesses / Caveats</th></tr></thead>
+      <tbody>
+        <tr><td>BloodHound</td><td>GitHub and official SpecterOps docs, checked 2026-08-31.</td><td>Reveal hidden AD/Azure privilege relationships with graph theory.</td><td>Graph UI, attack-path exploration, AD/Azure data ingestion, findings and remediation, API and SIEM/ticketing integrations.</td><td>Collector-fed graph analysis with data quality and remediation workflows.</td><td>SharpHound, AzureHound, PostgreSQL, Neo4j, API, XSOAR, Google SecOps, Atlassian, ServiceNow, Splunk references in docs.</td><td>Community Edition open source; Enterprise features gated by SpecterOps offering.</td><td>Verified SpecterOps organization, active docs, official collectors.</td><td>Deep relationship graph and mature AD/Azure mental model.</td><td>Operational complexity from graph database and collector setup.</td></tr>
+        <tr><td>AzureHound</td><td>Official AzureHound CE docs, checked 2026-08-31.</td><td>Collect Entra ID and AzureRM data for BloodHound using Microsoft Graph and Azure REST APIs.</td><td>Cross-platform Go binary, multiple auth flows, tenant-scoped output to JSON.</td><td>Single-purpose collector emits normalized import file.</td><td>Microsoft Graph, Azure REST, BloodHound import.</td><td>Community Edition available as binary/source; Enterprise collector client is gated.</td><td>Official BloodHound collector maintained by SpecterOps ecosystem.</td><td>Focused cloud identity collection with portable output.</td><td>Auth and permissions are sensitive; FORGE should prefer offline import unless ROE permits live cloud queries.</td></tr>
+        <tr><td>SharpHound</td><td>Official SharpHound CE docs, checked 2026-08-31.</td><td>Collect AD/domain-joined system data for BloodHound.</td><td>LDAP/native Windows collection, group membership, trusts, abusable rights, GPO links, sessions, local group membership, JSON zip output.</td><td>Default collection, session loop collection, drag-and-drop import into BloodHound.</td><td>BloodHound zip import; Windows APIs and LDAP.</td><td>Community Edition available as binary/source; Enterprise signed collector is gated.</td><td>Official collector with detailed permissions docs.</td><td>Clear collection method taxonomy and data quality value.</td><td>AV flags and privileged collection requirements make direct execution inappropriate for FORGE.</td></tr>
+        <tr><td>Nemesis</td><td>GitHub README and SpecterOps org README, checked 2026-08-31.</td><td>Centralized data processing and collaborative analysis for files from assessments.</td><td>Ingest, enrich, analyze files; Docker/Dapr architecture; collaborative human and AI workflows.</td><td>Artifact workbench and enrichment pipeline instead of one-off local parsing.</td><td>C2 frameworks, manual uploads, Chrome downloads, Docker/Kubernetes paths.</td><td>Open source; deployment effort is the practical gate.</td><td>SpecterOps R&amp;D project, centralized processing positioning.</td><td>Turns collected files into reusable engagement intelligence.</td><td>Infrastructure-heavy for smaller FORGE deployments.</td></tr>
+        <tr><td>Mythic, Merlin, CrucibleC2</td><td>GitHub READMEs and SpecterOps org README, checked 2026-08-31.</td><td>Collaborative red-team operation frameworks.</td><td>Multi-user operator surfaces, plugins/modules, server/client separation, eventing, reporting or manager views.</td><td>Strong operator workflow, plugin isolation, event streams, component boundaries.</td><td>Docker/web UI, gRPC/TLS in Merlin CLI, plugin/event systems in Crucible, Mythic browser UI.</td><td>Open source; operational use requires authorization and infrastructure.</td><td>Active repos and recognized community tools.</td><td>Operator UX and extensibility patterns.</td><td>C2/agent execution features are out of scope for FORGE and must not be copied.</td></tr>
+        <tr><td>SharpSCCM, SharpCloud, StayKit, Malleable C2</td><td>GitHub READMEs and SpecterOps org README, checked 2026-08-31.</td><td>Domain-specific offensive references for SCCM, cloud credential file discovery, persistence, and C2 profile validation.</td><td>Technique catalogs, operator menus, profile lint/reference guidance, cloud/SCCM surface awareness.</td><td>Structured option taxonomies and preflight validation.</td><td>Cobalt Strike aggressor scripts in some projects; C2 profile files; cloud credential file locations.</td><td>Open source where available.</td><td>Popular/referenced security community projects.</td><td>Useful as defensive taxonomy and artifact-classification inspiration.</td><td>Execution behaviors are not suitable for FORGE; ODI URL unresolved.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Comparison Targets</h2>
+    <table>
+      <thead><tr><th>Target</th><th>Why Included</th><th>Primary Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>BloodHound</td><td>Best-in-class AD/Azure relationship graph and attack-path analysis pattern.</td><td>SpecterOps says BloodHound uses graph theory for AD/Azure relationships; GitHub describes React/Sigma.js, Go API, PostgreSQL, Neo4j, SharpHound and AzureHound collectors.</td></tr>
+        <tr><td>AzureHound</td><td>Cloud identity collector pattern that maps Entra ID and AzureRM data into BloodHound.</td><td>Official docs describe a Go binary using Microsoft Graph and Azure REST APIs with file output for BloodHound import.</td></tr>
+        <tr><td>SharpHound</td><td>AD collection and data-quality pattern with JSON zip outputs and session-loop collection.</td><td>Official docs describe native Windows API/LDAP collection, default data types, JSON zip output, and data quality review path.</td></tr>
+        <tr><td>Nemesis</td><td>Centralized artifact processing and enrichment pattern for offensive assessment data.</td><td>GitHub README describes centralized ingestion, enrichment, and collaborative analysis of collected files; SpecterOps calls it a data store and automation layer for repetitive engagement tasks.</td></tr>
+        <tr><td>Mythic / Merlin / CrucibleC2</td><td>Collaborative operator UX, plugin architecture, eventing, and transport abstraction patterns.</td><td>Mythic README emphasizes web UI for operators, managers, and reporting; Merlin documents split server/CLI/agent components and message transforms; SpecterOps summarizes Crucible as multi-user, plugin/eventing oriented.</td></tr>
+        <tr><td>SharpSCCM / SharpCloud / StayKit / Malleable C2</td><td>Useful as taxonomy, detection, planning, and import-reference patterns, not execution features.</td><td>Repos document SCCM primitives, cloud credential-file discovery, persistence menus, and C2 profile lint/reference guidance.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Key Findings</h2>
+    <ol>
+      <li>BloodHound's strongest transferable advantage is not a scanner; it is a collector-fed relationship graph plus quality/review workflow. FORGE already has graph, report, audit, validation, and ownership primitives, so the concrete gap is import normalization and data-quality scoring.</li>
+      <li>AzureHound and SharpHound show that FORGE should make "collector output import" a first-class workflow. Offline JSON/zip import fits FORGE's deterministic, non-destructive model better than running collectors directly.</li>
+      <li>Nemesis validates FORGE's artifact-analysis direction, but FORGE needs a clearer artifact workbench: queue state, parser lineage, extracted entities, failure reasons, and safe reprocess plans.</li>
+      <li>Mythic, Merlin, and CrucibleC2 are relevant for collaboration, plugin boundaries, and eventing patterns only. Their C2/agent capabilities are intentionally excluded from this roadmap.</li>
+      <li>SharpSCCM, SharpCloud, StayKit, and Malleable C2 are best treated as defensive taxonomy and linting references. They should feed checklist mappings, artifact classifiers, and remediation content, not execution modules.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Capability Matrix</h2>
+    <table>
+      <thead><tr><th>Capability</th><th>Current FORGE</th><th>External Pattern</th><th>Gap</th><th>Buildable Upgrade</th></tr></thead>
+      <tbody>
+        <tr><td>AD/Azure graph ingestion</td><td>Has asset graph tables and cloud identity context parsing in <code>forge/graph/assets.py</code>.</td><td>BloodHound is collector-fed and uses graph storage for AD/Azure relationships.</td><td>No first-class BloodHound/AzureHound/SharpHound import lane visible in connector registry.</td><td>Add passive import connectors for BloodHound CE JSON, SharpHound zip, and AzureHound JSON that normalize nodes/edges into FORGE asset graph plus provenance.</td></tr>
+        <tr><td>Data quality review</td><td>Has reporting/dashboard and validation coverage concepts.</td><td>BloodHound docs expose a data quality review workflow around collection completeness.</td><td>No dedicated "collection quality" report for imported graph data.</td><td>Add graph data-quality snapshot: stale collection age, missing edge families, source coverage, orphan nodes, tenant/domain coverage, and confidence score.</td></tr>
+        <tr><td>Central artifact enrichment</td><td>Has local artifact queue, parsers, recursive seed extraction, and cloud config extraction.</td><td>Nemesis centralizes file ingestion, enrichment, collaboration, and analytics.</td><td>FORGE parsing exists but lacks a simple operator-facing artifact workbench and enrichment status taxonomy.</td><td>Add artifact analysis dashboard tab backed by existing queue tables: state, parser family, extracted entities, failures, lineage, and reprocess action as dry-run command plan.</td></tr>
+        <tr><td>Collector client planning</td><td>Has connector registry, install-plan, run-plan, secret lifecycle, and gates.</td><td>BloodHound Enterprise collector clients separate collector auth/config from analysis tenant.</td><td>FORGE connectors are individually cataloged but not grouped into reusable collection profiles.</td><td>Add read-only collection profile manifests for "web ASM", "cloud identity import", "AD graph import", and "artifact enrichment"; profiles emit commands but require explicit ROE for live checks.</td></tr>
+        <tr><td>Operator collaboration</td><td>Has workspaces, RBAC, remediation ownership, audit review routes.</td><td>Mythic and Crucible emphasize multi-user operator UX; Ghostwriter/SpecterOps ecosystem emphasizes reporting/project workflow.</td><td>FORGE has surfaces, but the core workflow could better show who touched what, next action, and review status.</td><td>Add engagement activity timeline unifying connector runs, artifact parser events, validation jobs, owner changes, and report/audit review decisions.</td></tr>
+        <tr><td>Protocol/profile validation</td><td>FORGE has C2-adjacent modules and safety gates but should not expand into C2 operation.</td><td>Malleable C2 repo centers linting and reference-profile validation.</td><td>No defensive profile lint/import path for provided C2 profiles as artifacts.</td><td>Add passive "profile artifact analyzer" for uploaded C2/profile configs: classify structure, record risk notes, map to detections and hardening guidance without generating deployable profiles.</td></tr>
+        <tr><td>SCCM/cloud/persistence taxonomy</td><td>Cloud audits and hardening modules exist; offensive optional deps are gated.</td><td>SharpSCCM, SharpCloud, StayKit document common enterprise abuse surfaces.</td><td>FORGE lacks a clean defensive taxonomy and importable checklist for these domains.</td><td>Add ATT&amp;CK/control mapping packs and read-only checklist importers for SCCM exposure, cloud credential hygiene, and persistence indicators.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Upgrade Opportunities</h2>
+    <h3>Do Now</h3>
+    <table>
+      <thead><tr><th>Upgrade</th><th>Source Pattern</th><th>Why It Matters</th><th>Repo Fit</th><th>Effort</th><th>Risk</th><th>Next Artifact</th></tr></thead>
+      <tbody>
+        <tr><td>BloodHound-family offline import connector</td><td>SharpHound zip and AzureHound JSON import model.</td><td>Lets operators reuse existing AD/Azure collection outputs while keeping FORGE passive and deterministic.</td><td>Matches connector import architecture and asset graph schema.</td><td>Medium</td><td>Schema drift across collector versions.</td><td>Spec, then tickets.</td></tr>
+        <tr><td>Graph data-quality report</td><td>BloodHound data quality review workflow.</td><td>Prevents incomplete imported graph data from producing overconfident findings.</td><td>Extends existing validation/report/dashboard paths with deterministic metrics.</td><td>Low</td><td>Quality score could be misread as finding severity.</td><td>Ticket.</td></tr>
+        <tr><td>Artifact enrichment status tab</td><td>Nemesis centralized file enrichment workbench.</td><td>Makes existing artifact queue useful to operators and exposes parser failures quickly.</td><td>Uses current artifact queue, lineage, dashboard, and report surfaces.</td><td>Medium</td><td>Accidental display of sensitive extracted values.</td><td>Spec.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Do Next</h3>
+    <table>
+      <thead><tr><th>Upgrade</th><th>Source Pattern</th><th>Why It Matters</th><th>Repo Fit</th><th>Effort</th><th>Risk</th><th>Next Artifact</th></tr></thead>
+      <tbody>
+        <tr><td>Collection profile manifests</td><td>BloodHound collector client/profile pattern.</td><td>Gives repeatable setup plans for common engagement modes.</td><td>Builds on connector registry, run-plan, secret readiness, and ROE gates.</td><td>Medium</td><td>Profiles can hide unsafe defaults if not explicit.</td><td>Tickets.</td></tr>
+        <tr><td>Unified engagement activity timeline</td><td>Mythic/Crucible eventing and operator collaboration.</td><td>Shows who changed what, what ran, what failed, and what needs review.</td><td>Aggregates existing audit, validation, remediation, connector, and report state.</td><td>Medium</td><td>RBAC/redaction mistakes.</td><td>Spec.</td></tr>
+        <tr><td>Defensive C2/profile artifact analyzer</td><td>Malleable C2 lint/reference workflow.</td><td>Lets defenders classify uploaded profile/config artifacts and map detections.</td><td>Fits passive artifact analysis and standards metadata.</td><td>Low</td><td>Must not generate usable C2 profiles.</td><td>Ticket.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Explore</h3>
+    <table>
+      <thead><tr><th>Upgrade</th><th>Inspired By</th><th>Why</th><th>Risk</th><th>Next</th></tr></thead>
+      <tbody>
+        <tr><td>Neo4j/OpenGraph export bridge</td><td>BloodHound graph-native ecosystem.</td><td>Could make FORGE evidence portable into mature graph-review workflows.</td><td>Could add complexity beside current SQLite/Postgres and GraphML/JSON outputs.</td><td>Wayfinder map or architecture spec.</td></tr>
+        <tr><td>Nemesis-compatible artifact handoff</td><td>Nemesis centralized enrichment pipeline.</td><td>Could let teams exchange sanitized engagement artifacts between systems.</td><td>Depends on Nemesis API stability and deployment burden.</td><td>Prototype with sanitized fixtures.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Do Not Copy</h2>
+    <table>
+      <thead><tr><th>Pattern</th><th>Reason</th><th>FORGE-Safe Alternative</th></tr></thead>
+      <tbody>
+        <tr><td>Persistence execution menus from StayKit</td><td>Conflicts with deterministic authorized ASM and would add high-risk post-exploitation behavior.</td><td>Model persistence as defensive indicators, checklist findings, and remediation guidance.</td></tr>
+        <tr><td>C2 listener/agent features from Merlin, Mythic, CrucibleC2, or Malleable C2</td><td>FORGE's locked goal is evidence collection, validation, scoring, and review, not command-and-control.</td><td>Use their collaboration, plugin, eventing, and linting patterns only.</td></tr>
+        <tr><td>Credential collection behavior from SharpCloud or SharpSCCM</td><td>Direct credential harvesting or lateral movement would violate the repo's safety gates.</td><td>Import scanner outputs, map cloud credential hygiene controls, and validate only through non-destructive proof gates.</td></tr>
+        <tr><td>AV bypass or in-memory execution guidance</td><td>Not needed for FORGE's product goal and unsafe to operationalize.</td><td>Keep local false-positive checks limited to build verification and document no bypass guarantee.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Proposed Next Step</h2>
+    <p>Create a focused spec for the BloodHound-family offline import connector: supported SharpHound zip and AzureHound JSON fixture formats, graph node/edge normalization, provenance rows, data-quality metrics, dashboard/report surfacing, and fail-closed tests. This is the highest-value next action because it strengthens FORGE's graph, validation, review, artifact-analysis, and fallback gates without adding unsafe execution behavior.</p>
+  </section>
+
+  <section>
+    <h2>Guardrails</h2>
+    <ul>
+      <li>Do not scrape behind logins or bypass access controls.</li>
+      <li>Do not copy proprietary UI, text, branding, or private workflows.</li>
+      <li>Do not clone competitor features without adapting them to FORGE's deterministic, authorized engagement model.</li>
+      <li>Do not use undated claims; every external product claim in this plan is dated 2026-08-31.</li>
+      <li>Do not hide uncertainty; the ODI URL remains unresolved until the exact repository is confirmed.</li>
+      <li>Do not turn competitor research into busywork; prioritize the smaller set of upgrades that improve the locked release gates.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Implementation Roadmap</h2>
+    <table>
+      <thead><tr><th>Phase</th><th>Build</th><th>Files To Touch</th><th>Definition Of Done</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Add passive BloodHound/AzureHound/SharpHound import definitions and parsers.</td><td><code>forge/connectors/registry.py</code>, <code>forge/connectors/runner.py</code>, new tests under <code>tests/connectors</code>.</td><td>Fixture import persists graph rows and provenance; bad files fail closed.</td></tr>
+        <tr><td>2</td><td>Add graph data-quality snapshot and dashboard/report blocks.</td><td><code>forge/graph/assets.py</code>, <code>forge/reporting/*</code>, web UI route/tests.</td><td>Quality metrics appear in JSON, HTML dashboard, and report fallback path.</td></tr>
+        <tr><td>3</td><td>Expose artifact enrichment status and lineage.</td><td><code>forge/orchestration/artifact_processor_runtime.py</code>, <code>forge/webui/*</code>, React/static dashboard.</td><td>Operators can see parser state and dry-run reprocess plan without raw secret leakage.</td></tr>
+        <tr><td>4</td><td>Add collection profiles and timeline aggregation.</td><td><code>forge/connectors/*</code>, <code>forge/audit/*</code>, <code>forge/webui/*</code>.</td><td>Profiles emit deterministic plans; timeline is RBAC-filtered and redacted.</td></tr>
+        <tr><td>5</td><td>Add defensive taxonomy packs for SCCM, cloud credential hygiene, and C2/profile artifacts.</td><td><code>forge/standards/*</code>, <code>forge/phase1/*artifact*</code>, tests.</td><td>Fixtures map to ATT&amp;CK/control metadata and remediation without executable tradecraft.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Source Notes</h2>
+    <p class="muted">Primary research sources used on 2026-08-31:</p>
+    <ul>
+      <li><a href="https://github.com/SpecterOps">SpecterOps GitHub organization README</a></li>
+      <li><a href="https://github.com/SpecterOps/BloodHound">SpecterOps/BloodHound</a></li>
+      <li><a href="https://bloodhound.specterops.io/collect-data/ce-collection/azurehound">AzureHound Community Edition docs</a></li>
+      <li><a href="https://bloodhound.specterops.io/collect-data/ce-collection/sharphound">SharpHound Community Edition docs</a></li>
+      <li><a href="https://github.com/SpecterOps/Nemesis">SpecterOps/Nemesis</a></li>
+      <li><a href="https://github.com/its-a-feature/Mythic">its-a-feature/Mythic</a></li>
+      <li><a href="https://github.com/Ne0nd0g/merlin">Ne0nd0g/merlin</a></li>
+      <li><a href="https://github.com/DragoQCC/CrucibleC2">DragoQCC/CrucibleC2</a></li>
+      <li><a href="https://github.com/Mayyhem/SharpSCCM">Mayyhem/SharpSCCM</a></li>
+      <li><a href="https://github.com/chrismaddalena/SharpCloud">chrismaddalena/SharpCloud</a></li>
+      <li><a href="https://github.com/0xthirteen/StayKit">0xthirteen/StayKit</a></li>
+      <li><a href="https://github.com/threatexpress/malleable-c2">threatexpress/malleable-c2</a></li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

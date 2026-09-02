@@ -351,6 +351,7 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
                                 'owned_by',
                                 'routed_to',
                                 'observed_in',
+                                'active_session',
                                 'other'
                             )),
         confidence          REAL    NOT NULL DEFAULT 0.5

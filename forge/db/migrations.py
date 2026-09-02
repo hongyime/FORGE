@@ -2031,6 +2031,7 @@ def _m0038_asset_graph_primitive(conn: sqlite3.Connection) -> None:
                                     'owned_by',
                                     'routed_to',
                                     'observed_in',
+                                    'active_session',
                                     'other'
                                 )),
             confidence          REAL    NOT NULL DEFAULT 0.5
@@ -2276,6 +2277,7 @@ def _m0040_asset_graph_evidence_nodes(conn: sqlite3.Connection) -> None:
                                             'owned_by',
                                             'routed_to',
                                             'observed_in',
+                                            'active_session',
                                             'other'
                                         )),
                     confidence          REAL    NOT NULL DEFAULT 0.5

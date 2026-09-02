@@ -3,7 +3,9 @@
 """Verify obfuscated module loading and Rust extension import."""
 
 import sys
+import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -50,14 +52,17 @@ def test_kerberos_import():
     assert ops is not None
 
 
-def test_mimikatz_import(monkeypatch):
+def test_mimikatz_import():
     """Test MimikatzBackend import without probing privileges or tools."""
     assert MimikatzBackend is not None
-    monkeypatch.setattr(MimikatzBackend, "_verify_windows", lambda self: None)
-    monkeypatch.setattr(MimikatzBackend, "_find_mimikatz", lambda self: None)
-    monkeypatch.setattr(MimikatzBackend, "_verify_admin_privileges", lambda self: False)
 
-    backend = MimikatzBackend(roe_id="TEST-ROE", scope_manifest=SCOPE_MANIFEST)
+    with (
+        patch.object(MimikatzBackend, "_verify_windows", lambda self: None),
+        patch.object(MimikatzBackend, "_find_mimikatz", lambda self: None),
+        patch.object(MimikatzBackend, "_verify_admin_privileges", lambda self: False),
+    ):
+        backend = MimikatzBackend(roe_id="TEST-ROE", scope_manifest=SCOPE_MANIFEST)
+
     assert backend is not None
 
 
@@ -69,7 +74,7 @@ def test_spray_import():
 
 
 def test_forge_loader_loads_obfuscated_modules():
-    """Test root loader reports and returns all three obfuscated modules."""
+    """Test root loader and direct packages expose obfuscated classes."""
     assert loader_status() == {
         "kerberos_ops": "obfuscated",
         "mimikatz_backend": "obfuscated",
@@ -84,6 +89,28 @@ def test_forge_loader_loads_obfuscated_modules():
     for module_name, attr_name in expected_attrs.items():
         module = load(module_name)
         assert getattr(module, attr_name, None) is not None
+
+    code = (
+        "from obfuscated.kerberos.kerberos_ops import KerberosOps; "
+        "from obfuscated.mimikatz.mimikatz_backend import MimikatzBackend; "
+        "from obfuscated.auth.spray_optimizer import SprayOptimizer; "
+        "scope = {'domains': ['example.test'], 'hosts': ['127.0.0.1'], 'roe_id': 'TEST-ROE'}; "
+        "print(KerberosOps('TEST-ROE', scope).__class__.__name__); "
+        "print(SprayOptimizer('TEST-ROE', scope).__class__.__name__); "
+        "print(MimikatzBackend.__name__)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).parent.parent,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.splitlines() == [
+        "KerberosOps",
+        "SprayOptimizer",
+        "MimikatzBackend",
+    ]
 
 
 def test_forge_core_aes_roundtrip():
@@ -115,6 +142,12 @@ def main():
     print()
     
     test_spray_import()
+    print()
+
+    test_forge_loader_loads_obfuscated_modules()
+    print()
+
+    test_forge_core_aes_roundtrip()
     print()
     
     print("=" * 60)

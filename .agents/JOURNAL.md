@@ -330,3 +330,21 @@
 - 2026-08-31 17:26:01 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=11
 - 2026-08-31 17:37:35 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=12
 - 2026-08-31 17:43:50 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=12
+- 2026-08-31 18:31:23 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=0
+- 2026-08-31: Re-vet of `f3041c1` found Cargo build artifacts committed under `rust_core/target`; decision is to ignore/untrack Cargo target output and keep `forge_core.pyd` as a local rebuildable artifact.
+- 2026-08-31 23:25:56 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=433
+- 2026-08-31: Direct `obfuscated.*` imports should be supported without `forge_loader.py`; patched package initializers to expose PyArmor runtime paths while preserving ROE/scope constructor requirements.
+- 2026-08-31: Competitive upgrade decision is to adapt BloodHound/AzureHound/SharpHound/Nemesis patterns as offline import, data-quality, graph-review, and artifact-enrichment work; do not copy C2, persistence, credential-harvesting, or bypass behaviors.
+- 2026-08-31 23:57:08 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=441
+- 2026-09-01 00:37:00 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=442
+- 2026-09-01 06:52:10 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=442
+- 2026-09-01 07:08:03 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=442
+- 2026-09-01 07:20:29 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=442
+- 2026-09-01 08:54:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=446
+- 2026-09-01 10:37:00 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=446
+- 2026-09-01 10:37:00 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=446
+- 2026-09-01 12:47:54 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=458
+- 2026-09-01 19:16:10 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=482
+- 2026-09-02 00:04:59 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=491
+- 2026-09-02 09:43:20 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=491
+- 2026-09-02 09:55:48 +08:00 [PRAWN-E14/codex/session-start] branch=main head=f3041c1 dirty=491

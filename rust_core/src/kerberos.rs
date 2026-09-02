@@ -140,4 +140,43 @@ mod tests {
         assert!(ops.is_in_scope("sub.test.local"));
         assert!(!ops.is_in_scope("other.local"));
     }
+    #[test]
+    fn test_kerberos_ops_requires_roe_id() {
+        let result = KerberosOps::new("".to_string(), None, false, false);
+        assert!(result.is_err(), "Empty ROE ID must be rejected");
+    }
+
+    #[test]
+    fn test_parse_kirbi_returns_empty_placeholder() {
+        let ops = KerberosOps::new(
+            "ROE-TEST".to_string(),
+            Some(vec!["test.local".to_string()]),
+            false,
+            false,
+        )
+        .expect("Valid KerberosOps construction");
+        // Characterization test: placeholder returns empty, does not panic
+        let result = ops.parse_kirbi("nonexistent.kirbi".to_string());
+        assert!(result.is_ok(), "parse_kirbi placeholder must not panic");
+        assert!(
+            result.unwrap().is_empty(),
+            "parse_kirbi is placeholder — must return empty Vec until asn1-rs is implemented"
+        );
+    }
+
+    #[test]
+    fn test_kerberoast_rejects_out_of_scope_domain() {
+        let ops = KerberosOps::new(
+            "ROE-TEST".to_string(),
+            Some(vec!["allowed.local".to_string()]),
+            false,
+            true,
+        )
+        .expect("Valid KerberosOps construction");
+        let result = ops.enumerate_kerberoast_candidates(
+            "notallowed.local".to_string(),
+            "10.0.0.1".to_string(),
+        );
+        assert!(result.is_err(), "Out-of-scope domain must be rejected");
+    }
 }

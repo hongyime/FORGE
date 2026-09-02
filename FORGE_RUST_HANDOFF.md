@@ -26,7 +26,9 @@ Key build changes:
   `crypto::generate_key` from the PyO3 module.
 
 ## Context
-Previous attempts to compile Rust core failed. Source bugs fixed but cargo build times out (300s+).
+Previous attempts to compile Rust core failed because source bugs and a heavy
+dependency set pushed release builds past the available command timeout. The
+current reduced dependency set builds successfully.
 
 ## What's Done
 1. ✅ PyArmor obfuscation: 3 modules complete (19 files, 2.06MB)
@@ -35,7 +37,7 @@ Previous attempts to compile Rust core failed. Source bugs fixed but cargo build
    - Added `rand = "0.8"` to Cargo.toml (line 21)
    - Fixed type cast in spray.rs (line 46: `as u64`)
 
-## What's Blocked
+## Former Blocker
 - **Resolved**: `cargo build --release` now completes with the reduced dependency
   set and temp target dir.
 
@@ -44,7 +46,10 @@ Previous attempts to compile Rust core failed. Source bugs fixed but cargo build
 shell tool terminated command after exceeding timeout 300000 ms
 ```
 
-## Next Actions for Codex
+## Historical Recovery Options
+
+These were the options considered while the build was failing. They are kept as
+context, not as current blocked-state instructions.
 
 ### Option 1: Check if build completed
 ```powershell
@@ -124,9 +129,10 @@ python -c "from forge_loader import load; k = load('kerberos_ops'); print(k)"
 ```
 
 ## Fallback: Use Python-only obfuscation
-If Rust remains blocked:
+If future native Rust work is unavailable:
 - Current PyArmor packaging can remain the Python-only code-protection fallback.
-- Document Rust as "future enhancement" if native build work is deferred.
+- Document native non-crypto Rust modules as future enhancement if that work is
+  deferred.
 - All 3 selected modules (kerberos, mimikatz, spray) are obfuscated and load
   through the verified wrappers.
 
@@ -141,7 +147,7 @@ If Rust remains blocked:
 ## Success Criteria
 1. `forge_core.dll` exists in target/release/
 2. Python can import: `from forge_core import aes_encrypt`
-3. Windows Defender doesn't flag the DLL
+3. Local Defender query returns no matching detections for the DLL or `.pyd`
 4. Integration test passes: `forge_loader.py` loads all 3 modules
 
 ## Contact

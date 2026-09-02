@@ -1,0 +1,100 @@
+name: detection-surface
+
+# E3.3 - measure how detectable FORGE binaries look to AV/EDR.
+# Runs monthly on schedule and manually via workflow_dispatch.
+# Warns on high AV detection but never fails CI.
+
+on:
+  schedule:
+    # Monthly on the 3rd at 04:00 UTC (12:00 SGT) - staggered vs scorecard.
+    - cron: "0 4 3 * *"
+  workflow_dispatch:
+    inputs:
+      binary_path:
+        description: "Relative path to the binary/artifact to measure"
+        required: false
+        default: "forge_core.pyd"
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    name: Measure detection surface
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ClamAV (local scanner)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y clamav
+          sudo systemctl stop clamav-freshclam || true
+          sudo freshclam || true
+
+      - name: Locate binary
+        id: locate
+        run: |
+          set -euo pipefail
+          candidate="${{ github.event.inputs.binary_path }}"
+          if [ -z "${candidate}" ]; then candidate="forge_core.pyd"; fi
+          if [ ! -f "${candidate}" ]; then
+            echo "::warning::Binary '${candidate}' not found; falling back to bootstrap.py"
+            candidate="bootstrap.py"
+          fi
+          echo "path=${candidate}" >> "$GITHUB_OUTPUT"
+
+      - name: Run measurement
+        env:
+          FORGE_VT_API_KEY: ${{ secrets.FORGE_VT_API_KEY }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from forge.security.detection_surface import run_full_measurement
+
+          binary = Path(os.environ.get("BINARY_PATH", "${{ steps.locate.outputs.path }}"))
+          history = Path("reports/security/detection_surface_history.jsonl")
+          report = run_full_measurement(binary, history_path=history, av_target=5)
+
+          out = Path("reports/security/detection_surface_latest.json")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(report, indent=2, sort_keys=True))
+          print(json.dumps({
+              "binary": report["binary"],
+              "sha256": report["sha256"],
+              "av_source": report["av"]["source"],
+              "av_detected": report["av"]["detected_count"],
+              "av_total": report["av"]["total_engines"],
+              "target_max_av_detections": report["target_max_av_detections"],
+              "target_met": report["target_met"],
+              "entropy": report["entropy"]["entropy_score"],
+              "entropy_suspicious": report["entropy"]["is_suspicious"],
+              "suspicious_string_count": len(report["strings"]["suspicious_strings"]),
+              "matched_patterns": report["strings"]["matched_patterns"],
+          }, indent=2))
+
+          if not report["target_met"]:
+              print(f"::warning::AV detections ({report['av']['detected_count']}) exceed target ({report['target_max_av_detections']}); posture regression")
+          if report["entropy"]["is_suspicious"]:
+              print(f"::warning::High entropy ({report['entropy']['entropy_score']}); binary looks packed/obfuscated")
+          PY
+        env:
+          BINARY_PATH: ${{ steps.locate.outputs.path }}
+          FORGE_VT_API_KEY: ${{ secrets.FORGE_VT_API_KEY }}
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: detection-surface-${{ github.run_number }}
+          path: reports/security/
+          retention-days: 365
+          if-no-files-found: warn

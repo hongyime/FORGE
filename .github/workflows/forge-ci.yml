@@ -409,6 +409,37 @@ jobs:
       - name: Run kill-chain smoke test
         run: pytest tests/integration/test_kill_chain.py -v --tb=short
 
+# ── Graph rendering perf ──────────────────────────────────────────
+  test-performance-graph:
+    name: Graph rendering perf (U5.4)
+    runs-on: ubuntu-24.04
+    # Perf regressions warn via the JSON artifact; hard ceilings still fail.
+    continue-on-error: true
+    needs:
+      - test-core
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        run: pip install -e ".[dev,graph]" pytest-benchmark==5.3.0
+      - name: Run graph rendering benchmarks
+        run: |
+          pytest tests/performance/test_graph_rendering.py \
+            --benchmark-only \
+            --benchmark-json=benchmark-results.json \
+            --benchmark-columns=min,mean,max,stddev,rounds \
+            --benchmark-min-rounds=5 \
+            -v
+      - name: Upload benchmark JSON
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: graph-rendering-benchmark-results
+          path: benchmark-results.json
+          retention-days: 30
 # ── PyInstaller build ─────────────────────────────────────────────────────────
   build:
     name: PyInstaller — Linux x86_64

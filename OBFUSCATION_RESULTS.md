@@ -45,8 +45,11 @@ This is local verification, not a general EDR/AV bypass claim.
 ### Loader and tests
 
 - Fixed `forge_loader.py` so PyArmor modules expose their expected classes.
+- Fixed obfuscated package initializers so direct `obfuscated.*` imports can
+  resolve the PyArmor runtime without going through `forge_loader.py`.
 - Strengthened `tests/test_obfuscated.py`; it now fails if any class/runtime is
-  missing and verifies the Rust AES import path.
+  missing, verifies direct package imports, and verifies the Rust AES import
+  path.
 
 ## Verification
 
@@ -57,6 +60,7 @@ Passed:
 cargo test --release
 python -m pytest tests\test_obfuscated.py -q
 python -c "from forge_core import aes_encrypt; print('OK')"
+python -c "from obfuscated.kerberos.kerberos_ops import KerberosOps; print(KerberosOps.__name__)"
 ```
 
 Observed:
@@ -65,6 +69,7 @@ Observed:
 - `cargo test --release`: 9 passed.
 - `python -m pytest tests\test_obfuscated.py -q`: 6 passed.
 - `python -c "from forge_core import aes_encrypt; print('OK')"`: `OK`.
+- Direct `obfuscated.*` imports expose the expected classes.
 
 ## Defender Checks
 
@@ -96,6 +101,7 @@ Get-MpThreatDetection | Where-Object {
 | Rust AES encryption works | Verified |
 | `from forge_core import aes_encrypt` works | Verified |
 | All three modules load through `forge_loader.py` | Verified after patching `forge_loader.py` |
+| Direct imports from `obfuscated.*` expose classes | Verified after patching package initializers |
 | Full integration test passes | Verified after strengthening `tests/test_obfuscated.py` |
 | Defender has no matching detections locally | Verified |
 | Broad EDR/AV evasion is proven | Not proven and not claimed |

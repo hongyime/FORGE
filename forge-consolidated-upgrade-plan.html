@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FORGE — Consolidated Upgrade Plan</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e27;--bg2:#0d1436;--bg3:#111b45;--bg4:#162255;
+  --blue:#5865f2;--green:#3ba55d;--orange:#faa81a;--red:#ed4245;
+  --text:#e2e8f0;--muted:#8892b0;--border:#1e2d5c;--code:#79c0ff;
+}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;line-height:1.65}
+code{font-family:Menlo,Consolas,monospace;background:rgba(255,255,255,.08);padding:.1rem .35rem;border-radius:3px;font-size:.82rem;color:var(--code)}
+h1{font-size:1.85rem;font-weight:800;letter-spacing:-.02em}
+h2{font-size:1.1rem;font-weight:700;color:var(--blue);border-bottom:1px solid var(--border);padding-bottom:.5rem;margin-bottom:1rem;text-transform:uppercase;letter-spacing:.05em}
+h3{font-size:.95rem;font-weight:600;margin-bottom:.6rem}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+p{color:var(--muted)}
+strong{color:var(--text)}
+.wrap{max-width:1200px;margin:0 auto;padding:2rem 1.5rem}
+/* Header */
+.hdr{background:linear-gradient(135deg,#0d1a4a,#14215f);border:1px solid var(--border);border-radius:14px;padding:2rem 2.2rem;margin-bottom:1.8rem;position:relative;overflow:hidden}
+.hdr::before{content:'';position:absolute;top:-60px;right:-60px;width:240px;height:240px;background:radial-gradient(circle,rgba(88,101,242,.18) 0%,transparent 70%);pointer-events:none}
+.hdr-sub{color:var(--muted);font-size:.82rem;margin-top:.4rem;display:flex;gap:1.2rem;flex-wrap:wrap}
+.hdr-sub span::before{content:'•';margin-right:.5rem;color:var(--blue)}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:.9rem;margin-top:1.6rem}
+.mc{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center}
+.mc-n{font-size:2.2rem;font-weight:800;color:var(--blue);line-height:1}
+.mc-l{color:var(--muted);font-size:.78rem;margin-top:.3rem;text-transform:uppercase;letter-spacing:.04em}
+/* Sections */
+.sec{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:1.5rem 1.8rem;margin-bottom:1.4rem}
+/* Badges */
+.b{display:inline-block;padding:.15rem .55rem;border-radius:4px;font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;line-height:1.6}
+.b-strong{background:rgba(59,165,93,.18);color:#4ade80;border:1px solid rgba(59,165,93,.5)}
+.b-partial{background:rgba(250,168,26,.18);color:var(--orange);border:1px solid rgba(250,168,26,.5)}
+.b-missing{background:rgba(237,66,69,.18);color:#f87171;border:1px solid rgba(237,66,69,.5)}
+.b-keep{background:rgba(59,165,93,.12);color:var(--green)}
+.b-expand{background:rgba(88,101,242,.12);color:#a5b4fc}
+.b-hi{background:rgba(237,66,69,.15);color:#fc8181}
+.b-med{background:rgba(88,101,242,.15);color:#a5b4fc}
+.b-lo{background:rgba(107,114,128,.15);color:#9ca3af}
+.b-p1{background:rgba(88,101,242,.2);color:#a5b4fc;border:1px solid rgba(88,101,242,.4)}
+.b-p2{background:rgba(59,165,93,.2);color:#4ade80;border:1px solid rgba(59,165,93,.4)}
+.b-odin{background:rgba(250,168,26,.2);color:var(--orange);border:1px solid rgba(250,168,26,.4)}
+.b-effort-lo{background:rgba(59,165,93,.1);color:var(--green)}
+.b-effort-med{background:rgba(250,168,26,.1);color:var(--orange)}
+.b-effort-hi{background:rgba(237,66,69,.1);color:#f87171}
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:.84rem}
+th{background:var(--bg3);padding:.55rem .85rem;text-align:left;color:var(--muted);font-weight:700;border-bottom:2px solid var(--border);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em}
+td{padding:.55rem .85rem;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.025)}
+/* Source grid */
+.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.sc{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem}
+.sc-tag{font-size:.75rem;color:var(--muted);font-family:monospace;background:rgba(0,0,0,.3);padding:.2rem .5rem;border-radius:4px;display:inline-block;margin-bottom:.7rem}
+.sc ul{padding-left:1.1rem;margin-top:.4rem}
+.sc li{color:var(--muted);font-size:.85rem;margin:.25rem 0}
+.sc li strong{color:var(--text)}
+/* Upgrade cards */
+.uc{background:var(--bg3);border-left:3px solid var(--blue);border-radius:0 10px 10px 0;padding:1rem 1.3rem;margin-bottom:.75rem}
+.uc.p2{border-left-color:var(--green)}
+.uc.exp{border-left-color:var(--orange)}
+.uc-name{font-weight:700;font-size:.95rem;color:var(--text)}
+.uc-meta{display:flex;gap:.4rem;flex-wrap:wrap;margin:.45rem 0 .35rem}
+.uc-why{color:var(--muted);font-size:.84rem;line-height:1.55}
+/* Rust items */
+.ri{background:var(--bg3);border-left:3px solid var(--red);padding:.65rem 1rem;margin:.45rem 0;border-radius:0 6px 6px 0;font-family:Menlo,Consolas,monospace;font-size:.82rem}
+.ri .f{color:var(--orange)}
+.ri .fn{color:var(--code)}
+.ri .n{color:var(--muted);display:block;margin-top:.2rem;font-size:.8rem}
+/* Open questions */
+.oq{background:var(--bg3);border-radius:8px;padding:.9rem 1.1rem;margin:.55rem 0}
+.oq-t{font-weight:700;color:var(--orange);margin-bottom:.35rem;font-size:.9rem}
+/* Roadmap */
+.rg{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.rc{background:var(--bg3);border-radius:10px;padding:1rem 1.2rem}
+.rc h3{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.8rem;font-weight:700}
+.ri2{background:var(--bg4);border-radius:6px;padding:.45rem .8rem;margin:.4rem 0;font-size:.82rem;color:var(--text);border-left:2px solid var(--border)}
+/* Warning */
+.wb{background:rgba(237,66,69,.08);border:1px solid rgba(237,66,69,.25);border-radius:10px;padding:1.1rem 1.3rem}
+.wb h3{color:var(--red);font-size:.9rem;margin-bottom:.7rem}
+.wb ul{padding-left:1.2rem}
+.wb li{color:var(--muted);font-size:.84rem;margin:.35rem 0}
+.wb li strong{color:var(--text)}
+/* Alert */
+.alert{background:rgba(237,66,69,.1);border:1px solid rgba(237,66,69,.3);border-radius:8px;padding:.8rem 1rem;font-size:.84rem;margin-top:.9rem}
+.alert strong{color:#f87171}
+footer{text-align:center;color:var(--muted);font-size:.78rem;padding:1.8rem 0;border-top:1px solid var(--border);margin-top:.5rem}
+@media(max-width:900px){.metrics,.sg,.rg{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.metrics,.sg,.rg{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ═══ HEADER ═══ -->
+<div class="hdr">
+  <h1>🔥 FORGE — Consolidated Upgrade Plan</h1>
+  <div class="hdr-sub">
+    <span>Generated: 2026-09-01</span>
+    <span>Codex verified: commit f3041c1</span>
+    <span>3 research sources merged</span>
+    <span>Internal use only</span>
+  </div>
+  <div class="metrics">
+    <div class="mc"><div class="mc-n">15</div><div class="mc-l">Capabilities Analyzed</div></div>
+    <div class="mc"><div class="mc-n">16</div><div class="mc-l">Upgrades Identified</div></div>
+    <div class="mc"><div class="mc-n">5</div><div class="mc-l">FORGE Strengths</div></div>
+    <div class="mc"><div class="mc-n">3</div><div class="mc-l">Sources Merged</div></div>
+  </div>
+</div>
+
+<!-- ═══ EXECUTIVE SUMMARY ═══ -->
+<div class="sec">
+  <h2>Executive Summary</h2>
+  <p>This document merges three independent research streams — <strong>SpecterOps ecosystem analysis (Plan 1)</strong>, <strong>Offensive Security competitive review (Plan 2)</strong>, and the <strong>ODIN open-source OSINT framework</strong> — into a single actionable roadmap for FORGE. All results are cross-referenced against Codex verification on commit <code>f3041c1</code>. Sixteen upgrades are tiered as <span class="b b-hi">Do Now</span> <span class="b b-med">Do Next</span> <span class="b b-lo">Explore</span>.</p>
+  <p style="margin-top:.7rem">FORGE's five confirmed differentiators should be defended and never regressed: <strong>multi-seed ASM intake</strong>, <strong>deterministic pipeline</strong>, <strong>hash-chain audit logging</strong>, <strong>PyArmor obfuscation (19 files, 2.06 MiB verified)</strong>, and <strong>Rust AES-GCM/BLAKE3 crypto (9 cargo tests passing)</strong>.</p>
+  <div class="alert"><strong>Critical:</strong> Five Rust functions (<code>parse_kirbi</code>, <code>enumerate_kerberoast_candidates</code>, <code>extract_from_lsass</code>, <code>extract_from_sam</code>, <code>pth::execute</code>) return placeholder data. Do <strong>NOT</strong> claim "Rust core complete" beyond AES-GCM/BLAKE3. See Codex Rust Status section.</div>
+</div>
+
+<!-- ═══ SOURCE PLANS ═══ -->
+<div class="sec">
+  <h2>Source Plans</h2>
+  <div class="sg">
+    <div class="sc">
+      <h3 style="color:var(--blue)">Plan 1 — SpecterOps Ecosystem</h3>
+      <div class="sc-tag">jcckulw143vj.postplan.dev &nbsp;|&nbsp; Aug 31</div>
+      <p style="font-size:.84rem;margin-bottom:.5rem">Focus: BloodHound-family import, data quality, artifact enrichment</p>
+      <ul>
+        <li><strong>Key gap:</strong> No first-class BloodHound/SharpHound/AzureHound import connector</li>
+        <li><strong>Best pattern:</strong> Offline JSON/zip import into collector-fed graph</li>
+        <li><strong>Best pattern:</strong> Data quality workflow post-collection</li>
+        <li><strong>Unique insight:</strong> Artifact enrichment status visibility drives operator trust</li>
+      </ul>
+    </div>
+    <div class="sc">
+      <h3 style="color:var(--green)">Plan 2 — Offensive Security</h3>
+      <div class="sc-tag">hi6f72aj4rt2.postplan.dev &nbsp;|&nbsp; Sep 1</div>
+      <p style="font-size:.84rem;margin-bottom:.5rem">Focus: Cloud credential collection, C2 patterns, hybrid paths</p>
+      <ul>
+        <li><strong>FORGE strengths:</strong> Deterministic pipeline, hash-chain audit, PyArmor, Rust AES — all confirmed</li>
+        <li><strong>Key gap:</strong> AD enumeration and cloud credential harvesting</li>
+        <li><strong>Key gap:</strong> Real-time graph UI for path visualization</li>
+        <li><strong>Unique insight:</strong> Hybrid on-prem + cloud path analysis is the next moat</li>
+      </ul>
+    </div>
+    <div class="sc">
+      <h3 style="color:var(--orange)">ODIN v2.0.0 "Huginn"</h3>
+      <div class="sc-tag">github.com/chrismaddalena/ODIN &nbsp;|&nbsp; ⭐ 666</div>
+      <p style="font-size:.84rem;margin-bottom:.5rem">4-phase: Asset Discovery → Employee Discovery → Cloud/Web → Reporting</p>
+      <ul>
+        <li><strong>Adopt:</strong> Phase 2 employee discovery structure</li>
+        <li><strong>Adopt:</strong> HTML report generation (SQL-based)</li>
+        <li><strong>Adopt:</strong> Neo4j native export, screenshot automation</li>
+        <li><strong>Skip:</strong> Non-deterministic gates, SQLite-only storage, no-fallback reporting</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CAPABILITY MATRIX ═══ -->
+<div class="sec">
+  <h2>Capability Matrix — 15 Capabilities</h2>
+  <table>
+    <thead><tr><th>Capability</th><th>FORGE Status</th><th>Best Competitor / Reference</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td>Multi-seed ASM intake</td><td><span class="b b-strong">Strong</span></td><td><em style="color:var(--muted)">N/A — Unique to FORGE</em></td><td><span class="b b-keep">Keep</span></td></tr>
+      <tr><td>Deterministic pipeline</td><td><span class="b b-strong">Strong</span></td><td><em style="color:var(--muted)">N/A — Unique to FORGE</em></td><td><span class="b b-keep">Keep</span></td></tr>
+      <tr><td>Hash-chain audit logging</td><td><span class="b b-strong">Strong</span></td><td><em style="color:var(--muted)">N/A — Unique to FORGE</em></td><td><span class="b b-keep">Keep</span></td></tr>
+      <tr><td>PyArmor obfuscation</td><td><span class="b b-strong">Verified</span></td><td><em style="color:var(--muted)">N/A — Unique to FORGE</em></td><td><span class="b b-keep">Keep</span></td></tr>
+      <tr><td>Rust core (AES-GCM / BLAKE3)</td><td><span class="b b-partial">Partial</span></td><td><em style="color:var(--muted)">N/A — 5 fns still placeholder</em></td><td><span class="b b-expand">Expand Carefully</span></td></tr>
+      <tr><td>AD / LDAP enumeration</td><td><span class="b b-missing">Missing</span></td><td>BloodHound / SharpHound</td><td><span class="b b-hi">High</span></td></tr>
+      <tr><td>Cloud credential harvesting</td><td><span class="b b-partial">Partial</span></td><td>SharpCloud</td><td><span class="b b-hi">High</span></td></tr>
+      <tr><td>Graph visualization</td><td><span class="b b-partial">Neo4j export only</span></td><td>BloodHound / ODIN native</td><td><span class="b b-hi">High</span></td></tr>
+      <tr><td>Hybrid path analysis</td><td><span class="b b-missing">Missing</span></td><td>BloodHound v5.13</td><td><span class="b b-hi">High</span></td></tr>
+      <tr><td>BloodHound-family import</td><td><span class="b b-missing">Missing</span></td><td>SharpHound / AzureHound</td><td><span class="b b-hi">High</span></td></tr>
+      <tr><td>Artifact enrichment workbench</td><td><span class="b b-partial">Queue exists</span></td><td>Nemesis</td><td><span class="b b-hi">High</span></td></tr>
+      <tr><td>Data quality review</td><td><span class="b b-partial">Reports exist</span></td><td>BloodHound built-in scoring</td><td><span class="b b-med">Medium</span></td></tr>
+      <tr><td>Employee discovery</td><td><span class="b b-partial">Email modules</span></td><td>ODIN Phase 2</td><td><span class="b b-med">Medium</span></td></tr>
+      <tr><td>HTML report generation</td><td><span class="b b-partial">Templates</span></td><td>ODIN SQL-based reports</td><td><span class="b b-med">Medium</span></td></tr>
+      <tr><td>Neo4j native export</td><td><span class="b b-missing">Missing</span></td><td>ODIN (built-in)</td><td><span class="b b-med">Medium</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══ DO NOW ═══ -->
+<div class="sec">
+  <h2>⚡ Do Now — 6 Upgrades</h2>
+
+  <div class="uc">
+    <div class="uc-name">BloodHound-Family Offline Import Connector</div>
+    <div class="uc-meta">
+      <span class="b b-p1">Plan 1</span>
+      <span class="b b-effort-med">Medium Effort</span>
+      <span class="b b-hi">High Priority</span>
+      <span class="b" style="background:rgba(88,101,242,.1);color:#a5b4fc">Inspired by: SharpHound / AzureHound JSON bundles</span>
+    </div>
+    <div class="uc-why">Accept SharpHound/AzureHound JSON zip bundles as an offline import path; normalize into FORGE's collector-fed graph + quality workflow. Closes the single largest data-ingestion gap vs. the BloodHound ecosystem without requiring live agent connectivity.</div>
+  </div>
+
+  <div class="uc">
+    <div class="uc-name">Graph Data-Quality Report</div>
+    <div class="uc-meta">
+      <span class="b b-p1">Plan 1</span>
+      <span class="b b-effort-lo">Low Effort</span>
+      <span class="b b-med">Medium Priority</span>
+      <span class="b" style="background:rgba(88,101,242,.1);color:#a5b4fc">Inspired by: BloodHound data quality scoring</span>
+    </div>
+    <div class="uc-why">Auto-generate completeness/consistency report after each collection run (node coverage, missing edges, stale timestamps). Extends the existing FORGE report infrastructure; low effort because the report scaffolding already exists.</div>
+  </div>
+
+  <div class="uc">
+    <div class="uc-name">Artifact Enrichment Status Tab</div>
+    <div class="uc-meta">
+      <span class="b b-p1">Plan 1</span>
+      <span class="b b-effort-med">Medium Effort</span>
+      <span class="b b-hi">High Priority</span>
+      <span class="b" style="background:rgba(88,101,242,.1);color:#a5b4fc">Inspired by: Nemesis workbench UX</span>
+    </div>
+    <div class="uc-why">Surface the existing artifact queue as a UI tab showing enrichment state per artifact (pending / processing / complete / failed). Brings FORGE operator visibility closer to Nemesis-style UX without a full Nemesis dependency.</div>
+  </div>
+
+  <div class="uc p2">
+    <div class="uc-name">Cloud Credential Collector</div>
+    <div class="uc-meta">
+      <span class="b b-p2">Plan 2</span>
+      <span class="b b-effort-lo">Low Effort</span>
+      <span class="b b-hi">High Priority</span>
+      <span class="b" style="background:rgba(59,165,93,.1);color:var(--green)">Inspired by: SharpCloud patterns</span>
+    </div>
+    <div class="uc-why">Formalizes the partial cloud credential capability into a deterministic, auditable module: harvest AWS/Azure/GCP credentials from environment variables, config files, and metadata endpoints. Each harvest step is hash-chain logged and gated by ROE flags.</div>
+  </div>
+
+  <div class="uc p2">
+    <div class="uc-name">Graph UI — Client-Side (Sigma.js / D3 bundled locally)</div>
+    <div class="uc-meta">
+      <span class="b b-p2">Plan 2</span>
+      <span class="b b-effort-lo">Low Effort</span>
+      <span class="b b-hi">High Priority</span>
+      <span class="b" style="background:rgba(59,165,93,.1);color:var(--green)">Inspired by: BloodHound graph UI, ODIN Neo4j view</span>
+    </div>
+    <div class="uc-why">Add a real-time graph visualization layer using Sigma.js or D3 bundled locally (no CDN). Closes the "no graph UI" gap identified in both Plan 2 and ODIN analysis. Sigma.js library should be vendored into the FORGE assets directory.</div>
+  </div>
+
+  <div class="uc p2">
+    <div class="uc-name">Session Enumeration Module</div>
+    <div class="uc-meta">
+      <span class="b b-p2">Plan 2</span>
+      <span class="b b-effort-lo">Low Effort</span>
+      <span class="b b-med">Medium Priority</span>
+      <span class="b" style="background:rgba(59,165,93,.1);color:var(--green)">Inspired by: C2 eventing patterns (boundary only)</span>
+    </div>
+    <div class="uc-why">Enumerate active sessions on target hosts and feed results into the deterministic pipeline. Addresses the C2-pattern collection gap without introducing C2 listener infrastructure. Output normalized to FORGE graph schema and hash-chain logged.</div>
+  </div>
+</div>
+
+<!-- ═══ DO NEXT ═══ -->
+<div class="sec">
+  <h2>🔶 Do Next — 5 Upgrades</h2>
+
+  <div class="uc">
+    <div class="uc-name">Collection Profile Manifests</div>
+    <div class="uc-meta">
+      <span class="b b-p1">Plan 1</span>
+      <span class="b b-effort-med">Medium Effort</span>
+      <span class="b b-med">Medium Priority</span>
+    </div>
+    <div class="uc-why">Declarative YAML/JSON manifests defining which collectors run, in which order, with pre/post conditions and expected output schemas. Improves reproducibility of engagements; makes the deterministic pipeline observable and shareable across operators.</div>
+  </div>
+
+  <div class="uc">
+    <div class="uc-name">Unified Engagement Activity Timeline</div>
+    <div class="uc-meta">
+      <span class="b b-p1">Plan 1</span>
+      <span class="b b-effort-med">Medium Effort</span>
+      <span class="b b-med">Medium Priority</span>
+      <span class="b" style="background:rgba(88,101,242,.1);color:#a5b4fc">Inspired by: BloodHound analysis timeline, ODIN 4-phase reporting</span>
+    </div>
+    <div class="uc-why">Cross-phase chronological timeline pulling events from the hash-chain audit log. Gives operators a single pane for reviewing engagement history; leverages existing audit infrastructure so the incremental work is visualization only.</div>
+  </div>
+
+  <div class="uc p2">
+    <div class="uc-name">AD / LDAP Collection Module</div>
+    <div class="uc-meta">
+      <span class="b b-p2">Plan 2</span>
+      <span class="b b-effort-med">Medium Effort</span>
+      <span class="b b-hi">High Priority</span>
+      <span class="b" style="background:rgba(59,165,93,.1);color:var(--green)">Inspired by: BloodHound / SharpHound</span>
+    </div>
+    <div class="uc-why">Python or Rust LDAP module for pulling user/group/computer/trust data from Active Directory. Closes the single largest "Missing" gap vs. BloodHound/SharpHound and unblocks hybrid path derivation. Rust scaffolding exists at <code>kerberos.rs:57</code> (currently returns empty Vec — needs LDAP queries wired in).</div>
+  </div>
+
+  <div class="uc p2">
+    <div class="uc-name">AzureHound Data Ingestion</div>
+    <div class="uc-meta">
+      <span class="b b-p2">Plan 2</span>
+      <span class="b b-effort-med">Medium Effort</span>
+      <span class="b b-hi">High Priority</span>
+      <span class="b" style="background:rgba(59,165,93,.1);color:var(--green)">Inspired by: AzureHound / BloodHound CE</span>
+    </div>
+    <div class="uc-why">Accept and normalize AzureHound JSON output alongside the BloodHound-family import connector. Prerequisite for hybrid path derivation. Delivers Azure tenant visibility (service principals, managed identities, role assignments) into the FORGE graph.</div>
+  </div>
+
+  <div class="uc p2">
+    <div class="uc-name">Hybrid Path Derivation</div>
+    <div class="uc-meta">
+      <span class="b b-p2">Plan 2</span>
+      <span class="b b-effort-med">Medium Effort</span>
+      <span class="b b-hi">High Priority</span>
+      <span class="b" style="background:rgba(59,165,93,.1);color:var(--green)">Inspired by: BloodHound v5.13 primary differentiator</span>
+    </div>
+    <div class="uc-why">Combine on-prem AD graph with Azure tenant data to surface cross-boundary attack paths (e.g., on-prem user → Azure SP → privileged role). Mirrors BloodHound v5.13's key moat. Depends on: AD/LDAP module + AzureHound ingestion both shipping first.</div>
+  </div>
+</div>
+
+<!-- ═══ EXPLORE ═══ -->
+<div class="sec">
+  <h2>🔭 Explore — 5 Upgrades</h2>
+
+  <div class="uc exp">
+    <div class="uc-name">Neo4j / OpenGraph Export Bridge</div>
+    <div class="uc-meta">
+      <span class="b b-p1">Plan 1</span>
+      <span class="b b-effort-hi">High Effort</span>
+      <span class="b b-med">Medium Priority</span>
+      <span class="b b-odin">ODIN has this natively</span>
+    </div>
+    <div class="uc-why">Native Neo4j export (Cypher / APOC) so FORGE graphs can be analyzed in external tools. High effort due to schema design, round-trip fidelity, and version compatibility requirements. ODIN ships this out of the box; FORGE currently missing.</div>
+  </div>
+
+  <div class="uc exp">
+    <div class="uc-name">Nemesis-Compatible Artifact Handoff</div>
+    <div class="uc-meta">
+      <span class="b b-p1">Plan 1</span>
+      <span class="b b-effort-hi">High Effort</span>
+      <span class="b b-med">Medium Priority</span>
+    </div>
+    <div class="uc-why">Implement a Nemesis-compatible artifact submission API so FORGE artifacts can be forwarded for deeper post-processing. Requires studying Nemesis protobuf schema and maintaining compatibility across Nemesis versions; considerable integration cost.</div>
+  </div>
+
+  <div class="uc exp">
+    <div class="uc-name">Agent Ecosystem — Collaboration Patterns Only</div>
+    <div class="uc-meta">
+      <span class="b b-p2">Plan 2</span>
+      <span class="b b-effort-hi">High Effort</span>
+      <span class="b b-lo">Low Priority</span>
+    </div>
+    <div class="uc-why">Adopt eventing and plugin-boundary patterns from Merlin/Mythic/Crucible for inter-tool orchestration. <strong>Collaboration patterns ONLY</strong> — no C2 listener, no agent beacon, no in-memory execution. See Do Not Copy section for hard constraints.</div>
+  </div>
+
+  <div class="uc exp">
+    <div class="uc-name">OpenGraph Plugin Interface</div>
+    <div class="uc-meta">
+      <span class="b b-p2">Plan 2</span>
+      <span class="b b-effort-hi">High Effort</span>
+      <span class="b b-med">Medium Priority</span>
+    </div>
+    <div class="uc-why">Define a stable plugin interface for external graph providers (BloodHound, ODIN, custom Neo4j) so FORGE can act as an orchestration layer without owning every graph implementation. Enables long-term ecosystem flexibility; depends on Neo4j bridge being stable first.</div>
+  </div>
+
+  <div class="uc exp">
+    <div class="uc-name">Attack Path Management Framework</div>
+    <div class="uc-meta">
+      <span class="b b-p2">Plan 2</span>
+      <span class="b b-effort-hi">High Effort</span>
+      <span class="b b-lo">Low Priority</span>
+    </div>
+    <div class="uc-why">Structured framework for tracking, prioritizing, and reporting attack paths identified during an engagement — linking paths to MITRE techniques, risk scores, and remediation recommendations. Long-term product differentiator; gate on graph visualization + hybrid paths being stable first.</div>
+  </div>
+</div>
+
+<!-- ═══ CODEX RUST STATUS ═══ -->
+<div class="sec">
+  <h2>🦀 Codex Rust Status — commit f3041c1 (2026-09-01)</h2>
+
+  <h3 style="color:var(--green);margin-bottom:.75rem">✅ Verified Working</h3>
+  <table style="margin-bottom:1.3rem">
+    <thead><tr><th>Artifact</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td><code>obfuscated/</code> directory</td><td>19 files, 2.06 MiB — all package initializers patched</td></tr>
+      <tr><td><code>forge_loader.load("kerberos_ops")</code></td><td>Returns module, exposes <code>KerberosOps</code> class</td></tr>
+      <tr><td>Direct import</td><td><code>from obfuscated.kerberos.kerberos_ops import KerberosOps</code> works</td></tr>
+      <tr><td><code>forge_core.pyd</code></td><td>351,744 bytes at repo root — AES-GCM roundtrip passes</td></tr>
+      <tr><td><code>cargo test --release</code></td><td>9 / 9 passed</td></tr>
+      <tr><td><code>pytest tests/test_obfuscated.py -v</code></td><td>6 / 6 passed — loader class exposure strengthened at :76</td></tr>
+      <tr><td>Defender scan</td><td>No FORGE-related detections</td></tr>
+      <tr><td><code>.gitignore</code></td><td>Explicit Cargo/Rust output ignore rules added at :28</td></tr>
+      <tr><td>432 <code>rust_core/target</code> artifacts</td><td>Untracked from index (no longer committed)</td></tr>
+      <tr><td><code>FORGE_RUST_HANDOFF.md:40</code></td><td>Stale "currently blocked" wording removed</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="color:var(--red);margin-bottom:.6rem">⚠️ Still Limited — Placeholder Scaffolding (NOT Production Behavior)</h3>
+  <p style="color:var(--muted);font-size:.84rem;margin-bottom:.8rem">These functions compile and pass tests against stub assertions, but return empty/placeholder values. Do <strong style="color:#f87171">NOT</strong> claim production behavior for any of these.</p>
+
+  <div class="ri"><span class="f">kerberos.rs</span><span style="color:var(--muted)">:50</span> — <span class="fn">parse_kirbi()</span><span class="n">Returns empty Vec. TODO: implement with asn1-rs crate to decode .kirbi ticket blobs.</span></div>
+  <div class="ri"><span class="f">kerberos.rs</span><span style="color:var(--muted)">:57</span> — <span class="fn">enumerate_kerberoast_candidates()</span><span class="n">Returns empty Vec. Blocked on AD/LDAP Collection Module — needs live LDAP queries against a domain controller.</span></div>
+  <div class="ri"><span class="f">credentials.rs</span><span style="color:var(--muted)">:51</span> — <span class="fn">extract_from_lsass()</span><span class="n">Returns empty Vec. Needs Windows API: DuplicateTokenEx, OpenProcess, MiniDumpWriteDump. Requires explicit safe-flag gating + authorization check before implementation.</span></div>
+  <div class="ri"><span class="f">credentials.rs</span><span style="color:var(--muted)">:67</span> — <span class="fn">extract_from_sam()</span><span class="n">Returns empty Vec. Needs obfuscated syscalls for SAM hive access. Requires explicit safe-flag gating + authorization check before implementation.</span></div>
+  <div class="ri"><span class="f">pth.rs</span><span style="color:var(--muted)">:36</span> — <span class="fn">execute()</span><span class="n">Returns placeholder string. Needs full NTLM authentication flow implementation. Authorization check and ROE flag required before implementation.</span></div>
+</div>
+
+<!-- ═══ OPEN QUESTIONS ═══ -->
+<div class="sec">
+  <h2>❓ Open Questions</h2>
+
+  <div class="oq">
+    <div class="oq-t">1. Authenticated Scraping Policy Change</div>
+    <p style="font-size:.84rem">User wants authenticated scraping allowed. Requires: (a) ROE manifest update with explicit scope field, (b) per-request authorization checks, (c) audit log entries with credential-type tag for each authenticated request. <strong style="color:var(--orange)">Action: defer to a separate authenticated-scraping spec — do not implement without signed-off spec.</strong></p>
+  </div>
+
+  <div class="oq">
+    <div class="oq-t">2. Rust Native Behavior Expansion</div>
+    <p style="font-size:.84rem">Expand Rust beyond AES-GCM/BLAKE3 crypto. Each "Still Limited" function requires: (a) explicit safe-flag gating in the calling pipeline, (b) authorization check at invocation, (c) audit log entry. Immediate unblock path: asn1-rs for <code>parse_kirbi</code>; Windows API access plan for lsass/SAM extraction. <strong style="color:var(--orange)">Action: create per-function expansion tickets, each linked to the AD/LDAP module milestone.</strong></p>
+  </div>
+
+  <div class="oq">
+    <div class="oq-t">3. C2 Infrastructure Boundary Definition</div>
+    <p style="font-size:.84rem">Explore-tier agent ecosystem work must be limited to plugin boundaries and eventing patterns. No C2 listener, no agent beacon, no in-memory staging. <strong style="color:var(--orange)">Action: write and publish a plugin-boundary spec before any Explore-tier C2 pattern work begins. Spec must define what events may cross the boundary.</strong></p>
+  </div>
+</div>
+
+<!-- ═══ ROADMAP ═══ -->
+<div class="sec">
+  <h2>📅 Roadmap Summary</h2>
+  <div class="rg">
+    <div class="rc">
+      <h3>⚡ Do Now (6)</h3>
+      <div class="ri2" style="border-left-color:var(--blue)">BloodHound Offline Import Connector</div>
+      <div class="ri2" style="border-left-color:var(--blue)">Graph Data-Quality Report</div>
+      <div class="ri2" style="border-left-color:var(--blue)">Artifact Enrichment Status Tab</div>
+      <div class="ri2" style="border-left-color:var(--green)">Cloud Credential Collector</div>
+      <div class="ri2" style="border-left-color:var(--green)">Graph UI (client-side bundled)</div>
+      <div class="ri2" style="border-left-color:var(--green)">Session Enumeration Module</div>
+    </div>
+    <div class="rc">
+      <h3>🔶 Do Next (5)</h3>
+      <div class="ri2" style="border-left-color:var(--blue)">Collection Profile Manifests</div>
+      <div class="ri2" style="border-left-color:var(--blue)">Engagement Activity Timeline</div>
+      <div class="ri2" style="border-left-color:var(--green)">AD/LDAP Collection Module</div>
+      <div class="ri2" style="border-left-color:var(--green)">AzureHound Data Ingestion</div>
+      <div class="ri2" style="border-left-color:var(--green)">Hybrid Path Derivation</div>
+    </div>
+    <div class="rc">
+      <h3>🔭 Explore (5)</h3>
+      <div class="ri2" style="border-left-color:var(--orange)">Neo4j / OpenGraph Export Bridge</div>
+      <div class="ri2" style="border-left-color:var(--orange)">Nemesis Artifact Handoff</div>
+      <div class="ri2" style="border-left-color:var(--orange)">Agent Ecosystem (patterns only)</div>
+      <div class="ri2" style="border-left-color:var(--orange)">OpenGraph Plugin Interface</div>
+      <div class="ri2" style="border-left-color:var(--orange)">Attack Path Mgmt Framework</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DO NOT COPY ═══ -->
+<div class="sec">
+  <h2>🚫 Do Not Copy</h2>
+  <div class="wb">
+    <h3>⛔ Out-of-Scope Patterns — Hard Constraints</h3>
+    <ul>
+      <li><strong>Persistence execution menus (StayKit)</strong> — use defensive indicators instead; persistence-as-a-feature is out of scope for FORGE's goal</li>
+      <li><strong>C2 listener / agent features (Merlin / Mythic / Crucible)</strong> — collaboration patterns and plugin-boundary eventing ONLY; no beacon, no agent lifecycle, no in-memory staging or shellcode execution</li>
+      <li><strong>AV bypass / in-memory execution</strong> — not needed for FORGE's pipeline goal; adds detection surface with no benefit; PyArmor obfuscation already handles necessary protection</li>
+      <li><strong>ODIN's non-deterministic gates</strong> — FORGE's deterministic pipeline is a verified strength; do not regress it by adopting ODIN's looser collection sequencing</li>
+      <li><strong>ODIN's SQLite-only storage and no-fallback reporting</strong> — FORGE has richer storage and fallback patterns; do not replace them with ODIN's simpler but less resilient approach</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══ SOURCES ═══ -->
+<div class="sec">
+  <h2>📚 Sources</h2>
+  <table>
+    <thead><tr><th>Source</th><th>URL / Reference</th><th>Date</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Plan 1 — SpecterOps Ecosystem</td><td><a href="https://jcckulw143vj.postplan.dev" target="_blank">jcckulw143vj.postplan.dev</a></td><td>Aug 31, 2026</td><td>BloodHound-family import, data quality, artifact enrichment</td></tr>
+      <tr><td>Plan 2 — Offensive Security</td><td><a href="https://hi6f72aj4rt2.postplan.dev" target="_blank">hi6f72aj4rt2.postplan.dev</a></td><td>Sep 1, 2026</td><td>Cloud credential collection, C2 patterns, hybrid paths</td></tr>
+      <tr><td>ODIN v2.0.0 "Huginn"</td><td><a href="https://github.com/chrismaddalena/ODIN" target="_blank">github.com/chrismaddalena/ODIN</a></td><td>Ongoing</td><td>4-phase OSINT framework, Neo4j native, ⭐ 666 stars</td></tr>
+      <tr><td>Codex Verification</td><td><code>commit f3041c1</code> — FORGE repo</td><td>Sep 1, 2026</td><td>cargo 9/9 ✓, pytest 6/6 ✓; 5 Rust functions still placeholder</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<footer>FORGE Consolidated Upgrade Plan &nbsp;·&nbsp; 3 sources merged &nbsp;·&nbsp; 16 upgrades &nbsp;·&nbsp; 15 capabilities analyzed &nbsp;·&nbsp; Generated 2026-09-01 &nbsp;·&nbsp; Internal use only</footer>
+</div>
+</body>
+</html>

@@ -120,4 +120,25 @@ mod tests {
         );
         assert!(extractor.is_ok());
     }
+    #[test]
+    fn test_credential_extractor_requires_roe_id() {
+        let result = CredentialExtractor::new("".to_string(), None, false, false);
+        assert!(result.is_err(), "Empty ROE ID must be rejected");
+    }
+
+    #[test]
+    fn test_extract_lsass_blocked_without_permission() {
+        let extractor = CredentialExtractor::new(
+            "ROE-TEST".to_string(),
+            Some(vec!["192.168.1.1".to_string()]),
+            false, // allow_lsass = false
+            false,
+        )
+        .expect("Valid CredentialExtractor construction");
+        let result = extractor.extract_from_lsass();
+        assert!(
+            result.is_err(),
+            "LSASS extraction must be blocked when allow_lsass=false"
+        );
+    }
 }

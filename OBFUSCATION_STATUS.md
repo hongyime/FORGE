@@ -48,6 +48,11 @@ Two loaders are present:
 names and include both the module directory and `pyarmor_runtime_000000` on
 `sys.path`.
 
+The obfuscated package initializers also add their own module directories to
+`sys.path`, so direct imports such as
+`from obfuscated.kerberos.kerberos_ops import KerberosOps` resolve the PyArmor
+runtime without relying on the root loader.
+
 ## Verification Commands
 
 Passed:
@@ -57,6 +62,7 @@ Passed:
 cargo test --release
 python -m pytest tests\test_obfuscated.py -q
 python -c "from forge_core import aes_encrypt; print('OK')"
+python -c "from obfuscated.kerberos.kerberos_ops import KerberosOps; print(KerberosOps.__name__)"
 ```
 
 Observed results:
@@ -64,6 +70,7 @@ Observed results:
 - `cargo test --release`: 9 passed.
 - `python -m pytest tests\test_obfuscated.py -q`: 6 passed.
 - `from forge_core import aes_encrypt` works from the repo root.
+- Direct imports from `obfuscated.*` expose the expected classes.
 - AES encrypt/decrypt roundtrip works.
 
 ## Defender Result

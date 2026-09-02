@@ -1,0 +1,126 @@
+/* QualityWidget - mobile-first responsive styles.
+ * Uses existing FORGE panel tokens (--panel-border, --panel-shadow, --text-muted).
+ */
+
+.quality-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  box-shadow: var(--panel-shadow);
+  background: linear-gradient(145deg, rgba(11, 22, 40, 0.9), rgba(17, 31, 54, 0.85));
+}
+
+.quality-widget-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quality-widget-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+}
+
+.quality-widget-generated {
+  font-size: 0.75rem;
+}
+
+.quality-widget-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.quality-score {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.quality-score-value {
+  font-size: clamp(2.4rem, 6vw, 3.4rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.quality-score-indicator {
+  font-size: 1.4rem;
+}
+
+.quality-sparkline-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.quality-sparkline {
+  width: 100%;
+  max-width: 240px;
+  height: 40px;
+}
+
+.quality-sparkline-caption {
+  font-size: 0.72rem;
+}
+
+.quality-metrics {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.quality-metrics th,
+.quality-metrics td {
+  padding: 8px 6px;
+  text-align: left;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.quality-metrics thead th {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.quality-metrics tbody th {
+  font-weight: 500;
+}
+
+.quality-metrics tbody tr:last-child th,
+.quality-metrics tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.quality-widget-inline-error {
+  font-size: 0.78rem;
+}
+
+/* Tablet and up: place score + sparkline side by side. */
+@media (min-width: 640px) {
+  .quality-widget-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .quality-widget-body {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  .quality-sparkline-wrap {
+    align-items: flex-end;
+    width: auto;
+  }
+}

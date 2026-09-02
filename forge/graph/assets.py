@@ -62,6 +62,7 @@ _SAFE_RELATIONSHIP_TYPES = {
     "owned_by",
     "routed_to",
     "observed_in",
+    "active_session",
     "other",
 }
 _SAFE_OWNER_KINDS = {

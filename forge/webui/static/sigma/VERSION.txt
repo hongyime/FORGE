@@ -1,0 +1,16 @@
+sigma.js 2.4.0
+Vendored: 2026-09-01
+Source: https://registry.npmjs.org/sigma/2.4.0
+Upstream tarball SHA-1: efa213c82e8561138c9237c3a87cf15c0bbaee76
+Upstream tarball SHA-512: spi4C+c3cjlhCklT+RvAxJJcarMmjRpF6RPNvBIBYDduALq8iSNm7FwSpijQNGtI+ryeZ2EfvyBNLp36OFaZiw==
+GitHub: https://github.com/jacomyal/sigma.js/tree/v2.4.0
+License: MIT (see LICENSE.txt)
+
+Files:
+  sigma.min.js       - Minified UMD bundle (production)
+  sigma.js           - Non-minified UMD bundle (readable source; sigma 2.4.0 does not ship a .map file)
+  LICENSE.txt        - MIT License
+
+Note: sigma.js 2.4.0's build/ directory does not include a separate .map file.
+The non-minified sigma.js is provided as the readable-source counterpart.
+Verify integrity against SHA256SUMS.txt.

@@ -25,6 +25,9 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+target/
+rust_core/target/
+forge_core.pyd
 *.egg
 node_modules/
 coverage/

@@ -72,6 +72,11 @@ from forge.webui.asset_graph_routes import (
     resolve_ownership_conflict_payload,
     upsert_ownership_claim_payload,
 )
+from forge.webui.sigma_graph_routes import (
+    SigmaGraphRouteError,
+    SigmaGraphRouteNotFound,
+    sigma_graph_payload,
+)
 from forge.webui.logs import build_logs_dir_provider
 from forge.webui.kill_chain_launch import (
     KillChainLaunchConflict,
@@ -117,6 +122,10 @@ from forge.webui.retention_routes import (
     retention_overview_payload,
     retention_preview_payload,
     upsert_retention_policy_payload,
+)
+from forge.webui.artifact_queue_routes import (
+    ArtifactQueueRouteError,
+    artifact_queue_status_payload,
 )
 from forge.webui.engagement_lifecycle import (
     create_engagement_route_payload,
@@ -1089,6 +1098,34 @@ def create_app() -> Any:
             )
         finally:
             con.close()
+
+    @app.get("/api/engagements/{engagement_ref}/graph/sigma")
+    def get_engagement_sigma_graph(
+        engagement_ref: str,
+        layout: str = "circular",
+        node_types: str | None = None,
+        edge_types: str | None = None,
+        max_nodes: int = 10000,
+        principal: Principal = Depends(_auth_principal),
+    ) -> dict[str, Any]:
+        resolved = _resolve_engagement_db(engagement_ref, principal)
+        if resolved is None:
+            raise HTTPException(status_code=404, detail="Engagement not found.")
+        _require_principal_permission(principal, "assets:read")
+        db_path, engagement_id = resolved
+        try:
+            return sigma_graph_payload(
+                engagement_id=engagement_id,
+                db_path=db_path,
+                layout=layout,
+                node_types=node_types,
+                edge_types=edge_types,
+                max_nodes=max_nodes,
+            )
+        except SigmaGraphRouteError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except SigmaGraphRouteNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.post("/api/engagements/{engagement_ref}/asset-graph/ownership-claims")
     def create_engagement_asset_ownership_claim(
@@ -2146,6 +2183,35 @@ def create_app() -> Any:
             )
         except RunLogRouteNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get("/api/engagements/{engagement_ref}/artifact-queue")
+    def get_engagement_artifact_queue(
+        engagement_ref: str,
+        offset: int = 0,
+        limit: int = 100,
+        state: str | None = None,
+        sort: str | None = None,
+        principal: Principal = Depends(_auth_principal),
+    ) -> dict[str, Any]:
+        _require_principal_permission(principal, "artifacts:read")
+        resolved = _resolve_engagement_db(engagement_ref, principal)
+        if resolved is None:
+            raise HTTPException(status_code=404, detail="Engagement not found.")
+        db_path, engagement_id = resolved
+        con = _open_workflow_db(db_path)
+        try:
+            return artifact_queue_status_payload(
+                con,
+                engagement_id=engagement_id,
+                offset=offset,
+                limit=limit,
+                state=state,
+                sort=sort,
+            )
+        except ArtifactQueueRouteError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        finally:
+            con.close()
 
     @app.get("/api/engagements/{engagement_ref}/artifacts/{artifact_name}")
     def download_engagement_artifact(

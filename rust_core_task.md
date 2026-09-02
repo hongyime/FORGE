@@ -155,3 +155,40 @@ Or provide inline:
 ```bash
 codex exec --model gpt-5.2 --task "$(cat rust_core_task.md)"
 ```
+
+## Codex Verification Status (2026-09-01, commit f3041c1)
+
+### What Works
+- obfuscated/ verified: 19 files, 2.06 MiB
+- forge_loader.load("kerberos_ops") returns module and exposes KerberosOps
+- Direct import: `from obfuscated.kerberos.kerberos_ops import KerberosOps` works with required safety args
+- forge_core.pyd: 351,744 bytes at repo root, AES roundtrip verified
+- cargo test --release: 9 passed
+- pytest tests/test_obfuscated.py -v: 6 passed
+- Defender: no forge-related detections
+
+### What Was Fixed
+- .gitignore: added explicit ignore rules for Cargo/Rust output and root extension copy
+- Untracked 432 committed rust_core/target build artifacts from git index
+- obfuscated package initializers: fixed direct PyArmor package imports
+- tests/test_obfuscated.py: strengthened to check loader class exposure and direct imports in clean subprocess
+- FORGE_RUST_HANDOFF.md: removed stale "currently blocked" wording
+
+### Still Limited (Placeholder Scaffolding — NOT Production Behavior)
+
+The following methods compile and pass gate checks but return empty/stub results.
+Do NOT claim "Rust core complete" beyond AES-GCM/BLAKE3 crypto.
+
+| File | Line | Method | Status | What Real Implementation Needs |
+|------|------|--------|--------|-------------------------------|
+| kerberos.rs | 50 | parse_kirbi() | Returns empty Vec | asn1-rs for ASN.1 parsing of .kirbi format |
+| kerberos.rs | 57 | enumerate_kerberoast_candidates() | Returns empty Vec | LDAP queries to domain controller |
+| credentials.rs | 51 | extract_from_lsass() | Returns empty Vec | Windows API: DuplicateTokenEx, OpenProcess, MiniDumpWriteDump or in-memory parsing |
+| credentials.rs | 67 | extract_from_sam() | Returns empty Vec | Obfuscated syscalls for registry access |
+| pth.rs | 36 | execute() | Returns placeholder string | NTLM authentication implementation |
+
+### Next Steps for Real Native Behavior
+1. Each method requires explicit safe feature flags before implementation
+2. Each method requires authorization checks beyond current ROE/scope gates
+3. Implement behind `#[cfg(feature = "native-kerberos")]` etc. to keep placeholder as default
+4. Full security review required before any credential/PTH behavior ships
