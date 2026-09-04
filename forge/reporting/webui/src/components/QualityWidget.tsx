@@ -1,6 +1,7 @@
 import './QualityWidget.css'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { classifyScore } from './quality-widget-utils'
 
 /**
  * QualityWidget - displays engagement data-quality health.
@@ -37,19 +38,6 @@ export type QualitySnapshot = {
 }
 
 export type QualityThreshold = 'good' | 'warn' | 'bad'
-
-const THRESHOLD_GOOD = 80
-const THRESHOLD_WARN = 50
-
-export function classifyScore(score: number): QualityThreshold {
-  if (score >= THRESHOLD_GOOD) {
-    return 'good'
-  }
-  if (score >= THRESHOLD_WARN) {
-    return 'warn'
-  }
-  return 'bad'
-}
 
 function thresholdIcon(state: QualityThreshold): string {
   if (state === 'good') {
@@ -288,6 +276,14 @@ export default function QualityWidget({
     }
   }, [load])
 
+  // Synchronize snapshot state when initialSnapshot prop changes
+  useEffect(() => {
+    if (initialSnapshot !== undefined) {
+      setSnapshot(initialSnapshot)
+      setError(null)
+      setLoading(false)
+    }
+  }, [initialSnapshot])
   // WebSocket auto-refresh on `quality:updated`.
   useEffect(() => {
     if (disableWebSocket) {

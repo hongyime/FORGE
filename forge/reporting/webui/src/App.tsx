@@ -1,6 +1,42 @@
-import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import {
+  lazy,
+  startTransition,
+  Suspense,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { Link, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import ArtifactStatusTab from './components/ArtifactStatusTab'
+import QualityWidget from './components/QualityWidget'
 import './App.css'
+
+const GraphVisualization = lazy(() =>
+  import('./components/GraphVisualization').then((m) => ({ default: m.GraphVisualization })),
+)
+
+function GraphRoute() {
+  const params = useParams<{ slug: string }>()
+  const slug = params.slug ?? ''
+  const token =
+    typeof window !== 'undefined' ? window.localStorage.getItem(LIVE_TOKEN_KEY) : null
+  return (
+    <section className="panel graph-route" data-testid="graph-route">
+      <nav className="graph-route-breadcrumb">
+        <Link to={`/engagements/${slug}`}>&larr; Back to engagement</Link>
+      </nav>
+      <Suspense fallback={<div data-testid="graph-route-loading">Loading graph module…</div>}>
+        <GraphVisualization
+          engagementId={slug}
+          token={token}
+          style={{ minHeight: 600 }}
+        />
+      </Suspense>
+    </section>
+  )
+}
 
 type SummaryCounts = Record<string, number>
 type SeveritySummary = Record<string, number>
@@ -3513,6 +3549,10 @@ function App() {
             />
           }
         />
+        <Route
+          path="/engagements/:slug/graph"
+          element={<GraphRoute />}
+        />
       </Routes>
     </div>
   )
@@ -4355,58 +4395,64 @@ function EngagementRoute({
   const [error, setError] = useState('')
   const [progressNotice, setProgressNotice] = useState('')
 
-  async function refreshLiveSnapshot(options?: {
-    refreshSeeds?: boolean
-    refreshIndex?: boolean
-  }): Promise<void> {
-    if (!slug || !liveToken) {
-      return
-    }
-    const refreshSeeds = Boolean(options?.refreshSeeds)
-    const refreshIndex = Boolean(options?.refreshIndex)
-    const [
-      nextDetail,
-      nextLogs,
-      nextSeeds,
-      nextActiveValidation,
-      nextRemediation,
-      nextRetention,
-      nextConnectorCatalog,
-      nextConnectorSecrets,
-    ] = await Promise.all([
-      loadDetail(slug, summaries, liveToken),
-      loadEngagementLogs(slug, liveToken),
-      refreshSeeds ? loadLiveSeeds(slug, liveToken) : Promise.resolve<SeedRecord[] | null>(null),
-      loadActiveValidationForPanel(slug, liveToken),
-      loadRemediationForPanel(slug, liveToken),
-      loadRetentionForPanel(slug, liveToken),
-      loadConnectorCatalogForPanel(slug, liveToken),
-      loadConnectorSecretsForPanel(slug, liveToken),
-      refreshIndex ? onIndexRefresh().then(() => true) : Promise.resolve(false),
-    ])
-    const nextWorkspaceAudit = await loadWorkspaceAuditForPanel(nextDetail.workspace_id || 'default', liveToken)
-    const nextTail = nextLogs.length ? await loadRunLogTail(nextLogs[0], liveToken) : null
-    startTransition(() => {
-      setDetail(nextDetail)
-      if (nextSeeds !== null) {
-        setLiveSeeds(nextSeeds)
+  const refreshLiveSnapshot = useCallback(
+    async (options?: {
+      refreshSeeds?: boolean
+      refreshIndex?: boolean
+    }): Promise<void> => {
+      if (!slug || !liveToken) {
+        return
       }
-      setLiveLogs(nextLogs)
-      setLiveLogTail(nextTail)
-      setActiveValidation(nextActiveValidation.snapshot)
-      setActiveValidationLoadError(nextActiveValidation.error)
-      setRemediationOverview(nextRemediation.overview)
-      setRemediationLoadError(nextRemediation.error)
-      setRetentionOverview(nextRetention.overview)
-      setRetentionLoadError(nextRetention.error)
-      setConnectorCatalogOverview(nextConnectorCatalog.overview)
-      setConnectorCatalogLoadError(nextConnectorCatalog.error)
-      setConnectorSecretsOverview(nextConnectorSecrets.overview)
-      setConnectorSecretsLoadError(nextConnectorSecrets.error)
-      setWorkspaceAuditOverview(nextWorkspaceAudit.overview)
-      setWorkspaceAuditLoadError(nextWorkspaceAudit.error)
-    })
-  }
+      const refreshSeeds = Boolean(options?.refreshSeeds)
+      const refreshIndex = Boolean(options?.refreshIndex)
+      const [
+        nextDetail,
+        nextLogs,
+        nextSeeds,
+        nextActiveValidation,
+        nextRemediation,
+        nextRetention,
+        nextConnectorCatalog,
+        nextConnectorSecrets,
+      ] = await Promise.all([
+        loadDetail(slug, summaries, liveToken),
+        loadEngagementLogs(slug, liveToken),
+        refreshSeeds ? loadLiveSeeds(slug, liveToken) : Promise.resolve<SeedRecord[] | null>(null),
+        loadActiveValidationForPanel(slug, liveToken),
+        loadRemediationForPanel(slug, liveToken),
+        loadRetentionForPanel(slug, liveToken),
+        loadConnectorCatalogForPanel(slug, liveToken),
+        loadConnectorSecretsForPanel(slug, liveToken),
+        refreshIndex ? onIndexRefresh().then(() => true) : Promise.resolve(false),
+      ])
+      const nextWorkspaceAudit = await loadWorkspaceAuditForPanel(
+        nextDetail.workspace_id || 'default',
+        liveToken,
+      )
+      const nextTail = nextLogs.length ? await loadRunLogTail(nextLogs[0], liveToken) : null
+      startTransition(() => {
+        setDetail(nextDetail)
+        if (nextSeeds !== null) {
+          setLiveSeeds(nextSeeds)
+        }
+        setLiveLogs(nextLogs)
+        setLiveLogTail(nextTail)
+        setActiveValidation(nextActiveValidation.snapshot)
+        setActiveValidationLoadError(nextActiveValidation.error)
+        setRemediationOverview(nextRemediation.overview)
+        setRemediationLoadError(nextRemediation.error)
+        setRetentionOverview(nextRetention.overview)
+        setRetentionLoadError(nextRetention.error)
+        setConnectorCatalogOverview(nextConnectorCatalog.overview)
+        setConnectorCatalogLoadError(nextConnectorCatalog.error)
+        setConnectorSecretsOverview(nextConnectorSecrets.overview)
+        setConnectorSecretsLoadError(nextConnectorSecrets.error)
+        setWorkspaceAuditOverview(nextWorkspaceAudit.overview)
+        setWorkspaceAuditLoadError(nextWorkspaceAudit.error)
+      })
+    },
+    [liveToken, onIndexRefresh, slug, summaries],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -4510,11 +4556,14 @@ function EngagementRoute({
     }
   }, [slug, summaries, liveToken])
 
+  const detailId = detail?.id
+  const runStatus = detail?.run_summary?.status
+
   useEffect(() => {
-    if (!liveToken || !detail || !canUseLiveApi()) {
+    if (!liveToken || !detailId || !canUseLiveApi()) {
       return
     }
-    const engagementId = Number(detail.id)
+    const engagementId = Number(detailId)
     if (!Number.isFinite(engagementId) || engagementId <= 0) {
       return
     }
@@ -4560,14 +4609,14 @@ function EngagementRoute({
       }
       socket?.close()
     }
-  }, [detail?.id, liveToken])
+  }, [detailId, liveToken, refreshLiveSnapshot])
 
   useEffect(() => {
-    if (!liveToken || !detail) {
+    if (!liveToken || !runStatus) {
       return
     }
-    const runStatus = (detail.run_summary?.status || '').toLowerCase()
-    if (!['running', 'pausing', 'stopping'].includes(runStatus)) {
+    const normalizedStatus = runStatus.toLowerCase()
+    if (!['running', 'pausing', 'stopping'].includes(normalizedStatus)) {
       return
     }
     const intervalId = window.setInterval(() => {
@@ -4576,7 +4625,7 @@ function EngagementRoute({
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [detail?.id, detail?.run_summary?.status, liveToken])
+  }, [liveToken, refreshLiveSnapshot, runStatus])
 
   async function handleAddSeed(seedValue: string, seedType: string): Promise<void> {
     if (!slug || !liveToken) {
@@ -8196,6 +8245,30 @@ function DetailPage({
         </article>
       </section>
 
+      <section className="panel" id="artifact-queue">
+        <div className="panel-head">
+          <p className="section-kicker">Artifact enrichment queue</p>
+        </div>
+        <div className="panel-body">
+          <ArtifactStatusTab
+            engagementId={detail.id}
+            token={liveToken}
+          />
+        </div>
+      </section>
+
+      <section className="panel" id="quality-metrics" data-testid="quality-metrics-panel">
+        <div className="panel-head">
+          <p className="section-kicker">Data quality</p>
+        </div>
+        <div className="panel-body">
+          <QualityWidget
+            engagementId={detail.id}
+            authToken={liveToken}
+          />
+        </div>
+      </section>
+
       <section className="panel" id="operational-timeline">
         <div className="panel-head">
           <p className="section-kicker">Operational timeline</p>
@@ -8304,31 +8377,43 @@ function DetailPage({
 }
 
 function GraphExplorer({ detail }: { detail: EngagementDetail }) {
-  const graph = normalizeGraph(detail)
+  const graph = useMemo(() => normalizeGraph(detail), [detail])
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('ALL')
   const [severityFilter, setSeverityFilter] = useState('ALL')
   const [criticalOnly, setCriticalOnly] = useState(false)
   const deferredQuery = useDeferredValue(query).trim().toLowerCase()
 
-  const filteredNodes = graph.nodes.filter((node) => {
-    if (typeFilter !== 'ALL' && node.type !== typeFilter) {
-      return false
-    }
-    if (severityFilter !== 'ALL' && node.severity !== severityFilter) {
-      return false
-    }
-    if (criticalOnly && !node.critical) {
-      return false
-    }
-    if (!deferredQuery) {
-      return true
-    }
-    return [node.label, node.id, node.type, node.severity].join(' ').toLowerCase().includes(deferredQuery)
-  })
-  const visibleNodeIds = new Set(filteredNodes.map((node) => node.id))
-  const filteredEdges = graph.edges.filter(
-    (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target),
+  const filteredNodes = useMemo(
+    () => graph.nodes.filter((node) => {
+      if (typeFilter !== 'ALL' && node.type !== typeFilter) {
+        return false
+      }
+      if (severityFilter !== 'ALL' && node.severity !== severityFilter) {
+        return false
+      }
+      if (criticalOnly && !node.critical) {
+        return false
+      }
+      if (!deferredQuery) {
+        return true
+      }
+      return [node.label, node.id, node.type, node.severity]
+        .join(' ')
+        .toLowerCase()
+        .includes(deferredQuery)
+    }),
+    [criticalOnly, deferredQuery, graph.nodes, severityFilter, typeFilter],
+  )
+  const visibleNodeIds = useMemo(
+    () => new Set(filteredNodes.map((node) => node.id)),
+    [filteredNodes],
+  )
+  const filteredEdges = useMemo(
+    () => graph.edges.filter(
+      (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target),
+    ),
+    [graph.edges, visibleNodeIds],
   )
   const [selectedNodeId, setSelectedNodeId] = useState(filteredNodes[0]?.id ?? '')
 

@@ -1,27 +1,12 @@
-/**
- * Component tests for <ArtifactStatusTab />.
- *
- * These tests are written against the vitest + @testing-library/react
- * conventions. The current `package.json` doesn't yet depend on either,
- * so add:
- *
- *     bun add -D vitest @testing-library/react @testing-library/user-event jsdom @testing-library/jest-dom
- *
- * and configure vite.config.ts with `test: { environment: 'jsdom' }`
- * before running `bunx vitest run`.
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 
 import {
   ArtifactStatusTab,
-  formatRelativeTime,
-  pageWindow,
   type ArtifactQueueResponse,
   type ArtifactQueueRow,
 } from './ArtifactStatusTab'
+import { formatRelativeTime, pageWindow } from './artifact-status-utils'
 
 const FROZEN_NOW = new Date('2026-09-01T12:00:00Z')
 const now = () => new Date(FROZEN_NOW)
@@ -244,7 +229,6 @@ describe('<ArtifactStatusTab />', () => {
   })
 
   it('error rows are expandable via keyboard-accessible button', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const fetcher = mockFetcher(
       makeResponse([
         makeRow({
@@ -271,7 +255,7 @@ describe('<ArtifactStatusTab />', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByTestId('artifact-row-7-error-panel')).not.toBeInTheDocument()
 
-    await user.click(toggle)
+    fireEvent.click(toggle)
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     const panel = screen.getByTestId('artifact-row-7-error-panel')

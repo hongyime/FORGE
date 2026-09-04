@@ -7,6 +7,19 @@ import {
   type CSSProperties,
   type KeyboardEvent,
 } from 'react'
+import {
+  circularLayout,
+  colorForNodeType,
+  defaultSigmaLoader,
+  edgeEndpoints,
+  forceLayout,
+  hierarchicalLayout,
+  LAYOUT_KINDS,
+  nodeKey,
+  nodeLabelOf,
+  NODE_TYPE_COLORS,
+  nodeTypeOf,
+} from './graph-visualization-utils'
 
 /**
  * GraphVisualization
@@ -75,8 +88,6 @@ export type GraphPayload = {
 }
 
 export type LayoutKind = 'circular' | 'force' | 'hierarchical'
-
-export const LAYOUT_KINDS: readonly LayoutKind[] = ['circular', 'force', 'hierarchical'] as const
 
 /** Sigma 2.x + graphology surface actually used by this component. */
 export type SigmaLike = {
@@ -157,277 +168,7 @@ export type GraphVisualizationProps = {
   style?: CSSProperties
 }
 
-// ---------------------------------------------------------------------------
-// Legend / colors
-// ---------------------------------------------------------------------------
-
-/**
- * Node-type -> color map. Keys are upper-cased for stable matching against
- * both `node_type` and `entity_type` values returned by the graph API.
- */
-export const NODE_TYPE_COLORS: Record<string, string> = {
-  HOST: '#4a9eff',
-  SERVICE: '#10b981',
-  EMAIL: '#ffb84a',
-  CREDENTIAL: '#ffb84a',
-  CLOUD: '#a855f7',
-  VULN: '#ef4444',
-  IMPACT: '#f43f5e',
-  EXTERNAL: '#64748b',
-  SOCIAL: '#ec4899',
-  IDENTITY: '#8b5cf6',
-  ASSET: '#0ea5e9',
-  ORGANIZATION: '#f59e0b',
-  UNKNOWN: '#94a3b8',
-}
-
-export const NODE_FALLBACK_COLOR = '#94a3b8'
-
-export function colorForNodeType(nodeType: string | undefined): string {
-  if (!nodeType) return NODE_FALLBACK_COLOR
-  const key = nodeType.toUpperCase()
-  return NODE_TYPE_COLORS[key] ?? NODE_FALLBACK_COLOR
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-export function nodeKey(node: GraphNode, index: number): string {
-  const raw = node.node_id ?? node.id
-  if (typeof raw === 'string' && raw.length > 0) return raw
-  return `node-${index}`
-}
-
-export function edgeEndpoints(edge: GraphEdge): { source: string; target: string } | null {
-  const source = edge.source_node_id ?? edge.source
-  const target = edge.target_node_id ?? edge.target
-  if (typeof source !== 'string' || typeof target !== 'string') return null
-  if (source.length === 0 || target.length === 0) return null
-  return { source, target }
-}
-
-export function nodeTypeOf(node: GraphNode): string {
-  const raw = node.node_type ?? node.entity_type ?? 'UNKNOWN'
-  return String(raw).toUpperCase()
-}
-
-export function nodeLabelOf(node: GraphNode, key: string): string {
-  const raw = node.label
-  if (typeof raw === 'string' && raw.length > 0) return raw
-  return key
-}
-
-// ---------------------------------------------------------------------------
-// Layouts
-// ---------------------------------------------------------------------------
-
 export type Position = { x: number; y: number }
-
-/** Evenly distribute nodes on a unit circle. Deterministic for a given order. */
-export function circularLayout(keys: string[]): Record<string, Position> {
-  const positions: Record<string, Position> = {}
-  const n = Math.max(1, keys.length)
-  keys.forEach((key, i) => {
-    const theta = (2 * Math.PI * i) / n
-    positions[key] = { x: Math.cos(theta), y: Math.sin(theta) }
-  })
-  return positions
-}
-
-/**
- * Simple force-directed (Fruchterman-Reingold-lite). Deterministic seed
- * derived from node keys so tests are reproducible.
- */
-export function forceLayout(
-  keys: string[],
-  edges: Array<{ source: string; target: string }>,
-  iterations = 60,
-): Record<string, Position> {
-  const n = Math.max(1, keys.length)
-  const area = 1
-  const k = Math.sqrt(area / n)
-
-  const positions: Record<string, Position> = {}
-  keys.forEach((key, i) => {
-    const seed = hashSeed(key) + i
-    positions[key] = {
-      x: Math.cos(seed) * 0.5,
-      y: Math.sin(seed) * 0.5,
-    }
-  })
-
-  let temperature = 0.1
-  const cooling = temperature / (iterations + 1)
-
-  for (let iter = 0; iter < iterations; iter += 1) {
-    const displacements: Record<string, Position> = {}
-    keys.forEach((key) => {
-      displacements[key] = { x: 0, y: 0 }
-    })
-
-    // Repulsion.
-    for (let i = 0; i < keys.length; i += 1) {
-      for (let j = i + 1; j < keys.length; j += 1) {
-        const a = keys[i]
-        const b = keys[j]
-        const pa = positions[a]
-        const pb = positions[b]
-        const dx = pa.x - pb.x
-        const dy = pa.y - pb.y
-        const dist = Math.max(1e-4, Math.sqrt(dx * dx + dy * dy))
-        const force = (k * k) / dist
-        const fx = (dx / dist) * force
-        const fy = (dy / dist) * force
-        displacements[a].x += fx
-        displacements[a].y += fy
-        displacements[b].x -= fx
-        displacements[b].y -= fy
-      }
-    }
-
-    // Attraction along edges.
-    for (const edge of edges) {
-      const pa = positions[edge.source]
-      const pb = positions[edge.target]
-      if (!pa || !pb) continue
-      const dx = pa.x - pb.x
-      const dy = pa.y - pb.y
-      const dist = Math.max(1e-4, Math.sqrt(dx * dx + dy * dy))
-      const force = (dist * dist) / k
-      const fx = (dx / dist) * force
-      const fy = (dy / dist) * force
-      displacements[edge.source].x -= fx
-      displacements[edge.source].y -= fy
-      displacements[edge.target].x += fx
-      displacements[edge.target].y += fy
-    }
-
-    // Apply, capped by temperature.
-    for (const key of keys) {
-      const disp = displacements[key]
-      const mag = Math.max(1e-4, Math.sqrt(disp.x * disp.x + disp.y * disp.y))
-      const capped = Math.min(mag, temperature)
-      positions[key].x += (disp.x / mag) * capped
-      positions[key].y += (disp.y / mag) * capped
-    }
-    temperature = Math.max(cooling, temperature - cooling)
-  }
-  return positions
-}
-
-/** djb2-lite hash producing a bounded numeric seed. */
-function hashSeed(value: string): number {
-  let hash = 5381
-  for (let i = 0; i < value.length; i += 1) {
-    hash = ((hash << 5) + hash + value.charCodeAt(i)) | 0
-  }
-  return (Math.abs(hash) % 1000) / 100
-}
-
-/**
- * Hierarchical layout: layer nodes by node_type (or explicit `layer` metadata).
- * Layer order picks canonical categories first, then unknowns alphabetically.
- */
-export function hierarchicalLayout(
-  entries: Array<{ key: string; type: string }>,
-): Record<string, Position> {
-  const canonicalOrder = [
-    'EXTERNAL',
-    'IDENTITY',
-    'CREDENTIAL',
-    'EMAIL',
-    'SOCIAL',
-    'HOST',
-    'SERVICE',
-    'ASSET',
-    'CLOUD',
-    'VULN',
-    'IMPACT',
-    'ORGANIZATION',
-    'UNKNOWN',
-  ]
-  const byLayer = new Map<string, string[]>()
-  for (const entry of entries) {
-    const layer = entry.type || 'UNKNOWN'
-    const bucket = byLayer.get(layer) ?? []
-    bucket.push(entry.key)
-    byLayer.set(layer, bucket)
-  }
-
-  const layers = [...byLayer.keys()].sort((a, b) => {
-    const ai = canonicalOrder.indexOf(a)
-    const bi = canonicalOrder.indexOf(b)
-    if (ai !== -1 && bi !== -1) return ai - bi
-    if (ai !== -1) return -1
-    if (bi !== -1) return 1
-    return a.localeCompare(b)
-  })
-
-  const positions: Record<string, Position> = {}
-  const layerCount = Math.max(1, layers.length)
-  layers.forEach((layer, layerIndex) => {
-    const nodes = byLayer.get(layer) ?? []
-    const y = layerCount === 1 ? 0 : 1 - (2 * layerIndex) / (layerCount - 1)
-    const count = Math.max(1, nodes.length)
-    nodes.forEach((key, nodeIndex) => {
-      const x = count === 1 ? 0 : -1 + (2 * nodeIndex) / (count - 1)
-      positions[key] = { x, y }
-    })
-  })
-  return positions
-}
-
-// ---------------------------------------------------------------------------
-// Default Sigma / graphology loader (UMD from vendored /static/ tree).
-// ---------------------------------------------------------------------------
-
-type SigmaWindow = typeof window & {
-  Sigma?: SigmaFactory
-  graphology?: GraphologyFactory | { Graph?: GraphologyFactory }
-}
-
-const DEFAULT_SIGMA_URLS = {
-  graphology: '/static/graphology/graphology.umd.min.js',
-  sigma: '/static/sigma/sigma.min.js',
-}
-
-async function injectScript(url: string, id: string): Promise<void> {
-  if (typeof document === 'undefined') {
-    throw new Error(`cannot inject ${url} outside a DOM environment`)
-  }
-  const existing = document.getElementById(id)
-  if (existing) return
-  await new Promise<void>((resolve, reject) => {
-    const script = document.createElement('script')
-    script.id = id
-    script.src = url
-    script.async = true
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error(`failed to load ${url}`))
-    document.head.appendChild(script)
-  })
-}
-
-export const defaultSigmaLoader: SigmaLoader = async () => {
-  const win = window as SigmaWindow
-  if (!win.graphology) {
-    await injectScript(DEFAULT_SIGMA_URLS.graphology, 'forge-vendor-graphology')
-  }
-  if (!win.Sigma) {
-    await injectScript(DEFAULT_SIGMA_URLS.sigma, 'forge-vendor-sigma')
-  }
-  const Sigma = win.Sigma
-  const graphologyGlobal = win.graphology
-  const Graph =
-    typeof graphologyGlobal === 'function'
-      ? graphologyGlobal
-      : graphologyGlobal?.Graph
-  if (!Sigma || !Graph) {
-    throw new Error('sigma or graphology UMD globals unavailable after script load')
-  }
-  return { Sigma, Graph }
-}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -455,11 +196,13 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   const sigmaRef = useRef<SigmaLike | null>(null)
   const graphRef = useRef<GraphologyLike | null>(null)
   const factoriesRef = useRef<{ Sigma: SigmaFactory; Graph: GraphologyFactory } | null>(null)
+  const layoutRef = useRef<LayoutKind>(initialLayout)
 
   const [graphData, setGraphData] = useState<GraphPayload | null>(initialGraph ?? null)
   const [loadState, setLoadState] = useState<LoadState>(initialGraph ? 'ok' : 'idle')
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [layout, setLayout] = useState<LayoutKind>(initialLayout)
+  const [factoriesReady, setFactoriesReady] = useState<boolean>(false)
   const [search, setSearch] = useState<string>('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
@@ -524,11 +267,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         const factories = await sigmaLoader()
         if (cancelled) return
         factoriesRef.current = factories
-        // Trigger re-render so the mount effect below can build the sigma
-        // instance now that factories are ready.
-        setLoadState((prev) => (prev === 'error' ? prev : prev))
-        // Force a state update; use functional setState to avoid stale closure.
-        setLayout((prev) => prev)
+        setFactoriesReady(true)
       } catch (error) {
         if (cancelled) return
         setLoadState('error')
@@ -624,7 +363,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     })
 
     // Apply initial layout positions.
-    applyLayoutPositions(graph, keys, normalizedEdges, layout, nodesByKey)
+    applyLayoutPositions(graph, keys, normalizedEdges, layoutRef.current, nodesByKey)
 
     const sigma = new factories.Sigma(graph, container, {
       allowInvalidContainer: true,
@@ -640,14 +379,14 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     })
     sigmaRef.current = sigma
     setLoadState('ok')
-  }, [graphData, layout, nodesByKey])
+  }, [graphData, nodesByKey])
 
   // Rebuild on data/factory readiness.
   useEffect(() => {
     if (!graphData) return
-    if (!factoriesRef.current) return
+    if (!factoriesReady) return
     rebuildGraph()
-  }, [graphData, rebuildGraph])
+  }, [graphData, factoriesReady, rebuildGraph])
 
   // Cleanup on unmount.
   useEffect(() => {
@@ -797,6 +536,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
 
   const isLoading = loadState === 'loading-scripts' || loadState === 'loading-data'
   const showSkeleton = isLoading && !graphData
+
+  // Update layoutRef during render so rebuildGraph sees current layout.
+  layoutRef.current = layout
 
   const activeTypes = useMemo(() => {
     if (typeFilter === 'all') return knownTypes

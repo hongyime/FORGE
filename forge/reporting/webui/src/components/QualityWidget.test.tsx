@@ -1,20 +1,10 @@
-/**
- * QualityWidget tests - written for vitest + @testing-library/react.
- *
- * NOTE: forge/reporting/webui does not currently ship a test runner
- * (package.json has no `test` script and no vitest/@testing-library deps).
- * These tests are written against the vitest + testing-library idioms so
- * they run as soon as the runner is added via:
- *   npm i -D vitest @testing-library/react @testing-library/jest-dom jsdom
- * and package.json gets: "test": "vitest run --environment jsdom"
- */
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import QualityWidget, {
-  classifyScore,
   Sparkline,
   type QualitySnapshot,
 } from './QualityWidget'
+import { classifyScore } from './quality-widget-utils'
 
 const MOCK_SNAPSHOT: QualitySnapshot = {
   engagement_id: '1001',
@@ -34,6 +24,8 @@ const MOCK_SNAPSHOT: QualitySnapshot = {
     { timestamp: '2026-09-01T09:00:00Z', score: 87 },
   ],
 }
+
+const pendingFetcher = () => new Promise<QualitySnapshot>(() => undefined)
 
 describe('classifyScore', () => {
   it('returns good for scores at or above 80', () => {
@@ -80,6 +72,7 @@ describe('QualityWidget', () => {
       <QualityWidget
         engagementId="1001"
         initialSnapshot={MOCK_SNAPSHOT}
+        fetcher={pendingFetcher}
         disableWebSocket
       />,
     )
@@ -92,6 +85,7 @@ describe('QualityWidget', () => {
       <QualityWidget
         engagementId="1001"
         initialSnapshot={MOCK_SNAPSHOT}
+        fetcher={pendingFetcher}
         disableWebSocket
       />,
     )
@@ -101,12 +95,24 @@ describe('QualityWidget', () => {
   it('color indicator degrades for warn and bad scores', () => {
     const warnSnapshot: QualitySnapshot = { ...MOCK_SNAPSHOT, overall_score: 60 }
     const { rerender } = render(
-      <QualityWidget engagementId="1001" initialSnapshot={warnSnapshot} disableWebSocket />,
+      <QualityWidget
+        engagementId="1001"
+        initialSnapshot={warnSnapshot}
+        fetcher={pendingFetcher}
+        disableWebSocket
+      />,
     )
     expect(screen.getByTestId('quality-score-indicator')).toHaveTextContent('🟡')
 
     const badSnapshot: QualitySnapshot = { ...MOCK_SNAPSHOT, overall_score: 30 }
-    rerender(<QualityWidget engagementId="1001" initialSnapshot={badSnapshot} disableWebSocket />)
+    rerender(
+      <QualityWidget
+        engagementId="1001"
+        initialSnapshot={badSnapshot}
+        fetcher={pendingFetcher}
+        disableWebSocket
+      />,
+    )
     expect(screen.getByTestId('quality-score-indicator')).toHaveTextContent('🔴')
   })
 
@@ -115,6 +121,7 @@ describe('QualityWidget', () => {
       <QualityWidget
         engagementId="1001"
         initialSnapshot={MOCK_SNAPSHOT}
+        fetcher={pendingFetcher}
         disableWebSocket
       />,
     )
@@ -126,6 +133,7 @@ describe('QualityWidget', () => {
       <QualityWidget
         engagementId="1001"
         initialSnapshot={MOCK_SNAPSHOT}
+        fetcher={pendingFetcher}
         disableWebSocket
       />,
     )

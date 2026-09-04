@@ -1,30 +1,9 @@
-/**
- * Component tests for <GraphVisualization />.
- *
- * These tests are written against the vitest + @testing-library/react
- * conventions. The current `package.json` doesn't yet depend on either,
- * so add:
- *
- *     bun add -D vitest @testing-library/react @testing-library/user-event jsdom @testing-library/jest-dom
- *
- * and configure vite.config.ts with `test: { environment: 'jsdom' }`
- * before running `bunx vitest run`.
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import {
   GraphVisualization,
-  circularLayout,
-  colorForNodeType,
-  edgeEndpoints,
-  forceLayout,
-  hierarchicalLayout,
-  nodeKey,
-  nodeLabelOf,
-  nodeTypeOf,
   type GraphPayload,
   type GraphologyFactory,
   type GraphologyLike,
@@ -33,6 +12,16 @@ import {
   type SigmaLike,
   type SigmaLoader,
 } from './GraphVisualization'
+import {
+  circularLayout,
+  colorForNodeType,
+  edgeEndpoints,
+  forceLayout,
+  hierarchicalLayout,
+  nodeKey,
+  nodeLabelOf,
+  nodeTypeOf,
+} from './graph-visualization-utils'
 
 // ---------------------------------------------------------------------------
 // Sigma / graphology stubs
