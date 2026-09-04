@@ -500,3 +500,81 @@ def report_policy_plan(
         for command in follow_up_commands[:3]:
             if isinstance(command, list):
                 console.print(f"  follow_up={' '.join(str(part) for part in command)}")
+
+
+@report_app.command("quality-metrics")
+def report_quality_metrics(
+    quality_input: Optional[str] = typer.Option(
+        None,
+        "--quality-input",
+        help=(
+            "Path to a JSON file containing a serialized QualityReport "
+            "(as produced by QualityReport.as_dict()). "
+            "When omitted, an empty-graph report is generated as a demo."
+        ),
+    ),
+    base_markdown: Optional[str] = typer.Option(
+        None,
+        "--base-markdown",
+        help="Optional path to an existing Markdown body to prepend.",
+    ),
+    output: Optional[str] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write output to this path instead of stdout.",
+    ),
+    format: str = typer.Option(
+        "markdown",
+        "--format",
+        help="Output format: markdown or json.",
+    ),
+) -> None:
+    """Generate a quality-metrics report section from a QualityReport JSON file."""
+    from forge.report.generate import main as _generate_main  # noqa: PLC0415
+
+    argv: list[str] = ["--quality-report", "--format", format]
+    if quality_input:
+        argv += ["--quality-input", quality_input]
+    else:
+        # No input supplied: emit a demo empty-graph report so the command
+        # is always runnable for verification purposes.
+        import json as _json  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+        import os  # noqa: PLC0415
+        demo_report = {
+            "overall_score": 0.0,
+            "node_count": 0,
+            "edge_count": 0,
+            "explanation": "graph is empty: no nodes to score",
+            "metrics": {
+                "node_coverage": {"score": 0.0, "weight": 0.30, "numerator": 0, "denominator": 0, "detail": "graph is empty"},
+                "edge_completeness": {"score": 0.0, "weight": 0.30, "numerator": 0, "denominator": 0, "detail": "graph is empty"},
+                "stale_timestamps": {"score": 0.0, "weight": 0.20, "numerator": 0, "denominator": 0, "detail": "graph is empty"},
+                "orphan_nodes": {"score": 0.0, "weight": 0.20, "numerator": 0, "denominator": 0, "detail": "graph is empty"},
+            },
+        }
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        )
+        try:
+            _json.dump(demo_report, tmp)
+            tmp.close()
+            argv += ["--quality-input", tmp.name]
+            if base_markdown:
+                argv += ["--base-markdown", base_markdown]
+            if output:
+                argv += ["--output", output]
+            exit_code = _generate_main(argv)
+        finally:
+            os.unlink(tmp.name)
+        if exit_code:
+            raise typer.Exit(code=exit_code)
+        return
+    if base_markdown:
+        argv += ["--base-markdown", base_markdown]
+    if output:
+        argv += ["--output", output]
+    exit_code = _generate_main(argv)
+    if exit_code:
+        raise typer.Exit(code=exit_code)

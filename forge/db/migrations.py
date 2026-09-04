@@ -2593,6 +2593,99 @@ def _m0044_retention_policies(conn: sqlite3.Connection) -> None:
     )
     conn.commit()
 
+def _m0050_active_session_relationship_check(conn: sqlite3.Connection) -> None:
+    """Rebuild asset_relationships CHECK to include 'active_session'.
+
+    Databases upgraded through an earlier form of migration 40 (before the
+    'active_session' relationship type was inlined into that migration's
+    CREATE TABLE statement) carry a stale CHECK constraint that rejects
+    active_session edges. Fresh v50 installs already have the correct
+    constraint via the current v40 definition, so this migration is a no-op
+    for them. For upgraded DBs it rebuilds the table with the current CHECK.
+    """
+    if not _table_sql_contains(conn, "asset_relationships", "asset_relationships"):
+        conn.commit()
+        return
+    if _table_sql_contains(conn, "asset_relationships", "'active_session'"):
+        conn.commit()
+        return
+
+    row = conn.execute("PRAGMA foreign_keys").fetchone()
+    foreign_keys_enabled = bool(row and int(row[0] or 0))
+    if foreign_keys_enabled:
+        conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        _rebuild_table(
+            conn,
+            "asset_relationships",
+            """
+            CREATE TABLE asset_relationships (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id       INTEGER NOT NULL REFERENCES engagements(id),
+                source_entity_id    INTEGER NOT NULL REFERENCES asset_entities(id),
+                target_entity_id    INTEGER NOT NULL REFERENCES asset_entities(id),
+                relationship_type   TEXT    NOT NULL
+                                    CHECK (relationship_type IN (
+                                        'derived_from',
+                                        'corroborates',
+                                        'conflicts_with',
+                                        'same_entity',
+                                        'related_asset',
+                                        'runs_service',
+                                        'has_identity',
+                                        'references_cloud',
+                                        'supported_by',
+                                        'validated_by',
+                                        'has_finding',
+                                        'remediates',
+                                        'tracked_by',
+                                        'owned_by',
+                                        'routed_to',
+                                        'observed_in',
+                                        'active_session',
+                                        'other'
+                                    )),
+                confidence          REAL    NOT NULL DEFAULT 0.5
+                                    CHECK (confidence >= 0.0 AND confidence <= 1.0),
+                source_table        TEXT    NOT NULL DEFAULT 'system',
+                source_id           INTEGER NOT NULL DEFAULT 0,
+                evidence_json       TEXT    NOT NULL DEFAULT '{}',
+                created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (
+                    engagement_id,
+                    source_entity_id,
+                    target_entity_id,
+                    relationship_type,
+                    source_table,
+                    source_id
+                )
+            )
+            """,
+            [
+                """
+                CREATE INDEX IF NOT EXISTS idx_asset_relationships_engagement
+                    ON asset_relationships (engagement_id, relationship_type, updated_at DESC)
+                """,
+                """
+                CREATE INDEX IF NOT EXISTS idx_asset_relationships_source
+                    ON asset_relationships (engagement_id, source_entity_id, relationship_type)
+                """,
+            ],
+        )
+        violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+        if violations:
+            raise RuntimeError(
+                f"active_session CHECK migration left FK violations: {violations[:5]}"
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        if foreign_keys_enabled:
+            conn.execute("PRAGMA foreign_keys = ON")
+
 
 # ---------------------------------------------------------------------------
 # Migration registry — ordered by version number
@@ -2652,6 +2745,7 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (47, "connector_secrets", _m0047_connector_secrets),
     (48, "active_validation_http_security_headers", _m0048_active_validation_http_security_headers),
     (49, "asset_graph_remediation_source", _m0049_asset_graph_remediation_source),
+    (50, "active_session_relationship_check", _m0050_active_session_relationship_check),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)

@@ -975,7 +975,15 @@ def test_automation_status_summarizes_report_review_without_mutating(
     ]
 
 
-def test_automation_status_summarizes_autostart_history(tmp_path: Path) -> None:
+def test_automation_status_summarizes_autostart_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        automation_cycle_module,
+        "_now_utc",
+        lambda: datetime(2026, 8, 29, 2, 0, tzinfo=timezone.utc),
+    )
     imports_dir = tmp_path / "imports"
     imports_dir.mkdir()
     (imports_dir / "autostart.local.json").write_text(

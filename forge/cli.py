@@ -3560,6 +3560,27 @@ def kill_chain(
                 download_filename=str(metadata.get("download_filename") or ""),
             )
 
+        def _publish_artifact_event_callback(
+            eid: int, artifact_id: str, url: str
+        ) -> None:
+            if progress_event_queue is None:
+                return
+            try:
+                from forge.webui.state import artifact_enqueued_event  # noqa: PLC0415
+                import posixpath as _posixpath  # noqa: PLC0415
+                from urllib.parse import urlsplit as _urlsplit  # noqa: PLC0415
+                _parsed = _urlsplit(url)
+                _name = _posixpath.basename((_parsed.path or "").rstrip("/")) or _parsed.netloc or url
+                evt = artifact_enqueued_event(eid, artifact_id, _name)
+                progress_event_queue.publish("forge.events", evt.payload)
+            except Exception as exc:  # noqa: BLE001 - best-effort broadcast
+                logger.warning(
+                    "artifact queue broadcast failed: engagement_id=%s "
+                    "artifact_id=%s error=%s",
+                    eid,
+                    artifact_id,
+                    type(exc).__name__,
+                )
         con = _sq.connect(db_path)
         try:
             queued = 0
@@ -3619,6 +3640,7 @@ def kill_chain(
                     queue_candidate,
                     crawl_seed_upsert=_upsert_crawl_artifact_seed,
                     mobile_bundle_url_checker=_is_mobile_bundle_url,
+                    publish_artifact_event=_publish_artifact_event_callback,
                 )
 
             queued = queue_discovered_artifact_candidates(

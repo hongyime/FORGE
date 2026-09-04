@@ -822,7 +822,7 @@ def _autostart_history_summary(
         state=state,
         entries=entries,
         unreadable_count=unreadable_count,
-        now=datetime.now(timezone.utc),
+        now=_now_utc(),
         failure_backoff_minutes=failure_backoff_minutes,
     )
     return {
@@ -1965,7 +1965,7 @@ def _classify_queue_items(
             blocked.append(_blocked(item, f"retry_limit_reached:{failure_count}"))
             continue
         retry_after = _parse_iso(str(item.get("retry_after_at") or ""))
-        if retry_after is not None and retry_after > datetime.now(timezone.utc):
+        if retry_after is not None and retry_after > _now_utc():
             blocked.append(_blocked(item, f"retry_backoff_active:{retry_after.isoformat(timespec='seconds')}"))
             continue
         ignore_reason = _queue_ignore_reason(item, imports_dir)
@@ -2884,7 +2884,7 @@ def _mark_queue_item_failure(
         QUEUE_RETRY_BASE_SECONDS * (2 ** max(failure_count - 1, 0)),
         QUEUE_RETRY_MAX_SECONDS,
     )
-    retry_after = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
+    retry_after = _now_utc() + timedelta(seconds=delay_seconds)
     item["status"] = "failed"
     item["failure_count"] = failure_count
     item["last_returncode"] = int(returncode)
@@ -2939,4 +2939,8 @@ def _run_command(command: list[str], cwd: Path) -> dict[str, Any]:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return _now_utc().isoformat(timespec="seconds")
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)

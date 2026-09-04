@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, Optional
@@ -31,6 +31,10 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 # ===========================================================================
@@ -191,7 +195,7 @@ class SentryConfigModel(BaseModel):
     )
     action_overrides: dict[str, int] = Field(default_factory=dict)
     engagement_overrides: dict[str, Any] = Field(default_factory=dict)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=_utc_now)
 
 
 # ===========================================================================
@@ -258,7 +262,7 @@ class SubdomainResult(BaseModel):
     domain: str
     ip_addresses: list[str] = Field(default_factory=list)
     source: str = "crt_sh"
-    discovered_at: datetime = Field(default_factory=datetime.utcnow)
+    discovered_at: datetime = Field(default_factory=_utc_now)
 
 
 class ServiceBanner(BaseModel):
@@ -328,7 +332,7 @@ class CredentialValidationResult(BaseModel):
     host: str
     success: bool
     error: Optional[str] = None
-    validated_at: datetime = Field(default_factory=datetime.utcnow)
+    validated_at: datetime = Field(default_factory=_utc_now)
 
 
 class DehashedResult(BaseModel):
@@ -363,7 +367,7 @@ class KeyScannerFinding(BaseModel):
     repo_name: Optional[str] = None
     pattern_name: Optional[str] = None
     validation_state: KeyValidationState = KeyValidationState.UNVALIDATED
-    found_at: datetime = Field(default_factory=datetime.utcnow)
+    found_at: datetime = Field(default_factory=_utc_now)
 
     @model_validator(mode="after")
     def set_key_prefix(self) -> "KeyScannerFinding":
@@ -416,7 +420,7 @@ class ObfuscationResult(BaseModel):
     criterion: str  # e.g. 'base64_encode', 'xor_key', 'ps_concat'
     input_hash: str  # SHA256 of input bytes
     output_hash: str  # SHA256 of output bytes
-    applied_at: datetime = Field(default_factory=datetime.utcnow)
+    applied_at: datetime = Field(default_factory=_utc_now)
 
 
 # ===========================================================================
@@ -462,7 +466,7 @@ class VulnerabilityFinding(BaseModel):
     description: Optional[str] = None
     evidence: Optional[str] = Field(None, max_length=512)
     cvss_score: Optional[float] = None
-    found_at: datetime = Field(default_factory=datetime.utcnow)
+    found_at: datetime = Field(default_factory=_utc_now)
 
 
 class CloudAsset(BaseModel):
@@ -474,7 +478,7 @@ class CloudAsset(BaseModel):
     asset_type: Literal["firebase", "supabase"]
     identifier: str
     source: str
-    discovered_at: datetime = Field(default_factory=datetime.utcnow)
+    discovered_at: datetime = Field(default_factory=_utc_now)
 
 
 # ===========================================================================
@@ -680,7 +684,7 @@ class LateralMovementResult(BaseModel):
     output: Optional[str] = Field(None, max_length=65_536)  # 64 KB cap §16
     scope_verified: bool = False
     operator_confirmed: bool = False
-    executed_at: datetime = Field(default_factory=datetime.utcnow)
+    executed_at: datetime = Field(default_factory=_utc_now)
 
 
 # ===========================================================================
@@ -715,7 +719,7 @@ class LlmReportResult(BaseModel):
     content: str
     quality_score: Optional[float] = None
     validator_ok: bool = False
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=_utc_now)
     model: str = "qwen2.5-1.5b"
     prompt_hash: Optional[str] = None
     response_hash: Optional[str] = None

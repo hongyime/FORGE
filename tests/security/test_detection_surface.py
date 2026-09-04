@@ -72,10 +72,14 @@ class TestAnalyzeStrings:
         # Multiple pattern families must fire.
         assert {"password", "inject"}.issubset(matched)
         assert "virtualalloc" in matched
-        # Suspicious tokens ARE substrings of extracted strings.
+        # Detected strings are redacted to sha256:<16hex> tokens; the category
+        # signal lives in matched_patterns, and plaintext must NEVER leak.
+        for token in result.suspicious_strings:
+            assert token.startswith("sha256:")
+            assert len(token) == len("sha256:") + 16
         joined = "\n".join(result.suspicious_strings).lower()
-        assert "password" in joined
-        assert "shellcode" in joined
+        assert "password" not in joined
+        assert "shellcode" not in joined
 
     def test_clean_binary_has_no_matches(self, clean_binary: Path) -> None:
         result = analyze_strings(clean_binary)
@@ -88,7 +92,8 @@ class TestAnalyzeStrings:
         p.write_bytes(b"\x00zzz_specific_marker_xyz\x00")
         result = analyze_strings(p, patterns=("specific_marker",))
         assert result.matched_patterns == ("specific_marker",)
-        assert any("specific_marker" in s for s in result.suspicious_strings)
+        # Category is proved by matched_patterns; suspicious_strings stays hashed.
+        assert all(s.startswith("sha256:") for s in result.suspicious_strings)
 
     def test_missing_file_raises(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):

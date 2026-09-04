@@ -37,7 +37,7 @@ def test_stable_proof_gate_filters_validated_looking_cloud_rows_across_surfaces(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     data_dir, reports_dir, db_path = _build_fixture(tmp_path)
 

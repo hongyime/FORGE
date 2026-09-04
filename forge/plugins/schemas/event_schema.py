@@ -1,10 +1,11 @@
 """JSON Schema definitions for plugin event bus events (E2.3).
 
-Three event types map to the boundary contract from E2.1:
+Four event types map to the boundary contract from E2.1:
 
     - ArtifactDiscoveredSchema: emitted when a plugin discovers an artifact
     - GraphUpdatedSchema: emitted when the knowledge graph is mutated
     - ReportGeneratedSchema: emitted when a report artifact is produced
+    - CollectionProgressSchema: emitted when collection progress changes
 
 Every event on the bus must include an "event_type" discriminator and a
 "payload" object matching the schema for that type. Forbidden fields
@@ -23,32 +24,40 @@ from typing import Any, Final
 MAX_PAYLOAD_BYTES: Final[int] = 10240
 """Hard upper bound on serialized payload size in bytes (10 KiB)."""
 
-FORBIDDEN_FIELDS: Final[frozenset[str]] = frozenset(
+MAX_PAYLOAD_KEYS: Final[int] = 50
+"""Hard upper bound on keys across the complete payload tree."""
+
+MAX_NESTING_DEPTH: Final[int] = 5
+"""Hard upper bound on payload container nesting, including the payload root."""
+
+FORBIDDEN_FIELD_PATTERNS: Final[frozenset[str]] = frozenset(
     {
+        # Spec §4 (docs/specs/plugin_boundary_v1.md:166): case-insensitive
+        # substring match on any key at any depth. Catches 'access_token',
+        # 'database_password', 'MY_API_KEY', 'x-private-cert', etc.
         "password",
         "passwd",
         "pwd",
         "secret",
+        "token",
         "api_key",
         "apikey",
         "api-key",
-        "access_token",
-        "refresh_token",
-        "auth_token",
-        "bearer_token",
-        "private_key",
-        "privatekey",
-        "credentials",
-        "authorization",
-        "session_token",
-        "client_secret",
+        "credential",
+        "private",
+        "auth",
     }
 )
-"""Field names that must never appear on any event payload.
+"""Substring patterns that must never appear in any payload key.
 
-Matching is case-insensitive and applies at every nesting depth.
-Presence of any listed name (top-level or nested) rejects the event.
+Matching is case-insensitive substring at every nesting depth per spec §4.
+A key like 'my_access_token_value' is rejected because it contains 'token'.
+'access_token' -> 'token'; 'database_password' -> 'password'; 'auth_header'
+-> 'auth'; 'private_key_pem' -> 'private'/'private_key'.
 """
+
+# Backward-compatible alias for callers that still import the old name.
+FORBIDDEN_FIELDS: Final[frozenset[str]] = FORBIDDEN_FIELD_PATTERNS
 
 
 # ---------------------------------------------------------------------------
@@ -78,10 +87,12 @@ ArtifactDiscoveredSchema: Final[dict[str, Any]] = {
     "title": "ArtifactDiscovered",
     "type": "object",
     "additionalProperties": False,
-    "required": ["artifact_id", "artifact_type", "source", "timestamp"],
+    "maxProperties": MAX_PAYLOAD_KEYS,
+    "required": ["artifact_id", "artifact_type", "source", "discovered_at"],
     "properties": {
         "artifact_id": {
-            **_ID_SCHEMA,
+            "type": "integer",
+            "minimum": 1,
             "description": "Stable identifier for the discovered artifact.",
         },
         "artifact_type": {
@@ -96,7 +107,7 @@ ArtifactDiscoveredSchema: Final[dict[str, Any]] = {
             "maxLength": 256,
             "description": "Plugin or module that discovered the artifact.",
         },
-        "timestamp": _TIMESTAMP_SCHEMA,
+        "discovered_at": _TIMESTAMP_SCHEMA,
     },
 }
 
@@ -110,7 +121,8 @@ GraphUpdatedSchema: Final[dict[str, Any]] = {
     "title": "GraphUpdated",
     "type": "object",
     "additionalProperties": False,
-    "required": ["node_id", "node_type", "operation", "timestamp"],
+    "maxProperties": MAX_PAYLOAD_KEYS,
+    "required": ["node_id", "node_type", "operation"],
     "properties": {
         "node_id": {
             **_ID_SCHEMA,
@@ -124,10 +136,9 @@ GraphUpdatedSchema: Final[dict[str, Any]] = {
         },
         "operation": {
             "type": "string",
-            "enum": ["create", "update", "delete"],
+            "enum": ["created", "updated", "removed"],
             "description": "Mutation applied to the node.",
         },
-        "timestamp": _TIMESTAMP_SCHEMA,
     },
 }
 
@@ -141,7 +152,8 @@ ReportGeneratedSchema: Final[dict[str, Any]] = {
     "title": "ReportGenerated",
     "type": "object",
     "additionalProperties": False,
-    "required": ["report_type", "engagement_id", "output_path"],
+    "maxProperties": MAX_PAYLOAD_KEYS,
+    "required": ["report_type", "engagement_id", "path"],
     "properties": {
         "report_type": {
             "type": "string",
@@ -150,16 +162,49 @@ ReportGeneratedSchema: Final[dict[str, Any]] = {
             "description": "Report family or template identifier.",
         },
         "engagement_id": {
-            "type": ["integer", "string"],
+            "type": "integer",
+            "minimum": 1,
             "description": "Engagement the report belongs to.",
         },
-        "output_path": {
+        "path": {
             "type": "string",
             "minLength": 1,
             "maxLength": 1024,
-            "description": "Filesystem path (relative or absolute) to the report artifact.",
+            "description": "Relative path to the report artifact in the engagement workspace.",
         },
-        "timestamp": _TIMESTAMP_SCHEMA,
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# CollectionProgressSchema
+# ---------------------------------------------------------------------------
+
+CollectionProgressSchema: Final[dict[str, Any]] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "CollectionProgress",
+    "type": "object",
+    "additionalProperties": False,
+    "maxProperties": MAX_PAYLOAD_KEYS,
+    "required": ["collection_id", "progress", "state", "message"],
+    "properties": {
+        "collection_id": {
+            **_ID_SCHEMA,
+            "description": "Stable identifier for the collection or scan.",
+        },
+        "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+        },
+        "state": {
+            "type": "string",
+            "enum": ["pending", "running", "completed", "failed"],
+        },
+        "message": {
+            "type": "string",
+            "maxLength": 280,
+        },
     },
 }
 
@@ -169,18 +214,23 @@ ReportGeneratedSchema: Final[dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 
 EVENT_SCHEMAS: Final[dict[str, dict[str, Any]]] = {
-    "artifact_discovered": ArtifactDiscoveredSchema,
-    "graph_updated": GraphUpdatedSchema,
-    "report_generated": ReportGeneratedSchema,
+    "artifact:discovered": ArtifactDiscoveredSchema,
+    "graph:updated": GraphUpdatedSchema,
+    "report:generated": ReportGeneratedSchema,
+    "collection:progress": CollectionProgressSchema,
 }
 """Mapping of event_type discriminator -> JSON Schema for its payload."""
 
 
 __all__ = [
     "ArtifactDiscoveredSchema",
+    "CollectionProgressSchema",
     "GraphUpdatedSchema",
     "ReportGeneratedSchema",
     "EVENT_SCHEMAS",
     "FORBIDDEN_FIELDS",
+    "FORBIDDEN_FIELD_PATTERNS",
+    "MAX_NESTING_DEPTH",
     "MAX_PAYLOAD_BYTES",
+    "MAX_PAYLOAD_KEYS",
 ]

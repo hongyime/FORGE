@@ -31,6 +31,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from contextlib import contextmanager
+from datetime import date, datetime
 from pathlib import Path
 from typing import Generator
 
@@ -42,6 +43,28 @@ _LOG = logging.getLogger(__name__)
 # SQLite busy-timeout in milliseconds. WAL mode reduces contention, but
 # long-running ETL writes can still block short reads.
 _BUSY_TIMEOUT_MS: int = 5_000
+
+
+def _adapt_date_iso(value: date) -> str:
+    return value.isoformat()
+
+
+def _adapt_datetime_iso(value: datetime) -> str:
+    return value.isoformat(" ")
+
+
+def _convert_date_iso(value: bytes) -> date:
+    return date.fromisoformat(value.decode("utf-8"))
+
+
+def _convert_datetime_iso(value: bytes) -> datetime:
+    return datetime.fromisoformat(value.decode("utf-8"))
+
+
+sqlite3.register_adapter(date, _adapt_date_iso)
+sqlite3.register_adapter(datetime, _adapt_datetime_iso)
+sqlite3.register_converter("date", _convert_date_iso)
+sqlite3.register_converter("timestamp", _convert_datetime_iso)
 
 
 # ---------------------------------------------------------------------------

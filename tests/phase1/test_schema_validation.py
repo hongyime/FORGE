@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -37,3 +38,16 @@ def test_get_engagement_db_accepts_canonical_schema(tmp_path: Path) -> None:
     finally:
         conn.close()
     assert {"phase", "module", "action", "target", "result", "operator", "logged_at"}.issubset(cols)
+
+
+def test_get_engagement_db_round_trips_timezone_aware_timestamps(tmp_path: Path) -> None:
+    conn = get_engagement_db(tmp_path / "timestamps.db")
+    expected = datetime(2026, 9, 3, 14, 30, 45, 123456, tzinfo=timezone.utc)
+    try:
+        conn.execute("CREATE TABLE timestamp_probe (value timestamp NOT NULL)")
+        conn.execute("INSERT INTO timestamp_probe (value) VALUES (?)", (expected,))
+        actual = conn.execute("SELECT value FROM timestamp_probe").fetchone()[0]
+    finally:
+        conn.close()
+
+    assert actual == expected

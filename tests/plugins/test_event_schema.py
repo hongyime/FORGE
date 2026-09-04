@@ -26,38 +26,48 @@ from forge.plugins.schemas import (
 
 def _artifact_event(**overrides):
     payload = {
-        "artifact_id": "art-123",
+        "artifact_id": 123,
         "artifact_type": "host",
         "source": "subdomain_enum",
-        "timestamp": "2026-09-01T12:00:00Z",
+        "discovered_at": "2026-09-01T12:00:00Z",
     }
     payload.update(overrides)
-    return {"event_type": "artifact_discovered", "payload": payload}
+    return {"event_type": "artifact:discovered", "payload": payload}
 
 
 def _graph_event(**overrides):
     payload = {
         "node_id": "node-abc",
         "node_type": "asset",
-        "operation": "create",
-        "timestamp": "2026-09-01T12:00:00Z",
+        "operation": "created",
     }
     payload.update(overrides)
-    return {"event_type": "graph_updated", "payload": payload}
+    return {"event_type": "graph:updated", "payload": payload}
 
 
 def _report_event(**overrides):
     payload = {
         "report_type": "template_markdown",
         "engagement_id": 1001,
-        "output_path": "/tmp/report.md",
+        "path": "reports/report.md",
     }
     payload.update(overrides)
-    return {"event_type": "report_generated", "payload": payload}
+    return {"event_type": "report:generated", "payload": payload}
+
+
+def _collection_event(**overrides):
+    payload = {
+        "collection_id": "scan-123",
+        "progress": 50,
+        "state": "running",
+        "message": "Halfway complete",
+    }
+    payload.update(overrides)
+    return {"event_type": "collection:progress", "payload": payload}
 
 
 # ---------------------------------------------------------------------------
-# Happy path: all three event types
+# Happy path: all four event types
 # ---------------------------------------------------------------------------
 
 
@@ -65,7 +75,7 @@ def test_valid_artifact_discovered_passes():
     result = validate_event(_artifact_event())
     assert result.valid is True
     assert result.errors == ()
-    assert result.event_type == "artifact_discovered"
+    assert result.event_type == "artifact:discovered"
 
 
 def test_valid_graph_updated_passes():
@@ -80,16 +90,23 @@ def test_valid_report_generated_passes():
     assert result.errors == ()
 
 
-def test_report_generated_accepts_string_engagement_id():
-    result = validate_event(_report_event(engagement_id="ENG-9001"))
+def test_valid_collection_progress_passes():
+    result = validate_event(_collection_event())
     assert result.valid is True
+    assert result.errors == ()
 
 
-def test_event_schemas_registry_covers_all_three_types():
+def test_report_generated_rejects_string_engagement_id():
+    result = validate_event(_report_event(engagement_id="ENG-9001"))
+    assert result.valid is False
+
+
+def test_event_schemas_registry_covers_all_four_types():
     assert set(EVENT_SCHEMAS.keys()) == {
-        "artifact_discovered",
-        "graph_updated",
-        "report_generated",
+        "artifact:discovered",
+        "graph:updated",
+        "report:generated",
+        "collection:progress",
     }
 
 
@@ -144,7 +161,7 @@ def test_unknown_event_type_rejected():
 
 
 def test_missing_payload_rejected():
-    result = validate_event({"event_type": "artifact_discovered"})
+    result = validate_event({"event_type": "artifact:discovered"})
     assert result.valid is False
     assert any("payload" in e for e in result.errors)
 
@@ -202,8 +219,11 @@ def test_multiple_forbidden_fields_all_detected():
 
 
 def test_forbidden_field_registry_covers_common_secrets():
-    for name in {"password", "api_key", "access_token", "private_key", "secret"}:
-        assert name in FORBIDDEN_FIELDS
+    # Substring semantics per spec §4: composite names must be detected by
+    # their forbidden-pattern substring, not by exact match.
+    for composite in {"password", "api_key", "access_token", "private_key", "secret", "database_password"}:
+        lowered = composite.lower()
+        assert any(pattern in lowered for pattern in FORBIDDEN_FIELDS), composite
 
 
 def test_check_forbidden_fields_returns_empty_for_clean_payload():
@@ -251,14 +271,42 @@ def test_oversized_event_rejected_by_validate_event():
     assert "size" in joined.lower() and "exceed" in joined.lower()
 
 
-def test_payload_size_with_non_serializable_falls_back_to_str():
-    # Non-serializable objects go through the ``default=str`` fallback and
-    # are treated as their string representation for size accounting.
+def test_payload_size_with_non_serializable_is_rejected():
     class Weird:
-        def __str__(self) -> str:  # very large str representation
-            return "x" * (MAX_PAYLOAD_BYTES + 1)
+        pass
 
     assert validate_payload_size({"x": Weird()}) is False
+
+
+def test_payload_rejects_more_than_fifty_total_keys():
+    event = _collection_event()
+    event["payload"]["message"] = {f"k{i}": i for i in range(51)}
+    result = validate_event(event)
+    assert result.valid is False
+    assert any("key count" in error for error in result.errors)
+
+
+def test_payload_rejects_nesting_beyond_five_levels():
+    nested = {"level": "value"}
+    for _ in range(5):
+        nested = {"level": nested}
+    event = _collection_event(message=nested)
+    result = validate_event(event)
+    assert result.valid is False
+    assert any("nesting depth" in error for error in result.errors)
+
+
+@pytest.mark.parametrize("path", ["/tmp/report.md", "C:\\temp\\report.md", "../report.md"])
+def test_report_path_must_stay_within_engagement_workspace(path: str):
+    result = validate_event(_report_event(path=path))
+    assert result.valid is False
+    assert any("path:" in error for error in result.errors)
+
+
+@pytest.mark.parametrize("progress", [-1, 101, 1.5])
+def test_collection_progress_range_and_type_enforced(progress):
+    result = validate_event(_collection_event(progress=progress))
+    assert result.valid is False
 
 
 # ---------------------------------------------------------------------------
@@ -299,8 +347,8 @@ def test_multiple_errors_all_reported_not_just_first():
 def test_middleware_strict_raises_on_invalid_event():
     mw = EventValidatorMiddleware(mode="strict")
     with pytest.raises(SchemaValidationError) as excinfo:
-        mw.process({"event_type": "artifact_discovered", "payload": {}})
-    assert excinfo.value.event_type == "artifact_discovered"
+        mw.process({"event_type": "artifact:discovered", "payload": {}})
+    assert excinfo.value.event_type == "artifact:discovered"
     assert excinfo.value.errors
 
 
@@ -313,7 +361,7 @@ def test_middleware_strict_passes_valid_event():
 def test_middleware_lenient_returns_invalid_result_and_logs(caplog):
     mw = EventValidatorMiddleware(mode="lenient")
     with caplog.at_level(logging.WARNING, logger="forge.plugins.schemas.validators"):
-        result = mw.process({"event_type": "artifact_discovered", "payload": {}})
+        result = mw.process({"event_type": "artifact:discovered", "payload": {}})
     assert isinstance(result, ValidationResult)
     assert result.valid is False
     # Rejection must be logged - never silently dropped.
@@ -327,6 +375,6 @@ def test_middleware_rejects_bad_mode():
 
 def test_validation_result_is_truthy_when_valid():
     ok = validate_event(_artifact_event())
-    bad = validate_event({"event_type": "artifact_discovered", "payload": {}})
+    bad = validate_event({"event_type": "artifact:discovered", "payload": {}})
     assert bool(ok) is True
     assert bool(bad) is False

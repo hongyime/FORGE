@@ -5,6 +5,7 @@ import os
 import sqlite3
 import time
 import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -753,7 +754,7 @@ def test_engagement_detail_surfaces_raw_export_report_family(tmp_path: Path, mon
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     _build_engagement(tmp_path)
 
@@ -854,7 +855,7 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
     data_dir = tmp_path / ".forge_data"
@@ -995,7 +996,7 @@ def test_phase6_raw_export_lineage_agrees_across_dashboard_api_and_downloads(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
     reports_dir = tmp_path / "reports"
@@ -1076,7 +1077,7 @@ def test_engagement_detail_prefers_latest_report_family_and_preserves_history(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     _build_engagement(tmp_path)
 
@@ -1172,7 +1173,7 @@ def test_engagement_detail_api_excludes_report_prefix_collisions(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     _build_engagement(tmp_path)
 
@@ -1249,7 +1250,7 @@ def test_engagement_detail_api_excludes_noncanonical_graph_artifacts(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -1314,7 +1315,7 @@ def test_engagement_api_unions_seed_only_hosts_and_emails(tmp_path: Path, monkey
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -1389,7 +1390,7 @@ def test_engagement_api_falls_back_to_seed_graph_payload_without_attack_graph_ar
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -1507,7 +1508,7 @@ def test_engagement_api_parses_graphml_graph_payload_with_provenance(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -1543,7 +1544,7 @@ def test_engagement_api_parses_mtgx_graph_payload_when_graphml_is_missing(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -1645,7 +1646,7 @@ def test_engagement_api_prefers_snapshot_graph_over_report_artifacts(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     _build_engagement(tmp_path)
 
@@ -1756,7 +1757,7 @@ def test_engagement_detail_surfaces_provider_matrix_outputs_for_dashboard_review
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -2067,7 +2068,7 @@ def test_engagement_detail_api_orders_cloud_validation_results_by_latest_checked
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -2124,7 +2125,7 @@ def test_engagement_detail_api_cloud_assets_use_latest_validation_result(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -2208,7 +2209,7 @@ def test_engagement_assets_api_surfaces_cloud_artifact_provenance_without_secret
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -2292,7 +2293,7 @@ def test_engagement_detail_api_surfaces_slack_validation_proof_on_finding_rows(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -2352,7 +2353,7 @@ def test_engagement_detail_api_surfaces_validated_key_provider_inventory(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -2396,7 +2397,7 @@ def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -2489,7 +2490,7 @@ def test_asset_context_api_excludes_false_positive_passive_findings(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -2538,7 +2539,7 @@ def test_engagement_detail_api_filters_malformed_deterministic_cloud_findings(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
     graph = {
@@ -3300,6 +3301,10 @@ def test_remediation_workflow_routes_enforce_roles_and_track_state(
     monkeypatch.setenv("FORGE_ENV", "test")
     monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    monkeypatch.setattr(
+        "forge.remediation.workflow._now_utc",
+        lambda: datetime(2026, 8, 1, tzinfo=UTC),
+    )
     db_path = _build_engagement(tmp_path)
     con = sqlite3.connect(db_path)
     try:
@@ -4840,7 +4845,7 @@ def test_engagement_seed_routes_canonicalize_url_variants(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     _build_engagement(tmp_path)
 
@@ -4947,7 +4952,7 @@ def test_engagement_create_uses_monotonic_sequence_after_deleted_db(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     _build_engagement(tmp_path)
 
@@ -5009,7 +5014,7 @@ def test_launch_engagement_kill_chain_route(tmp_path: Path, monkeypatch) -> None
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     _build_engagement(tmp_path)
     stop_marker = tmp_path / ".forge_data" / "run_control" / "engagement_1001_stop.json"
@@ -5082,7 +5087,7 @@ def test_launch_engagement_kill_chain_route_passes_roe_and_live_modes(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     monkeypatch.delenv("FORGE_ROE_ID", raising=False)
     _build_engagement(tmp_path)
@@ -5152,7 +5157,7 @@ def test_launch_engagement_kill_chain_route_passes_scope_manifest_when_required_
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     monkeypatch.setenv("FORGE_REQUIRE_SCOPE_MANIFEST", "1")
     monkeypatch.delenv("FORGE_SCOPE_MANIFEST", raising=False)
@@ -5216,7 +5221,7 @@ def test_launch_engagement_kill_chain_route_rejects_live_without_roe_scope_by_de
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     monkeypatch.delenv("FORGE_ROE_ID", raising=False)
     monkeypatch.delenv("FORGE_SCOPE_MANIFEST", raising=False)
@@ -5258,7 +5263,7 @@ def test_launch_engagement_kill_chain_route_rejects_live_sensitive_modes_without
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     monkeypatch.delenv("FORGE_ROE_ID", raising=False)
     _build_engagement(tmp_path)
@@ -5294,7 +5299,7 @@ def test_launch_engagement_kill_chain_route_rejects_max_iter_out_of_range(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     _build_engagement(tmp_path)
 
@@ -5329,7 +5334,7 @@ def test_launch_engagement_kill_chain_route_rejects_live_sensitive_modes_without
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     monkeypatch.delenv("FORGE_SCOPE_MANIFEST", raising=False)
     _build_engagement(tmp_path)
@@ -5370,7 +5375,7 @@ def test_launch_engagement_kill_chain_route_rejects_live_without_scope_manifest_
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     monkeypatch.setenv("FORGE_REQUIRE_SCOPE_MANIFEST", "1")
     monkeypatch.delenv("FORGE_SCOPE_MANIFEST", raising=False)
@@ -5412,7 +5417,7 @@ def test_restart_engagement_kill_chain_route_publishes_progress_event(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     _build_engagement(tmp_path)
 
@@ -5472,7 +5477,7 @@ def test_run_progress_bridge_publishes_step_events_from_persisted_run_metadata(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     monkeypatch.setenv("FORGE_WEB_PROGRESS_POLL_INTERVAL", "0.05")
     db_path = _build_engagement(tmp_path)
@@ -5661,7 +5666,7 @@ def test_run_progress_bridge_republishes_when_queue_metrics_change_without_step_
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     monkeypatch.setenv("FORGE_WEB_PROGRESS_POLL_INTERVAL", "0.05")
     db_path = _build_engagement(tmp_path)
@@ -5816,7 +5821,7 @@ def test_engagement_run_log_and_stop_routes(tmp_path: Path, monkeypatch) -> None
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -5907,7 +5912,7 @@ def test_pause_route_publishes_progress_event(tmp_path: Path, monkeypatch) -> No
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -5959,7 +5964,7 @@ def test_engagement_pause_and_resume_routes(tmp_path: Path, monkeypatch) -> None
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -6061,7 +6066,7 @@ def test_launch_route_rejects_overlapping_running_engagement_run(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -6114,7 +6119,7 @@ def test_automation_execute_rejects_unsupported_or_sensitive_actions(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -6151,7 +6156,7 @@ def test_automation_execute_rejects_supported_action_without_roe_scope_context(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -6188,7 +6193,7 @@ def test_automation_execute_allows_supported_passive_recon_action_with_roe_scope
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
     scope_manifest = {"roe_id": "ROE-WEB-2026-07", "domains": ["app.acme.example"]}
@@ -6234,7 +6239,7 @@ def test_automation_execute_rejects_scope_manifest_denied_target_before_queue(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
     scope_manifest = {
@@ -6289,7 +6294,7 @@ def test_automation_playbook_route_requires_roe_scope_context(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
 
@@ -6322,7 +6327,7 @@ def test_automation_playbook_route_preserves_roe_scope_context(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
     scope_manifest = {"roe_id": "ROE-WEB-2026-07", "domains": ["acme.example"]}
@@ -6372,7 +6377,7 @@ def test_automation_playbook_route_rejects_scope_manifest_denied_target_before_q
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
     scope_manifest = {

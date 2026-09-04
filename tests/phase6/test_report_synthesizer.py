@@ -3165,6 +3165,7 @@ def test_synthesizer_mocked_llm_writes_report(tmp_eng_db, tmp_path, patch_confir
             db_path=tmp_eng_db,
             model_path=fake_gguf,
             output_dir=tmp_path,
+            provider="llama_cpp",
         )
         # Bypass lazy import guard
         synth._llm = mock_llama_cls.return_value
@@ -3194,6 +3195,7 @@ def test_synthesizer_llm_cannot_downgrade_authoritative_finding_severity(
             db_path=tmp_eng_db,
             model_path=fake_gguf,
             output_dir=tmp_path,
+            provider="llama_cpp",
         )
         synth._llm = mock_llama_cls.return_value
         out = synth.generate(ENGAGEMENT_ID, dry_run=False)
@@ -3229,6 +3231,7 @@ def test_synthesizer_validation_nonconvergence_falls_back_to_template(
             db_path=tmp_eng_db,
             model_path=fake_gguf,
             output_dir=tmp_path,
+            provider="llama_cpp",
             max_correction_loops=1,
         )
         synth._llm = mock_llama_cls.return_value
@@ -3272,6 +3275,7 @@ def test_synthesizer_persists_feedback_telemetry(tmp_eng_db, tmp_path, patch_con
             db_path=tmp_eng_db,
             model_path=fake_gguf,
             output_dir=tmp_path,
+            provider="llama_cpp",
         )
         synth._llm = mock_llama_cls.return_value
         synth.generate(ENGAGEMENT_ID, dry_run=False)
@@ -3306,6 +3310,7 @@ def test_synthesizer_correction_loop_updates_telemetry(tmp_eng_db, tmp_path, pat
             db_path=tmp_eng_db,
             model_path=fake_gguf,
             output_dir=tmp_path,
+            provider="llama_cpp",
         )
         synth._llm = mock_llama_cls.return_value
         synth.generate(ENGAGEMENT_ID, dry_run=False)

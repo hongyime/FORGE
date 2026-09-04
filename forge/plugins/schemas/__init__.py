@@ -5,7 +5,8 @@ published on the plugin event bus against a JSON Schema, rejecting
 forbidden fields (secrets), and capping payload size.
 
 Public API:
-    - ArtifactDiscoveredSchema, GraphUpdatedSchema, ReportGeneratedSchema
+    - ArtifactDiscoveredSchema, CollectionProgressSchema, GraphUpdatedSchema,
+      ReportGeneratedSchema
     - EVENT_SCHEMAS: mapping of event type -> JSON Schema
     - FORBIDDEN_FIELDS: set of field names that must never appear
     - MAX_PAYLOAD_BYTES: hard payload size ceiling (10240)
@@ -20,8 +21,11 @@ Public API:
 from forge.plugins.schemas.event_schema import (
     EVENT_SCHEMAS,
     FORBIDDEN_FIELDS,
+    MAX_NESTING_DEPTH,
     MAX_PAYLOAD_BYTES,
+    MAX_PAYLOAD_KEYS,
     ArtifactDiscoveredSchema,
+    CollectionProgressSchema,
     GraphUpdatedSchema,
     ReportGeneratedSchema,
 )
@@ -32,13 +36,17 @@ from forge.plugins.schemas.validators import (
     check_forbidden_fields,
     validate_event,
     validate_payload_size,
+    validate_payload_structure,
 )
 
 __all__ = [
     "EVENT_SCHEMAS",
     "FORBIDDEN_FIELDS",
+    "MAX_NESTING_DEPTH",
     "MAX_PAYLOAD_BYTES",
+    "MAX_PAYLOAD_KEYS",
     "ArtifactDiscoveredSchema",
+    "CollectionProgressSchema",
     "GraphUpdatedSchema",
     "ReportGeneratedSchema",
     "EventValidatorMiddleware",
@@ -47,4 +55,5 @@ __all__ = [
     "check_forbidden_fields",
     "validate_event",
     "validate_payload_size",
+    "validate_payload_structure",
 ]

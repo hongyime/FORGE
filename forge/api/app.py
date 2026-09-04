@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from forge.api.deps import get_bus, get_state_store
-from forge.api.routes import health, reports, workflows
+from forge.api.routes import health, quality, reports, workflows
 from forge.security_headers import install_security_headers
 
 __all__ = ["app", "create_app"]
@@ -70,6 +70,7 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(health.router)
     fastapi_app.include_router(workflows.router)
     fastapi_app.include_router(reports.router)
+    fastapi_app.include_router(quality.router)
     return fastapi_app
 
 

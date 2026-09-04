@@ -7,7 +7,7 @@ from unittest import mock
 from forge.collection.sessions import linux_sessions as ls
 from forge.collection.sessions.linux_sessions import (
     Session,
-    collect_linux_sessions,
+    _collect_linux_sessions_direct as collect_linux_sessions,
     parse_last,
     parse_w,
     parse_who,

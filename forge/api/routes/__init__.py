@@ -1,1 +1,1 @@
-"""API route modules: health, workflows, reports."""
+"""API route modules: health, workflows, reports, quality."""

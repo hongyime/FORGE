@@ -109,7 +109,7 @@ def test_latest_cloud_validation_row_wins_for_linked_key_reportability(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
-    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "s" * 64)
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     data_dir, reports_dir, db_path = _build_latest_validation_fixture(tmp_path)
 

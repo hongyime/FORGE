@@ -17877,6 +17877,7 @@ class ArtifactQueueProcessor:
         max_workers: int | None = None,
         remote_url_scope_checker: Callable[[str], bool] | None = None,
         remote_scope_denied_callback: Callable[[ArtifactDownloadRequest, str], None] | None = None,
+        publish_artifact_event: Callable[[int, str, str], None] | None = None,
     ) -> None:
         self._db_path = db_path
         self._engagement_id = engagement_id
@@ -17886,6 +17887,7 @@ class ArtifactQueueProcessor:
         self._barcode_decoder_backends = barcode_decoder_backend_names()
         self._remote_url_scope_checker = remote_url_scope_checker
         self._remote_scope_denied_callback = remote_scope_denied_callback
+        self._publish_artifact_event = publish_artifact_event
         resolved_workers = 2 if max_workers is None else int(max_workers)
         self._max_workers = max(1, min(4, resolved_workers))
         try:
@@ -19142,6 +19144,7 @@ class ArtifactQueueProcessor:
             self._engagement_id,
             queue_entry,
             audit_artifact_lineage=_audit_lineage,
+            publish_artifact_event=self._publish_artifact_event,
         )
 
     def _artifact_text_discovered_url_queue_entry(

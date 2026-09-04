@@ -105,6 +105,8 @@ dev = [
     "vcrpy>=8.2.1,<9.0",
     "pytest-cov==6.0.0",
     "pytest-mock==3.14.0",
+    "pytest-benchmark==5.3.0",
+    "httpx2==2.12.0",
     "responses==0.25.3",
     "pytest-httpserver==1.1.0",
     "hypothesis==6.119.3",

@@ -15,6 +15,7 @@ import typer
 
 from forge.cli import cloud_app, console
 from forge.cli_helpers import (
+    _cli_audit,
     _direct_cli_load_scope_lists,
     _direct_cli_require_roe,
     _normalise_output_format,
@@ -590,3 +591,256 @@ def cloud_supabase(
         url_prefixes=url_prefixes,
         require_scope=not dry_run,
     )
+
+
+@cloud_app.command("credentials")
+def cloud_credentials(
+    engagement: str = typer.Option(..., "--engagement", "-e"),
+    provider: str = typer.Option(
+        "all",
+        "--provider",
+        help="Cloud provider to harvest: aws, gcp, all.",
+    ),
+    include_metadata: bool = typer.Option(
+        False,
+        "--include-metadata/--no-include-metadata",
+        help="Query cloud instance metadata services (EC2 IMDS / GCE metadata). Disabled by default.",
+    ),
+    output_format: str = typer.Option(
+        "json",
+        "--output-format",
+        help="Output format: json, csv.",
+    ),
+    output_path: Optional[str] = typer.Option(
+        None,
+        "--output",
+        help="Optional output file path. Defaults under engagement artifacts.",
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    roe_id: Optional[str] = typer.Option(
+        None,
+        "--roe-id",
+        envvar="FORGE_ROE_ID",
+        help="ROE identifier required before live credential collection.",
+    ),
+    scope_manifest: Optional[str] = typer.Option(
+        None,
+        "--scope-manifest",
+        help="Scope manifest path/JSON for engagement scope gating.",
+    ),
+) -> None:
+    """Harvest cloud credentials from local sources (env vars, config files, metadata).
+
+    Enumerates AWS and/or GCP credentials from the operator's local environment:
+    environment variables, shared credential/config files, and optionally the
+    cloud instance metadata service. All secret material is SHA-256 hashed before
+    being returned; raw secrets never leave the collection module.
+
+    OPSEC: Metadata service queries (--include-metadata) make outbound HTTP
+    requests to 169.254.169.254 / metadata.google.internal. Only enable when
+    running on a cloud instance within the declared engagement scope.
+    """
+    import csv as _csv  # noqa: PLC0415
+    import time as _time  # noqa: PLC0415
+
+    from forge.collection.cloud.aws_credentials import harvest_aws_credentials  # noqa: PLC0415
+    from forge.collection.cloud.gcp_credentials import harvest_gcp_credentials  # noqa: PLC0415
+    from forge.config import ForgeConfig  # noqa: PLC0415
+
+    cfg = ForgeConfig.load()
+    db_path = cfg.engagement_db_path(engagement)
+    engagement_id = int(engagement)
+
+    provider_norm = provider.strip().lower()
+    if provider_norm not in {"aws", "gcp", "all"}:
+        console.print("[bold red]ERROR:[/bold red] --provider must be one of: aws, gcp, all")
+        raise typer.Exit(code=1)
+
+    output_fmt = output_format.strip().lower()
+    if output_fmt not in {"json", "csv"}:
+        console.print("[bold red]ERROR:[/bold red] --output-format must be one of: json, csv")
+        raise typer.Exit(code=1)
+
+    # ------------------------------------------------------------------ #
+    # ROE gate — required for live collection (not dry-run)              #
+    # ------------------------------------------------------------------ #
+    if not dry_run:
+        _direct_cli_require_roe(roe_id, command_name="cloud credentials")
+
+    # ------------------------------------------------------------------ #
+    # Engagement scope check                                              #
+    # ------------------------------------------------------------------ #
+    scope_values: list[str] = []
+    url_prefixes: list[str] = []
+    if not dry_run:
+        try:
+            scope_values, url_prefixes = _direct_cli_load_scope_lists(
+                engagement_id=engagement_id,
+                db_path=db_path,
+                scope_manifest=scope_manifest,
+            )
+        except typer.BadParameter as exc:
+            console.print(f"[bold red]Scope error:[/bold red] {exc}")
+            raise typer.Exit(code=1)
+
+    # ------------------------------------------------------------------ #
+    # Audit log — record collection intent before execution              #
+    # ------------------------------------------------------------------ #
+    _cli_audit(
+        db_path=db_path,
+        engagement_id=engagement_id,
+        phase="collection",
+        module="cloud_credentials",
+        action="start",
+        target=f"provider={provider_norm} include_metadata={include_metadata}",
+        result="initiated" if not dry_run else "dry_run",
+    )
+
+    console.print("[bold blue]Cloud Credential Collection[/bold blue]")
+    console.print(f"  Engagement:       {engagement}")
+    console.print(f"  Provider:         {provider_norm}")
+    console.print(f"  Include metadata: {include_metadata}")
+    console.print(f"  Dry run:          {dry_run}")
+
+    if dry_run:
+        console.print("[yellow]Dry-run: no credential collection performed.[/yellow]")
+        _cli_audit(
+            db_path=db_path,
+            engagement_id=engagement_id,
+            phase="collection",
+            module="cloud_credentials",
+            action="complete",
+            target=f"provider={provider_norm}",
+            result="dry_run_complete",
+        )
+        return
+
+    # ------------------------------------------------------------------ #
+    # Harvest                                                             #
+    # ------------------------------------------------------------------ #
+    started = _time.monotonic()
+    all_findings: list[dict] = []
+    provider_errors: dict[str, str] = {}
+    selected_providers = (
+        ("aws", "gcp") if provider_norm == "all" else (provider_norm,)
+    )
+
+    if provider_norm in {"aws", "all"}:
+        try:
+            aws_creds = harvest_aws_credentials(
+                include_ec2_metadata=include_metadata,
+                include_ecs_metadata=include_metadata,
+            )
+            for cred in aws_creds:
+                entry = cred.to_dict()
+                entry["cloud_provider"] = "aws"
+                all_findings.append(entry)
+            console.print(f"  [green]AWS:[/green] {len(aws_creds)} credential(s) found")
+        except Exception as exc:  # noqa: BLE001
+            provider_errors["aws"] = type(exc).__name__
+            console.print(
+                f"  [red]AWS harvest failed:[/red] {type(exc).__name__}"
+            )
+
+    if provider_norm in {"gcp", "all"}:
+        try:
+            gcp_creds = harvest_gcp_credentials(
+                include_metadata=include_metadata,
+            )
+            for cred in gcp_creds:
+                entry = cred.to_dict()
+                entry["cloud_provider"] = "gcp"
+                all_findings.append(entry)
+            console.print(f"  [green]GCP:[/green] {len(gcp_creds)} credential(s) found")
+        except Exception as exc:  # noqa: BLE001
+            provider_errors["gcp"] = type(exc).__name__
+            console.print(
+                f"  [red]GCP harvest failed:[/red] {type(exc).__name__}"
+            )
+
+    elapsed_ms = (_time.monotonic() - started) * 1000
+
+    if len(provider_errors) == len(selected_providers):
+        failed_names = ",".join(sorted(provider_errors))
+        _cli_audit(
+            db_path=db_path,
+            engagement_id=engagement_id,
+            phase="collection",
+            module="cloud_credentials",
+            action="complete",
+            target=f"provider={provider_norm} count=0",
+            result=f"failed providers={failed_names} elapsed_ms={elapsed_ms:.0f}",
+        )
+        console.print(
+            f"[bold red]Cloud credential collection failed for: {failed_names}[/bold red]"
+        )
+        raise typer.Exit(code=1)
+
+    # ------------------------------------------------------------------ #
+    # Output                                                              #
+    # ------------------------------------------------------------------ #
+    default_ext = output_fmt
+    output_target = (
+        Path(output_path)
+        if output_path
+        else (
+            cfg.data_dir
+            / "engagements"
+            / str(engagement)
+            / "reports"
+            / f"cloud_credentials.{default_ext}"
+        )
+    )
+    output_target.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_fmt == "json":
+        output_target.write_text(json.dumps(all_findings, indent=2), encoding="utf-8")
+    else:
+        # CSV: flatten dict keys across all findings
+        if all_findings:
+            all_keys: list[str] = []
+            seen_keys: set[str] = set()
+            for row in all_findings:
+                for k in row:
+                    if k not in seen_keys:
+                        seen_keys.add(k)
+                        all_keys.append(k)
+            with output_target.open("w", encoding="utf-8", newline="") as fh:
+                writer = _csv.DictWriter(fh, fieldnames=all_keys, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(all_findings)
+        else:
+            output_target.write_text("", encoding="utf-8")
+
+    # ------------------------------------------------------------------ #
+    # Audit log — record completion                                       #
+    # ------------------------------------------------------------------ #
+    completion_status = "partial" if provider_errors else "ok"
+    failure_suffix = (
+        f" failed_providers={','.join(sorted(provider_errors))}"
+        if provider_errors
+        else ""
+    )
+    _cli_audit(
+        db_path=db_path,
+        engagement_id=engagement_id,
+        phase="collection",
+        module="cloud_credentials",
+        action="complete",
+        target=f"provider={provider_norm} count={len(all_findings)}",
+        result=f"{completion_status}{failure_suffix} elapsed_ms={elapsed_ms:.0f}",
+    )
+
+    if provider_errors:
+        console.print(
+            f"[yellow]Cloud credential collection partially completed: "
+            f"{len(all_findings)} record(s)[/yellow]"
+        )
+    else:
+        console.print(
+            f"[green]Cloud credential collection completed: "
+            f"{len(all_findings)} record(s)[/green]"
+        )
+    console.print(f"[green]Output written:[/green] {output_target}")
+    if provider_errors:
+        raise typer.Exit(code=1)

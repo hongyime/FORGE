@@ -461,8 +461,8 @@ def _harvest_ecs_metadata(
 def harvest_aws_credentials(
     *,
     home: Path | None = None,
-    include_ec2_metadata: bool = True,
-    include_ecs_metadata: bool = True,
+    include_ec2_metadata: bool = False,
+    include_ecs_metadata: bool = False,
     ec2_base_url: str = _IMDS_BASE,
     ec2_token_url: str = _IMDS_TOKEN_URL,
     ecs_base_url: str = _ECS_CREDENTIALS_BASE,
@@ -474,8 +474,8 @@ def harvest_aws_credentials(
         home: Override home directory (for testing). Defaults to
             :func:`Path.home`.
         include_ec2_metadata: Whether to query the EC2 instance metadata
-            service. Off-cloud callers should leave enabled — it degrades
-            to an empty list on timeout/URLError.
+            service. Disabled by default — callers must explicitly opt in
+            to avoid unintended metadata service probes.
         include_ecs_metadata: Whether to consult the ECS credential
             endpoint when the ECS env vars are present.
         ec2_base_url / ec2_token_url / ecs_base_url: Override URLs used

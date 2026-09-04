@@ -277,7 +277,7 @@ def _harvest_metadata(
 def harvest_gcp_credentials(
     *,
     home: Path | None = None,
-    include_metadata: bool = True,
+    include_metadata: bool = False,
     metadata_url: str = _METADATA_URL,
     metadata_timeout: float = _METADATA_TIMEOUT_SECONDS,
 ) -> list[GCPCredential]:
@@ -286,6 +286,8 @@ def harvest_gcp_credentials(
     Args:
         home: Override home directory (for testing). Defaults to ``Path.home()``.
         include_metadata: Whether to query the GCE metadata service.
+            Disabled by default — callers must explicitly opt in to avoid
+            unintended metadata service probes.
         metadata_url: Override URL (for testing).
         metadata_timeout: Seconds before giving up on metadata service.
     """

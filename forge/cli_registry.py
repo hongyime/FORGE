@@ -38,6 +38,7 @@ class ForgeCliApps:
     workspaces_app: typer.Typer
     demo_app: typer.Typer
     retention_app: typer.Typer
+    import_app: typer.Typer
 
 
 def _make_sub(name: str, help_text: str) -> typer.Typer:
@@ -54,6 +55,7 @@ def _register_modular_commands(apps: ForgeCliApps) -> None:
     from forge.retention.cli import register_retention_commands
     from forge.standards.cli import register_standards_commands
     from forge.targets_import_cli import register_target_import_commands
+    from forge.cli_commands.import_cmd import register_import_commands
     from forge.workspaces_cli import register_workspace_commands
 
     register_active_validation_commands(apps.active_validation_app)
@@ -66,6 +68,7 @@ def _register_modular_commands(apps: ForgeCliApps) -> None:
     register_target_import_commands(apps.targets_app)
     register_automation_commands(apps.automation_app)
     register_workspace_commands(apps.workspaces_app)
+    register_import_commands(apps.import_app)
 
 
 def register_extracted_cli_commands(
@@ -148,6 +151,7 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
         workspaces_app=_make_sub("workspaces", "Workspace and member administration"),
         demo_app=_make_sub("demo", "Repeatable local demo proof packs"),
         retention_app=_make_sub("retention", "Enterprise retention policies"),
+        import_app=_make_sub("import", "Import external data into a FORGE engagement"),
     )
 
     root_app.add_typer(apps.kb_app)
@@ -164,6 +168,7 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
     root_app.add_typer(apps.report_app)
     root_app.add_typer(apps.audit_app)
     root_app.add_typer(apps.targets_app)
+    root_app.add_typer(apps.import_app)
     root_app.add_typer(apps.monitoring_app)
     root_app.add_typer(apps.remediation_app)
     root_app.add_typer(apps.active_validation_app)

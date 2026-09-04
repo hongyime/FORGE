@@ -25,7 +25,9 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Final
+from typing import Any, Final
+from pathlib import Path
+from typing import Mapping
 
 __all__ = [
     "Session",
@@ -456,7 +458,7 @@ def parse_last(output: str) -> list[Session]:
 # --------------------------------------------------------------------------- #
 
 
-def collect_linux_sessions() -> list[Session]:
+def _collect_linux_sessions_direct() -> list[Session]:
     """Run all three commands and return the merged, normalized session list.
 
     Any command that is missing or fails contributes zero rows; the
@@ -469,3 +471,40 @@ def collect_linux_sessions() -> list[Session]:
     sessions.extend(parse_w(_run_command(["w", "-h"])))
     sessions.extend(parse_last(_run_command(["last", "-F"])))
     return sessions
+
+
+def collect_linux_sessions(
+    *,
+    engagement_id: int,
+    scope_manifest: "Mapping[str, Any]",
+    db_path: "Path",
+    local_target: str = "127.0.0.1",
+) -> list[Session]:
+    """Scope-gated Linux session collection.
+
+    Mandatory security wrapper around :func:`_collect_linux_sessions_direct`.
+    Callers MUST supply ``engagement_id``, ``scope_manifest``, and ``db_path``
+    so the local target is verified against the engagement ROE and both
+    attempt/result audit rows are written before/after enumeration.
+    Direct callers must not bypass this wrapper.
+
+    ``local_target`` defaults to ``127.0.0.1``; supply the machine's
+    hostname or configured IP if the scope manifest expresses local scope
+    that way. Raises :class:`SessionEnumerationScopeError` if the local
+    target is not in scope, and :class:`SessionEnumerationAuditError` if
+    the audit_log row cannot be persisted.
+    """
+    from forge.collection.sessions.scope_check import enumerate_sessions_scoped
+
+    def _run(_target_arg: str) -> list[Session]:
+        return _collect_linux_sessions_direct()
+
+    scoped = enumerate_sessions_scoped(
+        local_target,
+        engagement_id=engagement_id,
+        scope_manifest=scope_manifest,
+        db_path=db_path,
+        enumerator=_run,
+    )
+    result = scoped["result"] if isinstance(scoped, dict) and "result" in scoped else []
+    return result if isinstance(result, list) else []

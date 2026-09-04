@@ -8,6 +8,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+from datetime import datetime, timezone
 
 from forge.audit.manifest import summarize_run_audit_manifest
 from forge.audit.review import audit_review_summary
@@ -257,6 +258,7 @@ from forge.webui.state import (
     queued_progress_event,
 )
 from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
+from forge.report.quality_metrics import QualityConfig, compute_quality_report
 
 
 def create_app() -> Any:
@@ -308,6 +310,9 @@ def create_app() -> Any:
     install_security_headers(app, surface="webui")
     if frontend_assets_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=frontend_assets_dir), name="frontend-assets")
+    _static_dir = Path(__file__).parent / "static"
+    if _static_dir.is_dir():
+        app.mount("/static", StaticFiles(directory=_static_dir), name="forge-static")
     auth_scheme = HTTPBearer(auto_error=False)
     if cfg.web_auth.lower() == "jwt":
         validate_jwt_secret()
@@ -2187,8 +2192,10 @@ def create_app() -> Any:
     @app.get("/api/engagements/{engagement_ref}/artifact-queue")
     def get_engagement_artifact_queue(
         engagement_ref: str,
-        offset: int = 0,
-        limit: int = 100,
+        offset: int | None = None,
+        limit: int | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
         state: str | None = None,
         sort: str | None = None,
         principal: Principal = Depends(_auth_principal),
@@ -2205,6 +2212,8 @@ def create_app() -> Any:
                 engagement_id=engagement_id,
                 offset=offset,
                 limit=limit,
+                page=page,
+                page_size=page_size,
                 state=state,
                 sort=sort,
             )
@@ -2362,6 +2371,127 @@ def create_app() -> Any:
             return asset_tree_route_payload(con, engagement_id)
         finally:
             con.close()
+
+    @app.get("/api/engagements/{engagement_ref}/quality")
+    def get_engagement_quality(
+        engagement_ref: str,
+        principal: Principal = Depends(_auth_principal),
+    ) -> dict[str, Any]:
+        resolved = _resolve_engagement_db(engagement_ref, principal)
+        if resolved is None:
+            raise HTTPException(status_code=404, detail="Engagement not found.")
+        _require_principal_permission(principal, "engagements:read")
+        db_path, engagement_id = resolved
+        con = _open_workflow_db(db_path)
+        try:
+            # Fetch graph stats from asset_entities / asset_relationships.
+            try:
+                node_rows = con.execute(
+                    "SELECT entity_key, updated_at FROM asset_entities WHERE engagement_id=?",
+                    (engagement_id,),
+                ).fetchall()
+            except sqlite3.Error:
+                node_rows = []
+            try:
+                edge_rows = con.execute(
+                    """
+                    SELECT ae_src.entity_key, ae_tgt.entity_key
+                    FROM asset_relationships ar
+                    JOIN asset_entities ae_src ON ae_src.id = ar.source_entity_id
+                    JOIN asset_entities ae_tgt ON ae_tgt.id = ar.target_entity_id
+                    WHERE ar.engagement_id=?
+                    """,
+                    (engagement_id,),
+                ).fetchall()
+            except sqlite3.Error:
+                edge_rows = []
+            # Derive expected counts from latest kill_chain run metadata.
+            try:
+                import json as _json
+                meta_row = con.execute(
+                    """
+                    SELECT metadata_json FROM engagement_runs
+                    WHERE engagement_id=? AND run_kind='kill_chain'
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (engagement_id,),
+                ).fetchone()
+                meta: dict[str, Any] = _json.loads(meta_row[0]) if meta_row else {}
+            except Exception:
+                meta = {}
+            expected_nodes = int(meta.get("expected_node_count", 0))
+            expected_edges = int(meta.get("expected_edge_count", 0))
+            node_ids = [str(r[0]) for r in node_rows]
+            edges = [(str(r[0]), str(r[1])) for r in edge_rows]
+            timestamps = {str(r[0]): str(r[1]) for r in node_rows if r[1]}
+            # Fetch run history (last 10 completed runs with quality_score).
+            history: list[dict[str, Any]] = []
+            try:
+                run_rows = con.execute(
+                    """
+                    SELECT metadata_json, completed_at, updated_at
+                    FROM engagement_runs
+                    WHERE engagement_id=? AND run_kind='kill_chain' AND status='completed'
+                    ORDER BY id DESC LIMIT 10
+                    """,
+                    (engagement_id,),
+                ).fetchall()
+                for meta_json, completed_at, updated_at in reversed(run_rows):
+                    try:
+                        run_meta = _json.loads(meta_json) if meta_json else {}
+                    except Exception:
+                        run_meta = {}
+                    score = run_meta.get("quality_score")
+                    if score is None:
+                        continue
+                    ts = completed_at or updated_at or ""
+                    history.append({"timestamp": str(ts), "score": float(score)})
+            except sqlite3.Error:
+                history = []
+        finally:
+            con.close()
+        reference_time = datetime.now(tz=timezone.utc)
+        try:
+            report = compute_quality_report(
+                nodes=node_ids,
+                edges=edges,
+                expected_nodes=expected_nodes,
+                expected_edges=expected_edges,
+                node_timestamps=timestamps if timestamps else None,
+                reference_time=reference_time,
+                config=QualityConfig(),
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"quality_compute_failed:{exc}") from exc
+        _METRIC_KEY_MAP = {
+            "node_coverage": "coverage",
+            "edge_completeness": "completeness",
+            "stale_timestamps": "freshness",
+            "orphan_nodes": "connectivity",
+        }
+        _METRIC_LABEL_MAP = {
+            "coverage": "Coverage",
+            "completeness": "Completeness",
+            "freshness": "Freshness",
+            "connectivity": "Connectivity",
+        }
+        metrics = []
+        for internal_key, widget_key in _METRIC_KEY_MAP.items():
+            metric = report.metrics.get(internal_key)
+            if metric is None:
+                continue
+            metrics.append({
+                "key": widget_key,
+                "label": _METRIC_LABEL_MAP[widget_key],
+                "score": round(metric.score, 2),
+            })
+        return {
+            "engagement_id": str(engagement_id),
+            "overall_score": report.overall_score,
+            "generated_at": reference_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "metrics": metrics,
+            "history": history,
+        }
 
     publish_command_event = build_command_event_publisher(broker.publish_sync)
     command_body_engagement_id = build_command_body_engagement_id_parser(

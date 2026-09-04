@@ -114,7 +114,9 @@ def test_artifact_queue_returns_counts_and_paginated_rows(
 
         # Row shape: name / parser / state / timestamp / error_msg all present.
         first = body["artifacts"][0]
-        assert set(first) == {"name", "parser", "state", "timestamp", "error_msg"}
+        assert set(first) >= {"name", "parser", "state", "timestamp", "error_msg"}
+        assert first["artifact_name"] == first["name"]
+        assert "id" in first
 
 
 def test_artifact_queue_pagination_offset_and_limit(

@@ -57,6 +57,7 @@ _audit_logs/
 engagement_*_report_*.md
 testoperator.txt
 AUDIT_RESULTS.md
+plugin_events_audit.jsonl
 .kiro/
 .claude/handoffs/*
 !.claude/handoffs/2026-07-19-173416-aws-client-reference-validation.md

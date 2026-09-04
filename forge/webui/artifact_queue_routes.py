@@ -115,8 +115,12 @@ def _artifact_row_payload(row: sqlite3.Row) -> dict[str, Any]:
         # metadata_json body which may contain provider/source detail.
         raw_notes = row["notes"] if "notes" in row.keys() else None
         error_msg = str(raw_notes or "")[:512]
+    display_name = _artifact_display_name(str(row["source_url"] or ""))
     return {
-        "name": _artifact_display_name(str(row["source_url"] or "")),
+        "id": int(row["id"]) if row["id"] is not None else 0,
+        "name": display_name,
+        # Frontend U3.1 alias for `name`.
+        "artifact_name": display_name,
         "parser": str(row["artifact_type"] or ""),
         "state": api_state,
         "timestamp": str(row["updated_at"] or ""),
@@ -128,14 +132,45 @@ def artifact_queue_status_payload(
     con: sqlite3.Connection,
     *,
     engagement_id: int,
-    offset: Any = 0,
-    limit: Any = _DEFAULT_LIMIT,
+    offset: Any = None,
+    limit: Any = None,
+    page: Any = None,
+    page_size: Any = None,
     state: str | None = None,
     sort: str | None = None,
 ) -> dict[str, Any]:
     """Build the paginated artifact-queue status payload."""
-    offset_value = _parse_int(offset, field="offset", minimum=0, maximum=None)
-    limit_value = _parse_int(limit, field="limit", minimum=1, maximum=_MAX_LIMIT)
+    # Frontend (U3.1) sends page/page_size (1-based); legacy CLI/API callers
+    # use offset/limit. If page/page_size supplied, they take precedence and
+    # translate to offset/limit for the underlying query.
+    if page is not None or page_size is not None:
+        page_size_value = _parse_int(
+            page_size if page_size is not None else _DEFAULT_LIMIT,
+            field="page_size",
+            minimum=1,
+            maximum=_MAX_LIMIT,
+        )
+        page_value = _parse_int(
+            page if page is not None else 1,
+            field="page",
+            minimum=1,
+            maximum=None,
+        )
+        limit_value = page_size_value
+        offset_value = (page_value - 1) * page_size_value
+    else:
+        offset_value = _parse_int(
+            offset if offset is not None else 0,
+            field="offset",
+            minimum=0,
+            maximum=None,
+        )
+        limit_value = _parse_int(
+            limit if limit is not None else _DEFAULT_LIMIT,
+            field="limit",
+            minimum=1,
+            maximum=_MAX_LIMIT,
+        )
     db_state = _parse_state_filter(state)
     sort_column, sort_direction = _parse_sort(sort)
 
@@ -186,6 +221,15 @@ def artifact_queue_status_payload(
     if db_state is not None:
         filtered_total = counts.get(_DB_STATE_TO_API.get(db_state, ""), 0)
 
+    # Derived 1-based pagination fields for the frontend U3.1 contract.
+    page_size_out = limit_value
+    page_out = (offset_value // limit_value) + 1 if limit_value > 0 else 1
+    total_pages = (
+        (filtered_total + limit_value - 1) // limit_value
+        if limit_value > 0 and filtered_total > 0
+        else 1
+    )
+
     return {
         "counts": counts,
         "pending": counts["pending"],
@@ -199,6 +243,10 @@ def artifact_queue_status_payload(
             "returned": len(artifacts),
             "filtered_total": filtered_total,
         },
+        # Frontend U3.1 fields (1-based pagination, filtered totals).
+        "page": page_out,
+        "page_size": page_size_out,
+        "total_pages": total_pages,
         "filter": {
             "state": _DB_STATE_TO_API.get(db_state, None) if db_state else None,
         },
@@ -206,7 +254,10 @@ def artifact_queue_status_payload(
             "column": sort_column,
             "direction": sort_direction.lower(),
         },
+        # Legacy field kept for existing consumers.
         "artifacts": artifacts,
+        # Frontend U3.1 alias.
+        "items": artifacts,
     }
 
 

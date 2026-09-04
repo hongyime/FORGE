@@ -70,6 +70,15 @@ class TestReverseShellGeneration:
 
 class TestPersistenceInstallation:
     """Test persistence installation (dry-run mode)."""
+
+    def test_live_persistence_config_is_rejected(self):
+        """Live persistence cannot be enabled through configuration."""
+        with pytest.raises(ValueError, match="Live persistence operations are disabled"):
+            ReverseShellConfig(
+                rhost="10.10.14.5",
+                rport=4444,
+                dry_run=False,
+            )
     
     def test_cron_persistence_dry_run(self):
         """Test cron persistence installation in dry-run."""
@@ -174,6 +183,11 @@ class TestWebServerPoison:
 
 class TestCleanup:
     """Test persistence cleanup."""
+
+    def test_live_uninstall_is_rejected(self):
+        """Cleanup remains non-mutating outside dry-run mode."""
+        with pytest.raises(ValueError, match="Live persistence cleanup is disabled"):
+            uninstall_persistence("10.10.14.5", dry_run=False)
     
     def test_uninstall_dry_run(self):
         """Test uninstall in dry-run mode."""

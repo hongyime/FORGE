@@ -177,8 +177,12 @@ def _normalize_escalation_status(value: str | None, *, owner: str) -> str:
     return status
 
 
+def _now_utc() -> datetime:
+    return datetime.now(UTC)
+
+
 def _utc_timestamp() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return _now_utc().replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _parse_review_timestamp(value: str | datetime | None) -> datetime | None:
@@ -199,7 +203,7 @@ def _parse_review_timestamp(value: str | datetime | None) -> datetime | None:
 
 def _review_base_time(value: str | datetime | None) -> datetime:
     parsed = _parse_review_timestamp(value) if value is not None else None
-    return parsed or datetime.now(UTC)
+    return parsed or _now_utc()
 
 
 def _review_age_days(value: str | datetime | None, *, now: datetime) -> int | None:
@@ -307,9 +311,9 @@ def risk_acceptance_review_status(
     expiry = _parse_review_timestamp(expires_at)
     if expiry is None:
         return "invalid_expiry"
-    base = _parse_review_timestamp(now) if now is not None else datetime.now(UTC)
+    base = _parse_review_timestamp(now) if now is not None else _now_utc()
     if base is None:
-        base = datetime.now(UTC)
+        base = _now_utc()
     if expiry <= base:
         return "expired"
     if expiry <= base + timedelta(days=max(0, int(warning_days))):
@@ -342,7 +346,7 @@ def _sla_due_at_from_days(days: int | None, *, now: str | None = None) -> str | 
         if base.tzinfo is None:
             base = base.replace(tzinfo=UTC)
     else:
-        base = datetime.now(UTC)
+        base = _now_utc()
     return (base + timedelta(days=days)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
@@ -352,6 +356,7 @@ def remediation_item_payload(
     latest_ticket_event: dict[str, Any] | None = None,
     now: str | datetime | None = None,
 ) -> dict[str, Any]:
+    base = _review_base_time(now)
     metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
     if not isinstance(metadata, dict):
         metadata = {}
@@ -359,7 +364,11 @@ def remediation_item_payload(
     if not isinstance(owner_approval, dict):
         owner_approval = {}
     risk_expires_at = str(row["risk_acceptance_expires_at"] or "")
-    review_status = risk_acceptance_review_status(str(row["status"] or ""), risk_expires_at)
+    review_status = risk_acceptance_review_status(
+        str(row["status"] or ""),
+        risk_expires_at,
+        now=base,
+    )
     item = {
         "id": int(row["id"]),
         "engagement_id": int(row["engagement_id"]),
@@ -388,7 +397,6 @@ def remediation_item_payload(
         "created_at": str(row["created_at"] or ""),
         "updated_at": str(row["updated_at"] or ""),
     }
-    base = _review_base_time(now)
     item["ticket_state"] = _ticket_state(item, latest_ticket_event)
     item["latest_ticket_event"] = latest_ticket_event
     item["validation_proof_freshness"] = _validation_proof_freshness(item, now=base)

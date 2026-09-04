@@ -447,6 +447,7 @@ def queue_artifact_text_discovered_url(
     queue_entry: ArtifactTextDiscoveredUrlQueueEntry | None,
     *,
     audit_artifact_lineage: Callable[..., None] | None = None,
+    publish_artifact_event: Callable[[int, str, str], None] | None = None,
 ) -> int:
     if queue_entry is None:
         return 0
@@ -487,6 +488,12 @@ def queue_artifact_text_discovered_url(
                 f"artifact_type={queue_entry.artifact_type} seed_type={queue_entry.seed_type}"
             ),
         )
+    if inserted and publish_artifact_event is not None:
+        artifact_id = _resolve_inserted_artifact_id(con, engagement_id, queue_entry.url)
+        try:
+            publish_artifact_event(engagement_id, artifact_id, queue_entry.url)
+        except Exception:  # noqa: BLE001 - best-effort websocket broadcast
+            pass
     return 1 if inserted else 0
 
 
@@ -497,6 +504,7 @@ def queue_artifact_candidate(
     *,
     crawl_seed_upsert: Callable[[str, str, dict[str, Any]], None] | None = None,
     mobile_bundle_url_checker: Callable[[str], bool] | None = None,
+    publish_artifact_event: Callable[[int, str, str], None] | None = None,
 ) -> int:
     if queue_candidate is None:
         return 0
@@ -532,10 +540,40 @@ def queue_artifact_candidate(
                     "apk_url" if is_mobile_bundle else "url",
                     metadata,
                 )
+            if publish_artifact_event is not None:
+                artifact_id = _resolve_inserted_artifact_id(
+                    con, engagement_id, raw_url,
+                )
+                try:
+                    publish_artifact_event(engagement_id, artifact_id, raw_url)
+                except Exception:  # noqa: BLE001 - best-effort websocket broadcast
+                    pass
             return 1
     except sqlite3.OperationalError:
         return -1
     return 0
+
+
+def _resolve_inserted_artifact_id(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    source_url: str,
+) -> str:
+    """Resolve the artifact_queue.id for a just-inserted row.
+
+    Returns the stringified integer id, or the source_url as a fallback if the
+    lookup fails (never raises - this is a best-effort id for broadcast only).
+    """
+    try:
+        row = con.execute(
+            "SELECT id FROM artifact_queue WHERE engagement_id=? AND source_url=?",
+            (engagement_id, source_url),
+        ).fetchone()
+        if row is not None and row[0] is not None:
+            return str(row[0])
+    except sqlite3.OperationalError:
+        pass
+    return source_url
 
 
 def sweep_completed_artifact_metadata(

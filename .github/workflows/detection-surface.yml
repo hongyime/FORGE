@@ -13,7 +13,7 @@ on:
       binary_path:
         description: "Relative path to the binary/artifact to measure"
         required: false
-        default: "forge_core.pyd"
+        default: "forge_core.so"
 
 permissions:
   contents: read
@@ -39,20 +39,62 @@ jobs:
           sudo systemctl stop clamav-freshclam || true
           sudo freshclam || true
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust_core/target
+          key: ${{ runner.os }}-cargo-detection-surface-${{ hashFiles('rust_core/Cargo.toml', 'rust_core/Cargo.lock') }}
+
+      - name: Build Rust extension (forge_core)
+        run: |
+          set -euo pipefail
+          cargo build --release --manifest-path rust_core/Cargo.toml
+          # Normalize the platform artifact name for downstream scanning.
+          # ubuntu-latest produces libforge_core.so; copy to forge_core.so at repo root.
+          src="rust_core/target/release/libforge_core.so"
+          if [ ! -f "${src}" ]; then
+            echo "::error::Rust build did not produce ${src}"
+            exit 1
+          fi
+          cp "${src}" "forge_core.so"
+          ls -la forge_core.so
+
       - name: Locate binary
         id: locate
         run: |
           set -euo pipefail
+          # Prefer explicit workflow_dispatch input, then platform-native artifact.
+          # SECURITY: never fall back to bootstrap.py — that scans Python source
+          # (including any embedded env values) as though it were the shipped binary,
+          # which leaks credentials and produces meaningless AV signal.
           candidate="${{ github.event.inputs.binary_path }}"
-          if [ -z "${candidate}" ]; then candidate="forge_core.pyd"; fi
-          if [ ! -f "${candidate}" ]; then
-            echo "::warning::Binary '${candidate}' not found; falling back to bootstrap.py"
-            candidate="bootstrap.py"
+          if [ -z "${candidate}" ] || [ ! -f "${candidate}" ]; then
+            if [ -f "forge_core.so" ]; then
+              candidate="forge_core.so"
+            elif [ -f "forge_core.pyd" ]; then
+              candidate="forge_core.pyd"
+            else
+              echo "::error::Compiled forge_core extension not found; refusing to scan Python source."
+              exit 1
+            fi
           fi
+          case "${candidate}" in
+            *bootstrap.py|*/bootstrap.py)
+              echo "::error::Refusing to scan bootstrap.py — Python source may embed credentials."
+              exit 1
+              ;;
+          esac
           echo "path=${candidate}" >> "$GITHUB_OUTPUT"
 
       - name: Run measurement
         env:
+          BINARY_PATH: ${{ steps.locate.outputs.path }}
           FORGE_VT_API_KEY: ${{ secrets.FORGE_VT_API_KEY }}
         run: |
           python - <<'PY'
@@ -86,9 +128,6 @@ jobs:
           if report["entropy"]["is_suspicious"]:
               print(f"::warning::High entropy ({report['entropy']['entropy_score']}); binary looks packed/obfuscated")
           PY
-        env:
-          BINARY_PATH: ${{ steps.locate.outputs.path }}
-          FORGE_VT_API_KEY: ${{ secrets.FORGE_VT_API_KEY }}
 
       - name: Upload results
         if: always()
@@ -96,5 +135,8 @@ jobs:
         with:
           name: detection-surface-${{ github.run_number }}
           path: reports/security/
-          retention-days: 365
+          # Sensitive: reports contain SHA-256 hashes of suspicious strings and
+          # AV signature hits. Keep short so CI artifact storage cannot become
+          # a long-lived leak surface.
+          retention-days: 30
           if-no-files-found: warn

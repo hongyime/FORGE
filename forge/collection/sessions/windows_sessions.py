@@ -49,6 +49,8 @@ import ctypes
 import sys
 from ctypes import wintypes
 from typing import Any
+from pathlib import Path
+from typing import Mapping
 
 __all__ = [
     "SESSION_LEVEL_10",
@@ -174,7 +176,7 @@ def _normalize_server(server: str | None) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def enumerate_sessions(
+def _enumerate_sessions_direct(
     server: str | None = None,
     *,
     level: int = SESSION_LEVEL_10,
@@ -309,3 +311,48 @@ def _parse_buffer(
             }
         )
     return out
+
+
+def enumerate_sessions(
+    server: str | None = None,
+    *,
+    engagement_id: int,
+    scope_manifest: "Mapping[str, Any]",
+    db_path: "Path",
+    level: int = SESSION_LEVEL_10,
+    client_name: str | None = None,
+    user_name: str | None = None,
+) -> dict[str, Any]:
+    """Scope-gated Windows session enumeration.
+
+    Mandatory security wrapper around :func:`_enumerate_sessions_direct`.
+    Every call MUST supply ``engagement_id``, ``scope_manifest``, and
+    ``db_path`` so the target is verified against the engagement ROE and
+    both attempt/result audit rows are written before/after enumeration.
+    Direct callers must not bypass this wrapper.
+
+    Raises :class:`SessionEnumerationScopeError` for invalid/out-of-scope
+    targets and :class:`SessionEnumerationAuditError` when the audit_log
+    row cannot be persisted. The underlying Win32 failure modes still
+    surface as structured error dicts inside the ``result`` payload.
+    """
+    from forge.collection.sessions.scope_check import enumerate_sessions_scoped
+
+    scope_target = server if server else "127.0.0.1"
+
+    def _run(_target_arg: str) -> dict[str, Any]:
+        return _enumerate_sessions_direct(
+            server if server else None,
+            level=level,
+            client_name=client_name,
+            user_name=user_name,
+        )
+
+    scoped = enumerate_sessions_scoped(
+        scope_target,
+        engagement_id=engagement_id,
+        scope_manifest=scope_manifest,
+        db_path=db_path,
+        enumerator=_run,
+    )
+    return scoped["result"] if isinstance(scoped, dict) and "result" in scoped else scoped

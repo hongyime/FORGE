@@ -6,7 +6,9 @@ Measures how detectable FORGE binaries look to AV/EDR:
    public API, rate-limited to 4 req/min) or local ClamAV/YARA when a scan
    binary is on PATH. Never uploads a binary without an explicit opt-in flag.
 2. ``analyze_strings`` - extracts printable strings and flags suspicious
-   tokens (``password``, ``dump``, ``inject``, ...).
+   tokens (``password``, ``dump``, ``inject``, ...). Detected strings are
+   redacted to SHA-256 hash prefixes in reports so CI artifacts never leak
+   embedded credentials or full plaintext patterns.
 3. ``measure_entropy`` - Shannon entropy of the file bytes; >7.2 is treated as
    suspicious (packed/obfuscated).
 
@@ -84,7 +86,13 @@ class AVScanResult:
 
 @dataclass(frozen=True)
 class StringAnalysis:
-    """Printable-string audit of a binary."""
+    """Printable-string audit of a binary.
+
+    ``suspicious_strings`` contains ``sha256:<16hex>`` tokens, NEVER plaintext,
+    so the report is safe to publish as a CI artifact even when a suspicious
+    string embeds a secret. ``matched_patterns`` surfaces which category tag
+    (``password``, ``inject``, ...) fired without revealing surrounding bytes.
+    """
 
     total_strings: int
     suspicious_strings: tuple[str, ...]
@@ -161,7 +169,8 @@ def analyze_strings(
         low = s.lower()
         hits = [pat for pat in lowered_patterns if pat in low]
         if hits:
-            suspicious.append(s)
+            digest = hashlib.sha256(s.encode("utf-8", errors="replace")).hexdigest()
+            suspicious.append(f"sha256:{digest[:16]}")
             matched.update(hits)
 
     return StringAnalysis(

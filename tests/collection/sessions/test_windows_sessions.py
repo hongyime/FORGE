@@ -20,7 +20,7 @@ from forge.collection.sessions import windows_sessions as ws
 from forge.collection.sessions.windows_sessions import (
     SESSION_LEVEL_10,
     SESSION_LEVEL_502,
-    enumerate_sessions,
+    _enumerate_sessions_direct as enumerate_sessions,
     translate_error,
 )
 

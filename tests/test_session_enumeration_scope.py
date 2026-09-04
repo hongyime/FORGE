@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from forge.collection.sessions.scope_check import (
+    SessionEnumerationAuditError,
     SessionEnumerationScopeError,
     audit_session_enumeration,
     check_target_in_scope,
@@ -139,12 +140,14 @@ class TestAuditLog:
         rows = _audit_rows(db_path)
         assert rows == [("session_enumeration_started", "10.0.0.5", "allowed")]
 
-    def test_audit_failure_is_silent(self, tmp_path: Path) -> None:
+    def test_audit_failure_surfaces(self, tmp_path: Path) -> None:
         missing = tmp_path / "nope.db"
-        # Should NOT raise even though the DB has no audit_log table.
-        audit_session_enumeration(
-            missing, 1, "x", "session_enumeration_started", "allowed"
-        )
+        # Audit write failure MUST surface — never silently swallowed — so the
+        # caller cannot mistakenly report the operation as complete.
+        with pytest.raises(SessionEnumerationAuditError):
+            audit_session_enumeration(
+                missing, 1, "x", "session_enumeration_started", "allowed"
+            )
 
 
 # -- enumerate_sessions_scoped end-to-end ---------------------------------

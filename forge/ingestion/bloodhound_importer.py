@@ -39,6 +39,11 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from forge.audit.models import AuditEntry, AuditEventType
+from forge.ingestion.bloodhound_persist import (
+    ParsedEntityBatch,
+    detect_collector_source,
+    persist_normalized_entities,
+)
 
 if TYPE_CHECKING:
     from forge.audit.logger import AuditLogger
@@ -228,56 +233,59 @@ class BloodHoundImporter:
         self.audit_logger = audit_logger or self._build_default_logger()
 
     # ------------------------------------------------------------------ api
-    def import_zip(self, zip_path: Path, engagement_id: str) -> ImportResult:
-        """Import a BloodHound export zip under an engagement's ROE.
+    def import_source(
+        self,
+        source_path: Path,
+        engagement_id: str,
+        *,
+        db_path: Path | None = None,
+    ) -> ImportResult:
+        """Import a BloodHound zip OR directory under an engagement's ROE.
 
-        Order of operations (must not be reordered):
+        Single audit-gated entrypoint. Order of operations (must not be
+        reordered):
 
         1. Validate ``engagement_id`` -- raises before any audit write.
         2. Emit ``import_started`` audit entry.
-        3. Iterate zip members, parse each supported JSON envelope, emit
-           one ``entity_imported`` audit entry per entity type.
+        3. Iterate JSON members (zip or ``*.json`` in a directory), parse
+           each supported envelope, emit one ``entity_imported`` audit
+           entry per JSON member, and (when ``db_path`` is given) persist
+           the normalized entities through
+           :mod:`forge.graph.normalizer`.
         4. Emit ``import_completed`` on success, or ``import_failed`` on
-           any exception raised during the read/parse loop.
-
-        Args:
-            zip_path: Path to a BloodHound ``.zip`` export.
-            engagement_id: Non-empty engagement identifier.
-
-        Returns:
-            :class:`ImportResult` describing the outcome. ``success`` is
-            ``False`` when the read/parse loop raised; the exception's
-            message lands in ``error``.
-
-        Raises:
-            MissingEngagementIdError: ``engagement_id`` is missing/empty.
+           any exception raised during the read/parse/persist loop.
         """
         self._validate_engagement_id(engagement_id)
         correlation_id = str(uuid.uuid4())
-        zip_path_str = str(zip_path)
+        source_str = str(source_path)
         start_time = time.monotonic()
 
-        # AUDIT FIRST -- before opening the zip so the trail exists even
-        # if the zip read itself panics.
+        # AUDIT FIRST -- before opening the source so the trail exists
+        # even if the read itself panics.
         self._emit_event(
             event_name="import_started",
             engagement_id=engagement_id,
             correlation_id=correlation_id,
             params={
-                "zip_path": zip_path_str,
+                "source_path": source_str,
+                "zip_path": source_str,
                 "timestamp_utc": time.time(),
                 "roe_id": self.scope_manifest.roe_id,
+                "db_path": str(db_path) if db_path is not None else None,
             },
             success=True,
         )
 
         entities_by_type: dict[str, int] = {}
+        persisted = 0
         try:
-            entities_by_type = self._import_zip_members(
-                zip_path=zip_path,
+            batches, entities_by_type = self._process_source_members(
+                source_path=source_path,
                 engagement_id=engagement_id,
                 correlation_id=correlation_id,
             )
+            if db_path is not None:
+                persisted = persist_normalized_entities(db_path, batches)
         except Exception as exc:  # noqa: BLE001 -- funnel to audit + result
             duration = time.monotonic() - start_time
             self._emit_event(
@@ -285,7 +293,8 @@ class BloodHoundImporter:
                 engagement_id=engagement_id,
                 correlation_id=correlation_id,
                 params={
-                    "zip_path": zip_path_str,
+                    "source_path": source_str,
+                    "zip_path": source_str,
                     "error_message": str(exc),
                     "duration_seconds": duration,
                 },
@@ -293,15 +302,15 @@ class BloodHoundImporter:
                 error_detail=f"{type(exc).__name__}: {exc}",
             )
             _LOG.warning(
-                "BloodHoundImporter: import failed engagement=%s zip=%s error=%s",
+                "BloodHoundImporter: import failed engagement=%s source=%s error=%s",
                 engagement_id,
-                zip_path_str,
+                source_str,
                 exc,
             )
             return ImportResult(
                 success=False,
                 engagement_id=engagement_id,
-                zip_path=zip_path_str,
+                zip_path=source_str,
                 total_entities=sum(entities_by_type.values()),
                 entities_by_type=dict(entities_by_type),
                 duration_seconds=duration,
@@ -315,22 +324,35 @@ class BloodHoundImporter:
             engagement_id=engagement_id,
             correlation_id=correlation_id,
             params={
-                "zip_path": zip_path_str,
+                "source_path": source_str,
+                "zip_path": source_str,
                 "total_entities": total,
+                "persisted_entities": persisted,
                 "entities_by_type": dict(entities_by_type),
                 "duration_seconds": duration,
+                "db_path": str(db_path) if db_path is not None else None,
             },
             success=True,
         )
         return ImportResult(
             success=True,
             engagement_id=engagement_id,
-            zip_path=zip_path_str,
+            zip_path=source_str,
             total_entities=total,
             entities_by_type=dict(entities_by_type),
             duration_seconds=duration,
             error=None,
         )
+
+    def import_zip(
+        self,
+        zip_path: Path,
+        engagement_id: str,
+        *,
+        db_path: Path | None = None,
+    ) -> ImportResult:
+        """Backward-compatible alias -- delegates to :meth:`import_source`."""
+        return self.import_source(zip_path, engagement_id, db_path=db_path)
 
     # ------------------------------------------------------------- helpers
     @staticmethod
@@ -349,47 +371,58 @@ class BloodHoundImporter:
                 "ROE requirement failed: engagement_id must be a non-empty string."
             )
 
-    def _import_zip_members(
+    def _process_source_members(
         self,
-        zip_path: Path,
+        source_path: Path,
         engagement_id: str,
         correlation_id: str,
-    ) -> dict[str, int]:
-        """Read every supported JSON member and count entities per type.
+    ) -> tuple[list[ParsedEntityBatch], dict[str, int]]:
+        """Read every supported JSON member from a zip OR directory.
 
-        Emits one ``entity_imported`` audit entry per (entity_type, count)
-        pair. Any per-file parse error is fatal so the caller can log a
-        single ``import_failed`` entry with the offending file name.
+        Emits one ``entity_imported`` audit entry per JSON member. Any
+        per-file parse error is fatal so the caller can log a single
+        ``import_failed`` entry with the offending file name.
         """
         entities_by_type: dict[str, int] = {}
-        with zipfile.ZipFile(zip_path, "r") as archive:
-            for member in archive.namelist():
-                if not member.lower().endswith(".json"):
-                    continue
-                entity_type = _entity_type_from_filename(member)
-                with archive.open(member, "r") as fh:
-                    raw = fh.read()
-                try:
-                    payload = json.loads(raw.decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-                    raise ValueError(
-                        f"failed to parse BloodHound member {member!r}: {exc}"
-                    ) from exc
+        batches: list[ParsedEntityBatch] = []
+        for member_name, raw_bytes in _iter_source_members(source_path):
+            entity_type = _entity_type_from_filename(member_name)
+            try:
+                payload = json.loads(raw_bytes.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise ValueError(
+                    f"failed to parse BloodHound member {member_name!r}: {exc}"
+                ) from exc
 
-                count = _count_entities(payload)
-                entities_by_type[entity_type] = entities_by_type.get(entity_type, 0) + count
-                self._emit_event(
-                    event_name="entity_imported",
-                    engagement_id=engagement_id,
-                    correlation_id=correlation_id,
-                    params={
-                        "entity_type": entity_type,
-                        "count": count,
-                        "source_member": member,
-                    },
-                    success=True,
+            count = _count_entities(payload)
+            entities_by_type[entity_type] = (
+                entities_by_type.get(entity_type, 0) + count
+            )
+            raw_entities = _extract_raw_entities(payload)
+            collection_type = _extract_collection_type(payload, entity_type)
+            batches.append(
+                ParsedEntityBatch(
+                    source_path=member_name,
+                    collection_type=collection_type,
+                    source=detect_collector_source(collection_type),
+                    raw_entities=tuple(raw_entities),
                 )
-        return entities_by_type
+            )
+            self._emit_event(
+                event_name="entity_imported",
+                engagement_id=engagement_id,
+                correlation_id=correlation_id,
+                params={
+                    "entity_type": entity_type,
+                    "count": count,
+                    "source_member": member_name,
+                    "collector_source": detect_collector_source(
+                        collection_type
+                    ).value,
+                },
+                success=True,
+            )
+        return batches, entities_by_type
 
     # ---------------------------------------------------------- audit sink
     def _emit_event(
@@ -485,6 +518,43 @@ def _count_entities(payload: Any) -> int:
     if isinstance(payload, list):
         return len(payload)
     return 0
+
+
+def _iter_source_members(source_path: Path) -> Any:
+    """Yield ``(member_name, raw_bytes)`` for every JSON in zip OR dir."""
+    if source_path.is_dir():
+        for json_path in sorted(source_path.rglob("*.json")):
+            yield json_path.name, json_path.read_bytes()
+        return
+    with zipfile.ZipFile(source_path, "r") as archive:
+        for member in archive.namelist():
+            if not member.lower().endswith(".json"):
+                continue
+            with archive.open(member, "r") as fh:
+                yield member, fh.read()
+
+
+def _extract_raw_entities(payload: Any) -> list[dict]:
+    """Return the entity dicts under ``payload[\"data\"]`` (or the list itself)."""
+    if isinstance(payload, dict):
+        data = payload.get("data")
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+        return []
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    return []
+
+
+def _extract_collection_type(payload: Any, fallback: str) -> str:
+    """Return ``meta.type`` or the filename-derived fallback."""
+    if isinstance(payload, dict):
+        meta = payload.get("meta")
+        if isinstance(meta, dict):
+            reported = meta.get("type")
+            if isinstance(reported, str) and reported.strip():
+                return reported.strip().lower()
+    return fallback
 
 
 def _run_sync(coro: Any) -> None:

@@ -1,49 +1,43 @@
-"""BloodHound import CLI command (Click).
+"""BloodHound import CLI command.
 
-Command: forge import bloodhound --engagement N --file PATH [--dry-run]
+Command: forge import bloodhound --engagement N --file PATH \\
+    --roe-id ROE --scope-manifest PATH_OR_JSON [--dry-run]
 
-Accepts either a SharpHound `.zip` or a directory of BloodHound JSON files.
-Persists entities to the engagement SQLite DB under table `bloodhound_entities`.
+Accepts either a SharpHound ``.zip`` or a directory of BloodHound JSON files.
+
+**Single audit-gated entrypoint.** Every non-dry-run import routes through
+:class:`forge.ingestion.bloodhound_importer.BloodHoundImporter`, which:
+
+* Enforces the ROE / scope-manifest gate at construction time.
+* Normalizes every entity through :mod:`forge.graph.normalizer` before it
+  reaches ``bloodhound_entities`` (no CLI-side raw writes).
+* Emits ``import_started`` / ``entity_imported`` / ``import_completed``
+  audit entries -- with ``import_failed`` on any error -- through the
+  shared :class:`forge.audit.logger.AuditLogger`.
 
 Exit codes:
     0 = success
-    1 = validation error (bad args, missing/invalid input, unknown schema)
-    2 = import error (I/O, DB, or partial-persist failure)
+    1 = validation error (bad args, missing/invalid input, ROE not satisfied)
+    2 = import error (I/O, DB, or ROE-gated importer failure)
 """
 
 from __future__ import annotations
 
 import json
-import sqlite3
+import os
 import sys
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
 
 import click
 
 from forge.engagement_ids import engagement_db_root
+from forge.ingestion.bloodhound_persist import SHARPHOUND_ENTITY_TYPES
 
-# BloodHound / SharpHound canonical collection types.
-BLOODHOUND_TYPES: frozenset[str] = frozenset(
-    {
-        "users",
-        "computers",
-        "groups",
-        "domains",
-        "gpos",
-        "ous",
-        "containers",
-        "azure",
-        "aiacas",
-        "rootcas",
-        "enterprisecas",
-        "ntauthstores",
-        "certtemplates",
-        "issuancepolicies",
-    }
-)
+# Legacy filename hint kept for tests / operator tooling that inspect the
+# recognised BloodHound collection types.
+BLOODHOUND_TYPES: frozenset[str] = SHARPHOUND_ENTITY_TYPES | frozenset({"azure"})
 
 EXIT_OK = 0
 EXIT_VALIDATION = 1
@@ -51,17 +45,8 @@ EXIT_IMPORT = 2
 
 
 @dataclass(frozen=True, slots=True)
-class BloodHoundFile:
-    """One parsed BloodHound JSON payload."""
-
-    source_path: str
-    entity_type: str
-    entities: list[dict]
-
-
-@dataclass(frozen=True, slots=True)
 class ImportSummary:
-    """Aggregate results of an import (or dry-run)."""
+    """Aggregate results of an import (or dry-run) for stdout reporting."""
 
     files_processed: int
     entity_counts: dict[str, int]
@@ -77,232 +62,25 @@ class ValidationError(click.ClickException):
     exit_code = EXIT_VALIDATION
 
 
-class ImportError_(click.ClickException):
-    """Raised when a validated import fails during persistence."""
-
-    exit_code = EXIT_IMPORT
-
-
-def _iter_json_members(source: Path) -> Iterator[tuple[str, bytes]]:
-    """Yield (member_name, raw_bytes) for each JSON in a zip or directory."""
-    if source.is_dir():
-        for path in sorted(source.rglob("*.json")):
-            yield str(path), path.read_bytes()
-        return
-    with zipfile.ZipFile(source) as zf:
-        for name in sorted(zf.namelist()):
-            if not name.lower().endswith(".json"):
-                continue
-            yield name, zf.read(name)
-
-
-def _parse_bloodhound_json(member_name: str, raw: bytes) -> BloodHoundFile | None:
-    """Parse a single BloodHound JSON blob. Returns None if unrecognized."""
-    try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise ValidationError(f"{member_name}: invalid JSON ({exc})") from exc
-    if not isinstance(payload, dict):
-        return None
-    meta = payload.get("meta")
-    data = payload.get("data")
-    if not isinstance(meta, dict) or not isinstance(data, list):
-        return None
-    entity_type = str(meta.get("type", "")).lower().strip()
-    if entity_type not in BLOODHOUND_TYPES:
-        return None
-    entities = [item for item in data if isinstance(item, dict)]
-    return BloodHoundFile(
-        source_path=member_name,
-        entity_type=entity_type,
-        entities=entities,
-    )
-
-
 def _validate_input_file(file_path: Path) -> None:
     """Fail fast when the input path is missing or the wrong shape."""
     if not file_path.exists():
         raise ValidationError(f"File not found: {file_path}")
     if file_path.is_file() and file_path.suffix.lower() != ".zip":
         raise ValidationError(
-            f"Expected .zip archive or directory, got: {file_path.suffix or '<no ext>'}"
+            f"Expected .zip archive or directory, got: "
+            f"{file_path.suffix or '<no ext>'}"
         )
     if file_path.is_file() and not zipfile.is_zipfile(file_path):
         raise ValidationError(f"Not a valid zip archive: {file_path}")
 
 
-def _collect_files(source: Path) -> list[BloodHoundFile]:
-    """Iterate the source and return all recognized BloodHound payloads."""
-    collected: list[BloodHoundFile] = []
-    for name, raw in _iter_json_members(source):
-        parsed = _parse_bloodhound_json(name, raw)
-        if parsed is not None:
-            collected.append(parsed)
-    if not collected:
-        raise ValidationError(
-            f"No BloodHound JSON payloads found in: {source} "
-            f"(expected files with meta.type in {sorted(BLOODHOUND_TYPES)})"
-        )
-    return collected
-
-
-def _ensure_db_schema(conn: sqlite3.Connection) -> None:
-    """Create the bloodhound_entities table if it does not exist."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS bloodhound_entities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            entity_type TEXT NOT NULL,
-            source_path TEXT NOT NULL,
-            object_id TEXT,
-            payload_json TEXT NOT NULL,
-            imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS ix_bh_type ON bloodhound_entities(entity_type)"
-    )
-
-
-def _extract_object_id(entity: dict) -> str | None:
-    """Best-effort ObjectIdentifier extraction from a BloodHound entity."""
-    for key in ("ObjectIdentifier", "objectid", "ObjectID"):
-        val = entity.get(key)
-        if isinstance(val, str) and val:
-            return val
-    props = entity.get("Properties")
-    if isinstance(props, dict):
-        val = props.get("objectid")
-        if isinstance(val, str) and val:
-            return val
-    return None
-
-
 def _resolve_engagement_db(engagement_id: int) -> Path:
     """Locate the engagement SQLite DB path from FORGE_DATA_DIR."""
-    import os
-
     data_dir = os.environ.get("FORGE_DATA_DIR") or str(Path.cwd() / ".forge_data")
     root = engagement_db_root(data_dir)
     root.mkdir(parents=True, exist_ok=True)
     return root / f"{engagement_id}.db"
-
-
-def _persist(
-    db_path: Path,
-    files: list[BloodHoundFile],
-    progress_cb,
-) -> int:
-    """Write parsed entities into the engagement DB, updating progress per entity."""
-    total = 0
-    try:
-        with sqlite3.connect(str(db_path)) as conn:
-            _ensure_db_schema(conn)
-            for bh_file in files:
-                rows = [
-                    (
-                        bh_file.entity_type,
-                        bh_file.source_path,
-                        _extract_object_id(entity),
-                        json.dumps(entity, separators=(",", ":")),
-                    )
-                    for entity in bh_file.entities
-                ]
-                conn.executemany(
-                    "INSERT INTO bloodhound_entities "
-                    "(entity_type, source_path, object_id, payload_json) "
-                    "VALUES (?, ?, ?, ?)",
-                    rows,
-                )
-                total += len(rows)
-                progress_cb(len(rows))
-            conn.commit()
-    except sqlite3.Error as exc:
-        raise ImportError_(f"Database write failed: {exc}") from exc
-    return total
-
-
-@click.group(name="import")
-def import_group() -> None:
-    """Import external data into a FORGE engagement."""
-
-
-@import_group.command(name="bloodhound")
-@click.option(
-    "--engagement",
-    "-e",
-    type=int,
-    required=True,
-    help="Engagement ID that scopes the imported entities (required).",
-)
-@click.option(
-    "--file",
-    "-f",
-    "file_path",
-    type=click.Path(path_type=Path),
-    required=True,
-    help="Path to a SharpHound .zip archive or a directory of BloodHound JSON files.",
-)
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    default=False,
-    help="Validate the input and report entity counts without writing to the database.",
-)
-def bloodhound(engagement: int, file_path: Path, dry_run: bool) -> None:
-    """Import BloodHound / SharpHound collector output for an engagement."""
-    if engagement <= 0:
-        raise ValidationError(f"--engagement must be a positive integer, got {engagement}")
-    _validate_input_file(file_path)
-    files = _collect_files(file_path)
-    total_entities = sum(len(f.entities) for f in files)
-    entity_counts: dict[str, int] = {}
-    for f in files:
-        entity_counts[f.entity_type] = entity_counts.get(f.entity_type, 0) + len(f.entities)
-
-    click.echo(
-        f"Validated {len(files)} BloodHound file(s) / {total_entities} entities "
-        f"across {len(entity_counts)} type(s) for engagement {engagement}."
-    )
-
-    if dry_run:
-        click.echo("[dry-run] No database changes will be made.")
-        for etype, count in sorted(entity_counts.items()):
-            click.echo(f"  {etype}: {count}")
-        _print_summary(
-            ImportSummary(
-                files_processed=len(files),
-                entity_counts=entity_counts,
-                total_entities=total_entities,
-                dry_run=True,
-                engagement_id=engagement,
-                db_path=None,
-            )
-        )
-        return
-
-    db_path = _resolve_engagement_db(engagement)
-    with click.progressbar(
-        length=total_entities,
-        label=f"Importing {total_entities} entities",
-        show_pos=True,
-    ) as bar:
-        written = _persist(db_path, files, bar.update)
-    if written != total_entities:
-        raise ImportError_(
-            f"Persisted {written} of {total_entities} entities (short write)"
-        )
-    _print_summary(
-        ImportSummary(
-            files_processed=len(files),
-            entity_counts=entity_counts,
-            total_entities=total_entities,
-            dry_run=False,
-            engagement_id=engagement,
-            db_path=str(db_path),
-        )
-    )
 
 
 def _print_summary(summary: ImportSummary) -> None:
@@ -315,5 +93,210 @@ def _print_summary(summary: ImportSummary) -> None:
     )
 
 
-if __name__ == "__main__":  # pragma: no cover
-    sys.exit(import_group.main(standalone_mode=True))
+def _load_scope_manifest_from_input(
+    scope_manifest_input: str,
+    roe_id: str | None,
+):  # -> "ScopeManifest"
+    """Parse scope manifest from a JSON file path or inline JSON string."""
+    from forge.ingestion.bloodhound_importer import (
+        InvalidScopeManifestError,
+        build_scope_manifest,
+    )
+
+    candidate = Path(scope_manifest_input)
+    if candidate.exists() and candidate.is_file():
+        try:
+            data = json.loads(candidate.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            raise ValidationError(
+                f"Could not read scope manifest {candidate}: {exc}"
+            ) from exc
+    else:
+        try:
+            data = json.loads(scope_manifest_input)
+        except json.JSONDecodeError as exc:
+            raise ValidationError(
+                f"Scope manifest is not a valid file path or JSON: {exc}"
+            ) from exc
+    if not isinstance(data, dict):
+        raise ValidationError("Scope manifest JSON must be an object.")
+    if roe_id and not data.get("roe_id"):
+        data["roe_id"] = roe_id
+    try:
+        return build_scope_manifest(data)
+    except InvalidScopeManifestError as exc:
+        raise ValidationError(str(exc)) from exc
+
+
+def _dry_run_scan(file_path: Path) -> tuple[int, dict[str, int]]:
+    """Parse (without persisting) to report file / entity counts.
+
+    Deliberately duplicates the light-weight enumeration logic so the
+    dry-run path never constructs the ROE-gated importer -- ROE credentials
+    must NOT be required just to preview counts.
+    """
+    from forge.ingestion.bloodhound_importer import (
+        _count_entities,
+        _entity_type_from_filename,
+        _iter_source_members,
+    )
+
+    entity_counts: dict[str, int] = {}
+    files_seen = 0
+    for member_name, raw in _iter_source_members(file_path):
+        files_seen += 1
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValidationError(
+                f"{member_name}: invalid JSON ({exc})"
+            ) from exc
+        entity_type = _entity_type_from_filename(member_name)
+        count = _count_entities(payload)
+        entity_counts[entity_type] = entity_counts.get(entity_type, 0) + count
+    if files_seen == 0:
+        raise ValidationError(
+            f"No BloodHound JSON payloads found in: {file_path}"
+        )
+    return files_seen, entity_counts
+
+
+def register_import_commands(import_app) -> None:
+    """Register the `forge import` Typer commands on the given sub-app."""
+    import typer
+
+    from forge.ingestion.bloodhound_importer import (
+        BloodHoundImporter,
+        ROEViolation,
+    )
+
+    @import_app.command("bloodhound")
+    def bloodhound_cmd(
+        engagement: int = typer.Option(
+            ..., "--engagement", "-e",
+            help="Engagement ID that scopes the imported entities.",
+        ),
+        file_path: Path = typer.Option(
+            ..., "--file", "-f",
+            help="Path to a SharpHound .zip archive or BloodHound JSON directory.",
+        ),
+        dry_run: bool = typer.Option(
+            False, "--dry-run",
+            help="Validate + parse without writing to the engagement DB.",
+        ),
+        roe_id: str | None = typer.Option(
+            None, "--roe-id",
+            envvar="FORGE_ROE_ID",
+            help="ROE / written-authorization reference. Required for non-dry-run.",
+        ),
+        scope_manifest: str | None = typer.Option(
+            None, "--scope-manifest",
+            envvar="FORGE_SCOPE_MANIFEST",
+            help="JSON file path or inline JSON with authorized domains/URLs/IPs/seeds.",
+        ),
+    ) -> None:
+        """Import BloodHound/SharpHound collector output through the ROE gate."""
+        # 1. Argument validation.
+        if engagement <= 0:
+            click.echo(
+                f"--engagement must be a positive integer, got {engagement}",
+                err=True,
+            )
+            raise typer.Exit(code=EXIT_VALIDATION)
+        try:
+            _validate_input_file(file_path)
+        except ValidationError as exc:
+            click.echo(str(exc), err=True)
+            raise typer.Exit(code=EXIT_VALIDATION) from exc
+
+        # 2. Dry-run preview -- no ROE, no writes, no importer construction.
+        if dry_run:
+            try:
+                files_processed, entity_counts = _dry_run_scan(file_path)
+            except ValidationError as exc:
+                click.echo(str(exc), err=True)
+                raise typer.Exit(code=EXIT_VALIDATION) from exc
+            total_entities = sum(entity_counts.values())
+            click.echo(
+                f"Validated {files_processed} BloodHound file(s) / "
+                f"{total_entities} entities across {len(entity_counts)} "
+                f"type(s) for engagement {engagement}."
+            )
+            click.echo("[dry-run] No database changes will be made.")
+            for etype, count in sorted(entity_counts.items()):
+                click.echo(f"  {etype}: {count}")
+            _print_summary(
+                ImportSummary(
+                    files_processed=files_processed,
+                    entity_counts=entity_counts,
+                    total_entities=total_entities,
+                    dry_run=True,
+                    engagement_id=engagement,
+                    db_path=None,
+                )
+            )
+            return
+
+        # 3. ROE gate: real import requires roe_id + scope_manifest.
+        if not roe_id or not roe_id.strip():
+            click.echo(
+                "ROE requirement failed: --roe-id (or FORGE_ROE_ID) is "
+                "required for non-dry-run imports.",
+                err=True,
+            )
+            raise typer.Exit(code=EXIT_VALIDATION)
+        if not scope_manifest or not scope_manifest.strip():
+            click.echo(
+                "ROE requirement failed: --scope-manifest (or "
+                "FORGE_SCOPE_MANIFEST) is required for non-dry-run imports.",
+                err=True,
+            )
+            raise typer.Exit(code=EXIT_VALIDATION)
+        try:
+            manifest = _load_scope_manifest_from_input(scope_manifest, roe_id)
+        except ValidationError as exc:
+            click.echo(str(exc), err=True)
+            raise typer.Exit(code=EXIT_VALIDATION) from exc
+
+        # 4. Route ALL persistence through the ROE-gated importer. This is
+        #    the ONLY path that writes to bloodhound_entities.
+        try:
+            importer = BloodHoundImporter(scope_manifest=manifest)
+        except ROEViolation as exc:
+            click.echo(f"ROE gate rejected import: {exc}", err=True)
+            raise typer.Exit(code=EXIT_VALIDATION) from exc
+
+        db_path = _resolve_engagement_db(engagement)
+        result = importer.import_source(
+            source_path=file_path,
+            engagement_id=str(engagement),
+            db_path=db_path,
+        )
+        if not result.success:
+            click.echo(
+                f"ROE-gated importer failed: {result.error}", err=True,
+            )
+            raise typer.Exit(code=EXIT_IMPORT)
+
+        entity_counts = dict(result.entities_by_type)
+        _print_summary(
+            ImportSummary(
+                files_processed=len(entity_counts),
+                entity_counts=entity_counts,
+                total_entities=result.total_entities,
+                dry_run=False,
+                engagement_id=engagement,
+                db_path=str(db_path),
+            )
+        )
+
+
+__all__ = [
+    "BLOODHOUND_TYPES",
+    "EXIT_IMPORT",
+    "EXIT_OK",
+    "EXIT_VALIDATION",
+    "ImportSummary",
+    "ValidationError",
+    "register_import_commands",
+]

@@ -1022,8 +1022,8 @@ def test_synthesis_engine_parallelizes_scope_seed_backfill_and_preserves_upsert_
     engine = EngagementSynthesisEngine(db_path, 1001)
     active = 0
     peak = 0
-    lock = threading.Lock()
     entered = 0
+    lock = threading.Lock()
     gate = threading.Event()
     delays = {
         "*.alpha.example": 0.05,
@@ -1237,7 +1237,9 @@ def test_synthesis_engine_parallelizes_seed_confidence_seed_entries_and_preserve
     engine = EngagementSynthesisEngine(db_path, 1001)
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
     delays = {
         "acme.example": 0.05,
         "app.acme.example": 0.01,
@@ -1305,11 +1307,17 @@ def test_synthesis_engine_parallelizes_seed_confidence_seed_entries_and_preserve
         row: Any,
     ) -> tuple[int, dict[str, Any], dict[str, Any]] | None:
         seed_value = str(row["seed_value"])
-        nonlocal active, peak
+        nonlocal active, entered, peak
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 4:
+                gate.set()
         try:
+            if current_entered <= 4:
+                assert gate.wait(timeout=5.0)
             time.sleep(delays[seed_value])
             return original_seed_confidence_seed_entry(row)
         finally:
@@ -1360,7 +1368,9 @@ def test_synthesis_engine_parallelizes_seed_confidence_relation_entries_and_pres
     engine = EngagementSynthesisEngine(db_path, 1001)
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
 
     con = sqlite3.connect(db_path)
     try:
@@ -1432,11 +1442,17 @@ def test_synthesis_engine_parallelizes_seed_confidence_relation_entries_and_pres
         seed_map: dict[int, dict[str, Any]],
     ) -> tuple[int, int, str, float, str] | None:
         key = f"{int(row['source_seed_id'])}:{int(row['target_seed_id'])}"
-        nonlocal active, peak
+        nonlocal active, entered, peak
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 4:
+                gate.set()
         try:
+            if current_entered <= 4:
+                assert gate.wait(timeout=5.0)
             time.sleep(delays[key])
             return original_seed_confidence_relation_entry(row, seed_map)
         finally:
@@ -1486,7 +1502,9 @@ def test_synthesis_engine_parallelizes_seed_confidence_update_entries_and_preser
     engine = EngagementSynthesisEngine(db_path, 1001)
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
 
     con = sqlite3.connect(db_path)
     try:
@@ -1558,11 +1576,17 @@ def test_synthesis_engine_parallelizes_seed_confidence_update_entries_and_preser
     ) -> tuple[int, str, float, str, bool] | None:
         seed_id, row = item
         seed_value = str(row["seed_value"])
-        nonlocal active, peak
+        nonlocal active, entered, peak
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 4:
+                gate.set()
         try:
+            if current_entered <= 4:
+                assert gate.wait(timeout=5.0)
             time.sleep(delays[seed_value])
             return original_seed_confidence_update_entry(self, item, metrics)
         finally:
@@ -1736,7 +1760,9 @@ def test_synthesis_engine_parallelizes_seed_id_rows_and_preserves_mapping(
     engine = EngagementSynthesisEngine(db_path, 1001)
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
 
     con = sqlite3.connect(db_path)
     try:
@@ -1791,11 +1817,17 @@ def test_synthesis_engine_parallelizes_seed_id_rows_and_preserves_mapping(
         row: Any,
     ) -> tuple[tuple[str, str], int] | None:
         seed_value = str(row["seed_value"])
-        nonlocal active, peak
+        nonlocal active, entered, peak
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 4:
+                gate.set()
         try:
+            if current_entered <= 4:
+                assert gate.wait(timeout=5.0)
             time.sleep(delays[seed_value])
             return original_seed_id_entry(row)
         finally:
@@ -1834,7 +1866,9 @@ def test_synthesis_engine_parallelizes_seed_depth_rows_and_preserves_mapping(
     engine = EngagementSynthesisEngine(db_path, 1001)
     active = 0
     peak = 0
+    entered = 0
     lock = threading.Lock()
+    gate = threading.Event()
 
     con = sqlite3.connect(db_path)
     try:
@@ -1889,11 +1923,17 @@ def test_synthesis_engine_parallelizes_seed_depth_rows_and_preserves_mapping(
         row: Any,
     ) -> tuple[tuple[str, str], int] | None:
         seed_value = str(row["seed_value"])
-        nonlocal active, peak
+        nonlocal active, entered, peak
         with lock:
             active += 1
             peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 4:
+                gate.set()
         try:
+            if current_entered <= 4:
+                assert gate.wait(timeout=5.0)
             time.sleep(delays[seed_value])
             return original_seed_depth_entry(row)
         finally:

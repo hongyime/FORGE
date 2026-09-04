@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "SessionEnumerationScopeError",
+    "SessionEnumerationAuditError",
     "validate_target_format",
     "check_target_in_scope",
     "audit_session_enumeration",
@@ -61,6 +62,15 @@ class SessionEnumerationScopeError(RuntimeError):
     def __init__(self, reason: str, message: str) -> None:
         super().__init__(message)
         self.reason = reason
+
+
+class SessionEnumerationAuditError(RuntimeError):
+    """Raised when the audit_log row for a session enumeration cannot be written.
+
+    Audit failures are never silently swallowed: if we cannot record the
+    receipt, the caller MUST see the error so the operation is not falsely
+    reported as complete.
+    """
 
 
 # ── target format ──────────────────────────────────────────────────────────
@@ -190,7 +200,7 @@ def audit_session_enumeration(
     action: str,
     result: str,
 ) -> None:
-    """Append one audit_log row. Never raises."""
+    """Append one audit_log row. Raises SessionEnumerationAuditError on failure."""
     try:
         con = sqlite3.connect(str(db_path))
         try:
@@ -205,8 +215,11 @@ def audit_session_enumeration(
             con.commit()
         finally:
             con.close()
-    except Exception as exc:  # pragma: no cover - audit failure must not block
-        logger.warning("Session enumeration audit write failed: %s", exc)
+    except Exception as exc:
+        logger.error("Session enumeration audit write failed: %s", exc)
+        raise SessionEnumerationAuditError(
+            f"session enumeration audit write failed: {exc}"
+        ) from exc
 
 
 # ── public entrypoint ──────────────────────────────────────────────────────

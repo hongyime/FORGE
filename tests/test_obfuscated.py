@@ -1,13 +1,14 @@
 #!/usr/bin/env python
-# -*- test_obfuscated.py
-"""Verify obfuscated module loading and Rust extension import."""
+"""Verify obfuscated module loading, Rust extension AES, and fail-closed gates."""
 
+import base64
 import sys
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
-# Add parent to path
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from forge_loader import load, status as loader_status
@@ -27,7 +28,6 @@ SCOPE_MANIFEST = {
 
 
 def test_obfuscation_files_exist():
-    """Test that obfuscated files were created."""
     status = is_obfuscated()
 
     assert status == {
@@ -46,14 +46,12 @@ def test_obfuscation_files_exist():
 
 
 def test_kerberos_import():
-    """Test KerberosOps import and constructor contract."""
     assert KerberosOps is not None
     ops = KerberosOps(roe_id="TEST-ROE", scope_manifest=SCOPE_MANIFEST)
     assert ops is not None
 
 
 def test_mimikatz_import():
-    """Test MimikatzBackend import without probing privileges or tools."""
     assert MimikatzBackend is not None
 
     with (
@@ -67,14 +65,12 @@ def test_mimikatz_import():
 
 
 def test_spray_import():
-    """Test SprayOptimizer import and constructor contract."""
     assert SprayOptimizer is not None
     optimizer = SprayOptimizer(roe_id="TEST-ROE", scope_manifest=SCOPE_MANIFEST)
     assert optimizer is not None
 
 
 def test_forge_loader_loads_obfuscated_modules():
-    """Test root loader and direct packages expose obfuscated classes."""
     assert loader_status() == {
         "kerberos_ops": "obfuscated",
         "mimikatz_backend": "obfuscated",
@@ -113,17 +109,97 @@ def test_forge_loader_loads_obfuscated_modules():
     ]
 
 
-def test_forge_core_aes_roundtrip():
-    """Test Rust PyO3 extension import and AES helpers."""
+def test_forge_core_aes_roundtrip_and_native_gates():
     from forge_core import aes_decrypt, aes_encrypt, generate_key
 
+    # AES roundtrip verification
     key = generate_key()
     encrypted = aes_encrypt("verification", key)
     assert aes_decrypt(encrypted, key) == "verification"
 
+    # Python boundary: malformed base64 ciphertext must fail closed
+    with pytest.raises(Exception):
+        malformed = base64.b64encode(b"not_valid_aes_ciphertext").decode()
+        aes_decrypt(malformed, key)
+
+    # Python boundary: empty ciphertext must fail closed
+    with pytest.raises(Exception):
+        aes_decrypt("", key)
+
+    # Python boundary: wrong key must fail closed
+    wrong_key = generate_key()
+    with pytest.raises(Exception):
+        aes_decrypt(encrypted, wrong_key)
+
+    # Python boundary: corrupted nonce/ciphertext must fail closed
+    with pytest.raises(Exception):
+        corrupted = encrypted[:-8] + base64.b64encode(b"corrupt").decode()
+        aes_decrypt(corrupted, key)
+
+    # All obfuscated modules exist
+    assert (
+        KerberosOps is not None
+        and MimikatzBackend is not None
+        and SprayOptimizer is not None
+    )
+
+    # Python boundary: empty ROE ID must fail closed at wrapper layer
+    with pytest.raises(ValueError):
+        KerberosOps(roe_id="", scope_manifest=SCOPE_MANIFEST)
+
+    with (
+        patch.object(MimikatzBackend, "_verify_windows", lambda self: None),
+        patch.object(MimikatzBackend, "_find_mimikatz", lambda self: None),
+        patch.object(
+            MimikatzBackend, "_verify_admin_privileges", lambda self: False
+        ),
+    ):
+        with pytest.raises(ValueError):
+            MimikatzBackend(roe_id="", scope_manifest=SCOPE_MANIFEST)
+
+    with pytest.raises(ValueError):
+        SprayOptimizer(roe_id="", scope_manifest=SCOPE_MANIFEST)
+
+    # Native Rust boundary: create optimizer without spray permission (valid)
+    from forge_core import SprayOptimizer as NativeSprayOptimizer
+
+    native_blocked = NativeSprayOptimizer(3, 300, None, False)
+    with pytest.raises(RuntimeError):
+        native_blocked.spray("password")
+
+    # Native Rust boundary: spray without ROE when enabled must fail closed
+    with pytest.raises(ValueError):
+        NativeSprayOptimizer(3, 300, None, True)
+
+    # Native Rust boundary: unsafe max_attempts must fail closed
+    with pytest.raises(ValueError):
+        NativeSprayOptimizer(0, 300, "ROE-TEST", False)
+    with pytest.raises(ValueError):
+        NativeSprayOptimizer(11, 300, "ROE-TEST", False)
+
+    # Native Rust boundary: zero delay must fail closed
+    with pytest.raises(ValueError):
+        NativeSprayOptimizer(3, 0, "ROE-TEST", False)
+
+    # Native Rust boundary: empty ROE string when spray enabled must fail closed
+    with pytest.raises(ValueError):
+        NativeSprayOptimizer(3, 300, "  ", True)
+
+    # Native Rust boundary: permitted but unimplemented spray fails closed with NotImplementedError
+    native_allowed = NativeSprayOptimizer(3, 300, "ROE-TEST", True)
+    native_allowed.add_target("host.example")
+
+    try:
+        result = native_allowed.spray("password")
+        pytest.fail(
+            "Authorized native spray must raise NotImplementedError, not return"
+        )
+    except Exception as e:
+        assert "not implemented" in str(e).lower(), (
+            f"Expected NotImplementedError, got: {type(e).__name__}: {e}"
+        )
 
 def main():
-    """Run all obfuscation tests."""
     print("=" * 60)
     print("FORGE Obfuscation Verification")
     print("=" * 60)
@@ -147,7 +223,7 @@ def main():
     test_forge_loader_loads_obfuscated_modules()
     print()
 
-    test_forge_core_aes_roundtrip()
+    test_forge_core_aes_roundtrip_and_native_gates()
     print()
     
     print("=" * 60)
