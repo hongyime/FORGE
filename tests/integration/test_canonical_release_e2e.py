@@ -436,7 +436,7 @@ def _populate_pipeline_state(db_path: Path, engagement_id: int, tmp_path: Path) 
             INSERT OR IGNORE INTO validation_claims
                 (engagement_id, claim_type, key_id, owner, expires_at)
             SELECT engagement_id, 'key', id, 'appsec@canonical.example',
-                   '2026-09-01T00:00:00Z'
+                   '2026-12-01T00:00:00Z'
             FROM key_scanner_findings
             WHERE engagement_id=? AND service IN ('firebase', 'supabase')
             ORDER BY id
@@ -843,10 +843,11 @@ def _assert_detail_surfaces(detail: dict[str, Any], report_path: Path) -> str:
     run_summary = detail["run_summary"]
     assert run_summary["status"] == "completed"
     assert run_summary["roe_id"] == ROE_ID
-    policy = run_summary["metadata"]["live_execution_policy"]
-    assert policy["scope_manifest_required"] is True
-    assert policy["scope_manifest_present"] is True
-    assert policy["destructive_actions_allowed"] is False
+    assert run_summary["scope_manifest_required"] is True
+    assert run_summary["scope_manifest_present"] is True
+    assert run_summary["destructive_actions_allowed"] is False
+    assert run_summary["audit_manifest"]["verification_status"] == "verified"
+    assert run_summary["audit_manifest"]["artifact_available"] is True
     assert run_summary["audit_manifest"]["verification_status"] == "verified"
     assert run_summary["audit_manifest"]["artifact_available"] is True
 

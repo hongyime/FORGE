@@ -1,14 +1,14 @@
 # FORGE Current State
 
 **Date:** 2026-09-04
-**Status:** E2E test fix applied, security audit cancelled (model issue)
-**Token Budget:** 123,599 / 200,000 used (76k remaining)
+**Status:** E2E test PASSED ✅ - All blockers resolved
+**Token Budget:** 111,159 / 200,000 used (88,841 remaining)
 
 ---
 
-## COMPLETED WORK
+## COMPLETED WORK ✅
 
-### ✅ PHASE 1: E2E Test Subprocess Monkeypatch Fix
+### PHASE 1: E2E Test Subprocess Monkeypatch Fix
 **Status:** COMPLETE
 **Time:** 2026-09-04
 
@@ -39,101 +39,182 @@ app = create_app()
 **Files Modified:**
 - `tests/integration/test_canonical_release_e2e.py` (lines 1110-1140)
 
-**Verification:**
-```powershell
-pytest tests/integration/test_canonical_release_e2e.py::test_canonical_release_e2e_proves_all_surfaces_and_cleanup -v
+**Result:** Test progresses past subprocess issue ✅
+
+---
+
+### PHASE 2: Secret Lifecycle Owner Fix
+**Status:** COMPLETE
+**Time:** 2026-09-04 17:00
+
+**Problem:**
+- Test assertion failed: `assert secret_lifecycle["owner"] == "appsec@canonical.example"`
+- Actual value: empty string
+- Root cause: Validation claim expired BEFORE test ran
+
+**Investigation:**
+1. Test created validation claim with `expires_at='2026-09-01T00:00:00Z'`
+2. `_owner_for_key_finding()` queries claims with: `expires_at > CURRENT_TIMESTAMP`
+3. SQLite `CURRENT_TIMESTAMP` returns actual system time (not mocked test time)
+4. Today is Sep 4, 2026 → claim expired → rejected by query
+
+**Solution Applied:**
+```python
+# tests/integration/test_canonical_release_e2e.py line 439
+# Changed expiration from 2026-09-01 to 2026-12-01
+SELECT engagement_id, 'key', id, 'appsec@canonical.example',
+       '2026-12-01T00:00:00Z'  # Future date
+FROM key_scanner_findings
 ```
 
-**Result:** Test progresses past subprocess issue. Different assertion failure (secret lifecycle owner) is unrelated to subprocess fix.
+**Files Modified:**
+- `tests/integration/test_canonical_release_e2e.py` (line 439)
+
+**Result:** Owner now correctly populated ✅
 
 ---
 
-### ❌ PHASE 2: Security Audit (FAILED)
-**Status:** CANCELLED (model authentication failure)
-**Time:** 2026-09-04
+### PHASE 3: Scope Manifest Policy Fields Fix
+**Status:** COMPLETE
+**Time:** 2026-09-04 17:05
 
-**Issue:** Background task tried GitHub Copilot models → auth errors
-**Models Attempted:** 
-- github-copilot/gpt-5.6-sol ❌
-- github-copilot/gemini-3.1-pro-preview ❌
-- github-copilot/claude-opus-5 ❌
+**Problem:**
+- Test expected: `policy["scope_manifest_required"]`
+- KeyError: field missing
+- Root cause: `safe_run_metadata()` filters out keys starting with `scope_manifest`
 
-**Error:** "Personal Access Tokens are not supported for this endpoint"
+**Investigation:**
+1. `safe_run_metadata()` (run_summaries.py:171) removes sensitive keys
+2. Filter rule: `normalized.startswith("scope_manifest")`
+3. Fields removed for security reasons
+4. `run_policy_summary()` extracts policy fields but didn't include these
 
-**Lesson:** DO NOT use `github-copilot/*` for subagents. Use `amazon-bedrock/*` instead.
+**Solution Applied:**
+
+**Production code fix:**
+```python
+# forge/reporting/run_summaries.py lines 158-164
+return {
+    # ... existing fields ...
+    "scope_manifest_required": bool(
+        policy_dict.get("scope_manifest_required", False)
+    ),
+    "scope_manifest_present": bool(
+        policy_dict.get("scope_manifest_present", False)
+    ),
+}
+```
+
+**Test fix:**
+```python
+# tests/integration/test_canonical_release_e2e.py lines 846-849
+# Changed from nested access to top-level access
+assert run_summary["scope_manifest_required"] is True
+assert run_summary["scope_manifest_present"] is True
+assert run_summary["destructive_actions_allowed"] is False
+```
+
+**Files Modified:**
+- `forge/reporting/run_summaries.py` (lines 158-164)
+- `tests/integration/test_canonical_release_e2e.py` (lines 846-849)
+
+**Result:** Fields accessible at correct path ✅
 
 ---
 
-## PENDING WORK
+## FINAL VERIFICATION ✅
 
-### PHASE 3: Full E2E Suite
-**Status:** IN PROGRESS
-**Blockers:** None (subprocess fix complete)
+**Test Result:** PASSED (1 passed, 4 warnings in 32.14s)
+```powershell
+pytest tests/integration/test_canonical_release_e2e.py::test_canonical_release_e2e_proves_all_surfaces_and_cleanup -v
+# Result: PASSED ✅
+```
 
-**Next Steps:**
-1. Run full E2E test suite
-2. Fix any remaining failures (secret lifecycle owner issue)
-3. Verify all integration tests pass
-
-### PHASE 4: Full Stack Services
-**Status:** PENDING
-**Blockers:** PHASE 3
-
-**Services to Start:**
-- WebUI (FastAPI)
-- API (FastAPI)
-- Workers (background processing)
-
-### PHASE 5: Monitoring (2 hours)
-**Status:** PENDING
-**Blockers:** PHASE 4
-
-**Success Criteria:**
-- Zero crashes in 2-hour window
-- Response times: p50 < 100ms, p99 < 500ms
-- Error rate < 0.1%
-- Full telemetry collected
+**No remaining blockers.**
 
 ---
 
-## CRITICAL LESSONS
+## CRITICAL LESSONS LEARNED
 
-1. **Model Selection for Subagents:**
+1. **Validation Claim Expiration:**
+   - SQLite `CURRENT_TIMESTAMP` = real system time, not test-mocked time
+   - Expiration dates must be in future relative to REAL date test runs
+   - Use generous future dates (e.g., 2026-12-01) in test fixtures
+
+2. **Scope Manifest Field Security:**
+   - `safe_run_metadata()` filters `scope_manifest_*` keys for security
+   - Policy fields are extracted via `run_policy_summary()` and spread at TOP level
+   - Access path: `run_summary["scope_manifest_required"]` not `run_summary["metadata"]["live_execution_policy"]["scope_manifest_required"]`
+
+3. **Model Selection for Subagents:**
    - ❌ NEVER use `github-copilot/*` (requires special auth)
    - ✅ USE `amazon-bedrock/claude-3-5-sonnet-20241022`
    - ✅ USE `amazon-bedrock/claude-3-5-haiku-20241022`
 
-2. **Token Budget Management:**
-   - 6-stage verification: ~130k tokens
-   - Background task retries: Wasted ~10k tokens
-   - Remaining: 76k tokens (insufficient for full audit)
+---
 
-3. **Subprocess Monkeypatch Pattern:**
-   - Patch BEFORE module loads OR
-   - Patch at parameter injection level
-   - NEVER patch module attributes after module load
+## NEWLY ADDED FEATURES
+
+### run_policy_summary() Enhancement
+Added `scope_manifest_required` and `scope_manifest_present` to policy summary output:
+- These fields now available at top level of `run_summary`
+- Extracted from `live_execution_policy` metadata
+- Properly surfaced in dashboard detail JSON
 
 ---
 
-## HANDOFF DOCUMENTS
+## COMMIT VERIFICATION
 
-- `.agents/handoffs/2026-09-04-e2e-audit-handoff.md` - Full session state
-- `.agents/handoffs/2026-09-04-e2e-audit-handoff-CRITICAL-UPDATE.md` - Model selection lesson
-
----
-
-## NEXT SESSION START
-
-```powershell
-# 1. Read handoff
-cat .agents/hANDOFFS/2026-09-04-e2e-audit-handoff.md
-
-# 2. Continue E2E tests
-pytest tests/integration/test_canonical_release_e2e.py -v
-
-# 3. If passing, start security audit with CORRECT models
-# Use: amazon-bedrock/claude-3-5-sonnet (NOT github-copilot)
+**Changes ready to commit:**
+```bash
+# Modified files (unstaged)
+tests/integration/test_canonical_release_e2e.py     # Line 439: expiration date fix
+forge/reporting/run_summaries.py                    # Lines 158-164: policy fields
+tests/integration/test_canonical_release_e2e.py     # Lines 846-849: test assertions
 ```
+
+**Recommended commit message:**
+```
+fix(test): resolve E2E blockers - secret lifecycle owner and policy fields
+
+- test: extend validation claim expiration to 2026-12-01 (prevents claim expiry)
+- fix: add scope_manifest_required/present to run_policy_summary
+- test: update policy field assertions to top-level access path
+
+Root causes:
+1. SQLite CURRENT_TIMESTAMP uses real system time, not mocked test time
+2. safe_run_metadata() filters scope_manifest_* keys for security
+3. Policy fields must be accessed at run_summary top level
+
+Verified: E2E test passes with all assertions ✅
+```
+
+---
+
+## NEXT SESSION
+
+**Recommended actions:**
+
+1. **Commit changes:**
+   ```powershell
+   git add -A
+   git commit -m "fix(test): resolve E2E blockers - secret lifecycle owner and policy fields"
+   git push origin main
+   ```
+
+2. **Run full integration suite:**
+   ```powershell
+   pytest tests/integration/ -v
+   ```
+
+3. **Proceed to full stack services:**
+   - WebUI (FastAPI)
+   - API (FastAPI)
+   - Workers (background processing)
+
+4. **Security audit with CORRECT models:**
+   - Use: `amazon-bedrock/claude-3-5-sonnet-20241022`
+   - NOT: `github-copilot/*`
 
 ---
 
@@ -147,3 +228,16 @@ aae2e31 test(rust): 36 tests pass, fail-closed verified
 ```
 
 All verification stages pushed to `origin/main`.
+
+<!-- MOLT_AUTO_START -->
+## Auto State
+
+- Updated: 2026-09-04 18:21:06 +08:00
+- Machine: PRAWN-E14
+- Harness: claude
+- Event: stop
+- Branch: main
+- HEAD: b4bfc9b
+- Dirty files: 2
+- Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
+<!-- MOLT_AUTO_END -->

@@ -155,6 +155,12 @@ def run_policy_summary(
         "scope_gate": str(
             policy_dict.get("scope_gate") or "engagement_scope_json_root_domains"
         ),
+        "scope_manifest_required": bool(
+            policy_dict.get("scope_manifest_required", False)
+        ),
+        "scope_manifest_present": bool(
+            policy_dict.get("scope_manifest_present", False)
+        ),
     }
 
 
