@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-09-03: MEDIUM 8 — cloud-creds CLI + ROE integration. Fixed missing `_cli_audit` import in `forge/cli_cloud.py` (NameError at runtime). Fixed `SyntaxError` in `forge/collection/cloud/__init__.py` (`}` → `]`). Added 14-test regression suite `tests/cli/test_cloud_credentials_cli.py` covering: command registration, importability, safe defaults (metadata off), ROE gate, scope check, audit logging, provider/format validation, output correctness. All 14 pass.
 - 2026-08-29: B739 refreshed and re-uploaded the autonomous target loop PostPlan HTML so the published plan matches the latest hardening commits through c4e30b4.
 - 2026-08-29: B738 added total_count/ready_count/blocked_count/ignored_count aliases to queue and guarded source-queue summaries for supervisor-friendly parsing.
 - 2026-08-29: B737 made CTI queue target promotion configurable through queue_promote_targets and per-item promote_targets while preserving the previous enabled default.
@@ -348,3 +349,24 @@
 - 2026-09-02 00:04:59 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=491
 - 2026-09-02 09:43:20 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=491
 - 2026-09-02 09:55:48 +08:00 [PRAWN-E14/codex/session-start] branch=main head=f3041c1 dirty=491
+2026-09-02 | Codex review verdict is BLOCKING_ISSUES pending integration fixes: root BloodHound CLI/ROE wiring, frontend/API contract alignment and build dependencies, active-session schema migration, plugin boundary enforcement, and safe detection-surface reporting.
+- 2026-09-02 10:33:24 +08:00 [PRAWN-E14/codex/session-start] branch=main head=25aa7b5 dirty=0
+- 2026-09-02 10:36:02 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=0
+- 2026-09-02 21:26:19 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=31
+- 2026-09-03 08:51:11 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=46
+- 2026-09-03 09:18:11 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=46
+- 2026-09-03 09:58:25 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=50
+- 2026-09-03 11:06:32 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=50
+- 2026-09-03 11:28:34 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=52
+- 2026-09-03 14:21:09 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=58
+- 2026-09-03 15:01:56 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=70
+- 2026-09-03 15:29:49 +08:00 [PRAWN-E14/codex/session-start] branch=main head=25aa7b5 dirty=73
+- 2026-09-03 20:02:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=76
+- 2026-09-03 20:20:37 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=80
+2026-09-03: Plugin event boundary v1 is fail-closed: trusted registration is mandatory, accepted events are audited before dispatch, both documented rate windows are enforced, and repeated violations disable only the affected engagement binding.
+- 2026-09-03 21:02:10 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=82
+- 2026-09-03 23:17:03 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=83
+- 2026-09-04 09:14:20 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=83
+- 2026-09-04 09:45:14 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=83
+- 2026-09-04 10:26:04 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=83
+- 2026-09-04 10:53:54 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=83
