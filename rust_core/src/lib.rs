@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     fn test_spray_optimizer_creation() {
-        let optimizer = spray::SprayOptimizer::new(3, 300);
+        let optimizer = spray::SprayOptimizer::new(3, 300, None, false);
         assert!(optimizer.is_ok());
     }
 }
