@@ -126,17 +126,9 @@ def _assert_live_launch(
     slug: str,
     engagement_id: int,
     scope_manifest: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    launched: dict[str, Any],
 ) -> None:
-    launched: dict[str, Any] = {}
-
-    class _FakePopen:
-        def __init__(self, command: list[str], **kwargs: Any) -> None:
-            launched["command"] = [str(item) for item in command]
-            launched["kwargs"] = kwargs
-            self.pid = 62620
-
-    monkeypatch.setattr("forge.webui.app.subprocess.Popen", _FakePopen)
+    # subprocess.Popen already patched in test function
     response = client.post(
         f"/api/engagements/{slug}/runs/kill-chain",
         json={
@@ -1115,6 +1107,17 @@ def test_canonical_release_e2e_proves_all_surfaces_and_cleanup(
     monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     monkeypatch.delenv("FORGE_REDIS_URL", raising=False)
+    # Define FakePopen BEFORE create_app() to capture at module load time
+    launched: dict[str, Any] = {}
+
+    class _FakePopen:
+        def __init__(self, command: list[str], **kwargs: Any) -> None:
+            launched["command"] = [str(item) for item in command]
+            launched["kwargs"] = kwargs
+            self.pid = 62620
+
+    # Patch subprocess.Popen BEFORE create_app() captures it
+    monkeypatch.setattr("subprocess.Popen", _FakePopen)
 
     scope_manifest = _scope_manifest(tmp_path)
     app = create_app()
@@ -1130,7 +1133,7 @@ def test_canonical_release_e2e_proves_all_surfaces_and_cleanup(
             slug=slug,
             engagement_id=engagement_id,
             scope_manifest=scope_manifest,
-            monkeypatch=monkeypatch,
+            launched=launched,
         )
         _populate_pipeline_state(db_path, engagement_id, tmp_path)
         _exercise_enterprise_ctem_primitives(db_path, engagement_id, scope_manifest)
