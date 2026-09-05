@@ -1403,6 +1403,16 @@ def _docker_status(root: Path, *, probe: bool, mode: str = "host_compose") -> di
             "probed": False,
             "reason": "compose_file_present_probe_skipped",
         }
+    if shutil.which("docker") is None:
+        # Docker CLI not installed on this host — fail open rather than
+        # timing out on subprocess.run() and adding TimeoutExpired to
+        # blockers. Operators that intentionally require Docker health
+        # can set docker_probe_mode="compose_dependency" or install docker.
+        return {
+            "ok": True,
+            "probed": False,
+            "reason": "docker_cli_not_installed",
+        }
     try:
         completed = subprocess.run(
             ["docker", "compose", "-f", str(compose_file), "ps", "--format", "json"],
