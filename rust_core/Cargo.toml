@@ -20,7 +20,7 @@ rand = "0.8"
 serde = { version = "1", features = ["derive"] }
 
 # Cross-platform FFI
-pyo3 = { version = "0.22", features = ["extension-module", "abi3-py312"] }
+pyo3 = { version = "0.29", features = ["extension-module", "abi3-py312"] }
 
 [profile.release]
 opt-level = 3
