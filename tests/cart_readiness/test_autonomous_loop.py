@@ -130,6 +130,15 @@ def test_guarded_autostart_last_entry_within_cooldown_window() -> None:
     scheduled to run again — the classic "we proved it works, but forgot to
     schedule it" mode.
 
+    Threshold: ``max(cooldown_minutes * 6, 240 min)``. Rationale:
+    ``scripts/install_guarded_autostart_task.ps1`` computes scheduler cadence
+    as ``max(EveryMinutes, TimeoutMinutes + 5)``. With the documented invocation
+    (``-EveryMinutes 30 -TimeoutMinutes 150``) the actual cadence is 155 min.
+    A tight ``cooldown_minutes * 3`` (90 min) threshold flags a real problem
+    only during the ~65 min window between tick and threshold, so this uses
+    a generous ceiling that still catches the "loop is silent for hours"
+    failure mode.
+
     Skips (does not fail) on environments where the local autostart config is
     absent — CI runners and fresh clones haven't set up CART yet and this
     invariant does not apply.
@@ -141,7 +150,7 @@ def test_guarded_autostart_last_entry_within_cooldown_window() -> None:
         )
     config = json.loads(AUTOSTART_CONFIG.read_text(encoding="utf-8"))
     cooldown_min = float(config.get("cooldown_minutes", 30))
-    max_age_min = max(cooldown_min, 30.0) * 3.0
+    max_age_min = max(cooldown_min * 6.0, 240.0)
 
     history = _history_path()
     assert history is not None, (
@@ -163,7 +172,7 @@ def test_guarded_autostart_last_entry_within_cooldown_window() -> None:
 
     assert age_min <= max_age_min, (
         f"Last guarded-autostart entry is {age_min:.1f} min old "
-        f"(threshold {max_age_min:.1f} min = cooldown_minutes {cooldown_min:.0f} × 3). "
+        f"(threshold {max_age_min:.1f} min = max(cooldown_minutes {cooldown_min:.0f} * 6, 240)). "
         f"The autonomous loop is not ticking regularly. "
         f"Verify the 'FORGE Guarded Autostart' scheduled task is installed and enabled, "
         f"and that its trigger interval matches cooldown_minutes."
