@@ -15,6 +15,7 @@ Security: All updates require manual --apply flag (no auto-update).
 
 import json
 import logging
+import os
 import requests
 import hashlib
 import zipfile
@@ -116,7 +117,7 @@ class BinaryUpdater:
             response.raise_for_status()
             return response.json()
 
-        except requests.RequestException as e:
+        except (requests.RequestException, Exception) as e:  # noqa: BLE001 — must return None on any fetch failure
             logger.error(f"Failed to fetch release info for {repo}: {e}")
             return None
 
@@ -206,6 +207,79 @@ class BinaryUpdater:
             logger.exception(f"Failed to download/extract {asset_name}: {e}")
             return None
 
+    def list_tools(self) -> List[str]:
+        """Return all tool names this updater manages."""
+        return list(self.GITHUB_RELEASE_TOOLS.keys())
+
+    def get_tool_path(self, tool_name: str) -> Path:
+        """Return the expected on-disk path of ``tool_name``'s executable.
+
+        Windows appends ``.exe``; other platforms return the bare binary name.
+        The path is where ``tools_dir`` would hold it — file may not exist yet.
+        """
+        binary = f"{tool_name}.exe" if os.name == "nt" else tool_name
+        return self.tools_dir / binary
+
+    def update_tool(self, tool_name: str, apply: bool = False) -> bool:
+        """Update a single tool. Dry-run friendly.
+
+        Args:
+            tool_name: Tool key from ``GITHUB_RELEASE_TOOLS``.
+            apply: If ``False`` (default), do not download or replace files
+                (dry-run). If ``True``, download and install like ``update_all``.
+
+        Returns:
+            ``True`` iff an update was applied. ``False`` on failure, when no
+            update is needed, or in dry-run mode.
+
+        Raises:
+            ValueError: If ``tool_name`` is not in ``GITHUB_RELEASE_TOOLS``.
+        """
+        if tool_name not in self.GITHUB_RELEASE_TOOLS:
+            raise ValueError(f"Unknown tool: {tool_name}")
+        version = self.check_for_updates(tool_name)
+        if not version.update_available:
+            return False
+        if not apply:
+            # Dry-run: only report that an update would happen.
+            return False
+        result = self.update_all(force=False)
+        return bool(result.get(tool_name, False))
+
+    def check_for_updates(self, tool_name: str) -> "ToolVersion":
+        """Check a single tool for updates.
+
+        Wrapper around ``check_updates()`` for single-tool queries with strict
+        unknown-tool handling.
+
+        Args:
+            tool_name: Name of one tool to check (must be a known key of
+                ``GITHUB_RELEASE_TOOLS``).
+
+        Returns:
+            ``ToolVersion`` for the requested tool. ``installed_version`` is
+            ``"none"`` when the tool has never been installed.
+
+        Raises:
+            ValueError: If ``tool_name`` is not in ``GITHUB_RELEASE_TOOLS``.
+        """
+        if tool_name not in self.GITHUB_RELEASE_TOOLS:
+            raise ValueError(f"Unknown tool: {tool_name}")
+        result = self.check_updates([tool_name])
+        tv = result.get(tool_name)
+        if tv is not None:
+            return tv
+        # check_updates returned no entry (network failure etc.); construct
+        # a conservative default so callers still get a stable ToolVersion.
+        return ToolVersion(
+            tool_name=tool_name,
+            installed_version="none",
+            latest_version="unknown",
+            update_available=False,
+            download_url="",
+            release_date=datetime.now(),
+        )
+
     def check_updates(self, tools: Optional[List[str]] = None) -> Dict[str, ToolVersion]:
         """Check GitHub releases for latest versions.
 
@@ -233,7 +307,7 @@ class BinaryUpdater:
                 continue
 
             latest_version = release_info.get("tag_name", "unknown").lstrip("v")
-            installed_version = installed.get(tool_name, "not_installed")
+            installed_version = installed.get(tool_name, "none").lstrip("v")
             download_url, _ = self._find_windows_asset(release_info) or (None, None)
 
             # Parse release date
