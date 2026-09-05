@@ -2071,9 +2071,23 @@ def build_target_feed(
                 # Convert to FeedCandidate format
                 from datetime import datetime
                 for target in new_secret_targets:
+                    # Normalize the raw target value into the canonical form the
+                    # rest of the feed pipeline expects. Skip any target that
+                    # can't be normalized (out-of-scope shapes) rather than
+                    # crash the whole feed build.
+                    try:
+                        normalized = _normalize_target_value(
+                            target["target_type"], target["target"]
+                        )
+                    except ValueError:
+                        normalized = None
+                    if normalized is None:
+                        continue
+                    normalized_type, canonical_value = normalized
                     secret_targets.append(FeedCandidate(
-                        target_type=target["target_type"],
+                        target_type=normalized_type,
                         target_value=target["target"],
+                        canonical_value=canonical_value,
                         source_group=target["source"],
                         source_kind=target["provenance"]["secret_type"],
                         provenance=target["source"],
