@@ -249,7 +249,7 @@ addopts         = [
     "--import-mode=importlib",
     "-ra",
     "-m",
-    "not chaos and not slow",
+    "not chaos and not slow and not cart_readiness",
 ]
 markers = [
     "unit: default isolated unit/component tests",
@@ -260,6 +260,7 @@ markers = [
     "slow: tests taking > 10 s (LLM inference, full ETL pipeline)",
     "chaos: fault-injection / chaos scenarios; opt-in via -m chaos",
     "chaos_unit: unit tests for chaos harness safety helpers; run by default",
+    "cart_readiness: local operator autonomous-loop health checks; opt-in via -m cart_readiness (excluded from default addopts because they assert on runtime state — configured autostart, live JSONL history — that CI runners and fresh clones do not have)",
     "phase0: Phase 0 knowledge base tests",
     "phase2: Phase 2 OSINT tests",
     "phase3: Phase 3 evasion tests",
