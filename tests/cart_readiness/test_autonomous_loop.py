@@ -8,8 +8,10 @@ never completed a single apply-mode iteration on this machine.
 
 These tests live outside the phase* / opsec / integration marker groups because
 they exercise the *operational readiness* of the local machine, not any single
-phase's code. They are marked ``functional`` so the default pytest addopts
-(``-m "not chaos and not slow"``) still picks them up.
+phase's code. They are marked ``cart_readiness`` and excluded from the default
+pytest addopts (``-m "not chaos and not slow and not cart_readiness"``) so
+CI runners and fresh clones do not attempt them. Boss/operator runs them
+explicitly with ``pytest -m cart_readiness tests/cart_readiness/``.
 """
 from __future__ import annotations
 
