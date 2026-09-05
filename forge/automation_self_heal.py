@@ -191,7 +191,7 @@ def automation_self_heal_plan(
         ],
         "feed_build_dry_run": ["forge", "automation", "feed-build", "--json"],
         "autopilot_dry_run": [
-            "forge-autopilot.bat" if os.name == "nt" else "./forge-autopilot.sh",
+            str(root / "forge-autopilot.bat") if os.name == "nt" else str(root / "forge-autopilot.sh"),
             "--dry-run",
             "--feed-build",
             "--resume-limit",
@@ -204,7 +204,7 @@ def automation_self_heal_plan(
             "all",
         ],
         "autopilot_apply": [
-            "forge-autopilot.bat" if os.name == "nt" else "./forge-autopilot.sh",
+            str(root / "forge-autopilot.bat") if os.name == "nt" else str(root / "forge-autopilot.sh"),
             "--feed-file",
             str(feed_file),
             "--roe-id",
@@ -737,7 +737,9 @@ def _guarded_autostart_commands(
     *,
     skip_feed_build: bool = False,
 ) -> dict[str, list[str]]:
-    launcher = "forge-autopilot.bat" if os.name == "nt" else "./forge-autopilot.sh"
+    launcher = str(
+        root / ("forge-autopilot.bat" if os.name == "nt" else "forge-autopilot.sh")
+    )
     base = [
         launcher,
         "--resume-limit",
