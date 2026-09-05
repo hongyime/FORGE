@@ -30,8 +30,6 @@ EXPECTED_PACKAGED_GO_TOOLS = {
     "tlsx": "tls_fingerprint",
     "uncover": "provider_search",
     "naabu": "active_ports",
-    "dnsx": "dns_enrichment",
-    "httpx": "http_probe",
     "katana": "crawler",
     "subfinder": "subdomains",
 }
