@@ -1419,7 +1419,11 @@ def _docker_status(root: Path, *, probe: bool, mode: str = "host_compose") -> di
             cwd=root,
             text=True,
             capture_output=True,
-            timeout=15,
+            # Bumped from 15s to 60s: on Windows a fresh subprocess invoking
+            # docker compose from a cold Docker Desktop can take 30-40 seconds
+            # to return. 15s was reliably tripping TimeoutExpired in scheduled-
+            # task runs where the parent shell had no warm docker CLI cache.
+            timeout=60,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
