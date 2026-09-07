@@ -141,7 +141,7 @@ DEFAULT_AUTOSTART_CONFIG: dict[str, Any] = {
     "failure_backoff_minutes": 120,
     "log_max_entries": 25,
     "feed_sources": ["all"],
-    "docker_probe_mode": "host_compose",
+    "docker_probe_mode": "disabled",
 }
 
 
