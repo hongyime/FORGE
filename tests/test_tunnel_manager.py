@@ -145,20 +145,21 @@ class TestTunnelManager:
             'CLOUDFLARED_PATH',
             Path('/fake/cloudflared.exe')
         ):
-            with patch.object(tm, '_verify_platform', return_value=True):
-                # Mock process with tunnel URL in output
-                mock_process = MagicMock()
-                mock_process.stdout.readline.side_effect = [
-                    "Your quick Tunnel is ready: https://abc123.trycloudflare.com\n",
-                    ""  # EOF
-                ]
-                mock_process.poll.return_value = None
-                mock_popen.return_value = mock_process
+            with patch.object(Path, 'exists', return_value=True):
+                with patch.object(tm, '_verify_platform', return_value=True):
+                    # Mock process with tunnel URL in output
+                    mock_process = MagicMock()
+                    mock_process.stdout.readline.side_effect = [
+                        "Your quick Tunnel is ready: https://abc123.trycloudflare.com\n",
+                        ""  # EOF
+                    ]
+                    mock_process.poll.return_value = None
+                    mock_popen.return_value = mock_process
 
-                url = tm.start_quick_tunnel(local_port=4444)
-                
-                assert url == "https://abc123.trycloudflare.com"
-                assert tm._active_tunnel is not None
+                    url = tm.start_quick_tunnel(local_port=4444)
+                    
+                    assert url == "https://abc123.trycloudflare.com"
+                    assert tm._active_tunnel is not None
 
     @patch('subprocess.Popen')
     def test_start_named_tunnel_success(self, mock_popen):
