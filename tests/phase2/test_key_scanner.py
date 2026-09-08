@@ -1038,7 +1038,10 @@ class TestValidationConfirmation:
             pattern_name="aws_access_key_id",
         )
 
-    def test_questionary_called_before_first_validation(self, engagement_db):
+    def test_questionary_called_before_first_validation(self, engagement_db, monkeypatch):
+        # Explicitly clear the OPSEC-prompt bypass env var so the test invariant
+        # (confirm called exactly once) is not skipped when the shell inherits it.
+        monkeypatch.delenv("FORGE_KEYSCAN_ASSUME_YES", raising=False)
         with (
             patch(
                 "forge.utils.intel.secret_finder._github_keyscan",
