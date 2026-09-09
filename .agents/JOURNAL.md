@@ -442,3 +442,11 @@
 - 2026-09-08 17:38:20 +08:00 [PRAWN-E14/claude/stop] branch=main head=af7e722 dirty=4
 - 2026-09-08 22:24:34 +08:00 [PRAWN-E14/claude/stop] branch=main head=af7e722 dirty=4
 - 2026-09-09 00:48:36 +08:00 [PRAWN-E14/claude/stop] branch=main head=af7e722 dirty=4
+
+## 2026-09-09 Session #9 (yolo/Kiro) — reconciliation + do-now/do-next
+- Reconciled STATE.md v8 against real test runs. Session-8 claim "FIXES COMPLETE" was wrong: `>= 4` relaxation only covers race-adjacent failures, not structural peak<4 or nested-pool deadlocks.
+- Fixed 6 concrete test failures across cli/self_heal, cli/registry, integration/pipeline: 27c19bc, fe626c8, 9a8b4c8, 9b9eb77, 6afaa91, 17bb66b, a715c11.
+- 886a0ea eliminates nested-pool deadlock via <=4 items sequential + `FORGE_LOCAL_BATCH_WORKERS` env override + integration autouse. integration/test_engagement_pipeline.py goes from 0/9 (all hang) to 6/9 passing.
+- Remaining 3 integration failures (auto_without_cloud, azure_connection_string, mixes_key_validators) are pre-existing missing-finding assertions, confirmed via git stash + rerun; not this session's regressions.
+- Peak-concurrency orchestrator tests failing with peak=3 are pre-existing structural failures (seed policy filter reduces active workers). Not fixed this session.
+- Next: E2E subprocess DI fix, then primary-task security audit, then Do Now T1-T8, Do Next T5-T6, per user autonomy directive.
