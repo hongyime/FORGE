@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import re
 import sqlite3
@@ -259,7 +260,7 @@ def verify_run_audit_manifest(
     if stored is None:
         return AuditManifestVerification(ok=False, reason="manifest not found")
     stored_json_hash = sha256_text(stored.manifest_json)
-    if stored_json_hash != stored.manifest_hash:
+    if not hmac.compare_digest(str(stored_json_hash), str(stored.manifest_hash)):
         return AuditManifestVerification(
             ok=False,
             stored_hash=stored.manifest_hash,
@@ -281,7 +282,7 @@ def verify_run_audit_manifest(
         run_id=run_id,
         payload=payload,
     )
-    ok = stored.manifest_hash == rebuilt.manifest_hash
+    ok = hmac.compare_digest(str(stored.manifest_hash), str(rebuilt.manifest_hash))
     return AuditManifestVerification(
         ok=ok,
         stored_hash=stored.manifest_hash,

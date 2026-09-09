@@ -200,7 +200,7 @@ def verify_run_audit_manifest_bundle_signature(
                         ok=False,
                         reason=f"signed file missing: {name}",
                     )
-                if actual_hash != str(expected_hash):
+                if not hmac.compare_digest(str(actual_hash), str(expected_hash)):
                     return AuditManifestBundleSignatureVerification(
                         ok=False,
                         reason=f"signed file hash mismatch: {name}",

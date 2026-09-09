@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -197,7 +198,7 @@ def _write_once(
         return False
     except FileExistsError:
         existing_hash = _file_sha256(path)
-        if expected_sha256 is None or existing_hash != expected_sha256:
+        if expected_sha256 is None or not hmac.compare_digest(str(existing_hash), str(expected_sha256)):
             raise ValueError(f"remote audit bundle path already exists with different content: {path}")
         return True
     except OSError as exc:
