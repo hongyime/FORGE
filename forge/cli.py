@@ -221,6 +221,7 @@ report_app = _cli_apps.report_app
 demo_app = _cli_apps.demo_app
 standards_app = _cli_apps.standards_app
 sessions_app = _cli_apps.sessions_app
+artifacts_app = _cli_apps.artifacts_app
 
 
 # ---------------------------------------------------------------------------
