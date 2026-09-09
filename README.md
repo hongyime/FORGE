@@ -250,6 +250,7 @@ forge graph ownership list --engagement N   # List asset ownership claims
 forge graph ownership set --engagement N --entity-key KEY --owner OWNER
 forge graph ownership resolve --engagement N --entity-key KEY --owner OWNER
 forge graph attribution import --engagement N --file attributions.json|csv
+forge import bloodhound --engagement N --file collector.zip|json-dir [--dry-run]  # SharpHound zip / BloodHound JSON offline import (ROE-gated for non-dry-run)
 forge audit manifest-verify --engagement N
 forge audit manifest-export --engagement N [--sign] [--remote-store]
 forge audit manifest-bundle-verify --bundle PATH
