@@ -450,3 +450,10 @@
 - Remaining 3 integration failures (auto_without_cloud, azure_connection_string, mixes_key_validators) are pre-existing missing-finding assertions, confirmed via git stash + rerun; not this session's regressions.
 - Peak-concurrency orchestrator tests failing with peak=3 are pre-existing structural failures (seed policy filter reduces active workers). Not fixed this session.
 - Next: E2E subprocess DI fix, then primary-task security audit, then Do Now T1-T8, Do Next T5-T6, per user autonomy directive.
+
+## 2026-09-09 Session #9 (yolo/Kiro) — wrap
+- 12 atomic commits pushed to origin/main (27c19bc → 667ce12). Zero regressions across 287 tests in touched surfaces (221 broad sweep + 66 cli/self_heal|cli/registry).
+- Reconciliation revealed STATE #8 was overclaiming; real test surface is fixed for the concrete failures I found (cli/self_heal 4→0, cli/registry 2→0, e2e broken→passing, integration 0→6/9). Nested-pool deadlock permanently fixed.
+- Security audit: 0 CRITICAL findings, 2 HIGH/3 MEDIUM shipped: hmac.compare_digest on bootstrap + audit manifest hashes, min-length WEB_SECRET_KEY outside dev.
+- Do Now T1-T8 + Do Next T5,T6 Python modules verified real (cloudflared subprocess, GitHub Releases API, base64 STS parse, impacket integration, LDAP lockout probe, ticket parsing, synced-user detection). 118 module tests green.
+- Rust core placeholders remain intentional per 2026-09-01 decision. Introduced `FORGE_LOCAL_BATCH_WORKERS` env override for operator escape hatch on nested-pool paths.
