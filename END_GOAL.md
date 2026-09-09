@@ -1,6 +1,6 @@
 # FORGE End Goal
 
-Last updated: 2026-07-23
+Last updated: 2026-09-09
 
 Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
 
@@ -69,9 +69,13 @@ There is one end goal, not several competing goals:
   operators and future agents.
 - `SPEC.md` is the root implementer spec that restates the goal as invariants
   and task categories, but it must not override this file.
-- `docs/engagement_overhaul_tasklist.md` contains acceptance criteria and the
-  current implementation backlog.
-- `docs/claude_quick_handoff.md` contains the latest short resume notes.
+- [Done Means](#done-means) and [Release Gate Semantics](#release-gate-semantics)
+  below contain the acceptance criteria; `SPEC.md` supplies the invariants.
+- [docs/competitive_upgrade_consolidated_backlog.md](docs/competitive_upgrade_consolidated_backlog.md)
+  contains prioritized upgrade proposals, subject to this goal and its gates.
+- [.agents/STATE.md](.agents/STATE.md) contains current verified progress,
+  blockers, and next steps; [.agents/JOURNAL.md](.agents/JOURNAL.md) records
+  durable decisions and historical verification.
 
 The goal lock identifier above is the pinned release target. Do not create a
 replacement goal or reinterpret the project as UI-only, provider-count-only, or
@@ -79,10 +83,12 @@ scanner-collection work. Clarify the wording in the existing source-of-truth
 files instead.
 
 Do not create a new goal document when the goal feels unclear. Update these
-files instead, keep them consistent, and commit the clarification. Treat checked
-backlog entries as evidence already landed, unchecked canonical end-goal boxes
-as release criteria, and `## Compact active backlog` as the current sequence of
-work.
+files instead, keep them consistent, and commit the clarification. Treat the
+acceptance criteria below as the fixed destination, not current live status.
+Use the backlog's `Do Now`, `Do Next`, and `Explore` sections for priorities,
+reconciled with shared state and code before choosing unfinished work. A backlog
+row is neither completion proof nor authorization to bypass scope or safety
+gates.
 
 Runtime chat goal text, `/goal` state, old handoff snippets, and agent memory
 are not authoritative when they conflict with this documentation chain. If the
@@ -206,10 +212,12 @@ advances and verify it with focused or mocked tests.
 
 Read next:
 
-1. `SPEC.md` for the compact root invariants and implementation task categories.
-2. `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal` for
-   acceptance criteria. Unchecked boxes there are goal criteria, not current live
-   status.
-3. `docs/engagement_overhaul_tasklist.md` under `## Compact active backlog` for
-   the current implementation continuation order.
-4. `docs/claude_quick_handoff.md` for the latest short resume notes.
+1. [.agents/STATE.md](.agents/STATE.md) for current verified progress and
+   blockers, then [.agents/JOURNAL.md](.agents/JOURNAL.md) for recent decisions.
+2. [SPEC.md](SPEC.md) for the compact root invariants and implementation task
+   categories.
+3. [Done Means](#done-means) and [Release Gate Semantics](#release-gate-semantics)
+   above for acceptance criteria, not current live status.
+4. [docs/competitive_upgrade_consolidated_backlog.md](docs/competitive_upgrade_consolidated_backlog.md)
+   for prioritized proposals and deferred questions, reconciled with the locked
+   goal and shared state before implementation.

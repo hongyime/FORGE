@@ -37,10 +37,11 @@ or testing/cleanup. If none applies, stop and choose a concrete release-gate gap
 instead.
 
 Do not replace this goal with a new project direction in a task handoff. If the
-goal needs clarification, update `END_GOAL.md`, `SPEC.md`, and
-`docs/engagement_overhaul_tasklist.md` together so every agent sees the same
-locked target. Refresh `docs/claude_quick_handoff.md` too when active
-continuation wording would mislead the next agent.
+goal needs clarification, update `END_GOAL.md` and `SPEC.md` together so every
+agent sees the same locked target. Keep
+`docs/competitive_upgrade_consolidated_backlog.md` aligned with that contract.
+Refresh `.agents/STATE.md` and append the decision to `.agents/JOURNAL.md` when
+active continuation wording would mislead the next agent.
 
 If runtime `/goal` text, chat summaries, or historical handoffs disagree with
 that chain, treat them as stale. Continue against the goal lock above and update
@@ -49,21 +50,24 @@ the stale continuation note only when it would mislead the next agent.
 Fast project goal entry point: [END_GOAL.md](END_GOAL.md). Root implementer
 spec: [SPEC.md](SPEC.md). Normative project end goal:
 [END_GOAL.md](END_GOAL.md).
-Execution-facing checklist:
-[engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md) ->
-`Canonical End Goal`.
+Acceptance criteria: [Done Means](END_GOAL.md#done-means) and
+[release gate semantics](END_GOAL.md#release-gate-semantics).
+Active backlog:
+[competitive upgrade backlog](docs/competitive_upgrade_consolidated_backlog.md).
 
 Continuation order for future agents:
 
-1. Read [END_GOAL.md](END_GOAL.md) for the short goal.
-2. Read [SPEC.md](SPEC.md) for the invariant and task contract.
-3. Treat `## Canonical End Goal` in
-   [docs/engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md)
-   as acceptance criteria, not live progress.
-4. Use `## Compact active backlog` in that same task list as the current
-   continuation order.
-5. Use [docs/claude_quick_handoff.md](docs/claude_quick_handoff.md) for the
-   latest short resume notes.
+1. Read [.agents/STATE.md](.agents/STATE.md) for current progress and blockers,
+   then [.agents/JOURNAL.md](.agents/JOURNAL.md) for recent decisions.
+2. Read [END_GOAL.md](END_GOAL.md) for the locked goal and acceptance criteria.
+3. Read [SPEC.md](SPEC.md) for the invariant and task contract.
+4. Use the `Do Now`, `Do Next`, and `Explore` sections in the
+   [competitive upgrade backlog](docs/competitive_upgrade_consolidated_backlog.md)
+   for priorities. Reconcile each item with verified state and code before
+   treating it as unfinished; backlog rows are proposals, not completion proof
+   or authorization to bypass the goal, scope, or safety gates.
+5. Update shared state after verified milestones and append durable decisions
+   to the journal rather than creating a parallel handoff source of truth.
 
 ---
 
@@ -1410,8 +1414,9 @@ Current baseline: **2,100+ passing** / 0 failing.
 - `README.md` (this file) — main reference
 - `END_GOAL.md` — fast end-goal entry point for operators and future agents
 - `SPEC.md` — root implementer invariant and task contract
-- `docs/engagement_overhaul_tasklist.md` — canonical acceptance checklist and active backlog
-- `docs/claude_quick_handoff.md` — latest short resume notes
+- `docs/competitive_upgrade_consolidated_backlog.md` — prioritized upgrade backlog, subject to the locked goal
+- `.agents/STATE.md` — latest verified progress, blockers, and next steps
+- `.agents/JOURNAL.md` — append-only decisions and historical verification
 - `DAILY_USE.md` — one-page operator cheatsheet
 - `.kiro/MORNING_HANDOFF.md` — historical 2026-07-06 handoff; not current source of truth
 - `.kiro/OSINT_HANDOVER_BRIEF.md` — clean handover doc if you're consuming FORGE OSINT elsewhere
@@ -1432,8 +1437,8 @@ Current baseline: **2,100+ passing** / 0 failing.
 ## Recent hardening (2026-08-05)
 
 The 2026-08-04 → 2026-08-05 arc added the following operator-facing surfaces
-and shared primitives. Details in `AUDIT_RESULTS.md` (top section) and
-`docs/engagement_overhaul_tasklist.md` `## Post-audit hardening milestones`.
+and shared primitives. Details in `AUDIT_RESULTS.md` (top section); current
+continuation state is in `.agents/STATE.md`.
 
 - **HTMX engagement detail tabs** at `GET /engagements/{ref}/htmx` — a
   server-rendered parallel path to the React SPA. Six tabs
