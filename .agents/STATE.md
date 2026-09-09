@@ -4,8 +4,8 @@
 **Session:** Hephaestus continuation of Kiro sessions #9/#10
 **Branch:** main
 **Starting HEAD:** 672aa67 (matched origin/main at recovery)
-**Current task:** Track D shipped (`c527f37`); next: artifact enrichment status tab (#3).
-**Track D checkpoint:** c527f37 (pushed to origin/main).
+**Current task:** Track #3 shipped (`234cf70`); next: Sigma.js graph UI (#5).
+**Track #3 checkpoint:** 234cf70 (pushed to origin/main).
 **Gate:** testing/cleanup and continuation traceability (`SPEC.md` T8); no production behavior changes.
 
 ---
