@@ -367,6 +367,9 @@ def test_end_to_end_engagement_pipeline_auto_without_cloud_uses_local_llama(
     class _FakeLlama:
         def create_chat_completion(self, **kwargs):  # noqa: ANN003
             del kwargs
+            # 17 repetitions × 3 words = 51 words, just above the 50-word
+            # minimum enforced by forge.phase6.llm_validator [V-05].
+            filler = " ".join(["Professional assessment finding."] * 17)
             return {
                 "choices": [
                     {
@@ -374,19 +377,17 @@ def test_end_to_end_engagement_pipeline_auto_without_cloud_uses_local_llama(
                             "content": (
                                 "## 1. Executive Summary\n\n"
                                 "The overall risk is HIGH. "
-                                + " ".join(["Professional assessment finding."] * 15)
-                                + "\n\n## 2. Engagement Scope & Methodology\n\n"
-                                + " ".join(["Professional assessment finding."] * 15)
-                                + "\n\n## 3. Reconnaissance Findings\n\n"
-                                + " ".join(["Professional assessment finding."] * 15)
-                                + "\n\n## 4. OSINT & Credential Intelligence\n\n"
-                                + " ".join(["Professional assessment finding."] * 15)
-                                + "\n\n## 5. Vulnerability & Exploit Correlation\n\n"
-                                + " ".join(["Professional assessment finding."] * 15)
-                                + "\n\n## 6. Post-Exploitation Activities\n\n"
-                                + " ".join(["Professional assessment finding."] * 15)
-                                + "\n\n## 7. Risk Ratings & Remediation Recommendations\n\n"
-                                + " ".join(["Professional assessment finding."] * 15)
+                                "Validated Firebase data exposure was confirmed against "
+                                f"acme-firebase-prod. {filler}"
+                                f"\n\n## 2. Engagement Scope & Methodology\n\n{filler}"
+                                f"\n\n## 3. Reconnaissance Findings\n\n{filler}"
+                                f"\n\n## 4. OSINT & Credential Intelligence\n\n{filler}"
+                                "\n\n## 5. Vulnerability & Exploit Correlation\n\n"
+                                "Validated Firebase data exposure remains the top "
+                                f"authoritative finding. {filler}"
+                                f"\n\n## 6. Post-Exploitation Activities\n\n{filler}"
+                                "\n\n## 7. Risk Ratings & Remediation Recommendations\n\n"
+                                f"{filler}"
                             )
                         }
                     }
