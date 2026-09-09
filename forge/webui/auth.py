@@ -68,6 +68,18 @@ def _secret() -> str:
             'run `python -c "import secrets; print(secrets.token_urlsafe(48))"` '
             "to generate one."
         )
+    # Doctor already refuses production launches with FORGE_WEB_SECRET_KEY
+    # shorter than 32 chars. Mirror the same check here in mint/verify so
+    # weak keys are rejected even when the runtime path skips doctor: PyJWT
+    # only emits a warning for short HS256 secrets, which is not enough to
+    # stop weak-key deployments from serving live tokens. Dev profiles keep
+    # accepting short fixtures for tests that seed 'test-secret' etc.
+    if not _is_dev_profile() and len(key) < 32:
+        raise RuntimeError(
+            "FORGE_WEB_SECRET_KEY must be at least 32 characters outside dev/test profiles. "
+            "HS256 tokens signed with a short key are enumerable via HMAC brute force. "
+            'Generate one with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.'
+        )
     return key
 
 

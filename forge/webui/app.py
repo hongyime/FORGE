@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import os
 import sqlite3
 import subprocess
@@ -464,7 +465,12 @@ def create_app() -> Any:
             raise HTTPException(status_code=400, detail="operator is required.")
         if bootstrap_token is None or not bootstrap_token.strip():
             raise HTTPException(status_code=401, detail="Missing bootstrap credential.")
-        if bootstrap_token != _bootstrap_secret():
+        # Constant-time comparison: guards against timing side-channel token
+        # enumeration. Both sides are encoded to bytes because compare_digest
+        # requires identical types.
+        supplied = bootstrap_token.strip().encode("utf-8")
+        expected = _bootstrap_secret().encode("utf-8")
+        if not hmac.compare_digest(supplied, expected):
             raise HTTPException(status_code=401, detail="Invalid bootstrap credential.")
         normalized_role = str(role or "operator").strip().lower() or "operator"
         if normalized_role not in ROLE_PERMISSIONS:
