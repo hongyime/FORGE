@@ -1,6 +1,7 @@
 # Agent Journal
 
 - 2026-09-03: MEDIUM 8 — cloud-creds CLI + ROE integration. Fixed missing `_cli_audit` import in `forge/cli_cloud.py` (NameError at runtime). Fixed `SyntaxError` in `forge/collection/cloud/__init__.py` (`}` → `]`). Added 14-test regression suite `tests/cli/test_cloud_credentials_cli.py` covering: command registration, importability, safe defaults (metadata off), ROE gate, scope check, audit logging, provider/format validation, output correctness. All 14 pass.
+- 2026-09-10: Track E — session enumeration CLI shipped (e5bd699). Populated forge/collection/sessions/__init__.py public API; created forge/cli_sessions.py with `forge sessions enum` (Windows NetSessionEnum + Linux who/w/last, ROE-gated, scope-checked, audit-logged, JSON/CSV, dry-run); added sessions_app to ForgeCliApps + cli_registry.py + cli.py + cli_legacy_decorators.py. 92 session tests green, 0 regressions.
 - 2026-08-29: B739 refreshed and re-uploaded the autonomous target loop PostPlan HTML so the published plan matches the latest hardening commits through c4e30b4.
 - 2026-08-29: B738 added total_count/ready_count/blocked_count/ignored_count aliases to queue and guarded source-queue summaries for supervisor-friendly parsing.
 - 2026-08-29: B737 made CTI queue target promotion configurable through queue_promote_targets and per-item promote_targets while preserving the previous enabled default.
