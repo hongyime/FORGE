@@ -46,7 +46,7 @@ def _build_db(path: Path) -> sqlite3.Connection:
         INSERT INTO validation_claims
             (engagement_id, claim_type, key_id, owner, expires_at)
         VALUES
-            (1001, 'key', 30, 'appsec@example.com', '2026-09-01T00:00:00Z')
+            (1001, 'key', 30, 'appsec@example.com', '2099-12-31 00:00:00')
         """
     )
     con.commit()
