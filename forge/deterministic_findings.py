@@ -464,10 +464,23 @@ class DeterministicFindingEngine:
             validation_detail,
             asset_aliases=_validation_asset_types_for_key_service(service),
         )
-        if linked_reportable is not None:
-            confirmed = linked_reportable
+        # linked_reportable can be:
+        #   True  → cloud validation index says the key's linked cloud resource
+        #           is reportable; accept immediately.
+        #   None  → no matching cloud validation row; fall through to the
+        #           direct-detail parser.
+        #   False → cloud validation row exists but is_reportable_cloud_validation
+        #           could not classify the method. That does not disprove the
+        #           key's own provider proof — the sweep still marked the key
+        #           validation_state=ACTIVE with a stable provider proof (e.g.
+        #           azure_blob_list_containers_shared_key, aws_sts_get_caller_identity).
+        #           Fall back to key_validation_detail_is_reportable rather than
+        #           discarding a valid stable-proof finding.
+        detail_reportable = key_validation_detail_is_reportable(service, validation_detail)
+        if linked_reportable is True:
+            confirmed = True
         else:
-            confirmed = key_validation_detail_is_reportable(service, validation_detail)
+            confirmed = detail_reportable
         if not confirmed:
             return None
         description = (

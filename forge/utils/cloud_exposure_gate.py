@@ -40,6 +40,35 @@ PROVIDER_KEY_VALIDATION_METHODS = {
     "discord": frozenset({"discord_current_user"}),
     "slack": frozenset({"slack_auth_test"}),
     "telegram": frozenset({"telegram_get_me"}),
+    # Provider-key validation methods keyed by the raw service name that
+    # forge.deterministic_findings and forge.phase6.report_synthesizer feed
+    # in. Without these entries is_reportable_cloud_validation_method returns
+    # False for cloud/API key validations even when the sweep produced a
+    # stable-proof VALIDATED row, and _build_key_finding then discards
+    # otherwise-reportable findings. Values match the validation_method
+    # strings that cloud_validate and the individual validators emit.
+    "aws": frozenset({"aws_sts_get_caller_identity"}),
+    "aws_s3": frozenset({"aws_sts_get_caller_identity"}),
+    "azure": frozenset({"azure_blob_list_containers_shared_key"}),
+    "azure_blob": frozenset({"azure_blob_list_containers_shared_key"}),
+    "cloudflare": frozenset({"cloudflare_token_verify"}),
+    "datadog": frozenset({"datadog_api_key_validate"}),
+    "gcp": frozenset({"google_generative_language_models_list"}),
+    "google": frozenset({"google_generative_language_models_list"}),
+    "github": frozenset({"github_user_api"}),
+    "gitlab": frozenset({"gitlab_current_user_api"}),
+    "huggingface": frozenset({"huggingface_whoami_v2"}),
+    "mailchimp": frozenset({"mailchimp_ping_api"}),
+    "netlify": frozenset({"netlify_current_user"}),
+    "notion": frozenset({"notion_users_me"}),
+    "openai": frozenset({"openai_models_list"}),
+    "anthropic": frozenset({"anthropic_models_list"}),
+    "posthog": frozenset({"posthog_users_me"}),
+    "sendgrid": frozenset({"sendgrid_profile_api"}),
+    "sentry": frozenset({"sentry_list_organizations"}),
+    "stripe": frozenset({"stripe_balance_api"}),
+    "twilio": frozenset({"twilio_account_api"}),
+    "vercel": frozenset({"vercel_user_get"}),
 }
 
 _ASSET_TYPE_ALIASES = {

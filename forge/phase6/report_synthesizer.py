@@ -1540,8 +1540,15 @@ class ContextBuilder:
             validation_detail,
             asset_aliases=self._validation_asset_types_for_provider(service),
         )
-        if linked_reportable is not None:
-            return linked_reportable
+        # See forge.deterministic_findings._build_key_finding for the same
+        # linked-vs-detail policy: linked=True short-circuits accept, everything
+        # else (linked=None or linked=False due to unclassified cloud method)
+        # falls back to the direct provider-proof parser. Otherwise a
+        # ("azure","<account>") row that the cloud gate cannot classify would
+        # suppress an otherwise-stable azure_blob_list_containers_shared_key
+        # finding from the report.
+        if linked_reportable is True:
+            return True
         return key_validation_detail_is_reportable(service, validation_detail)
 
     @staticmethod
