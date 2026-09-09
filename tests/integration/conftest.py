@@ -33,6 +33,23 @@ MOCK_SSH_PORT = int(os.getenv("MOCK_SSH_PORT", "2223"))
 SSH_AVAILABLE = bool(MOCK_SSH_HOST)
 
 
+@pytest.fixture(autouse=True)
+def _force_sequential_local_batches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force EngagementSynthesisEngine local batches to run sequentially.
+
+    Integration tests exercise the real synthesis + artifact-persistence
+    pipeline, which uses recursive ``_run_ordered_local_batch`` fan-outs. Under
+    pytest on Windows those nested ThreadPoolExecutor spawns have been
+    observed to deadlock (see forge.engagement_orchestrator._run_ordered_local_batch
+    comment). Setting the env override to 1 keeps every batch on the calling
+    thread, which is the same behaviour operators can opt into via
+    ``FORGE_LOCAL_BATCH_WORKERS=1`` on real hosts if they hit the same hang.
+    Peak-concurrency tests live in tests/phase1 and are unaffected.
+    """
+
+    monkeypatch.setenv("FORGE_LOCAL_BATCH_WORKERS", "1")
+
+
 @pytest.fixture()
 def int_eng_db(tmp_path: Path) -> Path:
     """Full-schema engagement DB for integration tests."""

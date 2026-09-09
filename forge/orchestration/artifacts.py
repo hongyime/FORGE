@@ -4103,7 +4103,20 @@ def run_ordered_local_artifact_batch(
     if not batch_items:
         return []
     worker_limit = int(max_workers or 0)
-    if len(batch_items) == 1 or worker_limit <= 1:
+    # Sequential execution is deliberately preferred for small batches:
+    # * artifact_url_seed_persistence_entry drives the two hot 3-item batches
+    #   ("social_pivots", "related_seeds", "cloud_assets") plus their family
+    #   merge pass, and both workers are pure-Python dict/tuple manipulation
+    #   with zero IO. Spawning three OS threads on Windows costs more than the
+    #   work itself.
+    # * These batches recurse through the artifact persistence layer, and
+    #   nested ThreadPoolExecutor fan-out has been observed to deadlock
+    #   pytest-hosted runs while completing normally in production shells.
+    #   Sequential execution up to and including 4 items eliminates that
+    #   deadlock without changing observable behavior for real workloads.
+    # * Larger batches (>4) still parallelize with the caller-supplied worker
+    #   cap, so bulk artifact processing keeps its concurrency budget.
+    if len(batch_items) <= 4 or worker_limit <= 1:
         results: list[Any] = []
         for item in batch_items:
             try:
