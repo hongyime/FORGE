@@ -1,19 +1,20 @@
-"""BloodHound import CLI command.
+"""BloodHound / AzureHound import CLI commands.
 
-Command: forge import bloodhound --engagement N --file PATH \\
-    --roe-id ROE --scope-manifest PATH_OR_JSON [--dry-run]
+Commands:
+    forge import bloodhound --engagement N --file PATH \\
+        --roe-id ROE --scope-manifest PATH_OR_JSON [--dry-run]
 
-Accepts either a SharpHound ``.zip`` or a directory of BloodHound JSON files.
+    forge import azurehound --engagement N --file PATH \\
+        --roe-id ROE [--dry-run]
 
-**Single audit-gated entrypoint.** Every non-dry-run import routes through
-:class:`forge.ingestion.bloodhound_importer.BloodHoundImporter`, which:
+``bloodhound`` accepts either a SharpHound ``.zip`` or a directory of
+BloodHound JSON files.  ``azurehound`` accepts a single AzureHound v2 JSON
+export (canonical ``{"meta":...,"data":[...]}`` shape or a bare record list).
 
-* Enforces the ROE / scope-manifest gate at construction time.
-* Normalizes every entity through :mod:`forge.graph.normalizer` before it
-  reaches ``bloodhound_entities`` (no CLI-side raw writes).
-* Emits ``import_started`` / ``entity_imported`` / ``import_completed``
-  audit entries -- with ``import_failed`` on any error -- through the
-  shared :class:`forge.audit.logger.AuditLogger`.
+**Single audit-gated entrypoint.** Every non-dry-run BloodHound import routes
+through :class:`forge.ingestion.bloodhound_importer.BloodHoundImporter`.
+AzureHound imports route through
+:func:`forge.ingestion.bloodhound_persist.persist_azurehound_entities`.
 
 Exit codes:
     0 = success
@@ -284,6 +285,135 @@ def register_import_commands(import_app) -> None:
                 files_processed=len(entity_counts),
                 entity_counts=entity_counts,
                 total_entities=result.total_entities,
+                dry_run=False,
+                engagement_id=engagement,
+                db_path=str(db_path),
+            )
+        )
+
+    # ------------------------------------------------------------------ #
+    # AzureHound import                                                    #
+    # ------------------------------------------------------------------ #
+
+    @import_app.command("azurehound")
+    def azurehound_cmd(
+        engagement: int = typer.Option(
+            ..., "--engagement", "-e",
+            help="Engagement ID that scopes the imported entities.",
+        ),
+        file_path: Path = typer.Option(
+            ..., "--file", "-f",
+            help="Path to an AzureHound JSON export file.",
+        ),
+        dry_run: bool = typer.Option(
+            False, "--dry-run",
+            help="Validate + count without writing to the engagement DB.",
+        ),
+        roe_id: str | None = typer.Option(
+            None, "--roe-id",
+            envvar="FORGE_ROE_ID",
+            help="ROE / written-authorization reference. Required for non-dry-run.",
+        ),
+    ) -> None:
+        """Import AzureHound Entra ID / Azure RBAC collector output through the ROE gate.
+
+        Accepts the canonical AzureHound v2 JSON shape
+        (``{"meta": ..., "data": [...]}``) as well as bare record lists and
+        legacy single-record shapes.  All entity kinds (users, groups,
+        service principals, role assignments, subscriptions, etc.) are stored
+        in the engagement's ``bloodhound_entities`` table with
+        ``collector_source='AzureHound'``.
+
+        Dry-run validates the file and reports entity counts without writing
+        to the DB or requiring ``--roe-id``.
+        """
+        from forge.ingestion.bloodhound_persist import (  # noqa: PLC0415
+            persist_azurehound_entities,
+        )
+        from forge.ingestion.parsers.azurehound_parser import (  # noqa: PLC0415
+            parse_azurehound_json,
+        )
+
+        # 1. Argument validation.
+        if engagement <= 0:
+            click.echo(
+                f"--engagement must be a positive integer, got {engagement}",
+                err=True,
+            )
+            raise typer.Exit(code=EXIT_VALIDATION)
+        if not file_path.exists():
+            click.echo(f"File not found: {file_path}", err=True)
+            raise typer.Exit(code=EXIT_VALIDATION)
+        if file_path.is_dir():
+            click.echo("--file must be a JSON file, not a directory", err=True)
+            raise typer.Exit(code=EXIT_VALIDATION)
+        if file_path.suffix.lower() not in {".json", ""}:
+            click.echo(
+                f"Expected .json file, got: {file_path.suffix or '<no ext>'}",
+                err=True,
+            )
+            raise typer.Exit(code=EXIT_VALIDATION)
+
+        # 2. Parse — always needed (dry-run uses counts from parsed entities).
+        try:
+            entities = parse_azurehound_json(file_path)
+        except (FileNotFoundError, ValueError) as exc:
+            click.echo(f"AzureHound parse error: {exc}", err=True)
+            raise typer.Exit(code=EXIT_VALIDATION) from exc
+
+        entity_counts: dict[str, int] = {}
+        for entity in entities:
+            key = entity.entity_type.value
+            entity_counts[key] = entity_counts.get(key, 0) + 1
+        total_entities = sum(entity_counts.values())
+
+        # 3. Dry-run: report counts, no writes, no ROE required.
+        if dry_run:
+            click.echo(
+                f"Validated {len(entities)} AzureHound entities across "
+                f"{len(entity_counts)} type(s) for engagement {engagement}."
+            )
+            click.echo("[dry-run] No database changes will be made.")
+            for etype, count in sorted(entity_counts.items()):
+                click.echo(f"  {etype}: {count}")
+            _print_summary(
+                ImportSummary(
+                    files_processed=1,
+                    entity_counts=entity_counts,
+                    total_entities=total_entities,
+                    dry_run=True,
+                    engagement_id=engagement,
+                    db_path=None,
+                )
+            )
+            return
+
+        # 4. ROE gate: real import requires roe_id.
+        if not roe_id or not roe_id.strip():
+            click.echo(
+                "ROE requirement failed: --roe-id (or FORGE_ROE_ID) is "
+                "required for non-dry-run imports.",
+                err=True,
+            )
+            raise typer.Exit(code=EXIT_VALIDATION)
+
+        # 5. Persist through the single AzureHound write path.
+        try:
+            db_path = _resolve_engagement_db(engagement)
+            persisted = persist_azurehound_entities(
+                db_path,
+                entities,
+                str(file_path),
+            )
+        except Exception as exc:  # noqa: BLE001
+            click.echo(f"AzureHound import failed: {exc}", err=True)
+            raise typer.Exit(code=EXIT_IMPORT) from exc
+
+        _print_summary(
+            ImportSummary(
+                files_processed=1,
+                entity_counts=entity_counts,
+                total_entities=persisted,
                 dry_run=False,
                 engagement_id=engagement,
                 db_path=str(db_path),

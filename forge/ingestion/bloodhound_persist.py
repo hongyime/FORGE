@@ -32,6 +32,8 @@ __all__ = [
     "ensure_bloodhound_schema",
     "detect_collector_source",
     "SHARPHOUND_ENTITY_TYPES",
+    "AZUREHOUND_ENTITY_TYPES",
+    "persist_azurehound_entities",
 ]
 
 _LOG = logging.getLogger(__name__)
@@ -236,5 +238,101 @@ def persist_normalized_entities(
                 total += len(rows)
                 if progress_cb is not None:
                     progress_cb(len(rows))
+        conn.commit()
+    return total
+
+
+# ---------------------------------------------------------------------------
+# AzureHound-native entity types
+# ---------------------------------------------------------------------------
+
+AZUREHOUND_ENTITY_TYPES: frozenset[str] = frozenset({
+    "AZUser",
+    "AZGroup",
+    "AZServicePrincipal",
+    "AZApp",
+    "AZApplication",
+    "AZDevice",
+    "AZTenant",
+    "AZRole",
+    "AZRoleDefinition",
+    "AZRoleAssignment",
+    "AZManagementGroup",
+    "AZSubscription",
+    "AZResourceGroup",
+    "AZKeyVault",
+    "AZStorageAccount",
+    "AZVM",
+    "AZUnknown",
+})
+
+
+# ---------------------------------------------------------------------------
+# AzureHound-native persistence (bypasses SharpHound normalizer pipeline)
+# ---------------------------------------------------------------------------
+
+
+def persist_azurehound_entities(
+    db_path: Path,
+    entities: list,  # list[GraphEntity] — lazy import to avoid circular dep
+    source_path: str,
+    *,
+    progress_cb=None,
+) -> int:
+    """Persist parsed AzureHound ``GraphEntity`` objects to ``bloodhound_entities``.
+
+    Single write path for ``forge import azurehound``. Mirrors
+    :func:`persist_normalized_entities` but accepts the AzureHound-native
+    :class:`~forge.ingestion.parsers.azurehound_parser.GraphEntity` type
+    directly instead of routing through the SharpHound normalizer pipeline.
+
+    Each entity is stored as a self-contained JSON payload so downstream
+    graph consumers (attack-path builder, dashboard, Neo4j exporter) can
+    reconstruct the Azure identity graph from the DB alone.
+
+    Returns the total number of persisted rows. ``UNKNOWN`` entities are
+    persisted as-is so rejections are auditable.
+    """
+    total = 0
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(str(db_path)) as conn:
+        ensure_bloodhound_schema(conn)
+        rows: list[tuple] = []
+        for entity in entities:
+            entity_type = entity.entity_type.value
+            object_id: str | None = entity.object_id or None
+            raw_kind = (entity.metadata.get("raw_kind") or entity_type)
+            payload: dict = {
+                "entity_id": entity.entity_id,
+                "entity_type": entity_type,
+                "label": entity.label,
+                "object_id": entity.object_id,
+                "tenant_id": entity.tenant_id,
+                "app_id": entity.app_id,
+                "source": entity.source,
+                "properties": dict(entity.properties),
+                "relationships": [r.model_dump() for r in entity.relationships],
+                "metadata": {k: v for k, v in entity.metadata.items()},
+            }
+            rows.append((
+                entity_type,
+                source_path,
+                object_id,
+                json.dumps(payload, separators=(",", ":"), sort_keys=True),
+                "AzureHound",
+                raw_kind,
+                None,  # collection_time not available per-entity in AzureHound
+            ))
+        if rows:
+            conn.executemany(
+                "INSERT INTO bloodhound_entities "
+                "(entity_type, source_path, object_id, payload_json, "
+                " collector_source, raw_kind, collection_time) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+            total = len(rows)
+            if progress_cb is not None:
+                progress_cb(total)
         conn.commit()
     return total
