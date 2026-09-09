@@ -99,7 +99,7 @@ class TestDoctorCommandRegisteredExactlyOnce:
     """P2-B02: no more duplicate @app.command('doctor')."""
 
     def test_only_one_doctor_registration(self) -> None:
-        text = Path("forge/cli.py").read_text(encoding="utf-8", errors="replace")
+        text = Path("forge/cli_root_commands.py").read_text(encoding="utf-8", errors="replace")
         count = len(re.findall(r'@app\.command\("doctor"\)', text))
         assert count == 1, (
             f"expected exactly one @app.command('doctor'), found {count}. "
@@ -108,10 +108,10 @@ class TestDoctorCommandRegisteredExactlyOnce:
         )
 
     def test_doctor_reports_provider_discovery_readiness(self) -> None:
-        cli_text = Path("forge/cli.py").read_text(encoding="utf-8", errors="replace")
+        cli_text = Path("forge/cli_root_commands.py").read_text(encoding="utf-8", errors="replace")
         operator_text = Path("forge/cli_operator.py").read_text(encoding="utf-8", errors="replace")
         doctor_text = Path("forge/doctor.py").read_text(encoding="utf-8", errors="replace")
-        assert "run_doctor_command" in cli_text
+        assert "run_doctor_command(" in cli_text
         assert "doctor_payload_json" in operator_text
         assert "run_doctor(console=console)" in operator_text
         assert "from forge.providers.discovery import discover_backends" in doctor_text
