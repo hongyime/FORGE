@@ -13693,6 +13693,7 @@ from forge.cli_legacy_decorators import (  # noqa: F401,E402
     post_lateral,
     post_shell,
     report_generate,
+    sessions_enum,
 )
 
 def main() -> None:

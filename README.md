@@ -255,6 +255,9 @@ forge graph ownership set --engagement N --entity-key KEY --owner OWNER
 forge graph ownership resolve --engagement N --entity-key KEY --owner OWNER
 forge graph attribution import --engagement N --file attributions.json|csv
 forge import bloodhound --engagement N --file collector.zip|json-dir [--dry-run]  # SharpHound zip / BloodHound JSON offline import (ROE-gated for non-dry-run)
+forge import azurehound --engagement N --file azurehound.json [--dry-run]  # AzureHound Entra ID / Azure RBAC JSON import (ROE-gated for non-dry-run)
+forge sessions enum --engagement N [--target HOST] [--platform auto] [--dry-run]  # Active session enumeration (Windows NetSessionEnum / Linux who+w+last)
+forge artifacts status --engagement N [--state filter] [--json]  # Artifact enrichment queue: counts, parser lineage, failure taxonomy
 forge audit manifest-verify --engagement N
 forge audit manifest-export --engagement N [--sign] [--remote-store]
 forge audit manifest-bundle-verify --bundle PATH
