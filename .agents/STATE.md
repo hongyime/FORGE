@@ -4,8 +4,8 @@
 **Session:** Hephaestus continuation of Kiro sessions #9/#10
 **Branch:** main
 **Starting HEAD:** 672aa67 (matched origin/main at recovery)
-**Current task:** Track #3 shipped (`234cf70`); next: Sigma.js graph UI (#5).
-**Track #3 checkpoint:** 234cf70 (pushed to origin/main).
+**Current task:** All Do Now items (#1-6) done; next: Do Next #7 Collection Profile Manifests.
+**Latest checkpoint:** 8a335c5 — regression fix + README update (pushed to origin/main).
 **Gate:** testing/cleanup and continuation traceability (`SPEC.md` T8); no production behavior changes.
 
 ---
@@ -46,7 +46,7 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 ## Unfinished work and decisions
 
 1. **Track A remains partial:** `test_end_to_end_engagement_pipeline_auto_without_cloud_uses_local_llama` is still failing per Kiro's final handoff (retry-budget/final-approval convergence, reported quality 0.888). Kiro marked the task complete while explicitly deferring this third failure; do not erase it from the backlog. Not rerun here.
-2. **Remaining product priorities:** artifact enrichment status tab (#3) and Sigma.js graph UI (#5). AzureHound (#10 / Track D) **DONE** — `c527f37`. Session enumeration (#6 / Track E) **DONE** — `e5bd699`.
+2. **Remaining product priorities:** Do Next: #7 Collection Profile Manifests, #8 Unified Activity Timeline, #9 AD/LDAP Collection, #11 Hybrid Path Derivation. ALL Do Now (#1-6) complete. Track #5 (Sigma.js) already fully implemented — 13 Python tests passing, no new code needed.
 3. **Scope first:** the consolidated backlog contains competing legacy proposals and exclusions. `END_GOAL.md` and `SPEC.md` remain authoritative. Prefer offline import/evidence review; a backlog row does not authorize lateral movement, credential harvesting, C2, or evasion expansion.
 4. **Broader tests deferred:** structural peak-concurrency orchestrator failures and the unidentified full-CLI network hang remain pre-existing work. User requested focused slices only; do not run the full suite without approval.
 5. **Rust deferred:** `rust_core/src/kerberos.rs`, `credentials.rs`, and `pth.rs` placeholders still require explicit feature flags, authorization checks, and security review before real behavior. No Rust or credential API expansion was attempted.
@@ -63,12 +63,12 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-10 (Track D complete)
+- Updated: 2026-09-10 (all Do Now complete, regression fixed)
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: c527f37
+- HEAD: 8a335c5
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
