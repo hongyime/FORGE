@@ -7,6 +7,7 @@ import forge.cli_graph  # noqa: F401
 import forge.cli_osint  # noqa: F401
 import forge.cli_post  # noqa: F401
 import forge.cli_report  # noqa: F401
+import forge.cli_sessions  # noqa: F401
 from forge.cli_cloud import (
     cloud_aws,
     cloud_azure,
@@ -43,6 +44,7 @@ from forge.cli_post import (
     post_shell,
 )
 from forge.cli_report import report_generate
+from forge.cli_sessions import sessions_enum
 
 __all__ = [
     "_assert_offensive_cli",
@@ -75,4 +77,5 @@ __all__ = [
     "post_lateral",
     "post_shell",
     "report_generate",
+    "sessions_enum",
 ]

@@ -220,6 +220,7 @@ post_app = _cli_apps.post_app
 report_app = _cli_apps.report_app
 demo_app = _cli_apps.demo_app
 standards_app = _cli_apps.standards_app
+sessions_app = _cli_apps.sessions_app
 
 
 # ---------------------------------------------------------------------------
