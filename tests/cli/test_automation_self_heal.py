@@ -7,6 +7,7 @@ from datetime import timedelta
 from datetime import timezone
 from pathlib import Path
 
+import pytest
 import typer
 from typer.testing import CliRunner
 
@@ -19,6 +20,28 @@ app = typer.Typer()
 register_automation_commands(app)
 runner = CliRunner()
 
+
+@pytest.fixture(autouse=True)
+def _isolate_tool_search_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent operator FORGE_CONNECTOR_* env vars from leaking into tool discovery.
+
+    The tool finder in ``forge.automation_self_heal._tool_search_roots`` inspects
+    ``FORGE_CONNECTOR_BIN_DIR``, ``FORGE_CONNECTOR_BIN_DIRS``, and
+    ``FORGE_HOST_CONNECTOR_BIN_DIR`` from the process environment. On the
+    operator's shell these often point at ``~/go/bin`` where the real
+    ProjectDiscovery binaries are installed, which caused monkeypatched
+    ``PACKAGED_GO_TOOLS`` fixtures to still report ``available=True``. Clear
+    those variables for every test in this module so the packaged-tool
+    availability logic only sees what the individual test sets up.
+    """
+
+    for name in (
+        "FORGE_CONNECTOR_BIN_DIR",
+        "FORGE_CONNECTOR_BIN_DIRS",
+        "FORGE_HOST_CONNECTOR_BIN_DIR",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
 EXPECTED_PACKAGED_GO_TOOLS = {
     "nuclei": "templates",
     "gopls": "developer",
@@ -30,6 +53,8 @@ EXPECTED_PACKAGED_GO_TOOLS = {
     "tlsx": "tls_fingerprint",
     "uncover": "provider_search",
     "naabu": "active_ports",
+    "dnsx": "dns_enrichment",
+    "httpx": "http_probe",
     "katana": "crawler",
     "subfinder": "subdomains",
 }
