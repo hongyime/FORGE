@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from forge.reporting.run_summaries import safe_run_metadata
 
 
 def engagement_index_payload(engagement: dict[str, Any]) -> dict[str, Any]:
@@ -25,7 +26,7 @@ def engagement_index_payload(engagement: dict[str, Any]) -> dict[str, Any]:
         "highest_severity": engagement["highest_severity"],
         "graph_summary": engagement["graph_summary"],
         "asset_graph_summary": engagement.get("asset_graph_summary", {}),
-        "run_summary": engagement.get("run_summary"),
+        "run_summary": safe_run_metadata(engagement.get("run_summary")),
         "seed_graph_summary": engagement.get("seed_graph_summary", {}),
         "report_count": len(engagement["report_files"]),
         "graph_count": len(engagement["graph_files"]),
