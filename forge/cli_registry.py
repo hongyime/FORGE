@@ -41,6 +41,7 @@ class ForgeCliApps:
     import_app: typer.Typer
     sessions_app: typer.Typer
     artifacts_app: typer.Typer
+    collection_app: typer.Typer
 
 
 def _make_sub(name: str, help_text: str) -> typer.Typer:
@@ -156,6 +157,7 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
         import_app=_make_sub("import", "Import external data into a FORGE engagement"),
         sessions_app=_make_sub("sessions", "Collection \u2014 Active Session Enumeration"),
         artifacts_app=_make_sub("artifacts", "Artifact Enrichment \u2014 Queue Status and Parser Lineage"),
+        collection_app=_make_sub("collection", "Collection Profiles \u2014 Named engagement setup manifests"),
     )
 
     root_app.add_typer(apps.kb_app)
@@ -184,6 +186,7 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
     root_app.add_typer(apps.retention_app)
     root_app.add_typer(apps.sessions_app)
     root_app.add_typer(apps.artifacts_app)
+    root_app.add_typer(apps.collection_app)
 
     _register_modular_commands(apps)
     return apps

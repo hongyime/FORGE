@@ -258,6 +258,9 @@ forge import bloodhound --engagement N --file collector.zip|json-dir [--dry-run]
 forge import azurehound --engagement N --file azurehound.json [--dry-run]  # AzureHound Entra ID / Azure RBAC JSON import (ROE-gated for non-dry-run)
 forge sessions enum --engagement N [--target HOST] [--platform auto] [--dry-run]  # Active session enumeration (Windows NetSessionEnum / Linux who+w+last)
 forge artifacts status --engagement N [--state filter] [--json]  # Artifact enrichment queue: counts, parser lineage, failure taxonomy
+forge collection profiles list [--json]  # List built-in collection profile manifests
+forge collection profiles show NAME [--json]  # Show flags and operator notes for a profile
+forge collection profiles emit NAME --seed SEED --engagement N [--json]  # Emit a pre-configured kill-chain command (read-only)
 forge audit manifest-verify --engagement N
 forge audit manifest-export --engagement N [--sign] [--remote-store]
 forge audit manifest-bundle-verify --bundle PATH

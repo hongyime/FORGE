@@ -9,6 +9,7 @@ import forge.cli_post  # noqa: F401
 import forge.cli_report  # noqa: F401
 import forge.cli_sessions  # noqa: F401
 import forge.cli_artifacts  # noqa: F401
+import forge.cli_collection  # noqa: F401
 from forge.cli_cloud import (
     cloud_aws,
     cloud_azure,
