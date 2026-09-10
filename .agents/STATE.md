@@ -4,8 +4,8 @@
 **Session:** Hephaestus continuation of Kiro sessions #9/#10
 **Branch:** main
 **Starting HEAD:** 672aa67 (matched origin/main at recovery)
-**Current task:** Track #7 shipped (`32b2db2`); next: Do Next #8 Unified Activity Timeline.
-**Latest checkpoint:** 32b2db2 — Track #7 collection profile manifests (pushed).
+**Current task:** All Do Now + all Do Next items verified complete. Only Explore (#12-#16) remains.
+**Latest checkpoint:** d854d95 — Track #7 docs update pushed.
 **Gate:** testing/cleanup and continuation traceability (`SPEC.md` T8); no production behavior changes.
 
 ---
@@ -46,7 +46,7 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 ## Unfinished work and decisions
 
 1. **Track A remains partial:** `test_end_to_end_engagement_pipeline_auto_without_cloud_uses_local_llama` is still failing per Kiro's final handoff (retry-budget/final-approval convergence, reported quality 0.888). Kiro marked the task complete while explicitly deferring this third failure; do not erase it from the backlog. Not rerun here.
-2. **Remaining product priorities:** Do Next: #8 Unified Activity Timeline, #9 AD/LDAP Collection, #11 Hybrid Path Derivation. Track #7 (Collection Profile Manifests) **DONE** — `32b2db2`.
+2. **Remaining product priorities:** ALL Do Now (#1-6) + ALL Do Next (#7-#11) verified complete this session. #8 (Timeline: forge/reporting/timeline.py), #9 (AD/LDAP: forge/hybrid/ad_azure_sync.py, 15 tests), #11 (Hybrid path: tests/e2e/test_hybrid_e2e.py, 18 tests) all pre-existed. Only Explore (#12-#16) large-bet items remain.
 3. **Scope first:** the consolidated backlog contains competing legacy proposals and exclusions. `END_GOAL.md` and `SPEC.md` remain authoritative. Prefer offline import/evidence review; a backlog row does not authorize lateral movement, credential harvesting, C2, or evasion expansion.
 4. **Broader tests deferred:** structural peak-concurrency orchestrator failures and the unidentified full-CLI network hang remain pre-existing work. User requested focused slices only; do not run the full suite without approval.
 5. **Rust deferred:** `rust_core/src/kerberos.rs`, `credentials.rs`, and `pth.rs` placeholders still require explicit feature flags, authorization checks, and security review before real behavior. No Rust or credential API expansion was attempted.
@@ -63,12 +63,12 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-10 (Track #7 complete)
+- Updated: 2026-09-10 (all Do Now + Do Next verified complete)
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 32b2db2
+- HEAD: d854d95
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
