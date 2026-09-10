@@ -4,8 +4,8 @@
 **Session:** Hephaestus continuation of Kiro sessions #9/#10
 **Branch:** main
 **Starting HEAD:** 672aa67 (matched origin/main at recovery)
-**Current task:** All Do Now + all Do Next items verified complete. Only Explore (#12-#16) remains.
-**Latest checkpoint:** d854d95 — Track #7 docs update pushed.
+**Current task:** Bryan session complete — Rust, orch fix, command collation, Explore #12/#13/#16 all shipped (20e2eeb).
+**Latest checkpoint:** 20e2eeb — Explore #12/#13/#16 pushed.
 **Gate:** testing/cleanup and continuation traceability (`SPEC.md` T8); no production behavior changes.
 
 ---
