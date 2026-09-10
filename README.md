@@ -308,6 +308,7 @@ forge demo proof-pack [--engagement 9901]
 forge retention preview|apply --engagement N
 forge dashboard                             # Generate the static local operator dashboard
 forge doctor [--json] [--live-provider-probes] [--fix-safe]  # Operator setup, readiness checks, and safe local repairs
+forge operator-guide [--section loop|manual|profiles|rust] [--json]  # Complete workflow guide — every module linked together
 forge scaffold                              # Emit obfuscated directory tree
 forge clean --engagement N [--confirm]      # Securely wipe engagement artifacts
 ```

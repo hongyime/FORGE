@@ -113,3 +113,123 @@ def run_menu_command(
     from forge.tui.main_menu import run_menu  # noqa: PLC0415
 
     run_menu()
+
+
+# ---------------------------------------------------------------------------
+# Operator workflow guide
+# ---------------------------------------------------------------------------
+
+
+_GUIDE_SECTIONS: dict[str, str] = {
+    "loop": """
+[bold cyan]━━  UNATTENDED RECURSIVE LOOP  ━━[/bold cyan]
+
+Set up once; FORGE runs everything automatically:
+
+  forge automation cycle --apply --live
+
+The cycle auto-runs: feed-build → target-import → kill-chain →
+session enumeration → AzureHound/BloodHound ingestion →
+artifact enrichment → monitoring → reporting → dashboard refresh.
+Every module feeds every other module automatically.
+""",
+    "manual": """
+[bold cyan]━━  GUIDED MANUAL LOOP  ━━[/bold cyan]
+
+  # 1. Pick a collection profile
+  forge collection profiles list
+  forge collection profiles emit passive --seed <SEED> -e <N>
+
+  # 2. Run the emitted kill-chain command (add --roe-id + --scope-manifest)
+  forge kill-chain <SEED> -e <N> --no-attack-mode ...
+
+  # 3. Import offline collector outputs
+  forge import azurehound -e <N> --file azurehound.json --roe-id <ROE>
+  forge import bloodhound  -e <N> --file sharphound.zip  --roe-id <ROE> ...
+
+  # 4. Enumerate active sessions
+  forge sessions enum -e <N> --platform auto --roe-id <ROE>
+
+  # 5. Review artifact enrichment
+  forge artifacts status -e <N>
+
+  # 6. Build attack graph + export to Neo4j / Maltego
+  forge graph build -e <N> --format cypher     # -> Neo4j
+  forge graph build -e <N> --format graphml    # -> Maltego / yEd
+  forge graph tier-zero -e <N> --json          # -> tier-zero scoring
+
+  # 7. Export evidence for Nemesis C2 handoff
+  forge artifacts nemesis-export -e <N> --output nemesis.json
+
+  # 8. Generate and review reports
+  forge report quality-audit --json
+  forge report generate -e <N>
+""",
+    "profiles": """
+[bold cyan]━━  COLLECTION PROFILES (emit kill-chain commands)  ━━[/bold cyan]
+
+  passive       No live scanning. subdomain+DNS+CT logs only.
+  quick-recon   Fast 2-iteration passive scan. Good for scoping.
+  standard      Default kill-chain. Requires ROE + scope-manifest.
+  full-scope    Max iterations + parallelism. High-impact.
+  cloud-focus   Standard + keyscan + cloud asset audit.
+
+  forge collection profiles emit <name> --seed <SEED> -e <N>
+""",
+    "rust": """
+[bold cyan]━━  RUST CORE — POST-EXPLOITATION (Windows)  ━━[/bold cyan]
+
+  KerberosOps.enumerate_kerberoast_candidates(domain, dc_ip)
+    LDAP anonymous-bind SPN query → user/SPN pairs for offline cracking
+
+  KerberosOps.parse_kirbi(filepath)
+    DER KRB-CRED walker → realm/principal metadata (no secrets returned)
+
+  CredentialExtractor.extract_from_lsass(target, dump_path)  [Windows]
+    MiniDumpWriteDump → LSASS dump file; analyse offline with pypykatz
+
+  CredentialExtractor.extract_from_sam(hive_path)  [Windows]
+    RegSaveKeyExW → SAM+SYSTEM hives; analyse with secretsdump
+
+  PTHExecutor.execute(target, nt_hash, command)  [Windows]
+    CreateProcessWithLogonW LOGON_NETCREDENTIALS_ONLY
+
+  All operations require roe_id + scope declaration.
+""",
+}
+
+
+def run_operator_guide_command(
+    *,
+    section: str | None,
+    json_output: bool,
+    console: Console,
+) -> None:
+    """Print the complete operator workflow guide."""
+    import json as _json  # noqa: PLC0415
+
+    if json_output:
+        if section:
+            key = section.lower().strip()
+            if key not in _GUIDE_SECTIONS:
+                typer.echo(_json.dumps({"error": f"Unknown section: {key!r}", "available": sorted(_GUIDE_SECTIONS)}))
+                raise typer.Exit(code=1)
+            typer.echo(_json.dumps({key: _GUIDE_SECTIONS[key]}, indent=2))
+        else:
+            typer.echo(_json.dumps(_GUIDE_SECTIONS, indent=2))
+        return
+
+    if section:
+        key = section.lower().strip()
+        if key not in _GUIDE_SECTIONS:
+            console.print(f"[red]Unknown section:[/red] {key!r}")
+            console.print(f"  Available: {', '.join(sorted(_GUIDE_SECTIONS))}")
+            raise typer.Exit(code=1)
+        console.print(_GUIDE_SECTIONS[key].strip())
+        return
+
+    console.print("\n[bold white on blue]  FORGE Operator Workflow Guide  [/bold white on blue]\n")
+    console.print("  [dim]Every module links to every other. The automation loop is the default path.[/dim]\n")
+    for text in _GUIDE_SECTIONS.values():
+        console.print(text.strip())
+        console.print()

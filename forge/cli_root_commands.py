@@ -11,6 +11,7 @@ from forge.cli_operator import (
     run_dashboard_command,
     run_doctor_command,
     run_menu_command,
+    run_operator_guide_command,
     run_scaffold_command,
 )
 
@@ -87,3 +88,14 @@ def register_root_operator_commands(app: typer.Typer, *, console: Console) -> No
     ) -> None:
         """Launch the interactive engagement menu (TUI)."""
         run_menu_command(advanced=advanced, console=console)
+
+    @app.command("operator-guide")
+    def operator_guide(
+        section: str | None = typer.Option(
+            None, "--section", "-s",
+            help="Section: loop, manual, profiles, rust. Omit for full guide.",
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Complete FORGE operator workflow guide — every module, linked together."""
+        run_operator_guide_command(section=section, json_output=json_output, console=console)
