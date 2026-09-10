@@ -4043,7 +4043,7 @@ def static_batch_worker_count(
         return max(0, item_count)
     raw_value = os.environ.get(env_var, "").strip()
     if not raw_value:
-        return 1
+        return max(1, min(max_static_batch_workers, item_count))
     try:
         configured = int(raw_value)
     except ValueError:

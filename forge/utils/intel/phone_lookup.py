@@ -548,7 +548,7 @@ def _mine_dork_urls(
     worker_count = (
         _phone_dork_max_workers_default()
         if max_workers is None
-        else max(1, min(int(max_workers or 1), 3))
+        else max(1, min(int(max_workers or 1), 4))
     )
     if len(selected_sites) <= 1 or worker_count <= 1:
         site_results = [_query_site(site) for site in selected_sites]
@@ -812,7 +812,7 @@ def lookup_phone(
                 max_workers=(
                     _phone_dork_max_workers_default()
                     if dork_max_workers is None
-                    else max(1, min(int(dork_max_workers or 1), 3))
+                    else max(1, min(int(dork_max_workers or 1), 4))
                 ),
             )
         else:

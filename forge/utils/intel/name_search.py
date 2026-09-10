@@ -531,7 +531,7 @@ def search_name(
         max_workers=(
             _name_search_max_concurrency_default()
             if max_concurrency is None
-            else max(1, min(int(max_concurrency or 1), 3))
+            else max(1, min(int(max_concurrency or 1), 4))
         ),
     )
     used_fallback = any(used_fallback for _, used_fallback in dork_results)
