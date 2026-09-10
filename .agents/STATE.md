@@ -72,3 +72,7 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
+
+## 2026-09-10 - Portfolio persistence review
+
+Portfolio upkeep reviewed SQLite workflow/retention helpers, the separate PostgreSQL state-store development service, route authorization and CI. Seven selected modules parsed without imports. An extracted retention helper with a fake engine accepted confirm="false" and confirm=1; validate literal boolean true before any real apply operation. No engagement data, retention engine, scanner, provider or full suite was invoked. Existing operational test totals remain historical; this review does not change the locked project goal or complete the deferred integration work.
