@@ -382,10 +382,10 @@ def test_end_to_end_engagement_pipeline_auto_without_cloud_uses_local_llama(
                                 f"\n\n## 2. Engagement Scope & Methodology\n\n{filler}"
                                 f"\n\n## 3. Reconnaissance Findings\n\n{filler}"
                                 f"\n\n## 4. OSINT & Credential Intelligence\n\n{filler}"
-                                "\n\n## 5. Vulnerability & Exploit Correlation\n\n"
+                                "\n\n## 5. Vulnerability & Exposure Correlation\n\n"
                                 "Validated Firebase data exposure remains the top "
                                 f"authoritative finding. {filler}"
-                                f"\n\n## 6. Post-Exploitation Activities\n\n{filler}"
+                                f"\n\n## 6. Validation Boundaries & Evidence Handling\n\n{filler}"
                                 "\n\n## 7. Risk Ratings & Remediation Recommendations\n\n"
                                 f"{filler}"
                             )
