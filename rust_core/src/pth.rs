@@ -138,7 +138,7 @@ fn pth_run(target: &str, nt_hash: &str, command: &str) -> PyResult<String> {
         Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
         Security::SECURITY_ATTRIBUTES,
         Storage::FileSystem::{
-            ReadFile, FILE_ATTRIBUTE_NORMAL, GENERIC_READ, OPEN_EXISTING,
+            ReadFile, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_READ, OPEN_EXISTING,
         },
         System::{
             Pipes::CreatePipe,

