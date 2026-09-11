@@ -181,66 +181,54 @@ mod tests {
 
     #[test]
     fn test_permission_guard_denies_spray() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|_py| {
-            let mut blocked =
-                SprayOptimizer::new(3, 300, Some("ROE-TEST".to_string()), false).unwrap();
-            let result = blocked.spray("password");
-            assert!(result.is_err());
-            let err_msg = result.unwrap_err().to_string();
-            assert!(
-                err_msg.contains("not permitted"),
-                "Expected permission error"
-            );
-        });
+        let mut blocked =
+            SprayOptimizer::new(3, 300, Some("ROE-TEST".to_string()), false).unwrap();
+        let result = blocked.spray("password");
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("not permitted"),
+            "Expected permission error"
+        );
     }
 
     #[test]
     fn test_missing_scope_guard_denies_spray() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|_py| {
-            let mut allowed =
-                SprayOptimizer::new(3, 300, Some("ROE-TEST".to_string()), true).unwrap();
-            let result = allowed.spray("password");
-            assert!(result.is_err());
-            let err_msg = result.unwrap_err().to_string();
-            assert!(err_msg.contains("scoped target"), "Expected scope error");
-        });
+        let mut allowed =
+            SprayOptimizer::new(3, 300, Some("ROE-TEST".to_string()), true).unwrap();
+        let result = allowed.spray("password");
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("scoped target"), "Expected scope error");
     }
 
     #[test]
     fn test_blank_password_denied() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|_py| {
-            let mut allowed =
-                SprayOptimizer::new(3, 300, Some("ROE-TEST".to_string()), true).unwrap();
-            allowed.add_target("host.example".to_string()).unwrap();
-            let result = allowed.spray("");
-            assert!(result.is_err());
-            let err_msg = result.unwrap_err().to_string();
-            assert!(
-                err_msg.contains("cannot be blank"),
-                "Expected blank password error"
-            );
-        });
+        let mut allowed =
+            SprayOptimizer::new(3, 300, Some("ROE-TEST".to_string()), true).unwrap();
+        allowed.add_target("host.example".to_string()).unwrap();
+        let result = allowed.spray("");
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("cannot be blank"),
+            "Expected blank password error"
+        );
     }
 
     #[test]
     fn test_oversized_password_denied() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|_py| {
-            let mut allowed =
-                SprayOptimizer::new(3, 300, Some("ROE-TEST".to_string()), true).unwrap();
-            allowed.add_target("host.example".to_string()).unwrap();
-            let big_pass = "x".repeat(100_000);
-            let result = allowed.spray(&big_pass);
-            assert!(result.is_err());
-            let err_msg = result.unwrap_err().to_string();
-            assert!(
-                err_msg.contains("cannot exceed"),
-                "Expected size limit error"
-            );
-        });
+        let mut allowed =
+            SprayOptimizer::new(3, 300, Some("ROE-TEST".to_string()), true).unwrap();
+        allowed.add_target("host.example".to_string()).unwrap();
+        let big_pass = "x".repeat(100_000);
+        let result = allowed.spray(&big_pass);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("cannot exceed"),
+            "Expected size limit error"
+        );
     }
 
     #[test]
@@ -253,18 +241,15 @@ mod tests {
 
     #[test]
     fn test_authorized_fails_closed_with_not_implemented() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|_py| {
-            let mut allowed =
-                SprayOptimizer::new(3, 300, Some("ROE-TEST".to_string()), true).unwrap();
-            allowed.add_target("host.example".to_string()).unwrap();
-            let result = allowed.spray("password");
-            assert!(result.is_err(), "Authorized spray must fail closed");
-            let err_msg = result.unwrap_err().to_string();
-            assert!(
-                err_msg.contains("not implemented"),
-                "Must raise NotImplementedError, not return false success"
-            );
-        });
+        let mut allowed =
+            SprayOptimizer::new(3, 300, Some("ROE-TEST".to_string()), true).unwrap();
+        allowed.add_target("host.example".to_string()).unwrap();
+        let result = allowed.spray("password");
+        assert!(result.is_err(), "Authorized spray must fail closed");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("not implemented"),
+            "Must raise NotImplementedError, not return false success"
+        );
     }
 }
