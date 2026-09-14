@@ -62,11 +62,11 @@ def nodes_to_cypher(nodes: list[dict[str, Any]]) -> list[str]:
     statements: list[str] = []
     seen: set[str] = set()
     for node in nodes:
-        node_id = str(node.get("id") or node.get("node_id") or "")
+        node_id = str(node.get("node_id") or node.get("id") or "")
         if not node_id or node_id in seen:
             continue
         seen.add(node_id)
-        label = _cypher_label(node.get("entity_type") or node.get("type") or "Node")
+        label = _cypher_label(node.get("node_type") or node.get("entity_type") or node.get("type") or "Node")
         props = _safe_props(dict(node.get("properties") or {}))
         props["forge_id"] = node_id
         if node.get("label"):
@@ -83,12 +83,12 @@ def edges_to_cypher(edges: list[dict[str, Any]]) -> list[str]:
     """Return one MATCH+MERGE statement per edge."""
     statements: list[str] = []
     for edge in edges:
-        src = str(edge.get("source") or edge.get("source_node_id") or "")
-        tgt = str(edge.get("target") or edge.get("target_node_id") or "")
+        src = str(edge.get("source_node_id") or edge.get("source") or "")
+        tgt = str(edge.get("target_node_id") or edge.get("target") or "")
         if not src or not tgt:
             continue
         rel_type = _SAFE_LABEL_RE.sub("_", str(
-            edge.get("label") or edge.get("type") or "RELATES_TO"
+            edge.get("edge_type") or edge.get("label") or edge.get("type") or "RELATES_TO"
         ).upper())
         statements.append(
             f"MATCH (a {{forge_id: {_cypher_string(src)}}}), "

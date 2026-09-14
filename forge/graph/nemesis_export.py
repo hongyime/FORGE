@@ -35,6 +35,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from forge.utils.artifact_url_sanitizer import strip_sensitive_url_query
 
 __all__ = ["build_nemesis_bundle"]
 
@@ -94,24 +95,25 @@ def build_nemesis_bundle(
         # Findings
         try:
             rows = con.execute(
-                "SELECT title, severity, category, domain, status, description "
-                "FROM findings WHERE engagement_id = ? LIMIT ?",
+                "SELECT title, severity, vuln_type, target_url, description "
+                "FROM vulnerability_findings WHERE engagement_id = ? LIMIT ?",
                 (engagement_id, limit),
             ).fetchall()
             bundle["findings"] = [
                 {
                     "title": _safe_str(r["title"]),
                     "severity": _safe_str(r["severity"]),
-                    "category": _safe_str(r["category"]),
-                    "domain": _safe_str(r["domain"]),
-                    "status": _safe_str(r["status"]),
+                    "category": _safe_str(r["vuln_type"]),
+                    "domain": _safe_str(r["target_url"]),
                     "description": _safe_str(r.get("description") or "", 512),
                     "source": "FORGE",
                 }
                 for r in rows
             ]
-        except sqlite3.OperationalError:
-            pass
+        except sqlite3.OperationalError as exc:
+            bundle.setdefault("_skipped_sections", []).append(
+                {"section": "findings", "reason": str(exc)}
+            )
 
         # Artifact paths (sanitized — no local filesystem paths)
         try:
@@ -122,54 +124,58 @@ def build_nemesis_bundle(
             ).fetchall()
             bundle["files"] = [
                 {
-                    "source_url": _safe_str(r["source_url"]),
+                    "source_url": strip_sensitive_url_query(_safe_str(r["source_url"])),
                     "artifact_type": _safe_str(r["artifact_type"]),
                     "status": _safe_str(r["status"]),
                 }
                 for r in rows
             ]
-        except sqlite3.OperationalError:
-            pass
+        except sqlite3.OperationalError as exc:  # noqa: BLE001
+            bundle.setdefault("_skipped_sections", []).append(
+                {"section": "files", "reason": str(exc)}
+            )
 
         # Key findings (redacted hashes)
         try:
             rows = con.execute(
-                "SELECT service, pattern, state, validation_status "
+                "SELECT service, pattern_name, validation_state "
                 "FROM key_scanner_findings WHERE engagement_id = ? LIMIT ?",
                 (engagement_id, limit),
             ).fetchall()
             bundle["credentials"] = [
                 {
                     "service": _safe_str(r["service"]),
-                    "pattern": _safe_str(r["pattern"]),
-                    "state": _safe_str(r["state"]),
-                    "validation_status": _safe_str(r["validation_status"]),
+                    "pattern": _safe_str(r["pattern_name"]),
+                    "state": _safe_str(r["validation_state"]),
                     "hash": "<redacted>",
                     "note": "Raw credential material redacted by FORGE export.",
                 }
                 for r in rows
             ]
-        except sqlite3.OperationalError:
-            pass
+        except sqlite3.OperationalError as exc:  # noqa: BLE001
+            bundle.setdefault("_skipped_sections", []).append(
+                {"section": "credentials", "reason": str(exc)}
+            )
 
-        # Seeds as path targets
         try:
             rows = con.execute(
-                "SELECT seed_value, seed_type, created_at "
-                "FROM seeds WHERE engagement_id = ? "
-                "ORDER BY created_at DESC LIMIT ?",
+                "SELECT seed_value, seed_type, discovered_at "
+                "FROM engagement_seeds WHERE engagement_id = ? "
+                "ORDER BY discovered_at DESC LIMIT ?",
                 (engagement_id, limit),
             ).fetchall()
             bundle["paths"] = [
                 {
                     "path": _safe_str(r["seed_value"]),
                     "type": _safe_str(r["seed_type"]),
-                    "discovered_at": _safe_str(r["created_at"]),
+                    "discovered_at": _safe_str(r["discovered_at"]),
                 }
                 for r in rows
             ]
-        except sqlite3.OperationalError:
-            pass
+        except sqlite3.OperationalError as exc:  # noqa: BLE001
+            bundle.setdefault("_skipped_sections", []).append(
+                {"section": "paths", "reason": str(exc)}
+            )
 
     finally:
         con.close()

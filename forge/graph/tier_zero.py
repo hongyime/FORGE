@@ -64,7 +64,7 @@ def compute_tier_zero(
 ) -> TierZeroReport:
     """Compute tier-zero exposure from the stored asset graph.
 
-    Reads ``asset_graph_nodes`` and ``asset_graph_edges`` tables.
+    Reads ``asset_entities`` and ``asset_relationships`` tables.
     Falls back gracefully when those tables are absent (returns empty report).
 
     Args:
@@ -101,15 +101,15 @@ def compute_tier_zero(
         # Load nodes
         try:
             rows = con.execute(
-                "SELECT node_key, node_type, label, metadata_json "
-                "FROM asset_graph_nodes WHERE engagement_id = ?",
+                "SELECT entity_key, entity_type, label, metadata_json "
+                "FROM asset_entities WHERE engagement_id = ?",
                 (engagement_id,),
             ).fetchall()
             nodes = [
                 {
-                    "node_key": r["node_key"],
-                    "node_type": str(r["node_type"] or ""),
-                    "label": str(r["label"] or r["node_key"] or ""),
+                    "entity_key": r["entity_key"],
+                    "entity_type": str(r["entity_type"] or ""),
+                    "label": str(r["label"] or r["entity_key"] or ""),
                 }
                 for r in rows
             ]
@@ -119,13 +119,15 @@ def compute_tier_zero(
         # Count inbound edges (blast radius proxy)
         try:
             edge_rows = con.execute(
-                "SELECT target_node_key, COUNT(*) AS cnt "
-                "FROM asset_graph_edges WHERE engagement_id = ? "
-                "GROUP BY target_node_key",
+                "SELECT ae.entity_key AS target_entity_key, COUNT(*) AS cnt "
+                "FROM asset_relationships ar "
+                "JOIN asset_entities ae ON ae.id = ar.target_entity_id "
+                "WHERE ar.engagement_id = ? "
+                "GROUP BY ar.target_entity_id",
                 (engagement_id,),
             ).fetchall()
             for r in edge_rows:
-                edge_targets[str(r["target_node_key"])] = int(r["cnt"])
+                edge_targets[str(r["target_entity_key"])] = int(r["cnt"])
         except sqlite3.OperationalError:
             pass
 
@@ -138,7 +140,7 @@ def compute_tier_zero(
             engagement_id=engagement_id,
             tier_zero_nodes=[],
             total_nodes=0,
-            summary="No asset graph nodes found. Run: forge graph sync-assets -e <N>",
+            summary="No asset graph entities found. Run: forge graph sync-assets -e <N>",
         )
 
     # Score each node
@@ -147,31 +149,32 @@ def compute_tier_zero(
 
     scored: list[dict[str, Any]] = []
     for node in nodes:
-        key = node["node_key"]
+        key = node["entity_key"]
         inbound = edge_targets.get(key, 0)
-        is_critical = "domain_controller" in node.get("node_type", "").lower() or \
+        is_critical = "domain_controller" in node.get("entity_type", "").lower() or \
                       "dc" in node.get("label", "").lower() or \
                       inbound >= threshold
         if is_critical or inbound >= threshold:
             scored.append({
-                "node_key": key,
-                "node_type": node["node_type"],
+                "entity_key": key,
+                "entity_type": node["entity_type"],
                 "label": node["label"],
-                "inbound_paths": inbound,
+                "inbound_relationships": inbound,
                 "tier_zero": True,
                 "remediation_hint": (
-                    "Isolate or harden this node — it is reachable from "
-                    f"{inbound} attack paths. Prioritise in remediation queue."
+                    "Isolate or harden this asset — it has "
+                    f"{inbound} inbound relationships in the asset graph. "
+                    "Prioritise in remediation queue."
                 ),
             })
 
-    scored.sort(key=lambda n: n["inbound_paths"], reverse=True)
+    scored.sort(key=lambda n: n["inbound_relationships"], reverse=True)
     tier_zero_nodes = scored[:top_n]
 
     summary = (
-        f"Found {len(scored)} tier-zero candidate(s) out of {total} graph nodes. "
-        f"Top node: {tier_zero_nodes[0]['label'] if tier_zero_nodes else 'none'} "
-        f"({tier_zero_nodes[0]['inbound_paths'] if tier_zero_nodes else 0} inbound paths)."
+        f"Found {len(scored)} tier-zero candidate(s) out of {total} asset graph entities. "
+        f"Top asset: {tier_zero_nodes[0]['label'] if tier_zero_nodes else 'none'} "
+        f"({tier_zero_nodes[0]['inbound_relationships'] if tier_zero_nodes else 0} inbound relationships)."
     )
 
     return TierZeroReport(
