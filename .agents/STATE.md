@@ -1,6 +1,14 @@
-# Current Task: Explore #14 Agent Ecosystem + test_registry fix
+# Current Task: Runtime readiness, complete test accounting, and session TODO reconciliation
 
-**Status:** ALL WORK COMPLETE | HEAD: `2e1eedd` | Date: 2026-09-15
+**Status:** IN PROGRESS | Baseline HEAD: `6b0edce` | Date: 2026-09-15
+
+## Current verification
+
+- User requested runtime recovery, all-test accounting, unfinished session-task reconciliation, and Rust usage. Full Rust-only migration scope needs clarification; existing application is Python with a PyO3 Rust extension.
+- Python 3.12.10, pytest 9.1.1, and `forge_core.pyd` import successfully. Rust/cargo 1.94.1 available.
+- Live service readiness is unproven: Docker Linux engine was unavailable and web port 8080 refused connections. CLI import tracing progressed but exceeded a 45-second diagnostic budget.
+- Previous 29/29 agent tests and 21/21 Rust tests are historical slice results, not a current full-suite pass. Default pytest excludes chaos, slow, cart_readiness, and network lanes.
+- Read-only inventories of project-local task records, test lanes, and runtime/Rust wiring are in progress. Preserve historical records and pre-existing session-hook edits.
 
 ## A/B/C gate status — all done (from previous sessions)
 
@@ -48,11 +56,12 @@ File no longer hangs default runs — use `-m network` to run explicitly.
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-15 (session)
+- Updated: 2026-09-15 07:03:19 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
+- Event: stop
 - Branch: main
-- HEAD: 2e1eedd
+- HEAD: 6b0edce
 - Dirty files: 0
-- Resume hint: Explore #14 shipped (2e1eedd). No open work items. test_registry.py is now @network-marked.
+- Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
