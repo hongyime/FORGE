@@ -1,8 +1,8 @@
-# Current Task: A/B/C safety, export, test, and UI verification
+# Current Task: Explore #14 Agent Ecosystem + test_registry fix
 
-**Status:** .venv FULLY REBUILT AND VERIFIED | HEAD: `1f794f0` | Date: 2026-09-14
+**Status:** ALL WORK COMPLETE | HEAD: pending-commit | Date: 2026-09-15
 
-## A/B/C gate status — all done
+## A/B/C gate status — all done (from previous sessions)
 
 | Gate | Commit | What |
 |------|--------|------|
@@ -12,43 +12,47 @@
 | Rust | `ea97a98` | pyo3 0.29 no-host-Python unit tests — 21/21 pass |
 | C-proof | (isolated run) | demo proof-pack, artifacts status, graph build, tier-zero, dashboard verified |
 
-### C-gate CLI proof — completed in isolated FORGE_DATA_DIR
+## Explore #14 — Agent Ecosystem (Bryan approved 2026-09-15)
 
-All five commands ran from `FORGE_DATA_DIR=C:\Users\bryan\AppData\Local\Temp\forge-qa-data` with `cwd=forge-qa-cwd` (isolated, outside repo):
+Implemented in `feat(explore): Explore #14` commit (pending push):
 
-| Command | Result |
-|---------|--------|
-| `forge demo proof-pack --engagement 9901` | ✅ DB + report + graph + STIX artifacts generated |
-| `forge artifacts status --engagement 9901 --json` | ✅ 1 complete, 0 failed, parser lineage present |
-| `forge graph build --engagement 9901 --format json` | ✅ 9 nodes · 8 edges · weight 85.2 |
-| `forge graph tier-zero --engagement 9901 --json` | ✅ 1 tier-zero asset, canonical entity_key/entity_type schema |
-| `forge dashboard` | ✅ 24,576-byte dashboard.html generated |
+| File | What |
+|------|------|
+| `forge/agents/event_bus.py` | In-process pub/sub; bounded asyncio.Queue per topic; 5 allowed topics |
+| `forge/agents/capability_manifest.py` | `forge.agent.capability.v1` schema validation; plugin_id pattern check |
+| `forge/agents/base_plugin.py` | `ForgePlugin` ABC; `TaskSpec`/`TaskResult`; ROE+scope gate in `execute_task` |
+| `forge/agents/coordinator.py` | `TaskCoordinator`: register/route/track tasks; publishes lifecycle events |
+| `forge/agents/cli.py` | `forge agents list` and `forge agents task-status` (read-only only) |
+| `forge/agents/__init__.py` | Updated exports |
+| `forge/cli_registry.py` | Added `agents_app` to `ForgeCliApps` + registration |
+| `tests/unit/test_agents_event_bus.py` | 13 unit tests |
+| `tests/unit/test_agents_coordinator.py` | 9 unit tests |
+| `tests/unit/test_agents_plugin_base.py` | 7 unit tests |
+| Total | 29/29 pass |
 
-### `.venv` rebuilt — fresh Python 3.12 at `C:\forge\.venv`
+## test_registry.py fix
 
-Old OneDrive copy (23 missing files, caused file-lock hangs) deleted. Fresh venv built with `uv` from `pyproject.toml`. All packages installed including `llama-cpp-python==0.3.8` (CPU wheel from `https://abetlen.github.io/llama-cpp-python/whl/cpu`). Verified: **retention slice 16/16 PASS** on new venv. Note: `importlib.metadata` uses normalized name `llama_cpp_python`; `m.distribution('llama-cpp-python')` returns 0.3.8 correctly.
-
-
-Old source folder `C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit` kept per instruction; can be removed now that the new venv is verified.
+`tests/connectors/test_registry.py` marked with `pytestmark = pytest.mark.network`.
+`pyproject.toml` adds `network` marker and excludes it from default addopts.
+File no longer hangs default runs — use `-m network` to run explicitly.
 
 ## Remaining open items
 
-- **Explore #14** Agent Ecosystem implementation — gate requires Bryan's explicit approval
-- **test_registry.py** hangs on network — always exclude: `--ignore=tests/connectors/test_registry.py`
+- **test_registry.py** — marked `@pytest.mark.network`; runs only with `-m network` (no longer hanging default suite)
 
 ## Prior session handoffs (preserved)
 
+**2026-09-14**: .venv rebuilt (Python 3.12, uv), llama-cpp-python==0.3.8 CPU wheel, retention 16/16 PASS.
 **2026-09-11**: Commits `5148227..34236b4` — Rust NTLM/cargo fixes, Explore #14 plan, Explore #15 OpenGraph, spray pyo3 fix.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-14 23:33:06 +08:00
+- Updated: 2026-09-15 (session)
 - Machine: PRAWN-E14
 - Harness: claude
-- Event: stop
 - Branch: main
-- HEAD: 1ea61cf
-- Dirty files: 0
-- Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
+- HEAD: pending-commit
+- Dirty files: 10
+- Resume hint: Read .agents/STATE.md. All work complete; commit feat(explore) pending.
 <!-- MOLT_AUTO_END -->

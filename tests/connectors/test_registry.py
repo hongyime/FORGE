@@ -6,6 +6,7 @@ import sqlite3
 import subprocess
 from pathlib import Path
 
+import pytest
 import typer
 from typer.testing import CliRunner
 
@@ -33,6 +34,8 @@ from forge.connectors.secrets import (
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.db.validation import validate_canonical_schema
+
+pytestmark = pytest.mark.network  # file makes live subprocess/network calls
 
 
 def _build_connector_db(path: Path) -> sqlite3.Connection:

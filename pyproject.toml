@@ -249,7 +249,7 @@ addopts         = [
     "--import-mode=importlib",
     "-ra",
     "-m",
-    "not chaos and not slow and not cart_readiness",
+    "not chaos and not slow and not cart_readiness and not network",
 ]
 markers = [
     "unit: default isolated unit/component tests",
@@ -270,6 +270,7 @@ markers = [
     "upgrade: competitive upgrade integration tests (see docs/competitive_upgrades)",
     "do_now: high-priority competitive upgrade tasks to execute immediately",
     "explore: exploratory/spike tests for competitive upgrade research",
+    "network: tests making live network calls — excluded from default runs; use -m network to run explicitly",
 ]
 
 # ── Coverage ──────────────────────────────────────────────────────────────────
