@@ -1,45 +1,46 @@
 # Current Task: A/B/C safety, export, test, and UI verification
 
-**Status:** A and B gates CLOSED and PUSHED | HEAD: `ebbdae1` | Date: 2026-09-14
+**Status:** ALL GATES CLOSED | HEAD: `1b0ef31` | Date: 2026-09-14
 
-## This session — completed and pushed
+## A/B/C gate status — all done
 
-All A/B/C defect work described in the handoff has been resolved, tested, and pushed.
+| Gate | Commit | What |
+|------|--------|------|
+| A-retention | `ebbdae1` | Retention confirm gate requires literal True — V14/B658; 16/16 pass |
+| A-export | `16ce013` | tier-zero/nemesis/neo4j canonical schema parity |
+| B-test | `bc584d1` | Worker peak tests reconciled (5 items to exceed sequential threshold) |
+| Rust | `ea97a98` | pyo3 0.29 no-host-Python unit tests — 21/21 pass |
+| C-proof | (isolated run) | demo proof-pack, artifacts status, graph build, tier-zero, dashboard verified |
 
-| Commit | Gate | What |
-|--------|------|------|
-| `ea97a98` | Rust | Drop PyErr::Display in unit tests — pyo3 0.29 no host Python; 21/21 pass |
-| `16ce013` | A-export | Canonical graph exports: tier-zero/nemesis/neo4j schema parity |
-| `bc584d1` | B-test | Worker peak tests need >4 items to exceed sequential threshold |
-| `ebbdae1` | A-retention | Retention confirm gate requires literal True — V14/B658 |
+### C-gate CLI proof — completed in isolated FORGE_DATA_DIR
 
-### Test gates verified before commit
+All five commands ran from `FORGE_DATA_DIR=C:\Users\bryan\AppData\Local\Temp\forge-qa-data` with `cwd=forge-qa-cwd` (isolated, outside repo):
 
-| Suite | Result |
-|-------|--------|
-| `cargo test --lib -- credentials spray` | 21/21 pass |
-| `tests/connectors/` (excl. test_registry.py) | 102 pass |
-| `tests/cli/test_artifacts_status_cli.py` | 13 pass |
-| `tests/webui/test_artifacts.py` | 8 pass |
-| `tests/phase1/test_artifact_api_spec_workers.py` | 2 pass |
-| Retention focused slice | 16 pass |
+| Command | Result |
+|---------|--------|
+| `forge demo proof-pack --engagement 9901` | ✅ DB + report + graph + STIX artifacts generated |
+| `forge artifacts status --engagement 9901 --json` | ✅ 1 complete, 0 failed, parser lineage present |
+| `forge graph build --engagement 9901 --format json` | ✅ 9 nodes · 8 edges · weight 85.2 |
+| `forge graph tier-zero --engagement 9901 --json` | ✅ 1 tier-zero asset, canonical entity_key/entity_type schema |
+| `forge dashboard` | ✅ 24,576-byte dashboard.html generated |
 
-### Graph export fixes in `16ce013`
+### `.venv` rebuilt — fresh Python 3.12 at `C:\forge\.venv`
 
-- **tier_zero.py**: `asset_graph_nodes/edges` → `asset_entities/asset_relationships` with JOIN; entity_key/entity_type canonical columns; summary text avoids "attack paths"
-- **nemesis_export.py**: `findings`→`vulnerability_findings`, `seeds`→`engagement_seeds`, `pattern`→`pattern_name`, `state`→`validation_state`; URL param sanitization via `strip_sensitive_url_query`; per-section skip logging instead of silent pass
-- **neo4j_export.py**: `node_type`/`edge_type`/`node_id`/`source_node_id`/`target_node_id` checked first before legacy fallbacks
+Old OneDrive copy (23 missing files, caused file-lock hangs) deleted. Fresh venv built with `uv` from `pyproject.toml`. Iteratively installed all missing packages. Verified: **retention slice 16/16 PASS** on new venv.
 
-## Remaining open items (C gate + future)
+Missing (deferred): `llama-cpp-python==0.3.8` — no pre-built wheel for Win/Py3.12; compilation hangs. Only affects the local GGUF report path; all other workflows functional. Install with: `uv pip install "llama-cpp-python==0.3.8"` in a separate long-running shell when convenient.
 
-- **test_registry.py hangs** — identified as a network-hang test; always exclude: `--ignore=tests/connectors/test_registry.py`
-- **Live browser proof** for artifact status, Sigma graph, timeline — C gate not yet completed
+Old source folder `C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit` kept per instruction; can be removed now that the new venv is verified.
+
+## Remaining open items
+
 - **Explore #14** Agent Ecosystem implementation — gate requires Bryan's explicit approval
-- `docs/competitive_upgrade_consolidated_backlog.md` is git-tracked ✓ (no issue)
+- `llama-cpp-python==0.3.8` — deferred background compile (see above)
+- **test_registry.py** hangs on network — always exclude: `--ignore=tests/connectors/test_registry.py`
 
-## Prior session handoff (preserved)
+## Prior session handoffs (preserved)
 
-**Status**: COMPLETED | Session date: 2026-09-11 | Commits: `5148227..34236b4`
+**2026-09-11**: Commits `5148227..34236b4` — Rust NTLM/cargo fixes, Explore #14 plan, Explore #15 OpenGraph, spray pyo3 fix.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
@@ -48,7 +49,7 @@ All A/B/C defect work described in the handoff has been resolved, tested, and pu
 - Machine: PRAWN-E14
 - Harness: claude
 - Branch: main
-- HEAD: ebbdae1
-- Dirty files: 0
-- Resume hint: Read .agents/STATE.md. A/B gates closed. C-gate (browser proof) and Explore #14 (needs approval) remain.
+- HEAD: 1b0ef31
+- Dirty files: 1 (STATE.md pending commit)
+- Resume hint: Read .agents/STATE.md. All A/B/C gates closed. Only Explore #14 (needs approval) and llama-cpp-python compile remain.
 <!-- MOLT_AUTO_END -->
