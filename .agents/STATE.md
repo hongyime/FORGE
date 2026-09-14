@@ -1,6 +1,6 @@
 # Current Task: A/B/C safety, export, test, and UI verification
 
-**Status:** .venv FULLY REBUILT AND VERIFIED | HEAD: `c7ae44f` | Date: 2026-09-14
+**Status:** .venv FULLY REBUILT AND VERIFIED | HEAD: `1f794f0` | Date: 2026-09-14
 
 ## A/B/C gate status — all done
 
@@ -47,7 +47,7 @@ Old source folder `C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit` kept per in
 - Machine: PRAWN-E14
 - Harness: claude
 - Branch: main
-- HEAD: c7ae44f
+- HEAD: 1f794f0
 - Dirty files: 0
 - Resume hint: .venv complete. All A/B/C gates closed. Only Explore #14 (Bryan approval needed) remains.
 <!-- MOLT_AUTO_END -->
