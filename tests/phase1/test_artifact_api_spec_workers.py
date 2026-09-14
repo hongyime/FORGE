@@ -12,8 +12,10 @@ def test_api_spec_mapping_children_use_bounded_workers_and_preserve_order(
     monkeypatch,
 ) -> None:
     processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    monkeypatch.delenv("FORGE_LOCAL_BATCH_WORKERS", raising=False)
     document = {
         "openapi": "3.1.0",
+        "info": {"title": "Test API", "version": "1.0"},
         "servers": [
             {"url": "https://api-one.acme.example/v1?token=hidden&view=public"},
             {"host": "api-two.acme.example", "scheme": "https", "basePath": "/v2"},
@@ -66,11 +68,13 @@ def test_api_spec_list_items_use_bounded_workers_and_preserve_order(
     monkeypatch,
 ) -> None:
     processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    monkeypatch.delenv("FORGE_LOCAL_BATCH_WORKERS", raising=False)
     document = [
         {"url": "https://list-one.acme.example"},
         {"url": "list-two.acme.example/path"},
         {"callbacks": {"https://list-callback.acme.example/hook": {}}},
         {"externalDocs": {"url": "https://list-docs.acme.example/openapi"}},
+        {"info": {"title": "Test API", "version": "1.0"}},
     ]
     original_item = ArtifactQueueProcessor._api_spec_list_item_candidate_values
     active = 0
