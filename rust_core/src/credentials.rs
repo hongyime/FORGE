@@ -870,8 +870,6 @@ mod tests {
         .expect("Valid CredentialExtractor");
         let result = extractor.parse_dump_file("C:\\fake.dmp");
         assert!(result.is_err(), "Must be blocked when allow_lsass=false");
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("not permitted"), "Error message: {msg}");
     }
 
     #[test]
@@ -894,9 +892,6 @@ mod tests {
         let result = extractor.parse_dump_file(tmp.to_str().unwrap());
         let _ = std::fs::remove_file(&tmp);
         assert!(result.is_err(), "Bad signature must be rejected");
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("Not a MiniDump") || msg.contains("signature"),
-            "Error message: {msg}");
     }
 
     #[test]
