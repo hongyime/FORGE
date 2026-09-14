@@ -1,6 +1,6 @@
 # Current Task: Explore #14 Agent Ecosystem + test_registry fix
 
-**Status:** ALL WORK COMPLETE | HEAD: pending-commit | Date: 2026-09-15
+**Status:** ALL WORK COMPLETE | HEAD: `2e1eedd` | Date: 2026-09-15
 
 ## A/B/C gate status — all done (from previous sessions)
 
@@ -14,7 +14,7 @@
 
 ## Explore #14 — Agent Ecosystem (Bryan approved 2026-09-15)
 
-Implemented in `feat(explore): Explore #14` commit (pending push):
+Implemented in commit `2e1eedd` — pushed to origin/main.
 
 | File | What |
 |------|------|
@@ -52,7 +52,7 @@ File no longer hangs default runs — use `-m network` to run explicitly.
 - Machine: PRAWN-E14
 - Harness: claude
 - Branch: main
-- HEAD: pending-commit
-- Dirty files: 10
-- Resume hint: Read .agents/STATE.md. All work complete; commit feat(explore) pending.
+- HEAD: 2e1eedd
+- Dirty files: 0
+- Resume hint: Explore #14 shipped (2e1eedd). No open work items. test_registry.py is now @network-marked.
 <!-- MOLT_AUTO_END -->
