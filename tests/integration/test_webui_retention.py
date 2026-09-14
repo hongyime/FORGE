@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from forge.webui.app import create_app
@@ -239,4 +240,32 @@ def test_retention_route_hides_cross_workspace_engagement(
             headers=beta_headers,
         )
 
-        assert response.status_code == 404, response.text
+    assert response.status_code == 404, response.text
+
+
+@pytest.mark.parametrize("confirmation", ["false", "true", 1, 1.0, [True], {"value": True}])
+def test_retention_apply_rejects_non_boolean_confirmation_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    confirmation: str | int | float | list[bool] | dict[str, bool],
+) -> None:
+    # Given an authorized caller and disposable, retention-eligible evidence.
+    _configure_webui_env(tmp_path, monkeypatch)
+    with TestClient(create_app()) as client:
+        headers = _headers("review-operator", role="operator")
+        created = _create_engagement(client, headers=headers)
+        db_path = Path(str(created["path"]))
+        _seed_retention_rows(db_path)
+
+        # When a truthy value other than JSON true is submitted.
+        response = client.post(
+            f"/api/engagements/{created['slug']}/retention/apply",
+            json={"confirm": confirmation, "now": "2026-01-01T00:00:00Z"},
+            headers=headers,
+        )
+
+        # Then admission fails before any evidence or retention ledger changes.
+        assert response.status_code == 400, "Only literal JSON true may authorize retention"
+        with sqlite3.connect(db_path) as con:
+            assert con.execute("SELECT COUNT(*) FROM monitoring_trend_points").fetchone()[0] == 2
+            assert con.execute("SELECT COUNT(*) FROM retention_runs").fetchone()[0] == 0

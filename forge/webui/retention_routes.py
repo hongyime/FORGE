@@ -121,7 +121,7 @@ def retention_apply_payload(
     operator: str,
 ) -> dict[str, Any]:
     payload = body or {}
-    if not bool(payload.get("confirm")):
+    if payload.get("confirm") is not True:
         raise RetentionRouteError("retention apply requires confirm=true")
     try:
         return run_retention(
