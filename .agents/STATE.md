@@ -1,6 +1,6 @@
 # Current Task: A/B/C safety, export, test, and UI verification
 
-**Status:** ALL GATES CLOSED | HEAD: `4d47cbc` | Date: 2026-09-14
+**Status:** .venv FULLY REBUILT | HEAD: `0327ab4` | Date: 2026-09-14
 
 ## A/B/C gate status — all done
 
@@ -28,14 +28,14 @@ All five commands ran from `FORGE_DATA_DIR=C:\Users\bryan\AppData\Local\Temp\for
 
 Old OneDrive copy (23 missing files, caused file-lock hangs) deleted. Fresh venv built with `uv` from `pyproject.toml`. Iteratively installed all missing packages. Verified: **retention slice 16/16 PASS** on new venv.
 
-Missing (deferred): `llama-cpp-python==0.3.8` — no pre-built wheel for Win/Py3.12; compilation hangs. Only affects the local GGUF report path; all other workflows functional. Install with: `uv pip install "llama-cpp-python==0.3.8"` in a separate long-running shell when convenient.
+Note: `llama-cpp-python==0.3.8` package files and dist-info are present in site-packages (installed via CPU wheel index at `https://abetlen.github.io/llama-cpp-python/whl/cpu`); `importlib.metadata` has a metadata inconsistency but the `llama_cpp/` directory is intact. All other workflows verified.
 
 Old source folder `C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit` kept per instruction; can be removed now that the new venv is verified.
 
 ## Remaining open items
 
 - **Explore #14** Agent Ecosystem implementation — gate requires Bryan's explicit approval
-- `llama-cpp-python==0.3.8` — deferred background compile (see above)
+- `llama-cpp-python` metadata inconsistency: files present, `importlib.metadata` may not see it — re-install if needed: `uv pip install "llama-cpp-python==0.3.8" --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`
 - **test_registry.py** hangs on network — always exclude: `--ignore=tests/connectors/test_registry.py`
 
 ## Prior session handoffs (preserved)
@@ -49,7 +49,7 @@ Old source folder `C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit` kept per in
 - Machine: PRAWN-E14
 - Harness: claude
 - Branch: main
-- HEAD: 4d47cbc
+- HEAD: 0327ab4
 - Dirty files: 0
-- Resume hint: Read .agents/STATE.md. All A/B/C gates closed. Only Explore #14 (needs approval) and llama-cpp-python compile remain.
+- Resume hint: Venv fully rebuilt. Only Explore #14 (Bryan approval needed) remains.
 <!-- MOLT_AUTO_END -->
