@@ -43,11 +43,12 @@ Old source folder `C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit` kept per in
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-14 (session wrap)
+- Updated: 2026-09-14 20:04:45 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
+- Event: stop
 - Branch: main
-- HEAD: 1f794f0
+- HEAD: bbd59ce
 - Dirty files: 0
-- Resume hint: .venv complete. All A/B/C gates closed. Only Explore #14 (Bryan approval needed) remains.
+- Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
