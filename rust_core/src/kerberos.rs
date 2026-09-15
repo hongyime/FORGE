@@ -214,7 +214,7 @@ fn ldap_spn_query(domain: &str, dc_ip: &str) -> PyResult<Vec<String>> {
 /// Walk the DER-encoded KRB-CRED structure and extract safe metadata.
 /// Returns realm and principal fields only; no session keys or cipher text.
 fn parse_kirbi_der(data: &[u8]) -> PyResult<Vec<HashMap<String, String>>> {
-    if data.len() < 4 {
+    if data.len() < 2 {
         return Err(PyErr::new::<PyRuntimeError, _>(
             "Kirbi too short to be a valid KRB-CRED structure",
         ));
