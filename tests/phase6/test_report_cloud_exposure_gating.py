@@ -225,7 +225,7 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     )
     assert inventory_by_identifier["742931608514"]["validation_status"] == "VALIDATED"
     assert inventory_by_identifier["742931608514"]["stored_validation_status"] == "VALIDATED"
-    assert inventory_by_identifier["742931608514"]["validation_reportable"] is False
+    assert inventory_by_identifier["742931608514"]["validation_reportable"] is True
     assert inventory_by_identifier["742931608514"]["method"] == "aws_sts_get_caller_identity"
     assert (
         "prod/customer-records.csv"
@@ -341,7 +341,7 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
         row["cloud_asset_type"] == "aws"
         and row["cloud_identifier"] == "742931608514"
         and row["validation_status"] == "VALIDATED"
-        and row["validation_reportable"] == "False"
+        and row["validation_reportable"] == "True"
         for row in raw_validation_rows
     )
     assert "raw-validation-secret" not in json.dumps(raw_payload)

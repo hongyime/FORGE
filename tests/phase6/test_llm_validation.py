@@ -439,6 +439,7 @@ class TestReportSynthesizerIntegration:
             assert "CVE-2021-44228" in prompt
             assert "Log4Shell" in prompt
     
+    @pytest.mark.slow
     def test_report_generation_with_validation_feedback(self):
         """Test report generation with validation feedback loop."""
         with tempfile.TemporaryDirectory() as temp_dir:

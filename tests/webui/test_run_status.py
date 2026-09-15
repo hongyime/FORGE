@@ -155,6 +155,8 @@ def test_engagement_run_rows_preserves_web_api_payload_contract(tmp_path: Path) 
             "post_exploitation_allowed": False,
             "requires_explicit_roe": True,
             "scope_gate": "custom_scope_gate",
+            "scope_manifest_required": False,
+            "scope_manifest_present": False,
             "error": "operator stopped",
             "metadata": metadata,
             "audit_manifest": {
