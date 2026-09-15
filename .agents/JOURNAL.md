@@ -401,3 +401,7 @@
 - 2026-09-15 23:32:58 +08:00 [PRAWN-E14/codex/session-start] branch=main head=cede061 dirty=0
 - 2026-09-16 01:32:50 +08:00 [PRAWN-E14/codex/session-start] branch=main head=cede061 dirty=8
 - 2026-09-16 02:50:15 +08:00 [PRAWN-E14/claude/stop] branch=main head=bb6d85d dirty=2
+- 2026-09-16 03:02:01 +08:00 [PRAWN-E14/claude/stop] branch=main head=35cad10 dirty=1
+- 2026-09-16 03:05:27 +08:00 [PRAWN-E14/codex/session-start] branch=main head=35cad10 dirty=1
+- 2026-09-16: Published approved full-Rust plan and reviewed corrections/visual in `cede061`, `5fa2142`, `35cad10`, preserving concurrent baseline-repair commits. Independent plan review approved dependency DAG, explicit legacy subsystem ownership, lossless rollback and final-artifact test binding; HTML structure passed, browser inspection remained unavailable. PostPlan version 2: https://1cxewab3ciln.postplan.dev .
+- 2026-09-16: Implemented and pushed native migration inventory checkpoint `5b7b82e` through separate workers and independent verification. Corrected duplicate-declaration ID/owner loss with failing-first regressions; 28 native tests, fmt, Clippy and fixture CLI checks pass. Existing plan T1 already specified the invariant. Full T1 closure remains blocked by policy-denied cleanup of two exact owned fixture directories and unavailable LSP; generated ledgers remain local, all later migration tasks uncompleted. Verified existing Python API/web health and worker container state; no Rust cutover claimed.
