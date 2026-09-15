@@ -39,11 +39,12 @@ A minimal valid DER SEQUENCE header is 2 bytes (tag byte + zero-length byte). Th
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-15 (session wrap)
+- Updated: 2026-09-15 09:02:25 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
+- Event: stop
 - Branch: main
-- HEAD: 540cb44
+- HEAD: 3433ce7
 - Dirty files: 0
-- Resume hint: All tests green. Only operator-decision items remain (full collection crash investigation, Vitest, API startup).
+- Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
