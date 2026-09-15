@@ -1,9 +1,9 @@
 ---
 slug: forge-full-rust-rewrite
-status: approved
+status: executing
 intent: clear
 review_required: false
-pending-action: review, publish, and hand off .omo/plans/forge-full-rust-rewrite.md to execution
+pending-action: independently verify task 1, then integrate its first native checkpoint
 approach: Complete first-party Rust replacement using parity-gated migration, preserved data/contracts, native CLI/API/workers, and a proposed Rust-authored web UI; final distribution must not depend on Python.
 ---
 
@@ -100,3 +100,11 @@ status: approved
 <!-- That durable record is the loop guard: on a later turn read it and resume at the gate instead of re-running exploration. -->
 
 Approval received: “i approve all do all the steps now, spin subagents commit and push main”. Plan created with 36 implementation tasks and four final verifiers. Next: finish review/structural validation, publish approved plan checkpoint, then explicit worker handoff. Native Metis/Momus/Oracle task types are not exposed by the current task tool; a read-only explore gap-review was launched and must be reported by its actual tool/result, not relabeled as native high-accuracy approval.
+
+## Published plan and execution receipts
+
+- Initial approved plan committed and pushed as `cede061`; remote SHA confirmed. First push hit transient Windows shell/credential-helper process errors; normal retry succeeded without bypassing hooks or changing Git configuration.
+- Team reviewers returned conditional approval identifying legacy namespace ownership and dependency-order gaps. Main corrected those, added lossless post-cutover rollback and final-artifact-bound release checks. A separate configured Codex reviewer then returned **APPROVE — planning artifacts only**, with 36 tasks/F1-F4, matching dependency table/body DAG, no missing task fields and all four corrections checked.
+- Approved Markdown SHA256: `ffb359b307cc7203bfc7d0d7f158e5a136c2abad1a28b9fea7a077d1b1fc39ca`. Approved HTML SHA256: `3cfaf14837119d19447165a0143011ce18567cd324496c58c21b18978c09968b`. Local review receipt: `.omo/evidence/rust-rewrite/plan-final-review.json`. This is not a native Momus/Oracle dual-review claim.
+- HTML structural checker passed. Desktop/mobile browser attempts were blocked by sandbox IPC/crashpad access denial; visual inspection remains unavailable, not passed. Updated PostPlan version 2: https://1cxewab3ciln.postplan.dev .
+- A separate Codex implementation worker started T1, first reported a dependency-fetch blocker, then resumed after permitted parent Cargo fetch populated its cache. Worker now claims 22 Rust tests, 28 CLI assertions and 10 metadata assertions passing; independent T1 verification is still required before checking the plan task or publishing product code.
