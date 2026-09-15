@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="visual-explainer-version" content="1.0.0">
+<title>FORGE Full Rust Rewrite — Execution Plan</title>
+<style>
+:root{--background:#101418;--surface:#171D23;--raised:#202830;--border:#36434F;--text:#E8EDF2;--muted:#A8B5C2;--accent:#67D4E8;--accent-soft:#182D34;--radius:12px;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color-scheme:dark}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:var(--background);color:var(--text);font-size:17px;line-height:1.65}a{color:var(--accent);text-underline-offset:4px}a:hover{text-decoration-thickness:2px}button,summary,a{-webkit-tap-highlight-color:transparent}button:focus-visible,summary:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:5px}button{font:inherit}svg{display:block;max-width:100%;height:auto}svg text{font-family:"Segoe UI",system-ui,sans-serif}p{margin:0 0 16px}h1,h2,h3{line-height:1.15;letter-spacing:-.025em}h1{font-size:clamp(28px,5vw,48px);font-weight:650;max-width:820px;margin:20px 0}h2{font-size:27px;font-weight:600;margin:0 0 12px}h3{font-size:19px;font-weight:600;margin:0 0 10px}code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}code{font-size:.88em;color:var(--accent)}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.7;margin:0}small,.muted{color:var(--muted)}[hidden]{display:none!important}
+.page{width:min(1080px,calc(100% - 80px));margin:auto}
+.masthead{padding:28px 0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);gap:16px}
+.brand{font-size:14px;font-weight:650;letter-spacing:.035em}.brand::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:10px}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.intro{padding:52px 0 32px}
+.lead{font-size:19px;color:var(--muted);max-width:750px}
+.toc{display:flex;gap:26px;padding:0 0 28px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.toc a{font-size:14px;color:var(--muted);text-decoration:none}.toc a:hover{color:var(--accent)}
+.toc span{color:var(--accent);margin-right:7px}
+.section{padding:40px 0;border-bottom:1px solid var(--border)}
+.section-heading{display:flex;gap:18px;align-items:baseline;margin-bottom:20px}
+.number{font-size:13px;color:var(--accent);font-family:ui-monospace,Consolas,monospace}
+.section-description{max-width:760px;color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px}
+.caption{font-size:14px;color:var(--muted);margin:16px 0 0;max-width:850px}
+.diagram-frame{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;overflow-x:auto}
+.diagram-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.reading-grid{display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:20px}
+details{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 18px;margin-bottom:10px}
+details[open]{padding-bottom:18px}
+summary{cursor:pointer;font-weight:600;font-size:15px;list-style:none;color:var(--text)}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+ ";color:var(--accent)}
+details[open] summary::before{content:"− "}
+details p{margin:10px 0 0;font-size:15px;color:var(--muted)}
+.rule{border-left:3px solid var(--accent);padding:10px 18px;background:var(--accent-soft);border-radius:0 8px 8px 0;margin:16px 0}
+.rule p{margin:0;font-size:15px}
+.wave-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
+.wave-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.wave-card h3{font-size:16px;margin-bottom:8px}
+.wave-num{display:inline-block;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:4px;margin-bottom:10px}
+.wave-tasks{font-size:13px;color:var(--muted);line-height:1.7}
+.task-badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;background:var(--raised);color:var(--muted);border:1px solid var(--border)}
+.task-badge.pending{background:var(--accent-soft);color:var(--accent);border-color:var(--border)}
+.gate-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:20px}
+.gate-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px}
+.gate-card h3{font-size:15px;margin-bottom:6px;color:var(--accent)}
+.gate-card p{font-size:14px;color:var(--muted);margin:0}
+.status-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.status-row:last-child{border-bottom:none}
+.status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.dot-pending{background:var(--accent)}
+.dot-blocked{background:var(--muted)}
+.status-label{font-size:14px;flex:1}
+.status-meta{font-size:12px;color:var(--muted)}
+.next ol{list-style:none;padding:0;margin:0;counter-reset:next-steps}
+.next li{counter-increment:next-steps;padding:16px 0 16px 56px;position:relative;border-bottom:1px solid var(--border)}
+.next li:last-child{border-bottom:none}
+.next li::before{content:counter(next-steps);position:absolute;left:0;top:18px;width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:32px}
+.next li strong{display:block;margin-bottom:6px}
+.next li p{margin:0;color:var(--muted);font-size:15px}
+.footer{display:flex;justify-content:space-between;padding:24px 0;color:var(--muted);font-size:13px;flex-wrap:wrap;gap:8px}
+/* SVG shared styles */
+.svg-text{fill:#E8EDF2;font-size:13px;font-weight:600}
+.svg-sub{fill:#A8B5C2;font-size:11px}
+.svg-accent{fill:#67D4E8;font-size:11px;font-weight:600}
+.node{fill:#171D23;stroke:#36434F;stroke-width:1.5}
+.node-accent{fill:#182D34;stroke:#67D4E8;stroke-width:1.5}
+.node-pending{fill:var(--surface);stroke:var(--border);stroke-width:1.5}
+.diagram-frame svg{min-width:1000px}
+.boundary{fill:none;stroke:#36434F;stroke-width:1;stroke-dasharray:5 3}
+.edge{fill:none;stroke:#A8B5C2;stroke-width:1.5}
+.edge-accent{fill:none;stroke:#67D4E8;stroke-width:1.5}
+.wave-sep{fill:none;stroke:#36434F;stroke-width:1;stroke-dasharray:3 3}
+@media(max-width:700px){.page{width:calc(100% - 40px)}.masthead{padding:20px 0}.intro{padding:34px 0 24px}.lead{font-size:17px}.section{padding:30px 0}.reading-grid{grid-template-columns:1fr;gap:24px}.wave-grid{grid-template-columns:1fr;gap:12px}.gate-grid{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media print{:root{--background:#FFFFFF;--surface:#FFFFFF;--raised:#F2F4F5;--border:#67727D;--text:#111820;--muted:#344350;--accent:#075A6B;--accent-soft:#E8F0F2;color-scheme:light}body{font-size:11pt}.page{width:100%}.intro,.section{padding:20px 0}.toc{display:none!important}.diagram-frame{overflow:visible;break-inside:avoid}details>*{display:block}h1{font-size:24pt}.footer{padding-bottom:0}}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <div class="brand">Visual Explainer</div>
+    <div class="eyebrow">FORGE · Rust Rewrite Plan · 2026-09-15</div>
+  </header>
+  <main>
+    <div class="intro">
+      <div class="eyebrow">XL · High Risk · 36 Tasks · 6 Waves · 4 Final Gates</div>
+      <h1>FORGE Full Rust Rewrite — Execution Plan</h1>
+      <p class="lead">Complete first-party Rust migration of FORGE's CLI, TUI, HTTP API, WebSocket layer, browser dashboard (Leptos SSR), background workers, and all shipped plugins — with parity-first TDD, explicit rollback, and verified incremental publishing to <code>main</code>. Implementation status: <strong>not complete; inventory checkpoint started</strong>.</p>
+    </div>
+    <nav class="toc" aria-label="Document sections">
+      <a href="#overview"><span>01</span>Architecture overview</a>
+      <a href="#details"><span>02</span>Waves &amp; tasks</a>
+      <a href="#next-steps"><span>03</span>Execution gates</a>
+    </nav>
+
+    <!-- ===== SECTION 01: OVERVIEW ===== -->
+    <section class="section" id="overview" aria-labelledby="overview-title">
+      <div class="section-heading"><span class="number">01</span><h2 id="overview-title">Architecture overview</h2></div>
+      <p class="section-description">Proposed target-state crate layout, surface boundaries, and migration path from current Python/React runtime. All boxes labeled <em>proposed</em> are pending implementation.</p>
+
+      <div class="diagram-frame" tabindex="0" role="region" aria-label="Proposed FORGE Rust architecture diagram; scroll horizontally on narrow screens">
+        <div class="diagram-label">Proposed target architecture · crate boundaries &amp; surfaces</div>
+        <svg viewBox="0 0 1020 580" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="arch-title arch-desc">
+          <title id="arch-title">Proposed FORGE Rust target architecture</title>
+          <desc id="arch-desc">Six horizontal bands show the six migration waves. Wave 1 lays foundations: xtask runner, migration ledgers, domain types, config/lifecycle, policy/authorization, and crypto/adapters. Wave 2 adds storage: SQLite, audit chains, Postgres/workflow, message bus, connectors/plugins, and workflow engine. Wave 3 adds analysis: discovery, enrichment, artifact parsers, validation, and scoring. Wave 4 adds reporting: graphs, reports, monitoring, remediation, retention, and service parity. Wave 5 adds surfaces: CLI/TUI, platform API/worker, engagement API/auth, and Leptos UI. Wave 6 closes: packaging, deployment, testing matrix, data cutover, retirement, and final validation. Four final read-only gates run in parallel: plan compliance, code quality, manual QA, and scope fidelity.</desc>
+          <defs>
+            <marker id="a-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A8B5C2"/>
+            </marker>
+            <marker id="a-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#67D4E8"/>
+            </marker>
+          </defs>
+
+          <!-- Wave labels (left column) -->
+          <rect x="8" y="8" width="68" height="50" rx="5" class="node-accent"/>
+          <text x="42" y="29" text-anchor="middle" class="svg-accent">W1</text>
+          <text x="42" y="47" text-anchor="middle" class="svg-sub">Found.</text>
+
+          <rect x="8" y="68" width="68" height="50" rx="5" class="node-accent"/>
+          <text x="42" y="89" text-anchor="middle" class="svg-accent">W2</text>
+          <text x="42" y="107" text-anchor="middle" class="svg-sub">Storage</text>
+
+          <rect x="8" y="128" width="68" height="50" rx="5" class="node-accent"/>
+          <text x="42" y="149" text-anchor="middle" class="svg-accent">W3</text>
+          <text x="42" y="167" text-anchor="middle" class="svg-sub">Analysis</text>
+
+          <rect x="8" y="188" width="68" height="50" rx="5" class="node-accent"/>
+          <text x="42" y="209" text-anchor="middle" class="svg-accent">W4</text>
+          <text x="42" y="227" text-anchor="middle" class="svg-sub">Reporting</text>
+
+          <rect x="8" y="248" width="68" height="50" rx="5" class="node-accent"/>
+          <text x="42" y="269" text-anchor="middle" class="svg-accent">W5</text>
+          <text x="42" y="287" text-anchor="middle" class="svg-sub">Surfaces</text>
+
+          <rect x="8" y="308" width="68" height="50" rx="5" class="node-accent"/>
+          <text x="42" y="329" text-anchor="middle" class="svg-accent">W6</text>
+          <text x="42" y="347" text-anchor="middle" class="svg-sub">Release</text>
+
+          <!-- Horizontal wave separators -->
+          <line x1="84" y1="63" x2="1012" y2="63" class="wave-sep"/>
+          <line x1="84" y1="123" x2="1012" y2="123" class="wave-sep"/>
+          <line x1="84" y1="183" x2="1012" y2="183" class="wave-sep"/>
+          <line x1="84" y1="243" x2="1012" y2="243" class="wave-sep"/>
+          <line x1="84" y1="303" x2="1012" y2="303" class="wave-sep"/>
+          <line x1="84" y1="363" x2="1012" y2="363" class="wave-sep"/>
+
+          <!-- WAVE 1: T1-T6 -->
+          <rect x="90" y="12" width="130" height="42" rx="6" class="node-pending"/>
+          <text x="155" y="29" text-anchor="middle" class="svg-text">T1: xtask + ledgers</text>
+          <text x="155" y="45" text-anchor="middle" class="svg-sub">inventory · evidence runner</text>
+
+          <rect x="230" y="12" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="290" y="29" text-anchor="middle" class="svg-text">T2: Baseline</text>
+          <text x="290" y="45" text-anchor="middle" class="svg-sub">test accounting</text>
+
+          <rect x="360" y="12" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="420" y="29" text-anchor="middle" class="svg-text">T3: Domain</text>
+          <text x="420" y="45" text-anchor="middle" class="svg-sub">forge-domain types</text>
+
+          <rect x="490" y="12" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="550" y="29" text-anchor="middle" class="svg-text">T4: Config</text>
+          <text x="550" y="45" text-anchor="middle" class="svg-sub">config · lifecycle</text>
+
+          <rect x="620" y="12" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="680" y="29" text-anchor="middle" class="svg-text">T5: Policy</text>
+          <text x="680" y="45" text-anchor="middle" class="svg-sub">forge-policy · RBAC</text>
+
+          <rect x="750" y="12" width="130" height="42" rx="6" class="node-pending"/>
+          <text x="815" y="29" text-anchor="middle" class="svg-text">T6: Crypto/Adapters</text>
+          <text x="815" y="45" text-anchor="middle" class="svg-sub">forge-adapters · fakes</text>
+
+          <!-- WAVE 2: T7-T12 -->
+          <rect x="90" y="72" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="150" y="89" text-anchor="middle" class="svg-text">T7: SQLite</text>
+          <text x="150" y="105" text-anchor="middle" class="svg-sub">forge-storage</text>
+
+          <rect x="220" y="72" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="280" y="89" text-anchor="middle" class="svg-text">T8: Audit</text>
+          <text x="280" y="105" text-anchor="middle" class="svg-sub">chains · manifests</text>
+
+          <rect x="350" y="72" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="410" y="89" text-anchor="middle" class="svg-text">T9: Postgres</text>
+          <text x="410" y="105" text-anchor="middle" class="svg-sub">workflow history</text>
+
+          <rect x="480" y="72" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="540" y="89" text-anchor="middle" class="svg-text">T10: Bus</text>
+          <text x="540" y="105" text-anchor="middle" class="svg-sub">Redis · in-process</text>
+
+          <rect x="610" y="72" width="125" height="42" rx="6" class="node-pending"/>
+          <text x="672" y="89" text-anchor="middle" class="svg-text">T11: Plugins</text>
+          <text x="672" y="105" text-anchor="middle" class="svg-sub">native · JSON-stdio</text>
+
+          <rect x="745" y="72" width="135" height="42" rx="6" class="node-pending"/>
+          <text x="812" y="89" text-anchor="middle" class="svg-text">T12: Workflow Eng.</text>
+          <text x="812" y="105" text-anchor="middle" class="svg-sub">forge-runtime · scheduler</text>
+
+          <!-- WAVE 3: T13-T18 -->
+          <rect x="90" y="132" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="150" y="149" text-anchor="middle" class="svg-text">T13: Discovery</text>
+          <text x="150" y="165" text-anchor="middle" class="svg-sub">seed intake · recursive</text>
+
+          <rect x="220" y="132" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="280" y="149" text-anchor="middle" class="svg-text">T14: Enrichment</text>
+          <text x="280" y="165" text-anchor="middle" class="svg-sub">DNS · RDAP · identity</text>
+
+          <rect x="350" y="132" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="410" y="149" text-anchor="middle" class="svg-text">T15: Artifacts</text>
+          <text x="410" y="165" text-anchor="middle" class="svg-sub">parsers · decoders</text>
+
+          <rect x="480" y="132" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="540" y="149" text-anchor="middle" class="svg-text">T16: Validation</text>
+          <text x="540" y="165" text-anchor="middle" class="svg-sub">proof-bound · ND only</text>
+
+          <rect x="610" y="132" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="670" y="149" text-anchor="middle" class="svg-text">T17: Scoring</text>
+          <text x="670" y="165" text-anchor="middle" class="svg-sub">deterministic rules</text>
+
+          <rect x="740" y="132" width="145" height="42" rx="6" class="node-pending"/>
+          <text x="812" y="149" text-anchor="middle" class="svg-text">T18: Pipeline Parity</text>
+          <text x="812" y="165" text-anchor="middle" class="svg-sub">integration · diff</text>
+
+          <!-- WAVE 4: T19-T24 -->
+          <rect x="90" y="192" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="150" y="209" text-anchor="middle" class="svg-text">T19: Graphs</text>
+          <text x="150" y="225" text-anchor="middle" class="svg-sub">asset · attack · export</text>
+
+          <rect x="220" y="192" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="280" y="209" text-anchor="middle" class="svg-text">T20: Reports</text>
+          <text x="280" y="225" text-anchor="middle" class="svg-sub">templates · fallback</text>
+
+          <rect x="350" y="192" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="410" y="209" text-anchor="middle" class="svg-text">T21: Monitoring</text>
+          <text x="410" y="225" text-anchor="middle" class="svg-sub">alerts · exposure</text>
+
+          <rect x="480" y="192" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="540" y="209" text-anchor="middle" class="svg-text">T22: Remediation</text>
+          <text x="540" y="225" text-anchor="middle" class="svg-sub">tickets · retest</text>
+
+          <rect x="610" y="192" width="120" height="42" rx="6" class="node-pending"/>
+          <text x="670" y="209" text-anchor="middle" class="svg-text">T23: Retention</text>
+          <text x="670" y="225" text-anchor="middle" class="svg-sub">workspaces · ops</text>
+
+          <rect x="740" y="192" width="145" height="42" rx="6" class="node-pending"/>
+          <text x="812" y="209" text-anchor="middle" class="svg-text">T24: Svc Parity</text>
+          <text x="812" y="225" text-anchor="middle" class="svg-sub">API contract schema</text>
+
+          <!-- WAVE 5: T25-T30 -->
+          <rect x="90" y="252" width="140" height="42" rx="6" class="node-pending"/>
+          <text x="160" y="269" text-anchor="middle" class="svg-text">T25: CLI/TUI</text>
+          <text x="160" y="285" text-anchor="middle" class="svg-sub">forge-cli · binary</text>
+
+          <rect x="240" y="252" width="140" height="42" rx="6" class="node-pending"/>
+          <text x="310" y="269" text-anchor="middle" class="svg-text">T26: Platform API</text>
+          <text x="310" y="285" text-anchor="middle" class="svg-sub">forge-server :8000</text>
+
+          <rect x="390" y="252" width="140" height="42" rx="6" class="node-pending"/>
+          <text x="460" y="269" text-anchor="middle" class="svg-text">T27: Engage API</text>
+          <text x="460" y="285" text-anchor="middle" class="svg-sub">JWT · WS :8080</text>
+
+          <rect x="540" y="252" width="145" height="42" rx="6" class="node-pending"/>
+          <text x="612" y="269" text-anchor="middle" class="svg-text">T28: UI Overview</text>
+          <text x="612" y="285" text-anchor="middle" class="svg-sub">Leptos SSR · nav</text>
+
+          <rect x="695" y="252" width="145" height="42" rx="6" class="node-pending"/>
+          <text x="767" y="269" text-anchor="middle" class="svg-text">T29: UI Detail</text>
+          <text x="767" y="285" text-anchor="middle" class="svg-sub">graph · review · audit</text>
+
+          <rect x="848" y="252" width="150" height="42" rx="6" class="node-pending"/>
+          <text x="923" y="269" text-anchor="middle" class="svg-text">T30: Operator E2E</text>
+          <text x="923" y="285" text-anchor="middle" class="svg-sub">full journey proof</text>
+
+          <!-- WAVE 6: T31-T36 -->
+          <rect x="90" y="312" width="140" height="42" rx="6" class="node-pending"/>
+          <text x="160" y="329" text-anchor="middle" class="svg-text">T31: Packaging</text>
+          <text x="160" y="345" text-anchor="middle" class="svg-sub">Python-free dist</text>
+
+          <rect x="240" y="312" width="140" height="42" rx="6" class="node-pending"/>
+          <text x="310" y="329" text-anchor="middle" class="svg-text">T32: Deployment</text>
+          <text x="310" y="345" text-anchor="middle" class="svg-sub">Compose · Helm</text>
+
+          <rect x="390" y="312" width="140" height="42" rx="6" class="node-pending"/>
+          <text x="460" y="329" text-anchor="middle" class="svg-text">T33: Test Matrix</text>
+          <text x="460" y="345" text-anchor="middle" class="svg-sub">mutation · chaos · soak</text>
+
+          <rect x="540" y="312" width="140" height="42" rx="6" class="node-pending"/>
+          <text x="610" y="329" text-anchor="middle" class="svg-text">T34: Cutover</text>
+          <text x="610" y="345" text-anchor="middle" class="svg-sub">rehearse · rollback</text>
+
+          <rect x="690" y="312" width="140" height="42" rx="6" class="node-pending"/>
+          <text x="760" y="329" text-anchor="middle" class="svg-text">T35: Retire Legacy</text>
+          <text x="760" y="345" text-anchor="middle" class="svg-sub">Python/React removed</text>
+
+          <rect x="840" y="312" width="158" height="42" rx="6" class="node-pending"/>
+          <text x="919" y="329" text-anchor="middle" class="svg-text">T36: Validate Install</text>
+          <text x="919" y="345" text-anchor="middle" class="svg-sub">TPH restore · health</text>
+
+          <!-- FINAL GATES: F1-F4 -->
+          <line x1="84" y1="370" x2="1012" y2="370" class="wave-sep"/>
+          <rect x="90" y="375" width="218" height="52" rx="6" class="node-accent"/>
+          <text x="199" y="397" text-anchor="middle" class="svg-text">F1: Plan Compliance</text>
+          <text x="199" y="414" text-anchor="middle" class="svg-sub">read-only · receipt hashes</text>
+
+          <rect x="318" y="375" width="218" height="52" rx="6" class="node-accent"/>
+          <text x="427" y="397" text-anchor="middle" class="svg-text">F2: Code Quality</text>
+          <text x="427" y="414" text-anchor="middle" class="svg-sub">fmt · clippy · workspace</text>
+
+          <rect x="546" y="375" width="218" height="52" rx="6" class="node-accent"/>
+          <text x="655" y="397" text-anchor="middle" class="svg-text">F3: Manual QA</text>
+          <text x="655" y="414" text-anchor="middle" class="svg-sub">CLI + API + browser + rollback</text>
+
+          <rect x="774" y="375" width="224" height="52" rx="6" class="node-accent"/>
+          <text x="886" y="397" text-anchor="middle" class="svg-text">F4: Scope Fidelity</text>
+          <text x="886" y="414" text-anchor="middle" class="svg-sub">no Python/React in release</text>
+
+          <!-- Gates label -->
+          <rect x="8" y="375" width="68" height="52" rx="5" fill="#0d1f28" stroke="#67D4E8" stroke-width="1.5"/>
+          <text x="42" y="396" text-anchor="middle" class="svg-accent">FINAL</text>
+          <text x="42" y="412" text-anchor="middle" class="svg-accent">GATES</text>
+
+          <!-- Key dependency arrows (selective, keep readable) -->
+          <path d="M 155 54 L 155 72" class="edge" marker-end="url(#a-arrow)"/>
+          <path d="M 290 54 L 290 72" class="edge" marker-end="url(#a-arrow)"/>
+          <path d="M 155 114 L 155 132" class="edge" marker-end="url(#a-arrow)"/>
+          <path d="M 812 114 L 812 132" class="edge" marker-end="url(#a-arrow)"/>
+          <path d="M 812 174 L 812 192" class="edge" marker-end="url(#a-arrow)"/>
+          <path d="M 812 234 L 812 252" class="edge" marker-end="url(#a-arrow)"/>
+          <path d="M 460 294 L 460 312" class="edge" marker-end="url(#a-arrow)"/>
+          <path d="M 199 427 V 450 H 427 V 427" class="edge-accent" stroke-dasharray="4 3"/>
+          <path d="M 655 427 V 450 H 886 V 427" class="edge-accent" stroke-dasharray="4 3"/>
+
+          <!-- Legend -->
+          <rect x="90" y="455" width="14" height="14" rx="3" class="node-pending"/>
+          <text x="110" y="467" class="svg-sub">Pending implementation</text>
+          <rect x="300" y="455" width="14" height="14" rx="3" class="node-accent"/>
+          <text x="320" y="467" class="svg-sub">Wave label / Final gate</text>
+          <rect x="510" y="455" width="14" height="14" rx="3" class="node"/>
+          <text x="530" y="467" class="svg-sub">Existing baseline</text>
+
+          <!-- Rust toolchain note -->
+          <rect x="90" y="480" width="870" height="30" rx="5" fill="#101820" stroke="#36434F" stroke-width="1"/>
+          <text x="525" y="500" text-anchor="middle" class="svg-sub">Rust 1.94.1 · edition 2024 · clap 4 · Tokio 1 · Axum 0.8 · Leptos 0.8 · serde 1 · SQLx 0.8 · resolver-locked · workspace: native/Cargo.toml</text>
+
+          <!-- Baseline note -->
+          <text x="90" y="545" class="svg-sub">Baseline: 0717e42 · reported slices 53 Rust / 29 agent / 102 connector tests · unresolved: collection AV, Vitest worker failures, service startup failures</text>
+        </svg>
+      </div>
+      <p class="caption">Proposed target architecture — all tasks labeled <em>pending</em> until evidence receipts exist. Wave order is binding; intra-wave parallelism follows the dependency matrix. Final gates run in parallel after all 36 tasks complete and require unanimous approval before a release claim.</p>
+    </section>
+
+    <!-- ===== SECTION 02: DETAILS ===== -->
+    <section class="section" id="details" aria-labelledby="details-title">
+      <div class="section-heading"><span class="number">02</span><h2 id="details-title">Waves &amp; tasks</h2></div>
+
+      <div class="wave-grid">
+
+        <div class="wave-card">
+          <span class="wave-num">Wave 1 · T1–T6</span>
+          <h3>Foundation</h3>
+          <div class="wave-tasks">
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T1 — Bootstrap inventory &amp; evidence runner</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T2 — Trustworthy baseline &amp; test accounting</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T3 — Typed domain &amp; serialization contracts</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T4 — Config, errors, logging, resource lifecycle</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T5 — Scope, authorization &amp; admission gates</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T6 — Cryptography &amp; safe adapter interfaces</span><span class="task-badge pending">pending</span></div>
+          </div>
+        </div>
+
+        <div class="wave-card">
+          <span class="wave-num">Wave 2 · T7–T12</span>
+          <h3>Storage &amp; Runtime</h3>
+          <div class="wave-tasks">
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T7 — SQLite engagement/control repositories</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T8 — Audit chains, manifests &amp; retained evidence</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T9 — Platform Postgres &amp; workflow history</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T10 — Message bus, eventing &amp; task coordination</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T11 — Connectors &amp; first-party plugin boundary</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T12 — Workflow engine, agent loop &amp; scheduler</span><span class="task-badge pending">pending</span></div>
+          </div>
+        </div>
+
+        <div class="wave-card">
+          <span class="wave-num">Wave 3 · T13–T18</span>
+          <h3>Analysis Pipeline</h3>
+          <div class="wave-tasks">
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T13 — Scoped seed intake &amp; recursive discovery</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T14 — Passive identity, DNS &amp; provider enrichment</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T15 — Static artifact decoding &amp; queue processing</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T16 — Non-destructive validation &amp; proof-bound reportability</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T17 — Deterministic scoring &amp; standards enrichment</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T18 — Full pipeline parity proof</span><span class="task-badge pending">pending</span></div>
+          </div>
+        </div>
+
+        <div class="wave-card">
+          <span class="wave-num">Wave 4 · T19–T24</span>
+          <h3>Reporting &amp; Operations</h3>
+          <div class="wave-tasks">
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T19 — Asset/attack graphs &amp; all export formats</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T20 — Reports, templates &amp; narrative providers</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T21 — Monitoring, alerts &amp; exposure history</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T22 — Remediation, ticket handoffs &amp; retest lifecycle</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T23 — Retention, workspaces &amp; operator automation</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T24 — Domain/service parity &amp; API contract schemas</span><span class="task-badge pending">pending</span></div>
+          </div>
+        </div>
+
+        <div class="wave-card">
+          <span class="wave-num">Wave 5 · T25–T30</span>
+          <h3>Operator Surfaces</h3>
+          <div class="wave-tasks">
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T25 — Complete public/hidden CLI &amp; native TUI</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T26 — Platform API, health &amp; worker entrypoints (:8000)</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T27 — Engagement web API, auth &amp; progress sockets (:8080)</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T28 — Rust UI overview, navigation &amp; workspace admin (Leptos)</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T29 — Rust UI engagement review, graphs &amp; actions</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T30 — Full native operator journey E2E proof</span><span class="task-badge pending">pending</span></div>
+          </div>
+        </div>
+
+        <div class="wave-card">
+          <span class="wave-num">Wave 6 · T31–T36</span>
+          <h3>Release &amp; Retirement</h3>
+          <div class="wave-tasks">
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T31 — Reproducible Python-free native distributions</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T32 — Service deployment &amp; startup supervision</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T33 — Cross-platform tests, mutation, chaos &amp; soak</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T34 — Copy-based data cutover &amp; rollback rehearsal</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T35 — Retire legacy first-party runtime</span><span class="task-badge pending">pending</span></div>
+            <div class="status-row"><span class="status-dot dot-pending"></span><span class="status-label">T36 — Validate installed system &amp; restore TPH workloads</span><span class="task-badge pending">pending</span></div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="reading-grid" style="margin-top:32px">
+        <div>
+          <h3>Dependency rules</h3>
+            <p>T1 is the global prerequisite. Within waves, work follows the detailed dependency matrix: T2 may overlap the domain/config foundation; T3 → T4 → T5 → T6 is ordered; APIs precede UI integration; packaging precedes deployment and release tests. At most two coding agents and one heavy build/test run on this host. Final gates F1–F4 follow all 36 verified tasks.</p>
+          <div class="rule"><p>A task is not <em>checked</em> merely because its commit exists. Each task requires a <code>verify CASE</code> receipt via <code>forge-xtask</code> capturing exit code, collected/executed/passed counts, and artifact refs.</p></div>
+          <details>
+            <summary>Verification receipt format</summary>
+            <p>Each task runs: <code>cargo run --locked --manifest-path native/Cargo.toml -p forge-xtask -- verify CASE --evidence .omo/evidence/rust-rewrite/task-N</code>. The helper records command, revision, fixture hashes, duration, exit code, stdout/stderr refs, and owned-resource teardown. Unknown/unimplemented cases fail nonzero.</p>
+          </details>
+          <details>
+            <summary>Common gates after every native change</summary>
+            <p><code>cargo fmt --check</code> · <code>cargo clippy -D warnings</code> · <code>cargo test --workspace --locked</code> (with <code>--jobs 1</code> on this host). WASM/SSR feature matrices run separately; do not assume mutually exclusive feature sets compile together.</p>
+          </details>
+          <details>
+            <summary>TDD requirement</summary>
+            <p>Every behavior change requires a failing test first. RED output must be captured before any production code lands. Implementation writes only enough to flip RED→GREEN. Refactor only after GREEN. Regression scenarios re-run after each wave integration point.</p>
+          </details>
+        </div>
+        <div>
+          <h3>Scope boundaries</h3>
+          <p>The rewrite covers all shipped first-party runtime functionality. Optional third-party tools may keep their own runtimes behind bounded JSON-over-stdio adapters. First-party Python plugins must be ported — they cannot be relabeled as third-party exceptions.</p>
+          <details>
+            <summary>What must be preserved</summary>
+            <p><code>END_GOAL.md</code> and SPEC V1–V14 · existing CLI names/options/exit semantics · API routes and machine-readable payloads · config precedence · SQLite evidence/control files · platform Postgres/Redis roles · encryption formats · audit-chain verification · monotonic IDs · report/export compatibility.</p>
+          </details>
+          <details>
+            <summary>What must NOT happen</summary>
+            <p>No reduced-feature executable called the completed rewrite. No empty successful handlers. No skip-based green suites. No concurrent Python/Rust writers to the same live databases. No changing audit history or deleting source/session history. No metric guarantees invented from the language choice.</p>
+          </details>
+          <details>
+            <summary>Unresolved issues at baseline</summary>
+            <p>Collection access violation · frontend Vitest worker startup failures · service startup failures. These remain blocking until evidenced fixed or explicitly scoped to a task. Reported slices (53 Rust / 29 agent / 102 connector tests) require re-run before treatment as verified.</p>
+          </details>
+          <details>
+            <summary>Migration ledger locations</summary>
+            <p><code>native/migration/</code>: <code>capabilities.json</code>, <code>contracts.json</code>, <code>tests.json</code>, <code>session-work.json</code>, <code>baseline.json</code>, <code>parity.json</code>, <code>resources.json</code>. Statuses: <code>pending</code>, <code>implemented</code>, <code>verified</code>, <code>superseded</code>, <code>blocked</code>. Verified requires receipt references. Blocked is never a release pass.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 03: NEXT STEPS ===== -->
+    <section class="section" id="next-steps" aria-labelledby="next-title">
+      <div class="section-heading"><span class="number">03</span><h2 id="next-title">Execution gates</h2></div>
+      <p class="section-description">Four final read-only verification gates that must all approve before a release claim is valid. Each runs independently after all 36 tasks are evidenced.</p>
+
+      <div class="gate-grid">
+        <div class="gate-card">
+          <h3>F1 · Plan Compliance Audit</h3>
+          <p>Read-only reviewer compares tasks 1–36, stable capability/session IDs, and receipt revision hashes to the live tree. Pass requires zero unverified required entries; a missing receipt is a failure. Returns exact revision, verdict, and citations. Command: <code>verify plan-compliance --evidence .omo/evidence/rust-rewrite/final-F1</code>.</p>
+        </div>
+        <div class="gate-card">
+          <h3>F2 · Code Quality Review</h3>
+          <p>Independent reviewer audits native workspace architecture, parser limits, cancellation, audit/auth/storage compatibility, and all warning/type/test gates. Re-runs <code>fmt</code>/<code>clippy</code>/workspace tests on the final revision. Attaches evidence at <code>.omo/evidence/rust-rewrite/final-F2</code>. Pass requires no requirement-blocking issue.</p>
+        </div>
+        <div class="gate-card">
+          <h3>F3 · Real Manual QA</h3>
+          <p>Separate QA agent runs installed CLI, API, worker, and browser journey at desktop/mobile viewport sizes. Includes failover and rollback checks with synthetic fixtures. Evidence: screenshots, HTTP/action logs, teardown receipts at <code>.omo/evidence/rust-rewrite/final-F3</code>. Mock-only or screenshot-only submissions do not pass.</p>
+        </div>
+        <div class="gate-card">
+          <h3>F4 · Scope Fidelity</h3>
+          <p>Independent reviewer verifies full first-party Rust scope, external-tool boundary, no lost supported features/tests, no unrequested offensive expansion, and no erased user/session work. Checks absence of Python/React application runtime from release. Attaches exact artifact/revision hashes and verdict at <code>.omo/evidence/rust-rewrite/final-F4</code>.</p>
+        </div>
+      </div>
+
+      <div class="reading-grid" style="margin-top:32px">
+        <div>
+          <h3>Success criteria (all required)</h3>
+          <div class="next">
+            <ol>
+              <li><strong>All 36 tasks + F1–F4 approved</strong><p>Evidence-backed completion on the final native revision; six component outcomes from the approved draft hold.</p></li>
+              <li><strong>Complete ledger reconciliation</strong><p>Every discovered capability/test/session entry reconciled with executable proof or evidenced supersession. Required tests cannot be waived by absent services or crashed collectors.</p></li>
+              <li><strong>Python/React-free runtime</strong><p>Complete supported engagement journey works using native Rust without Python/React application logic; optional external tools are explicit dependencies, never core fallbacks.</p></li>
+          <li><strong>Data &amp; auth compatibility preserved</strong><p>Existing data, cryptographic envelopes, IDs, audit evidence, and authorization/reportability boundaries remain compatible. Write-fenced cutover and lossless rollback must preserve every acknowledged post-cutover write and audit event. Changed runtime artifacts require renewed release tests and soak evidence.</p></li>
+              <li><strong>Cross-platform test receipts</strong><p>Windows/Linux/macOS-supported paths and browser targets build; full test/chaos/mutation/24h-soak receipts exist and resource behavior stays within recorded budgets.</p></li>
+              <li><strong>Installed system validated</strong><p>API/web/worker and backing services healthy, synthetic work completes, TPH paused set restored, and all temporary QA resources accounted for.</p></li>
+              <li><strong>Commits pushed to origin/main</strong><p>Intended verified commits pushed with matching SHA. Open failures block the full-rewrite completion claim; no statement of flawless operation replaces measurable evidence.</p></li>
+            </ol>
+          </div>
+        </div>
+        <div>
+          <h3>Commit strategy</h3>
+          <p>One integrator owns <code>main</code>; coding subagents work on disjoint files/task branches and do not push. Each task produces one or more atomic conventional commits: <code>feat(domain): ...</code>, <code>test(migration): ...</code>, etc. Larger tasks may have several independently verified commits; no monolithic rewrite commit is permitted.</p>
+          <div class="rule"><p>A task is checked off only when its <code>verify CASE</code> receipt exists with the correct revision SHA — not when its commit lands.</p></div>
+          <p>Plans under <code>.omo/</code> require explicit file-only staging; never force-add the entire directory. No secrets, ignored databases, raw customer logs, or unrelated changes may be staged.</p>
+          <details>
+            <summary>Integrator duties</summary>
+            <p>Fetch and inspect upstream before push. If <code>main</code> moved, stop integration, reconcile normally, and retest affected scope. Never force-push, reset unrelated work, skip hooks, or claim local work is published until the remote SHA is checked. Persist short, truthful <code>.agents/STATE.md</code> and append <code>.agents/JOURNAL.md</code> decisions after each wave.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+  </main>
+  <footer class="footer">
+    <span>FORGE Rust Rewrite · Execution Plan · 2026-09-15</span>
+    <span>Standalone HTML · No runtime dependencies · All tasks: <strong style="color:#67b0a0">pending implementation</strong></span>
+  </footer>
+</div>
+</body>
+</html>
