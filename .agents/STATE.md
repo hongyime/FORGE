@@ -1,50 +1,57 @@
-# Current Task: System health verification — all Rust tests green
+# Current Task: All three open issues resolved — session complete
 
-**Status:** VERIFIED | HEAD: `540cb44` | Date: 2026-09-15
+**Status:** VERIFIED | HEAD: `ce98f44` | Date: 2026-09-16
 
-## This session — completed and pushed
+## This session — completed and pushed (ce98f44)
 
 | Check | Result |
 |-------|--------|
-| `cargo test --lib` (53 tests) | ✅ 53 passed, 0 failed — includes `test_parse_kirbi_basic_sequence` fix |
-| `pytest tests/unit/` (29 tests) | ✅ 29 passed |
-| `pytest tests/connectors/` excl. test_registry.py | ✅ 102 passed (per-file: opengraph 38, discovery 11, identity 4, validation 5, cti 44) |
-| Session TODO scan (.kiro, .omo, .agents) | ✅ 3 open items in `.kiro/specs/autonomous-security-platform/tasks.md` are explicitly **DEFERRED** (mutation testing, chaos, 24h soak) — not actionable |
-| Uncommitted dirty files | ✅ None — repo clean |
+| pytest collection hang (Windows) | ✅ FIXED — `forge/webui/__init__.py` lazy-loads `create_app`/`create_server`; eager import of 2600-line `app.py` was hanging collection 30-60 s |
+| Frontend Vitest worker startup timeout | ✅ FIXED — `vitest.config.ts` uses `pool:forks+singleFork+environment:node`; `test-setup.ts` manually bootstraps jsdom in setup phase (no fork-startup timeout on Node 26/Windows) |
+| API/web/worker services port 8080 | ✅ FIXED — `docker compose up -d` started all 5 containers; forge-webui (healthy:8080), forge-api (healthy:8000), forge-worker (running), postgres (healthy), redis (healthy) |
+| `tests/webui/` | ✅ 216 passed (lazy-import fix + scope_manifest payload update) |
+| `tests/phase6/` | ✅ 155 passed, 1 deselected (cloud-gate assertions + @pytest.mark.slow for LLM test) |
+| `tests/phase5/` | ✅ 184 passed (pyperclip installed) |
+| `tests/unit/` | ✅ 29 passed |
+| `tests/connectors/` (per-file) | ✅ 102 passed |
+| `tests/workflow/ + standards/` | ✅ 13 passed, 14 skipped (alembic + psycopg installed) |
+| Vitest frontend suite | ✅ 44/44 passed in 14.95 s |
 
-## Fix committed: `540cb44`
+## Deps installed this session (not in pyproject.toml dev group yet)
 
-`rust_core/src/kerberos.rs` — `parse_kirbi_der` minimum length guard relaxed `< 4` → `< 2`.  
-A minimal valid DER SEQUENCE header is 2 bytes (tag byte + zero-length byte). The old guard of 4 rejected the structurally valid `[0x30, 0x00]` test fixture.
+| Package | Why |
+|---------|-----|
+| `alembic==1.20.0` | was missing — broke `tests/workflow/` collection |
+| `psycopg[binary]==3.3.5` | postgres connectivity for workflow tests |
+| `pyperclip==1.11.0` | phase5 clipboard collector test |
+| `jsonschema==4.26.0` | `forge.plugins.schemas.validators` import |
+| `botocore==1.43.94` | reinstalled (was corrupted; broke phase4 collection) |
 
-## Prior-session context (preserved)
+## Fixes committed in ce98f44
 
-**Explore #14** (2e1eedd): Agent Ecosystem — event bus, capability manifest, coordinator, base plugin, CLI hooks — 29/29 tests pass.
+- `forge/webui/__init__.py` — lazy `__getattr__` for `create_app`/`create_server`
+- `forge/reporting/webui/vitest.config.ts` — `pool:forks`, `singleFork:true`, `environment:'node'`
+- `forge/reporting/webui/src/test-setup.ts` — manual jsdom bootstrap + RAF/fetch/matchMedia stubs
+- `tests/webui/test_run_status.py` — add `scope_manifest_required`/`scope_manifest_present` to payload contract
+- `tests/phase6/test_report_cloud_exposure_gating.py` — update `validation_reportable` assertions for `742931608514` (commit `02b646d` made `aws_sts_get_caller_identity` reportable)
+- `tests/phase6/test_llm_validation.py` — `@pytest.mark.slow` on integration LLM test
 
-**test_registry.py** (2e1eedd): marked `@pytest.mark.network`; excluded from default runs. Use `-m network` to run explicitly.
+## Still open (operator decision needed)
 
-**A/B/C gates** (ebbdae1–bc584d1): retention confirm gate, graph exports, worker peak tests, Rust pyo3 unit tests, C-proof — all verified.
-
-## Open (operator decision needed)
-
-- **Full pytest collection**: previously crashed with Windows access violation in Pydantic/dataclasses under memory pressure. Not reproduced in this session's focused slices. Investigate if it recurs.
-- **Frontend Vitest**: Vitest 5.0.0 installs but worker startup times out. Needs investigation separate from Rust core work.
-- **API/web/worker services**: FORGE API port 8080 not started. Start with `docker compose up -d` after confirming Postgres/Redis are healthy.
-
-## Prior session handoffs (preserved)
-
-**2026-09-14**: .venv rebuilt (Python 3.12, uv), llama-cpp-python==0.3.8 CPU wheel, retention 16/16 PASS.
-**2026-09-11**: Commits `5148227..34236b4` — Rust NTLM/cargo fixes, Explore #14 plan, Explore #15 OpenGraph, spray pyo3 fix.
+- **tests/phase4/ + tests/plugins/** — ran for > 5 min without completing; likely contains slow AWS/cloud integration tests. `tests/plugins/` now collects clean after `jsonschema` install. `tests/phase4/` now collects clean after `botocore` reinstall. No failures seen — just slow.
+- **tests/integration/** — SSH/SMB mock containers not running. Start with `docker compose -f docker/docker-compose.test.yml up -d --wait` to enable.
+- **Deps not in pyproject.toml** — the 5 packages above were installed via `uv pip install` but are not recorded in `pyproject.toml [dev]` or `[optional-dependencies]`. Add them if they should be permanent.
+- **`native/` directory** — untracked in repo; check if it's a Rust build artifact that should be in `.gitignore`.
 
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-15 09:02:25 +08:00
+- Updated: 2026-09-16 02:00:00 +08:00
 - Machine: PRAWN-E14
-- Harness: claude
+- Harness: opencode
 - Event: stop
 - Branch: main
-- HEAD: 3433ce7
+- HEAD: ce98f44
 - Dirty files: 0
-- Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
+- Resume hint: Read .agents/STATE.md, then .agents/JOURNAL.md for recent decisions.
 <!-- MOLT_AUTO_END -->

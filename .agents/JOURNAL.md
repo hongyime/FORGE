@@ -396,3 +396,7 @@
 - 2026-09-15: User clarified a complete Rust rewrite and requested planning first, superseding immediate repair implementation. Created the planning draft at `.omo/drafts/forge-full-rust-rewrite.md` with parity, data/test/session accounting, UI and external-runtime decisions. With explicit permission, gracefully stopped all ten running theprawnhunter containers to release RAM and recorded the exact restart set; retained Forge Postgres/Redis and Pi-hole. Preserved the unrelated dirty Rust source edit and all prior failed-verification evidence.
 - 2026-09-15 08:12:09 +08:00 [PRAWN-E14/claude/stop] branch=main head=e4caf4c dirty=1
 - 2026-09-15 09:02:25 +08:00 [PRAWN-E14/claude/stop] branch=main head=3433ce7 dirty=0
+- 2026-09-15 11:35:34 +08:00 [PRAWN-E14/claude/stop] branch=main head=0717e42 dirty=0
+- 2026-09-15 22:52:34 +08:00 [PRAWN-E14/codex/session-start] branch=main head=0717e42 dirty=0
+- 2026-09-15 23:32:58 +08:00 [PRAWN-E14/codex/session-start] branch=main head=cede061 dirty=0
+- 2026-09-16 01:32:50 +08:00 [PRAWN-E14/codex/session-start] branch=main head=cede061 dirty=8
