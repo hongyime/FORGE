@@ -67,12 +67,12 @@
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-16 05:43:10 +08:00
+- Updated: 2026-09-16 02:30:00 +08:00
 - Machine: PRAWN-E14
-- Harness: codex
-- Event: session-start
+- Harness: opencode
+- Event: stop
 - Branch: main
-- HEAD: 260d923
-- Dirty files: 16
-- Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
+- HEAD: 486c344
+- Dirty files: 0
+- Resume hint: Read .agents/STATE.md, then .agents/JOURNAL.md for recent decisions.
 <!-- MOLT_AUTO_END -->
