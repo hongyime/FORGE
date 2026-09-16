@@ -46,13 +46,16 @@ impl Fixture {
                 if matches!(name, "timeout" | "budget-isolated") {
                     "5000"
                 } else {
-                    "30000"
+                    "120000"
                 },
                 "--evidence",
             ])
             .arg(&evidence);
         if name == "budget-isolated" {
             command.args(["--budget-ms", "5000"]);
+        } else if name != "timeout" {
+            // Functional fixtures test outcomes, not host-dependent pytest startup speed.
+            command.args(["--budget-ms", "300000"]);
         }
         let output = command.output().unwrap();
         assert!(
