@@ -6,7 +6,11 @@
     "T3-IR-3"
   ],
   "file": "review-fixes.json",
-  "sha256": "b08a8ab6e2d0e3bd8ed14c2187400a0caade4a7492e8c217a7ebdfcf29d370d8",
+  "bytes": 52962,
+  "sha256": "f9132b13a9b60bfdd75282b41c382562d00aa8b1bcc351729585e6817d179a43",
+  "capture_bytes": 54842,
+  "capture_sha256": "b08a8ab6e2d0e3bd8ed14c2187400a0caade4a7492e8c217a7ebdfcf29d370d8",
+  "fixture_policy": "Only CRLF-to-LF normalization; JSON values unchanged. bytes/sha256 describe shipped LF-only bytes; capture_bytes/capture_sha256 retain original capture information. Source hashes remain historical provenance, not checkout assertions.",
   "cases": 112,
   "source_hashes": {
     "forge/models/pydantic_models.py": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",

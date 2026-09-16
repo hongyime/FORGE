@@ -1,42 +1,54 @@
 {
-  "fixture_policy": "Existing synthetic reference inputs and outputs, copied byte-for-byte; no source regeneration. Provenance paths are informational, never runtime dependencies.",
+  "fixture_policy": "Existing synthetic reference inputs and outputs; only CRLF-to-LF normalization, no source regeneration or JSON value changes. bytes/sha256 describe shipped LF-only fixture bytes; capture_bytes/capture_sha256 preserve original captured bytes. Provenance paths and source hashes are historical information, never runtime dependencies or checkout assertions.",
   "schema": "forge.domain.fixture-provenance.v1",
   "files": [
     {
       "provenance": ".omo/evidence/rust-rewrite/task-3/reference-cases.json",
       "file": "reference-cases.json",
-      "bytes": 170065,
-      "sha256": "419309ccbb7bbab5f2696c777d319a1ef5077ee117cb57c5859d68c7127e9660"
+      "bytes": 169254,
+      "sha256": "d16de6a59fd0a27509fd763392cc66f590d8a0569aa2983c07e8af6b2066d155",
+      "capture_bytes": 170065,
+      "capture_sha256": "419309ccbb7bbab5f2696c777d319a1ef5077ee117cb57c5859d68c7127e9660"
     },
     {
       "provenance": ".omo/evidence/rust-rewrite/task-3/reference-agent.json",
       "file": "reference-agent.json",
-      "bytes": 432,
-      "sha256": "2f66fbec1bb51a409a1248dba5e70ae3b7afe13fb99404f17311e000a73519bb"
+      "bytes": 412,
+      "sha256": "a1995abb3ebd6804096ee48ffad25497ef788b5d5dadea111d75e8cd53392fe6",
+      "capture_bytes": 432,
+      "capture_sha256": "2f66fbec1bb51a409a1248dba5e70ae3b7afe13fb99404f17311e000a73519bb"
     },
     {
       "provenance": ".omo/evidence/rust-rewrite/task-3/reference-seeds.json",
       "file": "reference-seeds.json",
-      "bytes": 985,
-      "sha256": "4e080b2b431f9354317d6004ac8790b31f1c97a5d1311cf2489ed6925cbc7e32"
+      "bytes": 941,
+      "sha256": "dee1d4d5dded3580deaf8d8db452c253b3b375f2ff602ad4d63d7449c915c30e",
+      "capture_bytes": 985,
+      "capture_sha256": "4e080b2b431f9354317d6004ac8790b31f1c97a5d1311cf2489ed6925cbc7e32"
     },
     {
       "provenance": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/python-cases.json",
       "file": "python-cases.json",
-      "bytes": 552126,
-      "sha256": "3b3260f929e591ec9d242deb62fcbe4087dcb3b834252feeb3326b904573246c"
+      "bytes": 529649,
+      "sha256": "ecc03c20fd37a40a88592cc28691979f6191a6d11d4dcb63c488aade651ea8e9",
+      "capture_bytes": 552126,
+      "capture_sha256": "3b3260f929e591ec9d242deb62fcbe4087dcb3b834252feeb3326b904573246c"
     },
     {
       "provenance": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/unaffected-extra.json",
       "file": "unaffected-extra.json",
-      "bytes": 884210,
-      "sha256": "00494777c97e0886471bd42090e5a1250058fa917955e9b1da632d87105ede37"
+      "bytes": 880537,
+      "sha256": "24b3eff903e79f362141d96ad7a1a66b06e48e84e99c08ca1845b15ed1e8ab9c",
+      "capture_bytes": 884210,
+      "capture_sha256": "00494777c97e0886471bd42090e5a1250058fa917955e9b1da632d87105ede37"
     },
     {
       "provenance": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/unaffected-agents.json",
       "file": "unaffected-agents.json",
-      "bytes": 9873,
-      "sha256": "1c0eab262f2a56bbcd41925cbc5c7aff3a9abd9d5a0f9f300e25b3fc8ef26737"
+      "bytes": 9424,
+      "sha256": "0a9f18af5094ad7558ad96f4dce0f9d744215f111b533cb4827c5880e7b65937",
+      "capture_bytes": 9873,
+      "capture_sha256": "1c0eab262f2a56bbcd41925cbc5c7aff3a9abd9d5a0f9f300e25b3fc8ef26737"
     }
   ]
 }

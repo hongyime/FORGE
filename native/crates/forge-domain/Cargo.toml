@@ -11,5 +11,8 @@ serde_json = { version = "=1.0.151", features = ["raw_value"] }
 time = "=0.3.55"
 rand = "=0.8.8"
 
+[dev-dependencies]
+sha2 = "=0.10.9"
+
 [lints.rust]
 unsafe_code = "forbid"
