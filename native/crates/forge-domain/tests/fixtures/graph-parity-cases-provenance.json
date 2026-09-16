@@ -1,0 +1,17 @@
+{
+  "schema": "forge.domain.fixture-provenance.v1",
+  "file": "graph-parity-cases.json",
+  "bytes": 27458,
+  "sha256": "f3236fd8bb71e32eedb0369041c938bdb48970f989ce6437f67b80595fad7ba8",
+  "source_module": "forge/models/attack_graph_models.py",
+  "source_version": "d92464d",
+  "source_hash_note": "Derived by static reading of attack_graph_models.py at HEAD d92464d; no live Python execution. Fixture cases are synthetic inputs whose accept/reject outcomes are derived from source field constraints (Field ge/le/max_length, model_validator logic, Pydantic v2 BaseModel defaults). Dynamic defaults (e.g. bool coercion of int in non-strict mode) are annotated in individual cases.",
+  "contract_types": [
+    "AttackNode",
+    "AttackEdge",
+    "AttackGraph",
+    "AttackGraphReportContext"
+  ],
+  "sections": 4,
+  "generation_date": "2026-09-16"
+}

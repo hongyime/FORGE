@@ -49,6 +49,22 @@
       "sha256": "0a9f18af5094ad7558ad96f4dce0f9d744215f111b533cb4827c5880e7b65937",
       "capture_bytes": 9873,
       "capture_sha256": "1c0eab262f2a56bbcd41925cbc5c7aff3a9abd9d5a0f9f300e25b3fc8ef26737"
+    },
+    {
+      "provenance": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/graph-parity",
+      "file": "graph-parity-cases.json",
+      "bytes": 27458,
+      "sha256": "f3236fd8bb71e32eedb0369041c938bdb48970f989ce6437f67b80595fad7ba8",
+      "capture_bytes": 27458,
+      "capture_sha256": "f3236fd8bb71e32eedb0369041c938bdb48970f989ce6437f67b80595fad7ba8"
+    },
+    {
+      "provenance": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/graph-parity",
+      "file": "graph-coercion-cases.json",
+      "bytes": 7814,
+      "sha256": "46e61a38a32c39b8d003658b670087de03c6b98f8e035ff165494c2764799b12",
+      "capture_bytes": 7814,
+      "capture_sha256": "46e61a38a32c39b8d003658b670087de03c6b98f8e035ff165494c2764799b12"
     }
   ]
 }

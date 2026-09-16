@@ -1,6 +1,12 @@
 //! AttackGraph: complete serialisable attack graph with dangling-edge validation.
 use super::{AttackEdge, AttackNode};
-use crate::{enums::Severity, error::DomainError, ids::EngagementId, scalars::NonNegativeCount};
+use crate::{
+    enums::Severity,
+    error::DomainError,
+    ids::EngagementId,
+    json_boundary::{JsonBool, JsonFloat, JsonInt},
+    scalars::NonNegativeCount,
+};
 use serde::{Deserialize, Serialize};
 
 /// Raw input passed to AttackGraph::new(). Validated by each node/edge first,
@@ -23,21 +29,21 @@ pub struct GraphInput {
 
 #[derive(Deserialize)]
 pub(super) struct AttackGraphInput {
-    pub engagement_id: i64,
+    pub engagement_id: JsonInt,
     pub engagement_name: String,
-    pub node_count: i64,
-    pub edge_count: i64,
+    pub node_count: JsonInt,
+    pub edge_count: JsonInt,
     #[serde(default)]
     pub critical_path_nodes: Vec<String>,
-    #[serde(default)]
-    pub critical_path_weight: f64,
+    #[serde(default = "crate::json_boundary::zero_float")]
+    pub critical_path_weight: JsonFloat,
     pub nodes: Vec<AttackNode>,
     pub edges: Vec<AttackEdge>,
     pub generated_at: String,
     #[serde(default = "default_severity")]
     pub min_severity_filter: Severity,
     #[serde(default)]
-    pub pruned: bool,
+    pub pruned: JsonBool,
     #[serde(default)]
     pub prune_reason: Option<String>,
 }
@@ -109,25 +115,25 @@ impl TryFrom<AttackGraphInput> for AttackGraph {
     type Error = DomainError;
     fn try_from(raw: AttackGraphInput) -> Result<Self, Self::Error> {
         let node_count =
-            NonNegativeCount::new(raw.node_count).map_err(|_| DomainError::OutOfRange {
+            NonNegativeCount::new(raw.node_count.get()).map_err(|_| DomainError::OutOfRange {
                 field: "node_count",
             })?;
         let edge_count =
-            NonNegativeCount::new(raw.edge_count).map_err(|_| DomainError::OutOfRange {
+            NonNegativeCount::new(raw.edge_count.get()).map_err(|_| DomainError::OutOfRange {
                 field: "edge_count",
             })?;
         Self::new(GraphInput {
-            engagement_id: EngagementId::new(raw.engagement_id),
+            engagement_id: EngagementId::new(raw.engagement_id.get()),
             engagement_name: raw.engagement_name,
             node_count,
             edge_count,
             critical_path_nodes: raw.critical_path_nodes,
-            critical_path_weight: raw.critical_path_weight,
+            critical_path_weight: raw.critical_path_weight.get(),
             nodes: raw.nodes,
             edges: raw.edges,
             generated_at: raw.generated_at,
             min_severity_filter: raw.min_severity_filter,
-            pruned: raw.pruned,
+            pruned: raw.pruned.get(),
             prune_reason: raw.prune_reason,
         })
     }

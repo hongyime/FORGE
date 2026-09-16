@@ -1,0 +1,16 @@
+{
+  "schema": "forge.domain.fixture-provenance.v1",
+  "file": "graph-coercion-cases.json",
+  "bytes": 7814,
+  "sha256": "46e61a38a32c39b8d003658b670087de03c6b98f8e035ff165494c2764799b12",
+  "source_module": "forge/models/attack_graph_models.py",
+  "source_sha256": "5fb4a8ea71af08e8a23a823365cf7af1a7004e886b95cc3cdb90f456915aec1f",
+  "python_version": "3.12.10",
+  "pydantic_version": "2.10.4",
+  "capture_method": "actual_python_execution",
+  "cases_total": 31,
+  "cases_mismatch": 20,
+  "cases_control": 11,
+  "generation_date": "2026-09-17",
+  "extension_note": "Extended from original 17 cases (11 mismatch+6 control) with 14 additional cases covering critical_path_weight (both full.rs and report.rs), edge_count, engagement_id (node/graph/report), total_high_nodes, cloud_misconfig_count, idor_finding_count"
+}

@@ -1,6 +1,7 @@
 //! AttackEdge: directed weighted edge in the attack graph.
 use crate::{
     error::DomainError,
+    json_boundary::{JsonBool, JsonFloat},
     metadata::GraphMetadata,
     scalars::{EdgeWeight, Label},
 };
@@ -10,11 +11,11 @@ use serde::{Deserialize, Serialize};
 pub(super) struct AttackEdgeInput {
     pub source_node_id: String,
     pub target_node_id: String,
-    pub weight: f64,
+    pub weight: JsonFloat,
     #[serde(default)]
     pub label: Option<String>,
     #[serde(default)]
-    pub on_critical_path: bool,
+    pub on_critical_path: JsonBool,
     pub edge_type: String,
     #[serde(default)]
     pub metadata: GraphMetadata,
@@ -40,9 +41,9 @@ impl TryFrom<AttackEdgeInput> for AttackEdge {
         Ok(Self {
             source_node_id: raw.source_node_id,
             target_node_id: raw.target_node_id,
-            weight: EdgeWeight::new(raw.weight)?,
+            weight: EdgeWeight::new(raw.weight.get())?,
             label,
-            on_critical_path: raw.on_critical_path,
+            on_critical_path: raw.on_critical_path.get(),
             edge_type: raw.edge_type,
             metadata: raw.metadata,
         })

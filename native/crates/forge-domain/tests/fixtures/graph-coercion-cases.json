@@ -1,0 +1,288 @@
+{
+  "schema": "forge.domain.graph-coercion.v1",
+  "python_version": "3.12.10",
+  "pydantic_version": "2.10.4",
+  "source_file": "forge/models/attack_graph_models.py",
+  "source_sha256": "5fb4a8ea71af08e8a23a823365cf7af1a7004e886b95cc3cdb90f456915aec1f",
+  "cases": [
+    {
+      "id": "node-on_critical_path-int1",
+      "contract": "AttackNode",
+      "field": "on_critical_path",
+      "input_json": 1,
+      "python_accepted": true,
+      "python_normalized": true,
+      "mismatch": true
+    },
+    {
+      "id": "node-on_critical_path-str-true",
+      "contract": "AttackNode",
+      "field": "on_critical_path",
+      "input_json": "true",
+      "python_accepted": true,
+      "python_normalized": true,
+      "mismatch": true
+    },
+    {
+      "id": "node-source_id-str7",
+      "contract": "AttackNode",
+      "field": "source_id",
+      "input_json": "7",
+      "python_accepted": true,
+      "python_normalized": 7,
+      "mismatch": true
+    },
+    {
+      "id": "node-engagement_id-str1001",
+      "contract": "AttackNode",
+      "field": "engagement_id",
+      "input_json": "1001",
+      "python_accepted": true,
+      "python_normalized": 1001,
+      "mismatch": true
+    },
+    {
+      "id": "node-on_critical_path-bool-control",
+      "contract": "AttackNode",
+      "field": "on_critical_path",
+      "input_json": true,
+      "python_accepted": true,
+      "python_normalized": true,
+      "mismatch": false
+    },
+    {
+      "id": "node-on_critical_path-str-invalid",
+      "contract": "AttackNode",
+      "field": "on_critical_path",
+      "input_json": "NOTABOOL",
+      "python_accepted": false,
+      "python_normalized": null,
+      "mismatch": false
+    },
+    {
+      "id": "node-engagement_id-null-invalid",
+      "contract": "AttackNode",
+      "field": "engagement_id",
+      "input_json": null,
+      "python_accepted": false,
+      "python_normalized": null,
+      "mismatch": false
+    },
+    {
+      "id": "edge-on_critical_path-int1",
+      "contract": "AttackEdge",
+      "field": "on_critical_path",
+      "input_json": 1,
+      "python_accepted": true,
+      "python_normalized": true,
+      "mismatch": true
+    },
+    {
+      "id": "edge-on_critical_path-str-false",
+      "contract": "AttackEdge",
+      "field": "on_critical_path",
+      "input_json": "false",
+      "python_accepted": true,
+      "python_normalized": false,
+      "mismatch": true
+    },
+    {
+      "id": "edge-weight-str2.5",
+      "contract": "AttackEdge",
+      "field": "weight",
+      "input_json": "2.5",
+      "python_accepted": true,
+      "python_normalized": 2.5,
+      "mismatch": true
+    },
+    {
+      "id": "edge-weight-int50-control",
+      "contract": "AttackEdge",
+      "field": "weight",
+      "input_json": 50,
+      "python_accepted": true,
+      "python_normalized": 50.0,
+      "mismatch": false
+    },
+    {
+      "id": "edge-on_critical_path-null-invalid",
+      "contract": "AttackEdge",
+      "field": "on_critical_path",
+      "input_json": null,
+      "python_accepted": false,
+      "python_normalized": null,
+      "mismatch": false
+    },
+    {
+      "id": "graph-pruned-str-false",
+      "contract": "AttackGraph",
+      "field": "pruned",
+      "input_json": "false",
+      "python_accepted": true,
+      "python_normalized": false,
+      "mismatch": true
+    },
+    {
+      "id": "graph-node_count-str0",
+      "contract": "AttackGraph",
+      "field": "node_count",
+      "input_json": "0",
+      "python_accepted": true,
+      "python_normalized": 0,
+      "mismatch": true
+    },
+    {
+      "id": "graph-edge_count-str0",
+      "contract": "AttackGraph",
+      "field": "edge_count",
+      "input_json": "0",
+      "python_accepted": true,
+      "python_normalized": 0,
+      "mismatch": true
+    },
+    {
+      "id": "graph-engagement_id-str1001",
+      "contract": "AttackGraph",
+      "field": "engagement_id",
+      "input_json": "1001",
+      "python_accepted": true,
+      "python_normalized": 1001,
+      "mismatch": true
+    },
+    {
+      "id": "graph-critical_path_weight-str150.5",
+      "contract": "AttackGraph",
+      "field": "critical_path_weight",
+      "input_json": "150.5",
+      "python_accepted": true,
+      "python_normalized": 150.5,
+      "mismatch": true
+    },
+    {
+      "id": "graph-pruned-bool-control",
+      "contract": "AttackGraph",
+      "field": "pruned",
+      "input_json": true,
+      "python_accepted": true,
+      "python_normalized": true,
+      "mismatch": false
+    },
+    {
+      "id": "graph-edge_count-null-invalid",
+      "contract": "AttackGraph",
+      "field": "edge_count",
+      "input_json": null,
+      "python_accepted": false,
+      "python_normalized": null,
+      "mismatch": false
+    },
+    {
+      "id": "graph-critical_path_weight-null-invalid",
+      "contract": "AttackGraph",
+      "field": "critical_path_weight",
+      "input_json": null,
+      "python_accepted": false,
+      "python_normalized": null,
+      "mismatch": false
+    },
+    {
+      "id": "report-has_validated_creds-int1",
+      "contract": "AttackGraphReportContext",
+      "field": "has_validated_creds",
+      "input_json": 1,
+      "python_accepted": true,
+      "python_normalized": true,
+      "mismatch": true
+    },
+    {
+      "id": "report-has_validated_creds-str-false",
+      "contract": "AttackGraphReportContext",
+      "field": "has_validated_creds",
+      "input_json": "false",
+      "python_accepted": true,
+      "python_normalized": false,
+      "mismatch": true
+    },
+    {
+      "id": "report-total_critical_nodes-str0",
+      "contract": "AttackGraphReportContext",
+      "field": "total_critical_nodes",
+      "input_json": "0",
+      "python_accepted": true,
+      "python_normalized": 0,
+      "mismatch": true
+    },
+    {
+      "id": "report-total_high_nodes-str3",
+      "contract": "AttackGraphReportContext",
+      "field": "total_high_nodes",
+      "input_json": "3",
+      "python_accepted": true,
+      "python_normalized": 3,
+      "mismatch": true
+    },
+    {
+      "id": "report-critical_path_weight-str75.0",
+      "contract": "AttackGraphReportContext",
+      "field": "critical_path_weight",
+      "input_json": "75.0",
+      "python_accepted": true,
+      "python_normalized": 75.0,
+      "mismatch": true
+    },
+    {
+      "id": "report-cloud_misconfig_count-str2",
+      "contract": "AttackGraphReportContext",
+      "field": "cloud_misconfig_count",
+      "input_json": "2",
+      "python_accepted": true,
+      "python_normalized": 2,
+      "mismatch": true
+    },
+    {
+      "id": "report-idor_finding_count-str1",
+      "contract": "AttackGraphReportContext",
+      "field": "idor_finding_count",
+      "input_json": "1",
+      "python_accepted": true,
+      "python_normalized": 1,
+      "mismatch": true
+    },
+    {
+      "id": "report-engagement_id-str1001",
+      "contract": "AttackGraphReportContext",
+      "field": "engagement_id",
+      "input_json": "1001",
+      "python_accepted": true,
+      "python_normalized": 1001,
+      "mismatch": true
+    },
+    {
+      "id": "report-has_validated_creds-str-invalid",
+      "contract": "AttackGraphReportContext",
+      "field": "has_validated_creds",
+      "input_json": "NOTABOOL",
+      "python_accepted": false,
+      "python_normalized": null,
+      "mismatch": false
+    },
+    {
+      "id": "report-has_validated_creds-bool-control",
+      "contract": "AttackGraphReportContext",
+      "field": "has_validated_creds",
+      "input_json": true,
+      "python_accepted": true,
+      "python_normalized": true,
+      "mismatch": false
+    },
+    {
+      "id": "report-critical_path_weight-null-invalid",
+      "contract": "AttackGraphReportContext",
+      "field": "critical_path_weight",
+      "input_json": null,
+      "python_accepted": false,
+      "python_normalized": null,
+      "mismatch": false
+    }
+  ]
+}

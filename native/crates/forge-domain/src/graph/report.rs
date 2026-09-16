@@ -1,21 +1,24 @@
 //! AttackGraphReportContext: Phase 6 LLM context slice from attack graph.
-use crate::error::DomainError;
+use crate::{
+    error::DomainError,
+    json_boundary::{JsonBool, JsonFloat, JsonInt},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub(super) struct AttackGraphReportContextInput {
-    pub engagement_id: i64,
+    pub engagement_id: JsonInt,
     pub critical_path_summary: Vec<String>,
-    pub critical_path_weight: f64,
-    pub total_critical_nodes: i64,
-    pub total_high_nodes: i64,
+    pub critical_path_weight: JsonFloat,
+    pub total_critical_nodes: JsonInt,
+    pub total_high_nodes: JsonInt,
     pub top_exploits: Vec<String>,
+    #[serde(default = "crate::json_boundary::zero_int")]
+    pub cloud_misconfig_count: JsonInt,
+    #[serde(default = "crate::json_boundary::zero_int")]
+    pub idor_finding_count: JsonInt,
     #[serde(default)]
-    pub cloud_misconfig_count: i64,
-    #[serde(default)]
-    pub idor_finding_count: i64,
-    #[serde(default)]
-    pub has_validated_creds: bool,
+    pub has_validated_creds: JsonBool,
     #[serde(default)]
     pub mermaid_snippet: Option<String>,
 }
@@ -40,7 +43,7 @@ pub struct AttackGraphReportContext {
 impl TryFrom<AttackGraphReportContextInput> for AttackGraphReportContext {
     type Error = DomainError;
     fn try_from(raw: AttackGraphReportContextInput) -> Result<Self, Self::Error> {
-        if raw.total_critical_nodes < 0 || raw.total_high_nodes < 0 {
+        if raw.total_critical_nodes.get() < 0 || raw.total_high_nodes.get() < 0 {
             return Err(DomainError::OutOfRange {
                 field: "total_nodes",
             });
@@ -58,15 +61,15 @@ impl TryFrom<AttackGraphReportContextInput> for AttackGraphReportContext {
             }
         });
         Ok(Self {
-            engagement_id: raw.engagement_id,
+            engagement_id: raw.engagement_id.get(),
             critical_path_summary: raw.critical_path_summary,
-            critical_path_weight: raw.critical_path_weight,
-            total_critical_nodes: raw.total_critical_nodes,
-            total_high_nodes: raw.total_high_nodes,
+            critical_path_weight: raw.critical_path_weight.get(),
+            total_critical_nodes: raw.total_critical_nodes.get(),
+            total_high_nodes: raw.total_high_nodes.get(),
             top_exploits,
-            cloud_misconfig_count: raw.cloud_misconfig_count,
-            idor_finding_count: raw.idor_finding_count,
-            has_validated_creds: raw.has_validated_creds,
+            cloud_misconfig_count: raw.cloud_misconfig_count.get(),
+            idor_finding_count: raw.idor_finding_count.get(),
+            has_validated_creds: raw.has_validated_creds.get(),
             mermaid_snippet,
         })
     }

@@ -2,6 +2,7 @@
 use crate::{
     enums::{NodeType, Severity},
     error::DomainError,
+    json_boundary::{JsonBool, JsonInt},
     metadata::GraphMetadata,
     scalars::Label,
 };
@@ -15,10 +16,10 @@ pub(super) struct AttackNodeInput {
     #[serde(default)]
     pub severity: Option<Severity>,
     pub source_table: String,
-    pub source_id: i64,
-    pub engagement_id: i64,
+    pub source_id: JsonInt,
+    pub engagement_id: JsonInt,
     #[serde(default)]
-    pub on_critical_path: bool,
+    pub on_critical_path: JsonBool,
     #[serde(default)]
     pub metadata: GraphMetadata,
 }
@@ -47,9 +48,9 @@ impl TryFrom<AttackNodeInput> for AttackNode {
             label: Label::new(raw.label)?,
             severity: raw.severity,
             source_table: raw.source_table,
-            source_id: raw.source_id,
-            engagement_id: raw.engagement_id,
-            on_critical_path: raw.on_critical_path,
+            source_id: raw.source_id.get(),
+            engagement_id: raw.engagement_id.get(),
+            on_critical_path: raw.on_critical_path.get(),
             metadata: raw.metadata,
         })
     }

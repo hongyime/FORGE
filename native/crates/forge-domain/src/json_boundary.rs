@@ -158,3 +158,13 @@ where
 {
     T::deserialize(d).map(Some)
 }
+
+/// Default value for JsonInt fields that use `#[serde(default)]`.
+pub const fn zero_int() -> JsonInt {
+    JsonInt::constant::<0>()
+}
+
+/// Default value for JsonFloat fields that use `#[serde(default)]`.
+pub fn zero_float() -> JsonFloat {
+    JsonFloat(0.0)
+}

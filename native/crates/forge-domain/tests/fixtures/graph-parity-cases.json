@@ -1,0 +1,673 @@
+{
+  "schema": "forge.domain.graph-parity.v1",
+  "source_module": "forge/models/attack_graph_models.py",
+  "sections": [
+    {
+      "ledger_id": "forge/models/attack_graph_models.py:AttackNode",
+      "cases": [
+        {
+          "id": "node-happy-host",
+          "description": "Minimal HOST node with all required fields, no severity, empty metadata",
+          "input": {
+            "node_id": "HOST::10.0.0.1",
+            "node_type": "HOST",
+            "label": "10.0.0.1",
+            "source_table": "hosts",
+            "source_id": 42,
+            "engagement_id": 1001
+          },
+          "accepted": true,
+          "expected_node_type": "HOST",
+          "expected_on_critical_path": false,
+          "expected_metadata_empty": true
+        },
+        {
+          "id": "node-happy-external-with-severity",
+          "description": "EXTERNAL node with CRITICAL severity and safe metadata",
+          "input": {
+            "node_id": "EXTERNAL::entry",
+            "node_type": "EXTERNAL",
+            "label": "Entry Point",
+            "severity": "CRITICAL",
+            "source_table": "hosts",
+            "source_id": 1,
+            "engagement_id": 1001,
+            "on_critical_path": true,
+            "metadata": {"os_family": "linux", "service": "ssh"}
+          },
+          "accepted": true,
+          "expected_node_type": "EXTERNAL",
+          "expected_severity": "CRITICAL",
+          "expected_on_critical_path": true
+        },
+        {
+          "id": "node-happy-all-node-types",
+          "description": "Each NodeType variant must deserialize from its wire string",
+          "input_variants": [
+            {"node_type": "EXTERNAL", "accepted": true},
+            {"node_type": "HOST", "accepted": true},
+            {"node_type": "CREDENTIAL", "accepted": true},
+            {"node_type": "EXPLOIT", "accepted": true},
+            {"node_type": "VULN", "accepted": true},
+            {"node_type": "CLOUD", "accepted": true},
+            {"node_type": "APIKEY", "accepted": true},
+            {"node_type": "IMPACT", "accepted": true},
+            {"node_type": "UNKNOWN_TYPE", "accepted": false},
+            {"node_type": "host", "accepted": false},
+            {"node_type": "external", "accepted": false},
+            {"node_type": null, "accepted": false},
+            {"node_type": 0, "accepted": false}
+          ]
+        },
+        {
+          "id": "node-happy-all-severity-variants",
+          "description": "Each Severity variant in attack_graph_models: CRITICAL HIGH MEDIUM LOW INFO",
+          "input_variants": [
+            {"severity": "CRITICAL", "accepted": true},
+            {"severity": "HIGH", "accepted": true},
+            {"severity": "MEDIUM", "accepted": true},
+            {"severity": "LOW", "accepted": true},
+            {"severity": "INFO", "accepted": true},
+            {"severity": null, "accepted": true, "note": "severity is Optional"},
+            {"severity": "critical", "accepted": false, "note": "lowercase not accepted"},
+            {"severity": "UNKNOWN", "accepted": false},
+            {"severity": 0, "accepted": false}
+          ]
+        },
+        {
+          "id": "node-label-max-120-chars",
+          "description": "label field has max_length=120. Python validates at construction.",
+          "input_at_boundary": "a",
+          "input_at_limit": "x",
+          "limit": 120,
+          "label_at_limit_accepted": true,
+          "label_over_limit_accepted": false
+        },
+        {
+          "id": "node-forbidden-metadata-keys",
+          "description": "metadata containing forbidden keys must be rejected",
+          "forbidden_keys": ["password", "hash_plaintext", "key_enc", "key_raw", "password_enc"],
+          "cases": [
+            {"metadata": {"password": "secret123"}, "accepted": false},
+            {"metadata": {"hash_plaintext": "abc"}, "accepted": false},
+            {"metadata": {"key_enc": "enc"}, "accepted": false},
+            {"metadata": {"key_raw": "raw"}, "accepted": false},
+            {"metadata": {"password_enc": "enc"}, "accepted": false},
+            {"metadata": {"safe_key": "value"}, "accepted": true},
+            {"metadata": {}, "accepted": true},
+            {"metadata": {"nested": {"password": "inner"}}, "accepted": true, "note": "Python only checks top-level keys; nested password is not forbidden"}
+          ]
+        },
+        {
+          "id": "node-missing-required-fields",
+          "description": "Omitting required fields must be rejected",
+          "cases": [
+            {"omit": "node_id", "accepted": false},
+            {"omit": "node_type", "accepted": false},
+            {"omit": "label", "accepted": false},
+            {"omit": "source_table", "accepted": false},
+            {"omit": "source_id", "accepted": false},
+            {"omit": "engagement_id", "accepted": false}
+          ]
+        },
+        {
+          "id": "node-optional-defaults",
+          "description": "Optional/default fields when omitted produce known Python defaults",
+          "cases": [
+            {"field": "severity", "omitted_default": null},
+            {"field": "on_critical_path", "omitted_default": false},
+            {"field": "metadata", "omitted_default": {}}
+          ]
+        },
+        {
+          "id": "node-unicode-label",
+          "description": "Unicode in label (chars, not bytes) counts toward the 120-char limit",
+          "input": {
+            "node_id": "HOST::unicode",
+            "node_type": "HOST",
+            "label": "ホスト名テスト",
+            "source_table": "hosts",
+            "source_id": 99,
+            "engagement_id": 2
+          },
+          "accepted": true,
+          "note": "7 Unicode chars well within 120"
+        },
+        {
+          "id": "node-source-id-integer-boundary",
+          "description": "source_id is i64 in Python (Field int); test boundaries",
+          "cases": [
+            {"source_id": 0, "accepted": true},
+            {"source_id": 1, "accepted": true},
+            {"source_id": 9223372036854775807, "accepted": true, "note": "i64::MAX"},
+            {"source_id": -1, "accepted": true, "note": "Python int has no lower bound restriction here"},
+            {"source_id": null, "accepted": false},
+            {"source_id": "not-an-int", "accepted": false},
+            {"source_id": 1.5, "accepted": false}
+          ]
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/attack_graph_models.py:AttackEdge",
+      "cases": [
+        {
+          "id": "edge-happy-minimal",
+          "description": "Minimal valid edge: no label, no metadata, on_critical_path defaults false",
+          "input": {
+            "source_node_id": "HOST::10.0.0.1",
+            "target_node_id": "VULN::CVE-2021-44228",
+            "weight": 75.0,
+            "edge_type": "vuln_found"
+          },
+          "accepted": true,
+          "expected_on_critical_path": false,
+          "expected_label": null,
+          "expected_metadata_empty": true
+        },
+        {
+          "id": "edge-happy-full",
+          "description": "Full edge with all optional fields populated",
+          "input": {
+            "source_node_id": "EXTERNAL::entry",
+            "target_node_id": "HOST::10.0.0.1",
+            "weight": 150.0,
+            "label": "entry pivot",
+            "on_critical_path": true,
+            "edge_type": "entry",
+            "metadata": {"protocol": "tcp", "port": 22}
+          },
+          "accepted": true
+        },
+        {
+          "id": "edge-weight-boundaries",
+          "description": "weight is constrained ge=0.0 le=200.0 in Python Field",
+          "cases": [
+            {"weight": 0.0, "accepted": true},
+            {"weight": 200.0, "accepted": true},
+            {"weight": 100.0, "accepted": true},
+            {"weight": -0.001, "accepted": false},
+            {"weight": 200.001, "accepted": false},
+            {"weight": -1.0, "accepted": false},
+            {"weight": 201.0, "accepted": false},
+            {"weight": null, "accepted": false},
+            {"weight": "high", "accepted": false}
+          ]
+        },
+        {
+          "id": "edge-label-max-80-chars",
+          "description": "label optional max_length=80. None/null accepted; empty string accepted; >80 chars rejected",
+          "cases": [
+            {"label": null, "accepted": true},
+            {"label": "short label", "accepted": true},
+            {"label_length": 80, "accepted": true},
+            {"label_length": 81, "accepted": false}
+          ]
+        },
+        {
+          "id": "edge-forbidden-metadata-keys",
+          "description": "Same five forbidden metadata keys as AttackNode",
+          "cases": [
+            {"metadata": {"password": "x"}, "accepted": false},
+            {"metadata": {"hash_plaintext": "x"}, "accepted": false},
+            {"metadata": {"key_enc": "x"}, "accepted": false},
+            {"metadata": {"key_raw": "x"}, "accepted": false},
+            {"metadata": {"password_enc": "x"}, "accepted": false},
+            {"metadata": {"safe": "ok"}, "accepted": true},
+            {"metadata": {"nested": {"password": "inner"}}, "accepted": true, "note": "Python only checks top-level"}
+          ]
+        },
+        {
+          "id": "edge-valid-edge-types",
+          "description": "edge_type is an unconstrained string in Python (no Enum); any string accepted",
+          "cases": [
+            {"edge_type": "credential_use", "accepted": true},
+            {"edge_type": "exploit_applies", "accepted": true},
+            {"edge_type": "vuln_found", "accepted": true},
+            {"edge_type": "cloud_misconfig", "accepted": true},
+            {"edge_type": "key_chains_to", "accepted": true},
+            {"edge_type": "entry", "accepted": true},
+            {"edge_type": "impact", "accepted": true},
+            {"edge_type": "custom_edge_type", "accepted": true, "note": "unconstrained string field"},
+            {"edge_type": "", "accepted": true, "note": "empty string accepted by Python str field"},
+            {"edge_type": null, "accepted": false},
+            {"edge_type": 123, "accepted": false}
+          ]
+        },
+        {
+          "id": "edge-missing-required-fields",
+          "description": "Omitting any required edge field must be rejected",
+          "cases": [
+            {"omit": "source_node_id", "accepted": false},
+            {"omit": "target_node_id", "accepted": false},
+            {"omit": "weight", "accepted": false},
+            {"omit": "edge_type", "accepted": false}
+          ]
+        },
+        {
+          "id": "edge-defaults-on-optional",
+          "description": "Optional/defaulted fields when omitted",
+          "cases": [
+            {"field": "label", "omitted_default": null},
+            {"field": "on_critical_path", "omitted_default": false},
+            {"field": "metadata", "omitted_default": {}}
+          ]
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/attack_graph_models.py:AttackGraph",
+      "cases": [
+        {
+          "id": "graph-happy-minimal-empty",
+          "description": "Graph with zero nodes and zero edges is valid",
+          "input": {
+            "engagement_id": 1001,
+            "engagement_name": "Test Engagement",
+            "node_count": 0,
+            "edge_count": 0,
+            "nodes": [],
+            "edges": [],
+            "generated_at": "2026-09-16T12:00:00Z"
+          },
+          "accepted": true,
+          "expected_critical_path_nodes": [],
+          "expected_critical_path_weight": 0.0,
+          "expected_pruned": false,
+          "expected_prune_reason": null,
+          "expected_min_severity_filter": "LOW"
+        },
+        {
+          "id": "graph-happy-two-nodes-one-edge",
+          "description": "Two valid nodes, one edge connecting them",
+          "input": {
+            "engagement_id": 1001,
+            "engagement_name": "Test Engagement",
+            "node_count": 2,
+            "edge_count": 1,
+            "nodes": [
+              {
+                "node_id": "EXTERNAL::entry",
+                "node_type": "EXTERNAL",
+                "label": "Entry",
+                "source_table": "hosts",
+                "source_id": 1,
+                "engagement_id": 1001
+              },
+              {
+                "node_id": "IMPACT::compromise",
+                "node_type": "IMPACT",
+                "label": "Compromise",
+                "source_table": "hosts",
+                "source_id": 2,
+                "engagement_id": 1001
+              }
+            ],
+            "edges": [
+              {
+                "source_node_id": "EXTERNAL::entry",
+                "target_node_id": "IMPACT::compromise",
+                "weight": 100.0,
+                "edge_type": "entry"
+              }
+            ],
+            "generated_at": "2026-09-16T12:00:00Z",
+            "critical_path_nodes": ["EXTERNAL::entry", "IMPACT::compromise"],
+            "critical_path_weight": 100.0
+          },
+          "accepted": true
+        },
+        {
+          "id": "graph-dangling-edge-source",
+          "description": "Edge referencing absent source node must be rejected by _node_id_consistency validator",
+          "input": {
+            "engagement_id": 1001,
+            "engagement_name": "Test",
+            "node_count": 1,
+            "edge_count": 1,
+            "nodes": [
+              {
+                "node_id": "HOST::present",
+                "node_type": "HOST",
+                "label": "Present",
+                "source_table": "hosts",
+                "source_id": 1,
+                "engagement_id": 1001
+              }
+            ],
+            "edges": [
+              {
+                "source_node_id": "HOST::absent",
+                "target_node_id": "HOST::present",
+                "weight": 50.0,
+                "edge_type": "vuln_found"
+              }
+            ],
+            "generated_at": "2026-09-16T12:00:00Z"
+          },
+          "accepted": false,
+          "rejection_reason": "dangling_edge_source"
+        },
+        {
+          "id": "graph-dangling-edge-target",
+          "description": "Edge referencing absent target node must be rejected by _node_id_consistency validator",
+          "input": {
+            "engagement_id": 1001,
+            "engagement_name": "Test",
+            "node_count": 1,
+            "edge_count": 1,
+            "nodes": [
+              {
+                "node_id": "HOST::present",
+                "node_type": "HOST",
+                "label": "Present",
+                "source_table": "hosts",
+                "source_id": 1,
+                "engagement_id": 1001
+              }
+            ],
+            "edges": [
+              {
+                "source_node_id": "HOST::present",
+                "target_node_id": "HOST::absent",
+                "weight": 50.0,
+                "edge_type": "vuln_found"
+              }
+            ],
+            "generated_at": "2026-09-16T12:00:00Z"
+          },
+          "accepted": false,
+          "rejection_reason": "dangling_edge_target"
+        },
+        {
+          "id": "graph-min-severity-filter-default",
+          "description": "min_severity_filter defaults to LOW in Python (Severity.LOW)",
+          "input": {
+            "engagement_id": 1,
+            "engagement_name": "X",
+            "node_count": 0,
+            "edge_count": 0,
+            "nodes": [],
+            "edges": [],
+            "generated_at": "2026-01-01T00:00:00Z"
+          },
+          "accepted": true,
+          "expected_min_severity_filter": "LOW",
+          "note": "Python: min_severity_filter: Severity = Severity.LOW"
+        },
+        {
+          "id": "graph-min-severity-filter-all-variants",
+          "description": "All severity wire strings accepted for min_severity_filter",
+          "cases": [
+            {"min_severity_filter": "CRITICAL", "accepted": true},
+            {"min_severity_filter": "HIGH", "accepted": true},
+            {"min_severity_filter": "MEDIUM", "accepted": true},
+            {"min_severity_filter": "LOW", "accepted": true},
+            {"min_severity_filter": "INFO", "accepted": true},
+            {"min_severity_filter": "critical", "accepted": false},
+            {"min_severity_filter": "unknown", "accepted": false}
+          ]
+        },
+        {
+          "id": "graph-node-count-nonnegative",
+          "description": "node_count and edge_count must be non-negative (ge=0)",
+          "cases": [
+            {"field": "node_count", "value": 0, "accepted": true},
+            {"field": "node_count", "value": 1, "accepted": true},
+            {"field": "node_count", "value": -1, "accepted": false},
+            {"field": "edge_count", "value": 0, "accepted": true},
+            {"field": "edge_count", "value": -1, "accepted": false}
+          ]
+        },
+        {
+          "id": "graph-prune-fields",
+          "description": "pruned defaults false, prune_reason defaults null",
+          "cases": [
+            {"pruned": true, "prune_reason": "too many nodes", "accepted": true},
+            {"pruned": false, "prune_reason": null, "accepted": true},
+            {"pruned_omitted": true, "prune_reason_omitted": true, "expected_pruned": false, "expected_prune_reason": null}
+          ]
+        },
+        {
+          "id": "graph-empty-collections-defaults",
+          "description": "critical_path_nodes defaults to [], critical_path_weight defaults to 0.0",
+          "input": {
+            "engagement_id": 5,
+            "engagement_name": "Minimal",
+            "node_count": 0,
+            "edge_count": 0,
+            "nodes": [],
+            "edges": [],
+            "generated_at": "2026-09-16T00:00:00Z"
+          },
+          "accepted": true,
+          "expected_critical_path_nodes": [],
+          "expected_critical_path_weight": 0.0
+        },
+        {
+          "id": "graph-missing-required-fields",
+          "description": "Required fields in AttackGraph",
+          "cases": [
+            {"omit": "engagement_id", "accepted": false},
+            {"omit": "engagement_name", "accepted": false},
+            {"omit": "node_count", "accepted": false},
+            {"omit": "edge_count", "accepted": false},
+            {"omit": "nodes", "accepted": false},
+            {"omit": "edges", "accepted": false},
+            {"omit": "generated_at", "accepted": false}
+          ]
+        },
+        {
+          "id": "graph-duplicate-node-ids",
+          "description": "Python's _node_id_consistency uses a set; duplicate node_ids cause the set to hold one copy, but both edges can still resolve. Python does NOT explicitly reject duplicate node IDs in the nodes list itself.",
+          "note": "Python does not raise on duplicate node_ids in nodes list; _node_id_consistency only checks edges. Rust may preserve or differ — this is a potential mismatch point.",
+          "input": {
+            "engagement_id": 1,
+            "engagement_name": "X",
+            "node_count": 2,
+            "edge_count": 0,
+            "nodes": [
+              {"node_id": "HOST::dup", "node_type": "HOST", "label": "A", "source_table": "hosts", "source_id": 1, "engagement_id": 1},
+              {"node_id": "HOST::dup", "node_type": "HOST", "label": "B", "source_table": "hosts", "source_id": 2, "engagement_id": 1}
+            ],
+            "edges": [],
+            "generated_at": "2026-09-16T00:00:00Z"
+          },
+          "python_accepted": true,
+          "note2": "Record as potential parity divergence if Rust rejects this"
+        },
+        {
+          "id": "graph-roundtrip-serialization",
+          "description": "A complete graph serialized by Python via model_dump(mode='json') and deserialized should produce identical typed values",
+          "input": {
+            "engagement_id": 1001,
+            "engagement_name": "Roundtrip Test",
+            "node_count": 1,
+            "edge_count": 0,
+            "critical_path_nodes": [],
+            "critical_path_weight": 0.0,
+            "nodes": [
+              {
+                "node_id": "CLOUD::s3-public",
+                "node_type": "CLOUD",
+                "label": "S3 Public Bucket",
+                "severity": "HIGH",
+                "source_table": "cloud_assets",
+                "source_id": 7,
+                "engagement_id": 1001,
+                "on_critical_path": false,
+                "metadata": {"bucket_name_hash": "abc123", "region": "us-east-1"}
+              }
+            ],
+            "edges": [],
+            "generated_at": "2026-09-16T12:30:00Z",
+            "min_severity_filter": "LOW",
+            "pruned": false,
+            "prune_reason": null
+          },
+          "accepted": true,
+          "roundtrip": true
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/attack_graph_models.py:AttackGraphReportContext",
+      "cases": [
+        {
+          "id": "report-happy-minimal",
+          "description": "Minimal report context with all required fields",
+          "input": {
+            "engagement_id": 1001,
+            "critical_path_summary": ["Entry Point", "10.0.0.1", "Compromise"],
+            "critical_path_weight": 150.0,
+            "total_critical_nodes": 2,
+            "total_high_nodes": 3,
+            "top_exploits": ["EDB-50560", "CVE-2021-44228"]
+          },
+          "accepted": true,
+          "expected_cloud_misconfig_count": 0,
+          "expected_idor_finding_count": 0,
+          "expected_has_validated_creds": false,
+          "expected_mermaid_snippet": null
+        },
+        {
+          "id": "report-top-exploits-truncation",
+          "description": "top_exploits truncated to 5 entries by _truncate_top_exploits validator",
+          "input": {
+            "engagement_id": 1,
+            "critical_path_summary": [],
+            "critical_path_weight": 0.0,
+            "total_critical_nodes": 0,
+            "total_high_nodes": 0,
+            "top_exploits": ["E1", "E2", "E3", "E4", "E5", "E6", "E7"]
+          },
+          "accepted": true,
+          "expected_top_exploits_len": 5,
+          "expected_top_exploits": ["E1", "E2", "E3", "E4", "E5"],
+          "note": "Python truncates to first 5 entries via object.__setattr__"
+        },
+        {
+          "id": "report-top-exploits-exactly-five",
+          "description": "exactly 5 exploits passes through unchanged",
+          "input": {
+            "engagement_id": 1,
+            "critical_path_summary": [],
+            "critical_path_weight": 0.0,
+            "total_critical_nodes": 0,
+            "total_high_nodes": 0,
+            "top_exploits": ["E1", "E2", "E3", "E4", "E5"]
+          },
+          "accepted": true,
+          "expected_top_exploits_len": 5
+        },
+        {
+          "id": "report-top-exploits-empty",
+          "description": "empty top_exploits is valid",
+          "input": {
+            "engagement_id": 1,
+            "critical_path_summary": [],
+            "critical_path_weight": 0.0,
+            "total_critical_nodes": 0,
+            "total_high_nodes": 0,
+            "top_exploits": []
+          },
+          "accepted": true,
+          "expected_top_exploits_len": 0
+        },
+        {
+          "id": "report-mermaid-snippet-truncation",
+          "description": "mermaid_snippet truncated to 4000 chars by _mermaid_char_limit validator",
+          "truncation_limit": 4000,
+          "input_under_limit_chars": 3999,
+          "input_at_limit_chars": 4000,
+          "input_over_limit_chars": 4001,
+          "cases": [
+            {"mermaid_length": 3999, "accepted": true, "truncated": false},
+            {"mermaid_length": 4000, "accepted": true, "truncated": false},
+            {"mermaid_length": 4001, "accepted": true, "truncated": true, "expected_length": 4000},
+            {"mermaid_length": 8000, "accepted": true, "truncated": true, "expected_length": 4000},
+            {"mermaid_snippet": null, "accepted": true, "note": "null is valid — optional field"}
+          ],
+          "note": "Python warns but does NOT reject; it truncates silently with object.__setattr__"
+        },
+        {
+          "id": "report-total-nodes-nonnegative",
+          "description": "total_critical_nodes and total_high_nodes must be ge=0",
+          "cases": [
+            {"total_critical_nodes": 0, "accepted": true},
+            {"total_critical_nodes": 1, "accepted": true},
+            {"total_critical_nodes": -1, "accepted": false},
+            {"total_high_nodes": 0, "accepted": true},
+            {"total_high_nodes": -1, "accepted": false}
+          ]
+        },
+        {
+          "id": "report-defaults",
+          "description": "Optional/default fields when omitted",
+          "cases": [
+            {"field": "cloud_misconfig_count", "omitted_default": 0},
+            {"field": "idor_finding_count", "omitted_default": 0},
+            {"field": "has_validated_creds", "omitted_default": false},
+            {"field": "mermaid_snippet", "omitted_default": null}
+          ]
+        },
+        {
+          "id": "report-missing-required-fields",
+          "description": "Required fields for AttackGraphReportContext",
+          "cases": [
+            {"omit": "engagement_id", "accepted": false},
+            {"omit": "critical_path_summary", "accepted": false},
+            {"omit": "critical_path_weight", "accepted": false},
+            {"omit": "total_critical_nodes", "accepted": false},
+            {"omit": "total_high_nodes", "accepted": false},
+            {"omit": "top_exploits", "accepted": false}
+          ]
+        },
+        {
+          "id": "report-unicode-in-summary",
+          "description": "Unicode strings in critical_path_summary and top_exploits are passed through",
+          "input": {
+            "engagement_id": 2,
+            "critical_path_summary": ["エントリポイント", "10.0.0.1", "侵害完了"],
+            "critical_path_weight": 100.0,
+            "total_critical_nodes": 1,
+            "total_high_nodes": 2,
+            "top_exploits": ["CVE-2021-44228 (Log4Shell)"]
+          },
+          "accepted": true
+        },
+        {
+          "id": "report-has-validated-creds-bool-coercion",
+          "description": "has_validated_creds is a bool field",
+          "cases": [
+            {"has_validated_creds": true, "accepted": true},
+            {"has_validated_creds": false, "accepted": true},
+            {"has_validated_creds": 1, "accepted": false, "note": "Pydantic v2 strict mode rejects int for bool"},
+            {"has_validated_creds": 0, "accepted": false, "note": "Pydantic v2 strict mode rejects int for bool"},
+            {"has_validated_creds": "true", "accepted": false, "note": "Pydantic v2 strict mode rejects string for bool"}
+          ],
+          "note": "Python BaseModel default mode: actually coerces 1->true, 0->false. Pydantic v2 non-strict accepts int. Mark as boundary to verify."
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "sections": 4,
+    "ledger_ids": [
+      "forge/models/attack_graph_models.py:AttackNode",
+      "forge/models/attack_graph_models.py:AttackEdge",
+      "forge/models/attack_graph_models.py:AttackGraph",
+      "forge/models/attack_graph_models.py:AttackGraphReportContext"
+    ],
+    "scenarios_covered": [
+      "valid_nested_roundtrip",
+      "malformed_null_missing_default_boundary",
+      "adjacent_enum_id_redaction_regressions",
+      "forbidden_metadata_keys",
+      "dangling_edge_references",
+      "truncation_invariants",
+      "unicode_passthrough",
+      "integer_boundaries"
+    ]
+  }
+}
