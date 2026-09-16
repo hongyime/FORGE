@@ -9,6 +9,10 @@ pub enum DomainError {
     DanglingEdges { references: usize },
     InvalidPluginId,
     InvalidC2Url,
+    InvalidAuthMaterial,
+    InvalidDescriptor,
+    InvalidEventSource,
+    InvalidManifestVersion,
 }
 
 impl fmt::Display for DomainError {
@@ -22,6 +26,10 @@ impl fmt::Display for DomainError {
             }
             Self::InvalidPluginId => f.write_str("invalid plugin identifier"),
             Self::InvalidC2Url => f.write_str("invalid C2 URL"),
+            Self::InvalidAuthMaterial => f.write_str("missing required authentication material"),
+            Self::InvalidDescriptor => f.write_str("invalid descriptor fields"),
+            Self::InvalidEventSource => f.write_str("event source must not be empty"),
+            Self::InvalidManifestVersion => f.write_str("manifest version must not be empty"),
         }
     }
 }

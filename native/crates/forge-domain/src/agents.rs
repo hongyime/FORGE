@@ -1,5 +1,5 @@
 //! TaskSpec data only. ROE/scope execution policy belongs to a later task.
-//! Explicit timestamp construction keeps this domain crate free of ambient clocks.
+//! Timestamp defaults match the source dataclasses; explicit values remain unchanged.
 use crate::{ids::EngagementId, metadata::JsonObject};
 use serde::{Deserialize, Serialize};
 
@@ -14,19 +14,22 @@ pub struct TaskSpec {
     pub scope: Vec<String>,
     #[serde(default)]
     pub params: JsonObject,
+    #[serde(default = "crate::events::timestamp_utc")]
     pub created_at: String,
 }
 
-/// Immutable event envelope carried across the in-process EventBus.
-/// topic must be one of the ALLOWED_TOPICS; source_plugin_id must be non-empty.
+pub use crate::events::AgentEvent;
+
+/// Source status is an unconstrained string, not the TaskState taxonomy.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct AgentEvent {
-    pub topic: String,
-    pub source_plugin_id: String,
-    pub engagement_id: EngagementId,
+pub struct TaskResult {
+    pub task_id: String,
+    pub plugin_id: String,
+    pub status: String,
     #[serde(default)]
     pub payload: JsonObject,
-    pub event_id: String,
-    pub timestamp_utc: String,
+    pub error: Option<String>,
+    #[serde(default = "crate::events::timestamp_utc")]
+    pub completed_at: String,
 }
