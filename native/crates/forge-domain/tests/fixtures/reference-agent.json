@@ -1,0 +1,20 @@
+{
+  "task": {
+    "task_id": "t",
+    "engagement_id": 0,
+    "capability": "arbitrary",
+    "target": "\u4f8b",
+    "roe_id": "",
+    "scope": [],
+    "params": {},
+    "created_at": "2026-01-01T00:00:00+00:00"
+  },
+  "event": {
+    "topic": "task.created",
+    "source_plugin_id": " ",
+    "engagement_id": 0,
+    "payload": {},
+    "event_id": "opaque",
+    "timestamp_utc": "2026-01-01T00:00:00+00:00"
+  }
+}

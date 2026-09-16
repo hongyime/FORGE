@@ -1,0 +1,449 @@
+[
+  {
+    "type": "CapabilityManifest",
+    "case": "manifest_0",
+    "input": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": " plugin_abc ",
+      "version": " 1 ",
+      "capabilities": [
+        "monitoring",
+        "artifact_parsing",
+        "monitoring"
+      ],
+      "subscribes": [
+        "task.updated",
+        "task.created"
+      ],
+      "publishes": []
+    },
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1",
+      "capabilities": [
+        "artifact_parsing",
+        "monitoring"
+      ],
+      "subscribes": [
+        "task.created",
+        "task.updated"
+      ],
+      "publishes": []
+    }
+  },
+  {
+    "type": "CapabilityManifest",
+    "case": "manifest_1",
+    "input": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": " plugin_abc ",
+      "version": " 1 ",
+      "capabilities": [
+        "monitoring",
+        "artifact_parsing",
+        "monitoring"
+      ],
+      "subscribes": [
+        "task.updated",
+        "task.created"
+      ],
+      "publishes": [],
+      "extra": 1
+    },
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1",
+      "capabilities": [
+        "artifact_parsing",
+        "monitoring"
+      ],
+      "subscribes": [
+        "task.created",
+        "task.updated"
+      ],
+      "publishes": []
+    }
+  },
+  {
+    "type": "CapabilityManifest",
+    "case": "manifest_2",
+    "input": {
+      "schema": null,
+      "plugin_id": " plugin_abc ",
+      "version": " 1 ",
+      "capabilities": [
+        "monitoring",
+        "artifact_parsing",
+        "monitoring"
+      ],
+      "subscribes": [
+        "task.updated",
+        "task.created"
+      ],
+      "publishes": []
+    },
+    "accepted": false
+  },
+  {
+    "type": "CapabilityManifest",
+    "case": "manifest_3",
+    "input": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_a",
+      "version": " 1 ",
+      "capabilities": [
+        "monitoring",
+        "artifact_parsing",
+        "monitoring"
+      ],
+      "subscribes": [
+        "task.updated",
+        "task.created"
+      ],
+      "publishes": []
+    },
+    "accepted": false
+  },
+  {
+    "type": "CapabilityManifest",
+    "case": "manifest_4",
+    "input": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": " plugin_abc ",
+      "version": 123,
+      "capabilities": [
+        "monitoring",
+        "artifact_parsing",
+        "monitoring"
+      ],
+      "subscribes": [
+        "task.updated",
+        "task.created"
+      ],
+      "publishes": []
+    },
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "123",
+      "capabilities": [
+        "artifact_parsing",
+        "monitoring"
+      ],
+      "subscribes": [
+        "task.created",
+        "task.updated"
+      ],
+      "publishes": []
+    }
+  },
+  {
+    "type": "CapabilityManifest",
+    "case": "manifest_5",
+    "input": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": " plugin_abc ",
+      "version": null,
+      "capabilities": [
+        "monitoring",
+        "artifact_parsing",
+        "monitoring"
+      ],
+      "subscribes": [
+        "task.updated",
+        "task.created"
+      ],
+      "publishes": []
+    },
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "None",
+      "capabilities": [
+        "artifact_parsing",
+        "monitoring"
+      ],
+      "subscribes": [
+        "task.created",
+        "task.updated"
+      ],
+      "publishes": []
+    }
+  },
+  {
+    "type": "CapabilityManifest",
+    "case": "manifest_6",
+    "input": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": " plugin_abc ",
+      "version": " 1 ",
+      "capabilities": [
+        "unknown"
+      ],
+      "subscribes": [
+        "task.updated",
+        "task.created"
+      ],
+      "publishes": []
+    },
+    "accepted": false
+  },
+  {
+    "type": "CapabilityManifest",
+    "case": "manifest_7",
+    "input": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": " plugin_abc ",
+      "version": " 1 ",
+      "capabilities": [
+        "monitoring",
+        "artifact_parsing",
+        "monitoring"
+      ],
+      "subscribes": [
+        "bad"
+      ],
+      "publishes": []
+    },
+    "accepted": false
+  },
+  {
+    "type": "CapabilityManifest",
+    "case": "manifest_8",
+    "input": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": " plugin_abc ",
+      "version": " 1 ",
+      "capabilities": [
+        "monitoring",
+        "artifact_parsing",
+        "monitoring"
+      ],
+      "subscribes": [
+        "task.updated",
+        "task.created"
+      ],
+      "publishes": null
+    },
+    "accepted": false
+  },
+  {
+    "type": "CapabilityManifest",
+    "case": "manifest_9",
+    "input": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": " plugin_abc ",
+      "version": " 1 ",
+      "capabilities": {
+        "monitoring": 1
+      },
+      "subscribes": [
+        "task.updated",
+        "task.created"
+      ],
+      "publishes": []
+    },
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1",
+      "capabilities": [
+        "monitoring"
+      ],
+      "subscribes": [
+        "task.created",
+        "task.updated"
+      ],
+      "publishes": []
+    }
+  },
+  {
+    "type": "TaskResult",
+    "case": "TaskResult10",
+    "input": {
+      "task_id": "t",
+      "plugin_id": "plugin_abc",
+      "status": "custom",
+      "completed_at": "fixed"
+    },
+    "accepted": true,
+    "output": {
+      "task_id": "t",
+      "plugin_id": "plugin_abc",
+      "status": "custom",
+      "payload": {},
+      "error": null,
+      "completed_at": "fixed"
+    }
+  },
+  {
+    "type": "TaskResult",
+    "case": "TaskResult11",
+    "input": {
+      "task_id": "t",
+      "plugin_id": "plugin_abc",
+      "status": "custom",
+      "completed_at": "fixed",
+      "extra": 1
+    },
+    "accepted": false
+  },
+  {
+    "type": "AgentEvent",
+    "case": "AgentEvent12",
+    "input": {
+      "topic": "task.created",
+      "source_plugin_id": "p",
+      "engagement_id": 1,
+      "payload": {},
+      "event_id": "e",
+      "timestamp_utc": "fixed"
+    },
+    "accepted": true,
+    "output": {
+      "topic": "task.created",
+      "source_plugin_id": "p",
+      "engagement_id": 1,
+      "payload": {},
+      "event_id": "e",
+      "timestamp_utc": "fixed"
+    }
+  },
+  {
+    "type": "AgentEvent",
+    "case": "AgentEvent13",
+    "input": {
+      "topic": "task.created",
+      "source_plugin_id": "p",
+      "engagement_id": 1,
+      "payload": {},
+      "event_id": "e",
+      "timestamp_utc": "fixed",
+      "extra": 1
+    },
+    "accepted": false
+  },
+  {
+    "type": "AgentEvent",
+    "case": "AgentEvent14",
+    "input": {
+      "topic": "unknown",
+      "source_plugin_id": "p",
+      "engagement_id": 1,
+      "payload": {},
+      "event_id": "e",
+      "timestamp_utc": "fixed"
+    },
+    "accepted": false
+  },
+  {
+    "type": "AgentEvent",
+    "case": "AgentEvent15",
+    "input": {
+      "topic": "task.created",
+      "source_plugin_id": "",
+      "engagement_id": 1,
+      "payload": {},
+      "event_id": "e",
+      "timestamp_utc": "fixed"
+    },
+    "accepted": false
+  },
+  {
+    "type": "AgentEvent",
+    "case": "AgentEvent16",
+    "input": {
+      "topic": "task.created",
+      "source_plugin_id": " ",
+      "engagement_id": 1,
+      "payload": {},
+      "event_id": "e",
+      "timestamp_utc": "fixed"
+    },
+    "accepted": true,
+    "output": {
+      "topic": "task.created",
+      "source_plugin_id": " ",
+      "engagement_id": 1,
+      "payload": {},
+      "event_id": "e",
+      "timestamp_utc": "fixed"
+    }
+  },
+  {
+    "type": "TaskResult",
+    "case": "TaskResult_generated_defaults",
+    "input": {
+      "task_id": "t",
+      "plugin_id": "plugin_abc",
+      "status": "completed"
+    },
+    "accepted": true,
+    "output": {
+      "task_id": "t",
+      "plugin_id": "plugin_abc",
+      "status": "completed",
+      "payload": {},
+      "error": null,
+      "completed_at": "<generated-datetime>"
+    },
+    "normalized": [
+      "completed_at"
+    ]
+  },
+  {
+    "type": "TaskSpec",
+    "case": "TaskSpec_generated_defaults",
+    "input": {
+      "task_id": "t",
+      "engagement_id": 1,
+      "capability": "custom",
+      "target": "fixture",
+      "roe_id": "fixture",
+      "scope": []
+    },
+    "accepted": true,
+    "output": {
+      "task_id": "t",
+      "engagement_id": 1,
+      "capability": "custom",
+      "target": "fixture",
+      "roe_id": "fixture",
+      "scope": [],
+      "params": {},
+      "created_at": "<generated-datetime>"
+    },
+    "normalized": [
+      "created_at"
+    ]
+  },
+  {
+    "type": "AgentEvent",
+    "case": "AgentEvent_generated_defaults",
+    "input": {
+      "topic": "result.ready",
+      "source_plugin_id": "p",
+      "engagement_id": 1,
+      "payload": {}
+    },
+    "accepted": true,
+    "output": {
+      "topic": "result.ready",
+      "source_plugin_id": "p",
+      "engagement_id": 1,
+      "payload": {},
+      "event_id": "<generated-uuid>",
+      "timestamp_utc": "<generated-datetime>"
+    },
+    "normalized": [
+      "timestamp_utc"
+    ]
+  }
+]

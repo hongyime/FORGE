@@ -1,0 +1,1880 @@
+[
+  {
+    "id": "timestamp_0",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2024-+1-02T03:04:05Z\"}",
+    "accepted": false
+  },
+  {
+    "id": "timestamp_1",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2024-01-02T03:04.5\"}",
+    "accepted": false
+  },
+  {
+    "id": "timestamp_2",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"+024-01-02T03:04:05Z\"}",
+    "accepted": false
+  },
+  {
+    "id": "timestamp_3",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2024-01-+2T03:04:05Z\"}",
+    "accepted": false
+  },
+  {
+    "id": "timestamp_4",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2024-\\uff101-02T03:04:05Z\"}",
+    "accepted": false
+  },
+  {
+    "id": "timestamp_5",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2024-01-02T03:04,5\"}",
+    "accepted": false
+  },
+  {
+    "id": "timestamp_6",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2024-01-02T03:04\"}",
+    "accepted": true,
+    "output": {
+      "event_id": "e",
+      "event_type": "fixture",
+      "engagement_id": 1,
+      "timestamp": "2024-01-02T03:04:00",
+      "payload": {},
+      "severity": "info",
+      "acknowledged": false,
+      "expires_at": null
+    }
+  },
+  {
+    "id": "timestamp_7",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2024-01-02T03:04:05.5\"}",
+    "accepted": true,
+    "output": {
+      "event_id": "e",
+      "event_type": "fixture",
+      "engagement_id": 1,
+      "timestamp": "2024-01-02T03:04:05.500000",
+      "payload": {},
+      "severity": "info",
+      "acknowledged": false,
+      "expires_at": null
+    }
+  },
+  {
+    "id": "timestamp_8",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2024-01-02T03:04:05,5Z\"}",
+    "accepted": true,
+    "output": {
+      "event_id": "e",
+      "event_type": "fixture",
+      "engagement_id": 1,
+      "timestamp": "2024-01-02T03:04:05.500000Z",
+      "payload": {},
+      "severity": "info",
+      "acknowledged": false,
+      "expires_at": null
+    }
+  },
+  {
+    "id": "timestamp_9",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2024-01-02T03:04:05.123456+05:30\"}",
+    "accepted": true,
+    "output": {
+      "event_id": "e",
+      "event_type": "fixture",
+      "engagement_id": 1,
+      "timestamp": "2024-01-02T03:04:05.123456+05:30",
+      "payload": {},
+      "severity": "info",
+      "acknowledged": false,
+      "expires_at": null
+    }
+  },
+  {
+    "id": "timestamp_10",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2024-02-29\"}",
+    "accepted": true,
+    "output": {
+      "event_id": "e",
+      "event_type": "fixture",
+      "engagement_id": 1,
+      "timestamp": "2024-02-29T00:00:00",
+      "payload": {},
+      "severity": "info",
+      "acknowledged": false,
+      "expires_at": null
+    }
+  },
+  {
+    "id": "timestamp_11",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2023-02-29\"}",
+    "accepted": false
+  },
+  {
+    "id": "timestamp_12",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2024-01-02 03:04:05\"}",
+    "accepted": true,
+    "output": {
+      "event_id": "e",
+      "event_type": "fixture",
+      "engagement_id": 1,
+      "timestamp": "2024-01-02T03:04:05",
+      "payload": {},
+      "severity": "info",
+      "acknowledged": false,
+      "expires_at": null
+    }
+  },
+  {
+    "id": "timestamp_13",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"2024-01-02t03:04:05z\"}",
+    "accepted": true,
+    "output": {
+      "event_id": "e",
+      "event_type": "fixture",
+      "engagement_id": 1,
+      "timestamp": "2024-01-02T03:04:05Z",
+      "payload": {},
+      "severity": "info",
+      "acknowledged": false,
+      "expires_at": null
+    }
+  },
+  {
+    "id": "timestamp_14",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": 0}",
+    "accepted": true,
+    "output": {
+      "event_id": "e",
+      "event_type": "fixture",
+      "engagement_id": 1,
+      "timestamp": "1970-01-01T00:00:00Z",
+      "payload": {},
+      "severity": "info",
+      "acknowledged": false,
+      "expires_at": null
+    }
+  },
+  {
+    "id": "timestamp_15",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": -1.2}",
+    "accepted": true,
+    "output": {
+      "event_id": "e",
+      "event_type": "fixture",
+      "engagement_id": 1,
+      "timestamp": "1969-12-31T23:59:58.200000Z",
+      "payload": {},
+      "severity": "info",
+      "acknowledged": false,
+      "expires_at": null
+    }
+  },
+  {
+    "id": "timestamp_16",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": \"-1.2\"}",
+    "accepted": true,
+    "output": {
+      "event_id": "e",
+      "event_type": "fixture",
+      "engagement_id": 1,
+      "timestamp": "1969-12-31T23:59:58.800000Z",
+      "payload": {},
+      "severity": "info",
+      "acknowledged": false,
+      "expires_at": null
+    }
+  },
+  {
+    "id": "timestamp_17",
+    "kind": "timestamp",
+    "input_json": "{\"event_id\": \"e\", \"event_type\": \"fixture\", \"engagement_id\": 1, \"timestamp\": 20000000001}",
+    "accepted": true,
+    "output": {
+      "event_id": "e",
+      "event_type": "fixture",
+      "engagement_id": 1,
+      "timestamp": "1970-08-20T11:33:20.001000Z",
+      "payload": {},
+      "severity": "info",
+      "acknowledged": false,
+      "expires_at": null
+    }
+  },
+  {
+    "id": "manifest_0",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":1e-7}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1e-07",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_1",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":{\"z\":1,\"a\":2}}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "{'z': 1, 'a': 2}",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_2",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u0000b\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\x00b']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_3",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":{\"z\":1,\"a\":2,\"z\":3}}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "{'z': 3, 'a': 2}",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_4",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":{\"z\":[{\"b\":1,\"a\":2}],\"a\":{}}}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "{'z': [{'b': 1, 'a': 2}], 'a': {}}",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_5",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":1e-5}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1e-05",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_6",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":1e-4}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "0.0001",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_7",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":1e15}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1000000000000000.0",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_8",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":1e16}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1e+16",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_9",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":1e20}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1e+20",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_10",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":1.2e20}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1.2e+20",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_11",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":-1e-7}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "-1e-07",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_12",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":1e-100}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1e-100",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_13",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":-0}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "0",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_14",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":-0.0}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "-0.0",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_15",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":-0e0}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "-0.0",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_16",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":0.0}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "0.0",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_17",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":1.0}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1.0",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_18",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":1e0}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1.0",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_19",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":5e-324}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "5e-324",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_20",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":1.7976931348623157e308}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "1.7976931348623157e+308",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_21",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":true}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "True",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_22",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":false}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "False",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_23",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":null}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "None",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_24",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":\"'\"}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "'",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_25",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"'\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "[\"'\"]",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_26",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":\"\\\"\"}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "\"",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_27",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"\\\"\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['\"']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_28",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":\"both'\\\"\"}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "both'\"",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_29",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"both'\\\"\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['both\\'\"']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_30",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":\"a\\\\b\"}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "a\\b",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_31",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\\\b\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\\\b']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_32",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":\"\\t\\n\\r\"}",
+    "accepted": false
+  },
+  {
+    "id": "manifest_33",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"\\t\\n\\r\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['\\t\\n\\r']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_34",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":\"\\u4f60\\u597d\\ud83d\\ude42\"}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "你好🙂",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_35",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"\\u4f60\\u597d\\ud83d\\ude42\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['你好🙂']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_36",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":\"\\u001cv\\u001f\"}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "v",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_37",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"\\u001cv\\u001f\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['\\x1cv\\x1f']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_38",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":\" \"}",
+    "accepted": false
+  },
+  {
+    "id": "manifest_39",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\" \"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "[' ']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_40",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":\"v\\u0000x\"}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "v\u0000x",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_41",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"v\\u0000x\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['v\\x00x']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_42",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u0000b\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\x00b']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_43",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u0001b\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\x01b']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_44",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u0007b\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\x07b']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_45",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\bb\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\x08b']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_46",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\tb\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\tb']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_47",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\nb\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\nb']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_48",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u000bb\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\x0bb']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_49",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\fb\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\x0cb']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_50",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\rb\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\rb']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_51",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u001bb\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\x1bb']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_52",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u001fb\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\x1fb']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_53",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u007fb\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\x7fb']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_54",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u0080b\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\x80b']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_55",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u009fb\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\x9fb']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_56",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u00a0b\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\xa0b']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_57",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u00adb\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\xadb']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_58",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u200bb\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\u200bb']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_59",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u2028b\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\u2028b']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_60",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u3000b\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\u3000b']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_61",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\ue000b\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\ue000b']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_62",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u0378b\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['a\\u0378b']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "manifest_63",
+    "kind": "manifest",
+    "input_json": "{\"schema\":\"forge.agent.capability.v1\",\"plugin_id\":\"plugin_abc\",\"version\":[\"a\\u0301b\"]}",
+    "accepted": true,
+    "output": {
+      "schema": "forge.agent.capability.v1",
+      "plugin_id": "plugin_abc",
+      "version": "['áb']",
+      "capabilities": [],
+      "subscribes": [],
+      "publishes": []
+    }
+  },
+  {
+    "id": "ccache_path_0",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"kerberos\", \"ccache_path\": \"./a\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "a",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "a",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    }
+  },
+  {
+    "id": "ccache_path_1",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"kerberos\", \"ccache_path\": \".\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": ".",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": ".",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    }
+  },
+  {
+    "id": "ccache_path_2",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"kerberos\", \"ccache_path\": \"./\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": ".",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": ".",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    }
+  },
+  {
+    "id": "ccache_path_3",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"kerberos\", \"ccache_path\": \"\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": ".",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": ".",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    }
+  },
+  {
+    "id": "ccache_path_4",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"kerberos\", \"ccache_path\": \"././a\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "a",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "a",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    }
+  },
+  {
+    "id": "ccache_path_5",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"kerberos\", \"ccache_path\": \"a/./b\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "a\\b",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "a/b",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    }
+  },
+  {
+    "id": "ccache_path_6",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"kerberos\", \"ccache_path\": \"a/../b\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "a\\..\\b",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "a/../b",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    }
+  },
+  {
+    "id": "ccache_path_7",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"kerberos\", \"ccache_path\": \"./../a\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "..\\a",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "../a",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    }
+  },
+  {
+    "id": "ccache_path_8",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"kerberos\", \"ccache_path\": \"..\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "..",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "..",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    }
+  },
+  {
+    "id": "ccache_path_9",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"kerberos\", \"ccache_path\": \"../.\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "..",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": "..",
+      "cert_path": null,
+      "key_path": null,
+      "auth_type": "kerberos"
+    }
+  },
+  {
+    "id": "cert_path_0",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"./a\", \"key_path\": \"fixture.key\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "a",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "a",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "cert_path_1",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \".\", \"key_path\": \"fixture.key\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": ".",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": ".",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "cert_path_2",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"./\", \"key_path\": \"fixture.key\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": ".",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": ".",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "cert_path_3",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"\", \"key_path\": \"fixture.key\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": ".",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": ".",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "cert_path_4",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"././a\", \"key_path\": \"fixture.key\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "a",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "a",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "cert_path_5",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"a/./b\", \"key_path\": \"fixture.key\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "a\\b",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "a/b",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "cert_path_6",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"a/../b\", \"key_path\": \"fixture.key\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "a\\..\\b",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "a/../b",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "cert_path_7",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"./../a\", \"key_path\": \"fixture.key\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "..\\a",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "../a",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "cert_path_8",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"..\", \"key_path\": \"fixture.key\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "..",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "..",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "cert_path_9",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"../.\", \"key_path\": \"fixture.key\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "..",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "..",
+      "key_path": "fixture.key",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "key_path_0",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"fixture.cert\", \"key_path\": \"./a\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "a",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "a",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "key_path_1",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"fixture.cert\", \"key_path\": \".\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": ".",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": ".",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "key_path_2",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"fixture.cert\", \"key_path\": \"./\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": ".",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": ".",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "key_path_3",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"fixture.cert\", \"key_path\": \"\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": ".",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": ".",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "key_path_4",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"fixture.cert\", \"key_path\": \"././a\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "a",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "a",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "key_path_5",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"fixture.cert\", \"key_path\": \"a/./b\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "a\\b",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "a/b",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "key_path_6",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"fixture.cert\", \"key_path\": \"a/../b\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "a\\..\\b",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "a/../b",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "key_path_7",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"fixture.cert\", \"key_path\": \"./../a\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "..\\a",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "../a",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "key_path_8",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"fixture.cert\", \"key_path\": \"..\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "..",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "..",
+      "auth_type": "certificate"
+    }
+  },
+  {
+    "id": "key_path_9",
+    "kind": "path",
+    "input_json": "{\"credential_id\": 1, \"username\": \"fixture\", \"auth_type\": \"certificate\", \"cert_path\": \"fixture.cert\", \"key_path\": \"../.\"}",
+    "accepted": true,
+    "output": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "..",
+      "auth_type": "certificate"
+    },
+    "output_posix": {
+      "credential_id": 1,
+      "username": "fixture",
+      "domain": null,
+      "password": null,
+      "ccache_path": null,
+      "cert_path": "fixture.cert",
+      "key_path": "..",
+      "auth_type": "certificate"
+    }
+  }
+]

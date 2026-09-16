@@ -1,0 +1,14 @@
+{
+  "schema": "forge.domain.timezone-fixtures.v1",
+  "review_id": "T3-IR-1-offset-grammar",
+  "file": "timezone-offsets.json",
+  "sha256": "ac925189799cd8e60de30fe2636982d855f345991c493f3bff15ea1cc262c263",
+  "cases": 60,
+  "accepted": 23,
+  "rejected": 37,
+  "source": "forge/models/pydantic_models.py:169-179",
+  "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+  "pydantic": "2.10.4",
+  "generator": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/timezone-fixtures.py",
+  "runtime": "Captured synthetic expectations only; Rust tests require neither Python nor .omo"
+}

@@ -2,10 +2,8 @@ use forge_domain::{graph::*, secrets::BreachRecord, seeds::EngagementSeed};
 use serde_json::{Value, json};
 
 fn fixture(name: &str) -> Value {
-    let cases: Vec<Value> = serde_json::from_str(include_str!(
-        "../../../../.omo/evidence/rust-rewrite/task-3/reference-cases.json"
-    ))
-    .unwrap();
+    let cases: Vec<Value> =
+        serde_json::from_str(include_str!("fixtures/reference-cases.json")).unwrap();
     cases.into_iter().find(|case| case["case"] == name).unwrap()
 }
 
@@ -146,10 +144,8 @@ fn omitted_and_empty_secret_defaults_match_python() {
 #[test]
 fn seed_enum_defaults_match_existing_sql_fixtures() {
     // Given real synthetic SQL rows with their enum defaults omitted,
-    let rows: Vec<Value> = serde_json::from_str(include_str!(
-        "../../../../.omo/evidence/rust-rewrite/task-3/reference-seeds.json"
-    ))
-    .unwrap();
+    let rows: Vec<Value> =
+        serde_json::from_str(include_str!("fixtures/reference-seeds.json")).unwrap();
     for expected in rows {
         let mut input = expected.clone();
         input.as_object_mut().unwrap().remove("source");

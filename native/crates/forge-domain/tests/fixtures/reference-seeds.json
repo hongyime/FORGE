@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "engagement_id": 42,
+    "seed_value": "\u4f8b.example",
+    "seed_type": "domain",
+    "source": "operator",
+    "status": "pending",
+    "depth": -1,
+    "confidence": 2.0,
+    "parent_seed_id": null,
+    "metadata_json": "{}",
+    "discovered_at": "fixed",
+    "updated_at": "fixed"
+  },
+  {
+    "id": 2,
+    "engagement_id": 42,
+    "seed_value": "a@example.test",
+    "seed_type": "email",
+    "source": "operator",
+    "status": "pending",
+    "depth": -1,
+    "confidence": 2.0,
+    "parent_seed_id": null,
+    "metadata_json": "{}",
+    "discovered_at": "fixed",
+    "updated_at": "fixed"
+  },
+  {
+    "id": 3,
+    "engagement_id": 42,
+    "seed_value": "aws_s3:fixture",
+    "seed_type": "cloud_ref",
+    "source": "operator",
+    "status": "pending",
+    "depth": -1,
+    "confidence": 2.0,
+    "parent_seed_id": null,
+    "metadata_json": "{}",
+    "discovered_at": "fixed",
+    "updated_at": "fixed"
+  }
+]

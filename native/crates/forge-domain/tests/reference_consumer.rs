@@ -22,10 +22,8 @@ fn check<T: DeserializeOwned + Serialize>(case: &Value) {
 
 #[test]
 fn python_graph_and_secret_fixtures() {
-    let cases: Vec<Value> = serde_json::from_str(include_str!(
-        "../../../../.omo/evidence/rust-rewrite/task-3/reference-cases.json"
-    ))
-    .unwrap();
+    let cases: Vec<Value> =
+        serde_json::from_str(include_str!("fixtures/reference-cases.json")).unwrap();
     let mut count = 0;
     for case in cases {
         match case["type"].as_str().unwrap() {

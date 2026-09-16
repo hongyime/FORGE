@@ -1,0 +1,42 @@
+{
+  "fixture_policy": "Existing synthetic reference inputs and outputs, copied byte-for-byte; no source regeneration. Provenance paths are informational, never runtime dependencies.",
+  "schema": "forge.domain.fixture-provenance.v1",
+  "files": [
+    {
+      "provenance": ".omo/evidence/rust-rewrite/task-3/reference-cases.json",
+      "file": "reference-cases.json",
+      "bytes": 170065,
+      "sha256": "419309ccbb7bbab5f2696c777d319a1ef5077ee117cb57c5859d68c7127e9660"
+    },
+    {
+      "provenance": ".omo/evidence/rust-rewrite/task-3/reference-agent.json",
+      "file": "reference-agent.json",
+      "bytes": 432,
+      "sha256": "2f66fbec1bb51a409a1248dba5e70ae3b7afe13fb99404f17311e000a73519bb"
+    },
+    {
+      "provenance": ".omo/evidence/rust-rewrite/task-3/reference-seeds.json",
+      "file": "reference-seeds.json",
+      "bytes": 985,
+      "sha256": "4e080b2b431f9354317d6004ac8790b31f1c97a5d1311cf2489ed6925cbc7e32"
+    },
+    {
+      "provenance": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/python-cases.json",
+      "file": "python-cases.json",
+      "bytes": 552126,
+      "sha256": "3b3260f929e591ec9d242deb62fcbe4087dcb3b834252feeb3326b904573246c"
+    },
+    {
+      "provenance": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/unaffected-extra.json",
+      "file": "unaffected-extra.json",
+      "bytes": 884210,
+      "sha256": "00494777c97e0886471bd42090e5a1250058fa917955e9b1da632d87105ede37"
+    },
+    {
+      "provenance": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/unaffected-agents.json",
+      "file": "unaffected-agents.json",
+      "bytes": 9873,
+      "sha256": "1c0eab262f2a56bbcd41925cbc5c7aff3a9abd9d5a0f9f300e25b3fc8ef26737"
+    }
+  ]
+}

@@ -76,10 +76,8 @@ fn seed_and_task_external_roundtrips() {
     assert!(serde_json::from_value::<SeedType>(json!("bogus")).is_err());
     assert!(serde_json::from_value::<SeedStatus>(json!("queued")).is_err());
     assert!(serde_json::from_value::<SeedSource>(json!(null)).is_err());
-    let fixtures: Value = serde_json::from_str(include_str!(
-        "../../../../.omo/evidence/rust-rewrite/task-3/reference-agent.json"
-    ))
-    .unwrap();
+    let fixtures: Value =
+        serde_json::from_str(include_str!("fixtures/reference-agent.json")).unwrap();
     let task: TaskSpec = serde_json::from_value(fixtures["task"].clone()).unwrap();
     assert_eq!(serde_json::to_value(task).unwrap(), fixtures["task"]);
     assert!(serde_json::from_value::<TaskSpec>(json!({})).is_err());

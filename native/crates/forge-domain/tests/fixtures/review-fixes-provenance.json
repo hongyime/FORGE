@@ -1,0 +1,23 @@
+{
+  "schema": "forge.domain.review-fixtures.v1",
+  "review_ids": [
+    "T3-IR-1",
+    "T3-IR-2",
+    "T3-IR-3"
+  ],
+  "file": "review-fixes.json",
+  "sha256": "b08a8ab6e2d0e3bd8ed14c2187400a0caade4a7492e8c217a7ebdfcf29d370d8",
+  "cases": 112,
+  "source_hashes": {
+    "forge/models/pydantic_models.py": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+    "forge/agents/capability_manifest.py": "160e807b41cd460685f2d8f3cc68f5e8a479366e6f0af880c9879ef7a65fe838",
+    "forge/agents/event_bus.py": "bb8ad7a8eba5a9afd3724db3c91f1fb0b65d786b8ba22193d7591d6f89958761"
+  },
+  "python": "3.12.10",
+  "pydantic": "2.10.4",
+  "source_platform": "win32",
+  "raw_json_retained": true,
+  "posix_path_expectations": "PurePosixPath lexical equivalents of the same synthetic path fields; no filesystem resolution",
+  "generator": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/review-fixtures.py",
+  "runtime": "Captured expectations only; Rust tests do not invoke Python or read generator paths"
+}
