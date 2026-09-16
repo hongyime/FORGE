@@ -1,0 +1,1979 @@
+{
+  "baseline": {
+    "dirty_paths": [
+      ".agents/JOURNAL.md",
+      ".agents/STATE.md",
+      ".omo/plans/forge-full-rust-rewrite.md",
+      "forge/reporting/webui/src/test-setup.ts",
+      "forge/reporting/webui/vitest.config.ts",
+      "forge/webui/__init__.py",
+      "native/.gitignore",
+      "native/Cargo.lock",
+      "native/Cargo.toml",
+      "native/rust-toolchain.toml",
+      "native/xtask/Cargo.toml",
+      "native/xtask/src/aliases.rs",
+      "native/xtask/src/documents.rs",
+      "native/xtask/src/exclusions.rs",
+      "native/xtask/src/fixture.rs",
+      "native/xtask/src/frontend.rs",
+      "native/xtask/src/jsx.rs",
+      "native/xtask/src/ledger.rs",
+      "native/xtask/src/main.rs",
+      "native/xtask/src/model.rs",
+      "native/xtask/src/paths.rs",
+      "native/xtask/src/persist.rs",
+      "native/xtask/src/python.rs",
+      "native/xtask/src/receipt.rs",
+      "native/xtask/src/rust_declarations.rs",
+      "native/xtask/src/scan.rs",
+      "native/xtask/src/syntax.rs",
+      "native/xtask/src/verify.rs",
+      "native/xtask/src/verify_checks.rs",
+      "native/xtask/tests/inventory.rs",
+      "native/xtask/tests/jsx.rs",
+      "native/xtask/tests/regressions.rs",
+      "native/xtask/tests/support/junction.ps1",
+      "native/xtask/tests/support/mod.rs",
+      "native/xtask/tests/verification.rs",
+      "tests/phase6/test_llm_validation.py",
+      "tests/phase6/test_report_cloud_exposure_gating.py",
+      "tests/webui/test_run_status.py"
+    ],
+    "revision": "cede061eb466d041a3f9c9032ea8a7a8a919dca1"
+  },
+  "counts": {
+    "collected": null,
+    "current_test_inventory_entries": 7470,
+    "executed": 0,
+    "failed": 0,
+    "passed": 0,
+    "skipped": 0,
+    "static_test_declarations": 7160
+  },
+  "dirty_paths_scope": "all_worktree_paths_except_generated_inventory_build_and_evidence",
+  "discovery": "static_only_no_imports_or_discovered_tests_executed",
+  "exclusions": [
+    {
+      "path": ".benchmarks",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".coverage",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": ".deepsource.toml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": ".dockerignore",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": ".env",
+      "reason": "secret_or_environment"
+    },
+    {
+      "path": ".env.example",
+      "reason": "secret_or_environment"
+    },
+    {
+      "path": ".forge_data",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".git",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".gitattributes",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": ".github/FUNDING.yml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": ".github/greetings.yml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": ".github/labels.yml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": ".gitignore",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": ".hypothesis",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/A10_killchain_5010.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_audit_a2a3_findings.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".kiro/_audit_a2a3_logs",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_codex_1001.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_codex_1001_v2.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_codex_1001_v3.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_codex_raw_response.md",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_codex_report.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_codex_report2.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_codex_run.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_kb_sync.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_kb_sync2.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_kb_sync3.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_kiro_report.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_prompt_1001.txt",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": ".kiro/_provider_smoke.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_provider_smoke_result.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".kiro/_pw_install.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_pytest_end.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_pytest_final.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_pytest_final2.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_retest_run.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_smoke_test_run.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_tool_test_run.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/_web_run.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/ghunt_bryan.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".kiro/hong-yi/2_crawl.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/hong-yi/3_hibp.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/hong-yi/4_harvest.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/hong-yi/4_harvest_retry.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/hong-yi/5_keyscan.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/hong-yi/6_report.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/hong-yi/killchain.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/hong-yi/killchain_v2.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/hong-yi/killchain_v3.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/smoke_1007.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/smoke_1009.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/smoke_1010.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/smoke_1011.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".kiro/smoke_test_results.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".kiro/specs/audit-cleanup-and-chaos/.config.kiro",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": ".kiro/specs/autonomous-security-platform/.config.kiro",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": ".kiro/tool_integration_results.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".mypy_cache",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".omo/boulder.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/evidence",
+      "reason": "generated_inventory_build_or_evidence"
+    },
+    {
+      "path": ".omo/plans/forge-full-rust-rewrite.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": ".omo/plans/plugin-boundary-remediation-progress.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": ".omo/plans/plugin-boundary-verification-complete.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5a7e28c2ffeNnTjZqe4OzfsGH.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5a7e303cffeS3jkhdVJD9dUe1.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5a7e3970ffeQtJ58mmtwFgDDA.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5a82fbaaffeybyVNKFFk1vluD.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5a8303a1ffepFSYPaPArINQUl.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5a898e0effel3f2Zlws0fIR4n.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5a899792ffedB1jQ3rBSeLTwH.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5a8ed3eaffeyzZYG19eFWwVTl.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5a8eec1effeESROgRh2JkiwRh.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5a8f0509ffe0ER5S9Ui48bwbL.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5dd34f3affek6tsIxqzyGbh0Q.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5dd353fdffec7RtP6VlyzLI0X.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5dd35befffe7EtvzkJrD4kFOv.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5dd36d39ffeE0ApqupYqBVCHi.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5dd37ad7ffezPqPsNn5TVaw7R.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5dd38cb2ffeyYOpCyrVjeh0Ja.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5f773148ffeH1cBCxo6AamHta.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5f7733cbffeWqiUHg1JwxhA6w.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f5f780516ffedcyBbZvmHr6pHh.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f61675ce7ffe8y4YyRi7xw2b5Y.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f7106d9d4ffeQI4kuyUzfuDdYw.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f711cab35ffedTqEzME0p20Y45.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f71550053ffe78aPRcPKi6xwcG.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f71b840f3ffe7Ez2yzbzHPw1pL.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f71b860c7ffesIM0GWPsuoOYIC.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f71b88b65ffealyQdEpccGpIIx.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f71ba4cefffePQQOUTQsxAsrbC.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f71ba6df7ffeiNv6kFkK4GkSjS.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f72621f93ffeNZs5Nq28i3sDyb.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f72622eafffe3zitn8s9vQqEKu.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f7262491affetgLVzmai5r25Fo.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f72625bf0ffeVsA7n3IOsGEvtO.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f7262679effev45ArrDln7fndy.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f792a3da0ffefmYqv6IHQDAv2v.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f792a575effex7LqSam0DbeIjS.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f793044acffevPy4f672S5wWWZ.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f7a3fdf8fffemjsTta3QgN8rWn.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f7a403b8cffeyaQ7029SA3WS10.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f7a5bc6f9ffeZYtdiSnwarmqJN.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f7a773f97ffeoYCnpbIAPaJ1Eh.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f7a775072ffej3quZMuxL95nrk.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f7aa89889ffeHUXG6XUP3zUoOp.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f7aa8a467ffeW7VC17vTbhjxXP.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f7aafc463ffeYKrnGtg5X5Q5GA.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f81c770dfffeP6yCvjD0f1cQ2X.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f81c77701ffekxPvtK5hkZchZg.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f81c78e91ffeN2efAh2wvcTSaJ.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f81c7abc2ffeohSEZJGqOUYnXB.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f81ccd078ffeBCm479eV3JmLBE.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f81ccd663ffeQLYqpqGn1Si1Pv.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f81ccf2baffeyQxdjHnvA1mMA1.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f81ccfa47ffe4LA3SAsPHip4D8.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f8f551ac0ffeS06ItZifQokmHz.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f8f551ff1ffekkg0bQuPeZB3hg.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f93702072ffeZmVET4R35sqBad.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f937a48d0ffeIgnuFuv3cJuQNT.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9515bef0ffeC6R1TGQpOHa8lE.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f951779e2ffeiUyj0fFHN0ryzZ.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f95195cfeffeSFRs8IW0YBMhUL.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f951964baffe4R22Ps9L3pftcn.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9519de51ffeDV8j0v4S234Tzf.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f961a0b7dffeS2e2GYITN0QnbP.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f962c36ddffexcCZZOWKCkimr8.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f98dd9e5fffeRtAPy2xZ342o4W.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9a11d946ffeoiXdEE3L6ReV3T.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ae10e86ffeplP2N2k5iuhh6A.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9aeeefc1ffeRTJKpOltKmNRWo.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9b0d3d81ffeg0NbMT2Bmch0BB.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9b375ef5ffet2c1lAhvzuSryb.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9cac0968ffei1fgyW5asKdi1N.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9cac0d87ffeklYNmSQDTUO72O.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9cac2ec4ffe3NyKs2jZ7k0cOF.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9cac30b9ffe7kkal1MYcTiDNa.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9cac9f38ffeH2rrNz8Q85AFwr.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9cac9f55ffeKsFNBA5vMx7rUr.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9cac9f64ffe6Q8bc9V8R5nxPw.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9cac9f7dffeTeIXiMI0XKTWv4.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9cac9f98ffePzCvuAhfeRxnYM.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9cae17b7ffeQHlgXbOaaZxNVy.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9cae5662ffeCNMnP4VMtSUI1D.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9cae70e1ffeNgPnL06J7yAs5Y.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9dacee7dffeBDWBXlH2NpAVgl.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9dacf61dffeYJtbapEBtvTXrw.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9dad42f2ffe8muZEmSG3J3mPy.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9dad4469ffeW3cZJUR2yAKSwV.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9dadf4b6fferiAdtuH7LIfgo2.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9dadf4dbffeCVcZttCkxEKeN4.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9dae30dfffe6Ftv51Cebnw6Iu.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9dae4c95ffeCKVWIJCvPTQD8z.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9dae66b9ffeUeWcjIjOERVTkU.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9dae8446ffe2VqbQtpUoVq1PY.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ec6ba3bffeunVnEqTO05995D.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ec6bbe4ffeTkrW61mY8LnYAk.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ec6fbe4ffe5nnB7u7DMv7b7Q.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ec6febfffeHLUXpcm8vYKlz5.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ec70f5effeUpgcKUo4sbpM7C.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ec7119cffeLHTvXtyvuMiT2F.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ec8fb2dffemBVuO9e8qL60vu.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ec8fb38ffeQ2ZpD5IPtnaPhQ.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ec8fb68ffe2KdoqqM9cH997M.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ec8fb78ffeM6UYF8uh6yZCei.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ec8fb85ffesCVrSBDS4SfLC5.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9ec8fba0ffeqsIoUb1CKopIAB.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9eca0e42ffei7PnRXlhKXi9yN.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_f9eca5d09ffexmM11g492mptOE.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa0492eadffeKU0Sdom3xJLGnV.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa049a75bffeORqkOOcPoqXWeb.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa04a2df1ffe1ct9hjJp4osdPb.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa04a6e6cffeNWVMOn9I68KybZ.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa29cd70affe2Rq6ZYC3UvuERT.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa29d1c41ffeqNOOKyGpgZUJYC.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa29e8b45ffePf9JBtznho6HFo.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa29ed122ffeiCRC7zi7g2qbz6.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa29fa667ffe93oqgK3a5uqJ3s.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa2a034f4ffe4jnOzBT2t53Z1F.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa3d33eabffeKCrFFHPDwMPKiJ.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa3eeab94ffeG5jEfWS7i8nZjZ.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa3eeabc8ffeee027A3HSSSVk7.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa3ef3eabffeRHzO46s1B8jvSL.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa3ef729bffeQTrthDuZPzYetl.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa3ef72e1ffenoieJeWF7fve1V.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa3eff3b4ffe20s4VCXUHk2oKF.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa3f059c2ffe0VUdpM0G0XtECW.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa47ecfa5ffeSbQdcFVKCa2b0P.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa47edd59ffez6eQaXjVOk2W0Q.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa47f0028ffexGLwlTk6TCS790.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa47f6b8cffeMGhfgjVgLAgjGc.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa47f8116ffegIs3q5o5qsrKE2.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa47f9a2fffeP8JKWk2eghj52m.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa47fb32bffebAKUmOsHGrK9Kr.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa47fe124ffezbpGfTP0ADbTt6.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa47fe14bffePDMUDu2ecV5UiN.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa48073d9ffefPHTIdK5Z9DZIj.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa48090bbffeLTg8PH75bmNU2D.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa480a52cffeXacWnxBtlCGyGd.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa52291c7ffesSYjrh4IhZuu4b.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa522aed3ffeQmygTGajUAwue1.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa522c653ffeU2sDFSyp10wH60.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa522c673ffeu39ExAQ6wpZI4F.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa5237863ffeqzCzaA1vuWMlPC.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa5241060ffekyFoL1JMg5vZdR.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa52479b3ffeqSjookJzTiz2W9.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa524b5c3ffedVA6u1PmXNzGCO.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa524e08affeXRdclXw85qM5QR.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa5cc3b4effeT3tZhgNPxjfWqb.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa5cd8a1dffe2gU1hZE2fA657Y.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa5cddaf5ffeK2hy2IT1Po18RS.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa77bf3e9ffeWtrVWAXK6xK5a1.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa7973d5effe3wYFM7Ol7hQeIu.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa7973e06ffe6wySE7AerZJ5YY.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa7973e46ffe2370E94iK69qme.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa7982b0affeFqFG0uulMXeU5N.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa798a226ffe5tVYomxmLxzlrs.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fa9cc86d3ffem8MXFAwBhYVSD3.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca80be7ffeRAHh7LoWvIjsA4.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca80d30ffe5T3KjI04LSbX8x.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca83a8effe7lSsJ4diQdOwsi.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca83c7fffenznEYLkG6AUi6k.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca857cdffeyrwSMkcMtD8hF4.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca859acffezJZcV6gU9QDqpg.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca873c1ffeQsqBebA7jPTdmE.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca874b5ffecya61yYRBKOTG4.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca875bbffe8pxPrH7B6E0ll8.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca876a2ffeZ0Iovq7XTUavgw.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca877d6ffepSzC8GncHNecJl.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca87806ffez3PjcC76JebW5p.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca87986ffeYlyOoUPUoSDTcV.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca87a0dffeQIaBRe3KubZPpQ.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca87a89ffeQZytMzxY1EyZ0U.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca87b4affepT4D4Y8nQmu8n9.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faca87b78ffeH1SL9x4au5WOo3.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_facaf83dbffe7ufLPHqASITPXJ.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_fada8358affeSN1uhp9SYuvVaS.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/run-continuation/ses_faf9a3b44ffejl1jxNyClpBbtt.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": ".omo/start-work/ledger.jsonl",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".omo/start-work/task-1-resume.stderr.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".omo/start-work/task-1-resume.stdout.jsonl",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".omo/start-work/task-1-worker-result.txt",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": ".omo/start-work/task-1-worker.stderr.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".omo/start-work/task-1-worker.stdout.jsonl",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".omo/start-work/task-1-worker.txt",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": ".pytest_cache",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".ruff_cache",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".sourcery.yml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": ".tmp",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".tmp-smoke-supabase-secretref",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".tmp_target_import_repro",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": ".venv",
+      "reason": "vendor_or_runtime"
+    },
+    {
+      "path": "FORGE_OBFUSCATION_PLAN.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "LICENSE",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "NOTICE",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "_audit_logs",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "alembic.ini",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "alembic/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "alembic/script.py.mako",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "alembic/versions/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "archive/ghunt-companion-extension",
+      "reason": "archived_external_runtime_bundle"
+    },
+    {
+      "path": "archived_logs",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "data",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "docker/Dockerfile",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/docker-compose.dev.yml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/docker-compose.test.yml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/docker-compose.yml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/Chart.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/templates/_helpers.tpl",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "docker/helm/forge/templates/configmap.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/templates/deployment-api.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/templates/deployment-webui.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/templates/deployment-worker.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/templates/externalsecret.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/templates/ingress.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/templates/networkpolicy.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/templates/pvc.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/templates/secret.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/templates/service.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/values.production-example.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/helm/forge/values.yaml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "docker/low-memory.env.example",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "docker/reverse-proxy/Caddyfile",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "docker/reverse-proxy/nginx.conf",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "docker/systemd/forge-compose.service",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "downloads",
+      "reason": "vendor_or_runtime"
+    },
+    {
+      "path": "forge-autonomous-target-loop-plan.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge-competitive-upgrade-plan.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge-consolidated-upgrade-plan.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge-montysecurity-upgrade-plan.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge-specterops-competitive-upgrade-plan.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/active_validation/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/agents/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/api/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/api/routes/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/audit/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/auth/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/bus/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/c2/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/cli_commands/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/cloud/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/collection/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/collection/cloud/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/collection/sessions/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/connectors/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/contracts/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/core/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/db/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/distributed/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/governance/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/graph/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/hardening/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/hybrid/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/ingestion/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/ingestion/parsers/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/ingestion/schemas/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/kerberos/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/models/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/monitoring/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/opsec/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/orchestration/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/phase0/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/phase1/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/phase2/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/phase2/data",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/phase3/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/phase3/templates/.gitkeep",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "forge/phase3/templates/bash_reverse.j2",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/phase3/templates/html_smuggle.j2",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/phase3/templates/powershell_reverse.j2",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/phase3/templates/powershell_tls_reverse.j2",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/phase3/templates/python_reverse.j2",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/phase3/templates/python_tls_reverse.j2",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/phase4/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/phase5/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/phase6/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/plugins/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/plugins/migrated/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/plugins/schemas/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/post_exploitation/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/providers/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/remediation/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/report/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/reporting/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/reporting/webui/.gitignore",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/.oxlintrc.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/.vite-logs/dev-5179.err.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/reporting/webui/.vite-logs/dev-5179.out.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/reporting/webui/dist",
+      "reason": "vendor_or_runtime"
+    },
+    {
+      "path": "forge/reporting/webui/index.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/node_modules",
+      "reason": "vendor_or_runtime"
+    },
+    {
+      "path": "forge/reporting/webui/package-lock.json",
+      "reason": "vendor_or_runtime"
+    },
+    {
+      "path": "forge/reporting/webui/public/favicon.svg",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/public/icons.svg",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/src/App.css",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/src/assets/hero.png",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/src/assets/react.svg",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/src/assets/vite.svg",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/src/components/QualityWidget.css",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/src/index.css",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/tsconfig.app.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/tsconfig.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/tsconfig.node.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": "forge/reporting/webui/vite-dev.err.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/reporting/webui/vite-dev.out.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/retention/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/secrets/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/security/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/standards/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/tools/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/utils/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/utils/intel/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/utils/intel/auth_adapters/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/utils/intel/data",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/utils/playbooks/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/utils/post/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/utils/post/channels/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/utils/post/collectors/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/utils/post/staging/.gitkeep",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "forge/webui/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge/webui/static/graphology/LICENSE.txt",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/static/graphology/SHA256SUMS.txt",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/static/graphology/VERSION.txt",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/static/graphology/graphology.umd.min.js.map",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "forge/webui/static/sigma/LICENSE.txt",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/static/sigma/SHA256SUMS.txt",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/static/sigma/VERSION.txt",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/templates/dashboard.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/templates/htmx/_tab_strip.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/templates/htmx/base.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/templates/htmx/tabs/audit.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/templates/htmx/tabs/findings.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/templates/htmx/tabs/graph.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/templates/htmx/tabs/overview.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/templates/htmx/tabs/report.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/webui/templates/htmx/tabs/seeds.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "forge/workflow/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "forge_core.pyd",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "forge_primary_secret.key",
+      "reason": "secret_or_environment"
+    },
+    {
+      "path": "forge_toolkit.egg-info",
+      "reason": "vendor_or_runtime"
+    },
+    {
+      "path": "imports",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "last_sync.txt",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "latest_logs",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "manifests/default.json",
+      "reason": "non_manifest_json_contents_not_read"
+    },
+    {
+      "path": "native/.gitignore",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "native/Cargo.lock",
+      "reason": "vendor_or_runtime"
+    },
+    {
+      "path": "native/migration",
+      "reason": "generated_inventory_build_or_evidence"
+    },
+    {
+      "path": "native/rust-toolchain.toml",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "native/target",
+      "reason": "generated_inventory_build_or_evidence"
+    },
+    {
+      "path": "obfuscated",
+      "reason": "vendor_or_runtime"
+    },
+    {
+      "path": "plan.html",
+      "reason": "opaque_contents_not_read"
+    },
+    {
+      "path": "plugin_events_audit.jsonl",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "pyarmor.bug.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "reports",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "rust_core/Cargo.lock",
+      "reason": "vendor_or_runtime"
+    },
+    {
+      "path": "rust_core/target",
+      "reason": "vendor_or_runtime"
+    },
+    {
+      "path": "scripts/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "scripts/scheduled/.gitignore",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "scripts/scheduled/forge_guarded_autostart.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "scripts/scheduled/forge_guarded_autostart.stderr.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "scripts/scheduled/forge_guarded_autostart.stdout.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "scripts/scheduled/forge_remediation_ticket_status_import.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "scripts/scheduled/forge_tph_import.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "scripts/scheduled/forge_tph_import.stderr.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "scripts/scheduled/forge_tph_import.stdout.log",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/active_validation/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/audit/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/automation/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/cart_readiness/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/cassettes/login_probe/.gitkeep",
+      "reason": "binary_or_unsupported_artifact_not_read"
+    },
+    {
+      "path": "tests/chaos/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/cli/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/collection/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/collection/cloud/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/collection/sessions/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/connectors/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/core/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/db/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/demo/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/distributed/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/e2e/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/governance/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/graph/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/hardening/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/ingestion/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/integration/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/monitoring/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/opsec/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/orchestration/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/orchestrator/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/performance/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/phase0/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/phase1/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/phase2/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/phase3/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/phase4/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/phase5/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/phase6/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/plugins/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/plugins/migrated/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/post/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/properties/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/providers/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/remediation/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/report/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/reporting/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/retention/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/scripts/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/secrets/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/security/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/standards/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/unit/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/utils/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/webui/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tests/workflow/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "tools/__pycache__",
+      "reason": "database_log_cache_or_private_runtime"
+    },
+    {
+      "path": "vendor",
+      "reason": "vendor_or_runtime"
+    }
+  ],
+  "schema_version": 2
+}

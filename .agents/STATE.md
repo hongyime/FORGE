@@ -1,6 +1,15 @@
-# Current Task: Complete Rust rewrite — native inventory code published; T1 cleanup blocked
+# Current Task: Complete Rust rewrite — T2 baseline accounting; T1 closure blockers retained
 
-**Status:** BLOCKED at T1 closure | Native checkpoint: `5b7b82e` | Date: 2026-09-16
+**Status:** IN PROGRESS on T2; T1 closure still blocked | Native checkpoint: `5b7b82e` | Date: 2026-09-16
+
+## Current worker progress
+
+- T2 worker added baseline accounting and real pytest adapters; its bounded run passed 29 agent tests and observed 3,318 case IDs, with 3,289 blocked and incomplete collection for 492 of 499 required Python files. These are partial observed counts, not full-suite totals. Missing Vitest/Rust/CI adapters and cleanup are still open.
+- Independent T2 reviewer reran 34 native tests/fmt/Clippy and found three real defects: duplicate node IDs could overwrite a failure with a pass, attempts could exceed the total budget, and root conftest changes were absent from input hashes. Fix worker is assigned exact reproductions; code is not committed or task-complete.
+- T3 domain worker is separately mapping 118 type/table entries and implementing a standalone `native/crates/forge-domain/` increment. It must not alter shared root manifests until integration is coordinated. Root integration, wider type/schema parity and independent verification remain pending. Heavy QA is serialized by a named mutex.
+- Codex reached its account usage limit. The subsequent recovery team was shut down after partial corrections; all edits preserved. Fresh Bedrock GPT workers then completed T2 corrective checks (48 native tests/fmt/Clippy plus failure/deadline/hash CLI proofs) and identified a partial Rustup installation blocking T3 verification. Independent T2 review remains required before commit.
+- Standard `rustup toolchain install 1.94.1 --profile minimal --component rustfmt --component clippy` recovered the partial installation. Installed-component listing and pinned rustc/cargo version probes now pass. This repaired build tooling, not the still-unavailable LSP service. T3 verification is resuming against the existing standalone crate; full type coverage and root integration remain open.
+- Remaining frontend collector detail verified in official docs: Vitest 5 `list` parses statically by default; runtime collection requires `--no-static-parse`. Static listings must not become executed/fully collected test counts. Reference details are recorded under `.omo/start-work/task-2-adapter-notes.txt`.
 
 ## Active approved migration (do not discard)
 
@@ -10,6 +19,7 @@
 - Automatic approval denied fixture cleanup for `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01`; both remain as tracked owned QA data. No denied deletion was retried or bypassed. Ask for explicit permission for those exact paths before retrying.
 - LSP diagnostics were unavailable: the parent daemon timed out twice; compiler/Clippy success is recorded separately. All owned Codex worker/verification wrapper PIDs were absent in the final process check; review team was shut down and deleted.
 - T1 remains unchecked; T2-T36 and F1-F4 are not complete. Do not label this checkpoint a full Rust rewrite or all-test-suite completion. Existing T1 stable-ID requirement already covered the confirmed bug; regression tests now enforce it without a new normative ASM invariant.
+- Continued read-only diagnosis: LSP daemon log shows Rustup component downloads; stable toolchain has no `rust-analyzer` binary/component. No installation/config changes or denied cleanup retries performed. Plan scheduling now allows T2/T3 to consume independently accepted T1 code while its cleanup/diagnostic closure stays open; final acceptance criteria are unchanged.
 - Existing task-2 baseline repair commits from the other session (`ce98f44`, `bb6d85d`, `90b0231`) are preserved; reported results below do not close full native migration or all-test accounting.
 - TPH stopped-set/restoration obligation remains in plan task 36. Current runtime checked directly: API 8000 and web 8080 health endpoints returned `status: ok`; production API/web/Postgres/Redis containers healthy and worker container running. These are the existing Python-based services, not Rust cutover proof.
 
@@ -57,12 +67,12 @@
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-16 03:05:27 +08:00
+- Updated: 2026-09-16 05:43:10 +08:00
 - Machine: PRAWN-E14
 - Harness: codex
 - Event: session-start
 - Branch: main
-- HEAD: 35cad10
-- Dirty files: 1
+- HEAD: 260d923
+- Dirty files: 16
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
