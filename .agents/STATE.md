@@ -1,21 +1,20 @@
-# Current Task: Complete Rust rewrite — T2 baseline accounting; T1 closure blockers retained
+# Current Task: Complete Rust rewrite — T3 native checkpoint published
 
-**Status:** IN PROGRESS; native workspace integrated | Code checkpoint: `91e79bb` | Date: 2026-09-16
+**Status:** IN PROGRESS; native workspace integrated | Latest pushed: `37cf5c4` | Date: 2026-09-16
 
 ## Current worker progress
 
-- User asked to pull latest main and reduce delay. `git fetch origin main` and `git pull --ff-only origin main` confirmed current `69dc11b`, including `486c344` which committed domain/baseline code and generated migration ledgers. Only state/journal edits were local. Do not redo these implementations or describe them as untracked.
-- Current T2 corrective increment independently confirmed: 48 native tests, fmt/Clippy, repeated-failure retention, remaining deadline and config-hash CLI checks pass (`task-2/adversarial-verify-final.json`). Full baseline remains incomplete.
-- Current T3 scoped verification passed: 20 consumer tests and 2 doctests after normal Rustup repair (`task-3/done-claim-final-verified.json`). Source implementation stayed unchanged in the fresh verification. Full 118-entry type/table parity remains incomplete.
-- Root workspace integration was verified and pushed in `91e79bb`: `native/Cargo.toml` includes both crates; root lockfile adds only the domain package, with no dependency version changes. Metadata RED/GREEN and member-entry checks passed; root fmt/Clippy and **48 xtask + 20 domain consumer + 2 doctests** passed. Nested domain lockfile retained unchanged. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`.
+- Verified native checkpoint: `cargo test --workspace --locked --offline --jobs 1 -- --test-threads=1` passed 118 tests/doctests (68 domain + 2 doctests + 48 xtask), 0 failures, 0 ignored. Evidence: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/parent-workspace-final.json` and `.log`.
+- Scoped independent reviewer ses_f55a27f13ffe2J6r6558QASYQM APPROVED pending fixture canonicalization and test-budget changes; read-only, no blockers. Scoped checkpoint only — not an F1–F4 review pass.
+- T3 domain ledger: 118 entries total. 26 `implemented_fixture_verified` (24 DTOs + 2 agent contracts); 22 `existing_partial`; 66 `reference_only` (storage/runtime/other-task scope); 3 `blocked_policy_conflict` (`DehashedResult.password`, `HashCredential.hash_plaintext`, `KeyScannerFinding.key_prefix`); 1 `blocked_dependency` (`HashCredentialSet`). Full type/table parity remains open.
+- Published commits: `a446679` (portable fixtures), `f8a9361` (typed records), `5e12b89` (canonical LF fixture metadata and integrity guard), `37cf5c4` (functional baseline attempt budget 120 s). All pushed to origin/main.
+- LSP timed out again; not clean-claimed. Compiler, Clippy (warnings denied), and fmt pass recorded in fixture-canonicalization evidence.
 
-- T2 worker added baseline accounting and real pytest adapters; its bounded run passed 29 agent tests and observed 3,318 case IDs, with 3,289 blocked and incomplete collection for 492 of 499 required Python files. These are partial observed counts, not full-suite totals. Missing Vitest/Rust/CI adapters and cleanup are still open.
-- Earlier independent T2 review found three defects after 34 tests; fresh workers fixed them and independent 48-test verification now confirms the corrective increment. Preserve earlier failure evidence; it is historical, not the current code verdict.
-- The domain increment is now part of the root workspace. Wider type/schema parity remains pending; do not recreate the standalone workspace or redo the verified integration. Heavy QA is serialized by a named mutex.
-- Codex reached its account usage limit. The subsequent recovery team was shut down after partial corrections; all edits preserved. Fresh Bedrock GPT workers completed T2 corrections and independent review, then completed T3 scoped verification after the Rustup repair. Avoid repeating completed slices; focus next on unresolved test adapters/full collection and missing domain models.
-- Standard `rustup toolchain install 1.94.1 --profile minimal --component rustfmt --component clippy` recovered the partial installation. Installed-component listing and pinned rustc/cargo version probes pass. This repaired build tooling, not the still-unavailable LSP service. Full domain coverage remains open; root integration is complete.
-- Remaining frontend collector detail verified in official docs: Vitest 5 `list` parses statically by default; runtime collection requires `--no-static-parse`. Static listings must not become executed/fully collected test counts. Reference details are recorded under `.omo/start-work/task-2-adapter-notes.txt`.
-
+- T2 corrective increment independently confirmed: 48 native tests, fmt/Clippy, repeated-failure retention and deadline checks pass (`task-2/adversarial-verify-final.json`). Full baseline (live/provider/operator-state lanes) remains incomplete.
+- Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
+- Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
+- Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
+- **Next action:** missing baseline adapters and remaining domain parity. No T3 completion claim.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
@@ -72,12 +71,12 @@
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-16 09:27:46 +08:00
+- Updated: 2026-09-16 (post-publish)
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 69dc11b
-- Dirty files: 0
+- HEAD: 37cf5c4
+- Dirty files: 3 (docs unit staged for commit)
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
