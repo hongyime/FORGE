@@ -1,20 +1,25 @@
 # Current Task: Complete Rust rewrite — T2 baseline accounting; T1 closure blockers retained
 
-**Status:** IN PROGRESS on T2; T1 closure still blocked | Native checkpoint: `5b7b82e` | Date: 2026-09-16
+**Status:** IN PROGRESS; native workspace integrated | Code checkpoint: `91e79bb` | Date: 2026-09-16
 
 ## Current worker progress
 
+- User asked to pull latest main and reduce delay. `git fetch origin main` and `git pull --ff-only origin main` confirmed current `69dc11b`, including `486c344` which committed domain/baseline code and generated migration ledgers. Only state/journal edits were local. Do not redo these implementations or describe them as untracked.
+- Current T2 corrective increment independently confirmed: 48 native tests, fmt/Clippy, repeated-failure retention, remaining deadline and config-hash CLI checks pass (`task-2/adversarial-verify-final.json`). Full baseline remains incomplete.
+- Current T3 scoped verification passed: 20 consumer tests and 2 doctests after normal Rustup repair (`task-3/done-claim-final-verified.json`). Source implementation stayed unchanged in the fresh verification. Full 118-entry type/table parity remains incomplete.
+- Root workspace integration was verified and pushed in `91e79bb`: `native/Cargo.toml` includes both crates; root lockfile adds only the domain package, with no dependency version changes. Metadata RED/GREEN and member-entry checks passed; root fmt/Clippy and **48 xtask + 20 domain consumer + 2 doctests** passed. Nested domain lockfile retained unchanged. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`.
+
 - T2 worker added baseline accounting and real pytest adapters; its bounded run passed 29 agent tests and observed 3,318 case IDs, with 3,289 blocked and incomplete collection for 492 of 499 required Python files. These are partial observed counts, not full-suite totals. Missing Vitest/Rust/CI adapters and cleanup are still open.
-- Independent T2 reviewer reran 34 native tests/fmt/Clippy and found three real defects: duplicate node IDs could overwrite a failure with a pass, attempts could exceed the total budget, and root conftest changes were absent from input hashes. Fix worker is assigned exact reproductions; code is not committed or task-complete.
-- T3 domain worker is separately mapping 118 type/table entries and implementing a standalone `native/crates/forge-domain/` increment. It must not alter shared root manifests until integration is coordinated. Root integration, wider type/schema parity and independent verification remain pending. Heavy QA is serialized by a named mutex.
-- Codex reached its account usage limit. The subsequent recovery team was shut down after partial corrections; all edits preserved. Fresh Bedrock GPT workers then completed T2 corrective checks (48 native tests/fmt/Clippy plus failure/deadline/hash CLI proofs) and identified a partial Rustup installation blocking T3 verification. Independent T2 review remains required before commit.
-- Standard `rustup toolchain install 1.94.1 --profile minimal --component rustfmt --component clippy` recovered the partial installation. Installed-component listing and pinned rustc/cargo version probes now pass. This repaired build tooling, not the still-unavailable LSP service. T3 verification is resuming against the existing standalone crate; full type coverage and root integration remain open.
+- Earlier independent T2 review found three defects after 34 tests; fresh workers fixed them and independent 48-test verification now confirms the corrective increment. Preserve earlier failure evidence; it is historical, not the current code verdict.
+- The domain increment is now part of the root workspace. Wider type/schema parity remains pending; do not recreate the standalone workspace or redo the verified integration. Heavy QA is serialized by a named mutex.
+- Codex reached its account usage limit. The subsequent recovery team was shut down after partial corrections; all edits preserved. Fresh Bedrock GPT workers completed T2 corrections and independent review, then completed T3 scoped verification after the Rustup repair. Avoid repeating completed slices; focus next on unresolved test adapters/full collection and missing domain models.
+- Standard `rustup toolchain install 1.94.1 --profile minimal --component rustfmt --component clippy` recovered the partial installation. Installed-component listing and pinned rustc/cargo version probes pass. This repaired build tooling, not the still-unavailable LSP service. Full domain coverage remains open; root integration is complete.
 - Remaining frontend collector detail verified in official docs: Vitest 5 `list` parses statically by default; runtime collection requires `--no-static-parse`. Static listings must not become executed/fully collected test counts. Reference details are recorded under `.omo/start-work/task-2-adapter-notes.txt`.
 
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
-- `native/` is deliberate NEW SOURCE for the rewrite, not disposable build output. Source/manifests/tests were committed and pushed in `5b7b82e`; remote SHA matched. Only `native/target/` is build/cache output. Five generated `native/migration/*.json` ledgers remain local/untracked; regenerate/reconcile against the current revision before relying on their snapshot counts.
+- `native/` is deliberate rewrite source, not disposable build output. Initial code shipped in `5b7b82e`; domain/baseline code and five migration ledgers were committed by the parallel session in `486c344`. Regenerate/reconcile ledger snapshots before relying on counts; code and ledger completion remain different claims.
 - Stable-ID/owner regression was reproduced independently, fixed with six new failing-first regressions, and reverified independently. **28/28 native tests**, fmt, Clippy, fixture CLI verification and ID/owner/rescan checks pass. Final code verdict: **confirmed** in `.omo/evidence/rust-rewrite/task-1/adversarial-verify-final.json`; full T1 verdict still incomplete. Three config files received trailing-blank-line-only cleanup after review; no behavior changed.
 - Automatic approval denied fixture cleanup for `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01`; both remain as tracked owned QA data. No denied deletion was retried or bypassed. Ask for explicit permission for those exact paths before retrying.
 - LSP diagnostics were unavailable: the parent daemon timed out twice; compiler/Clippy success is recorded separately. All owned Codex worker/verification wrapper PIDs were absent in the final process check; review team was shut down and deleted.
@@ -67,12 +72,12 @@
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-16 02:30:00 +08:00
+- Updated: 2026-09-16 09:27:46 +08:00
 - Machine: PRAWN-E14
-- Harness: opencode
+- Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 486c344
+- HEAD: 69dc11b
 - Dirty files: 0
-- Resume hint: Read .agents/STATE.md, then .agents/JOURNAL.md for recent decisions.
+- Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
