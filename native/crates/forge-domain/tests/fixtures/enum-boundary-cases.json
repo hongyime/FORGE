@@ -1,0 +1,1491 @@
+{
+  "schema": "forge.domain.enum-boundary.v1",
+  "python_version": "3.12.10",
+  "pydantic_version": "2.10.4",
+  "generator": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/enum-boundary-fixtures.py",
+  "policy": "Captured synthetic expectations only; Rust tests neither read .omo nor invoke Python.",
+  "enums": [
+    {
+      "ledger_id": "forge/models/pydantic_models.py:BreachSource",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::BreachSource",
+      "variants_in_order": [
+        "local_breach",
+        "dehashed",
+        "xposedornot",
+        "hibp",
+        "manual"
+      ],
+      "cases": [
+        {
+          "input": "local_breach",
+          "accepted": true,
+          "canonical": "local_breach"
+        },
+        {
+          "input": "dehashed",
+          "accepted": true,
+          "canonical": "dehashed"
+        },
+        {
+          "input": "xposedornot",
+          "accepted": true,
+          "canonical": "xposedornot"
+        },
+        {
+          "input": "hibp",
+          "accepted": true,
+          "canonical": "hibp"
+        },
+        {
+          "input": "manual",
+          "accepted": true,
+          "canonical": "manual"
+        },
+        {
+          "input": "LOCAL_BREACH",
+          "accepted": false
+        },
+        {
+          "input": " local_breach",
+          "accepted": false
+        },
+        {
+          "input": "local_breach ",
+          "accepted": false
+        },
+        {
+          "input": "\tlocal_breach",
+          "accepted": false
+        },
+        {
+          "input": " local_breach",
+          "accepted": false
+        },
+        {
+          "input": "LOCAL",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/pydantic_models.py:ValidationService",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::ValidationService",
+      "variants_in_order": [
+        "ssh",
+        "http",
+        "rdp",
+        "smb",
+        "ftp",
+        "dbms"
+      ],
+      "cases": [
+        {
+          "input": "ssh",
+          "accepted": true,
+          "canonical": "ssh"
+        },
+        {
+          "input": "http",
+          "accepted": true,
+          "canonical": "http"
+        },
+        {
+          "input": "rdp",
+          "accepted": true,
+          "canonical": "rdp"
+        },
+        {
+          "input": "smb",
+          "accepted": true,
+          "canonical": "smb"
+        },
+        {
+          "input": "ftp",
+          "accepted": true,
+          "canonical": "ftp"
+        },
+        {
+          "input": "dbms",
+          "accepted": true,
+          "canonical": "dbms"
+        },
+        {
+          "input": "SSH",
+          "accepted": false
+        },
+        {
+          "input": " ssh",
+          "accepted": false
+        },
+        {
+          "input": "ssh ",
+          "accepted": false
+        },
+        {
+          "input": "\tssh",
+          "accepted": false
+        },
+        {
+          "input": " ssh",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/pydantic_models.py:EngagementStatus",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::EngagementStatus",
+      "variants_in_order": [
+        "PREP",
+        "ACTIVE",
+        "COMPLETE",
+        "ARCHIVED"
+      ],
+      "cases": [
+        {
+          "input": "PREP",
+          "accepted": true,
+          "canonical": "PREP"
+        },
+        {
+          "input": "ACTIVE",
+          "accepted": true,
+          "canonical": "ACTIVE"
+        },
+        {
+          "input": "COMPLETE",
+          "accepted": true,
+          "canonical": "COMPLETE"
+        },
+        {
+          "input": "ARCHIVED",
+          "accepted": true,
+          "canonical": "ARCHIVED"
+        },
+        {
+          "input": "prep",
+          "accepted": false
+        },
+        {
+          "input": " PREP",
+          "accepted": false
+        },
+        {
+          "input": "PREP ",
+          "accepted": false
+        },
+        {
+          "input": "\tPREP",
+          "accepted": false
+        },
+        {
+          "input": " PREP",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/pydantic_models.py:OsFamily",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::OsFamily",
+      "variants_in_order": [
+        "windows",
+        "linux",
+        "macos",
+        "unknown"
+      ],
+      "cases": [
+        {
+          "input": "windows",
+          "accepted": true,
+          "canonical": "windows"
+        },
+        {
+          "input": "linux",
+          "accepted": true,
+          "canonical": "linux"
+        },
+        {
+          "input": "macos",
+          "accepted": true,
+          "canonical": "macos"
+        },
+        {
+          "input": "unknown",
+          "accepted": true,
+          "canonical": "unknown"
+        },
+        {
+          "input": "WINDOWS",
+          "accepted": false
+        },
+        {
+          "input": " windows",
+          "accepted": false
+        },
+        {
+          "input": "windows ",
+          "accepted": false
+        },
+        {
+          "input": "\twindows",
+          "accepted": false
+        },
+        {
+          "input": " windows",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/pydantic_models.py:Severity",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::Severity",
+      "variants_in_order": [
+        "CRITICAL",
+        "HIGH",
+        "MEDIUM",
+        "LOW",
+        "INFO"
+      ],
+      "cases": [
+        {
+          "input": "CRITICAL",
+          "accepted": true,
+          "canonical": "CRITICAL"
+        },
+        {
+          "input": "HIGH",
+          "accepted": true,
+          "canonical": "HIGH"
+        },
+        {
+          "input": "MEDIUM",
+          "accepted": true,
+          "canonical": "MEDIUM"
+        },
+        {
+          "input": "LOW",
+          "accepted": true,
+          "canonical": "LOW"
+        },
+        {
+          "input": "INFO",
+          "accepted": true,
+          "canonical": "INFO"
+        },
+        {
+          "input": "critical",
+          "accepted": false
+        },
+        {
+          "input": " CRITICAL",
+          "accepted": false
+        },
+        {
+          "input": "CRITICAL ",
+          "accepted": false
+        },
+        {
+          "input": "\tCRITICAL",
+          "accepted": false
+        },
+        {
+          "input": " CRITICAL",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/pydantic_models.py:VulnType",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::VulnType",
+      "variants_in_order": [
+        "IDOR",
+        "FIREBASE_MISCONFIG",
+        "SUPABASE_RLS"
+      ],
+      "cases": [
+        {
+          "input": "IDOR",
+          "accepted": true,
+          "canonical": "IDOR"
+        },
+        {
+          "input": "FIREBASE_MISCONFIG",
+          "accepted": true,
+          "canonical": "FIREBASE_MISCONFIG"
+        },
+        {
+          "input": "SUPABASE_RLS",
+          "accepted": true,
+          "canonical": "SUPABASE_RLS"
+        },
+        {
+          "input": "idor",
+          "accepted": false
+        },
+        {
+          "input": " IDOR",
+          "accepted": false
+        },
+        {
+          "input": "IDOR ",
+          "accepted": false
+        },
+        {
+          "input": "\tIDOR",
+          "accepted": false
+        },
+        {
+          "input": " IDOR",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/pydantic_models.py:KeyValidationState",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::KeyValidationState",
+      "variants_in_order": [
+        "ACTIVE",
+        "INVALID",
+        "UNVALIDATED",
+        "ERROR"
+      ],
+      "cases": [
+        {
+          "input": "ACTIVE",
+          "accepted": true,
+          "canonical": "ACTIVE"
+        },
+        {
+          "input": "INVALID",
+          "accepted": true,
+          "canonical": "INVALID"
+        },
+        {
+          "input": "UNVALIDATED",
+          "accepted": true,
+          "canonical": "UNVALIDATED"
+        },
+        {
+          "input": "ERROR",
+          "accepted": true,
+          "canonical": "ERROR"
+        },
+        {
+          "input": "active",
+          "accepted": false
+        },
+        {
+          "input": " ACTIVE",
+          "accepted": false
+        },
+        {
+          "input": "ACTIVE ",
+          "accepted": false
+        },
+        {
+          "input": "\tACTIVE",
+          "accepted": false
+        },
+        {
+          "input": " ACTIVE",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/pydantic_models.py:C2Channel",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::C2Channel",
+      "variants_in_order": [
+        "http",
+        "dns",
+        "smb",
+        "icmp"
+      ],
+      "cases": [
+        {
+          "input": "http",
+          "accepted": true,
+          "canonical": "http"
+        },
+        {
+          "input": "dns",
+          "accepted": true,
+          "canonical": "dns"
+        },
+        {
+          "input": "smb",
+          "accepted": true,
+          "canonical": "smb"
+        },
+        {
+          "input": "icmp",
+          "accepted": true,
+          "canonical": "icmp"
+        },
+        {
+          "input": "HTTP",
+          "accepted": false
+        },
+        {
+          "input": " http",
+          "accepted": false
+        },
+        {
+          "input": "http ",
+          "accepted": false
+        },
+        {
+          "input": "\thttp",
+          "accepted": false
+        },
+        {
+          "input": " http",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/pydantic_models.py:CommandTargetType",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::CommandTargetType",
+      "variants_in_order": [
+        "host",
+        "service",
+        "url",
+        "credential"
+      ],
+      "cases": [
+        {
+          "input": "host",
+          "accepted": true,
+          "canonical": "host"
+        },
+        {
+          "input": "service",
+          "accepted": true,
+          "canonical": "service"
+        },
+        {
+          "input": "url",
+          "accepted": true,
+          "canonical": "url"
+        },
+        {
+          "input": "credential",
+          "accepted": true,
+          "canonical": "credential"
+        },
+        {
+          "input": "HOST",
+          "accepted": false
+        },
+        {
+          "input": " host",
+          "accepted": false
+        },
+        {
+          "input": "host ",
+          "accepted": false
+        },
+        {
+          "input": "\thost",
+          "accepted": false
+        },
+        {
+          "input": " host",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/pydantic_models.py:CommandActionType",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::CommandActionType",
+      "variants_in_order": [
+        "scan_ports",
+        "crawl",
+        "content_discovery",
+        "vuln_scan",
+        "credential_test",
+        "exploit_attempt",
+        "brute_force_policy_check",
+        "share_enumeration"
+      ],
+      "cases": [
+        {
+          "input": "scan_ports",
+          "accepted": true,
+          "canonical": "scan_ports"
+        },
+        {
+          "input": "crawl",
+          "accepted": true,
+          "canonical": "crawl"
+        },
+        {
+          "input": "content_discovery",
+          "accepted": true,
+          "canonical": "content_discovery"
+        },
+        {
+          "input": "vuln_scan",
+          "accepted": true,
+          "canonical": "vuln_scan"
+        },
+        {
+          "input": "credential_test",
+          "accepted": true,
+          "canonical": "credential_test"
+        },
+        {
+          "input": "exploit_attempt",
+          "accepted": true,
+          "canonical": "exploit_attempt"
+        },
+        {
+          "input": "brute_force_policy_check",
+          "accepted": true,
+          "canonical": "brute_force_policy_check"
+        },
+        {
+          "input": "share_enumeration",
+          "accepted": true,
+          "canonical": "share_enumeration"
+        },
+        {
+          "input": "SCAN_PORTS",
+          "accepted": false
+        },
+        {
+          "input": " scan_ports",
+          "accepted": false
+        },
+        {
+          "input": "scan_ports ",
+          "accepted": false
+        },
+        {
+          "input": "\tscan_ports",
+          "accepted": false
+        },
+        {
+          "input": " scan_ports",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/pydantic_models.py:CommandRiskLevel",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::CommandRiskLevel",
+      "variants_in_order": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "cases": [
+        {
+          "input": "low",
+          "accepted": true,
+          "canonical": "low"
+        },
+        {
+          "input": "medium",
+          "accepted": true,
+          "canonical": "medium"
+        },
+        {
+          "input": "high",
+          "accepted": true,
+          "canonical": "high"
+        },
+        {
+          "input": "critical",
+          "accepted": true,
+          "canonical": "critical"
+        },
+        {
+          "input": "LOW",
+          "accepted": false
+        },
+        {
+          "input": " low",
+          "accepted": false
+        },
+        {
+          "input": "low ",
+          "accepted": false
+        },
+        {
+          "input": "\tlow",
+          "accepted": false
+        },
+        {
+          "input": " low",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/pydantic_models.py:CommandActionStatus",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::CommandActionStatus",
+      "variants_in_order": [
+        "suggested",
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "rolled_back"
+      ],
+      "cases": [
+        {
+          "input": "suggested",
+          "accepted": true,
+          "canonical": "suggested"
+        },
+        {
+          "input": "queued",
+          "accepted": true,
+          "canonical": "queued"
+        },
+        {
+          "input": "running",
+          "accepted": true,
+          "canonical": "running"
+        },
+        {
+          "input": "succeeded",
+          "accepted": true,
+          "canonical": "succeeded"
+        },
+        {
+          "input": "failed",
+          "accepted": true,
+          "canonical": "failed"
+        },
+        {
+          "input": "cancelled",
+          "accepted": true,
+          "canonical": "cancelled"
+        },
+        {
+          "input": "rolled_back",
+          "accepted": true,
+          "canonical": "rolled_back"
+        },
+        {
+          "input": "SUGGESTED",
+          "accepted": false
+        },
+        {
+          "input": " suggested",
+          "accepted": false
+        },
+        {
+          "input": "suggested ",
+          "accepted": false
+        },
+        {
+          "input": "\tsuggested",
+          "accepted": false
+        },
+        {
+          "input": " suggested",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/pydantic_models.py:CommandPolicyOutcome",
+      "python_source": "forge/models/pydantic_models.py",
+      "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+      "rust_type": "forge_domain::enums::CommandPolicyOutcome",
+      "variants_in_order": [
+        "auto_execute",
+        "queue",
+        "suggest",
+        "hidden",
+        "blocked"
+      ],
+      "cases": [
+        {
+          "input": "auto_execute",
+          "accepted": true,
+          "canonical": "auto_execute"
+        },
+        {
+          "input": "queue",
+          "accepted": true,
+          "canonical": "queue"
+        },
+        {
+          "input": "suggest",
+          "accepted": true,
+          "canonical": "suggest"
+        },
+        {
+          "input": "hidden",
+          "accepted": true,
+          "canonical": "hidden"
+        },
+        {
+          "input": "blocked",
+          "accepted": true,
+          "canonical": "blocked"
+        },
+        {
+          "input": "AUTO_EXECUTE",
+          "accepted": false
+        },
+        {
+          "input": " auto_execute",
+          "accepted": false
+        },
+        {
+          "input": "auto_execute ",
+          "accepted": false
+        },
+        {
+          "input": "\tauto_execute",
+          "accepted": false
+        },
+        {
+          "input": " auto_execute",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/attack_graph_models.py:NodeType",
+      "python_source": "forge/models/attack_graph_models.py",
+      "source_sha256": "5fb4a8ea71af08e8a23a823365cf7af1a7004e886b95cc3cdb90f456915aec1f",
+      "rust_type": "forge_domain::enums::NodeType",
+      "variants_in_order": [
+        "EXTERNAL",
+        "HOST",
+        "CREDENTIAL",
+        "EXPLOIT",
+        "VULN",
+        "CLOUD",
+        "APIKEY",
+        "IMPACT"
+      ],
+      "cases": [
+        {
+          "input": "EXTERNAL",
+          "accepted": true,
+          "canonical": "EXTERNAL"
+        },
+        {
+          "input": "HOST",
+          "accepted": true,
+          "canonical": "HOST"
+        },
+        {
+          "input": "CREDENTIAL",
+          "accepted": true,
+          "canonical": "CREDENTIAL"
+        },
+        {
+          "input": "EXPLOIT",
+          "accepted": true,
+          "canonical": "EXPLOIT"
+        },
+        {
+          "input": "VULN",
+          "accepted": true,
+          "canonical": "VULN"
+        },
+        {
+          "input": "CLOUD",
+          "accepted": true,
+          "canonical": "CLOUD"
+        },
+        {
+          "input": "APIKEY",
+          "accepted": true,
+          "canonical": "APIKEY"
+        },
+        {
+          "input": "IMPACT",
+          "accepted": true,
+          "canonical": "IMPACT"
+        },
+        {
+          "input": "external",
+          "accepted": false
+        },
+        {
+          "input": " EXTERNAL",
+          "accepted": false
+        },
+        {
+          "input": "EXTERNAL ",
+          "accepted": false
+        },
+        {
+          "input": "\tEXTERNAL",
+          "accepted": false
+        },
+        {
+          "input": " EXTERNAL",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/attack_graph_models.py:Severity",
+      "python_source": "forge/models/attack_graph_models.py",
+      "source_sha256": "5fb4a8ea71af08e8a23a823365cf7af1a7004e886b95cc3cdb90f456915aec1f",
+      "rust_type": "forge_domain::enums::Severity",
+      "variants_in_order": [
+        "CRITICAL",
+        "HIGH",
+        "MEDIUM",
+        "LOW",
+        "INFO"
+      ],
+      "cases": [
+        {
+          "input": "CRITICAL",
+          "accepted": true,
+          "canonical": "CRITICAL"
+        },
+        {
+          "input": "HIGH",
+          "accepted": true,
+          "canonical": "HIGH"
+        },
+        {
+          "input": "MEDIUM",
+          "accepted": true,
+          "canonical": "MEDIUM"
+        },
+        {
+          "input": "LOW",
+          "accepted": true,
+          "canonical": "LOW"
+        },
+        {
+          "input": "INFO",
+          "accepted": true,
+          "canonical": "INFO"
+        },
+        {
+          "input": "critical",
+          "accepted": false
+        },
+        {
+          "input": " CRITICAL",
+          "accepted": false
+        },
+        {
+          "input": "CRITICAL ",
+          "accepted": false
+        },
+        {
+          "input": "\tCRITICAL",
+          "accepted": false
+        },
+        {
+          "input": " CRITICAL",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "ledger_id": "forge/models/attack_graph_models.py:OutputFormat",
+      "python_source": "forge/models/attack_graph_models.py",
+      "source_sha256": "5fb4a8ea71af08e8a23a823365cf7af1a7004e886b95cc3cdb90f456915aec1f",
+      "rust_type": "forge_domain::enums::OutputFormat",
+      "variants_in_order": [
+        "mermaid",
+        "dot",
+        "json",
+        "maltego",
+        "all"
+      ],
+      "cases": [
+        {
+          "input": "mermaid",
+          "accepted": true,
+          "canonical": "mermaid"
+        },
+        {
+          "input": "dot",
+          "accepted": true,
+          "canonical": "dot"
+        },
+        {
+          "input": "json",
+          "accepted": true,
+          "canonical": "json"
+        },
+        {
+          "input": "maltego",
+          "accepted": true,
+          "canonical": "maltego"
+        },
+        {
+          "input": "all",
+          "accepted": true,
+          "canonical": "all"
+        },
+        {
+          "input": "MERMAID",
+          "accepted": false
+        },
+        {
+          "input": " mermaid",
+          "accepted": false
+        },
+        {
+          "input": "mermaid ",
+          "accepted": false
+        },
+        {
+          "input": "\tmermaid",
+          "accepted": false
+        },
+        {
+          "input": " mermaid",
+          "accepted": false
+        },
+        {
+          "input": "",
+          "accepted": false
+        },
+        {
+          "input": "unknown-value",
+          "accepted": false
+        },
+        {
+          "input": null,
+          "accepted": false
+        },
+        {
+          "input": 1,
+          "accepted": false
+        },
+        {
+          "input": 1.5,
+          "accepted": false
+        },
+        {
+          "input": true,
+          "accepted": false
+        },
+        {
+          "input": [],
+          "accepted": false
+        },
+        {
+          "input": {},
+          "accepted": false
+        }
+      ]
+    }
+  ]
+}

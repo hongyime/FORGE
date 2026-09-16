@@ -1,0 +1,25 @@
+{
+  "schema": "forge.domain.enum-boundary-fixtures.v1",
+  "file": "enum-boundary-cases.json",
+  "bytes": 32494,
+  "sha256": "6f898b18efb8f212fdfb0d0867a93ff1fbf46344e151f22879749979be62aefe",
+  "fixture_policy": "LF-only bytes; JSON values captured directly from Pydantic v2 TypeAdapter observations. bytes/sha256 describe shipped LF fixture bytes. Source hashes are historical provenance, not runtime dependencies.",
+  "generator": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/enum-boundary-fixtures.py",
+  "pydantic": "2.10.4",
+  "python": "3.12.10",
+  "enum_sections": 16,
+  "total_cases": 290,
+  "accepted_cases": 81,
+  "rejected_cases": 209,
+  "sources": [
+    {
+      "path": "forge/models/pydantic_models.py",
+      "sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968"
+    },
+    {
+      "path": "forge/models/attack_graph_models.py",
+      "sha256": "5fb4a8ea71af08e8a23a823365cf7af1a7004e886b95cc3cdb90f456915aec1f"
+    }
+  ],
+  "runtime": "Captured synthetic expectations only; Rust tests require neither Python nor .omo inputs."
+}
