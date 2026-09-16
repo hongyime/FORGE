@@ -1,20 +1,20 @@
-# Current Task: Complete Rust rewrite — T3 native checkpoint published
+# Current Task: Complete Rust rewrite — T3 enum-boundary checkpoint published
 
-**Status:** IN PROGRESS; native workspace integrated | Latest pushed: `37cf5c4` | Date: 2026-09-16
+**Status:** IN PROGRESS; native workspace integrated | Latest pushed: `d92464d` | Date: 2026-09-16
 
 ## Current worker progress
 
-- Verified native checkpoint: `cargo test --workspace --locked --offline --jobs 1 -- --test-threads=1` passed 118 tests/doctests (68 domain + 2 doctests + 48 xtask), 0 failures, 0 ignored. Evidence: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/parent-workspace-final.json` and `.log`.
-- Scoped independent reviewer ses_f55a27f13ffe2J6r6558QASYQM APPROVED pending fixture canonicalization and test-budget changes; read-only, no blockers. Scoped checkpoint only — not an F1–F4 review pass.
-- T3 domain ledger: 118 entries total. 26 `implemented_fixture_verified` (24 DTOs + 2 agent contracts); 22 `existing_partial`; 66 `reference_only` (storage/runtime/other-task scope); 3 `blocked_policy_conflict` (`DehashedResult.password`, `HashCredential.hash_plaintext`, `KeyScannerFinding.key_prefix`); 1 `blocked_dependency` (`HashCredentialSet`). Full type/table parity remains open.
-- Published commits: `a446679` (portable fixtures), `f8a9361` (typed records), `5e12b89` (canonical LF fixture metadata and integrity guard), `37cf5c4` (functional baseline attempt budget 120 s). All pushed to origin/main.
+- Verified enum-boundary checkpoint: `cargo test --workspace --locked --offline --jobs 1 -- --test-threads=1` passed 123 tests/doctests (73 domain + 2 doctests + 48 xtask), 0 failures, 0 ignored. Evidence: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/parent-enum-workspace-final.json` and `.log`.
+- Scoped independent reviewer ses_f55a27f13ffe2J6r6558QASYQM APPROVED enum-boundary increment after corrections (hard-coded variant check fixed; provenance counts corrected); read-only, no blockers. Scoped checkpoint only — not an F1–F4 review pass.
+- T3 domain ledger (LOCAL UNTRACKED — `native/migration/domain-contracts.json` not staged): 118 entries total. 42 `implemented_fixture_verified` (24 DTOs + 2 agent contracts + 16 enum sections/15 Rust types); 6 `existing_partial` (BreachRecord, AttackNode, AttackEdge, AttackGraph, AttackGraphReportContext, TaskState); 66 `reference_only`; 3 `blocked_policy_conflict` (`DehashedResult.password`, `HashCredential.hash_plaintext`, `KeyScannerFinding.key_prefix`); 1 `blocked_dependency` (`HashCredentialSet`). Full type/table parity remains open.
+- Published commits: `a446679` (portable fixtures), `f8a9361` (typed records), `5e12b89` (canonical LF fixture metadata and integrity guard), `37cf5c4` (functional baseline attempt budget 120 s), `d92464d` (enum boundary parity consumer and fixtures). All pushed to origin/main.
 - LSP timed out again; not clean-claimed. Compiler, Clippy (warnings denied), and fmt pass recorded in fixture-canonicalization evidence.
 
 - T2 corrective increment independently confirmed: 48 native tests, fmt/Clippy, repeated-failure retention and deadline checks pass (`task-2/adversarial-verify-final.json`). Full baseline (live/provider/operator-state lanes) remains incomplete.
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
 - Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
 - Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
-- **Next action:** missing baseline adapters and remaining domain parity. No T3 completion claim.
+- **Next action:** remaining partial domain contracts (BreachRecord, AttackNode/Edge/Graph, AttackGraphReportContext), missing baseline adapters. No T3 completion claim.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
@@ -71,12 +71,12 @@
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-16 (post-publish)
+- Updated: 2026-09-16 (post-enum-publish)
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 37cf5c4
-- Dirty files: 3 (docs unit staged for commit)
+- HEAD: d92464d
+- Dirty files: 8 LF-payload M entries + 1 untracked ledger (unchanged from prior session)
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
