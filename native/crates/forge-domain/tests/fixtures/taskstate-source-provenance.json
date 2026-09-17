@@ -1,0 +1,19 @@
+{
+  "schema": "forge.domain.taskstate-source-fixtures.v1",
+  "file": "taskstate-source.json",
+  "bytes": 3465,
+  "sha256": "ee96038aad5ef61f6e1f03bfd3366e9707e1615f8c7d151d820994214d3bf017",
+  "fixture_policy": "LF-only bytes captured from real dataclasses.asdict + json output. bytes/sha256 describe shipped fixture. Source hash is historical provenance only, never read at Rust test time.",
+  "generator": ".omo/evidence/rust-rewrite/task-3/taskstate-source/capture.py",
+  "python": "3.12.10",
+  "capture_method": "import forge.agents.base_plugin; dataclasses.asdict + json.dumps",
+  "constant_count": 4,
+  "case_count": 7,
+  "sources": [
+    {
+      "path": "forge/agents/base_plugin.py",
+      "sha256_lf": "00e5b9aa5d0e0f234711f54705542ba623b622088b41cda94d7f5b8706e4a3be"
+    }
+  ],
+  "runtime": "Rust tests read only the shipped fixture bytes; no Python or .omo access at test time."
+}

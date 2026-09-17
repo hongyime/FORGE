@@ -1,0 +1,131 @@
+{
+  "schema": "forge.domain.taskstate-source.v1",
+  "source": {
+    "module": "forge.agents.base_plugin",
+    "class_name": "TaskState",
+    "shape": "plain_class_namespace",
+    "is_enum": false,
+    "is_str_subclass": false,
+    "namespace_attrs": [
+      "COMPLETED",
+      "FAILED",
+      "PENDING",
+      "RUNNING"
+    ]
+  },
+  "constants": [
+    {
+      "name": "PENDING",
+      "value": "pending"
+    },
+    {
+      "name": "RUNNING",
+      "value": "running"
+    },
+    {
+      "name": "COMPLETED",
+      "value": "completed"
+    },
+    {
+      "name": "FAILED",
+      "value": "failed"
+    }
+  ],
+  "task_result_open_string": {
+    "annotation": "str",
+    "policy": "open_string_no_enum_boundary",
+    "cases": [
+      {
+        "case_id": "taskstate_pending",
+        "task_id": "TS_PEND_0001",
+        "status_input": "pending",
+        "task_result": {
+          "task_id": "TS_PEND_0001",
+          "plugin_id": "plugin_under_test",
+          "status": "pending",
+          "payload": {},
+          "error": null,
+          "completed_at": "2026-01-02T03:04:05.000000+00:00"
+        }
+      },
+      {
+        "case_id": "taskstate_running",
+        "task_id": "TS_RUN_0002",
+        "status_input": "running",
+        "task_result": {
+          "task_id": "TS_RUN_0002",
+          "plugin_id": "plugin_under_test",
+          "status": "running",
+          "payload": {},
+          "error": null,
+          "completed_at": "2026-01-02T03:04:05.000000+00:00"
+        }
+      },
+      {
+        "case_id": "taskstate_completed",
+        "task_id": "TS_COMP_0003",
+        "status_input": "completed",
+        "task_result": {
+          "task_id": "TS_COMP_0003",
+          "plugin_id": "plugin_under_test",
+          "status": "completed",
+          "payload": {},
+          "error": null,
+          "completed_at": "2026-01-02T03:04:05.000000+00:00"
+        }
+      },
+      {
+        "case_id": "taskstate_failed",
+        "task_id": "TS_FAIL_0004",
+        "status_input": "failed",
+        "task_result": {
+          "task_id": "TS_FAIL_0004",
+          "plugin_id": "plugin_under_test",
+          "status": "failed",
+          "payload": {},
+          "error": null,
+          "completed_at": "2026-01-02T03:04:05.000000+00:00"
+        }
+      },
+      {
+        "case_id": "open_string_custom",
+        "task_id": "TS_OPEN_0005",
+        "status_input": "custom_downstream_status",
+        "task_result": {
+          "task_id": "TS_OPEN_0005",
+          "plugin_id": "plugin_under_test",
+          "status": "custom_downstream_status",
+          "payload": {},
+          "error": null,
+          "completed_at": "2026-01-02T03:04:05.000000+00:00"
+        }
+      },
+      {
+        "case_id": "open_string_empty",
+        "task_id": "TS_OPEN_0006",
+        "status_input": "",
+        "task_result": {
+          "task_id": "TS_OPEN_0006",
+          "plugin_id": "plugin_under_test",
+          "status": "",
+          "payload": {},
+          "error": null,
+          "completed_at": "2026-01-02T03:04:05.000000+00:00"
+        }
+      },
+      {
+        "case_id": "open_string_unicode",
+        "task_id": "TS_OPEN_0007",
+        "status_input": "완료됨-✅",
+        "task_result": {
+          "task_id": "TS_OPEN_0007",
+          "plugin_id": "plugin_under_test",
+          "status": "완료됨-✅",
+          "payload": {},
+          "error": null,
+          "completed_at": "2026-01-02T03:04:05.000000+00:00"
+        }
+      }
+    ]
+  }
+}

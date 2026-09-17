@@ -3153,10 +3153,12 @@
       ],
       "rust_type": "forge_domain::enums::TaskState",
       "test_ids": [
-        "scalar_consumer::every_wire_enum_value_roundtrips_and_unknowns_fail"
+        "scalar_consumer::every_wire_enum_value_roundtrips_and_unknowns_fail",
+        "taskstate_source::source_taskstate_namespace_maps_to_rust_variants",
+        "taskstate_source::mutation_name_value_swap_is_rejected"
       ],
-      "status": "existing_partial",
-      "residual": "Rust wire-enum roundtrip confirmed for all 4 variants (PENDING/RUNNING/COMPLETED/FAILED) via scalar_consumer. Python TaskState is a plain string class, not an Enum subclass; no Python plain-class/consumer boundary characterization exists. Roundtrip alone does not justify full parity."
+      "status": "implemented_fixture_verified",
+      "residual": "Source-captured proof: taskstate-source.json 4 constants + 7 TaskResult open-string cases. Python TaskState is a plain-class namespace (not Enum, not str subclass); four (name,value) pairs map exactly to TaskState::ALL via TaskState::as_str. TaskResult.status is annotated str (open string, no enum boundary). Fixture 3465 bytes SHA256 ee96038aad5ef61f6e1f03bfd3366e9707e1615f8c7d151d820994214d3bf017; source LF hash 00e5b9aa5d0e0f234711f54705542ba623b622088b41cda94d7f5b8706e4a3be. Consumer taskstate_source::source_taskstate_namespace_maps_to_rust_variants GREEN; mutation_name_value_swap_is_rejected proves name-keyed mapping. Does not claim Python Enum validation."
     },
     {
       "id": "forge/agents/base_plugin.py:TaskSpec",
