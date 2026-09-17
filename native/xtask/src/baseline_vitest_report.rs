@@ -197,6 +197,64 @@ pub fn build_case(node_id: String, status: &str) -> Case {
     }
 }
 
+// ============================================================================
+// Collect-mode runtime parser (T2, vitest list --no-static-parse --json).
+// Flat top-level array: [{"name":"suite > title","file":"abs/path"}, ...].
+// Bodies never execute; each entry maps to Outcome::Collected + executed=false.
+// ============================================================================
+
+#[derive(Deserialize)]
+struct CollectItem {
+    name: String,
+    file: String,
+}
+
+pub struct CollectSummary {
+    pub cases: Vec<ParsedCase>,
+    pub file_errors: Vec<FileError>,
+}
+
+pub fn parse_collect_report(
+    path: &Path,
+    root: &Path,
+) -> std::result::Result<CollectSummary, &'static str> {
+    let bytes =
+        baseline_process::read(path).map_err(|_| "collect_report_unreadable_or_oversized")?;
+    let items: Vec<CollectItem> = serde_json::from_slice(&bytes)
+        .map_err(|_| "collect_report_malformed_expected_flat_array")?;
+    let mut cases: Vec<ParsedCase> = Vec::new();
+    let mut occurrence: BTreeMap<String, usize> = BTreeMap::new();
+    let mut file_errors: Vec<FileError> = Vec::new();
+    for item in items {
+        let file_key = match relativize(&item.file, root) {
+            Ok(k) => k,
+            Err(reason) => {
+                file_errors.push(FileError {
+                    file: sanitize_path_ref(&item.file),
+                    reason,
+                });
+                continue;
+            }
+        };
+        let count = occurrence
+            .entry(format!("{file_key}\u{1f}{}", item.name))
+            .or_insert(0);
+        let node_id = serde_json::to_string(&(&file_key, &item.name, *count as u64))
+            .unwrap_or_else(|_| format!("_unencodable_collect_{count}"));
+        *count += 1;
+        cases.push(ParsedCase {
+            node_id: node_id.clone(),
+            case: Case {
+                node_id,
+                markers: vec!["frontend_vitest".into(), "collect_only".into()],
+                outcome: Outcome::Collected,
+                executed: false,
+                reason: "vitest_collect_only".into(),
+            },
+        });
+    }
+    Ok(CollectSummary { cases, file_errors })
+}
 #[cfg(test)]
 #[path = "baseline_vitest_report_tests.rs"]
 mod red_tests;

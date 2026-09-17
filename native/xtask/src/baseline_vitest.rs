@@ -1,9 +1,9 @@
 use crate::{
     baseline::Deadline,
     baseline_types::*,
-    baseline_vitest_process::spawn_attempt,
+    baseline_vitest_process::{spawn_attempt, spawn_collect_attempt},
     baseline_vitest_reconcile::enumerate_expected_test_files_result,
-    baseline_vitest_report::{FileError, ReportSummary},
+    baseline_vitest_report::{CollectSummary, FileError, ReportSummary},
     baseline_vitest_tools::resolve_tools,
 };
 use std::{collections::BTreeSet, path::Path};
@@ -22,14 +22,6 @@ pub fn execute_lane(root: &Path, evidence: &Path, dl: &Deadline, run: &mut Run) 
     if !root.join(PACKAGE_REL).is_file() {
         return;
     }
-    if run.mode == Mode::Collect {
-        finalize_blocked(
-            run,
-            index,
-            "vitest_runtime_collection_deferred_no_static_parse_execution_authorized",
-        );
-        return;
-    }
     let tools = match resolve_tools(root) {
         Ok(t) => t,
         Err(reason) => {
@@ -37,6 +29,18 @@ pub fn execute_lane(root: &Path, evidence: &Path, dl: &Deadline, run: &mut Run) 
             return;
         }
     };
+    if run.mode == Mode::Collect {
+        match spawn_collect_attempt(&tools, root, evidence, dl, run.attempts.len()) {
+            Ok(Some((attempt, summary))) => finalize_collect(run, index, attempt, summary),
+            Ok(None) => finalize_blocked(
+                run,
+                index,
+                "run_time_budget_exhausted_before_vitest_collect_attempt",
+            ),
+            Err(reason) => finalize_blocked(run, index, reason),
+        }
+        return;
+    }
     match spawn_attempt(&tools, root, evidence, dl, run.attempts.len()) {
         Ok(Some((attempt, summary))) => finalize(root, run, index, attempt, summary),
         Ok(None) => finalize_blocked(
@@ -93,6 +97,38 @@ pub(crate) fn finalize(
     lane.reason = reason.into();
     push_file_error_prereqs(lane, &summary.file_errors);
     push_reconciliation_prereqs(lane, &missing, &extra, &enum_uncertainties);
+    run.attempts.push(attempt);
+}
+
+fn finalize_collect(run: &mut Run, index: usize, attempt: Attempt, summary: CollectSummary) {
+    let containment_ok = attempt.termination == Termination::Exited
+        && attempt.exit_code == Some(0)
+        && attempt.tree_reaped
+        && attempt.work_removed
+        && attempt.active_after == Some(0)
+        && attempt.protocol_complete
+        && attempt.protocol_error.is_none();
+    let case_ids: Vec<String> = summary.cases.iter().map(|p| p.node_id.clone()).collect();
+    let counts = Counts::from_cases(summary.cases.iter().map(|p| &p.case));
+    // Collect-only slice: bodies never execute, so passed/executed MUST stay 0.
+    // complete=false is a HARD invariant here — cross-mode provenance and
+    // reconciliation are deferred T2 capabilities and MUST NOT be signaled complete.
+    let lane = &mut run.lanes[index];
+    lane.case_ids = case_ids;
+    lane.counts = Some(counts);
+    lane.complete = false;
+    let reason: &str = if !containment_ok {
+        "vitest_collect_attempt_containment_or_protocol_not_proven"
+    } else if !summary.file_errors.is_empty() {
+        "vitest_collect_report_file_errors_present"
+    } else {
+        "vitest_collect_provenance_and_reconciliation_pending"
+    };
+    lane.reason = reason.into();
+    push_file_error_prereqs(lane, &summary.file_errors);
+    if !lane.prerequisites.iter().any(|p| p == reason) {
+        lane.prerequisites.push(reason.into());
+    }
     run.attempts.push(attempt);
 }
 

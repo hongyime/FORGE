@@ -12,6 +12,7 @@ mod baseline_vitest;
 mod baseline_vitest_process;
 mod baseline_vitest_reconcile;
 mod baseline_vitest_report;
+mod baseline_vitest_snapshot;
 mod baseline_vitest_tools;
 mod declaration_ids;
 mod documents;

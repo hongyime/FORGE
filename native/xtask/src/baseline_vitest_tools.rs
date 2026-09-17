@@ -1,5 +1,8 @@
-use crate::{baseline_vitest_report::ToolPaths, paths};
-use std::path::{Path, PathBuf};
+use crate::{baseline_process::python, baseline_vitest_report::ToolPaths, paths};
+use std::{
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+};
 
 const VITEST_REL: &str = "forge/reporting/webui/node_modules/vitest/vitest.mjs";
 
@@ -89,4 +92,69 @@ pub(crate) fn default_summary() -> ReportSummary {
         file_errors: vec![],
         reported_files: vec![],
     }
+}
+
+pub(crate) fn new_collect_attempt(node: &Path, vitest: &Path, timeout_ms: u64) -> Attempt {
+    // Collect-mode records the ACTUAL Node argv the bridge launches — no Python
+    // supervisor prefix — so audit consumers can verify the exact runtime we ran.
+    Attempt {
+        command: vec![
+            node.display().to_string(),
+            vitest.display().to_string(),
+            "list".into(),
+            "--no-static-parse".into(),
+            "--json=<ATTEMPT>/vitest-report.json".into(),
+        ],
+        files: vec![PACKAGE_REL.into()],
+        collect_only: true,
+        timeout_ms,
+        budget_elapsed_ms: 0,
+        cleanup_grace_ms: CLEANUP_GRACE_MS,
+        cleanup_duration_ms: None,
+        child_timeout_ms: None,
+        output_limit: LIMIT,
+        duration_ms: 0,
+        exit_code: None,
+        termination: Termination::LaunchFailed,
+        tree_reaped: false,
+        job_processes: 0,
+        active_after: None,
+        work_removed: false,
+        stdout_bytes: 0,
+        stderr_bytes: 0,
+        protocol_complete: false,
+        protocol_error: None,
+        events_hash: String::new(),
+    }
+}
+
+pub(crate) fn default_collect_summary() -> crate::baseline_vitest_report::CollectSummary {
+    crate::baseline_vitest_report::CollectSummary {
+        cases: vec![],
+        file_errors: vec![],
+    }
+}
+
+pub(crate) fn build_command(script: &Path, request: &Path, work: &Path) -> Command {
+    let mut command = Command::new(python());
+    command
+        .args(["-I", "-B", "-u"])
+        .arg(script)
+        .arg(request)
+        .current_dir(work)
+        .env_clear()
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    for name in ["PATH", "SystemRoot", "WINDIR", "SYSTEMROOT"] {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
+        }
+    }
+    command
+        .env("HOME", work)
+        .env("USERPROFILE", work)
+        .env("TEMP", work)
+        .env("TMP", work);
+    command
 }

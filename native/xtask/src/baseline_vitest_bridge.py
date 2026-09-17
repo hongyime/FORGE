@@ -32,8 +32,17 @@ def main():
     remaining = min(timeout, (request["deadline_epoch_ms"] - time.time_ns() // 1_000_000) / 1000)
     deadline = time.monotonic() + max(0, remaining)
     limit = 8 * 1024 * 1024
-    command = [str(node), str(vitest), "run", "--reporter=json",
-               f"--outputFile={output_file}"]
+    action = request.get("action", "run")
+    if action == "collect":
+        command = [str(node), str(vitest), "list", "--no-static-parse",
+                   f"--json={output_file}"]
+        accepted_exits = (0,)
+    elif action == "run":
+        command = [str(node), str(vitest), "run", "--reporter=json",
+                   f"--outputFile={output_file}"]
+        accepted_exits = (0, 1)
+    else:
+        raise ValueError("invalid_action")
     env = {name: os.environ[name] for name in
            ("PATH", "SystemRoot", "WINDIR", "SYSTEMROOT") if name in os.environ}
     env.update(HOME=str(work), USERPROFILE=str(work), TEMP=str(work), TMP=str(work),
@@ -86,8 +95,9 @@ def main():
                 break
             time.sleep(0.02)
         else:
-            # Vitest exits 0 on all-pass, 1 on failures. Both are protocol-complete.
-            result["termination"] = "exited" if child.returncode in (0, 1) else "crash"
+            # Runtime accept-set per action: vitest run returns 0/1 (pass/fail);
+            # vitest list returns 0 only. Non-accepted exits are crashes.
+            result["termination"] = "exited" if child.returncode in accepted_exits else "crash"
         result["exit_code"] = child.poll()
     except (OSError, ValueError):
         result["termination"] = "containment_failed" if child else "launch_failed"

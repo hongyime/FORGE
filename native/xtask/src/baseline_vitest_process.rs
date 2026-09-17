@@ -1,9 +1,15 @@
+use crate::baseline_vitest_snapshot::{DeadlineSnapshot, snapshot};
 use crate::{
     baseline::Deadline,
-    baseline_process::{LIMIT, python},
+    baseline_process::LIMIT,
     baseline_types::*,
-    baseline_vitest_report::{ReportSummary, ToolPaths, parse_report},
-    baseline_vitest_tools::{CLEANUP_GRACE_MS, default_summary, new_attempt},
+    baseline_vitest_report::{
+        CollectSummary, ReportSummary, ToolPaths, parse_collect_report, parse_report,
+    },
+    baseline_vitest_tools::{
+        CLEANUP_GRACE_MS, build_command, default_collect_summary, default_summary, new_attempt,
+        new_collect_attempt,
+    },
     model, paths,
 };
 use serde::Deserialize;
@@ -11,8 +17,8 @@ use std::{
     fs,
     io::Read,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    process::Command,
+    time::{Duration, Instant},
 };
 
 #[derive(Deserialize)]
@@ -31,6 +37,17 @@ struct Bridge {
     report_bytes: u64,
 }
 
+/// Shared per-attempt boundary for both `run` and `collect` actions. Bundles the
+/// inputs each attempt needs so downstream helpers derive `package_dir` and the
+/// report file from `root`/`work` rather than accepting redundant paths.
+pub(crate) struct RequestCtx<'a> {
+    pub(crate) tools: &'a ToolPaths,
+    pub(crate) root: &'a Path,
+    pub(crate) evidence: &'a Path,
+    pub(crate) dl: &'a Deadline,
+    pub(crate) seq: usize,
+}
+
 pub fn spawn_attempt(
     tools: &ToolPaths,
     root: &Path,
@@ -38,68 +55,102 @@ pub fn spawn_attempt(
     dl: &Deadline,
     seq: usize,
 ) -> std::result::Result<Option<(Attempt, ReportSummary)>, &'static str> {
-    if dl.clamp() == 0 {
+    spawn_generic(
+        RequestCtx {
+            tools,
+            root,
+            evidence,
+            dl,
+            seq,
+        },
+        "run",
+        "",
+        new_attempt,
+        default_summary,
+        |p| parse_report(p, root),
+    )
+}
+
+/// Runtime collection attempt: `vitest list --no-static-parse --json=<file>` executed
+/// through the same job-contained bridge. Test bodies never run; the report is a flat
+/// [{name, file}, ...] array that maps to unexecuted Case entries.
+pub fn spawn_collect_attempt(
+    tools: &ToolPaths,
+    root: &Path,
+    evidence: &Path,
+    dl: &Deadline,
+    seq: usize,
+) -> std::result::Result<Option<(Attempt, CollectSummary)>, &'static str> {
+    spawn_generic(
+        RequestCtx {
+            tools,
+            root,
+            evidence,
+            dl,
+            seq,
+        },
+        "collect",
+        "-collect",
+        new_collect_attempt,
+        default_collect_summary,
+        |p| parse_collect_report(p, root),
+    )
+}
+
+fn spawn_generic<T>(
+    ctx: RequestCtx<'_>,
+    action: &'static str,
+    seq_prefix: &str,
+    make_attempt: fn(&Path, &Path, u64) -> Attempt,
+    default_summary_of: fn() -> T,
+    parse: impl FnOnce(&Path) -> std::result::Result<T, &'static str>,
+) -> std::result::Result<Option<(Attempt, T)>, &'static str> {
+    let Some(snap) = snapshot(ctx.dl)? else {
         return Ok(None);
-    }
-    let work = evidence.join(format!("work-vitest-{seq}"));
+    };
+    let work = ctx
+        .evidence
+        .join(format!("work-vitest{seq_prefix}-{}", ctx.seq));
     fs::create_dir(&work).map_err(|_| "attempt_directory_create_failed")?;
     let request = work.join("request.json");
     let output_file = work.join("vitest-report.json");
-    let package_dir = root.join("forge/reporting/webui");
     let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/baseline_vitest_bridge.py");
-    let mut attempt = new_attempt(&tools.node, &tools.vitest, dl.clamp());
-    attempt.budget_elapsed_ms = dl.elapsed_ms();
-    if let Err(reason) = write_request(
-        &request,
-        root,
-        tools,
-        &work,
-        &package_dir,
-        &output_file,
-        attempt.timeout_ms,
-    ) {
+    let mut attempt = make_attempt(&ctx.tools.node, &ctx.tools.vitest, snap.timeout_ms);
+    attempt.budget_elapsed_ms = snap.elapsed_ms;
+    if let Err(reason) = write_request(&ctx, &work, &request, action, &snap) {
         let _ = fs::remove_dir_all(&work);
         return Err(reason);
     }
-    if dl.clamp() == 0 {
+    // Deadline may have been exhausted while we serialised the request; the
+    // bridge validates its absolute deadline anyway, but we skip launching a
+    // process that would exceed the monotonic budget.
+    if ctx.dl.clamp() == 0 {
         let _ = fs::remove_dir_all(&work);
         return Ok(None);
     }
     let started = Instant::now();
     let command = build_command(&script, &request, &work);
-    let summary = run_bridge(
-        command,
-        started,
-        attempt.timeout_ms,
-        &output_file,
-        root,
-        &mut attempt,
-    );
+    let summary = run_bridge(command, started, &output_file, &mut attempt, parse);
     attempt.duration_ms = started.elapsed().as_millis();
     paths::no_links(&work).map_err(|_| "attempt_cleanup_unsafe")?;
     attempt.work_removed = fs::remove_dir_all(&work).is_ok();
-    let summary = summary.unwrap_or_else(default_summary);
-    Ok(Some((attempt, summary)))
+    Ok(Some((attempt, summary.unwrap_or_else(default_summary_of))))
 }
 
 fn write_request(
-    request: &Path,
-    root: &Path,
-    tools: &ToolPaths,
+    ctx: &RequestCtx<'_>,
     work: &Path,
-    package_dir: &Path,
-    output_file: &Path,
-    timeout_ms: u64,
+    request: &Path,
+    action: &'static str,
+    snap: &DeadlineSnapshot,
 ) -> std::result::Result<(), &'static str> {
-    let epoch_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| "system_clock_precedes_epoch")?
-        .as_millis();
     let payload = serde_json::json!({
-        "root": root, "work": work, "package_dir": package_dir,
-        "node": tools.node, "vitest": tools.vitest, "output_file": output_file,
-        "timeout_ms": timeout_ms,
-        "deadline_epoch_ms": epoch_ms + u128::from(timeout_ms),
+        "root": ctx.root, "work": work,
+        "package_dir": ctx.root.join("forge/reporting/webui"),
+        "node": ctx.tools.node, "vitest": ctx.tools.vitest,
+        "output_file": work.join("vitest-report.json"),
+        "timeout_ms": snap.timeout_ms, "action": action,
+        "deadline_epoch_ms": snap.epoch_ms + u128::from(snap.timeout_ms),
     });
     fs::write(
         request,
@@ -108,38 +159,36 @@ fn write_request(
     .map_err(|_| "request_write_failed")
 }
 
-fn build_command(script: &Path, request: &Path, work: &Path) -> Command {
-    let mut command = Command::new(python());
-    command
-        .args(["-I", "-B", "-u"])
-        .arg(script)
-        .arg(request)
-        .current_dir(work)
-        .env_clear()
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    for name in ["PATH", "SystemRoot", "WINDIR", "SYSTEMROOT"] {
-        if let Some(value) = std::env::var_os(name) {
-            command.env(name, value);
+fn run_bridge<T>(
+    command: Command,
+    started: Instant,
+    output_file: &Path,
+    attempt: &mut Attempt,
+    parse: impl FnOnce(&Path) -> std::result::Result<T, &'static str>,
+) -> Option<T> {
+    let bytes = run_bridge_bytes(command, started, attempt.timeout_ms, output_file, attempt)?;
+    attempt.events_hash = model::hash(&bytes);
+    match parse(output_file) {
+        Ok(summary) => {
+            attempt.protocol_complete = true;
+            Some(summary)
+        }
+        Err(reason) => {
+            attempt.protocol_error = Some(reason.into());
+            None
         }
     }
-    command
-        .env("HOME", work)
-        .env("USERPROFILE", work)
-        .env("TEMP", work)
-        .env("TMP", work);
-    command
 }
 
-fn run_bridge(
+// Common bridge lifecycle: spawn, wait, drain, parse Bridge stdout, apply, read
+// report bytes. Returns raw report bytes on protocol-complete success.
+fn run_bridge_bytes(
     mut command: Command,
     started: Instant,
     timeout_ms: u64,
     output_file: &Path,
-    root: &Path,
     attempt: &mut Attempt,
-) -> Option<ReportSummary> {
+) -> Option<Vec<u8>> {
     let mut child = match command.spawn() {
         Ok(c) => c,
         Err(_) => {
@@ -185,21 +234,10 @@ fn run_bridge(
         }
         return None;
     }
-    let bytes = match crate::baseline_process::read(output_file) {
-        Ok(b) => b,
+    match crate::baseline_process::read(output_file) {
+        Ok(b) => Some(b),
         Err(_) => {
             attempt.protocol_error = Some("report_unreadable_or_oversized".into());
-            return None;
-        }
-    };
-    attempt.events_hash = model::hash(&bytes);
-    match parse_report(output_file, root) {
-        Ok(summary) => {
-            attempt.protocol_complete = true;
-            Some(summary)
-        }
-        Err(reason) => {
-            attempt.protocol_error = Some(reason.into());
             None
         }
     }
