@@ -1,20 +1,22 @@
-# Current Task: Complete Rust rewrite — T3 enum-boundary checkpoint published
+# Current Task: Complete Rust rewrite — T3 graph-coercion fix + all domain contracts verified
 
-**Status:** IN PROGRESS; native workspace integrated | Latest pushed: `d92464d` | Date: 2026-09-16
+**Status:** IN PROGRESS; native workspace integrated | Latest pushed: `59fc1b1` | Date: 2026-09-17
 
 ## Current worker progress
 
-- Verified enum-boundary checkpoint: `cargo test --workspace --locked --offline --jobs 1 -- --test-threads=1` passed 123 tests/doctests (73 domain + 2 doctests + 48 xtask), 0 failures, 0 ignored. Evidence: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/parent-enum-workspace-final.json` and `.log`.
-- Scoped independent reviewer ses_f55a27f13ffe2J6r6558QASYQM APPROVED enum-boundary increment after corrections (hard-coded variant check fixed; provenance counts corrected); read-only, no blockers. Scoped checkpoint only — not an F1–F4 review pass.
-- T3 domain ledger (LOCAL UNTRACKED — `native/migration/domain-contracts.json` not staged): 118 entries total. 42 `implemented_fixture_verified` (24 DTOs + 2 agent contracts + 16 enum sections/15 Rust types); 6 `existing_partial` (BreachRecord, AttackNode, AttackEdge, AttackGraph, AttackGraphReportContext, TaskState); 66 `reference_only`; 3 `blocked_policy_conflict` (`DehashedResult.password`, `HashCredential.hash_plaintext`, `KeyScannerFinding.key_prefix`); 1 `blocked_dependency` (`HashCredentialSet`). Full type/table parity remains open.
-- Published commits: `a446679` (portable fixtures), `f8a9361` (typed records), `5e12b89` (canonical LF fixture metadata and integrity guard), `37cf5c4` (functional baseline attempt budget 120 s), `d92464d` (enum boundary parity consumer and fixtures). All pushed to origin/main.
-- LSP timed out again; not clean-claimed. Compiler, Clippy (warnings denied), and fmt pass recorded in fixture-canonicalization evidence.
+- **2026-09-17 graph coercion fix** (`7491cb6`): Replaced plain `bool`/`i64`/`f64` in all four graph `*Input` structs (`AttackNodeInput`, `AttackEdgeInput`, `AttackGraphInput`, `AttackGraphReportContextInput`) with `JsonBool`/`JsonInt`/`JsonFloat` wrappers from `json_boundary.rs`. Added `zero_int()` and `zero_float()` default helpers. RED test (`graph_coercion_mismatch`) was EXIT 101 with 20 mismatches; now EXIT 0. Fixture: `graph-coercion-cases.json` 31 cases (20 mismatch + 11 control). Evidence: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/graph-parity/evidence.json` → `SCOPED_COERCION_FIXED`.
+- **2026-09-17 graph parity consumers** (`489c92b`): Added 41 parity tests across `graph_node_edge_parity.rs` (11), `graph_full_parity.rs` (13), `graph_report_parity.rs` (17). All GREEN. Ledger advanced 42→46 `implemented_fixture_verified` for AttackNode/Edge/Graph/AttackGraphReportContext.
+- **2026-09-17 BreachRecord+TaskState coverage** (`59fc1b1`): Added `breach_record_rejects_extra_fields_and_unknown_confidence` to `corrective_consumer.rs` (8 tests total). Ledger advanced 46→48; all 6 previously `existing_partial` contracts are now `implemented_fixture_verified`. 0 `existing_partial` remaining.
+- **T3 domain ledger** (`native/migration/domain-contracts.json` — committed `489c92b`/`59fc1b1`): 118 entries. 48 `implemented_fixture_verified` (24 DTOs + 2 agent contracts + 16 enum sections/15 Rust types + 6 domain records now cleared); 0 `existing_partial`; 66 `reference_only`; 3 `blocked_policy_conflict` (`DehashedResult.password`, `HashCredential.hash_plaintext`, `KeyScannerFinding.key_prefix`); 1 `blocked_dependency` (`HashCredentialSet`). Full type/table parity remains open.
+- **Published commits this session** (all pushed to origin/main): `7491cb6` (graph coercion fix), `489c92b` (graph parity consumers + ledger), `59fc1b1` (BreachRecord/TaskState coverage + ledger).
+- LSP timed out again; not clean-claimed. Compiler, Clippy (warnings denied), and fmt pass verified for all three commits under `Local\FORGE_RUST_REWRITE_QA` mutex.
+- **Dirty working tree (unchanged from prior session):** 8 LF-normalization fixture drift files (unstaged M entries); these are not blocking and not related to the session's work.
 
 - T2 corrective increment independently confirmed: 48 native tests, fmt/Clippy, repeated-failure retention and deadline checks pass (`task-2/adversarial-verify-final.json`). Full baseline (live/provider/operator-state lanes) remains incomplete.
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
 - Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
 - Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
-- **Next action:** remaining partial domain contracts (BreachRecord, AttackNode/Edge/Graph, AttackGraphReportContext), missing baseline adapters. No T3 completion claim.
+- **Next action:** Full T3 completion still requires full type/table parity (66 `reference_only` contracts), missing baseline adapters (T2), and plan tasks T4–T36 + F1–F4. No T3 completion claim; domain-contract partial-record axis is now cleared.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
@@ -71,12 +73,12 @@
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-16 (post-enum-publish)
+- Updated: 2026-09-17 (post-graph-coercion-and-domain-record-clearance)
 - Machine: PRAWN-E14
-- Harness: claude
+- Harness: opencode
 - Event: stop
 - Branch: main
-- HEAD: d92464d
-- Dirty files: 8 LF-payload M entries + 1 untracked ledger (unchanged from prior session)
-- Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
+- HEAD: 59fc1b1
+- Dirty files: 8 LF-payload M entries (same as prior session; unchanged)
+- Resume hint: Read .agents/STATE.md. All 6 previously existing_partial T3 domain contracts are now implemented_fixture_verified. Next: T2 missing baseline adapters or T4+ plan tasks.
 <!-- MOLT_AUTO_END -->
