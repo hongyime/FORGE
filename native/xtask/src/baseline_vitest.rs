@@ -1,6 +1,7 @@
 use crate::{
     baseline::Deadline,
     baseline_types::*,
+    baseline_vitest_drift_wire as drift_wire,
     baseline_vitest_process::{spawn_attempt, spawn_collect_attempt},
     baseline_vitest_reconcile::enumerate_expected_test_files_result,
     baseline_vitest_report::{CollectSummary, FileError, ReportSummary},
@@ -33,9 +34,19 @@ pub fn execute_lane(root: &Path, evidence: &Path, dl: &Deadline, run: &mut Run) 
         finalize_blocked(run, index, reason);
         return;
     }
+    let before_source = match drift_wire::before_snapshot(root, &mut run.input_hashes) {
+        Ok(m) => m,
+        Err(reason) => {
+            finalize_blocked(run, index, reason);
+            return;
+        }
+    };
     if run.mode == Mode::Collect {
         match spawn_collect_attempt(&tools, root, evidence, dl, run.attempts.len()) {
-            Ok(Some((attempt, summary))) => finalize_collect(run, index, attempt, summary),
+            Ok(Some((attempt, summary))) => {
+                finalize_collect(run, index, attempt, summary);
+                drift_wire::after_and_apply(root, &tools, run, index, &before_source);
+            }
             Ok(None) => finalize_blocked(
                 run,
                 index,
@@ -46,7 +57,10 @@ pub fn execute_lane(root: &Path, evidence: &Path, dl: &Deadline, run: &mut Run) 
         return;
     }
     match spawn_attempt(&tools, root, evidence, dl, run.attempts.len()) {
-        Ok(Some((attempt, summary))) => finalize(root, run, index, attempt, summary),
+        Ok(Some((attempt, summary))) => {
+            finalize(root, run, index, attempt, summary);
+            drift_wire::after_and_apply(root, &tools, run, index, &before_source);
+        }
         Ok(None) => finalize_blocked(
             run,
             index,
