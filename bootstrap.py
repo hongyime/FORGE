@@ -349,18 +349,19 @@ def setup_environment(root: Path, venv_dir: Path, dev: bool, check_only: bool) -
     # Check for requirements file based on mode. Older trees used
     # requirements-*.txt; current editable installs can derive dependencies
     # directly from pyproject.toml plus explicit extras.
-    safe_mode = os.environ.get("FORGE_SAFE_MODE", "0").strip() in ("1", "true", "yes")
+    safe_mode = os.environ.get("FORGE_SAFE_MODE", "1").strip().lower() not in ("0", "false", "no")
+    os.environ["FORGE_SAFE_MODE"] = "1" if safe_mode else "0"
     req_file = "requirements-safe.txt" if safe_mode else "requirements-full.txt"
     install_from_pyproject = False
 
-    # Fallback to requirements.txt if specific file is missing
+    # Core setup must not fall back to an unreviewed full dependency manifest.
     if not (root / req_file).exists():
-        if (root / "requirements.txt").exists():
+        if not safe_mode and (root / "requirements.txt").exists():
             print(f"[FORGE Setup] {req_file} not found, falling back to requirements.txt")
             req_file = "requirements.txt"
         else:
             print(
-                f"[FORGE Setup] {req_file} and requirements.txt are absent; "
+                "[FORGE Setup] No suitable requirements manifest selected; "
                 "installing from pyproject.toml extras instead."
             )
             install_from_pyproject = True
@@ -389,7 +390,7 @@ def setup_environment(root: Path, venv_dir: Path, dev: bool, check_only: bool) -
     subprocess.run([str(vpy), "-m", "pip", "install", "--upgrade", "pip"], cwd=str(root))
 
     if safe_mode:
-        print("[FORGE Setup] FORGE_SAFE_MODE=1 — installing core dependencies only (AV-safe).")
+        print("[FORGE Setup] Core setup selected — optional offensive dependencies excluded.")
     if install_from_pyproject:
         package_spec = _editable_install_spec(safe_mode=safe_mode, dev=dev)
         print(f"[FORGE Setup] Installing runtime dependencies from pyproject: {package_spec}")
@@ -573,7 +574,7 @@ def setup_environment(root: Path, venv_dir: Path, dev: bool, check_only: bool) -
 
     if dev and not install_from_pyproject:
         print("[FORGE Setup] Installing development dependencies...")
-        if (root / "requirements-full.txt").exists():
+        if not safe_mode and (root / "requirements-full.txt").exists():
             dev_run = subprocess.run(
                 [str(vpy), "-m", "pip", "install", "-r", "requirements-full.txt"], cwd=str(root)
             )
@@ -881,7 +882,8 @@ def verify_install(root: Path, venv_dir: Path) -> bool:
         "brotli": "brotli",
         "lz4.frame": "lz4",
     }
-    safe_mode = os.environ.get("FORGE_SAFE_MODE", "0").strip() in ("1", "true", "yes")
+    safe_mode = os.environ.get("FORGE_SAFE_MODE", "1").strip().lower() not in ("0", "false", "no")
+    os.environ["FORGE_SAFE_MODE"] = "1" if safe_mode else "0"
     if not safe_mode:
         optional_imports.update(
             {

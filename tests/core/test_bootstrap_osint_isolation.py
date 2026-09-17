@@ -4,8 +4,10 @@ import subprocess
 import tarfile
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import Mock
 
 import bootstrap
+import pytest
 
 
 def test_osint_cli_packages_are_separate_from_runtime_imports() -> None:
@@ -142,3 +144,98 @@ def test_trufflehog_release_installer_extracts_checksum_verified_binary(
     )
 
     assert (tool_dir / "trufflehog.exe").read_bytes() == b"fake-trufflehog-binary"
+
+
+@pytest.mark.parametrize("mode", [None, "1", "TRUE", "", "typo"])
+def test_core_setup_never_falls_back_to_generic_requirements(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode: str | None
+) -> None:
+    # Given a missing safe manifest and an unreviewed legacy requirements file.
+    if mode is None:
+        monkeypatch.delenv("FORGE_SAFE_MODE", raising=False)
+    else:
+        monkeypatch.setenv("FORGE_SAFE_MODE", mode)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'fixture'\n", encoding="utf-8")
+    legacy = tmp_path / "requirements.txt"
+    legacy.write_text("impacket==0.12.0\n", encoding="utf-8")
+    venv = tmp_path / ".venv"
+    vpy = bootstrap.venv_python(venv)
+    vpy.parent.mkdir(parents=True)
+    vpy.touch()
+    launch_modes: list[str | None] = []
+
+    def record_launch_mode(
+        args: list[str], cwd: Path | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        launch_modes.append(bootstrap.os.environ.get("FORGE_SAFE_MODE"))
+        return subprocess.CompletedProcess(args, 0)
+
+    runner = Mock(side_effect=record_launch_mode)
+    monkeypatch.setattr(bootstrap.subprocess, "run", runner)
+    monkeypatch.setattr(bootstrap, "verify_install", Mock(return_value=True))
+    monkeypatch.setattr(
+        bootstrap, "install_connector_tools",
+        Mock(side_effect=AssertionError("core setup must not install external tool bundles")),
+    )
+
+    # When setup selects its dependency commands (all external execution intercepted).
+    assert bootstrap.setup_environment(tmp_path, venv, dev=False, check_only=False) == 0
+
+    # Then only the declared core/artifact extra is selected, never the legacy bundle.
+    commands = [call.args[0] for call in runner.call_args_list]
+    assert any(command[-2:] == ["-e", ".[artifacts]"] for command in commands)
+    assert launch_modes and all(value == "1" for value in launch_modes)
+    assert not any(str(legacy) in command for command in commands)
+    assert not any("offensive" in str(arg) or "impacket" in str(arg)
+                   for command in commands for arg in command)
+
+
+def test_safe_development_setup_does_not_install_full_requirements(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Given both legacy manifests, safe development setup must preserve the safe choice.
+    monkeypatch.setenv("FORGE_SAFE_MODE", "1")
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'fixture'\n", encoding="utf-8")
+    (tmp_path / "requirements-safe.txt").write_text("pydantic==2.10.4\n", encoding="utf-8")
+    (tmp_path / "requirements-full.txt").write_text("impacket==0.12.0\n", encoding="utf-8")
+    venv = tmp_path / ".venv"
+    vpy = bootstrap.venv_python(venv)
+    vpy.parent.mkdir(parents=True)
+    vpy.touch()
+    runner = Mock(return_value=subprocess.CompletedProcess([], 0))
+    monkeypatch.setattr(bootstrap.subprocess, "run", runner)
+    monkeypatch.setattr(bootstrap, "verify_install", Mock(return_value=True))
+
+    assert bootstrap.setup_environment(tmp_path, venv, dev=True, check_only=False) == 0
+
+    commands = [call.args[0] for call in runner.call_args_list]
+    assert any(command[-2:] == ["-e", ".[artifacts,dev]"] for command in commands)
+    assert not any("requirements-full.txt" in str(arg) or "offensive" in str(arg)
+                   for command in commands for arg in command)
+
+
+@pytest.mark.parametrize(
+    ("mode", "expects_optional_probe"),
+    [(None, False), ("", False), ("typo", False), ("0", True), ("FALSE", True), ("no", True)],
+)
+def test_verification_requires_explicit_opt_out_of_core_mode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode: str | None, expects_optional_probe: bool
+) -> None:
+    # Only explicit opt-out values retain the existing optional-import checks.
+    if mode is None:
+        monkeypatch.delenv("FORGE_SAFE_MODE", raising=False)
+    else:
+        monkeypatch.setenv("FORGE_SAFE_MODE", mode)
+    venv = tmp_path / ".venv"
+    vpy = bootstrap.venv_python(venv)
+    vpy.parent.mkdir(parents=True)
+    vpy.touch()
+    runner = Mock(return_value=subprocess.CompletedProcess([], 0))
+    monkeypatch.setattr(bootstrap.subprocess, "run", runner)
+
+    assert bootstrap.verify_install(tmp_path, venv)
+
+    commands = [call.args[0] for call in runner.call_args_list]
+    assert any("import impacket" in command for command in commands) == expects_optional_probe
+    assert any("import phonenumbers" in command for command in commands)
+    assert bootstrap.os.environ["FORGE_SAFE_MODE"] == ("0" if expects_optional_probe else "1")
