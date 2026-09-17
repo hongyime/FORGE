@@ -2915,10 +2915,11 @@
         "graph_node_edge_parity::node_severity_variants_and_optional",
         "graph_node_edge_parity::node_label_at_and_over_limit",
         "graph_node_edge_parity::node_forbidden_metadata_and_nested_accepted",
-        "graph_coercion_mismatch::python_accepted_mismatch_cases_are_also_accepted_by_rust"
+        "graph_coercion_mismatch::python_accepted_mismatch_cases_are_also_accepted_by_rust",
+        "graph_source_parity::python_source_captured_cases_agree_with_rust_boundary"
       ],
-      "status": "existing_partial",
-      "residual": "Scalar-coercion source proof is valid: graph-coercion-cases.json was live-Python-derived and graph_coercion_mismatch.rs is GREEN. Structural fixture (graph-parity-cases.json) is hand-authored and not source-captured; it does not establish full source differential coverage. Full parity requires source-captured Python execution for the structural cases."
+      "status": "implemented_fixture_verified",
+      "residual": "Source-captured Python execution proof: graph-source-cases.json 112 cases (38 AttackNode), actual Pydantic v2 model_validate_json/model_dump_json on forge/models/attack_graph_models.py SHA 5fb4a8ea71af08e8a23a823365cf7af1a7004e886b95cc3cdb90f456915aec1f, Python 3.12.10/Pydantic 2.10.4. Consumer graph_source_parity::python_source_captured_cases_agree_with_rust_boundary GREEN. Scalar-coercion proof also valid via graph-coercion-cases.json. Fixture 121262 bytes SHA256 bbb55de25e6a9fe83819b10dbd00dbebe3c2699569f2efb6c3dedf7eef10cbee. Does not claim universally exhaustive coverage."
     },
     {
       "id": "forge/models/attack_graph_models.py:AttackEdge",
@@ -2967,10 +2968,11 @@
         "graph_node_edge_parity::edge_label_limit_and_optional",
         "graph_node_edge_parity::edge_type_is_unconstrained_string",
         "graph_node_edge_parity::edge_forbidden_metadata_keys_rejected",
-        "graph_coercion_mismatch::python_accepted_mismatch_cases_are_also_accepted_by_rust"
+        "graph_coercion_mismatch::python_accepted_mismatch_cases_are_also_accepted_by_rust",
+        "graph_source_parity::python_source_captured_cases_agree_with_rust_boundary"
       ],
-      "status": "existing_partial",
-      "residual": "Scalar-coercion source proof is valid: graph-coercion-cases.json was live-Python-derived and graph_coercion_mismatch.rs is GREEN. Structural fixture (graph-parity-cases.json) is hand-authored and not source-captured; it does not establish full source differential coverage. Full parity requires source-captured Python execution for the structural cases."
+      "status": "implemented_fixture_verified",
+      "residual": "Source-captured Python execution proof: graph-source-cases.json 112 cases (25 AttackEdge), actual Pydantic v2 model_validate_json/model_dump_json on forge/models/attack_graph_models.py SHA 5fb4a8ea71af08e8a23a823365cf7af1a7004e886b95cc3cdb90f456915aec1f, Python 3.12.10/Pydantic 2.10.4. Consumer graph_source_parity::python_source_captured_cases_agree_with_rust_boundary GREEN. Scalar-coercion proof also valid via graph-coercion-cases.json. Fixture 121262 bytes SHA256 bbb55de25e6a9fe83819b10dbd00dbebe3c2699569f2efb6c3dedf7eef10cbee. Does not claim universally exhaustive coverage."
     },
     {
       "id": "forge/models/attack_graph_models.py:AttackGraph",
@@ -3043,10 +3045,11 @@
         "graph_full_parity::graph_dangling_edge_source_rejected",
         "graph_full_parity::graph_dangling_edge_target_rejected",
         "graph_full_parity::graph_constructor_dangling_error_type",
-        "graph_coercion_mismatch::python_accepted_mismatch_cases_are_also_accepted_by_rust"
+        "graph_coercion_mismatch::python_accepted_mismatch_cases_are_also_accepted_by_rust",
+        "graph_source_parity::python_source_captured_cases_agree_with_rust_boundary"
       ],
-      "status": "existing_partial",
-      "residual": "Scalar-coercion source proof is valid: graph-coercion-cases.json was live-Python-derived and graph_coercion_mismatch.rs is GREEN. Structural fixture (graph-parity-cases.json) is hand-authored and not source-captured; it does not establish full source differential coverage. Full parity requires source-captured Python execution for the structural cases."
+      "status": "implemented_fixture_verified",
+      "residual": "Source-captured Python execution proof: graph-source-cases.json 112 cases (26 AttackGraph), actual Pydantic v2 model_validate_json/model_dump_json on forge/models/attack_graph_models.py SHA 5fb4a8ea71af08e8a23a823365cf7af1a7004e886b95cc3cdb90f456915aec1f, Python 3.12.10/Pydantic 2.10.4. Consumer graph_source_parity::python_source_captured_cases_agree_with_rust_boundary GREEN. Scalar-coercion proof also valid via graph-coercion-cases.json. Fixture 121262 bytes SHA256 bbb55de25e6a9fe83819b10dbd00dbebe3c2699569f2efb6c3dedf7eef10cbee. Does not claim universally exhaustive coverage."
     },
     {
       "id": "forge/models/attack_graph_models.py:AttackGraphReportContext",
@@ -3116,10 +3119,11 @@
         "graph_report_parity::graph_metadata_new_accepts_safe_and_nested_keys",
         "graph_report_parity::graph_metadata_new_rejects_forbidden_keys_and_hides_secret",
         "graph_report_parity::output_format_all_variants_and_wire_strings",
-        "graph_coercion_mismatch::python_accepted_mismatch_cases_are_also_accepted_by_rust"
+        "graph_coercion_mismatch::python_accepted_mismatch_cases_are_also_accepted_by_rust",
+        "graph_source_parity::python_source_captured_cases_agree_with_rust_boundary"
       ],
-      "status": "existing_partial",
-      "residual": "Scalar-coercion source proof is valid: graph-coercion-cases.json was live-Python-derived and graph_coercion_mismatch.rs is GREEN. Structural fixture (graph-parity-cases.json) is hand-authored and not source-captured; it does not establish full source differential coverage. Full parity requires source-captured Python execution for the structural cases."
+      "status": "implemented_fixture_verified",
+      "residual": "Source-captured Python execution proof: graph-source-cases.json 112 cases (23 AttackGraphReportContext), actual Pydantic v2 model_validate_json/model_dump_json on forge/models/attack_graph_models.py SHA 5fb4a8ea71af08e8a23a823365cf7af1a7004e886b95cc3cdb90f456915aec1f, Python 3.12.10/Pydantic 2.10.4. Consumer graph_source_parity::python_source_captured_cases_agree_with_rust_boundary GREEN. Scalar-coercion proof also valid via graph-coercion-cases.json. Fixture 121262 bytes SHA256 bbb55de25e6a9fe83819b10dbd00dbebe3c2699569f2efb6c3dedf7eef10cbee. Does not claim universally exhaustive coverage."
     },
     {
       "id": "forge/agents/base_plugin.py:TaskState",

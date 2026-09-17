@@ -1,0 +1,24 @@
+{
+  "schema": "forge.domain.fixture-provenance.v1",
+  "file": "graph-source-cases.json",
+  "bytes": 121262,
+  "sha256": "bbb55de25e6a9fe83819b10dbd00dbebe3c2699569f2efb6c3dedf7eef10cbee",
+  "source_module": "forge/models/attack_graph_models.py",
+  "source_sha256": "5fb4a8ea71af08e8a23a823365cf7af1a7004e886b95cc3cdb90f456915aec1f",
+  "python_version": "3.12.10",
+  "pydantic_version": "2.10.4",
+  "capture_method": "actual_python_execution",
+  "capture_command": ".venv/Scripts/python.exe capture.py",
+  "cases_total": 112,
+  "cases_accepted": 64,
+  "cases_rejected": 48,
+  "cases_by_contract": {
+    "AttackNode": 38,
+    "AttackEdge": 25,
+    "AttackGraph": 26,
+    "AttackGraphReportContext": 23
+  },
+  "generation_date": "2026-09-17",
+  "fixture_policy": "LF-only bytes; JSON captured from real Python execution of Pydantic v2 model_validate_json/model_dump_json. Rust tests must not depend on Python or .omo at test time.",
+  "runtime": "Synthetic inputs only; source errors summarised as ValidationError counts and error types without raw input material."
+}

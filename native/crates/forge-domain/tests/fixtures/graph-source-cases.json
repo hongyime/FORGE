@@ -1,0 +1,2882 @@
+{
+  "schema": "forge.domain.graph-source.v1",
+  "source_module": "forge/models/attack_graph_models.py",
+  "cases": [
+    {
+      "id": "node-happy-type-external",
+      "contract": "AttackNode",
+      "description": "Valid node with node_type=EXTERNAL",
+      "input_json": {
+        "node_id": "EXTERNAL::x",
+        "node_type": "EXTERNAL",
+        "label": "external",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "EXTERNAL::x",
+        "node_type": "EXTERNAL",
+        "label": "external",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-happy-type-host",
+      "contract": "AttackNode",
+      "description": "Valid node with node_type=HOST",
+      "input_json": {
+        "node_id": "HOST::x",
+        "node_type": "HOST",
+        "label": "host",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::x",
+        "node_type": "HOST",
+        "label": "host",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-happy-type-credential",
+      "contract": "AttackNode",
+      "description": "Valid node with node_type=CREDENTIAL",
+      "input_json": {
+        "node_id": "CREDENTIAL::x",
+        "node_type": "CREDENTIAL",
+        "label": "credential",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "CREDENTIAL::x",
+        "node_type": "CREDENTIAL",
+        "label": "credential",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-happy-type-exploit",
+      "contract": "AttackNode",
+      "description": "Valid node with node_type=EXPLOIT",
+      "input_json": {
+        "node_id": "EXPLOIT::x",
+        "node_type": "EXPLOIT",
+        "label": "exploit",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "EXPLOIT::x",
+        "node_type": "EXPLOIT",
+        "label": "exploit",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-happy-type-vuln",
+      "contract": "AttackNode",
+      "description": "Valid node with node_type=VULN",
+      "input_json": {
+        "node_id": "VULN::x",
+        "node_type": "VULN",
+        "label": "vuln",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "VULN::x",
+        "node_type": "VULN",
+        "label": "vuln",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-happy-type-cloud",
+      "contract": "AttackNode",
+      "description": "Valid node with node_type=CLOUD",
+      "input_json": {
+        "node_id": "CLOUD::x",
+        "node_type": "CLOUD",
+        "label": "cloud",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "CLOUD::x",
+        "node_type": "CLOUD",
+        "label": "cloud",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-happy-type-apikey",
+      "contract": "AttackNode",
+      "description": "Valid node with node_type=APIKEY",
+      "input_json": {
+        "node_id": "APIKEY::x",
+        "node_type": "APIKEY",
+        "label": "apikey",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "APIKEY::x",
+        "node_type": "APIKEY",
+        "label": "apikey",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-happy-type-impact",
+      "contract": "AttackNode",
+      "description": "Valid node with node_type=IMPACT",
+      "input_json": {
+        "node_id": "IMPACT::x",
+        "node_type": "IMPACT",
+        "label": "impact",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "IMPACT::x",
+        "node_type": "IMPACT",
+        "label": "impact",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-optional-defaults",
+      "contract": "AttackNode",
+      "description": "Optional severity/on_critical_path/metadata omitted",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-severity-critical",
+      "contract": "AttackNode",
+      "description": "severity=CRITICAL accepted",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "severity": "CRITICAL"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "severity": "CRITICAL",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-severity-null",
+      "contract": "AttackNode",
+      "description": "severity=null → None",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "severity": null
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-severity-invalid",
+      "contract": "AttackNode",
+      "description": "severity=lowercase rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "severity": "critical"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "enum"
+        ]
+      }
+    },
+    {
+      "id": "node-node-type-unknown",
+      "contract": "AttackNode",
+      "description": "Unknown NodeType wire rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "UNKNOWN",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "enum"
+        ]
+      }
+    },
+    {
+      "id": "node-label-empty",
+      "contract": "AttackNode",
+      "description": "Empty label accepted",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-label-120",
+      "contract": "AttackNode",
+      "description": "Label at 120-char max boundary accepted",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-label-121",
+      "contract": "AttackNode",
+      "description": "Label at 121 chars rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "string_too_long"
+        ]
+      }
+    },
+    {
+      "id": "node-label-unicode",
+      "contract": "AttackNode",
+      "description": "Unicode label of 120 codepoints accepted",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-label-unicode-over",
+      "contract": "AttackNode",
+      "description": "Unicode label of 121 codepoints rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "string_too_long"
+        ]
+      }
+    },
+    {
+      "id": "node-metadata-nested",
+      "contract": "AttackNode",
+      "description": "Nested forbidden key deep>1 accepted (top-level guard only)",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "metadata": {
+          "deep": {
+            "password": "inner"
+          }
+        }
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {
+          "deep": {
+            "password": "inner"
+          }
+        }
+      }
+    },
+    {
+      "id": "node-metadata-safe",
+      "contract": "AttackNode",
+      "description": "Safe metadata keys accepted",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "metadata": {
+          "os_family": "linux",
+          "service": "ssh",
+          "count": 3
+        }
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {
+          "os_family": "linux",
+          "service": "ssh",
+          "count": 3
+        }
+      }
+    },
+    {
+      "id": "node-metadata-forbidden-password",
+      "contract": "AttackNode",
+      "description": "Forbidden top-level metadata key password rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "metadata": {
+          "password": "synthetic-placeholder"
+        }
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "value_error"
+        ]
+      }
+    },
+    {
+      "id": "node-metadata-forbidden-hash_plaintext",
+      "contract": "AttackNode",
+      "description": "Forbidden top-level metadata key hash_plaintext rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "metadata": {
+          "hash_plaintext": "synthetic-placeholder"
+        }
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "value_error"
+        ]
+      }
+    },
+    {
+      "id": "node-metadata-forbidden-key_enc",
+      "contract": "AttackNode",
+      "description": "Forbidden top-level metadata key key_enc rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "metadata": {
+          "key_enc": "synthetic-placeholder"
+        }
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "value_error"
+        ]
+      }
+    },
+    {
+      "id": "node-metadata-forbidden-key_raw",
+      "contract": "AttackNode",
+      "description": "Forbidden top-level metadata key key_raw rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "metadata": {
+          "key_raw": "synthetic-placeholder"
+        }
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "value_error"
+        ]
+      }
+    },
+    {
+      "id": "node-metadata-forbidden-password_enc",
+      "contract": "AttackNode",
+      "description": "Forbidden top-level metadata key password_enc rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "metadata": {
+          "password_enc": "synthetic-placeholder"
+        }
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "value_error"
+        ]
+      }
+    },
+    {
+      "id": "node-missing-node_id",
+      "contract": "AttackNode",
+      "description": "Missing required field node_id rejected",
+      "input_json": {
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "node-missing-node_type",
+      "contract": "AttackNode",
+      "description": "Missing required field node_type rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "node-missing-label",
+      "contract": "AttackNode",
+      "description": "Missing required field label rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "node-missing-source_table",
+      "contract": "AttackNode",
+      "description": "Missing required field source_table rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_id": 42,
+        "engagement_id": 1001
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "node-missing-source_id",
+      "contract": "AttackNode",
+      "description": "Missing required field source_id rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "engagement_id": 1001
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "node-missing-engagement_id",
+      "contract": "AttackNode",
+      "description": "Missing required field engagement_id rejected",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "node-on-critical-path-true",
+      "contract": "AttackNode",
+      "description": "on_critical_path=true accepted",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": true
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": true,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-source-id-negative",
+      "contract": "AttackNode",
+      "description": "source_id negative accepted (int, no ge)",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": -5,
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": -5,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-source-id-string-coerce",
+      "contract": "AttackNode",
+      "description": "source_id str '42' coerced to int by pydantic lax",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": "42",
+        "engagement_id": 1001
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-engagement-id-string-coerce",
+      "contract": "AttackNode",
+      "description": "engagement_id str coerced",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": "1001"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-on-critical-path-int-coerce",
+      "contract": "AttackNode",
+      "description": "on_critical_path=1 coerced to True",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": 1
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": true,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-on-critical-path-string-coerce",
+      "contract": "AttackNode",
+      "description": "on_critical_path=\"true\" coerced",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": "true"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": true,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "node-metadata-unicode-key-value",
+      "contract": "AttackNode",
+      "description": "Unicode metadata key/value accepted",
+      "input_json": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "metadata": {
+          "注釈": "テスト"
+        }
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "node_id": "HOST::10.0.0.1",
+        "node_type": "HOST",
+        "label": "10.0.0.1",
+        "severity": null,
+        "source_table": "hosts",
+        "source_id": 42,
+        "engagement_id": 1001,
+        "on_critical_path": false,
+        "metadata": {
+          "注釈": "テスト"
+        }
+      }
+    },
+    {
+      "id": "edge-happy",
+      "contract": "AttackEdge",
+      "description": "Minimal edge with defaults",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "label": null,
+        "on_critical_path": false,
+        "edge_type": "vuln_found",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "edge-weight-zero",
+      "contract": "AttackEdge",
+      "description": "weight=0.0 (lower boundary)",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 0.0,
+        "edge_type": "vuln_found"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 0.0,
+        "label": null,
+        "on_critical_path": false,
+        "edge_type": "vuln_found",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "edge-weight-200",
+      "contract": "AttackEdge",
+      "description": "weight=200.0 (upper boundary)",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 200.0,
+        "edge_type": "vuln_found"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 200.0,
+        "label": null,
+        "on_critical_path": false,
+        "edge_type": "vuln_found",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "edge-weight-negative",
+      "contract": "AttackEdge",
+      "description": "weight=-0.001 rejected",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": -0.001,
+        "edge_type": "vuln_found"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "greater_than_equal"
+        ]
+      }
+    },
+    {
+      "id": "edge-weight-over",
+      "contract": "AttackEdge",
+      "description": "weight=200.001 rejected",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 200.001,
+        "edge_type": "vuln_found"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "less_than_equal"
+        ]
+      }
+    },
+    {
+      "id": "edge-weight-string-coerce",
+      "contract": "AttackEdge",
+      "description": "weight=\"50.5\" coerced",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": "50.5",
+        "edge_type": "vuln_found"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.5,
+        "label": null,
+        "on_critical_path": false,
+        "edge_type": "vuln_found",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "edge-label-null",
+      "contract": "AttackEdge",
+      "description": "label=null accepted as None",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found",
+        "label": null
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "label": null,
+        "on_critical_path": false,
+        "edge_type": "vuln_found",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "edge-label-80",
+      "contract": "AttackEdge",
+      "description": "label at 80-char max accepted",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found",
+        "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "on_critical_path": false,
+        "edge_type": "vuln_found",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "edge-label-81",
+      "contract": "AttackEdge",
+      "description": "label 81 chars rejected",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found",
+        "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "string_too_long"
+        ]
+      }
+    },
+    {
+      "id": "edge-label-unicode",
+      "contract": "AttackEdge",
+      "description": "Unicode label 80 codepoints accepted",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found",
+        "label": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "label": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+        "on_critical_path": false,
+        "edge_type": "vuln_found",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "edge-edge-type-custom",
+      "contract": "AttackEdge",
+      "description": "edge_type is unconstrained str",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "custom_edge"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "label": null,
+        "on_critical_path": false,
+        "edge_type": "custom_edge",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "edge-edge-type-empty",
+      "contract": "AttackEdge",
+      "description": "edge_type empty string accepted (no min_length)",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": ""
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "label": null,
+        "on_critical_path": false,
+        "edge_type": "",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "edge-edge-type-int",
+      "contract": "AttackEdge",
+      "description": "edge_type=123 rejected (str required)",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": 123
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "string_type"
+        ]
+      }
+    },
+    {
+      "id": "edge-on-critical-path-int",
+      "contract": "AttackEdge",
+      "description": "on_critical_path=0 coerced to False",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found",
+        "on_critical_path": 0
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "label": null,
+        "on_critical_path": false,
+        "edge_type": "vuln_found",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "edge-metadata-forbidden-password",
+      "contract": "AttackEdge",
+      "description": "Forbidden edge metadata key password rejected",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found",
+        "metadata": {
+          "password": "synthetic-placeholder"
+        }
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "value_error"
+        ]
+      }
+    },
+    {
+      "id": "edge-metadata-forbidden-hash_plaintext",
+      "contract": "AttackEdge",
+      "description": "Forbidden edge metadata key hash_plaintext rejected",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found",
+        "metadata": {
+          "hash_plaintext": "synthetic-placeholder"
+        }
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "value_error"
+        ]
+      }
+    },
+    {
+      "id": "edge-metadata-forbidden-key_enc",
+      "contract": "AttackEdge",
+      "description": "Forbidden edge metadata key key_enc rejected",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found",
+        "metadata": {
+          "key_enc": "synthetic-placeholder"
+        }
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "value_error"
+        ]
+      }
+    },
+    {
+      "id": "edge-metadata-forbidden-key_raw",
+      "contract": "AttackEdge",
+      "description": "Forbidden edge metadata key key_raw rejected",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found",
+        "metadata": {
+          "key_raw": "synthetic-placeholder"
+        }
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "value_error"
+        ]
+      }
+    },
+    {
+      "id": "edge-metadata-forbidden-password_enc",
+      "contract": "AttackEdge",
+      "description": "Forbidden edge metadata key password_enc rejected",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found",
+        "metadata": {
+          "password_enc": "synthetic-placeholder"
+        }
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "value_error"
+        ]
+      }
+    },
+    {
+      "id": "edge-metadata-nested",
+      "contract": "AttackEdge",
+      "description": "Nested forbidden key at depth>1 accepted",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found",
+        "metadata": {
+          "deep": {
+            "password": "x"
+          }
+        }
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "label": null,
+        "on_critical_path": false,
+        "edge_type": "vuln_found",
+        "metadata": {
+          "deep": {
+            "password": "x"
+          }
+        }
+      }
+    },
+    {
+      "id": "edge-metadata-safe",
+      "contract": "AttackEdge",
+      "description": "Safe edge metadata accepted",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found",
+        "metadata": {
+          "protocol": "smb",
+          "port": 445
+        }
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "label": null,
+        "on_critical_path": false,
+        "edge_type": "vuln_found",
+        "metadata": {
+          "protocol": "smb",
+          "port": 445
+        }
+      }
+    },
+    {
+      "id": "edge-missing-source_node_id",
+      "contract": "AttackEdge",
+      "description": "Missing required field source_node_id rejected",
+      "input_json": {
+        "target_node_id": "HOST::b",
+        "weight": 50.0,
+        "edge_type": "vuln_found"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "edge-missing-target_node_id",
+      "contract": "AttackEdge",
+      "description": "Missing required field target_node_id rejected",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "weight": 50.0,
+        "edge_type": "vuln_found"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "edge-missing-weight",
+      "contract": "AttackEdge",
+      "description": "Missing required field weight rejected",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "edge_type": "vuln_found"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "edge-missing-edge_type",
+      "contract": "AttackEdge",
+      "description": "Missing required field edge_type rejected",
+      "input_json": {
+        "source_node_id": "HOST::a",
+        "target_node_id": "HOST::b",
+        "weight": 50.0
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "graph-empty-defaults",
+      "contract": "AttackGraph",
+      "description": "Empty graph with all defaults",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 0.0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "LOW",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "graph-two-nodes-one-edge",
+      "contract": "AttackGraph",
+      "description": "Valid connected graph",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 2,
+        "edge_count": 1,
+        "nodes": [
+          {
+            "node_id": "EXTERNAL::entry",
+            "node_type": "EXTERNAL",
+            "label": "Entry",
+            "source_table": "hosts",
+            "source_id": 1,
+            "engagement_id": 1001
+          },
+          {
+            "node_id": "IMPACT::end",
+            "node_type": "IMPACT",
+            "label": "Compromise",
+            "source_table": "hosts",
+            "source_id": 2,
+            "engagement_id": 1001
+          }
+        ],
+        "edges": [
+          {
+            "source_node_id": "EXTERNAL::entry",
+            "target_node_id": "IMPACT::end",
+            "weight": 100.0,
+            "edge_type": "entry"
+          }
+        ],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "critical_path_nodes": [
+          "EXTERNAL::entry",
+          "IMPACT::end"
+        ],
+        "critical_path_weight": 100.0
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 2,
+        "edge_count": 1,
+        "critical_path_nodes": [
+          "EXTERNAL::entry",
+          "IMPACT::end"
+        ],
+        "critical_path_weight": 100.0,
+        "nodes": [
+          {
+            "node_id": "EXTERNAL::entry",
+            "node_type": "EXTERNAL",
+            "label": "Entry",
+            "severity": null,
+            "source_table": "hosts",
+            "source_id": 1,
+            "engagement_id": 1001,
+            "on_critical_path": false,
+            "metadata": {}
+          },
+          {
+            "node_id": "IMPACT::end",
+            "node_type": "IMPACT",
+            "label": "Compromise",
+            "severity": null,
+            "source_table": "hosts",
+            "source_id": 2,
+            "engagement_id": 1001,
+            "on_critical_path": false,
+            "metadata": {}
+          }
+        ],
+        "edges": [
+          {
+            "source_node_id": "EXTERNAL::entry",
+            "target_node_id": "IMPACT::end",
+            "weight": 100.0,
+            "label": null,
+            "on_critical_path": false,
+            "edge_type": "entry",
+            "metadata": {}
+          }
+        ],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "LOW",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "graph-dangling-source",
+      "contract": "AttackGraph",
+      "description": "Dangling edge source rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 1,
+        "edge_count": 1,
+        "nodes": [
+          {
+            "node_id": "HOST::present",
+            "node_type": "HOST",
+            "label": "10.0.0.1",
+            "source_table": "hosts",
+            "source_id": 42,
+            "engagement_id": 1001
+          }
+        ],
+        "edges": [
+          {
+            "source_node_id": "HOST::absent",
+            "target_node_id": "HOST::present",
+            "weight": 50.0,
+            "edge_type": "vuln_found"
+          }
+        ],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "value_error"
+        ]
+      }
+    },
+    {
+      "id": "graph-dangling-target",
+      "contract": "AttackGraph",
+      "description": "Dangling edge target rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 1,
+        "edge_count": 1,
+        "nodes": [
+          {
+            "node_id": "HOST::present",
+            "node_type": "HOST",
+            "label": "10.0.0.1",
+            "source_table": "hosts",
+            "source_id": 42,
+            "engagement_id": 1001
+          }
+        ],
+        "edges": [
+          {
+            "source_node_id": "HOST::present",
+            "target_node_id": "HOST::absent",
+            "weight": 50.0,
+            "edge_type": "vuln_found"
+          }
+        ],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "value_error"
+        ]
+      }
+    },
+    {
+      "id": "graph-duplicate-node-ids",
+      "contract": "AttackGraph",
+      "description": "Duplicate node_id in nodes list accepted by Python (no dedupe)",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 2,
+        "edge_count": 0,
+        "nodes": [
+          {
+            "node_id": "HOST::dup",
+            "node_type": "HOST",
+            "label": "10.0.0.1",
+            "source_table": "hosts",
+            "source_id": 42,
+            "engagement_id": 1001
+          },
+          {
+            "node_id": "HOST::dup",
+            "node_type": "HOST",
+            "label": "10.0.0.1",
+            "source_table": "hosts",
+            "source_id": 42,
+            "engagement_id": 1001
+          }
+        ],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 2,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 0.0,
+        "nodes": [
+          {
+            "node_id": "HOST::dup",
+            "node_type": "HOST",
+            "label": "10.0.0.1",
+            "severity": null,
+            "source_table": "hosts",
+            "source_id": 42,
+            "engagement_id": 1001,
+            "on_critical_path": false,
+            "metadata": {}
+          },
+          {
+            "node_id": "HOST::dup",
+            "node_type": "HOST",
+            "label": "10.0.0.1",
+            "severity": null,
+            "source_table": "hosts",
+            "source_id": 42,
+            "engagement_id": 1001,
+            "on_critical_path": false,
+            "metadata": {}
+          }
+        ],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "LOW",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "graph-min-severity-critical",
+      "contract": "AttackGraph",
+      "description": "min_severity_filter=CRITICAL accepted",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "CRITICAL"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 0.0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "CRITICAL",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "graph-min-severity-high",
+      "contract": "AttackGraph",
+      "description": "min_severity_filter=HIGH accepted",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "HIGH"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 0.0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "HIGH",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "graph-min-severity-medium",
+      "contract": "AttackGraph",
+      "description": "min_severity_filter=MEDIUM accepted",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "MEDIUM"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 0.0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "MEDIUM",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "graph-min-severity-low",
+      "contract": "AttackGraph",
+      "description": "min_severity_filter=LOW accepted",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "LOW"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 0.0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "LOW",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "graph-min-severity-info",
+      "contract": "AttackGraph",
+      "description": "min_severity_filter=INFO accepted",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "INFO"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 0.0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "INFO",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "graph-min-severity-invalid",
+      "contract": "AttackGraph",
+      "description": "min_severity_filter invalid wire rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "lowercase"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "enum"
+        ]
+      }
+    },
+    {
+      "id": "graph-node-count-negative",
+      "contract": "AttackGraph",
+      "description": "node_count=-1 rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": -1,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "greater_than_equal"
+        ]
+      }
+    },
+    {
+      "id": "graph-edge-count-negative",
+      "contract": "AttackGraph",
+      "description": "edge_count=-1 rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": -1,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "greater_than_equal"
+        ]
+      }
+    },
+    {
+      "id": "graph-pruned-true-with-reason",
+      "contract": "AttackGraph",
+      "description": "pruned=true with prune_reason string",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "pruned": true,
+        "prune_reason": "over 5k nodes"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 0.0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "LOW",
+        "pruned": true,
+        "prune_reason": "over 5k nodes"
+      }
+    },
+    {
+      "id": "graph-pruned-null-reason",
+      "contract": "AttackGraph",
+      "description": "prune_reason=null accepted",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "pruned": false,
+        "prune_reason": null
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 0.0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "LOW",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "graph-missing-engagement_id",
+      "contract": "AttackGraph",
+      "description": "Missing required field engagement_id rejected",
+      "input_json": {
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "graph-missing-engagement_name",
+      "contract": "AttackGraph",
+      "description": "Missing required field engagement_name rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "graph-missing-node_count",
+      "contract": "AttackGraph",
+      "description": "Missing required field node_count rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "graph-missing-edge_count",
+      "contract": "AttackGraph",
+      "description": "Missing required field edge_count rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "graph-missing-nodes",
+      "contract": "AttackGraph",
+      "description": "Missing required field nodes rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "graph-missing-edges",
+      "contract": "AttackGraph",
+      "description": "Missing required field edges rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "graph-missing-generated_at",
+      "contract": "AttackGraph",
+      "description": "Missing required field generated_at rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": []
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "graph-critical-path-weight-string-coerce",
+      "contract": "AttackGraph",
+      "description": "critical_path_weight str coerced",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "critical_path_weight": "12.5"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 12.5,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "LOW",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "graph-generated-at-empty-string",
+      "contract": "AttackGraph",
+      "description": "generated_at='' accepted (str, no format constraint)",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": ""
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 0.0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "",
+        "min_severity_filter": "LOW",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "graph-node-count-string-coerce",
+      "contract": "AttackGraph",
+      "description": "node_count str coerced",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": "0",
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "Test",
+        "node_count": 0,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 0.0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "LOW",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "graph-unicode-engagement-name",
+      "contract": "AttackGraph",
+      "description": "Unicode engagement_name accepted",
+      "input_json": {
+        "engagement_id": 1001,
+        "engagement_name": "侵入テスト",
+        "node_count": 0,
+        "edge_count": 0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "engagement_name": "侵入テスト",
+        "node_count": 0,
+        "edge_count": 0,
+        "critical_path_nodes": [],
+        "critical_path_weight": 0.0,
+        "nodes": [],
+        "edges": [],
+        "generated_at": "2026-09-17T00:00:00Z",
+        "min_severity_filter": "LOW",
+        "pruned": false,
+        "prune_reason": null
+      }
+    },
+    {
+      "id": "report-required-only",
+      "contract": "AttackGraphReportContext",
+      "description": "Only required fields; defaults apply",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": []
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": null
+      }
+    },
+    {
+      "id": "report-top-exploits-zero",
+      "contract": "AttackGraphReportContext",
+      "description": "Empty top_exploits accepted",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": []
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": null
+      }
+    },
+    {
+      "id": "report-top-exploits-four",
+      "contract": "AttackGraphReportContext",
+      "description": "4 exploits unchanged",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [
+          "E1",
+          "E2",
+          "E3",
+          "E4"
+        ]
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [
+          "E1",
+          "E2",
+          "E3",
+          "E4"
+        ],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": null
+      }
+    },
+    {
+      "id": "report-top-exploits-five",
+      "contract": "AttackGraphReportContext",
+      "description": "5 exploits unchanged",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [
+          "E1",
+          "E2",
+          "E3",
+          "E4",
+          "E5"
+        ]
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [
+          "E1",
+          "E2",
+          "E3",
+          "E4",
+          "E5"
+        ],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": null
+      }
+    },
+    {
+      "id": "report-top-exploits-seven-truncate",
+      "contract": "AttackGraphReportContext",
+      "description": "7 exploits truncated to 5 (model_validator)",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [
+          "E1",
+          "E2",
+          "E3",
+          "E4",
+          "E5",
+          "E6",
+          "E7"
+        ]
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [
+          "E1",
+          "E2",
+          "E3",
+          "E4",
+          "E5"
+        ],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": null
+      }
+    },
+    {
+      "id": "report-mermaid-null",
+      "contract": "AttackGraphReportContext",
+      "description": "mermaid_snippet=null accepted",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "mermaid_snippet": null
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": null
+      }
+    },
+    {
+      "id": "report-mermaid-4000",
+      "contract": "AttackGraphReportContext",
+      "description": "mermaid_snippet at 4000 chars unchanged",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "mermaid_snippet": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "report-mermaid-4001-truncate",
+      "contract": "AttackGraphReportContext",
+      "description": "mermaid_snippet 4001 → truncated to 4000",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "mermaid_snippet": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "report-mermaid-unicode-truncate",
+      "contract": "AttackGraphReportContext",
+      "description": "Unicode mermaid_snippet truncated by chars not bytes",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "mermaid_snippet": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日"
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日"
+      }
+    },
+    {
+      "id": "report-total-critical-negative",
+      "contract": "AttackGraphReportContext",
+      "description": "total_critical_nodes=-1 rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": -1,
+        "total_high_nodes": 0,
+        "top_exploits": []
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "greater_than_equal"
+        ]
+      }
+    },
+    {
+      "id": "report-total-high-negative",
+      "contract": "AttackGraphReportContext",
+      "description": "total_high_nodes=-1 rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": -1,
+        "top_exploits": []
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "greater_than_equal"
+        ]
+      }
+    },
+    {
+      "id": "report-cloud-misconfig-default",
+      "contract": "AttackGraphReportContext",
+      "description": "cloud_misconfig_count default 0",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": []
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": null
+      }
+    },
+    {
+      "id": "report-cloud-misconfig-set",
+      "contract": "AttackGraphReportContext",
+      "description": "cloud_misconfig_count set",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "cloud_misconfig_count": 7,
+        "idor_finding_count": 3,
+        "has_validated_creds": true
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "cloud_misconfig_count": 7,
+        "idor_finding_count": 3,
+        "has_validated_creds": true,
+        "mermaid_snippet": null
+      }
+    },
+    {
+      "id": "report-has-validated-creds-int",
+      "contract": "AttackGraphReportContext",
+      "description": "has_validated_creds=1 coerced to True",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "has_validated_creds": 1
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": true,
+        "mermaid_snippet": null
+      }
+    },
+    {
+      "id": "report-unicode-summary",
+      "contract": "AttackGraphReportContext",
+      "description": "Unicode critical_path_summary retained",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [
+          "エントリ",
+          "侵害"
+        ],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [
+          "CVE-2021-44228"
+        ]
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [
+          "エントリ",
+          "侵害"
+        ],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [
+          "CVE-2021-44228"
+        ],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": null
+      }
+    },
+    {
+      "id": "report-missing-engagement_id",
+      "contract": "AttackGraphReportContext",
+      "description": "Missing required field engagement_id rejected",
+      "input_json": {
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": []
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "report-missing-critical_path_summary",
+      "contract": "AttackGraphReportContext",
+      "description": "Missing required field critical_path_summary rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": []
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "report-missing-critical_path_weight",
+      "contract": "AttackGraphReportContext",
+      "description": "Missing required field critical_path_weight rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": []
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "report-missing-total_critical_nodes",
+      "contract": "AttackGraphReportContext",
+      "description": "Missing required field total_critical_nodes rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_high_nodes": 0,
+        "top_exploits": []
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "report-missing-total_high_nodes",
+      "contract": "AttackGraphReportContext",
+      "description": "Missing required field total_high_nodes rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "top_exploits": []
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "report-missing-top_exploits",
+      "contract": "AttackGraphReportContext",
+      "description": "Missing required field top_exploits rejected",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0
+      },
+      "python_accepted": false,
+      "python_error": {
+        "exception": "ValidationError",
+        "error_count": 1,
+        "error_types": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "report-critical-path-weight-string",
+      "contract": "AttackGraphReportContext",
+      "description": "critical_path_weight str coerced",
+      "input_json": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": "42.5",
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": []
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 42.5,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": null
+      }
+    },
+    {
+      "id": "report-engagement-id-string",
+      "contract": "AttackGraphReportContext",
+      "description": "engagement_id str coerced",
+      "input_json": {
+        "engagement_id": "1001",
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": []
+      },
+      "python_accepted": true,
+      "python_normalized": {
+        "engagement_id": 1001,
+        "critical_path_summary": [],
+        "critical_path_weight": 0.0,
+        "total_critical_nodes": 0,
+        "total_high_nodes": 0,
+        "top_exploits": [],
+        "cloud_misconfig_count": 0,
+        "idor_finding_count": 0,
+        "has_validated_creds": false,
+        "mermaid_snippet": null
+      }
+    }
+  ]
+}
