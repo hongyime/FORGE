@@ -101,6 +101,13 @@ Memory tools such as cognee or cavemem are optional local aids. Trust
 
 ## Repository-Specific Overrides
 
+### FORGE — Windows build and dependency hygiene
+- New first-party migration helpers must use Rust; use PowerShell for host administration. Do not generate new Python helpers or refresh `uv` caches for this rewrite. Existing Python reference adapters are legacy dependencies, not proof of a Python-free build.
+- Keep routine setup and verification on the core dependency path. Do not install the `offensive` extra, use `--all-extras`, or download offensive tool bundles to repair a build/test environment. For existing bootstrap use, select `FORGE_SAFE_MODE=1`; missing optional offensive dependencies remain explicit blockers.
+- Preserve Defender real-time protection. Do not add exclusions, disable scanning, restore quarantined artifacts, or repackage/rewrite flagged utilities merely to avoid detection.
+- Use task-required dependencies from trusted upstream sources with pinned versions/lockfiles. Investigate a detection using its threat name and artifact provenance; submit a genuine suspected false positive to Microsoft rather than bypassing the detection.
+- Check distributable native artifacts with current Defender signatures before release. Report the actual scan result and limitations; neither Rust nor a clean scan guarantees that future files will never be flagged.
+
 ### source-repo-code (Template/Source)
 - **Purpose**: Source of truth for shared configurations
 - **Special Rules**: Changes here should be synced to all repos
