@@ -9,6 +9,7 @@ mod baseline_lanes;
 mod baseline_process;
 mod baseline_types;
 mod baseline_vitest;
+mod baseline_vitest_identities;
 mod baseline_vitest_process;
 mod baseline_vitest_reconcile;
 mod baseline_vitest_report;

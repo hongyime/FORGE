@@ -87,7 +87,7 @@ fn sources(
     Ok(())
 }
 
-fn stream_hash(path: &Path) -> Result<String> {
+pub(crate) fn stream_hash(path: &Path) -> Result<String> {
     let mut file = fs::File::open(path)?;
     if file.metadata()?.len() > 256 * 1024 * 1024 {
         return Err(Error::Input("executable exceeds hash bound"));

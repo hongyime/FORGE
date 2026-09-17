@@ -29,6 +29,10 @@ pub fn execute_lane(root: &Path, evidence: &Path, dl: &Deadline, run: &mut Run) 
             return;
         }
     };
+    if let Err(reason) = crate::baseline_vitest_identities::capture(&tools, &mut run.input_hashes) {
+        finalize_blocked(run, index, reason);
+        return;
+    }
     if run.mode == Mode::Collect {
         match spawn_collect_attempt(&tools, root, evidence, dl, run.attempts.len()) {
             Ok(Some((attempt, summary))) => finalize_collect(run, index, attempt, summary),
