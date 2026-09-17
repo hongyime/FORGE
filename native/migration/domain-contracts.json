@@ -2917,8 +2917,8 @@
         "graph_node_edge_parity::node_forbidden_metadata_and_nested_accepted",
         "graph_coercion_mismatch::python_accepted_mismatch_cases_are_also_accepted_by_rust"
       ],
-      "status": "implemented_fixture_verified",
-      "residual": "JSON-boundary differential coverage: required/optional field acceptance, enum variants, label limits, metadata keys, coercion parity (int->bool, str->int). Fixture: graph-parity-cases.json + graph-coercion-cases.json."
+      "status": "existing_partial",
+      "residual": "Scalar-coercion source proof is valid: graph-coercion-cases.json was live-Python-derived and graph_coercion_mismatch.rs is GREEN. Structural fixture (graph-parity-cases.json) is hand-authored and not source-captured; it does not establish full source differential coverage. Full parity requires source-captured Python execution for the structural cases."
     },
     {
       "id": "forge/models/attack_graph_models.py:AttackEdge",
@@ -2969,8 +2969,8 @@
         "graph_node_edge_parity::edge_forbidden_metadata_keys_rejected",
         "graph_coercion_mismatch::python_accepted_mismatch_cases_are_also_accepted_by_rust"
       ],
-      "status": "implemented_fixture_verified",
-      "residual": "JSON-boundary differential coverage: required/optional field acceptance, weight boundaries, label limits, metadata keys, coercion parity (str->float for weight, int->bool for on_critical_path). Fixture: graph-parity-cases.json + graph-coercion-cases.json."
+      "status": "existing_partial",
+      "residual": "Scalar-coercion source proof is valid: graph-coercion-cases.json was live-Python-derived and graph_coercion_mismatch.rs is GREEN. Structural fixture (graph-parity-cases.json) is hand-authored and not source-captured; it does not establish full source differential coverage. Full parity requires source-captured Python execution for the structural cases."
     },
     {
       "id": "forge/models/attack_graph_models.py:AttackGraph",
@@ -3045,8 +3045,8 @@
         "graph_full_parity::graph_constructor_dangling_error_type",
         "graph_coercion_mismatch::python_accepted_mismatch_cases_are_also_accepted_by_rust"
       ],
-      "status": "implemented_fixture_verified",
-      "residual": "JSON-boundary differential coverage: required/optional fields, node/edge integrity, prune fields, severity filter variants, coercion parity (str->int for engagement_id/node_count/edge_count, str->float for critical_path_weight, int->bool for pruned). Fixture: graph-parity-cases.json + graph-coercion-cases.json."
+      "status": "existing_partial",
+      "residual": "Scalar-coercion source proof is valid: graph-coercion-cases.json was live-Python-derived and graph_coercion_mismatch.rs is GREEN. Structural fixture (graph-parity-cases.json) is hand-authored and not source-captured; it does not establish full source differential coverage. Full parity requires source-captured Python execution for the structural cases."
     },
     {
       "id": "forge/models/attack_graph_models.py:AttackGraphReportContext",
@@ -3118,8 +3118,8 @@
         "graph_report_parity::output_format_all_variants_and_wire_strings",
         "graph_coercion_mismatch::python_accepted_mismatch_cases_are_also_accepted_by_rust"
       ],
-      "status": "implemented_fixture_verified",
-      "residual": "JSON-boundary differential coverage: required/optional fields, top_exploits truncation, mermaid truncation, unicode, metadata key policy, output format variants, coercion parity (str->int for counts, str->float for critical_path_weight, int->bool for has_validated_creds). Fixture: graph-parity-cases.json + graph-coercion-cases.json."
+      "status": "existing_partial",
+      "residual": "Scalar-coercion source proof is valid: graph-coercion-cases.json was live-Python-derived and graph_coercion_mismatch.rs is GREEN. Structural fixture (graph-parity-cases.json) is hand-authored and not source-captured; it does not establish full source differential coverage. Full parity requires source-captured Python execution for the structural cases."
     },
     {
       "id": "forge/agents/base_plugin.py:TaskState",
@@ -3151,8 +3151,8 @@
       "test_ids": [
         "scalar_consumer::every_wire_enum_value_roundtrips_and_unknowns_fail"
       ],
-      "status": "implemented_fixture_verified",
-      "residual": "JSON-boundary differential coverage: all 4 declared variants roundtrip (pending/running/completed/failed), unknown and null inputs are rejected. Covered by shared wire_enum! roundtrip test."
+      "status": "existing_partial",
+      "residual": "Rust wire-enum roundtrip confirmed for all 4 variants (PENDING/RUNNING/COMPLETED/FAILED) via scalar_consumer. Python TaskState is a plain string class, not an Enum subclass; no Python plain-class/consumer boundary characterization exists. Roundtrip alone does not justify full parity."
     },
     {
       "id": "forge/agents/base_plugin.py:TaskSpec",
