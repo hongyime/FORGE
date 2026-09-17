@@ -134,6 +134,7 @@ pub fn run(
     if let Err(error) = &result {
         run.errors.push(error.to_string());
     }
+    crate::baseline_vitest::execute_lane(&root, &evidence, &dl, &mut run);
     baseline_lanes::reconcile(&mut run);
     run.cleanup = if result.is_ok() && run.attempts.iter().all(|a| a.tree_reaped && a.work_removed)
     {
