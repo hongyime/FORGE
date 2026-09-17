@@ -1421,10 +1421,12 @@
       ],
       "rust_type": "forge_domain::secrets::BreachRecord",
       "test_ids": [
-        "corrective_consumer::secret_record_debug_and_json_redact_python_fixture_plaintext"
+        "corrective_consumer::secret_record_debug_and_json_redact_python_fixture_plaintext",
+        "corrective_consumer::omitted_and_empty_secret_defaults_match_python",
+        "corrective_consumer::breach_record_rejects_extra_fields_and_unknown_confidence"
       ],
-      "status": "existing_partial",
-      "residual": "Full JSON-boundary differential coverage pending; prior consumer evidence preserved"
+      "status": "implemented_fixture_verified",
+      "residual": "JSON-boundary differential coverage: plaintext redaction in Debug/JSON, optional field defaults, extra=forbid enforcement, invalid confidence rejection. Fixtures: breach_secret, breach_default, breach_empty_secret, breach_extra, breach_unknown_confidence."
     },
     {
       "id": "forge/models/pydantic_models.py:CredentialValidationResult",
@@ -3149,8 +3151,8 @@
       "test_ids": [
         "scalar_consumer::every_wire_enum_value_roundtrips_and_unknowns_fail"
       ],
-      "status": "existing_partial",
-      "residual": "Full JSON-boundary differential coverage pending; prior consumer evidence preserved"
+      "status": "implemented_fixture_verified",
+      "residual": "JSON-boundary differential coverage: all 4 declared variants roundtrip (pending/running/completed/failed), unknown and null inputs are rejected. Covered by shared wire_enum! roundtrip test."
     },
     {
       "id": "forge/agents/base_plugin.py:TaskSpec",

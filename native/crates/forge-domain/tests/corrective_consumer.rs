@@ -155,3 +155,16 @@ fn seed_enum_defaults_match_existing_sql_fixtures() {
         assert_eq!(serde_json::to_value(seed).unwrap(), expected);
     }
 }
+
+#[test]
+fn breach_record_rejects_extra_fields_and_unknown_confidence() {
+    // Given the two Python rejection fixtures (deny_unknown_fields + invalid confidence),
+    for name in ["breach_extra", "breach_unknown_confidence"] {
+        let case = fixture(name);
+        assert_eq!(case["accepted"], false);
+        // When deserialized at the Rust boundary,
+        let result = serde_json::from_str::<BreachRecord>(&case["input"].to_string());
+        // Then both inputs are rejected — same policy as Python's extra=forbid.
+        assert!(result.is_err(), "{name}: expected rejection but got ok");
+    }
+}
