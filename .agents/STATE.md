@@ -1,6 +1,6 @@
-# Current Task: Complete Rust rewrite — tool-identity + TaskState source proof published (48 verified, 0 partial)
+# Current Task: Complete Rust rewrite — bounded Vitest input-drift guard published (48 verified, 0 partial)
 
-**Status:** IN PROGRESS; native workspace integrated | Latest code checkpoint pushed: `cc3b273` (identities `dc0c065`, TaskState proof `cc3b273`) | Date: 2026-09-17
+**Status:** IN PROGRESS; native workspace integrated | Latest code checkpoint pushed: `11c6014` (drift guard) | Date: 2026-09-17
 
 ## Current worker progress
 
@@ -9,9 +9,9 @@
 - ~~**2026-09-17 graph parity consumers** (`489c92b`): Added 41 parity tests across `graph_node_edge_parity.rs` (11), `graph_full_parity.rs` (13), `graph_report_parity.rs` (17). All GREEN. Ledger advanced 42→46 `implemented_fixture_verified` for AttackNode/Edge/Graph/AttackGraphReportContext.~~ **[SUPERSEDED BY 2026-09-17 AUDIT]** Tests and code are preserved; ledger advance was unsupported — structural fixture is hand-authored, not source-captured. Four graph contracts remain `existing_partial`.
 - ~~**2026-09-17 BreachRecord+TaskState coverage** (`59fc1b1`): Ledger advanced 46→48; all 6 previously `existing_partial` contracts are now `implemented_fixture_verified`. 0 `existing_partial` remaining.~~ **[SUPERSEDED BY 2026-09-17 AUDIT]** BreachRecord advance is valid and retained. TaskState advance was unsupported — plain Python class, no boundary characterization. Corrected ledger: 43 `implemented_fixture_verified`, 5 `existing_partial`. See line 11 for accepted counts.
 - **T3 domain ledger** (`native/migration/domain-contracts.json` — corrected `95e8cbe`, graph proof `81a1b56`, TaskState proof `cc3b273`): 118 entries. 48 `implemented_fixture_verified` (24 DTOs + 2 agent contracts + 16 enum sections + 1 BreachRecord + 4 graph types + 1 TaskState); 0 `existing_partial`; 66 `reference_only`; 3 `blocked_policy_conflict` (`DehashedResult.password`, `HashCredential.hash_plaintext`, `KeyScannerFinding.key_prefix`); 1 `blocked_dependency` (`HashCredentialSet`). 48+0+66+3+1=118. Note: prior 48-verified claim in `59fc1b1` was premature (reverted `95e8cbe`); this count is genuinely supported. 3 serialization policy conflicts + HashCredentialSet remain blocked; 66 reference entries route by owner. complete_t3=false.
-- **Published commits this session** (all pushed to origin/main): `7491cb6` (graph coercion fix), `489c92b` (graph parity consumers + ledger), `59fc1b1` (BreachRecord/TaskState coverage + ledger), `aca24ce` (bounded Vitest adapter), `95e8cbe` (ledger correction — 5 reverted), `408b4c8` (Vitest collect-mode), `81a1b56` (graph source-parity proof + 4 ledger advances), `dc0c065` (Vitest tool-identity hashing), `cc3b273` (TaskState source proof + ledger advance to 48).
-- LSP timed out; not clean-claimed. Parent ran `cargo test --workspace --locked --offline --jobs 1 -- --test-threads=1`: **233 tests pass** (129 domain + 104 xtask), 0 failures/ignores. fmt and clippy -D warnings clean. Evidence: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/parent-identities-state-{fmt,clippy,workspace}.json`; mutex released.
-- **Working tree after publication:** 8 LF-normalization fixture drift files remain unstaged (`native/crates/forge-domain/tests/fixtures/{python-cases,reference-agent,reference-cases,reference-seeds,review-fixes,timezone-offsets,unaffected-agents,unaffected-extra}.json`) — CRLF/LF line-ending drift only, no content change; do not stage. T2: tool-identity now pins Node/Vitest/package.json SHA snapshots before collect/run; stable Vitest 5.x.y supported; prerelease/build suffix unsupported; full source-drift/cross-mode reconciliation still DEFERRED; lane.complete remains false. T3: 0 existing_partial; 3 serialization policy conflicts + HashCredentialSet remain blocked; 66 reference entries route by owner.
+- **Published commits this session** (all pushed to origin/main): `7491cb6` (graph coercion fix), `489c92b` (graph parity consumers + ledger), `59fc1b1` (BreachRecord/TaskState coverage + ledger), `aca24ce` (bounded Vitest adapter), `95e8cbe` (ledger correction — 5 reverted), `408b4c8` (Vitest collect-mode), `81a1b56` (graph source-parity proof + 4 ledger advances), `dc0c065` (Vitest tool-identity hashing), `cc3b273` (TaskState source proof + ledger advance to 48), `11c6014` (bounded Vitest input-drift guard).
+- LSP timed out; not clean-claimed. Parent ran `cargo test --workspace --locked --offline --jobs 1 -- --test-threads=1`: **253 tests pass** (129 domain + 124 xtask), 0 failures/ignores. fmt and clippy -D warnings clean. Evidence: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/parent-input-drift-{fmt,clippy,workspace}.json`; mutex released.
+- **Working tree after publication:** 8 LF-normalization fixture drift files remain unstaged (`native/crates/forge-domain/tests/fixtures/{python-cases,reference-agent,reference-cases,reference-seeds,review-fixes,timezone-offsets,unaffected-agents,unaffected-extra}.json`) — CRLF/LF line-ending drift only, no content change; do not stage. T2: input-drift guard now snapshots frontend source/config/setup/tests + package/lock before and after each Vitest attempt; drift detected → lane.complete=false with prior reason preserved; source coverage is bounded known frontend extensions/manifests + 3 tool identities, NOT universal dependency closure; cross-mode reconciliation DEFERRED; lane.complete remains false. T3: 0 existing_partial; 3 serialization policy conflicts + HashCredentialSet remain blocked; 66 reference entries route by owner.
 
 - T2 corrective increment independently confirmed: 48 native tests, fmt/Clippy, repeated-failure retention and deadline checks pass (`task-2/adversarial-verify-final.json`). Full baseline (live/provider/operator-state lanes) remains incomplete.
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
@@ -74,12 +74,12 @@
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-17 09:05:34 +08:00
+- Updated: 2026-09-17 20:20:34 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 87520ec
+- HEAD: 49edc12
 - Dirty files: 8
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
