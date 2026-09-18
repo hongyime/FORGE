@@ -24,6 +24,13 @@ mod baseline_vitest_source_drift;
 mod baseline_vitest_tools;
 mod declaration_ids;
 mod documents;
+mod domain_artifacts;
+mod domain_checks;
+mod domain_graph;
+mod domain_inputs;
+mod domain_revision;
+mod domain_verify;
+mod domain_wire;
 mod exclusions;
 mod fixture;
 mod frontend;
@@ -79,7 +86,7 @@ enum Action {
     },
 }
 
-fn run() -> model::Result<()> {
+fn run() -> model::Result<i32> {
     match Cli::parse().command {
         Action::Baseline {
             root,
@@ -105,6 +112,7 @@ fn run() -> model::Result<()> {
             evidence,
             root,
         } => match case.as_str() {
+            "domain" => return domain_verify::run(&root, &evidence),
             "inventory" => verify::inventory(&root, &evidence),
             "baseline" => baseline::run(
                 &root,
@@ -116,12 +124,17 @@ fn run() -> model::Result<()> {
             .map_err(|e| e.to_string()),
             _ => Err(format!("unknown verify case: {case}")),
         },
-    }
+    }?;
+    Ok(0)
 }
 
 fn main() {
-    if let Err(error) = run() {
-        eprintln!("{error}");
-        std::process::exit(1);
+    match run() {
+        Ok(0) => (),
+        Ok(code) => std::process::exit(code),
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
     }
 }

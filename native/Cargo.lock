@@ -201,6 +201,7 @@ name = "forge-xtask"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "forge-domain",
  "pulldown-cmark",
  "serde",
  "serde_json",
