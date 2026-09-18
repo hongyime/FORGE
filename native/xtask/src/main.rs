@@ -9,6 +9,11 @@ mod baseline_lanes;
 mod baseline_process;
 mod baseline_types;
 mod baseline_vitest;
+mod baseline_vitest_case_identity;
+#[cfg(test)]
+mod baseline_vitest_case_identity_tests;
+mod baseline_vitest_collect_report;
+mod baseline_vitest_cross_mode;
 mod baseline_vitest_drift_wire;
 mod baseline_vitest_identities;
 mod baseline_vitest_process;

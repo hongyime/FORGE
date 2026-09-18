@@ -6,8 +6,7 @@
 //! These are NOT unit tests; the unit-level RED/GREEN for `after_and_apply`
 //! lives in `src/baseline_vitest_drift_wire_block_tests.rs`.
 //!
-//! Cross-mode reconciliation and the wider frontend required-lane set stay
-//! deferred T2/T3 work; `lane.complete` remains hard-false throughout.
+//! Cross-mode completion is allowed only for the unchanged, exactly matched control.
 
 mod vitest_support;
 use serde_json::Value;
@@ -106,7 +105,7 @@ fn real_vitest_passing_test_that_mutates_owned_helper_blocks_lane_with_drift_rea
 }
 
 #[test]
-fn real_vitest_unchanged_control_has_no_drift_and_deferred_reason_holds() {
+fn real_vitest_unchanged_control_completes_after_exact_reconciliation() {
     let vitest = require_real_vitest();
     let f = VitestFixture::new("drift_unchanged");
     f.with_webui().with_synthetic_suite(
@@ -125,12 +124,9 @@ fn real_vitest_unchanged_control_has_no_drift_and_deferred_reason_holds() {
     let after = receipt["input_hashes"][AFTER_KEY].as_str().unwrap();
     assert_eq!(before, after, "unchanged source must have equal hashes");
 
-    assert!(
-        lane["reason"]
-            .as_str()
-            .unwrap()
-            .contains("runtime_collection_and_input_provenance_pending"),
-        "unchanged control must retain deferred reason: {lane}"
+    assert_eq!(
+        lane["reason"],
+        "vitest_collected_and_executed_cases_proven_passed"
     );
     for p in prereq_list(lane) {
         assert!(
@@ -142,8 +138,7 @@ fn real_vitest_unchanged_control_has_no_drift_and_deferred_reason_holds() {
             "unexpected drift block prereq: {p}"
         );
     }
-    // lane.complete stays hard-false because of the deferred T2 gate, not drift.
-    assert_eq!(lane["complete"], false);
+    assert_eq!(lane["complete"], true);
 }
 
 #[test]

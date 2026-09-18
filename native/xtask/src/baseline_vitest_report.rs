@@ -1,3 +1,5 @@
+use crate::baseline_vitest_case_identity::{Field, Identity, Metadata, PENDING, PROJECT};
+pub(crate) use crate::baseline_vitest_collect_report::{CollectSummary, parse_collect_report};
 use crate::{baseline_process, baseline_types::*};
 use serde::Deserialize;
 use std::{
@@ -13,6 +15,7 @@ pub struct ToolPaths {
 pub struct ParsedCase {
     pub node_id: String,
     pub case: Case,
+    pub identity: std::result::Result<Identity, &'static str>,
 }
 
 pub struct FileError {
@@ -21,6 +24,7 @@ pub struct FileError {
 }
 
 pub struct ReportSummary {
+    pub cross_mode: std::result::Result<(), &'static str>,
     pub cases: Vec<ParsedCase>,
     pub success: bool,
     pub totals_consistent: bool,
@@ -51,6 +55,8 @@ struct FileReport {
     #[serde(rename = "assertionResults", default)]
     assertion_results: Vec<AssertionReport>,
     status: String,
+    #[serde(flatten)]
+    metadata: Metadata,
 }
 
 #[derive(Deserialize)]
@@ -58,6 +64,12 @@ struct AssertionReport {
     #[serde(rename = "fullName")]
     full_name: String,
     status: String,
+    #[serde(default, rename = "ancestorTitles")]
+    ancestors: Field<Vec<String>>,
+    #[serde(default)]
+    title: Field<String>,
+    #[serde(flatten)]
+    metadata: Metadata,
 }
 
 pub fn parse_report(path: &Path, root: &Path) -> std::result::Result<ReportSummary, &'static str> {
@@ -97,6 +109,13 @@ pub fn parse_report(path: &Path, root: &Path) -> std::result::Result<ReportSumma
                 .unwrap_or_else(|_| format!("_unencodable_case_{count}"));
             *count += 1;
             cases.push(ParsedCase {
+                identity: if file.metadata.supports_project() {
+                    assertion
+                        .metadata
+                        .assertion_identity(&file_key, (&assertion.ancestors, &assertion.title))
+                } else {
+                    Err(PROJECT)
+                },
                 node_id: node_id.clone(),
                 case: build_case(node_id, &assertion.status),
             });
@@ -136,6 +155,7 @@ pub fn parse_report(path: &Path, root: &Path) -> std::result::Result<ReportSumma
         && report.num_failed_tests == observed_failed
         && pending_plus_todo == Some(observed_skipped);
     Ok(ReportSummary {
+        cross_mode: Err(PENDING),
         cases,
         success: report.success,
         totals_consistent,
@@ -144,7 +164,7 @@ pub fn parse_report(path: &Path, root: &Path) -> std::result::Result<ReportSumma
     })
 }
 
-fn relativize(name: &str, root: &Path) -> std::result::Result<String, &'static str> {
+pub(crate) fn relativize(name: &str, root: &Path) -> std::result::Result<String, &'static str> {
     if name.is_empty() {
         return Err("vitest_reporter_report_file_path_empty");
     }
@@ -168,7 +188,7 @@ fn relativize(name: &str, root: &Path) -> std::result::Result<String, &'static s
     Ok(normalized)
 }
 
-fn sanitize_path_ref(name: &str) -> String {
+pub(crate) fn sanitize_path_ref(name: &str) -> String {
     // Path values are only ever emitted through a bounded fixed reason plus the
     // trimmed basename; the full absolute string never enters lane state.
     std::path::Path::new(&name.replace('\\', "/"))
@@ -197,64 +217,6 @@ pub fn build_case(node_id: String, status: &str) -> Case {
     }
 }
 
-// ============================================================================
-// Collect-mode runtime parser (T2, vitest list --no-static-parse --json).
-// Flat top-level array: [{"name":"suite > title","file":"abs/path"}, ...].
-// Bodies never execute; each entry maps to Outcome::Collected + executed=false.
-// ============================================================================
-
-#[derive(Deserialize)]
-struct CollectItem {
-    name: String,
-    file: String,
-}
-
-pub struct CollectSummary {
-    pub cases: Vec<ParsedCase>,
-    pub file_errors: Vec<FileError>,
-}
-
-pub fn parse_collect_report(
-    path: &Path,
-    root: &Path,
-) -> std::result::Result<CollectSummary, &'static str> {
-    let bytes =
-        baseline_process::read(path).map_err(|_| "collect_report_unreadable_or_oversized")?;
-    let items: Vec<CollectItem> = serde_json::from_slice(&bytes)
-        .map_err(|_| "collect_report_malformed_expected_flat_array")?;
-    let mut cases: Vec<ParsedCase> = Vec::new();
-    let mut occurrence: BTreeMap<String, usize> = BTreeMap::new();
-    let mut file_errors: Vec<FileError> = Vec::new();
-    for item in items {
-        let file_key = match relativize(&item.file, root) {
-            Ok(k) => k,
-            Err(reason) => {
-                file_errors.push(FileError {
-                    file: sanitize_path_ref(&item.file),
-                    reason,
-                });
-                continue;
-            }
-        };
-        let count = occurrence
-            .entry(format!("{file_key}\u{1f}{}", item.name))
-            .or_insert(0);
-        let node_id = serde_json::to_string(&(&file_key, &item.name, *count as u64))
-            .unwrap_or_else(|_| format!("_unencodable_collect_{count}"));
-        *count += 1;
-        cases.push(ParsedCase {
-            node_id: node_id.clone(),
-            case: Case {
-                node_id,
-                markers: vec!["frontend_vitest".into(), "collect_only".into()],
-                outcome: Outcome::Collected,
-                executed: false,
-                reason: "vitest_collect_only".into(),
-            },
-        });
-    }
-    Ok(CollectSummary { cases, file_errors })
-}
 #[cfg(test)]
 #[path = "baseline_vitest_report_tests.rs"]
 mod red_tests;

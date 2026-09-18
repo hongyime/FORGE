@@ -57,7 +57,7 @@ fn missing_node_binary_blocks_lane_and_reports_no_cases() {
 }
 
 #[test]
-fn real_vitest_passing_suite_reports_observed_counts_with_deferred_completion() {
+fn real_vitest_passing_suite_completes_after_cross_mode_reconciliation() {
     let vitest = require_real_vitest();
     let f = VitestFixture::new("passing_suite");
     f.with_webui().with_synthetic_suite(
@@ -78,19 +78,13 @@ fn real_vitest_passing_suite_reports_observed_counts_with_deferred_completion() 
     assert_eq!(counts["passed"], 4);
     assert_eq!(counts["failed"], 0);
     assert_eq!(counts["executed"], 4);
-    // BLOCKER 1 (round 3): runtime collection + input provenance are deferred T2 work;
-    // finalize must retain observed counts but explicitly withhold complete=true.
     assert_eq!(
-        lane["complete"], false,
-        "lane must not complete while capabilities deferred: {lane}"
+        lane["complete"], true,
+        "exact collected/executed match: {lane}"
     );
-    assert!(
-        lane["reason"]
-            .as_str()
-            .unwrap()
-            .contains("runtime_collection_and_input_provenance_pending"),
-        "reason must name deferred capabilities: {}",
-        lane["reason"]
+    assert_eq!(
+        lane["reason"],
+        "vitest_collected_and_executed_cases_proven_passed"
     );
     assert_eq!(lane["case_ids"].as_array().unwrap().len(), 4);
     // Every parametrised expansion must appear as a distinct node id.

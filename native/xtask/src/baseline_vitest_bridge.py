@@ -34,11 +34,11 @@ def main():
     limit = 8 * 1024 * 1024
     action = request.get("action", "run")
     if action == "collect":
-        command = [str(node), str(vitest), "list", "--no-static-parse",
+        command = [str(node), str(vitest), "list", "--no-static-parse", "--includeTaskLocation",
                    f"--json={output_file}"]
         accepted_exits = (0,)
     elif action == "run":
-        command = [str(node), str(vitest), "run", "--reporter=json",
+        command = [str(node), str(vitest), "run", "--reporter=json", "--includeTaskLocation",
                    f"--outputFile={output_file}"]
         accepted_exits = (0, 1)
     else:

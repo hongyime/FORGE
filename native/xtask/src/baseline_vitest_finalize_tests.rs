@@ -29,6 +29,7 @@ fn attempt_ok() -> Attempt {
 
 fn synth_case(id: &str, outcome: Outcome) -> ParsedCase {
     ParsedCase {
+        identity: Err(crate::baseline_vitest_case_identity::METADATA),
         node_id: id.into(),
         case: Case {
             node_id: id.into(),
@@ -72,6 +73,7 @@ fn run_with_lane() -> Run {
 
 fn synth_summary(cases: Vec<ParsedCase>, success: bool, consistent: bool) -> ReportSummary {
     ReportSummary {
+        cross_mode: Err(crate::baseline_vitest_case_identity::PENDING),
         cases,
         success,
         totals_consistent: consistent,

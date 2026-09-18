@@ -59,6 +59,7 @@ pub(crate) fn new_attempt(node: &Path, vitest: &Path, timeout_ms: u64) -> Attemp
             vitest.display().to_string(),
             "run".into(),
             "--reporter=json".into(),
+            "--includeTaskLocation".into(),
             "--outputFile=<ATTEMPT>/vitest-report.json".into(),
         ],
         files: vec![PACKAGE_REL.into()],
@@ -86,6 +87,7 @@ pub(crate) fn new_attempt(node: &Path, vitest: &Path, timeout_ms: u64) -> Attemp
 
 pub(crate) fn default_summary() -> ReportSummary {
     ReportSummary {
+        cross_mode: Err(crate::baseline_vitest_case_identity::PENDING),
         cases: vec![],
         success: false,
         totals_consistent: false,
@@ -103,6 +105,7 @@ pub(crate) fn new_collect_attempt(node: &Path, vitest: &Path, timeout_ms: u64) -
             vitest.display().to_string(),
             "list".into(),
             "--no-static-parse".into(),
+            "--includeTaskLocation".into(),
             "--json=<ATTEMPT>/vitest-report.json".into(),
         ],
         files: vec![PACKAGE_REL.into()],
