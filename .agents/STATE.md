@@ -1,9 +1,11 @@
-# Current Task: Rust rewrite — Rust-only blocked-receipt checkpoint published (`49cd38a`); 265 tests pass
+# Current Task: Rust rewrite — blocked decisions and dependency chain; not complete
 
-**Status:** IN PROGRESS; native workspace integrated | Bootstrap checkpoint: `7ca7fa0` | Last accepted native checkpoint: `49cd38a` | Date: 2026-09-18
+**Status:** BLOCKED, NOT COMPLETE | Last accepted native checkpoint: `49cd38a` (265 tests/doctests passed) | Bootstrap checkpoint: `7ca7fa0` | Date: 2026-09-18
 
 ## Current worker progress
 
+- **Awaiting explicit decisions:** T3 default-secret serialization and the proposed narrow Win32 FFI exception remain unanswered. Generic continuation is not approval to change either contract or weaken `unsafe_code = "forbid"`. No additional runtime implementation was started; last accepted native code remains `49cd38a` with 265 passing tests/doctests.
+- **Dependency sweep:** all 36 implementation tasks and four final gates remain incomplete (`[~]`, zero `[x]`). T12-T36 and F1-F4 now name their unaccepted direct prerequisites instead of appearing immediately runnable. This does not mark the rewrite complete or waive any work. Scoped T2/T3 work is permitted only within the existing scheduling exception; policy-gated adoption remains paused. Missing live/operator prerequisites, LSP, denied cleanup and final release/restoration evidence remain open independently of the two policy choices.
 - **Containment integration policy gate (2026-09-18):** `native/Cargo.toml:9-10` sets `unsafe_code = "forbid"`; xtask inherits it. The tested native Windows Job Object path needs a narrowly reviewed first-party Win32 FFI boundary. No policy exception or production adoption is approved. Keep the forbid setting intact until a verified safe dependency is selected or an explicit scoped exception is agreed. Inspected WinSafe 0.0.29 `CreateProcess` takes `STARTUPINFO`, not the extended attribute list used by the proof; this does not establish that all safe alternatives are unavailable. T10 is marked `[~]` on unaccepted T7/T8. No source, dependency or database change was made for this gate.
 - **Delegation correction (2026-09-18):** user requires every subagent to use the parent session's exact provider/model. Current route: `amazon-bedrock/global.openai.gpt-6-astra`. Avoid category defaults and cross-model fallbacks; if exact routing cannot be enforced, work directly. Image tasks also require attachment delivery verification. Durable rule is in `AGENTS.md`; this records a delegation policy, not a change to global harness configuration. The process-wrap lookup failed with a provider token error; its source audit was subsequently completed directly.
 - **Next T2 containment step:** process-wrap 10.0.0 std JobObject is unsuitable as a drop-in (kill-on-close disabled, no active-process-zero event check, unbounded/sequential output helpers). A direct isolated Rust 1.94.1/windows-sys 0.61.2 probe passed normal exit, explicit job termination, job-handle closure and abrupt supervisor-exit descendant cleanup. Evidence: `.omo/evidence/rust-rewrite/task-2/native-job-probe/verdict.json`; no active probe processes or runtime fixture directories remained. This is Windows-only feasibility, not production adoption, bounded-pipe/failure-injection or Miri/sanitizer proof. Next: design and test a production containment increment before Cargo collection integration. Main application suite remains 265 tests. T8/T9 are `[~]` for unaccepted prerequisite chains.
@@ -82,12 +84,12 @@
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-18 18:20:34 +08:00
+- Updated: 2026-09-18 19:08:22 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: f27db67
-- Dirty files: 8
+- HEAD: 9ffa01e
+- Dirty files: 9
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
