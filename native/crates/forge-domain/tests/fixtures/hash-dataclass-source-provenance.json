@@ -1,0 +1,14 @@
+{
+  "file": "hash-dataclass-source.json",
+  "bytes": 6039,
+  "sha256": "de6128a2a129b17728273b57dd32646565372fd4d04be0b3c6fab8ca675c02bd",
+  "source": "forge/models/pydantic_models.py",
+  "source_sha256": "4eed2a46e324f1bd8d4ca5f42fc983b49b4bcc8f0e5b68bef0b739e6592e0968",
+  "python": "3.12.10",
+  "pydantic": "2.10.4",
+  "reference_method": "Existing project interpreter, one-off runpy.run_path of source definitions, dataclass constructors and dataclasses.asdict; no new Python helper file, installs, uv, network calls or model-described actions.",
+  "verification": "All 12 stored cases replayed against actual legacy constructors; accepted output and five HashCredentialSet properties compared independently before native implementation acceptance.",
+  "case_counts": {"HashCredential": 5, "HashCredentialSet": 7},
+  "collection_boundary": "JSON arrays materialize declared HashCredential objects before constructing HashCredentialSet. Arbitrary non-list Python objects are outside this typed collection transport boundary.",
+  "encoding_note": "Stored JSON whitespace differs from the printed oracle output; semantic equality was reverified by replay. Hash describes shipped fixture bytes, not the original terminal stream."
+}

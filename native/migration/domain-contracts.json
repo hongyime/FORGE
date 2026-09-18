@@ -1541,10 +1541,14 @@
           "line": 348
         }
       ],
-      "rust_type": null,
-      "test_ids": [],
-      "status": "blocked_policy_conflict",
-      "residual": "Exact Python serialization exposes secret material; safe serialization requires an explicitly approved compatibility deviation. See source-security-conflicts.json."
+      "rust_type": "forge_domain::models::DehashedResult",
+      "test_ids": [
+        "approved_plaintext::dehashed_matches_38_python_boundary_cases",
+        "approved_plaintext::dehashed_preserves_plaintext_and_open_extra_fields"
+      ],
+      "status": "implemented_fixture_verified",
+      "residual": "User approved original plaintext serialization on 2026-09-18. Verified 38 preserved source cases, optional string defaults and open extras; no new masking. Not exhaustive input-space equivalence.",
+      "differential_cases": 38
     },
     {
       "id": "forge/models/pydantic_models.py:KeyScannerFinding",
@@ -1596,10 +1600,15 @@
           "line": 370
         }
       ],
-      "rust_type": null,
-      "test_ids": [],
-      "status": "blocked_policy_conflict",
-      "residual": "Exact Python serialization exposes secret material; safe serialization requires an explicitly approved compatibility deviation. See source-security-conflicts.json."
+      "rust_type": "forge_domain::models::KeyScannerFinding",
+      "test_ids": [
+        "approved_plaintext::key_finding_matches_56_python_boundary_cases",
+        "approved_plaintext::key_prefix_uses_unicode_characters_and_preserves_explicit_prefix",
+        "approved_plaintext::short_key_prefix_retains_original_value_and_secretstr_wire_format"
+      ],
+      "status": "implemented_fixture_verified",
+      "residual": "User approved source-compatible short plaintext prefixes on 2026-09-18. Verified 56 preserved source cases; explicit prefixes and Unicode truncation retained. key_value keeps the original SecretStr wire format; no new masking introduced.",
+      "differential_cases": 56
     },
     {
       "id": "forge/models/pydantic_models.py:PayloadSpec",
@@ -2691,10 +2700,13 @@
           "line": 744
         }
       ],
-      "rust_type": null,
-      "test_ids": [],
-      "status": "blocked_policy_conflict",
-      "residual": "Exact Python serialization exposes secret material; safe serialization requires an explicitly approved compatibility deviation. See source-security-conflicts.json."
+      "rust_type": "forge_domain::models::HashCredential",
+      "test_ids": [
+        "hash_dataclass_source::hash_credential_preserves_source_values_defaults_and_rejections"
+      ],
+      "status": "implemented_fixture_verified",
+      "residual": "Five actual legacy-constructor cases verify required/extra keywords, optional defaults and original plaintext output. JSON scalar fields remain uncoerced because the source dataclass does not validate annotations; not exhaustive Python-object equivalence.",
+      "differential_cases": 5
     },
     {
       "id": "forge/models/pydantic_models.py:HashCredentialSet",
@@ -2722,10 +2734,13 @@
           "line": 754
         }
       ],
-      "rust_type": null,
-      "test_ids": [],
-      "status": "blocked_dependency",
-      "residual": "All three lists contain the blocked central HashCredential representation. No DTO or serialization stub added.",
+      "rust_type": "forge_domain::models::HashCredentialSet",
+      "test_ids": [
+        "hash_dataclass_source::credential_sets_preserve_source_lists_and_properties"
+      ],
+      "status": "implemented_fixture_verified",
+      "residual": "Seven actual legacy-constructor cases verify defaults, independent lists, order/duplicate IDs and all five properties. JSON arrays materialize declared HashCredential objects; arbitrary non-list Python objects are outside this typed collection boundary.",
+      "differential_cases": 7,
       "depends_on": [
         "forge/models/pydantic_models.py:HashCredential"
       ]
@@ -4381,7 +4396,9 @@
   "inventory_source": ".omo/evidence/rust-rewrite/task-3/coverage-manifest.json",
   "notes": [
     "118 entries are inventory types, not additional heuristic route candidates.",
-    "Static mappings are not implementation or parity proof."
+    "Static mappings are not implementation or parity proof.",
+    "2026-09-18: all 52 T3-owned entries now have scoped fixture verification; 66 reference entries remain assigned to other tasks. complete_t3 remains false until the verify domain command and formal task closure are implemented and checked.",
+    "Latest four-contract increment: 94 existing Pydantic cases and 12 new dataclass cases replayed against Python 3.12.10/Pydantic 2.10.4; full native workspace 272 tests/doctests passed. Review used the inline fallback; no independent reviewer verdict is claimed for this increment."
   ],
   "unaffected_evidence": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/unaffected-done-claim.json"
 }

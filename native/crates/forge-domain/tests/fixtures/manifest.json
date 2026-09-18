@@ -1,7 +1,13 @@
 {
-  "fixture_policy": "Existing synthetic reference inputs and outputs; only CRLF-to-LF normalization, no source regeneration or JSON value changes. bytes/sha256 describe shipped LF-only fixture bytes; capture_bytes/capture_sha256 preserve original captured bytes. Provenance paths and source hashes are historical information, never runtime dependencies or checkout assertions.",
+  "fixture_policy": "Existing synthetic reference inputs and outputs remain unchanged except documented CRLF-to-LF normalization. New additive source captures identify their reference method and boundary. bytes/sha256 describe shipped LF-only fixture bytes; capture_bytes/capture_sha256, when present, preserve original captured bytes. Provenance paths and source hashes are historical information, never runtime dependencies or checkout assertions.",
   "schema": "forge.domain.fixture-provenance.v1",
   "files": [
+    {
+      "provenance": "hash-dataclass-source-provenance.json",
+      "file": "hash-dataclass-source.json",
+      "bytes": 6039,
+      "sha256": "de6128a2a129b17728273b57dd32646565372fd4d04be0b3c6fab8ca675c02bd"
+    },
     {
       "provenance": ".omo/evidence/rust-rewrite/task-3/reference-cases.json",
       "file": "reference-cases.json",

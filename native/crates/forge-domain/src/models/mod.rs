@@ -17,15 +17,19 @@ mod credentials;
 mod descriptors;
 mod discovery;
 mod findings;
+mod hash_credentials;
 mod reference;
 mod reports;
+mod source_credentials;
 pub use commands::*;
 pub use credentials::*;
 pub use descriptors::*;
 pub use discovery::*;
 pub use findings::*;
+pub use hash_credentials::*;
 pub use reference::*;
 pub use reports::*;
+pub use source_credentials::*;
 
 fn true_value() -> crate::json_boundary::JsonBool {
     crate::json_boundary::JsonBool::new(true)
