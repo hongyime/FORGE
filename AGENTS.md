@@ -106,6 +106,7 @@ Memory tools such as cognee or cavemem are optional local aids. Trust
 - If the delegation interface cannot enforce the same route, work directly or use an explicitly model-pinned CLI whose routing can be verified. For image tasks, also verify that image attachments reach the child; matching model names alone does not verify image delivery.
 
 ### FORGE — Windows build and dependency hygiene
+- User approved a narrow reviewed Win32 FFI boundary on 2026-09-18 for native process containment (job assignment, process-tree cleanup and bounded I/O). It must expose a safe API and isolate unsafe code to the dedicated boundary; retain `unsafe_code = "forbid"` for other first-party crates. This is not a blanket unsafe-code or Defender-policy exception.
 - New first-party migration helpers must use Rust; use PowerShell for host administration. Do not generate new Python helpers or refresh `uv` caches for this rewrite. Existing Python reference adapters are legacy dependencies, not proof of a Python-free build.
 - Keep routine setup and verification on the core dependency path. Do not install the `offensive` extra, use `--all-extras`, or download offensive tool bundles to repair a build/test environment. For existing bootstrap use, select `FORGE_SAFE_MODE=1`; missing optional offensive dependencies remain explicit blockers.
 - Preserve Defender real-time protection. Do not add exclusions, disable scanning, restore quarantined artifacts, or repackage/rewrite flagged utilities merely to avoid detection.
