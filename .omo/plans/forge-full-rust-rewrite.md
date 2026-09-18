@@ -12,7 +12,7 @@
 
 **Effort:** XL
 **Risk:** High — broad behavior, stored evidence, plugin compatibility and native/browser packaging must move together.
-**Decisions to sanity-check:** Approved: Rust-authored application and dashboard; optional independent tools may retain their own runtimes; test-first migration, explicit rollback and verified incremental publishing.
+**Decisions to sanity-check:** Approved: Rust-authored application and dashboard; optional independent tools may retain their own runtimes; test-first migration, explicit rollback and verified incremental publishing. On 2026-09-18 the user resolved the two pending decisions: preserve original plaintext serialization for the three discussed contracts, and permit a narrowly reviewed Win32 FFI boundary with a safe public API while retaining the unsafe-code prohibition elsewhere.
 
 Your next move: execution has been requested; use a dedicated worker session to execute the ordered tasks and publish verified checkpoints. Full execution detail follows below.
 
@@ -97,7 +97,7 @@ Single-source migration ledgers live in `native/migration/`: `capabilities.json`
 
 ## Todos
 > Implementation + Test = ONE todo. Never separate.
-> Status clarification (2026-09-18): `[~]` means blocked/incomplete, never completed. The downstream dependency sweep below records unavailable prerequisites; it does not waive implementation or verification. Zero runnable unchecked tasks is not completion: success still requires all 36 implementation tasks and F1-F4 to be evidence-backed `[x]`. T2/T3 retain only their explicitly admitted independent work; proposed policy changes still require resolution.
+> Current status (2026-09-18, after user decisions): 3/36 implementation milestones have delivered partial work (T1-T3); 0/36 are fully closed; 33/36 are queued; four final gates are pending. `[ ]` means actionable or queued work, `[~]` means a remaining external/acceptance blocker, `[x]` requires full evidence-backed closure. The previous all-blocked sweep is superseded. Dependencies still determine execution order, but neither plaintext compatibility nor narrow Win32 FFI approval is awaiting a decision. See `.agents/STATE.md` for checkpoint progress and the immediate todo list.
 <!-- APPEND TASK BATCHES BELOW THIS LINE WITH edit/apply_patch - never rewrite the headers above. -->
 - [~] 1. Bootstrap native migration inventory and fail-closed evidence runner
   Blocked closure: native code and independent verification are published (`5b7b82e`); previously denied cleanup of `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01`, plus unavailable LSP diagnostics, remain unresolved. No denied action is authorized by this status. Accepted code may be consumed per the scheduling clarification above; this is not full task completion.
@@ -111,15 +111,15 @@ Single-source migration ledgers live in `native/migration/`: `capabilities.json`
   Blocked full baseline: required live/provider/operator-state lanes lack explicit scoped prerequisites and prior fixture cleanup was denied. Implementable work remains: non-Python adapters and complete collection/execution accounting. Corrective runner code is independently confirmed (48 native tests; `task-2/adversarial-verify-final.json`) and published in `486c344`; the historical 3,318 observed cases are partial, not a full-suite total. Bounded Vitest execution-accounting adapter accepted and published in `aca24ce` (13 files); collect-mode runtime expansion accepted and published in `408b4c8` (10 files); tool-identity hashing accepted and published in `dc0c065` (7 files); bounded input-drift guard accepted and published in `11c6014` (8 files: source-drift snapshot/diff/insert_prefixed, drift-wire before/after wiring, block-apply with prior-reason preservation, unit + real CLI integration tests). Source coverage is bounded known frontend extensions/manifests + 3 tool identities, NOT universal dependency closure. Cross-mode reconciliation DEFERRED; lane.complete remains false. No full T2 completion.
   Checkpoint update (2026-09-18; supersedes the cross-mode deferral above): bounded single-project/unambiguous collect/run reconciliation is reviewed and published in `79763cc`, with assertion diagnostics in `76424e4`. One complete native workspace invocation passed 262 tests/doctests, zero failed/ignored; receipt `task-3/remaining-contracts/fixture-canonicalization/parent-cross-mode-workspace-observed.json`, exit 0 and mutex released. Reviewer `ses_f5216b9a6ffecql5TpWZbOQk8n` approved scoped publication. Historical intermittent failures remain recorded with unknown cause; no budget or assertion weakening. Required unsupported identities, unavailable lanes, LSP and old cleanup obligations remain blocking. T2 is not complete.
   Receipt-boundary follow-up verified (2026-09-18): Rust-only roots now emit explicit blocked Rust-lane receipts without pytest files or Python launcher/adapter hashes; empty roots fail without publishing invalid JSON. Python/Vitest-backed provenance is retained. Actual Rust collection/execution remains unimplemented and blocked. Three failing-first CLI regressions and one complete 265-test/doctest workspace run passed; fmt/Clippy passed; reviewer `ses_f5216b9a6ffecql5TpWZbOQk8n` approved the scoped code. Evidence: `task-3/remaining-contracts/fixture-canonicalization/parent-rust-only-workspace.json` (exit 0, mutex released) and `task-2/rust-only-receipts/`. This does not close T2.
-  Native containment integration blocker (2026-09-18): `native/Cargo.toml` forbids first-party unsafe code and xtask inherits that policy. The tested atomic Windows Job Object approach needs a reviewed Win32 FFI boundary; no exception has been approved. Inspected process-wrap 10.0.0 std APIs fail required cleanup guarantees, and WinSafe 0.0.29's inspected CreateProcess API accepts STARTUPINFO rather than the extended attribute list needed by the proof. This is not an exhaustive claim that no safe dependency exists. Preserve the forbid policy; production adoption requires either a verified safe dependency or an explicit narrow policy decision. The isolated four-scenario prototype is not authorization to weaken this gate.
+  Native containment decision resolved (2026-09-18): user approved a narrowly reviewed Win32 FFI boundary for process containment. Expose a safe public API; keep unsafe code isolated to the dedicated boundary and retain the workspace prohibition for all other first-party crates. Implement with failing-first tests, bounded pipes/deadlines and verified descendant cleanup. The four-scenario prototype is feasibility evidence, not a production implementation or blanket unsafe allowance.
   Scope: `native/migration/baseline.json`, test adapter in `native/xtask/`, affected legacy tests/runtime only for confirmed blockers. Collect each test file in a contained subprocess if a monolithic native import crashes, track parameterized IDs and exit/signal outcomes, reconcile markers including network/slow/chaos/cart_readiness and root/evidence harnesses. Reproduce/fix native crash and Vitest worker startup with evidence; do not blanket-exclude registry tests or call a timeout a pass.
   References: `tests/test_obfuscated.py`, `tests/connectors/test_registry.py:38`, `tests/integration/conftest.py:36-50`, `forge/reporting/webui/package.json`, `rust_core/Cargo.toml`, `build_rust_core.bat`, `.agents/STATE.md`.
   Dependencies: wave 1; 1. Acceptance: every discovered lane has exact invocation, prerequisites, case IDs and actual result; required baseline tests run or remain blocking. Isolated comparison fixtures cover valid behavior and SPEC overrides for known bugs.
   QA: `verify baseline`; happy 29-agent suite, current native suite and complete parameterized inventory reconcile counts; failure forced child crash/timeout produces failed receipt, cleans child tree and cannot drop file from totals.
   Commit: Y | `test(migration): capture executable parity baseline`.
 
-- [~] 3. Establish native typed domain and serialization contracts
-  Blocked contracts: characterization proved source-default disclosure in `DehashedResult.password`, `HashCredential.hash_plaintext`, and short `KeyScannerFinding.key_prefix`. Exact compatibility conflicts with the approved secret-redaction requirement; resolve the affected serialization boundary before those three ports. Evidence: `task-3/remaining-contracts/source-security-conflicts.json`. Unaffected DTO implementation remains actionable and must not be stalled or falsely marked complete.
+- [ ] 3. Establish native typed domain and serialization contracts
+  ACTIVE — decision resolved (2026-09-18): user selected original plaintext serialization for `DehashedResult.password`, `HashCredential.hash_plaintext`, and short `KeyScannerFinding.key_prefix`; do not introduce new masking into these pending ports. Preserve source input/output compatibility and port dependent `HashCredentialSet`. This resolves the policy question, not implementation or verification. The historical ledger's three policy-conflict labels await reconciliation during the actual port; no verified count is advanced by this approval alone.
   Verified progress: initial domain increment in `486c344`; workspace integration in `91e79bb`; portable fixtures in `a446679`, typed records in `f8a9361`, canonical LF fixture metadata + integrity guard in `5e12b89`, functional baseline budget fix in `37cf5c4`, enum boundary parity consumer and fixtures in `d92464d`, graph coercion fix in `7491cb6`, graph parity consumers in `489c92b`, BreachRecord/TaskState coverage in `59fc1b1`, domain ledger correction in `95e8cbe`, graph source-parity proof + four ledger advances in `81a1b56`, TaskState source proof + ledger advance to 48 in `cc3b273` — all pushed to origin/main. Note: prior 48-verified claim in `59fc1b1` was premature (reverted `95e8cbe`); `cc3b273` genuinely fills the last partial entry. Parent verification: `cargo test --workspace --locked --offline --jobs 1 -- --test-threads=1` passed **233 tests** (129 domain + 104 xtask), 0 failures/ignores; fmt and clippy -D warnings clean. Evidence: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/parent-identities-state-{fmt,clippy,workspace}.json`; mutex released. Reviewers: ses_f55a27f13ffe approved enum increment; ses_f5216b9a6ffe approved collect delta and tool-identity slice; ses_f51989415ffe approved graph source proof, four status advances, and TaskState source proof. Tracked ledger (committed `cc3b273`): 48 `implemented_fixture_verified` (24 DTOs + 2 agent contracts + 16 enum sections/15 Rust types + 1 BreachRecord + 4 graph types + 1 TaskState), 0 `existing_partial`, 3 `blocked_policy_conflict`, 1 `blocked_dependency`. Full 118-entry type/table parity remains open; 66 `reference_only` entries route by owner (storage→T7, plugin/bus runtime→T10–T12); complete_t3=false.
   Scope: `native/crates/forge-domain/`; engagement/workspace/entity IDs, typed seeds, URLs, findings, reportability, task states, provenance, timestamps and enums. No CLI/server dependency and no Python runtime.
   References: `forge/models/`, `forge/engagement_ids.py`, `forge/db/schema.py:28-120`, `forge/agents/base_plugin.py`, `forge/standards/`, SPEC V1-V8.
@@ -127,264 +127,264 @@ Single-source migration ledgers live in `native/migration/`: `capabilities.json`
   QA: `verify domain`; happy representative multi-seed/graph/task fixtures roundtrip unchanged; failure malformed enum/ID/URL produces typed error before persistence. Add property tests for canonicalization idempotence.
   Commit: Y | `feat(domain): port typed engagement contracts`.
 
-- [~] 4. Port configuration, errors, logging and resource lifecycle
-  Blocked start: prerequisite T3 is not accepted; unresolved serialization-policy decisions and incomplete domain-proof acceptance remain. The T1 scheduling exception authorizes T2/T3 only, not T4. Read-only preparation is permitted; production implementation waits for its prerequisite without weakening any acceptance gate.
+- [ ] 4. Port configuration, errors, logging and resource lifecycle
+  Queued after T3 implementation and acceptance. The serialization decision is resolved; complete its ports/tests before this task.
   Scope: `native/crates/forge-domain/src/config/`, shared runtime support. Preserve explicit CLI > environment > local-config > default precedence, bounded budgets, redaction and structured errors. Settings parsing must not spawn services or read unrelated secrets.
   References: `forge/config.py`, `forge/cli_runtime.py`, `forge/utils/log_redaction.py`, `forge/subprocess_tree.py`, `forge/automation_self_heal.py`.
   Dependencies: wave 1; 3. Acceptance: config inventory maps every supported key; invalid settings fail before side effects, cancellation releases owned handles, logs contain no fixture secret canaries.
   QA: `verify config`; happy conflicting distinct values select correct precedence; failure malformed budgets/secret-bearing errors stay fail-closed and redacted. Child tree termination is tested on Windows and POSIX.
   Commit: Y | `feat(runtime): port config and lifecycle contracts`.
 
-- [~] 5. Port scope, authorization and admission gates
-  Blocked start: prerequisites T3 and T4 remain unaccepted while the explicit serialization-policy decision is outstanding. No policy code is authorized by the T1-only scheduling exception. Continue independent T2 accounting work without weakening these dependency gates.
+- [ ] 5. Port scope, authorization and admission gates
+  Queued after T3/T4 implementation and acceptance; no further approval of the already-resolved serialization choice is needed.
   Scope: `native/crates/forge-policy/`; typed authorized contexts, ROE/scope, URL-prefix and redirect/subresource restrictions, capabilities/RBAC, validation approval and retention confirmation. A caller cannot bypass gates by invoking a lower layer directly.
   References: `forge/opsec/scope_gate.py`, `forge/webui/rbac.py`, `forge/active_validation/`, `forge/agents/base_plugin.py`, `forge/governance/`, SPEC V5-V14.
   Dependencies: wave 1; 3,4. Acceptance: contract fixtures cover wildcard rejection, IPv4/IPv6, URL paths, tenant denial, manual approval, literal boolean confirmation; denied operations cause zero I/O/persistence calls.
   QA: `verify policy`; happy explicitly authorized local fixture accepted; failure cross-tenant, redirect escape and string `true` retention requests rejected before dispatch.
   Commit: Y | `feat(policy): preserve authorization invariants`.
 
-- [~] 6. Port compatible cryptography and safe adapter interfaces
-  Blocked start (2026-09-18): prerequisites T3, T4 and T5 remain unaccepted pending the explicit default-secret-serialization decision recorded under T3. The T1 scheduling exception does not authorize this task. No cryptography or adapter production implementation has been accepted; continue independent T2 verification without changing these dependencies.
+- [ ] 6. Port compatible cryptography and safe adapter interfaces
+  Queued after T3/T4/T5 implementation and acceptance. No cryptography implementation is claimed by the Win32 process-boundary approval.
   Scope: `native/crates/forge-storage/src/crypto/`, `native/crates/forge-adapters/`; AES/encoding/key-reference formats, typed HTTP/process/browser adapter traits and deterministic fakes. Native library internals have no PyO3 dependency.
   References: `rust_core/src/crypto.rs`, `forge/connectors/secrets.py`, `forge/db/`, `forge/connectors/runner.py`, `forge/utils/intel/provider_urls.py`.
   Dependencies: wave 1; 3,4,5. Acceptance: old encrypted fixtures decrypt in Rust and Rust fixtures decrypt in legacy reference; malformed keys/ciphertexts fail without panic. Tool adapters declare version, availability, budgets, output schema and provenance.
   QA: `verify crypto-adapters`; happy cross-language encrypted fixture roundtrip; failure wrong key/truncated ciphertext/missing optional tool produces explicit error without fake success or core-startup failure.
   Commit: Y | `feat(adapters): add native compatibility boundaries`.
 
-- [~] 7. Port SQLite engagement/control repositories and migrations
-  Blocked start (2026-09-18): prerequisites T2, T3, T4 and T6 are not accepted. The scoped T2 checkpoint does not close the full baseline, and the unresolved T3 serialization decision continues to block T4/T6. No storage implementation or live database mutation is authorized by the T1-only scheduling exception.
+- [ ] 7. Port SQLite engagement/control repositories and migrations
+  Queued after T2/T3/T4/T6 acceptance. Earlier policy questions are resolved; storage work and parity checks remain unimplemented.
   Scope: `native/crates/forge-storage/`; every table/index/trigger/FTS item and migration discovered in SQLite ledgers, transaction boundaries, WAL/FK/timeouts and control-index/tombstone behavior. Work on copied fixtures only.
   References: `forge/db/{schema.py,migrations.py,direct_connect.py,session.py,control.py}`, `forge/engagement_ids.py`, `forge/workspace_backfill.py`, `tests/db/`.
   Dependencies: wave 2; 2,3,4,6. Acceptance: schema/data parity, read/write compatibility, monotonic non-reused IDs and corruption/migration interruption recovery. No parallel writers during differential checks.
   QA: `verify sqlite`; happy migrate old fixture then compare tables/exports; failure aborted migration rolls back and original copy hash stays unchanged.
   Commit: Y | `feat(storage): port SQLite evidence stores`.
 
-- [~] 8. Port audit chains, manifests, reviews and retained evidence
-  Blocked start (2026-09-18): prerequisite T7 is unaccepted and blocked by the T3 serialization decision and its dependent T4/T6 contracts, plus full T2 baseline acceptance. The accepted T2 receipt-only checkpoints do not authorize audit/storage implementation or mutation of existing audit history. Continue independently permitted T2 work; no audit implementation is claimed.
+- [ ] 8. Port audit chains, manifests, reviews and retained evidence
+  Queued after T7 acceptance; no audit implementation or history mutation has occurred.
   Scope: native storage/audit services; canonical serialization/hash algorithms, manifest signatures, bundle checksums, append-only enforcement, remote mounted storage, legal holds and review provenance.
   References: `forge/audit/`, `forge/reporting/audit_manifest_artifacts.py`, `forge/retention/`, `tests/audit/`, SPEC V3,V8,V11,V14.
   Dependencies: wave 2; 7. Acceptance: Rust verifies historical synthetic chains byte-for-byte; new append verifies through legacy reader; tampering and legal-hold violations rejected.
   QA: `verify audit`; happy verify/append/export/import fixture receipts match; failure modify one historical byte or request held-data removal yields nonzero without replacing evidence.
   Commit: Y | `feat(audit): preserve chain and manifest compatibility`.
 
-- [~] 9. Port platform Postgres state and workflow history
-  Blocked start (2026-09-18): prerequisites T7 and T8 are unaccepted, with their storage/audit contracts blocked by the unresolved T3 serialization decision and dependent contracts. No platform persistence implementation or database mutation has been started. Independent T2 harness work remains permitted; the scheduling exception does not bypass these dependencies.
+- [ ] 9. Port platform Postgres state and workflow history
+  Queued after T7/T8 acceptance; platform persistence implementation remains unstarted.
   Scope: `native/crates/forge-storage/src/platform/`; existing Postgres models/migrations, workflow persistence/history/replay, workspace enforcement and idempotent transitions.
   References: `forge/workflow/`, `alembic/`, `forge/api/deps.py`, `tests/workflow/`, `tests/conftest.py:118-179`.
   Dependencies: wave 2; 7,8. Acceptance: per-attempt Postgres schema fixtures preserve state/version/history; restart resumes without duplicate committed transitions. Required unavailable Postgres is a failed prerequisite, not a skip.
   QA: `verify postgres`; happy restart/replay matches committed history; failure duplicate/stale update rejected and disconnected DB gives unhealthy readiness.
   Commit: Y | `feat(storage): port workflow persistence`.
 
-- [~] 10. Port message bus, bounded eventing and task coordination
-  Blocked start (2026-09-18): prerequisites T7 and T8 remain unaccepted because their storage/audit contract chain depends on the unresolved T3 serialization decision and full baseline acceptance. No bus/runtime implementation has started. Continue independent T2 test infrastructure without bypassing these dependencies.
+- [ ] 10. Port message bus, bounded eventing and task coordination
+  Queued after T7/T8 acceptance; native bus/runtime implementation remains unstarted.
   Scope: `native/crates/forge-runtime/`; Redis and in-process buses, envelopes/ack/retry/dedup, cancellation/backpressure, bounded pub/sub and coordinator lifecycle. Distinguish the new agent event bus from durable platform bus.
   References: `forge/bus/`, `forge/distributed/`, `forge/agents/{event_bus.py,coordinator.py,capability_manifest.py}`, `tests/test_*bus*`, `tests/unit/`.
   Dependencies: wave 2; 7,8. Acceptance: event ordering, capacity, failure semantics, duplicate delivery and task status contracts preserved; no task status fabricated after process restart.
   QA: `verify bus`; happy ordered lifecycle and ack sequence; failure queue overflow/Redis disconnect/replayed message stays bounded, explicit and deduplicated.
   Commit: Y | `feat(runtime): port buses and task coordination`.
 
-- [~] 11. Port connectors and first-party plugin execution boundary
-  Blocked start (2026-09-18): prerequisites T5, T6, T7 and T8 remain unaccepted on the unresolved serialization-policy and storage/audit dependency chain. The separate T2 native containment proposal also awaits a verified safe dependency or an explicit narrow FFI-policy decision. No plugin execution, capability activation, or policy weakening is authorized by this blocked status.
+- [ ] 11. Port connectors and first-party plugin execution boundary
+  Queued after T5/T6/T7/T8 acceptance. The narrow process-containment FFI choice is approved; actual containment and plugin implementations still require testing.
   Scope: native adapter/policy registry, all shipped builtins and data-only connector manifests, including legacy subsystem wrappers/platform admission for `forge/{c2,kerberos,phase3,phase5,post_exploitation,hardening,hybrid,auth,post}/`. Port owned plugins to Rust; optional external plugins use versioned bounded JSON-over-stdio contracts, never arbitrary in-process Python imports. Supply manifest validation and a per-capability compatibility inventory for old plugin owners, with task 16/25 ownership of supported service behavior/dispatch. Do not activate a previously disabled capability.
   References: `forge/plugins/{base.py,loader.py,executor.py}`, `forge/connectors/`, `forge/agents/base_plugin.py`, `tests/plugins/`, `tests/connectors/`.
   Dependencies: wave 2; 5,6,7,8. Acceptance: each first-party plugin ID routes to native implementation; external executable allowlist, explicit capability context, child limits and sanitized results cannot be bypassed through manifests.
   QA: `verify plugins`; happy registered native plugin and external fixture return schema-valid evidence; failure unknown capability, malformed JSON, oversized output or hung child rejected/terminated and audited.
   Commit: Y | `feat(plugins): replace Python runtime loading`.
 
-- [~] 12. Port workflow engine, agent loop and scheduler
-  Blocked start: T6/T9/T10/T11 are unaccepted on the unresolved policy/storage/admission chain. No runtime implementation is claimed.
+- [ ] 12. Port workflow engine, agent loop and scheduler
+  Queued after T6/T9/T10/T11 acceptance. No runtime implementation is claimed.
   Scope: native runtime; planner/discovery/analysis/reporting/governance agent roles, workflow state machine, scheduling, retry/cooldown/locks, cancellation and worker startup/shutdown. No fake planner completion.
   References: `forge/core/`, `forge/workflow/`, `forge/agents/`, `forge/orchestrator/`, `forge/orchestration/`, `forge/core/runner.py`.
   Dependencies: wave 2; 6,9,10,11. Acceptance: fixture workflows execute through actual bus/repositories/plugin boundaries; restart and interruption preserve deterministic completed/pending work and clean owned locks.
   QA: `verify runtime`; happy multi-step workflow completes with receipts; failure terminate worker mid-task then resume without duplicate evidence or abandoned active lock.
   Commit: Y | `feat(runtime): port workflow and worker engine`.
 
-- [~] 13. Port scoped seed intake and bounded recursive discovery
-  Blocked start: T2/T5/T6/T12 acceptance is unavailable. The unresolved upstream decisions do not authorize discovery execution.
+- [ ] 13. Port scoped seed intake and bounded recursive discovery
+  Queued after T2/T5/T6/T12 acceptance; production discovery implementation remains unstarted.
   Scope: native runtime/adapters, seed classifier, related seeds, promotion/conflict/provenance, scope import, target feed and resume candidates. Preserve every typed seed and pending-work/stable termination rule.
   References: `forge/{targets_import.py,targets_resume_candidates.py,engagement_orchestrator.py,cli_kill_chain.py}`, `forge/orchestration/`, `forge/phase1/`, `tests/phase1/`.
   Dependencies: wave 3; 2,5,6,12. Acceptance: multi-iteration fixture reaches same canonical seeds, lineage and termination reason; failed queued work is not mistaken for convergence.
   QA: `verify discovery`; happy multi-seed fixture reaches stable snapshot; failure budget exhaustion/resume preserves pending queue and no out-of-scope pivot executes.
   Commit: Y | `feat(discovery): port bounded recursive intake`.
 
-- [~] 14. Port passive identity, DNS, history and provider enrichment
-  Blocked start: T2/T5/T6/T12 are unaccepted. No provider execution or native enrichment parity is claimed.
+- [ ] 14. Port passive identity, DNS, history and provider enrichment
+  Queued after T2/T5/T6/T12 acceptance; no native enrichment parity is claimed yet.
   Scope: every in-scope provider/enricher in capability ledger; DNS/RDAP/CT/history, identity normalization, public artifact metadata and optional tool adapters. Maintain pacing, retry-after ceilings, source constraints and free/keyed distinctions.
   References: `forge/phase0/`, `forge/phase2/`, `forge/utils/intel/`, `forge/ingestion/`, `tests/phase0/`, `tests/phase2/`.
   Dependencies: wave 3; 2,5,6,12. Acceptance: provider fixture families produce equivalent normalized evidence; no missing provider silently falls back to a misleading empty success.
   QA: `verify enrichment`; happy cached provider/identity responses match expected pivots; failure 429/malformed payload/missing key yields bounded retry or explicit unavailable status without unvalidated findings.
   Commit: Y | `feat(enrichment): port passive provider adapters`.
 
-- [~] 15. Port static artifact decoding, parsing and queue processing
-  Blocked start: T2/T5/T6/T12 are unaccepted; the required native adapter/runtime contracts are unavailable.
+- [ ] 15. Port static artifact decoding, parsing and queue processing
+  Queued after T2/T5/T6/T12 acceptance and their native adapter/runtime contracts.
   Scope: native analysis modules for every artifact parser/decoder/format in ledger, nested archives, encoding, URL classification, bounded worker execution, lineage and error taxonomy. Optional OCR/media engines remain declared external/native dependencies.
   References: `forge/phase4/artifact_parsers.py`, `forge/orchestration/artifact*`, `forge/utils/`, `tests/phase4/`, `tests/orchestration/`.
   Dependencies: wave 3; 2,5,6,12. Acceptance: every parser has positive and malformed fixture; output order/limits match contracts; bytes/path/depth budgets enforced before expensive allocations.
   QA: `verify artifacts`; happy nested safe fixtures preserve canonical candidates/lineage; failure ZIP traversal, decompression bomb, corrupt/unsupported format never executes input and records bounded failure.
   Commit: Y | `feat(analysis): port bounded static parsers`.
 
-- [~] 16. Port non-destructive validation and latest-proof reportability
-  Blocked start: T2/T5/T6/T12 are unaccepted. Authorization and reportability gates remain unchanged; no validation is activated.
+- [ ] 16. Port non-destructive validation and latest-proof reportability
+  Queued after T2/T5/T6/T12 acceptance. Existing authorization and reportability gates remain in place.
   Scope: native analysis/policy, cloud/resource/key proof parsers, active-validation jobs/methods, latest-row rules, remediation retest and allowed local/lab/live admission. Own the supported policy-admitted non-destructive behavior and platform contracts inventoried from legacy `c2`, `kerberos`, `phase3`, `phase5`, `post_exploitation`, `hardening`, `hybrid`, `auth` and `post` namespaces; preserve existing disabled/unsupported/manual-only outcomes and their tests. Pure static formatting/crypto helpers route to tasks 6/15; adapter lifecycle routes to task 11. Behavior conflicting with the normative ASM goal remains an explicit release blocker pending resolution, never an omitted row or silently substituted stub. Add no new offensive capability or sensor-avoidance behavior.
   References: `forge/active_validation/`, `forge/phase4/provider_key_validators.py`, `forge/utils/cloud_exposure_gate.py`, `forge/db/validation.py`, `tests/active_validation/`.
   Dependencies: wave 3; 2,5,6,12. Acceptance: only supported stable proof authorizes a finding; newer failed/unknown proof revokes stale reportability; redirect/URL/key values remain scrubbed.
   QA: `verify validation`; happy known proof fixture validates; failure placeholder proof, latest DEAD result or missing approval prevents findings and network dispatch.
   Commit: Y | `feat(validation): port proof-bound validation`.
 
-- [~] 17. Port deterministic scoring and standards enrichment
-  Blocked start: T2/T5/T6/T12 are unaccepted; native runtime/evidence contracts required by this task are not ready.
+- [ ] 17. Port deterministic scoring and standards enrichment
+  Queued after T2/T5/T6/T12 acceptance and native runtime/evidence contracts.
   Scope: native analysis; rule engine, findings synthesis, CVE/CVSS/EPSS/KEV/CWE/ATT&CK associations and standards normalization. LLM output never sets findings/severity.
   References: `forge/deterministic_findings.py`, `forge/standards/`, `forge/phase4/`, `tests/standards/`, `tests/test_cloud_exposure_gate.py`, SPEC V6-V9.
   Dependencies: wave 3; 2,5,6,12. Acceptance: deterministic severity/rule identifiers/evidence match fixed fixtures including unsupported/suspect inventory; numeric comparisons have an explicit contract, not arbitrary tolerance.
   QA: `verify scoring`; happy repeated fixtures yield same findings and scores; failure injected narrative severity or unsupported proof cannot promote a finding.
   Commit: Y | `feat(scoring): port deterministic findings`.
 
-- [~] 18. Prove full pipeline parity through Rust runtime
-  Blocked verification: T13-T17 are unimplemented and blocked upstream. No full native pipeline parity result exists.
+- [ ] 18. Prove full pipeline parity through Rust runtime
+  Pending verification after T13-T17 implementation. No full native pipeline parity result exists.
   Scope: native integration/differential scenarios combining tasks 13-17; no placeholder phase runners. Reconcile every pipeline capability row against implemented behavior and remaining non-pipeline tasks.
   References: `tests/integration/test_canonical_release_e2e.py`, other `tests/integration/` recursion fixtures, `forge/demo.py`, `END_GOAL.md:150-223`.
   Dependencies: wave 3; 13-17. Acceptance: real native runtime traverses intake/discovery/parsing/validation/scoring with persisted provenance, cancellation/resume and no live external dependency.
   QA: `verify pipeline`; happy multi-seed canonical fixture matches reference contracts; failure interrupted recursive iteration preserves pending work and denied scope produces zero target traffic.
   Commit: Y | `test(pipeline): prove native engagement parity`.
 
-- [~] 19. Port asset/attack graphs and all graph/export formats
-  Blocked start: T2/T8/T12/T18 are unaccepted; DTO fixture parity alone does not satisfy these service prerequisites.
+- [ ] 19. Port asset/attack graphs and all graph/export formats
+  Queued after T2/T8/T12/T18 acceptance; DTO fixture parity alone does not satisfy service prerequisites.
   Scope: native reporting; asset ownership/conflicts, attribution, identity/cloud relationships, tier-zero/path/choke-point/fix-set scoring and JSON/GraphML/Mermaid/DOT/MTGX/CSV/Cypher/Nemesis export inventory.
   References: `forge/graph/`, `forge/cli_graph.py`, `forge/cli_artifacts.py`, `tests/graph/`, commits `16ce013` and associated tests.
   Dependencies: wave 4; 2,8,12,18. Acceptance: canonical entity/node/edge fields and provenance survive every format; secret/path canaries excluded; exports reflect same validated evidence.
   QA: `verify graphs`; happy shared fixture has expected nodes/edges/ownership/fix-set across formats; failure malformed missing graph/type data errors explicitly rather than emitting empty successful graph.
   Commit: Y | `feat(graph): port canonical graph exports`.
 
-- [~] 20. Port reports, native templates, raw fallback and narrative providers
-  Blocked start: T2/T8/T12/T18 are unaccepted; native reporting integration prerequisites are unavailable.
+- [ ] 20. Port reports, native templates, raw fallback and narrative providers
+  Queued after T2/T8/T12/T18 acceptance for native reporting integration.
   Scope: native reporting/adapters; all report families, history/checksums, raw JSON/CSV, template rendering, CLI/provider cascade, local inference interface and quality/staleness/policy plans. Optional local inference may use its own native service; no llama-cpp-python in core.
   References: `forge/phase6/`, `forge/reporting/`, `forge/report/`, `forge/providers/`, `tests/phase6/`, `tests/reporting/`, SPEC V7,V9,V12,V13.
   Dependencies: wave 4; 2,8,12,18. Acceptance: every valid fixture produces an auditable template/raw report when all narrative providers fail; no prose assertion masquerades as behavior coverage.
   QA: `verify reports`; happy native template/checksum and provider fixture succeed; failure provider quota/token/timeout/missing executable still yields valid raw/template artifacts with failure metadata.
   Commit: Y | `feat(reporting): port deterministic report fallback`.
 
-- [~] 21. Port monitoring, alerts and exposure history
-  Blocked start: T2/T8/T12/T18 are unaccepted. No monitoring jobs, snapshots or deliveries are authorized by this status.
+- [ ] 21. Port monitoring, alerts and exposure history
+  Queued after T2/T8/T12/T18 acceptance; native monitoring implementation remains unstarted.
   Scope: `native/crates/forge-operations/`; policies, due planning, snapshots/diffs, alerts/suppression/delivery, bounded worker refresh, exposure metrics and enabled/idle semantics.
   References: `forge/monitoring/`, `tests/monitoring/`, `forge/connectors/`, `forge/active_validation/`.
   Dependencies: wave 4; 2,8,12,18. Acceptance: fixture clocks produce same due set/history; refresh respects gate and queue bounds; repeated equivalent evidence does not create duplicate alerts.
   QA: `verify monitoring`; happy due fixture records expected diff and alert; failure disconnected destination stores redacted failure/backoff and suppression prevents delivery.
   Commit: Y | `feat(monitoring): port policies and alerts`.
 
-- [~] 22. Port remediation, ticket handoffs and retest lifecycle
-  Blocked start: T2/T8/T12/T18 are unaccepted; native persistence/runtime/validation prerequisites are unavailable.
+- [ ] 22. Port remediation, ticket handoffs and retest lifecycle
+  Queued after T2/T8/T12/T18 acceptance for persistence/runtime/validation integration.
   Scope: native operations/adapters; ownership propagation, risk acceptance expiry/review, SLA queues, native local ticket event ledger, external ticket integrations and validation-linked retest.
   References: `forge/remediation/`, `tests/remediation/`, `forge/active_validation/`, `forge/graph/`.
   Dependencies: wave 4; 2,8,12,18. Acceptance: state transitions, expiry/timezone semantics, failed-handoff queue reasons and graph recommendations match fixture contracts; no real ticket creation during QA.
   QA: `verify remediation`; happy accepted risk and successful fixture retest update lifecycle correctly; failure expired risk/missing credentials/blocked retest remains explicit unresolved work.
   Commit: Y | `feat(remediation): port owner and retest workflow`.
 
-- [~] 23. Port retention, workspaces and operator automation
-  Blocked start: T2/T8/T12/T18 are unaccepted. Existing retention confirmations and automation admission rules remain intact.
+- [ ] 23. Port retention, workspaces and operator automation
+  Queued after T2/T8/T12/T18 acceptance. Existing retention confirmations and automation admission rules remain intact.
   Scope: native operations/storage; workspace/member administration, control audit, retention preview/apply/legal holds, feed/queue/autostart configuration, cooldown/backoff/single-instance locks and doctor/operator guidance.
   References: `forge/retention/`, `forge/workspaces_cli.py`, `forge/automation*`, `forge/targets_import*`, `forge/doctor.py`, `tests/retention/`, `tests/automation/`.
   Dependencies: wave 4; 2,8,12,18. Acceptance: all inventoried commands have truthful read-only/dry-run semantics and bounded apply behavior; confirm exactly true gates retained; cleanup removes only fixture-owned artifacts.
   QA: `verify operations`; happy fixture preview/apply respects policy; failure string confirmation, active lock, missing ROE and legal hold reject before mutation or live dispatch.
   Commit: Y | `feat(operations): port lifecycle and automation`.
 
-- [~] 24. Close domain/service parity and API contract schemas
-  Blocked verification: T19-T23 are not implemented or accepted; no service-parity closure is claimed.
+- [ ] 24. Close domain/service parity and API contract schemas
+  Pending verification after T19-T23 implementation; no service-parity closure is claimed.
   Scope: native migration ledger and integration cases combining 19-23. Build portable fixtures consumed by CLI/server/UI tasks, covering every supported result/error schema.
   References: `forge/webui/app.py`, `forge/api/routes/`, `forge/cli_registry.py`, native ledger, `tests/webui/`, `tests/cli/`.
   Dependencies: wave 4; 19-23. Acceptance: no service capability remains unmapped; provisional `implemented` entries lack verified status until executable case receipts exist. Inventory deltas from concurrent upstream work are reconciled.
   QA: `verify service-parity`; happy schema/behavior matrix is complete; failure delete a mapped implementation/test receipt and the ledger gate fails.
   Commit: Y | `test(parity): close native service contracts`.
 
-- [~] 25. Port complete public/hidden CLI and native TUI
-  Blocked start: T24 service-contract acceptance is unavailable through the unresolved upstream chain.
+- [ ] 25. Port complete public/hidden CLI and native TUI
+  Queued after T24 service-contract acceptance.
   Scope: `native/crates/forge-cli/`; binary `forge`, existing commands/options/defaults/help visibility/JSON/exit codes, interactive menu and TUI workflows. Unsupported platform functions retain explicit platform errors; no success stubs.
   References: `forge/cli*.py`, `forge/cli_commands/`, `forge/menu_shell.py`, `forge/tui/`, `tests/cli/`, capability inventory.
   Dependencies: wave 5; 24. Acceptance: every command ID has dispatch and behavior tests; noninteractive JSON remains parseable and secret-free; terminal navigation and CJK/Unicode widths verified with an actual terminal rendering harness.
   QA: `verify cli`; happy `forge demo proof-pack` plus report/graph/status on synthetic data; failure unknown command/missing argument/denied operation exits nonzero without DB writes.
   Commit: Y | `feat(cli): port complete native operator commands`.
 
-- [~] 26. Port platform API, health and worker entrypoints
-  Blocked start: T24/T25 are unaccepted; no native server/worker cutover has occurred.
+- [ ] 26. Port platform API, health and worker entrypoints
+  Queued after T24/T25 acceptance; no native server/worker cutover has occurred.
   Scope: `native/crates/forge-server/`, CLI `serve-api` and `worker`; existing platform workflow/report/quality endpoints and health payloads on loopback 8000. Preserve `/ready` legacy semantics while operational checks explicitly verify dependencies and worker heartbeat.
   References: `forge/api/`, `forge/core/runner.py`, `docker/docker-compose.yml:108-175`, `tests/core/`, `tests/integration/`.
   Dependencies: wave 5; 24,25. Acceptance: HTTP fixtures preserve route/schema/status contracts and tenant access; worker joins bus, processes fixture request and reports heartbeat; no swallowed schema-init failure presented as healthy.
   QA: `verify platform-api`; happy actual localhost requests and worker event complete; failure DB/bus outage gives unavailable health and queued fixture resumes after recovery.
   Commit: Y | `feat(server): port API and worker processes`.
 
-- [~] 27. Port engagement web API, auth and progress sockets
-  Blocked start: T24/T25/T26 are unaccepted. Existing authentication and tenant boundaries are not changed.
+- [ ] 27. Port engagement web API, auth and progress sockets
+  Queued after T24/T25/T26 acceptance. Existing authentication and tenant boundaries remain in place.
   Scope: native server `serve-web` on loopback 8080, all engagement/control routes, JWT issuance/claims, RBAC, websocket subprotocol and ownership guards, generated artifact/static access and headers.
   References: `forge/webui/`, `forge/security_headers.py`, `tests/webui/`, `forge/webui/app.py:458-1047` and all remaining registered routes in inventory.
   Dependencies: wave 5; 24,25,26. Acceptance: every route/permission pairing passes parity tests; websocket only emits allowed engagement progress; path traversal and cross-workspace artifact reads rejected.
   QA: `verify engagement-api`; happy token-scoped synthetic engagement CRUD/review/export; failure wrong tenant, stale token, invalid retention confirm and websocket engagement mismatch denied.
   Commit: Y | `feat(server): port engagement web contracts`.
 
-- [~] 28. Port Rust UI overview, navigation and workspace administration
-  Blocked start: T26/T27 native endpoints are unavailable; no production UI replacement is claimed.
+- [ ] 28. Port Rust UI overview, navigation and workspace administration
+  Queued after T26/T27 native endpoints; no production UI replacement is claimed.
   Scope: `native/crates/forge-ui/`, Leptos SSR and hydrate targets; overview/search/filter/navigation, workspace/member controls, setup/login and create engagement; accessible responsive UI, equivalent routes and state handling.
   References: `forge/reporting/webui/src/`, `forge/webui/templates/`, UI route/interaction ledger, existing frontend tests; Leptos SSR documentation in draft.
   Dependencies: wave 5; 26,27. Acceptance: no hydration mismatch, route parity, correct loading/error/empty states, keyboard and mobile operation; server endpoints enforce authorization independently of rendered controls.
   QA: `verify ui-overview`; happy browser login/create/navigate/filter with fixture data at desktop/mobile; failure expired token/empty workspace/API rejection shows actionable state without unsafe mutation.
   Commit: Y | `feat(ui): port Rust workspace overview`.
 
-- [~] 29. Port Rust UI engagement review, graphs and actions
-  Blocked start: T27/T28 are unaccepted; no native detail-UI implementation or browser parity result exists.
+- [ ] 29. Port Rust UI engagement review, graphs and actions
+  Queued after T27/T28 acceptance; no native detail-UI implementation or browser parity result exists.
   Scope: native UI detail panels, evidence/provenance/timeline, graph interaction, reports/raw exports, connectors/secrets, validation, remediation, retention, audit review and live progress. Preserve all inventoried React/static/HTMX operator capabilities; equivalent legacy URLs may redirect only when contract allows.
   References: `forge/reporting/webui/src/`, `forge/webui/templates/htmx/`, `tests/webui/`, frontend `*.test.tsx`, native API schemas.
   Dependencies: wave 5; 27,28. Acceptance: all controls have real authorized backing calls; reportability/counts match native service payloads; large graph interactions remain responsive without losing nodes silently.
   QA: `verify ui-detail`; happy browser traverses graph/report/validation/remediation/retention workflow; failure denied action, disconnected socket, malformed graph and withheld proof show correct state without leaking values.
   Commit: Y | `feat(ui): port engagement review workflows`.
 
-- [~] 30. Prove native operator journey across every surface
-  Blocked verification: T25-T29 are not implemented/accepted. The required native cross-surface journey cannot yet run.
+- [ ] 30. Prove native operator journey across every surface
+  Pending verification after T25-T29 implementation and acceptance.
   Scope: native E2E harness/ledger; actual CLI + API + worker + browser journey from synthetic intake through exports and owned cleanup. Cross-surface consistency is asserted from independent fixture expectations.
   References: `tests/integration/test_canonical_release_e2e.py`, `forge/demo.py`, `END_GOAL.md`, all native receipt/contract ledgers.
   Dependencies: wave 5; 25-29. Acceptance: same findings/provenance/reportability across API/UI/graph/report/raw/audit, reports survive provider failure, deny paths have no side effects, test artifact teardown recorded.
   QA: `verify operator-e2e`; happy full journey including restart/resume; failure provider loss plus interrupted worker still yields truthful partial/fallback output and no leaked test resources.
   Commit: Y | `test(e2e): prove full native operator journey`.
 
-- [~] 31. Package reproducible Python-free native distributions
-  Blocked start: T30 acceptance and the complete native runtime are unavailable; no production-ready distribution exists.
+- [ ] 31. Package reproducible Python-free native distributions
+  Queued after T30 acceptance; no production-ready native distribution exists yet.
   Scope: `native/` release profiles/artifacts, packaging scripts and native Docker targets; Windows exe, Linux native container/binary and macOS-supported paths, bundled UI assets/licenses/SBOM. No dev-only interpreter or node_modules in runtime.
   References: `docker/Dockerfile`, `setup.bat`, `setup.sh`, `bootstrap.py`, existing launchers, `THIRD_PARTY_LICENSES.md`, native toolchain/lock.
   Dependencies: wave 6; 30. Acceptance: clean build installs and runs from minimal environment without Python/Node; declared optional tools remain external; Windows-specific actions are accurately gated elsewhere.
   QA: `verify packaging`; happy release install/version/demo in clean runtime; failure missing optional tool yields catalog unavailable while core demo/report still succeeds, missing mandatory asset fails startup.
   Commit: Y | `build(native): package Python-free distributions`.
 
-- [~] 32. Replace service deployment and startup supervision
-  Blocked start: T31 has not produced an accepted release artifact. Existing services are not switched by this status.
+- [ ] 32. Replace service deployment and startup supervision
+  Queued after T31 produces an accepted release artifact; existing services have not been switched.
   Scope: native production/dev Compose, Windows scheduled/startup scripts, POSIX/systemd/Helm/reverse-proxy templates in inventory. Keep established ports, secrets by reference, persistent volumes, least privilege and bounded memory.
   References: `docker/`, `scripts/install_guarded_autostart_task.ps1`, `scripts/run_guarded_autostart_task.ps1`, `tools/forge-stack.ps1`, runtime ledger.
   Dependencies: wave 6; 31. Acceptance: preflight succeeds, services start in correct dependency order, API/web health + worker heartbeat truthful, restart recovers; migration smoke runs only synthetic queued work.
   QA: `verify deployment`; happy `docker compose -f docker/docker-compose.yml up -d --wait --wait-timeout 180` in isolated project with generated test env; failure Redis stopped makes health unavailable then recovers without duplicate work.
   Commit: Y | `build(deploy): switch services to native runtime`.
 
-- [~] 33. Complete cross-platform tests, mutation, chaos and soak lanes
-  Blocked verification: T31/T32 release/deployment artifacts are unavailable. No release matrix or 24-hour soak is claimed.
+- [ ] 33. Complete cross-platform tests, mutation, chaos and soak lanes
+  Pending verification against T31/T32 artifacts; no release matrix or 24-hour soak is claimed.
   Scope: native test/CI matrix, all replacement test IDs and legacy disposition receipts. Run supported Windows/Linux/macOS and browser target builds; required fixture services provisioned explicitly. No `allow-failure` hides required gates.
   References: `.github/workflows/`, `tests/chaos/`, `tests/properties/`, `tests/performance/`, `tools/evidence*`, `.kiro/specs/autonomous-security-platform/tasks.md:494-496`, native test ledger.
   Dependencies: wave 6; 31,32. Acceptance: every required replacement case passes against release artifact/image digests produced by 31 and deployed by 32; missing feature/tool/platform has an explicit supported-contract disposition. Run targeted mutation against domain/policy (survivors explained/fixed), deterministic fault injection and 24h synthetic soak; measure memory/queue growth against declared budgets. Runtime/bundled-asset/dependency changes later invalidate affected receipts; rerun the full release matrix and soak if the tested runtime artifact changes.
   QA: `verify release-suites`; happy all lane receipts reconcile totals including 24h soak; failure deliberately mutate authorization or kill Redis and relevant test fails/recovery proves bounded operation. Never claim 24h from a shorter run.
   Commit: Y | `test(release): enforce full native verification matrix`.
 
-- [~] 34. Rehearse copy-based data cutover and rollback
-  Blocked verification: T31-T33 are unaccepted. No cutover, rollback, write fencing or live data mutation has been attempted.
+- [ ] 34. Rehearse copy-based data cutover and rollback
+  Pending verification after T31-T33 acceptance; no native cutover or rollback has been attempted.
   Scope: native migration/export/import/checkpoint tooling and fixtures. Fence new writes and drain workers/queues before taking coordinated SQLite/Postgres/audit checkpoints and queue watermarks; retain old binary/data copy. During cutover use maintenance mode until pre-write verification succeeds. After enabling native writes, record durable replayable mutation/outbox receipts so rollback can preserve every acknowledged post-cutover write and audit event. Never restore a pre-cutover snapshot over newly acknowledged evidence.
   References: `forge/db/`, `forge/workflow/`, `forge/audit/`, native storage/cutover contracts, deployment receipts.
   Dependencies: wave 6; 31-33. Acceptance: fixture counts, ownership, encrypted readability and historical audit verification survive. Rollback either reopens a proven backward-compatible latest snapshot or replays all acknowledged native changes into a compatible checkpoint with original IDs/order/audit hashes; duplicate queue deliveries remain deduplicated. If lossless replay is unsupported, rollback is blocked and the latest data is retained under write fencing, never discarded.
   QA: `verify cutover`; happy staged fixture cutover/reopen yields identical public evidence; failure injected migration/checksum error prevents activation. A second failure scenario writes new evidence after activation, interrupts service, then rolls back and proves every acknowledged row/audit event and queued work survives exactly once.
   Commit: Y | `feat(migration): add rehearsed native cutover`.
 
-- [~] 35. Retire legacy first-party runtime and reconcile all migration work
-  Blocked start: T34 lossless cutover/rollback acceptance is unavailable. Legacy runtime and history must not be retired.
+- [ ] 35. Retire legacy first-party runtime and reconcile all migration work
+  Queued after T34 lossless cutover/rollback acceptance; preserve legacy runtime and history until then.
   Scope: packaging/entrypoints, capability/test/session ledgers and tracked continuation docs. Remove Python/React runtime from distribution; retain historical source in Git and migration-only fixtures until explicit cleanup approval. Update root SPEC through its designated spec workflow if contracts need clarification, not silent edits.
   References: native ledgers, `README.md`, `DAILY_USE.md`, `END_GOAL.md`, `SPEC.md`, `.agents/`, `.claude/`, `.kiro/`, `.omo/`.
   Dependencies: wave 6; 34. Acceptance: every supported capability and test case verified or evidenced superseded, zero active unowned/pending/blocked migration items; source/session history is preserved. Explicitly reconcile every legacy subsystem capability listed in Scope against native task 11/16/25 evidence: directory-level retirement, empty success stubs and unapproved feature removal fail the gate. All launchers reach native binaries, no Python subprocess fallback or first-party plugin loophole. Rebuild final release artifacts and compare hashes with task 33; changed runtime/assets/dependencies require rerunning task 33 against final artifacts before task 36, while docs-only changes retain receipts by identical artifact hash.
   QA: `verify retirement`; happy clean artifact works without interpreters and ledgers close; failure introduce a Python fallback/unmapped active TODO and gate rejects release.
   Commit: Y | `refactor(runtime): retire legacy deployment paths`.
 
-- [~] 36. Validate installed system and restore paused workloads
-  Blocked acceptance: T35 and the installed native release are unavailable. The recorded paused-workload restoration obligation remains open and is not waived.
+- [ ] 36. Validate installed system and restore paused workloads
+  Pending acceptance after T35 and native installation. The recorded paused-workload restoration obligation remains open.
   Scope: operator startup validation, final resource receipt and exact paused-set restoration. Verify API 8000/web 8080, backing dependencies, worker heartbeat and synthetic job/report path on the actual target install. Restore only the recorded TPH set; no scans are initiated by QA.
   References: approved draft stopped-set record, `docker/docker-compose.yml`, native deployment/evidence receipts, `.agents/STATE.md`.
   Dependencies: wave 6; 35. Acceptance: installed native Forge reports correct revision, all service health checks pass after normal restart, owned QA artifacts/processes are gone and paused-set restoration has a receipt.
@@ -393,17 +393,17 @@ Single-source migration ledgers live in `native/migration/`: `capabilities.json`
 
 ## Final verification wave
 > Runs in parallel after ALL todos. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
-- [~] F1. Plan compliance audit
-  Blocked final gate: T1-T36 are not all accepted; no final compliance approval exists.
+- [ ] F1. Plan compliance audit
+  Pending final gate after T1-T36 acceptance; no final compliance approval exists.
   Read-only reviewer: compare tasks 1-36, stable capability/session IDs and receipt revision hashes to live tree. Command: `cargo run --locked --manifest-path native/Cargo.toml -p forge-xtask -- verify plan-compliance --evidence .omo/evidence/rust-rewrite/final-F1`. Pass only with no unverified required entry; missing receipt is failure. Return exact revision/verdict/citations.
-- [~] F2. Code quality review
-  Blocked final gate: T1-T36 and the final native revision are unavailable. Scoped checkpoint reviews are not this final approval.
+- [ ] F2. Code quality review
+  Pending final gate on the completed native revision; scoped checkpoint reviews are not this final approval.
   Independent read-only reviewer: native workspace architecture, parser limits, cancellation, audit/auth/storage compatibility and all warning/type/test gates. Re-run fmt/clippy/workspace tests on final revision. Audit dependency/runtime composition. Pass only with no requirement-blocking issue; attach `.omo/evidence/rust-rewrite/final-F2` receipts.
-- [~] F3. Real manual QA
-  Blocked final gate: no accepted final installed native system from T36 exists. Prototype and legacy-service checks do not satisfy this gate.
+- [ ] F3. Real manual QA
+  Pending final gate on the T36 installation; prototype and legacy-service checks do not satisfy it.
   Separate QA agent: run installed CLI/API/worker/browser journey at desktop/mobile, failover and rollback checks using synthetic fixtures; reproduce real health and native process evidence. Screenshots, HTTP/action logs and teardown receipts at `.omo/evidence/rust-rewrite/final-F3`. No mock-only or screenshot-only pass.
-- [~] F4. Scope fidelity
-  Blocked final gate: T1-T36 migration and release evidence is incomplete; no full-scope approval exists.
+- [ ] F4. Scope fidelity
+  Pending final gate after T1-T36 migration and release evidence; no full-scope approval exists.
   Independent read-only reviewer: verify whole requested first-party Rust scope, external-tool boundary, no lost supported features/tests, no unrequested offensive expansion, no erased user/session work. Check absence of Python/React application runtime from release and preserved data/history. Attach exact artifact/revision hashes and verdict at `.omo/evidence/rust-rewrite/final-F4`.
 
 ## Commit strategy

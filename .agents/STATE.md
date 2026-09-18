@@ -1,8 +1,45 @@
-# Current Task: Rust rewrite — blocked decisions and dependency chain; not complete
+# Current Task: Rust rewrite — decisions resolved; finish domain and native test infrastructure
 
-**Status:** BLOCKED, NOT COMPLETE | Last accepted native checkpoint: `49cd38a` (265 tests/doctests passed) | Bootstrap checkpoint: `7ca7fa0` | Date: 2026-09-18
+**Status:** IN PROGRESS — T2/T3 implementation can proceed | Last accepted native checkpoint: `49cd38a` (265 tests/doctests passed) | Date: 2026-09-18
 
-## Current worker progress
+## Progress dashboard
+
+These are different measurements, not an estimated overall completion percentage.
+
+```text
+Major milestones fully closed  [....................]   0 / 36
+Milestones with delivered work [~~..................]   3 / 36 (T1-T3, partial)
+Contract inventory verified    [########............]  48 / 118 (41%, all owners)
+Latest native test run         [####################] 265 / 265 passed
+Final release reviews         [....]                    0 / 4
+```
+
+| Phase | Tasks | Current state |
+| --- | --- | --- |
+| Foundations, tests, domain, config, gates | T1-T6 | T1-T3 partial; T4-T6 queued |
+| Storage, audit, buses, plugins, runtime | T7-T12 | Not started |
+| Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
+| Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
+| Native CLI, APIs and Rust UI | T25-T30 | Not started |
+| Packaging, deployment, release QA and cutover | T31-T36 | Not started |
+
+### Decisions received — do not ask again
+- Preserve original plaintext serialization for the pending `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix` contracts. Do not introduce new masking into these ports. Port `HashCredentialSet` after its dependency. This decision is recorded; the remaining code/tests are not yet written or verified.
+- Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
+- Same exact provider/model for subagents remains mandatory; work directly if the interface cannot enforce it.
+
+### Immediate todo
+- [x] Receive and record plaintext-compatibility and narrow Win32 FFI decisions.
+- [x] Restore queued plan statuses and this visible progress dashboard.
+- [ ] Finish the three T3 contract ports and `HashCredentialSet`, with source-parity tests.
+- [ ] Implement production native process containment: bounded stdout/stderr, deadlines, failure paths and descendant cleanup.
+- [ ] Add actual Cargo test collection/execution accounting to T2.
+- [ ] Run scoped review and appropriate full native verification, then publish each tested increment.
+- [ ] Proceed to T4 configuration and subsequent tasks in dependency order.
+
+Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger: `native/migration/domain-contracts.json`. The earlier all-blocked sweep is superseded; 33 not-started implementation milestones and four final gates are queued, not awaiting another policy approval. T1/T2 retain their genuine external/full-acceptance blockers. Older ledger policy labels are historical pending reconciliation by the actual ports; verified counts are unchanged.
+
+## Historical checkpoints (prior unanswered-policy notes are superseded above)
 
 - **Awaiting explicit decisions:** T3 default-secret serialization and the proposed narrow Win32 FFI exception remain unanswered. Generic continuation is not approval to change either contract or weaken `unsafe_code = "forbid"`. No additional runtime implementation was started; last accepted native code remains `49cd38a` with 265 passing tests/doctests.
 - **Dependency sweep:** all 36 implementation tasks and four final gates remain incomplete (`[~]`, zero `[x]`). T12-T36 and F1-F4 now name their unaccepted direct prerequisites instead of appearing immediately runnable. This does not mark the rewrite complete or waive any work. Scoped T2/T3 work is permitted only within the existing scheduling exception; policy-gated adoption remains paused. Missing live/operator prerequisites, LSP, denied cleanup and final release/restoration evidence remain open independently of the two policy choices.
@@ -84,12 +121,12 @@
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-18 19:08:22 +08:00
+- Updated: 2026-09-18 20:21:07 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 9ffa01e
-- Dirty files: 9
+- HEAD: c7b2c8a
+- Dirty files: 8
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->

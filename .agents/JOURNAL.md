@@ -1,5 +1,6 @@
 # Agent Journal
 
+- 2026-09-18: User explicitly resolved both migration choices: retain original plaintext serialization for the three discussed pending contracts, and allow a narrowly reviewed Win32 FFI boundary with a safe API while keeping unsafe forbidden elsewhere. Restored queued downstream plan statuses and added a visible progress dashboard and immediate todo list to STATE. No contract implementation, ledger verification count, runtime redaction behavior or Cargo lint was changed by recording this decision; T2/T3 implementation can proceed without asking again.
 - 2026-09-18: Reconciled the remaining plan dependency chain in one pass: T12-T36 and F1-F4 are explicitly blocked on their named unaccepted prerequisites. All 40 top-level items remain incomplete with zero completed checkboxes; no implementation, verification or final approval was waived. Updated STATE to BLOCKED, NOT COMPLETE while preserving accepted checkpoints and unanswered serialization/FFI decisions.
 - 2026-09-18: Marked T11 blocked on unaccepted T5/T6/T7/T8. Preserved the unresolved serialization and proposed narrow Win32 FFI decisions; generic continuation supplied neither decision, so no runtime contract or unsafe-code policy was changed.
 - 2026-09-18: Identified an integration-policy gate for the proposed native containment helper: workspace unsafe_code is forbid and xtask inherits it. Preserved that setting and paused first-party Win32 FFI adoption pending a verified safe dependency or an explicit narrow exception. WinSafe 0.0.29's inspected CreateProcess signature uses STARTUPINFO rather than the prototype's extended job-list attributes; no exhaustive dependency-absence claim. Marked T10 blocked on T7/T8; no runtime, dependency or database changes.
@@ -446,3 +447,5 @@
 - 2026-09-18 18:20:34 +08:00 [PRAWN-E14/claude/stop] branch=main head=f27db67 dirty=8
 - 2026-09-18 18:53:05 +08:00 [PRAWN-E14/claude/stop] branch=main head=9ffa01e dirty=8
 - 2026-09-18 19:08:22 +08:00 [PRAWN-E14/claude/stop] branch=main head=9ffa01e dirty=9
+- 2026-09-18 20:07:10 +08:00 [PRAWN-E14/claude/stop] branch=main head=c7b2c8a dirty=8
+- 2026-09-18 20:21:07 +08:00 [PRAWN-E14/claude/stop] branch=main head=c7b2c8a dirty=8
