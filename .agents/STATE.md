@@ -4,6 +4,7 @@
 
 ## Current worker progress
 
+- **Containment integration policy gate (2026-09-18):** `native/Cargo.toml:9-10` sets `unsafe_code = "forbid"`; xtask inherits it. The tested native Windows Job Object path needs a narrowly reviewed first-party Win32 FFI boundary. No policy exception or production adoption is approved. Keep the forbid setting intact until a verified safe dependency is selected or an explicit scoped exception is agreed. Inspected WinSafe 0.0.29 `CreateProcess` takes `STARTUPINFO`, not the extended attribute list used by the proof; this does not establish that all safe alternatives are unavailable. T10 is marked `[~]` on unaccepted T7/T8. No source, dependency or database change was made for this gate.
 - **Delegation correction (2026-09-18):** user requires every subagent to use the parent session's exact provider/model. Current route: `amazon-bedrock/global.openai.gpt-6-astra`. Avoid category defaults and cross-model fallbacks; if exact routing cannot be enforced, work directly. Image tasks also require attachment delivery verification. Durable rule is in `AGENTS.md`; this records a delegation policy, not a change to global harness configuration. The process-wrap lookup failed with a provider token error; its source audit was subsequently completed directly.
 - **Next T2 containment step:** process-wrap 10.0.0 std JobObject is unsuitable as a drop-in (kill-on-close disabled, no active-process-zero event check, unbounded/sequential output helpers). A direct isolated Rust 1.94.1/windows-sys 0.61.2 probe passed normal exit, explicit job termination, job-handle closure and abrupt supervisor-exit descendant cleanup. Evidence: `.omo/evidence/rust-rewrite/task-2/native-job-probe/verdict.json`; no active probe processes or runtime fixture directories remained. This is Windows-only feasibility, not production adoption, bounded-pipe/failure-injection or Miri/sanitizer proof. Next: design and test a production containment increment before Cargo collection integration. Main application suite remains 265 tests. T8/T9 are `[~]` for unaccepted prerequisite chains.
 - **2026-09-18 bootstrap checkpoint (`7ca7fa0`):** unset/unknown safe-mode values default to core-only dependencies and normalize the child environment; safe setup cannot fall back to generic/full legacy requirements, including development setup. Existing bootstrap/test files only; no new Python helper or dependency installation. Parent verification: 19 pytest tests passed, Ruff passed, CLI `--help` exited 0. Does not guarantee detection-free artifacts.
@@ -81,12 +82,12 @@
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-18 17:28:41 +08:00
+- Updated: 2026-09-18 18:20:34 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 8fbe566
-- Dirty files: 10
+- HEAD: f27db67
+- Dirty files: 8
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
