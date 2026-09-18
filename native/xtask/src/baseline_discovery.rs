@@ -87,11 +87,18 @@ pub fn discover(root: &Path, mode: Mode) -> Result<Run> {
     for file in &files {
         crate::baseline_inputs::pytest_ancestors(root, &file.path, &mut hashes)?;
     }
-    let adapter = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    for path in ["baseline_bridge.py", "baseline_job.py", "pytest_adapter.py"] {
-        hashes.insert(format!("adapter/{path}"), hash(&read(&adapter.join(path))?));
+    // Receipt-only Rust lane discovery must not require Python. Only when the
+    // run will actually invoke the pytest or vitest Python bridge do we bind
+    // to the Python adapter/launcher provenance.
+    let needs_python =
+        !files.is_empty() || root.join("forge/reporting/webui/package.json").is_file();
+    if needs_python {
+        let adapter = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        for path in ["baseline_bridge.py", "baseline_job.py", "pytest_adapter.py"] {
+            hashes.insert(format!("adapter/{path}"), hash(&read(&adapter.join(path))?));
+        }
     }
-    crate::baseline_inputs::snapshot(root, &mut hashes)?;
+    crate::baseline_inputs::snapshot(root, &mut hashes, needs_python)?;
     let mut run = Run {
         schema_version: 1, revision: revision(root)?, mode, budget_ms: 0, input_hashes: hashes, inventory_hash,
         marker_exclusions: ["network", "slow", "chaos", "cart_readiness", "integration", "e2e"].map(str::to_string).to_vec(),

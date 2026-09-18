@@ -40,7 +40,11 @@ pub fn pytest_ancestors(
     Ok(())
 }
 
-pub fn snapshot(root: &Path, hashes: &mut BTreeMap<String, String>) -> Result<()> {
+pub fn snapshot(
+    root: &Path,
+    hashes: &mut BTreeMap<String, String>,
+    include_python_launcher: bool,
+) -> Result<()> {
     for relative in ["forge", "tests", "native/xtask", "rust_core/src"] {
         if root.join(relative).is_dir() {
             sources(root, relative, hashes, 0)?;
@@ -48,10 +52,12 @@ pub fn snapshot(root: &Path, hashes: &mut BTreeMap<String, String>) -> Result<()
     }
     let executable = std::env::current_exe()?;
     hashes.insert("runner/executable".into(), stream_hash(&executable)?);
-    hashes.insert(
-        "runner/python_launcher".into(),
-        stream_hash(&crate::baseline_process::python())?,
-    );
+    if include_python_launcher {
+        hashes.insert(
+            "runner/python_launcher".into(),
+            stream_hash(&crate::baseline_process::python())?,
+        );
+    }
     Ok(())
 }
 

@@ -41,17 +41,27 @@ pub fn run(
         ));
     }
     fs::create_dir_all(&evidence)?;
+    let mut run = baseline_discovery::discover(&root, mode)?;
+    run.budget_ms = budget_ms;
+    let files: Vec<_> = run.files.iter().map(|f| f.path.clone()).collect();
+    // Rust-only or vitest-only roots publish a truthful blocked receipt; a
+    // root with no supported test input at all publishes no artifact.
+    let has_non_pytest_lane = run
+        .lanes
+        .iter()
+        .any(|l| l.id.starts_with("rust:") || l.id == "frontend:vitest");
+    if files.is_empty() && !has_non_pytest_lane {
+        return Err(Error::Input("no supported test inputs discovered"));
+    }
     let mut output = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(evidence.join("baseline-run.json"))?;
-    let mut run = baseline_discovery::discover(&root, mode)?;
-    run.budget_ms = budget_ms;
-    let files: Vec<_> = run.files.iter().map(|f| f.path.clone()).collect();
-    if files.is_empty() {
-        return Err(Error::Input("no required pytest files discovered"));
-    }
     let result: Result<()> = (|| {
+        if files.is_empty() {
+            // Receipt-only Rust/Vitest lane discovery: no pytest bridge invoked.
+            return Ok(());
+        }
         attempt(&root, &evidence, &files, true, true, &dl, &mut run)?;
         if mode == Mode::Safe {
             for file in files.iter().filter(|f| f.starts_with("tests/unit/")) {
