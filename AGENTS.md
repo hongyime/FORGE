@@ -101,6 +101,10 @@ Memory tools such as cognee or cavemem are optional local aids. Trust
 
 ## Repository-Specific Overrides
 
+### FORGE — Same-model delegation
+- Subagents must use the active parent session's exact provider and model. Explicitly pin that route; do not use category defaults or cross-model/provider fallback that can select a different model.
+- If the delegation interface cannot enforce the same route, work directly or use an explicitly model-pinned CLI whose routing can be verified. For image tasks, also verify that image attachments reach the child; matching model names alone does not verify image delivery.
+
 ### FORGE — Windows build and dependency hygiene
 - New first-party migration helpers must use Rust; use PowerShell for host administration. Do not generate new Python helpers or refresh `uv` caches for this rewrite. Existing Python reference adapters are legacy dependencies, not proof of a Python-free build.
 - Keep routine setup and verification on the core dependency path. Do not install the `offensive` extra, use `--all-extras`, or download offensive tool bundles to repair a build/test environment. For existing bootstrap use, select `FORGE_SAFE_MODE=1`; missing optional offensive dependencies remain explicit blockers.
