@@ -138,7 +138,8 @@ fn assert_attempt_retains_failure(collect: bool) {
     .unwrap();
     assert!(
         run.attempts[0].protocol_complete,
-        "fixture must exercise a valid attempt"
+        "fixture must exercise a valid attempt: {:?}",
+        run.attempts[0]
     );
     // Then the earlier failed observation and execution flag survive.
     assert_eq!(
