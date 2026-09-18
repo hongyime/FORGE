@@ -1,34 +1,35 @@
-# Current Task: Rust rewrite — domain verifier delivered; finish T3 properties and acceptance
+# Current Task: Rust rewrite — T3 accepted; T4 configuration next
 
-**Status:** IN PROGRESS — canonicalization property tests and T3 acceptance reconciliation | Latest native code checkpoint: `2eac6f4` (290 tests/doctests passed) | Date: 2026-09-19
+**Status:** T3 ACCEPTED under the T1 scheduling exception; T4 configuration is next | Latest native code checkpoint: `570c397` (297 tests/doctests passed before publication) | Date: 2026-09-19
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [....................]   0 / 36
-Milestones with delivered work [~~..................]   3 / 36 (T1-T3, partial)
+Major milestones fully closed  [#...................]   1 / 36 (T3)
+Milestones with delivered work [~~#.................]   3 / 36 (T1/T2 partial; T3 accepted)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
-Latest native test run         [####################] 290 / 290 passed
+Latest native test run         [####################] 297 / 297 passed
 Final release reviews         [....]                    0 / 4
 ```
 
 | Phase | Tasks | Current state |
 | --- | --- | --- |
-| Foundations, tests, domain, config, gates | T1-T6 | T1-T3 partial; T4-T6 queued |
+| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 next, T5-T6 queued |
 | Storage, audit, buses, plugins, runtime | T7-T12 | Not started |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment
-- Code checkpoint `2eac6f4` delivers bounded `verify domain`, typed mapping/hash validation, complete exclusive receipts and 18 integration tests. Parent independently passed the full native workspace: **290 tests/doctests**, zero failed/ignored, exit 0; parent workspace all-target Clippy and worker fmt passed. Independent reviewer `ses_f4a00b418ffe0FRwFYtq28yRSJ` approved scoped publication; its remaining full-suite condition is satisfied. This is not full T3 review or closure; LSP remains unavailable.
-- Parent CLI executed **19 named in-process assertions**, validated 52 T3 mappings and nine manifest fixtures, and recorded 16 input hashes and **zero Cargo tests executed by the command**. The 66 later-owner references are not runtime verification. Receipt includes portable command/revision bindings, collected/executed/passed/failed/skipped counts, exact stdout/stderr artifact refs and teardown. Evidence base: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/`; parent receipts: `parent-domain-workspace-complete-20260919.{json,log}`, `parent-domain-clippy-20260919.{json,log}`, `parent-domain-cli-20260919/{receipt.json,stdout.txt,stderr.txt}`; worker fmt: `domain-receipt-contract-fmt-20260919.{json,log}`. Completed QA wrappers report mutex released/jobs1.
-- First parent workspace attempt hit the outer 1800-second tool timeout during `baseline_vitest_cross_mode` without a printed test failure. Historical partial log `parent-domain-workspace-20260919.log` is preserved; extended 3600-second retry completed. No test budgets/assertions changed. Parent inspection found no matching Cargo/native-test/Python/Node children after interruption; interrupted fixture-directory cleanup is **not proven**.
-- Prior credential checkpoint `5828331` remains accepted: 94 Pydantic and 12 dataclass reference cases preserve approved plaintext and existing masking. Verifier examples do not replace actual canonicalization property tests or exhaustive field/case acceptance reconciliation. Eight old fixture metadata-only drift paths remain unstaged; fixture bytes and domain ledger were not changed.
-- Dataclass scalar JSON values deliberately remain uncoerced. Set collections materialize the declared lists of credential objects; arbitrary non-list Python objects are outside this tested collection boundary. No lookup, cracking, network or persistence was added.
+### Accepted T3 evidence
+- Reviewer `ses_f4a00b418ffe0FRwFYtq28yRSJ` final delta explicitly **APPROVED T3 implementation acceptance under the T1 scheduling exception**; no unmet T3 criterion remains identified. Published `570c397` adds exactly `scalar_generated.rs` and `timestamp_generated.rs`: seven Rust tests, **60,337 generated evaluations** over C2Url/PluginId/Timestamp and **479 sensitivity errors detected by test-local bad adapters**. Five characterization tests passed before the two sensitivity tests. No production mutation or fresh Python-differential claim.
+- Parent independently passed **297/297 workspace tests/doctests**, zero failed/ignored, plus workspace fmt and all-target Clippy. Evidence base: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/`; receipts `parent-properties-workspace-20260919.{json,log}`, `parent-properties-clippy-20260919.{json,log}` and `parent-properties-fmt-20260919.json` report exit0 and QA mutex released/jobs1. Silent fmt produced no log. These are prepublication gates on the approved files; closure reconciliation does not rerun the suite.
+- Accepted scope: native typed domain/declared JSON source boundaries cover IDs, seeds, enums, graphs, task/agent records, findings, credentials and timestamps. All **52 T3 mappings** are fixture-verified; **66 later-owner references** retain ownership and are not T3 runtime verification. Prior source-parity fixtures (including enum, graph/coercion, TaskState, scalar/timestamp/path cases and `5828331`'s 94 Pydantic +12 dataclass cases) preserve approved plaintext/masking and boundary behavior. `2eac6f4` supplies the bounded verifier; parent CLI receipt `parent-properties-domain-cli-20260919/{receipt.json,stdout.txt,stderr.txt}` records **19 assertions passed, 52 mappings, 9 manifest fixtures, 16 input hashes and 0 Cargo tests executed**, with revision `b646dd8` before property publication. Final review accepts this evidence package: plan T3 is checked and ledger `complete_t3=true`. Standalone verifier receipt `complete_t3=false` intentionally describes limited-checker scope; no code or old receipt is changed to claim milestone closure.
+- Retained limits: LSP unavailable; SQL integer IDs are signed64 (opaque workspace/graph IDs remain strings); arbitrary non-list Python objects are outside declared JSON collection boundaries and dataclass scalar JSON values remain uncoerced. Verifier fixture hashes cover the manifest only, not every fixture/provenance sidecar or every mapped field/case. No full-rewrite or deployment-cutover claim.
+- Closure metadata validation: existing compiled `forge-xtask verify domain` passed19 assertions,52 mappings and9 fixture hashes with0 Cargo tests, exit0; exclusive evidence `t3-accepted-records-20260919/{receipt.json,stdout.txt,stderr.txt}` under the evidence base. Receipt complete_t3=false is the intentional checker limit, separate from accepted ledger complete_t3=true.
+- T1 denied cleanup and historical outer-timeout fixture uncertainty remain separate under the scheduling exception. Preserve `parent-domain-workspace-20260919.log`: its1800s interruption had no printed failure;3600s retry passed without budget/assertion changes, but interrupted fixture-directory cleanup is unproven. T2 baseline/accounting and native containment remain incomplete. Eight pre-existing fixture metadata-only drift paths remain unstaged; all118 ledger entries/ownership and fixture payloads are unchanged. Only the ledger closure flag/note and acceptance records are reconciled; this is not F1-F4 approval or deployment cutover.
 
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
@@ -41,14 +42,15 @@ Final release reviews         [....]                    0 / 4
 - [x] Finish the three T3 contract ports and `HashCredentialSet`, with source-parity tests.
 - [x] Commit the verified four-contract increment (`5828331`).
 - [x] Add, test and obtain scoped publication approval for `verify domain` (`2eac6f4`).
-- [ ] Add actual canonicalization property tests; current verifier has representative idempotence examples only.
-- [ ] Reconcile remaining T3 acceptance and obtain full T3 review before closing its checkbox.
+- [x] Publish approved generated canonicalization properties (`570c397`); parent297-suite/fmt/Clippy passed.
+- [x] Obtain final T3 sign-off (`ses_f4a00b418ffe0FRwFYtq28yRSJ`) and reconcile accepted closure metadata.
+- [ ] Implement T4 configuration against accepted T3 contracts.
 - [ ] Implement production native process containment: bounded stdout/stderr, deadlines, failure paths and descendant cleanup.
 - [ ] Add actual Cargo test collection/execution accounting to T2.
 - [ ] Run scoped review and appropriate full native verification, then publish each tested increment.
 - [ ] Proceed to T4 configuration and subsequent tasks in dependency order.
 
-Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger: `native/migration/domain-contracts.json`. The earlier all-blocked sweep is superseded; 33 not-started implementation milestones and four final gates are queued, not awaiting another policy approval. T1/T2 retain their genuine external/full-acceptance blockers. Older 48-verified/policy-blocked ledger claims below are historical; current ledger is 52 verified and 66 later-owner references, with complete_t3=false pending property coverage and final acceptance. Next: canonicalization properties/T3 reconciliation, then T4 and native containment according to their dependencies; 0/36 milestones fully closed, 3 partial.
+Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger: `native/migration/domain-contracts.json`. The earlier all-blocked sweep is superseded;33 not-started implementation milestones and four final gates remain queued. T1/T2 retain genuine external/full-acceptance blockers. Older48-verified/policy-blocked ledger claims below are historical; current ledger is52 verified and66 later-owner references, with complete_t3=true after final T3 approval. Next: T4 configuration; T2 native containment/accounting stays separate. **1/36 fully closed (T3),2 partial (T1/T2),33 queued**.
 
 ## Historical checkpoints (prior unanswered-policy notes are superseded above)
 

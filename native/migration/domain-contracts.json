@@ -1,6 +1,6 @@
 {
   "schema": "forge.domain-contracts.v1",
-  "complete_t3": false,
+  "complete_t3": true,
   "inventory_count": 118,
   "entries": [
     {
@@ -4397,7 +4397,7 @@
   "notes": [
     "118 entries are inventory types, not additional heuristic route candidates.",
     "Static mappings are not implementation or parity proof.",
-    "2026-09-18: all 52 T3-owned entries now have scoped fixture verification; 66 reference entries remain assigned to other tasks. complete_t3 remains false until the verify domain command and formal task closure are implemented and checked.",
+    "2026-09-19: T3 implementation acceptance APPROVED by reviewer ses_f4a00b418ffe0FRwFYtq28yRSJ under the T1 scheduling exception. All 52 T3-owned entries have scoped fixture verification; 66 reference entries retain later-owner assignments. Verifier 2eac6f4, generated properties 570c397 and parent 297-test/doctest workspace plus fmt/Clippy gates support complete_t3=true. Standalone verifier receipts remain limited-checker evidence, not milestone closure; T1/T2 and F1-F4 remain open.",
     "Latest four-contract increment: 94 existing Pydantic cases and 12 new dataclass cases replayed against Python 3.12.10/Pydantic 2.10.4; full native workspace 272 tests/doctests passed. Review used the inline fallback; no independent reviewer verdict is claimed for this increment."
   ],
   "unaffected_evidence": ".omo/evidence/rust-rewrite/task-3/remaining-contracts/unaffected-done-claim.json"
