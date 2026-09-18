@@ -1,6 +1,6 @@
 # Current Task: Rust rewrite — decisions resolved; finish domain and native test infrastructure
 
-**Status:** IN PROGRESS — T2/T3 implementation can proceed | Last accepted native checkpoint: `49cd38a` (265 tests/doctests passed) | Date: 2026-09-18
+**Status:** IN PROGRESS — finish T3 verification entrypoint | Latest native code checkpoint: `5828331` (272 tests/doctests passed) | Date: 2026-09-18
 
 ## Progress dashboard
 
@@ -9,8 +9,8 @@ These are different measurements, not an estimated overall completion percentage
 ```text
 Major milestones fully closed  [....................]   0 / 36
 Milestones with delivered work [~~..................]   3 / 36 (T1-T3, partial)
-Contract inventory verified    [########............]  48 / 118 (41%, all owners)
-Latest native test run         [####################] 265 / 265 passed
+Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
+Latest native test run         [####################] 272 / 272 passed
 Final release reviews         [....]                    0 / 4
 ```
 
@@ -23,21 +23,27 @@ Final release reviews         [....]                    0 / 4
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
+### Current verified increment
+- Code checkpoint `5828331` implements `DehashedResult`, `KeyScannerFinding`, `HashCredential` and `HashCredentialSet`. Replayed 94 preserved Pydantic source cases and 12 new dataclass source cases; seven new native tests pass. One full workspace run passed 272 tests/doctests, zero failed/ignored; fmt and Clippy passed. Evidence: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/approved-contracts-checkpoint.json`. Inline review fallback only; no independent review claimed. All 52 T3-owned entries now have scoped fixture verification; 66 entries belong to later runtime/storage tasks. T3 is not yet closed: the required `verify domain` command is still missing.
+- Dataclass scalar JSON values deliberately remain uncoerced. Set collections materialize the declared lists of credential objects; arbitrary non-list Python objects are outside this tested collection boundary. No lookup, cracking, network or persistence was added.
+
 ### Decisions received — do not ask again
-- Preserve original plaintext serialization for the pending `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix` contracts. Do not introduce new masking into these ports. Port `HashCredentialSet` after its dependency. This decision is recorded; the remaining code/tests are not yet written or verified.
+- Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
 - Same exact provider/model for subagents remains mandatory; work directly if the interface cannot enforce it.
 
 ### Immediate todo
 - [x] Receive and record plaintext-compatibility and narrow Win32 FFI decisions.
 - [x] Restore queued plan statuses and this visible progress dashboard.
-- [ ] Finish the three T3 contract ports and `HashCredentialSet`, with source-parity tests.
+- [x] Finish the three T3 contract ports and `HashCredentialSet`, with source-parity tests.
+- [x] Commit the verified four-contract increment (`5828331`).
+- [ ] Add and test the required `verify domain` command, then close T3.
 - [ ] Implement production native process containment: bounded stdout/stderr, deadlines, failure paths and descendant cleanup.
 - [ ] Add actual Cargo test collection/execution accounting to T2.
 - [ ] Run scoped review and appropriate full native verification, then publish each tested increment.
 - [ ] Proceed to T4 configuration and subsequent tasks in dependency order.
 
-Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger: `native/migration/domain-contracts.json`. The earlier all-blocked sweep is superseded; 33 not-started implementation milestones and four final gates are queued, not awaiting another policy approval. T1/T2 retain their genuine external/full-acceptance blockers. Older ledger policy labels are historical pending reconciliation by the actual ports; verified counts are unchanged.
+Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger: `native/migration/domain-contracts.json`. The earlier all-blocked sweep is superseded; 33 not-started implementation milestones and four final gates are queued, not awaiting another policy approval. T1/T2 retain their genuine external/full-acceptance blockers. Older 48-verified/policy-blocked ledger claims below are historical; current ledger is 52 verified and 66 later-owner references, with complete_t3=false pending its verifier/closure.
 
 ## Historical checkpoints (prior unanswered-policy notes are superseded above)
 
@@ -121,12 +127,12 @@ Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-18 20:21:07 +08:00
+- Updated: 2026-09-18 21:25:41 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: c7b2c8a
+- HEAD: e97a997
 - Dirty files: 8
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->

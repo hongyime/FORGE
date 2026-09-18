@@ -1,5 +1,7 @@
 # Agent Journal
 
+- 2026-09-18: Committed four-contract increment as `5828331`. Fast-forwarded non-overlapping upstream `cba7e24` (asyncssh declaration only) without installing dependencies; native source/lockfile and captured model source were unchanged by that incoming commit. T3 remains active for the missing verify-domain entrypoint, not another policy decision.
+- 2026-09-18: Implemented the four formerly policy/dependency-blocked domain records with approved original plaintext behavior. Replayed 94 preserved Pydantic and 12 new dataclass reference cases; seven new native tests and one full 272-test/doctest workspace run passed with fmt/Clippy. Advanced only these four ledger entries to scoped fixture-verified (52 total, 66 later-owner references). Inline review fallback documented after model-pinned review metadata export timed out; no independent verdict or full T3 closure claimed. Next is the required verify-domain command.
 - 2026-09-18: User explicitly resolved both migration choices: retain original plaintext serialization for the three discussed pending contracts, and allow a narrowly reviewed Win32 FFI boundary with a safe API while keeping unsafe forbidden elsewhere. Restored queued downstream plan statuses and added a visible progress dashboard and immediate todo list to STATE. No contract implementation, ledger verification count, runtime redaction behavior or Cargo lint was changed by recording this decision; T2/T3 implementation can proceed without asking again.
 - 2026-09-18: Reconciled the remaining plan dependency chain in one pass: T12-T36 and F1-F4 are explicitly blocked on their named unaccepted prerequisites. All 40 top-level items remain incomplete with zero completed checkboxes; no implementation, verification or final approval was waived. Updated STATE to BLOCKED, NOT COMPLETE while preserving accepted checkpoints and unanswered serialization/FFI decisions.
 - 2026-09-18: Marked T11 blocked on unaccepted T5/T6/T7/T8. Preserved the unresolved serialization and proposed narrow Win32 FFI decisions; generic continuation supplied neither decision, so no runtime contract or unsafe-code policy was changed.
@@ -449,3 +451,4 @@
 - 2026-09-18 19:08:22 +08:00 [PRAWN-E14/claude/stop] branch=main head=9ffa01e dirty=9
 - 2026-09-18 20:07:10 +08:00 [PRAWN-E14/claude/stop] branch=main head=c7b2c8a dirty=8
 - 2026-09-18 20:21:07 +08:00 [PRAWN-E14/claude/stop] branch=main head=c7b2c8a dirty=8
+- 2026-09-18 21:25:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=e97a997 dirty=8
