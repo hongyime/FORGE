@@ -157,14 +157,16 @@ Single-source migration ledgers live in `native/migration/`: `capabilities.json`
   QA: `verify sqlite`; happy migrate old fixture then compare tables/exports; failure aborted migration rolls back and original copy hash stays unchanged.
   Commit: Y | `feat(storage): port SQLite evidence stores`.
 
-- [ ] 8. Port audit chains, manifests, reviews and retained evidence
+- [~] 8. Port audit chains, manifests, reviews and retained evidence
+  Blocked start (2026-09-18): prerequisite T7 is unaccepted and blocked by the T3 serialization decision and its dependent T4/T6 contracts, plus full T2 baseline acceptance. The accepted T2 receipt-only checkpoints do not authorize audit/storage implementation or mutation of existing audit history. Continue independently permitted T2 work; no audit implementation is claimed.
   Scope: native storage/audit services; canonical serialization/hash algorithms, manifest signatures, bundle checksums, append-only enforcement, remote mounted storage, legal holds and review provenance.
   References: `forge/audit/`, `forge/reporting/audit_manifest_artifacts.py`, `forge/retention/`, `tests/audit/`, SPEC V3,V8,V11,V14.
   Dependencies: wave 2; 7. Acceptance: Rust verifies historical synthetic chains byte-for-byte; new append verifies through legacy reader; tampering and legal-hold violations rejected.
   QA: `verify audit`; happy verify/append/export/import fixture receipts match; failure modify one historical byte or request held-data removal yields nonzero without replacing evidence.
   Commit: Y | `feat(audit): preserve chain and manifest compatibility`.
 
-- [ ] 9. Port platform Postgres state and workflow history
+- [~] 9. Port platform Postgres state and workflow history
+  Blocked start (2026-09-18): prerequisites T7 and T8 are unaccepted, with their storage/audit contracts blocked by the unresolved T3 serialization decision and dependent contracts. No platform persistence implementation or database mutation has been started. Independent T2 harness work remains permitted; the scheduling exception does not bypass these dependencies.
   Scope: `native/crates/forge-storage/src/platform/`; existing Postgres models/migrations, workflow persistence/history/replay, workspace enforcement and idempotent transitions.
   References: `forge/workflow/`, `alembic/`, `forge/api/deps.py`, `tests/workflow/`, `tests/conftest.py:118-179`.
   Dependencies: wave 2; 7,8. Acceptance: per-attempt Postgres schema fixtures preserve state/version/history; restart resumes without duplicate committed transitions. Required unavailable Postgres is a failed prerequisite, not a skip.

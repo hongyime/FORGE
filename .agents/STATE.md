@@ -4,6 +4,8 @@
 
 ## Current worker progress
 
+- **Delegation correction (2026-09-18):** user requires every subagent to use the parent session's exact provider/model. Current route: `amazon-bedrock/global.openai.gpt-6-astra`. Avoid category defaults and cross-model fallbacks; if exact routing cannot be enforced, work directly. Image tasks also require attachment delivery verification. Durable rule is in `AGENTS.md`; this records a delegation policy, not a change to global harness configuration. The process-wrap lookup failed with a provider token error; its source audit was subsequently completed directly.
+- **Next T2 containment step:** process-wrap 10.0.0 std JobObject is unsuitable as a drop-in (kill-on-close disabled, no active-process-zero event check, unbounded/sequential output helpers). A direct isolated Rust 1.94.1/windows-sys 0.61.2 probe passed normal exit, explicit job termination, job-handle closure and abrupt supervisor-exit descendant cleanup. Evidence: `.omo/evidence/rust-rewrite/task-2/native-job-probe/verdict.json`; no active probe processes or runtime fixture directories remained. This is Windows-only feasibility, not production adoption, bounded-pipe/failure-injection or Miri/sanitizer proof. Next: design and test a production containment increment before Cargo collection integration. Main application suite remains 265 tests. T8/T9 are `[~]` for unaccepted prerequisite chains.
 - **2026-09-18 bootstrap checkpoint (`7ca7fa0`):** unset/unknown safe-mode values default to core-only dependencies and normalize the child environment; safe setup cannot fall back to generic/full legacy requirements, including development setup. Existing bootstrap/test files only; no new Python helper or dependency installation. Parent verification: 19 pytest tests passed, Ruff passed, CLI `--help` exited 0. Does not guarantee detection-free artifacts.
 - **Rust-only blocked-receipt checkpoint published (`49cd38a`):** Rust-only roots (`native/`, `rust_core/`) now emit blocked receipts with zero observed cases/attempts and no Python launcher/adapter prerequisite required; empty roots fail without invalid JSON; Python/Vitest-backed provenance retained unchanged. 4 files: `baseline.rs`, `baseline_discovery.rs`, `baseline_inputs.rs`, `tests/baseline_rust_only.rs`. Actual Rust Cargo collection/execution still pending; lanes incomplete. Not a Python-free entire runner; not full T2 or rewrite completion. Full workspace run: **265 tests/doctests** (127 domain integrations + 79 xtask units + 57 xtask integrations + 2 domain doctests), 0 failed/ignored/filtered; command: `cargo test --workspace --locked --offline --jobs 1 --no-fail-fast -- --test-threads=1 --nocapture`. fmt and Clippy -D warnings clean. Evidence: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/parent-rust-only-workspace.{json,log}`, exit 0, mutex_released=true. Reviewer ses_f5216b9a6ffecql5TpWZbOQk8n approved.
 - **T2 bounded Vitest checkpoint published (`79763cc`, `76424e4`):** Worker implemented typed file/name/location collect-before-run matching, shared deadline, ambiguity/project blockers, preserved observed counts, and bounded drift guards in 13 inseparable files (`79763cc`). Parent added diagnostic-only Attempt detail to an existing corrective assertion; no budget or assertion semantics changed (`76424e4`). One complete native workspace invocation passed **262 tests/doctests** (127 domain integrations + 79 xtask units + 54 xtask integrations + 2 domain doctests), 0 failed/ignored/filtered; command: `cargo test --workspace --locked --offline --jobs 1 --no-fail-fast -- --test-threads=1 --nocapture`. fmt and workspace Clippy clean. Evidence: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/parent-cross-mode-workspace-observed.{json,log}`, exit 0, mutex_released=true, current-run cleanup successful. Historical full-run failures (10-minute outer timeout; `execution_attempt_preserves_prior_failure` valid-attempt assertion; collect-only FAILED before outer batch watchdog truncation, termination cause unknown) preserved as historical; `instability-diagnosis.json` has `confirmed_root_cause=false` — current complete pass bounds checkpoint risk but does not prove why prior runs failed.
@@ -79,12 +81,12 @@
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-18 05:39:05 +08:00
+- Updated: 2026-09-18 17:28:41 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 195d57a
-- Dirty files: 22
+- HEAD: 8fbe566
+- Dirty files: 10
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
