@@ -9,8 +9,9 @@
 //! * **Budget keys** — five `PlatformSettings` positive-integer timeouts/thresholds.
 //! * **Flag keys** — thirteen `ForgeConfig` boolean discovery and service flags.
 //! * **Count keys** — twelve `ForgeConfig` non-negative integer worker/timeout/rate keys.
-//! * **String keys** — four `ForgeConfig` string/enum keys (log_level, curl_profile, web_auth, c2_default_channel).
-//! * **Optional string keys** — seven `ForgeConfig` optional string keys (proxy, redis_url, shodan_key, cloud ids).
+//! * **String keys** — nine `ForgeConfig` required string keys (log_level, curl_profile, etc.).
+//! * **Optional string keys** — twelve `ForgeConfig` optional string keys (proxy, paths, etc.).
+//! * **List keys** — four `ForgeConfig` CSV list keys (c2_fallback_order, cloud services).
 //!
 //! CLI/local keys are exact canonical names. Environment aliases are ASCII
 //! case-insensitive; duplicate alias spellings for the selected key fail
@@ -21,6 +22,7 @@ mod counts;
 mod error;
 mod flags;
 mod opt_strings;
+mod str_lists;
 mod strings;
 
 pub use budgets::{BudgetKey, ResolvedBudget, ResolvedBudgets};
@@ -39,6 +41,10 @@ pub use strings::{
 pub use opt_strings::{
     OptStrError, OptStrErrorKind, OptStrInputs, OptStrKey, ResolvedOptStr, ResolvedOptStrs,
     resolve_opt_strs,
+};
+pub use str_lists::{
+    ResolvedStrList, ResolvedStrLists, StrListError, StrListErrorKind, StrListInputs, StrListKey,
+    resolve_str_lists,
 };
 
 use budgets::positive_integer;
