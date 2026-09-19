@@ -1,6 +1,6 @@
-# Current Task: Rust rewrite — T4 req-strings published; web_secret_key/operator/path/list keys next
+# Current Task: Rust rewrite — T4 web_secret_key/operator published; path/list keys next
 
-**Status:** T4 PARTIAL — req-strings `fff7f31` published (domain 198/198 unchanged); next: web_secret_key, operator, path keys, list keys | Latest domain checkpoint: `fff7f31` | Date: 2026-09-19
+**Status:** T4 PARTIAL — web_secret_key/operator `0bacced` published (domain 198/198 unchanged); next: path keys, list keys | Latest domain checkpoint: `0bacced` | Date: 2026-09-19
 
 ## Progress dashboard
 
@@ -16,17 +16,17 @@ Final release reviews         [....]                    0 / 4
 
 | Phase | Tasks | Current state |
 | --- | --- | --- |
-|| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (budgets `97a796f` + flags `8cafea7` + counts `4859ffb` + strings `fff7f31` + opt-strings `a6d25ce`); T5-T6 queued |
+|| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (budgets `97a796f` + flags `8cafea7` + counts `4859ffb` + strings `0bacced` + opt-strings `a6d25ce`); T5-T6 queued |
 | Storage, audit, buses, plugins, runtime | T7-T12 | Not started |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T4 req-strings extension (`fff7f31`)
-- Published `fff7f31` feat(config): extend string keys with three required host/pipe/ip keys. Extended `src/config/strings.rs` + `tests/config_strings.rs`; `StrKey::ALL` grows from 4 to 7. New unconstrained non-empty keys: `WebHost` (FORGE_WEB_HOST, default '127.0.0.1'), `C2SmbPipeName` (FORGE_C2_SMB_PIPE_NAME, default 'atsvc'), `C2IcmpTargetIp` (FORGE_C2_ICMP_TARGET_IP, default '127.0.0.1'). Used `is_some_and()` to satisfy both Clippy and Rust 2021 (let-chain is Rust 2024 only). Tests updated in-place (renamed, not added new).
-- Domain suite unchanged **198/198 tests/doctests** (no new tests in this slice). fmt exit0, Clippy `-D warnings` exit0.
-- Remaining T4 work (task stays open): web_secret_key (allows empty, default ''); operator (env FORGE_OPERATOR, T4 default ''); path keys (data_dir/kb_path/nvd_path/exploitdb_*); list keys (c2_fallback_order, cloud services); `verify config`; file adapter; logging redaction; lifecycle.
+### Current verified increment — T4 web_secret_key/operator extension (`0bacced`)
+- Published `0bacced` feat(config): add web_secret_key and operator to string keys. Extended `src/config/strings.rs` + `tests/config_strings.rs`; `StrKey::ALL` grows from 7 to 9. New unconstrained allow-empty keys: `WebSecretKey` (FORGE_WEB_SECRET_KEY, default ''), `Operator` (FORGE_OPERATOR, T4 default '' — caller provides OS username). Added `allows_empty()` method; `validate()` skips EmptyString check for these. Tests updated in-place (renamed to nine_str_keys/all_nine_layers, canary test uses json!(42) for allows_empty keys, empty test skips them). fmt+Clippy exit 0.
+- Domain suite unchanged **198/198 tests/doctests**. No new tests added in this slice.
+- Remaining T4 work (task stays open): path keys (data_dir/kb_path/nvd_path/exploitdb_*); list keys (c2_fallback_order, cloud services); `verify config`; file adapter; logging redaction; lifecycle.
 - T1/T2 blockers unchanged. Eight pre-existing fixture metadata-only drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
@@ -47,9 +47,9 @@ Final release reviews         [....]                    0 / 4
 - [x] Publish T4 four-string/enum resolver (`e63b858`); domain186/fmt/Clippy passed.
 - [x] Publish T4 seven-optional-string resolver (`a6d25ce`); domain198/fmt/Clippy passed.
 - [x] Extend strings.rs with web_host/c2_smb_pipe_name/c2_icmp_target_ip (`fff7f31`); domain198/fmt/Clippy passed.
-- [ ] T4 next: web_secret_key (empty-allowed string), operator (env-only, T4 default ''), path keys.
-Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger unchanged. Score: **1/36 closed (T3), 3 partial (T1/T2/T4), 32 queued**. T4 needs completion before T5. Next coding: web_secret_key, operator, path/list keys.
-## Historical checkpoints (prior unanswered-policy notes are superseded above)
+- [x] Extend strings.rs with web_secret_key/operator (`0bacced`); domain198/fmt/Clippy passed.
+- [ ] T4 next: path keys (data_dir, kb_path, nvd_path, exploitdb_path, exploitdb_csv_path).
+Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger unchanged. Score: **1/36 closed (T3), 3 partial (T1/T2/T4), 32 queued**. T4 needs completion before T5. Next coding: ForgeConfig path keys.
 
 - **Awaiting explicit decisions:** T3 default-secret serialization and the proposed narrow Win32 FFI exception remain unanswered. Generic continuation is not approval to change either contract or weaken `unsafe_code = "forbid"`. No additional runtime implementation was started; last accepted native code remains `49cd38a` with 265 passing tests/doctests.
 - **Dependency sweep:** all 36 implementation tasks and four final gates remain incomplete (`[~]`, zero `[x]`). T12-T36 and F1-F4 now name their unaccepted direct prerequisites instead of appearing immediately runnable. This does not mark the rewrite complete or waive any work. Scoped T2/T3 work is permitted only within the existing scheduling exception; policy-gated adoption remains paused. Missing live/operator prerequisites, LSP, denied cleanup and final release/restoration evidence remain open independently of the two policy choices.
