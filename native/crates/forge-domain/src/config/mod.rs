@@ -12,6 +12,7 @@
 //! * **String keys** — nine `ForgeConfig` required string keys (log_level, curl_profile, etc.).
 //! * **Optional string keys** — twelve `ForgeConfig` optional string keys (proxy, paths, etc.).
 //! * **List keys** — four `ForgeConfig` CSV list keys (c2_fallback_order, cloud services).
+//! * **Snapshot** — `resolve_all` resolves all 55 keys in one call, collecting every error.
 //!
 //! CLI/local keys are exact canonical names. Environment aliases are ASCII
 //! case-insensitive; duplicate alias spellings for the selected key fail
@@ -22,6 +23,7 @@ mod counts;
 mod error;
 mod flags;
 mod opt_strings;
+mod snapshot;
 mod str_lists;
 mod strings;
 
@@ -46,6 +48,7 @@ pub use str_lists::{
     ResolvedStrList, ResolvedStrLists, StrListError, StrListErrorKind, StrListInputs, StrListKey,
     resolve_str_lists,
 };
+pub use snapshot::{ConfigAllInputs, ConfigSnapshot, resolve_all};
 
 use budgets::positive_integer;
 use serde_json::{Map, Value};
