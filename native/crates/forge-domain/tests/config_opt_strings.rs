@@ -62,7 +62,7 @@ fn one_json(
 }
 
 #[test]
-fn seven_opt_str_keys_all_default_to_none() {
+fn twelve_opt_str_keys_all_default_to_none() {
     let (cli, env, local) = empty_inputs();
     let r = resolve_opt_strs(OptStrInputs {
         cli: &cli,
@@ -71,7 +71,7 @@ fn seven_opt_str_keys_all_default_to_none() {
     })
     .unwrap();
 
-    assert_eq!(OptStrKey::ALL.len(), 7);
+    assert_eq!(OptStrKey::ALL.len(), 12);
     for key in OptStrKey::ALL {
         let resolved = r.get(key);
         assert_eq!(resolved.value(), None, "{}", key.name());

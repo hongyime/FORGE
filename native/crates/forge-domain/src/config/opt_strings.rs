@@ -1,4 +1,4 @@
-//! Seven `ForgeConfig` optional string keys (`forge/config.py:232-386`).
+//! Twelve `ForgeConfig` optional string keys (`forge/config.py:232-386`, `394-397`).
 //!
 //! All keys default to `None`. Non-empty strings after stripping are `Some(value)`.
 //! Empty strings and absent keys both resolve to `None` — no error for absent/empty.
@@ -79,9 +79,9 @@ impl ResolvedOptStr {
     }
 }
 
-/// Resolved optional string values for seven `ForgeConfig` keys.
+/// Resolved optional string values for twelve `ForgeConfig` keys.
 ///
-/// All default to `None` (`forge/config.py:232-386`).
+/// All default to `None` (`forge/config.py:232-386`, `394-397`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ResolvedOptStrs {
     pub proxy: ResolvedOptStr,
@@ -91,6 +91,11 @@ pub struct ResolvedOptStrs {
     pub cloud_azure_subscription_id: ResolvedOptStr,
     pub cloud_azure_tenant_id: ResolvedOptStr,
     pub cloud_azure_client_id: ResolvedOptStr,
+    pub data_dir: ResolvedOptStr,
+    pub kb_path: ResolvedOptStr,
+    pub nvd_path: ResolvedOptStr,
+    pub exploitdb_path: ResolvedOptStr,
+    pub exploitdb_csv_path: ResolvedOptStr,
 }
 
 impl ResolvedOptStrs {
@@ -103,6 +108,11 @@ impl ResolvedOptStrs {
             OptStrKey::CloudAzureSubscriptionId => &self.cloud_azure_subscription_id,
             OptStrKey::CloudAzureTenantId => &self.cloud_azure_tenant_id,
             OptStrKey::CloudAzureClientId => &self.cloud_azure_client_id,
+            OptStrKey::DataDir => &self.data_dir,
+            OptStrKey::KbPath => &self.kb_path,
+            OptStrKey::NvdPath => &self.nvd_path,
+            OptStrKey::ExploitdbPath => &self.exploitdb_path,
+            OptStrKey::ExploitdbCsvPath => &self.exploitdb_csv_path,
         }
     }
 }
@@ -119,10 +129,15 @@ pub enum OptStrKey {
     CloudAzureSubscriptionId,
     CloudAzureTenantId,
     CloudAzureClientId,
+    DataDir,
+    KbPath,
+    NvdPath,
+    ExploitdbPath,
+    ExploitdbCsvPath,
 }
 
 impl OptStrKey {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 12] = [
         Self::Proxy,
         Self::RedisUrl,
         Self::ShodanKey,
@@ -130,6 +145,11 @@ impl OptStrKey {
         Self::CloudAzureSubscriptionId,
         Self::CloudAzureTenantId,
         Self::CloudAzureClientId,
+        Self::DataDir,
+        Self::KbPath,
+        Self::NvdPath,
+        Self::ExploitdbPath,
+        Self::ExploitdbCsvPath,
     ];
 
     pub const fn name(self) -> &'static str {
@@ -141,6 +161,11 @@ impl OptStrKey {
             Self::CloudAzureSubscriptionId => "cloud_azure_subscription_id",
             Self::CloudAzureTenantId => "cloud_azure_tenant_id",
             Self::CloudAzureClientId => "cloud_azure_client_id",
+            Self::DataDir => "data_dir",
+            Self::KbPath => "kb_path",
+            Self::NvdPath => "nvd_path",
+            Self::ExploitdbPath => "exploitdb_path",
+            Self::ExploitdbCsvPath => "exploitdb_csv_path",
         }
     }
 
@@ -154,6 +179,11 @@ impl OptStrKey {
             Self::CloudAzureSubscriptionId => "FORGE_AZURE_SUBSCRIPTION_ID",
             Self::CloudAzureTenantId => "FORGE_AZURE_TENANT_ID",
             Self::CloudAzureClientId => "FORGE_AZURE_CLIENT_ID",
+            Self::DataDir => "FORGE_DATA_DIR",
+            Self::KbPath => "FORGE_KB_PATH",
+            Self::NvdPath => "FORGE_NVD_PATH",
+            Self::ExploitdbPath => "FORGE_EXPLOITDB_PATH",
+            Self::ExploitdbCsvPath => "FORGE_EXPLOITDB_CSV",
         }
     }
 
@@ -188,6 +218,11 @@ pub fn resolve_opt_strs(inputs: OptStrInputs<'_>) -> Result<ResolvedOptStrs, Opt
         cloud_azure_subscription_id: one(inputs, OptStrKey::CloudAzureSubscriptionId)?,
         cloud_azure_tenant_id: one(inputs, OptStrKey::CloudAzureTenantId)?,
         cloud_azure_client_id: one(inputs, OptStrKey::CloudAzureClientId)?,
+        data_dir: one(inputs, OptStrKey::DataDir)?,
+        kb_path: one(inputs, OptStrKey::KbPath)?,
+        nvd_path: one(inputs, OptStrKey::NvdPath)?,
+        exploitdb_path: one(inputs, OptStrKey::ExploitdbPath)?,
+        exploitdb_csv_path: one(inputs, OptStrKey::ExploitdbCsvPath)?,
     })
 }
 
