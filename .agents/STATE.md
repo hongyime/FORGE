@@ -1,6 +1,6 @@
-# Current Task: Rust rewrite — T4 integer keys published; string/enum keys next
+# Current Task: Rust rewrite — T4 string/enum keys published; optional strings next
 
-**Status:** T4 PARTIAL — counts `4859ffb` published (domain 173/173 passed); next: ForgeConfig string/enum keys | Latest domain checkpoint: `4859ffb` | Date: 2026-09-19
+**Status:** T4 PARTIAL — strings `e63b858` published (domain 186/186 passed); next: optional string/path keys | Latest domain checkpoint: `e63b858` | Date: 2026-09-19
 
 ## Progress dashboard
 
@@ -10,26 +10,26 @@ These are different measurements, not an estimated overall completion percentage
 Major milestones fully closed  [#...................]   1 / 36 (T3)
 Milestones with delivered work [~~##................]   4 / 36 (T1/T2 partial; T3 accepted; T4 partial)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
-Latest domain test run         [####################] 173 / 173 passed (workspace last: 308)
+Latest domain test run         [####################] 186 / 186 passed (workspace last: 308)
 Final release reviews         [....]                    0 / 4
 ```
 
 | Phase | Tasks | Current state |
 | --- | --- | --- |
-|| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (budgets `97a796f` + flags `8cafea7` + counts `4859ffb`); T5-T6 queued |
+|| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (budgets `97a796f` + flags `8cafea7` + counts `4859ffb` + strings `e63b858`); T5-T6 queued |
 | Storage, audit, buses, plugins, runtime | T7-T12 | Not started |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T4 non-negative integer resolver (`4859ffb`)
-- Published `4859ffb` feat(config): add twelve ForgeConfig non-negative integer resolver. New `src/config/counts.rs` (335 lines) + `tests/config_counts.rs` (259 lines, 10 tests). `resolve_counts(CountInputs)` is pure injected-source; twelve keys match `forge/config.py:283-372`. Zero accepted unlike budget keys; JSON bool/int/truncated-float and ASCII decimal strings coerce; unicode digits, collections, null, overflow, and negative values produce typed `CountError`. Env aliases ASCII case-insensitive; duplicate aliases for selected key fail deterministically. Redesigned helpers return `CountErrorKind` (no placeholder key/source) — callers wrap.
-- Domain suite passed **173/173 tests/doctests** (163 prior + 10 new), zero failed/ignored. Domain fmt exit0, domain Clippy `-D warnings` exit0. Evidence: `t4-counts-{green,domain,fmt-check,clippy}-20260919.{json,log}` all exit0 and QA mutex released/jobs1.
-- Defaults from `forge/config.py:283-372`: max_workers=4, task_timeout=3600, web_port=8080, browser_timeout=30, auth_max_attempts=1000, auth_rate_limit=10, c2_fail_threshold_https/dns=3, c2_fail_threshold_smb/icmp=2, c2_smb_fallback_timeout=30, c2_icmp_packet_interval=180. Prior budgets `97a796f` + flags `8cafea7` unchanged.
-- Remaining T4 work (task stays open): string/enum keys (log_level, curl_profile, web_auth, c2_channel); optional string/path keys; `verify config`; file adapter; logging redaction; lifecycle/cancellation.
+### Current verified increment — T4 string/enum key resolver (`e63b858`)
+- Published `e63b858` feat(config): add four ForgeConfig string/enum key resolver. New `src/config/strings.rs` (294 lines) + `tests/config_strings.rs` (360 lines, 13 tests). `resolve_str_keys(StrKeyInputs)` is pure injected-source; four keys match `forge/config.py:216-267`. `log_level` uppercases; `c2_default_channel` lowercases; `curl_profile` exact-case; `web_auth` any non-empty string. Constrained keys produce `InvalidVariant` (T4 extension; Python silently falls back). Env aliases ASCII case-insensitive; duplicate aliases fail deterministically.
+- Domain suite passed **186/186 tests/doctests** (173 prior + 13 new), zero failed/ignored. Domain fmt exit0, domain Clippy `-D warnings` exit0. Evidence: `t4-strings-{green,domain,fmt-check,clippy}-20260919.{json,log}` all exit0 and QA mutex released/jobs1.
+- Defaults from `forge/config.py:216-267`: log_level=INFO, curl_profile=chrome120, web_auth=jwt, c2_default_channel=https. Prior budgets `97a796f`, flags `8cafea7`, counts `4859ffb` unchanged.
+- Remaining T4 work (task stays open): optional string/path keys (operator, proxy, redis_url, shodan_key, data_dir, kb_path, etc.); `verify config`; file adapter; logging redaction; lifecycle/cancellation.
 - T1/T2 blockers unchanged: denied cleanup of `native/target/reviewer-t1` and `t1-id-cli-20260916-01`; unavailable LSP; T2 full baseline/containment incomplete. Eight pre-existing fixture metadata-only drift paths remain unstaged.
-- Prior T3 `9c2219e`/`570c397`/`2eac6f4`/`5828331`, T4-budget `97a796f`, T4-flags `8cafea7` all unchanged. complete_t3=true; ledger ownership unchanged.
+- Prior T3 `9c2219e`/`570c397`/`2eac6f4`/`5828331`, T4-budget `97a796f`, T4-flags `8cafea7`, T4-counts `4859ffb` all unchanged. complete_t3=true; ledger ownership unchanged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
@@ -46,10 +46,10 @@ Final release reviews         [....]                    0 / 4
 - [x] Publish T4 five-budget resolver (`97a796f`); 308-workspace/fmt/Clippy passed; reviewer approved.
 - [x] Publish T4 thirteen-flag resolver (`8cafea7`); domain163/fmt/Clippy passed.
 - [x] Publish T4 twelve-count resolver (`4859ffb`); domain173/fmt/Clippy passed.
-- [ ] T4 next: string/enum keys (log_level, curl_profile, web_auth, c2_channel).
-- [ ] T2: implement production native process containment (bounded IO, deadlines, cleanup).
+- [x] Publish T4 four-string/enum resolver (`e63b858`); domain186/fmt/Clippy passed.
+- [ ] T4 next: optional string/path keys (operator, proxy, redis_url, shodan_key, data_dir, kb_path, etc.).
 
-Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger unchanged. Score: **1/36 closed (T3), 3 partial (T1/T2/T4), 32 queued**. T4 needs completion before T5. Next coding: ForgeConfig string/enum keys.
+Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger unchanged. Score: **1/36 closed (T3), 3 partial (T1/T2/T4), 32 queued**. T4 needs completion before T5. Next coding: ForgeConfig optional string/path keys.
 
 ## Historical checkpoints (prior unanswered-policy notes are superseded above)
 
