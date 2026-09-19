@@ -1,6 +1,6 @@
-# Current Task: Rust rewrite — T3 accepted; T4 config first slice published
+# Current Task: Rust rewrite — T4 boolean flags published; integer keys next
 
-**Status:** T4 PARTIAL — five-budget resolver `97a796f` published; full T4 config remains open | Latest native code checkpoint: `97a796f` (308 tests/doctests passed) | Date: 2026-09-19
+**Status:** T4 PARTIAL — flags `8cafea7` published (domain 163/163 passed); next: ForgeConfig integer keys | Latest domain checkpoint: `8cafea7` | Date: 2026-09-19
 
 ## Progress dashboard
 
@@ -10,26 +10,26 @@ These are different measurements, not an estimated overall completion percentage
 Major milestones fully closed  [#...................]   1 / 36 (T3)
 Milestones with delivered work [~~##................]   4 / 36 (T1/T2 partial; T3 accepted; T4 partial)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
-Latest native test run         [####################] 308 / 308 passed
+Latest domain test run         [####################] 163 / 163 passed (workspace last: 308)
 Final release reviews         [....]                    0 / 4
 ```
 
 | Phase | Tasks | Current state |
 | --- | --- | --- |
-| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (five-budget `97a796f`); T5-T6 queued |
+| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (budgets `97a796f` + flags `8cafea7`); T5-T6 queued |
 | Storage, audit, buses, plugins, runtime | T7-T12 | Not started |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T4 five-budget config slice
-- Published `97a796f` feat(config): add pure five-budget configuration resolver. New files: `native/crates/forge-domain/src/config/{mod,budgets,error}.rs` + three integration test files (11 tests, 802 lines). `resolve_budgets(BudgetInputs)` takes injected CLI/environment/local maps, applies CLI > environment > local > default precedence with provenance, returns typed positive budgets or value-free `ConfigError{key,source,kind}`. Exact PlatformSettings defaults: provider_timeout=5, heartbeat_interval=30, telemetry_threshold_ms=5000, message_retry_max=3, message_ack_timeout=60 (source `forge/config.py:705-752`). No ambient env/FS/logger/service/provider access; no dependency changes.
-- Parent independently passed **308/308 workspace tests/doctests**, zero failed/ignored, plus domain fmt and all-target Clippy. Evidence base: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/`; receipts `parent-t4-budgets-workspace-20260919.{json,log}`, `t4-budget-{focused-final,domain,fmt,clippy}-20260919-02.{json,log}` all exit0 and QA mutex released/jobs1.
-- Reviewer `ses_f48e7bea2ffeA60Z6h7mikRzZL` APPROVED scoped partial-library publication. Documented limits: Unicode decimal text unsupported (Python `int()` accepts it; concrete remaining T4 work); CLI/local four-layer precedence is the T4 extension, not pre-existing Python behavior. Config API fully documented as a five-key projection; unrelated fields are ignored, not ported.
-- Remaining T4 work (task stays open): full key inventory; other settings/aliases (PlatformSettings, ForgeConfig, autostart); path resolution; secret-pool/web validation; autostart normalization; local-file adapter; logging redaction; `verify config`; lifecycle/cancellation integration consuming T2 native containment.
-- Prior T3 evidence unchanged: `ses_f4a00b418ffe0FRwFYtq28yRSJ` approved T3 under scheduling exception; `t3-accepted-records-20260919/receipt.json` records19 assertions/52 mappings; plan T3 checkbox checked and ledger `complete_t3=true`.
+### Current verified increment — T4 boolean flag resolver (`8cafea7`)
+- Published `8cafea7` feat(config): add thirteen ForgeConfig boolean flag resolver. New `src/config/flags.rs` (327 lines) + `tests/config_flags.rs` (299 lines, 9 tests). `resolve_flags(FlagInputs)` is pure injected-source; three coercion patterns match `forge/config.py:222-312` exactly: Strict1 (`offline_strict` — only `"1"`), Truthy3 (`safe_mode` — `"1"/"true"/"yes"`), Truthy4 (all other 11 discovery/web/detection flags). JSON bool and non-zero int are truthy; zero/null/collections follow typed errors. Env aliases ASCII case-insensitive; duplicate aliases for selected key fail deterministically.
+- Domain suite passed **163/163 tests/doctests** (154 prior + 9 new), zero failed/ignored. Domain fmt exit0, all-target Clippy `-D warnings` exit0. Evidence: `t4-flags-{red,green,domain,fmt-final,clippy}-20260919.{json,log}` all exit0 and QA mutex released/jobs1.
+- Defaults from `forge/config.py:213-312`: offline_strict=False, safe_mode=False, web_enabled=False, distributed_enabled=False; supabase_auto_discovery=True, mobile_assets_scan=True, repo_key_scavenge=True, firebase_web_discovery=True, firebase_repo_scavenge=True, browser_headless=True, screenshot_enabled=True, cdn_detection=True, waf_detection=True. Prior five-budget slice `97a796f` unchanged.
+- Remaining T4 work (task stays open): ForgeConfig non-negative integer keys (max_workers=4, task_timeout=3600, web_port=8080, browser_timeout=30, auth_max_attempts=1000, auth_rate_limit=10, C2 thresholds); string/enum keys (log_level, curl_profile, web_auth, c2_channel); optional string/path keys; `verify config`; file adapter; logging redaction; lifecycle/cancellation.
 - T1/T2 blockers unchanged: denied cleanup of `native/target/reviewer-t1` and `t1-id-cli-20260916-01`; unavailable LSP; T2 full baseline/containment incomplete. Eight pre-existing fixture metadata-only drift paths remain unstaged.
+- Prior T3 `9c2219e`/`570c397`/`2eac6f4`/`5828331` and T4-budget `97a796f` all unchanged. complete_t3=true; ledger ownership unchanged.
 
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
@@ -44,13 +44,13 @@ Final release reviews         [....]                    0 / 4
 - [x] Add, test and obtain scoped publication approval for `verify domain` (`2eac6f4`).
 - [x] Publish approved generated canonicalization properties (`570c397`); parent297-suite/fmt/Clippy passed.
 - [x] Obtain final T3 sign-off (`ses_f4a00b418ffe0FRwFYtq28yRSJ`) and reconcile accepted closure metadata.
-- [x] Publish T4 five-budget resolver (`97a796f`); 308-suite/fmt/Clippy passed; reviewer approved.
-- [ ] Complete T4: remaining key inventory, full settings/aliases, secret handling, autostart, file adapter, logging, `verify config`, lifecycle using T2 containment.
+- [x] Publish T4 five-budget resolver (`97a796f`); 308-workspace/fmt/Clippy passed; reviewer approved.
+- [x] Publish T4 thirteen-flag resolver (`8cafea7`); domain163/fmt/Clippy passed.
+- [ ] T4 next: ForgeConfig non-negative integer keys (max_workers, task_timeout, web_port, browser_timeout, auth_max_attempts, auth_rate_limit, C2 thresholds).
+- [ ] T4 follow-on: string/enum keys, optional strings/paths, verify config, file adapter, logging redaction.
 - [ ] T2: implement production native process containment (bounded IO, deadlines, cleanup).
-- [ ] T2: add actual Cargo test collection/execution accounting.
-- [ ] Proceed to remaining T4 and T5 (scope/authorization gates) in dependency order.
 
-Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger: `native/migration/domain-contracts.json`. Current score: **1/36 fully closed (T3), 3 partial (T1/T2/T4), 32 queued**. T1/T2 retain genuine external blockers. T4 needs completion before T5 can start. Next concrete coding steps: finish T4 (remaining key inventory + verify config) and T2 native containment in parallel.
+Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger unchanged. Score: **1/36 closed (T3), 3 partial (T1/T2/T4), 32 queued**. T4 needs completion before T5. Next coding: ForgeConfig integer keys.
 
 ## Historical checkpoints (prior unanswered-policy notes are superseded above)
 
