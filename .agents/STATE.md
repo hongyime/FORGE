@@ -1,6 +1,6 @@
-# Current Task: Rust rewrite — T4 opt-strings published; remaining T4 keys next
+# Current Task: Rust rewrite — T4 req-strings published; web_secret_key/operator/path/list keys next
 
-**Status:** T4 PARTIAL — opt-strings `a6d25ce` published (domain 198/198 passed); next: remaining T4 (operator, web_host, web_secret_key, c2 strings, path keys, list keys) | Latest domain checkpoint: `a6d25ce` | Date: 2026-09-19
+**Status:** T4 PARTIAL — req-strings `fff7f31` published (domain 198/198 unchanged); next: web_secret_key, operator, path keys, list keys | Latest domain checkpoint: `fff7f31` | Date: 2026-09-19
 
 ## Progress dashboard
 
@@ -16,18 +16,17 @@ Final release reviews         [....]                    0 / 4
 
 | Phase | Tasks | Current state |
 | --- | --- | --- |
-|| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (budgets `97a796f` + flags `8cafea7` + counts `4859ffb` + strings `e63b858` + opt-strings `a6d25ce`); T5-T6 queued |
+|| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (budgets `97a796f` + flags `8cafea7` + counts `4859ffb` + strings `fff7f31` + opt-strings `a6d25ce`); T5-T6 queued |
 | Storage, audit, buses, plugins, runtime | T7-T12 | Not started |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T4 optional string key resolver (`a6d25ce`)
-- Published `a6d25ce` feat(config): add seven ForgeConfig optional string key resolver. New `src/config/opt_strings.rs` (293 lines) + `tests/config_opt_strings.rs` (273 lines, 12 tests). `resolve_opt_strs(OptStrInputs)` is pure injected-source; seven keys match `forge/config.py:232-386`. All default to None; absent/empty/null all resolve to None without error; non-empty trimmed strings resolve to Some. `ShodanKey` has secondary alias `FORGE_SHODAN_KEY` checked after primary `FORGE_SHODAN_API_KEY`; primary wins. Duplicate case-spellings of the selected alias produce `AmbiguousEnvironmentKey`.
-- Domain suite passed **198/198 tests/doctests** (186 prior + 12 new), zero failed/ignored. Domain fmt exit0, domain Clippy `-D warnings` exit0. Evidence: `t4-opt-strings-{green,domain,fmt-check,clippy}-20260919.{json,log}` all exit0 and QA mutex released/jobs1.
-- Defaults from `forge/config.py:232-386`: proxy/redis_url/shodan_key/cloud_aws_profile/cloud_azure_*=None. Prior slices `97a796f` + `8cafea7` + `4859ffb` + `e63b858` unchanged.
-- Remaining T4 work (task stays open): operator/web_host/web_secret_key/c2_smb_pipe_name/c2_icmp_target_ip (unconstrained strings); path keys (data_dir/kb_path/nvd_path/exploitdb_*); list-of-string keys (c2_fallback_order, cloud services); `verify config`; file adapter; logging redaction; lifecycle.
+### Current verified increment — T4 req-strings extension (`fff7f31`)
+- Published `fff7f31` feat(config): extend string keys with three required host/pipe/ip keys. Extended `src/config/strings.rs` + `tests/config_strings.rs`; `StrKey::ALL` grows from 4 to 7. New unconstrained non-empty keys: `WebHost` (FORGE_WEB_HOST, default '127.0.0.1'), `C2SmbPipeName` (FORGE_C2_SMB_PIPE_NAME, default 'atsvc'), `C2IcmpTargetIp` (FORGE_C2_ICMP_TARGET_IP, default '127.0.0.1'). Used `is_some_and()` to satisfy both Clippy and Rust 2021 (let-chain is Rust 2024 only). Tests updated in-place (renamed, not added new).
+- Domain suite unchanged **198/198 tests/doctests** (no new tests in this slice). fmt exit0, Clippy `-D warnings` exit0.
+- Remaining T4 work (task stays open): web_secret_key (allows empty, default ''); operator (env FORGE_OPERATOR, T4 default ''); path keys (data_dir/kb_path/nvd_path/exploitdb_*); list keys (c2_fallback_order, cloud services); `verify config`; file adapter; logging redaction; lifecycle.
 - T1/T2 blockers unchanged. Eight pre-existing fixture metadata-only drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
@@ -47,9 +46,9 @@ Final release reviews         [....]                    0 / 4
 - [x] Publish T4 twelve-count resolver (`4859ffb`); domain173/fmt/Clippy passed.
 - [x] Publish T4 four-string/enum resolver (`e63b858`); domain186/fmt/Clippy passed.
 - [x] Publish T4 seven-optional-string resolver (`a6d25ce`); domain198/fmt/Clippy passed.
-- [ ] T4 next: operator/web_host/web_secret_key/c2_smb_pipe_name/c2_icmp_target_ip (unconstrained required strings).
-Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger unchanged. Score: **1/36 closed (T3), 3 partial (T1/T2/T4), 32 queued**. T4 needs completion before T5. Next coding: remaining ForgeConfig string keys.
-
+- [x] Extend strings.rs with web_host/c2_smb_pipe_name/c2_icmp_target_ip (`fff7f31`); domain198/fmt/Clippy passed.
+- [ ] T4 next: web_secret_key (empty-allowed string), operator (env-only, T4 default ''), path keys.
+Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger unchanged. Score: **1/36 closed (T3), 3 partial (T1/T2/T4), 32 queued**. T4 needs completion before T5. Next coding: web_secret_key, operator, path/list keys.
 ## Historical checkpoints (prior unanswered-policy notes are superseded above)
 
 - **Awaiting explicit decisions:** T3 default-secret serialization and the proposed narrow Win32 FFI exception remain unanswered. Generic continuation is not approval to change either contract or weaken `unsafe_code = "forbid"`. No additional runtime implementation was started; last accepted native code remains `49cd38a` with 265 passing tests/doctests.
