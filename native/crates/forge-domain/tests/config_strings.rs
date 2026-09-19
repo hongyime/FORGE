@@ -59,7 +59,7 @@ fn empty_inputs() -> (
 }
 
 #[test]
-fn seven_str_keys_defaults_and_public_fields() {
+fn nine_str_keys_defaults_and_public_fields() {
     let (cli, env, local) = empty_inputs();
     let r = resolve_str_keys(StrKeyInputs {
         cli: &cli,
@@ -68,9 +68,9 @@ fn seven_str_keys_defaults_and_public_fields() {
     })
     .unwrap();
 
-    assert_eq!(StrKey::ALL.len(), 7);
+    assert_eq!(StrKey::ALL.len(), 9);
 
-    // Defaults from forge/config.py:216-267, 361-368
+    // Defaults from forge/config.py:216-268, 361-368, 225
     assert_eq!(r.log_level.value(), "INFO");
     assert_eq!(r.curl_profile.value(), "chrome120");
     assert_eq!(r.web_auth.value(), "jwt");
@@ -78,6 +78,8 @@ fn seven_str_keys_defaults_and_public_fields() {
     assert_eq!(r.web_host.value(), "127.0.0.1");
     assert_eq!(r.c2_smb_pipe_name.value(), "atsvc");
     assert_eq!(r.c2_icmp_target_ip.value(), "127.0.0.1");
+    assert_eq!(r.web_secret_key.value(), "");
+    assert_eq!(r.operator.value(), "");
 
     for key in StrKey::ALL {
         assert_eq!(r.get(key).source(), ConfigSource::Default, "{}", key.name());
@@ -85,7 +87,7 @@ fn seven_str_keys_defaults_and_public_fields() {
 }
 
 #[test]
-fn all_seven_layers_have_distinct_values_and_provenance() {
+fn all_nine_layers_have_distinct_values_and_provenance() {
     // Valid values that differ from each other AND from the defaults
     let key_layers: &[(StrKey, &str, &str, &str, &str)] = &[
         (StrKey::LogLevel, "DEBUG", "WARNING", "ERROR", "INFO"),
@@ -124,6 +126,20 @@ fn all_seven_layers_have_distinct_values_and_provenance() {
             "8.8.4.4",
             "1.1.1.1",
             "127.0.0.1",
+        ),
+        (
+            StrKey::WebSecretKey,
+            "cli-secret",
+            "env-secret",
+            "local-secret",
+            "",
+        ),
+        (
+            StrKey::Operator,
+            "cli-operator",
+            "env-operator",
+            "local-operator",
+            "",
         ),
     ];
 
@@ -300,6 +316,9 @@ fn invalid_variant_rejected_for_constrained_keys() {
 #[test]
 fn empty_and_whitespace_strings_rejected_for_all_keys() {
     for key in StrKey::ALL {
+        if key.allows_empty() {
+            continue; // WebSecretKey and Operator accept empty strings
+        }
         for empty in ["", "   ", "\t", "\n", " \t\n "] {
             for source in [
                 ConfigSource::Cli,
@@ -396,18 +415,20 @@ fn environment_collision_fails_when_layer_selected() {
 fn error_surfaces_contain_only_typed_key_source_and_kind() {
     let canary = "CANARY_STR_MUST_NOT_LEAK";
     for key in StrKey::ALL {
-        // Constrained keys: inject canary to get InvalidVariant.
-        // Unconstrained non-empty keys: inject empty to get EmptyString.
-        let inject = if matches!(
+        // Constrained: inject canary → InvalidVariant.
+        // Unconstrained non-empty: inject empty → EmptyString.
+        // Allows-empty: inject number → InvalidType (any string succeeds).
+        let inject_val: Value = if matches!(
             key,
             StrKey::LogLevel | StrKey::CurlProfile | StrKey::C2DefaultChannel
         ) {
-            canary.to_owned()
+            Value::String(canary.to_owned())
+        } else if key.allows_empty() {
+            json!(42)
         } else {
-            "".to_owned()
+            Value::String("".to_owned())
         };
-        let obj: Map<String, Value> =
-            Map::from_iter([(key.name().to_owned(), Value::String(inject))]);
+        let obj: Map<String, Value> = Map::from_iter([(key.name().to_owned(), inject_val)]);
         let err = resolve_str_keys(StrKeyInputs {
             cli: &obj,
             environment: &BTreeMap::new(),

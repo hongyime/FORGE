@@ -1,9 +1,10 @@
-//! Seven `ForgeConfig` string/enum keys (`forge/config.py:216-267`, `361-368`).
+//! Nine `ForgeConfig` string/enum keys (`forge/config.py:216-268`, `361-368`, `225`).
 //!
 //! `log_level` uppercases before validating against `{"DEBUG","INFO","WARNING","ERROR"}`;
 //! `c2_default_channel` lowercases before validating against `{"https","dns","smb","icmp"}`;
 //! `curl_profile` requires exact-case match against 14 curl-impersonate profiles;
-//! `web_auth`, `web_host`, `c2_smb_pipe_name`, `c2_icmp_target_ip` accept any non-empty string.
+//! `web_auth`, `web_host`, `c2_smb_pipe_name`, `c2_icmp_target_ip` require non-empty string;
+//! `web_secret_key` and `operator` accept any string including empty (`allows_empty`).
 //!
 //! T4 extension: Python warns on invalid enum values and falls back to default;
 //! Rust produces typed `StrKeyError { key, source, kind: InvalidVariant }` instead.
@@ -104,12 +105,13 @@ impl ResolvedStr {
     }
 }
 
-/// Resolved string/enum values for seven `ForgeConfig` keys.
+/// Resolved string/enum values for nine `ForgeConfig` keys.
 ///
-/// Defaults from `forge/config.py:216-267`, `361-368`:
+/// Defaults from `forge/config.py:216-268`, `361-368`, `225`:
 /// log_level=`"INFO"`, curl_profile=`"chrome120"`, web_auth=`"jwt"`,
 /// c2_default_channel=`"https"`, web_host=`"127.0.0.1"`,
-/// c2_smb_pipe_name=`"atsvc"`, c2_icmp_target_ip=`"127.0.0.1"`.
+/// c2_smb_pipe_name=`"atsvc"`, c2_icmp_target_ip=`"127.0.0.1"`,
+/// web_secret_key=`""`, operator=`""`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ResolvedStrKeys {
     pub log_level: ResolvedStr,
@@ -119,6 +121,8 @@ pub struct ResolvedStrKeys {
     pub web_host: ResolvedStr,
     pub c2_smb_pipe_name: ResolvedStr,
     pub c2_icmp_target_ip: ResolvedStr,
+    pub web_secret_key: ResolvedStr,
+    pub operator: ResolvedStr,
 }
 
 impl ResolvedStrKeys {
@@ -131,6 +135,8 @@ impl ResolvedStrKeys {
             StrKey::WebHost => &self.web_host,
             StrKey::C2SmbPipeName => &self.c2_smb_pipe_name,
             StrKey::C2IcmpTargetIp => &self.c2_icmp_target_ip,
+            StrKey::WebSecretKey => &self.web_secret_key,
+            StrKey::Operator => &self.operator,
         }
     }
 }
@@ -147,10 +153,12 @@ pub enum StrKey {
     WebHost,
     C2SmbPipeName,
     C2IcmpTargetIp,
+    WebSecretKey,
+    Operator,
 }
 
 impl StrKey {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 9] = [
         Self::LogLevel,
         Self::CurlProfile,
         Self::WebAuth,
@@ -158,6 +166,8 @@ impl StrKey {
         Self::WebHost,
         Self::C2SmbPipeName,
         Self::C2IcmpTargetIp,
+        Self::WebSecretKey,
+        Self::Operator,
     ];
 
     pub const fn name(self) -> &'static str {
@@ -169,6 +179,8 @@ impl StrKey {
             Self::WebHost => "web_host",
             Self::C2SmbPipeName => "c2_smb_pipe_name",
             Self::C2IcmpTargetIp => "c2_icmp_target_ip",
+            Self::WebSecretKey => "web_secret_key",
+            Self::Operator => "operator",
         }
     }
 
@@ -182,6 +194,8 @@ impl StrKey {
             Self::WebHost => "FORGE_WEB_HOST",
             Self::C2SmbPipeName => "FORGE_C2_SMB_PIPE_NAME",
             Self::C2IcmpTargetIp => "FORGE_C2_ICMP_TARGET_IP",
+            Self::WebSecretKey => "FORGE_WEB_SECRET_KEY",
+            Self::Operator => "FORGE_OPERATOR",
         }
     }
 
@@ -194,6 +208,8 @@ impl StrKey {
             Self::WebHost => "127.0.0.1",
             Self::C2SmbPipeName => "atsvc",
             Self::C2IcmpTargetIp => "127.0.0.1",
+            Self::WebSecretKey => "",
+            Self::Operator => "",
         }
     }
 
@@ -208,7 +224,9 @@ impl StrKey {
             | Self::WebAuth
             | Self::WebHost
             | Self::C2SmbPipeName
-            | Self::C2IcmpTargetIp => trimmed.to_owned(),
+            | Self::C2IcmpTargetIp
+            | Self::WebSecretKey
+            | Self::Operator => trimmed.to_owned(),
         }
     }
 
@@ -218,8 +236,20 @@ impl StrKey {
             Self::LogLevel => Some(LOG_LEVEL_VARIANTS),
             Self::CurlProfile => Some(CURL_PROFILE_VARIANTS),
             Self::C2DefaultChannel => Some(C2_CHANNEL_VARIANTS),
-            Self::WebAuth | Self::WebHost | Self::C2SmbPipeName | Self::C2IcmpTargetIp => None,
+            Self::WebAuth
+            | Self::WebHost
+            | Self::C2SmbPipeName
+            | Self::C2IcmpTargetIp
+            | Self::WebSecretKey
+            | Self::Operator => None,
         }
+    }
+
+    /// `true` when an empty string is valid; `false` when non-empty is required.
+    /// Python: `web_secret_key` uses the raw env value; `operator` falls back to OS
+    /// username. T4 resolver defaults both to `\"\"` (caller fills in OS username).
+    pub const fn allows_empty(self) -> bool {
+        matches!(self, Self::WebSecretKey | Self::Operator)
     }
 }
 
@@ -244,6 +274,8 @@ pub fn resolve_str_keys(inputs: StrKeyInputs<'_>) -> Result<ResolvedStrKeys, Str
         web_host: one(inputs, StrKey::WebHost)?,
         c2_smb_pipe_name: one(inputs, StrKey::C2SmbPipeName)?,
         c2_icmp_target_ip: one(inputs, StrKey::C2IcmpTargetIp)?,
+        web_secret_key: one(inputs, StrKey::WebSecretKey)?,
+        operator: one(inputs, StrKey::Operator)?,
     })
 }
 
@@ -302,7 +334,7 @@ pub(super) fn validate(
     source: ConfigSource,
 ) -> Result<ResolvedStr, StrKeyError> {
     let normalized = key.normalize(raw);
-    if normalized.is_empty() {
+    if normalized.is_empty() && !key.allows_empty() {
         return Err(StrKeyError {
             key,
             source,
