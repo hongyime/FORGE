@@ -3,6 +3,7 @@
 
 pub mod agents;
 pub mod capability;
+pub mod config;
 pub mod enums;
 pub mod error;
 pub mod events;
