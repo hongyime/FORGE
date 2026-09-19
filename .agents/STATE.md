@@ -1,6 +1,6 @@
-# Current Task: Rust rewrite — T4 all config keys published; verify config next
+# Current Task: Rust rewrite — T4 verify config published; file adapter/redaction next
 
-**Status:** T4 PARTIAL — list keys `49ac7d3` published (domain 211/211, +13 new tests); ALL ForgeConfig keys now resolved | Latest domain checkpoint: `49ac7d3` | Date: 2026-09-19
+**Status:** T4 PARTIAL — verify config `c03e96c` published (domain 211/211 unchanged); next: file adapter, logging redaction, lifecycle | Latest domain checkpoint: `49ac7d3` | Date: 2026-09-19
 
 ## Progress dashboard
 
@@ -16,17 +16,16 @@ Final release reviews         [....]                    0 / 4
 
 | Phase | Tasks | Current state |
 | --- | --- | --- |
-|| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (budgets `97a796f` + flags `8cafea7` + counts `4859ffb` + strings `0bacced` + opt-strings `0d5f615` + lists `49ac7d3`); T5-T6 queued |
+|| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (budgets `97a796f` + flags `8cafea7` + counts `4859ffb` + strings `0bacced` + opt-strings `0d5f615` + lists `49ac7d3` + verify-cfg `c03e96c`); T5-T6 queued |
 | Storage, audit, buses, plugins, runtime | T7-T12 | Not started |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T4 list key resolver (`49ac7d3`)
-- Published `49ac7d3` feat(config): add four CSV string list key resolver. New `src/config/str_lists.rs` (342 lines) + `tests/config_str_lists.rs` (335 lines, 13 tests). `resolve_str_lists(StrListInputs)` covers four ForgeConfig CSV-list keys. `c2_fallback_order` lowercases and validates items against `{https,dns,smb,icmp}`; `cloud_aws_services`/`cloud_azure_services` lowercase; `cloud_aws_regions` strips only. `json_layer()` helper avoids `collapsible_if`/Rust-2024 let-chain catch-22.
-- Domain suite **211/211 tests/doctests** (198 prior + 13 new), zero failed/ignored. fmt+Clippy exit 0.
-- **ALL ForgeConfig + PlatformSettings config keys are now ported to T4 resolvers** (55 keys across budgets/flags/counts/strings/opt-strings/str-lists). Remaining T4 work: `verify config` CLI command; file adapter; logging redaction; lifecycle/cancellation.
+### Current verified increment — T4 verify config command (`c03e96c`)
+- Published `c03e96c` feat(config): add verify config xtask command. New `xtask/src/config_verify.rs` (199 lines). Wired as `forge-xtask verify config --root <root> --evidence <evidence>`. Runs all 6 T4 resolver groups against the ambient environment (empty CLI + local layers). Writes JSON receipt with per-resolver status, error messages (no secret values), exit code. Domain 211/211 unchanged. forge-xtask check + Clippy exit 0.
+- Remaining T4 work (task stays open): file adapter (load config from TOML/JSON/env file); logging redaction; lifecycle/cancellation.
 - T1/T2 blockers unchanged. Eight pre-existing fixture metadata-only drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
@@ -50,7 +49,7 @@ Final release reviews         [....]                    0 / 4
 - [x] Extend strings.rs with web_secret_key/operator (`0bacced`); domain198/fmt/Clippy passed.
 - [x] Extend opt_strings.rs with path keys (`0d5f615`); domain198/fmt/Clippy passed.
 - [x] Add four CSV list-key resolver (`49ac7d3`); domain211/fmt/Clippy passed.
-- [ ] T4 next: `verify config` CLI command (pure config validation, no runtime effects).
+- [x] Add `verify config` xtask command (`c03e96c`); forge-xtask check/Clippy passed.
 - **Awaiting explicit decisions:** T3 default-secret serialization and the proposed narrow Win32 FFI exception remain unanswered. Generic continuation is not approval to change either contract or weaken `unsafe_code = "forbid"`. No additional runtime implementation was started; last accepted native code remains `49cd38a` with 265 passing tests/doctests.
 - **Dependency sweep:** all 36 implementation tasks and four final gates remain incomplete (`[~]`, zero `[x]`). T12-T36 and F1-F4 now name their unaccepted direct prerequisites instead of appearing immediately runnable. This does not mark the rewrite complete or waive any work. Scoped T2/T3 work is permitted only within the existing scheduling exception; policy-gated adoption remains paused. Missing live/operator prerequisites, LSP, denied cleanup and final release/restoration evidence remain open independently of the two policy choices.
 - **Containment integration policy gate (2026-09-18):** `native/Cargo.toml:9-10` sets `unsafe_code = "forbid"`; xtask inherits it. The tested native Windows Job Object path needs a narrowly reviewed first-party Win32 FFI boundary. No policy exception or production adoption is approved. Keep the forbid setting intact until a verified safe dependency is selected or an explicit scoped exception is agreed. Inspected WinSafe 0.0.29 `CreateProcess` takes `STARTUPINFO`, not the extended attribute list used by the proof; this does not establish that all safe alternatives are unavailable. T10 is marked `[~]` on unaccepted T7/T8. No source, dependency or database change was made for this gate.
