@@ -44,6 +44,7 @@ mod receipt;
 mod rust_declarations;
 mod scan;
 mod syntax;
+mod config_verify;
 mod verify;
 mod verify_checks;
 
@@ -122,6 +123,7 @@ fn run() -> model::Result<i32> {
                 180_000,
             )
             .map_err(|e| e.to_string()),
+            "config" => return config_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;
