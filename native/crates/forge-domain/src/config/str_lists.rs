@@ -76,7 +76,7 @@ impl std::error::Error for StrListError {}
 // ─── Resolved value ──────────────────────────────────────────────────────────
 
 /// A validated list of strings and the source that supplied it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct ResolvedStrList {
     value: Vec<String>,
     source: ConfigSource,
@@ -93,6 +93,15 @@ impl ResolvedStrList {
 
     pub const fn source(&self) -> ConfigSource {
         self.source
+    }
+}
+
+impl std::fmt::Debug for ResolvedStrList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResolvedStrList")
+            .field("item_count", &self.value.len())
+            .field("source", &self.source)
+            .finish()
     }
 }
 

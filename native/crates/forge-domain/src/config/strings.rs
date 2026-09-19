@@ -85,7 +85,7 @@ impl std::error::Error for StrKeyError {}
 // ─── Resolved value ──────────────────────────────────────────────────────────
 
 /// A validated string and the source that supplied it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct ResolvedStr {
     value: String,
     source: ConfigSource,
@@ -102,6 +102,15 @@ impl ResolvedStr {
 
     pub const fn source(&self) -> ConfigSource {
         self.source
+    }
+}
+
+impl std::fmt::Debug for ResolvedStr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResolvedStr")
+            .field("value", &"<omitted>")
+            .field("source", &self.source)
+            .finish()
     }
 }
 
@@ -250,6 +259,12 @@ impl StrKey {
     /// username. T4 resolver defaults both to `\"\"` (caller fills in OS username).
     pub const fn allows_empty(self) -> bool {
         matches!(self, Self::WebSecretKey | Self::Operator)
+    }
+
+    /// `true` when the resolved value is sensitive and must not be logged.
+    /// Sensitive: `WebSecretKey` (JWT signing key).
+    pub const fn is_sensitive(self) -> bool {
+        matches!(self, Self::WebSecretKey)
     }
 }
 

@@ -59,7 +59,7 @@ impl std::error::Error for OptStrError {}
 /// A validated optional string and the source that supplied it.
 ///
 /// `None` means the key was absent, explicitly null, or resolved to an empty string.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct ResolvedOptStr {
     value: Option<String>,
     source: ConfigSource,
@@ -76,6 +76,15 @@ impl ResolvedOptStr {
 
     pub const fn source(&self) -> ConfigSource {
         self.source
+    }
+}
+
+impl std::fmt::Debug for ResolvedOptStr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResolvedOptStr")
+            .field("value", &self.value.as_ref().map(|_| "<omitted>"))
+            .field("source", &self.source)
+            .finish()
     }
 }
 
@@ -194,6 +203,20 @@ impl OptStrKey {
             Self::ShodanKey => Some("FORGE_SHODAN_KEY"),
             _ => None,
         }
+    }
+
+    /// `true` when the resolved value is sensitive and must not be logged.
+    /// Sensitive: `ShodanKey` (API key), `RedisUrl` (may contain password),
+    /// `CloudAzureSubscriptionId/TenantId/ClientId` (cloud credentials).
+    pub const fn is_sensitive(self) -> bool {
+        matches!(
+            self,
+            Self::ShodanKey
+                | Self::RedisUrl
+                | Self::CloudAzureSubscriptionId
+                | Self::CloudAzureTenantId
+                | Self::CloudAzureClientId
+        )
     }
 }
 
