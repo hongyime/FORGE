@@ -1,6 +1,6 @@
-# Current Task: Rust rewrite — T4 web_secret_key/operator published; path/list keys next
+# Current Task: Rust rewrite — T4 path keys published; list keys next
 
-**Status:** T4 PARTIAL — web_secret_key/operator `0bacced` published (domain 198/198 unchanged); next: path keys, list keys | Latest domain checkpoint: `0bacced` | Date: 2026-09-19
+**Status:** T4 PARTIAL — path keys `0d5f615` published (domain 198/198 unchanged); next: list keys (c2_fallback_order, cloud services) | Latest domain checkpoint: `0d5f615` | Date: 2026-09-19
 
 ## Progress dashboard
 
@@ -16,17 +16,17 @@ Final release reviews         [....]                    0 / 4
 
 | Phase | Tasks | Current state |
 | --- | --- | --- |
-|| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (budgets `97a796f` + flags `8cafea7` + counts `4859ffb` + strings `0bacced` + opt-strings `a6d25ce`); T5-T6 queued |
+|| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (budgets `97a796f` + flags `8cafea7` + counts `4859ffb` + strings `0bacced` + opt-strings `0d5f615`); T5-T6 queued |
 | Storage, audit, buses, plugins, runtime | T7-T12 | Not started |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T4 web_secret_key/operator extension (`0bacced`)
-- Published `0bacced` feat(config): add web_secret_key and operator to string keys. Extended `src/config/strings.rs` + `tests/config_strings.rs`; `StrKey::ALL` grows from 7 to 9. New unconstrained allow-empty keys: `WebSecretKey` (FORGE_WEB_SECRET_KEY, default ''), `Operator` (FORGE_OPERATOR, T4 default '' — caller provides OS username). Added `allows_empty()` method; `validate()` skips EmptyString check for these. Tests updated in-place (renamed to nine_str_keys/all_nine_layers, canary test uses json!(42) for allows_empty keys, empty test skips them). fmt+Clippy exit 0.
-- Domain suite unchanged **198/198 tests/doctests**. No new tests added in this slice.
-- Remaining T4 work (task stays open): path keys (data_dir/kb_path/nvd_path/exploitdb_*); list keys (c2_fallback_order, cloud services); `verify config`; file adapter; logging redaction; lifecycle.
+### Current verified increment — T4 path key extension (`0d5f615`)
+- Published `0d5f615` feat(config): add five path keys to opt_strs resolver. Extended `src/config/opt_strings.rs` + `tests/config_opt_strings.rs`; `OptStrKey::ALL` grows from 7 to 12. New keys: `DataDir` (FORGE_DATA_DIR), `KbPath` (FORGE_KB_PATH), `NvdPath` (FORGE_NVD_PATH), `ExploitdbPath` (FORGE_EXPLOITDB_PATH), `ExploitdbCsvPath` (FORGE_EXPLOITDB_CSV). All default to None; T4 resolver is pure (no expanduser/mkdir). Tests renamed to twelve_opt_str_keys/all_four_layers iterates ALL automatically.
+- Domain suite unchanged **198/198 tests/doctests**. No new tests in this slice. fmt+Clippy exit 0.
+- Remaining T4 work (task stays open): list keys (c2_fallback_order, cloud_aws_regions/services, cloud_azure_services); `verify config`; file adapter; logging redaction; lifecycle.
 - T1/T2 blockers unchanged. Eight pre-existing fixture metadata-only drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
@@ -48,9 +48,9 @@ Final release reviews         [....]                    0 / 4
 - [x] Publish T4 seven-optional-string resolver (`a6d25ce`); domain198/fmt/Clippy passed.
 - [x] Extend strings.rs with web_host/c2_smb_pipe_name/c2_icmp_target_ip (`fff7f31`); domain198/fmt/Clippy passed.
 - [x] Extend strings.rs with web_secret_key/operator (`0bacced`); domain198/fmt/Clippy passed.
-- [ ] T4 next: path keys (data_dir, kb_path, nvd_path, exploitdb_path, exploitdb_csv_path).
-Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger unchanged. Score: **1/36 closed (T3), 3 partial (T1/T2/T4), 32 queued**. T4 needs completion before T5. Next coding: ForgeConfig path keys.
-
+- [x] Extend opt_strings.rs with path keys (`0d5f615`); domain198/fmt/Clippy passed.
+- [ ] T4 next: list keys (c2_fallback_order CSV string, cloud_aws_regions, cloud_aws_services, cloud_azure_services).
+Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger unchanged. Score: **1/36 closed (T3), 3 partial (T1/T2/T4), 32 queued**. T4 needs completion before T5. Next coding: ForgeConfig list keys.
 - **Awaiting explicit decisions:** T3 default-secret serialization and the proposed narrow Win32 FFI exception remain unanswered. Generic continuation is not approval to change either contract or weaken `unsafe_code = "forbid"`. No additional runtime implementation was started; last accepted native code remains `49cd38a` with 265 passing tests/doctests.
 - **Dependency sweep:** all 36 implementation tasks and four final gates remain incomplete (`[~]`, zero `[x]`). T12-T36 and F1-F4 now name their unaccepted direct prerequisites instead of appearing immediately runnable. This does not mark the rewrite complete or waive any work. Scoped T2/T3 work is permitted only within the existing scheduling exception; policy-gated adoption remains paused. Missing live/operator prerequisites, LSP, denied cleanup and final release/restoration evidence remain open independently of the two policy choices.
 - **Containment integration policy gate (2026-09-18):** `native/Cargo.toml:9-10` sets `unsafe_code = "forbid"`; xtask inherits it. The tested native Windows Job Object path needs a narrowly reviewed first-party Win32 FFI boundary. No policy exception or production adoption is approved. Keep the forbid setting intact until a verified safe dependency is selected or an explicit scoped exception is agreed. Inspected WinSafe 0.0.29 `CreateProcess` takes `STARTUPINFO`, not the extended attribute list used by the proof; this does not establish that all safe alternatives are unavailable. T10 is marked `[~]` on unaccepted T7/T8. No source, dependency or database change was made for this gate.
