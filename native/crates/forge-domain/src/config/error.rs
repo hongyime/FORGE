@@ -12,7 +12,7 @@ pub enum ConfigSource {
 }
 
 impl ConfigSource {
-    const fn name(self) -> &'static str {
+    pub(crate) const fn name(self) -> &'static str {
         match self {
             Self::Cli => "cli",
             Self::Environment => "environment",

@@ -1,24 +1,28 @@
-//! Pure five-budget projection of `PlatformSettings` (`forge/config.py:705-752`).
+//! Configuration resolvers for `ForgeConfig` and `PlatformSettings` (`forge/config.py`).
 //!
 //! Callers supply already-decoded objects and an environment snapshot. This API
 //! never acquires environment, files, clocks, loggers, services or process handles.
 //! CLI > environment > local object > default is a T4 extension; Python's settings
-//! class does not itself implement this four-layer interface. Only [`BudgetKey::ALL`]
-//! is covered. Other fields are ignored by this projection, not validated or ported.
+//! classes do not themselves implement this four-layer interface.
+//!
+//! Currently ported:
+//! * **Budget keys** — five `PlatformSettings` positive-integer timeouts/thresholds.
+//! * **Flag keys** — thirteen `ForgeConfig` boolean discovery and service flags.
 //!
 //! CLI/local keys are exact canonical names. Environment aliases are ASCII
-//! case-insensitive; multiple spellings of the selected alias fail deterministically
-//! (even if equal), rather than depending on environment iteration order. Missing
-//! keys fall through; explicit null, empty or malformed selected values do not.
-//! Shadowed values are not validated. The first error follows [`BudgetKey::ALL`].
-//!
-//! See [`ResolvedBudgets`] for the concrete numeric/text representation boundary.
+//! case-insensitive; duplicate alias spellings for the selected key fail
+//! deterministically. Missing keys fall through; explicit null or invalid selected
+//! values produce typed errors. Shadowed values are not validated.
 
 mod budgets;
 mod error;
+mod flags;
 
 pub use budgets::{BudgetKey, ResolvedBudget, ResolvedBudgets};
 pub use error::{ConfigError, ConfigErrorKind, ConfigSource};
+pub use flags::{
+    FlagError, FlagErrorKind, FlagInputs, FlagKey, ResolvedFlag, ResolvedFlags, resolve_flags,
+};
 
 use budgets::positive_integer;
 use serde_json::{Map, Value};
