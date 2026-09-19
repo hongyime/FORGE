@@ -59,7 +59,7 @@ fn empty_inputs() -> (
 }
 
 #[test]
-fn four_str_keys_defaults_and_public_fields() {
+fn seven_str_keys_defaults_and_public_fields() {
     let (cli, env, local) = empty_inputs();
     let r = resolve_str_keys(StrKeyInputs {
         cli: &cli,
@@ -68,13 +68,16 @@ fn four_str_keys_defaults_and_public_fields() {
     })
     .unwrap();
 
-    assert_eq!(StrKey::ALL.len(), 4);
+    assert_eq!(StrKey::ALL.len(), 7);
 
-    // Defaults from forge/config.py:216-267
+    // Defaults from forge/config.py:216-267, 361-368
     assert_eq!(r.log_level.value(), "INFO");
     assert_eq!(r.curl_profile.value(), "chrome120");
     assert_eq!(r.web_auth.value(), "jwt");
     assert_eq!(r.c2_default_channel.value(), "https");
+    assert_eq!(r.web_host.value(), "127.0.0.1");
+    assert_eq!(r.c2_smb_pipe_name.value(), "atsvc");
+    assert_eq!(r.c2_icmp_target_ip.value(), "127.0.0.1");
 
     for key in StrKey::ALL {
         assert_eq!(r.get(key).source(), ConfigSource::Default, "{}", key.name());
@@ -82,7 +85,7 @@ fn four_str_keys_defaults_and_public_fields() {
 }
 
 #[test]
-fn all_four_layers_have_distinct_values_and_provenance() {
+fn all_seven_layers_have_distinct_values_and_provenance() {
     // Valid values that differ from each other AND from the defaults
     let key_layers: &[(StrKey, &str, &str, &str, &str)] = &[
         (StrKey::LogLevel, "DEBUG", "WARNING", "ERROR", "INFO"),
@@ -101,6 +104,27 @@ fn all_four_layers_have_distinct_values_and_provenance() {
             "jwt",
         ),
         (StrKey::C2DefaultChannel, "dns", "smb", "icmp", "https"),
+        (
+            StrKey::WebHost,
+            "10.0.0.1",
+            "10.0.0.2",
+            "10.0.0.3",
+            "127.0.0.1",
+        ),
+        (
+            StrKey::C2SmbPipeName,
+            "browser",
+            "svcctl",
+            "epmapper",
+            "atsvc",
+        ),
+        (
+            StrKey::C2IcmpTargetIp,
+            "8.8.8.8",
+            "8.8.4.4",
+            "1.1.1.1",
+            "127.0.0.1",
+        ),
     ];
 
     for &(key, cli_val, env_val, local_val, default_val) in key_layers {
@@ -372,11 +396,15 @@ fn environment_collision_fails_when_layer_selected() {
 fn error_surfaces_contain_only_typed_key_source_and_kind() {
     let canary = "CANARY_STR_MUST_NOT_LEAK";
     for key in StrKey::ALL {
-        // Inject canary as an invalid variant for constrained keys; for WebAuth use empty
-        let inject = if key == StrKey::WebAuth {
-            "".to_owned()
-        } else {
+        // Constrained keys: inject canary to get InvalidVariant.
+        // Unconstrained non-empty keys: inject empty to get EmptyString.
+        let inject = if matches!(
+            key,
+            StrKey::LogLevel | StrKey::CurlProfile | StrKey::C2DefaultChannel
+        ) {
             canary.to_owned()
+        } else {
+            "".to_owned()
         };
         let obj: Map<String, Value> =
             Map::from_iter([(key.name().to_owned(), Value::String(inject))]);

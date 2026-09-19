@@ -1,9 +1,9 @@
-//! Four `ForgeConfig` string/enum keys (`forge/config.py:216-267`).
+//! Seven `ForgeConfig` string/enum keys (`forge/config.py:216-267`, `361-368`).
 //!
 //! `log_level` uppercases before validating against `{"DEBUG","INFO","WARNING","ERROR"}`;
 //! `c2_default_channel` lowercases before validating against `{"https","dns","smb","icmp"}`;
 //! `curl_profile` requires exact-case match against 14 curl-impersonate profiles;
-//! `web_auth` accepts any non-empty string after stripping (unconstrained in Python).
+//! `web_auth`, `web_host`, `c2_smb_pipe_name`, `c2_icmp_target_ip` accept any non-empty string.
 //!
 //! T4 extension: Python warns on invalid enum values and falls back to default;
 //! Rust produces typed `StrKeyError { key, source, kind: InvalidVariant }` instead.
@@ -104,17 +104,21 @@ impl ResolvedStr {
     }
 }
 
-/// Resolved string/enum values for four `ForgeConfig` keys.
+/// Resolved string/enum values for seven `ForgeConfig` keys.
 ///
-/// Defaults from `forge/config.py:216-267`:
+/// Defaults from `forge/config.py:216-267`, `361-368`:
 /// log_level=`"INFO"`, curl_profile=`"chrome120"`, web_auth=`"jwt"`,
-/// c2_default_channel=`"https"`.
+/// c2_default_channel=`"https"`, web_host=`"127.0.0.1"`,
+/// c2_smb_pipe_name=`"atsvc"`, c2_icmp_target_ip=`"127.0.0.1"`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ResolvedStrKeys {
     pub log_level: ResolvedStr,
     pub curl_profile: ResolvedStr,
     pub web_auth: ResolvedStr,
     pub c2_default_channel: ResolvedStr,
+    pub web_host: ResolvedStr,
+    pub c2_smb_pipe_name: ResolvedStr,
+    pub c2_icmp_target_ip: ResolvedStr,
 }
 
 impl ResolvedStrKeys {
@@ -124,6 +128,9 @@ impl ResolvedStrKeys {
             StrKey::CurlProfile => &self.curl_profile,
             StrKey::WebAuth => &self.web_auth,
             StrKey::C2DefaultChannel => &self.c2_default_channel,
+            StrKey::WebHost => &self.web_host,
+            StrKey::C2SmbPipeName => &self.c2_smb_pipe_name,
+            StrKey::C2IcmpTargetIp => &self.c2_icmp_target_ip,
         }
     }
 }
@@ -137,14 +144,20 @@ pub enum StrKey {
     CurlProfile,
     WebAuth,
     C2DefaultChannel,
+    WebHost,
+    C2SmbPipeName,
+    C2IcmpTargetIp,
 }
 
 impl StrKey {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 7] = [
         Self::LogLevel,
         Self::CurlProfile,
         Self::WebAuth,
         Self::C2DefaultChannel,
+        Self::WebHost,
+        Self::C2SmbPipeName,
+        Self::C2IcmpTargetIp,
     ];
 
     pub const fn name(self) -> &'static str {
@@ -153,6 +166,9 @@ impl StrKey {
             Self::CurlProfile => "curl_profile",
             Self::WebAuth => "web_auth",
             Self::C2DefaultChannel => "c2_default_channel",
+            Self::WebHost => "web_host",
+            Self::C2SmbPipeName => "c2_smb_pipe_name",
+            Self::C2IcmpTargetIp => "c2_icmp_target_ip",
         }
     }
 
@@ -163,6 +179,9 @@ impl StrKey {
             Self::CurlProfile => "FORGE_CURL_IMPERSONATE",
             Self::WebAuth => "FORGE_WEB_AUTH",
             Self::C2DefaultChannel => "FORGE_C2_DEFAULT_CHANNEL",
+            Self::WebHost => "FORGE_WEB_HOST",
+            Self::C2SmbPipeName => "FORGE_C2_SMB_PIPE_NAME",
+            Self::C2IcmpTargetIp => "FORGE_C2_ICMP_TARGET_IP",
         }
     }
 
@@ -172,6 +191,9 @@ impl StrKey {
             Self::CurlProfile => "chrome120",
             Self::WebAuth => "jwt",
             Self::C2DefaultChannel => "https",
+            Self::WebHost => "127.0.0.1",
+            Self::C2SmbPipeName => "atsvc",
+            Self::C2IcmpTargetIp => "127.0.0.1",
         }
     }
 
@@ -182,7 +204,11 @@ impl StrKey {
         match self {
             Self::LogLevel => trimmed.to_uppercase(),
             Self::C2DefaultChannel => trimmed.to_lowercase(),
-            Self::CurlProfile | Self::WebAuth => trimmed.to_owned(),
+            Self::CurlProfile
+            | Self::WebAuth
+            | Self::WebHost
+            | Self::C2SmbPipeName
+            | Self::C2IcmpTargetIp => trimmed.to_owned(),
         }
     }
 
@@ -192,7 +218,7 @@ impl StrKey {
             Self::LogLevel => Some(LOG_LEVEL_VARIANTS),
             Self::CurlProfile => Some(CURL_PROFILE_VARIANTS),
             Self::C2DefaultChannel => Some(C2_CHANNEL_VARIANTS),
-            Self::WebAuth => None,
+            Self::WebAuth | Self::WebHost | Self::C2SmbPipeName | Self::C2IcmpTargetIp => None,
         }
     }
 }
@@ -215,6 +241,9 @@ pub fn resolve_str_keys(inputs: StrKeyInputs<'_>) -> Result<ResolvedStrKeys, Str
         curl_profile: one(inputs, StrKey::CurlProfile)?,
         web_auth: one(inputs, StrKey::WebAuth)?,
         c2_default_channel: one(inputs, StrKey::C2DefaultChannel)?,
+        web_host: one(inputs, StrKey::WebHost)?,
+        c2_smb_pipe_name: one(inputs, StrKey::C2SmbPipeName)?,
+        c2_icmp_target_ip: one(inputs, StrKey::C2IcmpTargetIp)?,
     })
 }
 
@@ -280,8 +309,9 @@ pub(super) fn validate(
             kind: StrKeyErrorKind::EmptyString,
         });
     }
-    if let Some(valid) = key.valid_set()
-        && !valid.contains(&normalized.as_str())
+    if key
+        .valid_set()
+        .is_some_and(|valid| !valid.contains(&normalized.as_str()))
     {
         return Err(StrKeyError {
             key,
