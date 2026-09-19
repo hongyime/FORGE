@@ -1,6 +1,6 @@
-# Current Task: Rust rewrite — T3 accepted; T4 configuration next
+# Current Task: Rust rewrite — T3 accepted; T4 config first slice published
 
-**Status:** T3 ACCEPTED under the T1 scheduling exception; T4 configuration is next | Latest native code checkpoint: `570c397` (297 tests/doctests passed before publication) | Date: 2026-09-19
+**Status:** T4 PARTIAL — five-budget resolver `97a796f` published; full T4 config remains open | Latest native code checkpoint: `97a796f` (308 tests/doctests passed) | Date: 2026-09-19
 
 ## Progress dashboard
 
@@ -8,28 +8,28 @@ These are different measurements, not an estimated overall completion percentage
 
 ```text
 Major milestones fully closed  [#...................]   1 / 36 (T3)
-Milestones with delivered work [~~#.................]   3 / 36 (T1/T2 partial; T3 accepted)
+Milestones with delivered work [~~##................]   4 / 36 (T1/T2 partial; T3 accepted; T4 partial)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
-Latest native test run         [####################] 297 / 297 passed
+Latest native test run         [####################] 308 / 308 passed
 Final release reviews         [....]                    0 / 4
 ```
 
 | Phase | Tasks | Current state |
 | --- | --- | --- |
-| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 next, T5-T6 queued |
+| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; T3 accepted; T4 partial (five-budget `97a796f`); T5-T6 queued |
 | Storage, audit, buses, plugins, runtime | T7-T12 | Not started |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Accepted T3 evidence
-- Reviewer `ses_f4a00b418ffe0FRwFYtq28yRSJ` final delta explicitly **APPROVED T3 implementation acceptance under the T1 scheduling exception**; no unmet T3 criterion remains identified. Published `570c397` adds exactly `scalar_generated.rs` and `timestamp_generated.rs`: seven Rust tests, **60,337 generated evaluations** over C2Url/PluginId/Timestamp and **479 sensitivity errors detected by test-local bad adapters**. Five characterization tests passed before the two sensitivity tests. No production mutation or fresh Python-differential claim.
-- Parent independently passed **297/297 workspace tests/doctests**, zero failed/ignored, plus workspace fmt and all-target Clippy. Evidence base: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/`; receipts `parent-properties-workspace-20260919.{json,log}`, `parent-properties-clippy-20260919.{json,log}` and `parent-properties-fmt-20260919.json` report exit0 and QA mutex released/jobs1. Silent fmt produced no log. These are prepublication gates on the approved files; closure reconciliation does not rerun the suite.
-- Accepted scope: native typed domain/declared JSON source boundaries cover IDs, seeds, enums, graphs, task/agent records, findings, credentials and timestamps. All **52 T3 mappings** are fixture-verified; **66 later-owner references** retain ownership and are not T3 runtime verification. Prior source-parity fixtures (including enum, graph/coercion, TaskState, scalar/timestamp/path cases and `5828331`'s 94 Pydantic +12 dataclass cases) preserve approved plaintext/masking and boundary behavior. `2eac6f4` supplies the bounded verifier; parent CLI receipt `parent-properties-domain-cli-20260919/{receipt.json,stdout.txt,stderr.txt}` records **19 assertions passed, 52 mappings, 9 manifest fixtures, 16 input hashes and 0 Cargo tests executed**, with revision `b646dd8` before property publication. Final review accepts this evidence package: plan T3 is checked and ledger `complete_t3=true`. Standalone verifier receipt `complete_t3=false` intentionally describes limited-checker scope; no code or old receipt is changed to claim milestone closure.
-- Retained limits: LSP unavailable; SQL integer IDs are signed64 (opaque workspace/graph IDs remain strings); arbitrary non-list Python objects are outside declared JSON collection boundaries and dataclass scalar JSON values remain uncoerced. Verifier fixture hashes cover the manifest only, not every fixture/provenance sidecar or every mapped field/case. No full-rewrite or deployment-cutover claim.
-- Closure metadata validation: existing compiled `forge-xtask verify domain` passed19 assertions,52 mappings and9 fixture hashes with0 Cargo tests, exit0; exclusive evidence `t3-accepted-records-20260919/{receipt.json,stdout.txt,stderr.txt}` under the evidence base. Receipt complete_t3=false is the intentional checker limit, separate from accepted ledger complete_t3=true.
-- T1 denied cleanup and historical outer-timeout fixture uncertainty remain separate under the scheduling exception. Preserve `parent-domain-workspace-20260919.log`: its1800s interruption had no printed failure;3600s retry passed without budget/assertion changes, but interrupted fixture-directory cleanup is unproven. T2 baseline/accounting and native containment remain incomplete. Eight pre-existing fixture metadata-only drift paths remain unstaged; all118 ledger entries/ownership and fixture payloads are unchanged. Only the ledger closure flag/note and acceptance records are reconciled; this is not F1-F4 approval or deployment cutover.
+### Current verified increment — T4 five-budget config slice
+- Published `97a796f` feat(config): add pure five-budget configuration resolver. New files: `native/crates/forge-domain/src/config/{mod,budgets,error}.rs` + three integration test files (11 tests, 802 lines). `resolve_budgets(BudgetInputs)` takes injected CLI/environment/local maps, applies CLI > environment > local > default precedence with provenance, returns typed positive budgets or value-free `ConfigError{key,source,kind}`. Exact PlatformSettings defaults: provider_timeout=5, heartbeat_interval=30, telemetry_threshold_ms=5000, message_retry_max=3, message_ack_timeout=60 (source `forge/config.py:705-752`). No ambient env/FS/logger/service/provider access; no dependency changes.
+- Parent independently passed **308/308 workspace tests/doctests**, zero failed/ignored, plus domain fmt and all-target Clippy. Evidence base: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/`; receipts `parent-t4-budgets-workspace-20260919.{json,log}`, `t4-budget-{focused-final,domain,fmt,clippy}-20260919-02.{json,log}` all exit0 and QA mutex released/jobs1.
+- Reviewer `ses_f48e7bea2ffeA60Z6h7mikRzZL` APPROVED scoped partial-library publication. Documented limits: Unicode decimal text unsupported (Python `int()` accepts it; concrete remaining T4 work); CLI/local four-layer precedence is the T4 extension, not pre-existing Python behavior. Config API fully documented as a five-key projection; unrelated fields are ignored, not ported.
+- Remaining T4 work (task stays open): full key inventory; other settings/aliases (PlatformSettings, ForgeConfig, autostart); path resolution; secret-pool/web validation; autostart normalization; local-file adapter; logging redaction; `verify config`; lifecycle/cancellation integration consuming T2 native containment.
+- Prior T3 evidence unchanged: `ses_f4a00b418ffe0FRwFYtq28yRSJ` approved T3 under scheduling exception; `t3-accepted-records-20260919/receipt.json` records19 assertions/52 mappings; plan T3 checkbox checked and ledger `complete_t3=true`.
+- T1/T2 blockers unchanged: denied cleanup of `native/target/reviewer-t1` and `t1-id-cli-20260916-01`; unavailable LSP; T2 full baseline/containment incomplete. Eight pre-existing fixture metadata-only drift paths remain unstaged.
 
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
@@ -44,13 +44,13 @@ Final release reviews         [....]                    0 / 4
 - [x] Add, test and obtain scoped publication approval for `verify domain` (`2eac6f4`).
 - [x] Publish approved generated canonicalization properties (`570c397`); parent297-suite/fmt/Clippy passed.
 - [x] Obtain final T3 sign-off (`ses_f4a00b418ffe0FRwFYtq28yRSJ`) and reconcile accepted closure metadata.
-- [ ] Implement T4 configuration against accepted T3 contracts.
-- [ ] Implement production native process containment: bounded stdout/stderr, deadlines, failure paths and descendant cleanup.
-- [ ] Add actual Cargo test collection/execution accounting to T2.
-- [ ] Run scoped review and appropriate full native verification, then publish each tested increment.
-- [ ] Proceed to T4 configuration and subsequent tasks in dependency order.
+- [x] Publish T4 five-budget resolver (`97a796f`); 308-suite/fmt/Clippy passed; reviewer approved.
+- [ ] Complete T4: remaining key inventory, full settings/aliases, secret handling, autostart, file adapter, logging, `verify config`, lifecycle using T2 containment.
+- [ ] T2: implement production native process containment (bounded IO, deadlines, cleanup).
+- [ ] T2: add actual Cargo test collection/execution accounting.
+- [ ] Proceed to remaining T4 and T5 (scope/authorization gates) in dependency order.
 
-Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger: `native/migration/domain-contracts.json`. The earlier all-blocked sweep is superseded;33 not-started implementation milestones and four final gates remain queued. T1/T2 retain genuine external/full-acceptance blockers. Older48-verified/policy-blocked ledger claims below are historical; current ledger is52 verified and66 later-owner references, with complete_t3=true after final T3 approval. Next: T4 configuration; T2 native containment/accounting stays separate. **1/36 fully closed (T3),2 partial (T1/T2),33 queued**.
+Full ordered task list: `.omo/plans/forge-full-rust-rewrite.md`. Contract ledger: `native/migration/domain-contracts.json`. Current score: **1/36 fully closed (T3), 3 partial (T1/T2/T4), 32 queued**. T1/T2 retain genuine external blockers. T4 needs completion before T5 can start. Next concrete coding steps: finish T4 (remaining key inventory + verify config) and T2 native containment in parallel.
 
 ## Historical checkpoints (prior unanswered-policy notes are superseded above)
 
