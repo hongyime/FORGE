@@ -10,6 +10,7 @@
 //! * **Flag keys** — thirteen `ForgeConfig` boolean discovery and service flags.
 //! * **Count keys** — twelve `ForgeConfig` non-negative integer worker/timeout/rate keys.
 //! * **String keys** — four `ForgeConfig` string/enum keys (log_level, curl_profile, web_auth, c2_default_channel).
+//! * **Optional string keys** — seven `ForgeConfig` optional string keys (proxy, redis_url, shodan_key, cloud ids).
 //!
 //! CLI/local keys are exact canonical names. Environment aliases are ASCII
 //! case-insensitive; duplicate alias spellings for the selected key fail
@@ -19,6 +20,7 @@ mod budgets;
 mod counts;
 mod error;
 mod flags;
+mod opt_strings;
 mod strings;
 
 pub use budgets::{BudgetKey, ResolvedBudget, ResolvedBudgets};
@@ -33,6 +35,10 @@ pub use flags::{
 pub use strings::{
     ResolvedStr, ResolvedStrKeys, StrKey, StrKeyError, StrKeyErrorKind, StrKeyInputs,
     resolve_str_keys,
+};
+pub use opt_strings::{
+    OptStrError, OptStrErrorKind, OptStrInputs, OptStrKey, ResolvedOptStr, ResolvedOptStrs,
+    resolve_opt_strs,
 };
 
 use budgets::positive_integer;
