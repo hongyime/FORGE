@@ -1,12 +1,12 @@
 //! Pure T4 config validation command (`verify config`).
 //!
 //! Resolves all six ForgeConfig/PlatformSettings key groups using the ambient
-//! environment as the env layer and empty maps for CLI and local layers. Reports
-//! per-resolver status in a JSON receipt without emitting any resolved values or
-//! secret material. Each resolver returns at most one typed error (the first key
-//! that fails); the limitations section documents this.
+//! environment as the env layer. If a local JSON or TOML config file is found at
+//! a conventional path it is loaded as the `local` layer (see `config_file`).
+//! Reports per-resolver status in a JSON receipt without emitting any resolved
+//! values or secret material. Each resolver returns at most one typed error.
 
-use crate::{domain_artifacts, model::Result};
+use crate::{config_file, domain_artifacts, model::Result};
 use forge_domain::config::{
     resolve_budgets, resolve_counts, resolve_flags, resolve_opt_strs, resolve_str_keys,
     resolve_str_lists, BudgetInputs, CountInputs, FlagInputs, OptStrInputs, StrKeyInputs,
@@ -55,6 +55,8 @@ pub struct Receipt {
     command: Vec<String>,
     root_binding: &'static str,
     env_var_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    local_config_file: Option<String>,
     resolvers: Vec<ResolverResult>,
     total_keys: usize,
     valid_resolvers: usize,
@@ -82,6 +84,7 @@ impl Receipt {
             root_binding:
                 "repository root supplied to verify; absolute local path intentionally omitted",
             env_var_count: 0,
+            local_config_file: None,
             resolvers: vec![],
             total_keys: 0,
             valid_resolvers: 0,
@@ -90,7 +93,7 @@ impl Receipt {
             duration_ms: 0,
             limitations: vec![
                 "Each resolver reports at most one typed error (the first failing key). Remaining keys in that resolver are not validated once one fails.",
-                "Only the ambient environment is evaluated. CLI and local JSON layers are empty for this command.",
+                "CLI layer is empty; local layer is loaded from a config file when one is found at a conventional path (see find_local conventions in config_file.rs).",
                 "No resolved values or secret material appear in the receipt.",
                 "No filesystem, network, subprocess, or process-state operations are performed.",
             ],
@@ -106,9 +109,27 @@ pub fn run(root: &Path, evidence: &Path) -> Result<i32> {
 
     let env: BTreeMap<String, String> = std::env::vars().collect();
     let cli: Map<String, Value> = Map::new();
-    let local: Map<String, Value> = Map::new();
+    let (local, local_config) = {
+        let opt_path = config_file::find_local(evidence, root);
+        match opt_path {
+            Some(ref p) => match config_file::load(p) {
+                Ok(m) => {
+                    let name = p
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("?")
+                        .to_owned();
+                    (m, Some(name))
+                }
+                Err(e) => (Map::new(), Some(format!("load-error:{e}"))),
+            },
+            None => (Map::new(), None),
+        }
+    };
 
     let mut receipt = Receipt::new(&output.evidence_binding);
+    receipt.env_var_count = env.len();
+    receipt.local_config_file = local_config;
     receipt.env_var_count = env.len();
 
     let resolvers: Vec<ResolverResult> = vec![

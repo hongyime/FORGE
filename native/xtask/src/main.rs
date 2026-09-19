@@ -44,6 +44,7 @@ mod receipt;
 mod rust_declarations;
 mod scan;
 mod syntax;
+mod config_file;
 mod config_verify;
 mod verify;
 mod verify_checks;
