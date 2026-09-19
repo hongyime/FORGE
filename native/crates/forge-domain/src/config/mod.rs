@@ -9,6 +9,7 @@
 //! * **Budget keys** — five `PlatformSettings` positive-integer timeouts/thresholds.
 //! * **Flag keys** — thirteen `ForgeConfig` boolean discovery and service flags.
 //! * **Count keys** — twelve `ForgeConfig` non-negative integer worker/timeout/rate keys.
+//! * **String keys** — four `ForgeConfig` string/enum keys (log_level, curl_profile, web_auth, c2_default_channel).
 //!
 //! CLI/local keys are exact canonical names. Environment aliases are ASCII
 //! case-insensitive; duplicate alias spellings for the selected key fail
@@ -18,6 +19,7 @@ mod budgets;
 mod counts;
 mod error;
 mod flags;
+mod strings;
 
 pub use budgets::{BudgetKey, ResolvedBudget, ResolvedBudgets};
 pub use counts::{
@@ -27,6 +29,10 @@ pub use counts::{
 pub use error::{ConfigError, ConfigErrorKind, ConfigSource};
 pub use flags::{
     FlagError, FlagErrorKind, FlagInputs, FlagKey, ResolvedFlag, ResolvedFlags, resolve_flags,
+};
+pub use strings::{
+    ResolvedStr, ResolvedStrKeys, StrKey, StrKeyError, StrKeyErrorKind, StrKeyInputs,
+    resolve_str_keys,
 };
 
 use budgets::positive_integer;
