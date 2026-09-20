@@ -1,6 +1,6 @@
-# Current Task: Rust rewrite — T4 config accepted; T5 storage layer next
+# Current Task: Rust rewrite — T5 forge-policy checkpoint; verify policy xtask next
 
-**Status:** T4 accepted (`e2697c9` inline review CODE APPROVE + PUBLICATION APPROVE); workspace domain 214/214 + xtask 79 units ok | Date: 2026-09-20
+**Status:** T5 forge-policy crate committed (`5756183`); 62 tests green (32 scope + 30 RBAC), fmt+clippy clean, pushed | Date: 2026-09-20
 
 ## Progress dashboard
 
@@ -8,7 +8,7 @@ These are different measurements, not an estimated overall completion percentage
 
 ```text
 Major milestones fully closed  [##..................]   2 / 36 (T3 + T4)
-Milestones with delivered work [~~##................]   4 / 36 (T1/T2 partial; T3+T4 accepted; T5-T6 queued)
+Milestones with delivered work [~~~##...............]   5 / 36 (T1/T2 partial; T3+T4 accepted; T5 in-progress)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
 Latest domain test run         [####################] 214 / 214 passed (workspace last: ~373: domain 214 + xtask 79 units + integration suites all ok)
 Final release reviews         [....]                    0 / 4
@@ -23,10 +23,10 @@ Final release reviews         [....]                    0 / 4
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T4 accepted (`e2697c9`)
-- Inline review (Oracle subagent unavailable; per AGENTS.md — work directly). Verified: four-layer precedence correct in all 6 resolvers; error types carry no values; `resolve_all` collects all errors without short-circuit; custom Debug omits values for ResolvedStr/ResolvedOptStr/ResolvedStrList; is_sensitive() marks WebSecretKey/ShodanKey/RedisUrl/CloudAzure*; CSV list validation correct; canary+shadowed-layer tests in every group; workspace domain 214/214+xtask79 ok.
-- **CODE APPROVE. PUBLICATION APPROVE.** Bounded scope: T4 config resolver work (`forge/config.py` ports, verify-cfg command, file adapter, redaction, snapshot). T5-T6 and full rewrite completion remain open.
-- T1/T2 blockers unchanged. Eight pre-existing fixture metadata-only drift paths remain unstaged.
+### Current verified increment — T5 forge-policy crate (`5756183`)
+- `native/crates/forge-policy/` — new crate, workspace-linked. Ports `forge/opsec/scope_gate.py` (scope.rs, 289 lines) and `forge/webui/rbac.py` (rbac.rs, 181 lines). 62 integration tests: 32 scope-gate + 30 RBAC. fmt+clippy -D warnings clean. Pushed.
+- Role::from_str renamed to Role::parse (clippy::should_implement_trait). collapsible_if and unnecessary_cast fixed. All 62 tests pass.
+- T1/T2 blockers unchanged. Eight pre-existing fixture metadata-only drift paths remain unstaged. Domain baseline still 214/214 (forge-policy adds 0 domain tests).
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
