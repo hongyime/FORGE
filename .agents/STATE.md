@@ -1,14 +1,14 @@
-# Current Task: Rust rewrite — T5 forge-policy + verify policy done; T5 review pending
+# Current Task: Rust rewrite — T5 accepted; T6 storage layer next
 
-**Status:** T5 `verify policy` command shipped (`7790f11`); 15/15 canary checks pass (receipt at `.omo/evidence/rust-rewrite/task-5/policy-verify-20260920/receipt.json`); fmt+clippy clean, pushed | Date: 2026-09-20
+**Status:** T5 accepted (`43d597d` inline review CODE APPROVE + PUBLICATION APPROVE); workspace domain 214/214 + xtask build clean | Date: 2026-09-20
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [##..................]   2 / 36 (T3 + T4)
-Milestones with delivered work [~~~##...............]   5 / 36 (T1/T2 partial; T3+T4 accepted; T5 code-complete pending review)
+Major milestones fully closed  [###.................]   3 / 36 (T3 + T4 + T5)
+Milestones with delivered work [~~~###..............]   6 / 36 (T1/T2 partial; T3+T4+T5 accepted; T6 queued)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
 Latest domain test run         [####################] 214 / 214 passed (workspace last: ~373: domain 214 + xtask 79 units + integration suites all ok)
 Final release reviews         [....]                    0 / 4
@@ -16,16 +16,16 @@ Final release reviews         [....]                    0 / 4
 
 | Phase | Tasks | Current state |
 | --- | --- | --- |
-Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; **T3 accepted; T4 accepted**; **T5 code-complete** (`7790f11`; pending inline review); T6 queued
+| Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; **T3 accepted; T4 accepted; T5 accepted** (`43d597d` inline review); T6 queued |
 | Storage, audit, buses, plugins, runtime | T7-T12 | Not started |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T5 code-complete (`7790f11`)
-- `forge-policy` crate: `scope.rs` (289 lines, ports scope_gate.py), `rbac.rs` (181 lines, ports rbac.py). 62 integration tests green. fmt+clippy clean.
-- `verify policy` xtask command: `policy_verify.rs` (258 lines), 15 canary checks across scope-gate and RBAC. Receipt: `.omo/evidence/rust-rewrite/task-5/policy-verify-20260920/receipt.json`. 15/15 pass, exit 0.
+### Current verified increment — T5 accepted (`43d597d`)
+- Inline review (Oracle subagent unavailable; per AGENTS.md — work directly). Verified: normalise() strips scheme/port/dot/lowercase; wildcard covers subdomains not apex; CIDR matching correct; empty scope fails closed; email scope domain+wildcard+exact-email logic matches Python source. Two intentional gaps noted: non-canonical CIDR input (fails closed in Rust, safe) and assert_url_in_scope not ported (uses Python governance module, deferred).
+- **CODE APPROVE. PUBLICATION APPROVE.** Bounded scope: T5 scope gate and RBAC ports (forge-policy crate + verify policy xtask). T6 and full rewrite completion remain open.
 - T1/T2 blockers unchanged. Eight pre-existing fixture metadata-only drift paths remain unstaged. Domain baseline 214/214 unchanged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
