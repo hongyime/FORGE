@@ -1,6 +1,6 @@
 # Current Task: Rust rewrite — T4 snapshot/lifecycle published; T4 config work complete
 
-**Status:** T4 config work COMPLETE — snapshot `2ac905b` published (domain 214/214, +3); all 55 keys + verify-cfg + file-adapter + redaction + resolve_all done | Latest domain checkpoint: `2ac905b` | Date: 2026-09-19
+**Status:** T4 config work COMPLETE — workspace passed (domain 214/214, xtask 79 units ok); awaiting T4 acceptance/review | Latest domain checkpoint: `2ac905b` | Date: 2026-09-19
 
 ## Progress dashboard
 
@@ -10,7 +10,7 @@ These are different measurements, not an estimated overall completion percentage
 Major milestones fully closed  [#...................]   1 / 36 (T3)
 Milestones with delivered work [~~##................]   4 / 36 (T1/T2 partial; T3 accepted; T4 partial)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
-Latest domain test run         [####################] 214 / 214 passed (workspace last: 308)
+Latest domain test run         [####################] 214 / 214 passed (workspace last: ~373: domain 214 + xtask 79 units + integration suites all ok)
 Final release reviews         [....]                    0 / 4
 ```
 
