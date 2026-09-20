@@ -197,6 +197,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "forge-policy"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "forge-xtask"
 version = "0.1.0"
 dependencies = [

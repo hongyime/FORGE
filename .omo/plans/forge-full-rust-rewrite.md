@@ -131,7 +131,7 @@ Single-source migration ledgers live in `native/migration/`: `capabilities.json`
   QA: ACCEPTED. `verify domain` representative multi-seed/graph/task fixtures roundtrip unchanged; malformed enum/ID/URL produces typed error before persistence. Generated canonicalization idempotence/input-preservation properties delivered in `570c397`; parent297-suite/fmt/Clippy and final T3 review passed.
   Commit: Y | `feat(domain): port typed engagement contracts`.
 
-- [ ] 4. Port configuration, errors, logging and resource lifecycle
+- [x] 4. Port configuration, errors, logging and resource lifecycle
   Next queued implementation task: T3 implementation and acceptance are complete under the T1 scheduling exception. The serialization decision is resolved; consume the accepted contracts.
   Scope: `native/crates/forge-domain/src/config/`, shared runtime support. Preserve explicit CLI > environment > local-config > default precedence, bounded budgets, redaction and structured errors. Settings parsing must not spawn services or read unrelated secrets.
   References: `forge/config.py`, `forge/cli_runtime.py`, `forge/utils/log_redaction.py`, `forge/subprocess_tree.py`, `forge/automation_self_heal.py`.
