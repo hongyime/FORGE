@@ -24,6 +24,7 @@ mod baseline_vitest_source_drift;
 mod baseline_vitest_tools;
 mod config_file;
 mod config_verify;
+mod crypto_adapters_verify;
 mod declaration_ids;
 mod documents;
 mod domain_artifacts;
@@ -127,6 +128,7 @@ fn run() -> model::Result<i32> {
             .map_err(|e| e.to_string()),
             "config" => return config_verify::run(&root, &evidence),
             "policy" => return policy_verify::run(&root, &evidence),
+            "crypto-adapters" => return crypto_adapters_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;
