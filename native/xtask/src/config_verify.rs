@@ -8,9 +8,9 @@
 
 use crate::{config_file, domain_artifacts, model::Result};
 use forge_domain::config::{
+    BudgetInputs, CountInputs, FlagInputs, OptStrInputs, StrKeyInputs, StrListInputs,
     resolve_budgets, resolve_counts, resolve_flags, resolve_opt_strs, resolve_str_keys,
-    resolve_str_lists, BudgetInputs, CountInputs, FlagInputs, OptStrInputs, StrKeyInputs,
-    StrListInputs,
+    resolve_str_lists,
 };
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -81,8 +81,7 @@ impl Receipt {
             ]
             .map(str::to_owned)
             .to_vec(),
-            root_binding:
-                "repository root supplied to verify; absolute local path intentionally omitted",
+            root_binding: "repository root supplied to verify; absolute local path intentionally omitted",
             env_var_count: 0,
             local_config_file: None,
             resolvers: vec![],

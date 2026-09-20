@@ -22,6 +22,8 @@ mod baseline_vitest_report;
 mod baseline_vitest_snapshot;
 mod baseline_vitest_source_drift;
 mod baseline_vitest_tools;
+mod config_file;
+mod config_verify;
 mod declaration_ids;
 mod documents;
 mod domain_artifacts;
@@ -39,13 +41,12 @@ mod ledger;
 mod model;
 mod paths;
 mod persist;
+mod policy_verify;
 mod python;
 mod receipt;
 mod rust_declarations;
 mod scan;
 mod syntax;
-mod config_file;
-mod config_verify;
 mod verify;
 mod verify_checks;
 
@@ -125,6 +126,7 @@ fn run() -> model::Result<i32> {
             )
             .map_err(|e| e.to_string()),
             "config" => return config_verify::run(&root, &evidence),
+            "policy" => return policy_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;

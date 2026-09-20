@@ -209,6 +209,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "forge-domain",
+ "forge-policy",
  "pulldown-cmark",
  "serde",
  "serde_json",
