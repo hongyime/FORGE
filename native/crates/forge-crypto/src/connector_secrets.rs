@@ -19,7 +19,7 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
     aead::{Aead, KeyInit, Payload},
 };
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use pbkdf2::pbkdf2_hmac;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -157,9 +157,9 @@ pub fn encrypt(value: &str, context: &str, key_material: &str) -> Result<String,
         v: 1,
         alg: "AES-256-GCM".to_owned(),
         kdf: format!("PBKDF2-HMAC-SHA256:{KDF_ITERATIONS}"),
-        nonce: URL_SAFE_NO_PAD.encode(nonce_bytes),
-        tag: URL_SAFE_NO_PAD.encode(tag_bytes),
-        ciphertext: URL_SAFE_NO_PAD.encode(ciphertext_bytes),
+        nonce: URL_SAFE.encode(nonce_bytes),
+        tag: URL_SAFE.encode(tag_bytes),
+        ciphertext: URL_SAFE.encode(ciphertext_bytes),
     };
 
     // sort_keys=True in Python — serde_json's default serialization doesn't
@@ -213,13 +213,13 @@ pub fn decrypt(
         ));
     }
 
-    let nonce_bytes = URL_SAFE_NO_PAD
+    let nonce_bytes = URL_SAFE
         .decode(&envelope.nonce)
         .map_err(|e| SecretError::DecryptFailed(format!("bad nonce: {e}")))?;
-    let tag_bytes = URL_SAFE_NO_PAD
+    let tag_bytes = URL_SAFE
         .decode(&envelope.tag)
         .map_err(|e| SecretError::DecryptFailed(format!("bad tag: {e}")))?;
-    let ciphertext_bytes = URL_SAFE_NO_PAD
+    let ciphertext_bytes = URL_SAFE
         .decode(&envelope.ciphertext)
         .map_err(|e| SecretError::DecryptFailed(format!("bad ciphertext: {e}")))?;
 
@@ -361,14 +361,14 @@ mod tests {
     }
 
     #[test]
-    fn envelope_nonce_is_base64url_no_padding() {
+    fn envelope_nonce_is_base64url_charset() {
         let envelope = encrypt("v", &ctx(), &test_key()).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&envelope).unwrap();
         let nonce_str = parsed["nonce"].as_str().unwrap();
-        // base64url no-pad: no '+', '/', or '=' chars
+        // base64url charset: no '+' or '/' (standard-alphabet chars); padding
+        // with '=' IS expected to match Python's base64.urlsafe_b64encode.
         assert!(!nonce_str.contains('+'));
         assert!(!nonce_str.contains('/'));
-        assert!(!nonce_str.contains('='));
     }
 
     #[test]
