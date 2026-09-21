@@ -139,7 +139,7 @@ Single-source migration ledgers live in `native/migration/`: `capabilities.json`
   QA: `verify config`; happy conflicting distinct values select correct precedence; failure malformed budgets/secret-bearing errors stay fail-closed and redacted. Child tree termination is tested on Windows and POSIX.
   Commit: Y | `feat(runtime): port config and lifecycle contracts`.
 
-- [ ] 5. Port scope, authorization and admission gates
+- [x] 5. Port scope, authorization and admission gates
   Queued after T3/T4 implementation and acceptance; no further approval of the already-resolved serialization choice is needed.
   Scope: `native/crates/forge-policy/`; typed authorized contexts, ROE/scope, URL-prefix and redirect/subresource restrictions, capabilities/RBAC, validation approval and retention confirmation. A caller cannot bypass gates by invoking a lower layer directly.
   References: `forge/opsec/scope_gate.py`, `forge/webui/rbac.py`, `forge/active_validation/`, `forge/agents/base_plugin.py`, `forge/governance/`, SPEC V5-V14.
@@ -147,7 +147,7 @@ Single-source migration ledgers live in `native/migration/`: `capabilities.json`
   QA: `verify policy`; happy explicitly authorized local fixture accepted; failure cross-tenant, redirect escape and string `true` retention requests rejected before dispatch.
   Commit: Y | `feat(policy): preserve authorization invariants`.
 
-- [ ] 6. Port compatible cryptography and safe adapter interfaces
+- [x] 6. Port compatible cryptography and safe adapter interfaces
   Queued after T3/T4/T5 implementation and acceptance. No cryptography implementation is claimed by the Win32 process-boundary approval.
   Scope: `native/crates/forge-storage/src/crypto/`, `native/crates/forge-adapters/`; AES/encoding/key-reference formats, typed HTTP/process/browser adapter traits and deterministic fakes. Native library internals have no PyO3 dependency.
   References: `rust_core/src/crypto.rs`, `forge/connectors/secrets.py`, `forge/db/`, `forge/connectors/runner.py`, `forge/utils/intel/provider_urls.py`.

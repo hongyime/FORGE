@@ -476,3 +476,4 @@
 - 2026-09-19 10:35:46 +08:00 [PRAWN-E14/claude/stop] branch=main head=6b5b712 dirty=8
 - 2026-09-19: Published T4 second slice `8cafea7` feat(config): add thirteen ForgeConfig boolean flag resolver. New `flags.rs` (327 lines) + `tests/config_flags.rs` (299 lines, 9 tests). Three coercion rules match `forge/config.py:222-312` exactly: Strict1 (offline_strict, only "1"), Truthy3 (safe_mode, "1"/"true"/"yes"), Truthy4 (eleven discovery/web/detection flags). Domain163/163 tests/doctests, fmt+all-target Clippy exit0; evidence: `t4-flags-{red,green,domain,fmt-final,clippy}-20260919.{json,log}`. Next: ForgeConfig non-negative integer keys.
 - 2026-09-20 08:43:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=c7cd362 dirty=8
+- 2026-09-21 20:12:29 +08:00 [PRAWN-E14/claude/stop] branch=main head=9778178 dirty=8
