@@ -1,33 +1,25 @@
 //! `forge-storage` — SQLite engagement/control repositories and migrations.
 //!
 //! Ports the storage layer from `forge/db/{schema.py,direct_connect.py,
-//! control.py}` and `forge/engagement_ids.py` to pure Rust using `rusqlite`.
+//! control.py,audit section}` and `forge/engagement_ids.py` to Rust.
 //!
-//! # Scope of this crate (T7 first increment)
+//! # Modules
 //!
-//! - `schema` — faithful port of the current (v48) engagement-DB DDL, plus
-//!   an idempotent `apply_schema()` applier.
-//! - `direct_connect` — the canonical PRAGMA-configured connection helper.
-//! - `control` — the central control-DB schema (workspaces, memberships,
-//!   tombstoned engagement index, append-only audit-events table+triggers)
-//!   plus non-audit-chain CRUD helpers.
-//! - `engagement_ids` — monotonic, non-reused engagement ID allocation.
+//! - `audit` — control-plane audit hash chain (T8): `append_control_audit_event`,
+//!   `verify_control_audit_chain`, `canonical_json`, SHA-256 `control_audit_hash`.
+//! - `control` — control-DB schema (workspaces, memberships, tombstoned
+//!   engagement index, append-only audit-events DDL/triggers) + CRUD helpers.
+//! - `direct_connect` — canonical PRAGMA-configured connection helper.
+//! - `engagement_ids` — monotonic, non-reused engagement ID allocator.
+//! - `schema` — v48 engagement-DB DDL (`apply_schema`, `table_names`).
 //!
-//! # Explicitly deferred (not claimed complete by this crate)
+//! # Deferred
 //!
-//! - The full historical `forge/db/migrations.py` chain (49 versioned
-//!   `ALTER TABLE`/backfill steps that upgrade a *pre-v48* database forward
-//!   in place). This crate's `schema::apply_schema` only creates the
-//!   *current* schema shape via `CREATE TABLE IF NOT EXISTS`/`CREATE INDEX
-//!   IF NOT EXISTS`, matching what Python's `apply_schema` does for a fresh
-//!   or already-current database — it does not replay historical `ALTER
-//!   TABLE` migrations against an old database file.
-//! - The control-audit hash-chain *append* logic (`append_control_audit_event`
-//!   in Python) — this crate owns the DDL/triggers that make the table
-//!   append-only, but the canonical hash-chaining algorithm is T8 scope
-//!   ("Port audit chains, manifests, reviews and retained evidence").
-//! - `forge/db/session.py`'s full connection-lifecycle/pooling behaviour.
+//! - `forge/db/migrations.py` historical ALTER TABLE chain (not replayed here).
+//! - `forge/audit/logger.py` JSONL hash-chain and manifest bundles (later T8).
+//! - `forge/db/session.py` pooling/lifecycle.
 
+pub mod audit;
 pub mod control;
 pub mod direct_connect;
 pub mod engagement_ids;

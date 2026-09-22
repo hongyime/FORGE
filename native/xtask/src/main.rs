@@ -1,4 +1,5 @@
 mod aliases;
+mod audit_verify;
 mod baseline;
 mod baseline_discovery;
 #[cfg(test)]
@@ -130,6 +131,7 @@ fn run() -> model::Result<i32> {
             "config" => return config_verify::run(&root, &evidence),
             "policy" => return policy_verify::run(&root, &evidence),
             "crypto-adapters" => return crypto_adapters_verify::run(&root, &evidence),
+            "audit" => return audit_verify::run(&root, &evidence),
             "sqlite" => return sqlite_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
