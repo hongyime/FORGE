@@ -1,14 +1,14 @@
-# Current Task: Rust rewrite — T7 accepted; T8 audit chain next
+# Current Task: Rust rewrite — T8 accepted; T9 platform Postgres next
 
-**Status:** T7 accepted (`fa8c74d` — forge-storage crate, verify sqlite 10/10, 39/39 tests, fmt+clippy clean) | Date: 2026-09-22
+**Status:** T8 accepted (`bf78a01` — audit.rs SHA-256 hash chain, 60/60 forge-storage tests, verify audit 10/10, fmt+clippy clean) | Date: 2026-09-22
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [#####...............]   5 / 36 (T3+T4+T5+T6+T7)
-Milestones with delivered work [~~~#####............]   8 / 36 (T1/T2 partial; T3+T4+T5+T6+T7 accepted; T8 queued)
+Major milestones fully closed  [######..............]   6 / 36 (T3+T4+T5+T6+T7+T8)
+Milestones with delivered work [~~~######...........]   9 / 36 (T1/T2 partial; T3–T8 accepted; T9 queued)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
 Latest domain test run         [####################] 214 / 214 passed (workspace last: ~440: domain 214 + xtask 79 units + storage 39 + integration suites; red_e slow test pre-existing)
 Final release reviews         [....]                    0 / 4
@@ -17,16 +17,16 @@ Final release reviews         [....]                    0 / 4
 | Phase | Tasks | Current state |
 | --- | --- | --- |
 | Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; **T3 accepted; T4 accepted; T5 accepted; T6 accepted** (`109c779` inline review); wave complete |
-| Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); T8 queued |
+| Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); **T8 accepted** (`bf78a01`); T9 queued |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T7 accepted (`fa8c74d`)
-- forge-storage crate: `schema.rs` (v48 DDL, 64 tables, 126 statements), `direct_connect.rs` (PRAGMA block), `control.rs` (workspace/membership CRUD + append-only control_audit_events triggers + tombstoned engagement_index), `engagement_ids.rs` (monotonic non-reused ID allocator). 39/39 tests (26 unit + 13 integration). rusqlite 0.32 bundled; MSVC env required for compilation (set LIB/INCLUDE/PATH from VS2022 before cargo test).
-- `sqlite_verify.rs` xtask command: 10/10 canary checks (schema v48, 64 tables, FK enforcement, control DDL, append-only triggers, engagement ID allocation, aborted-write SHA-256 guard). Receipt: `.omo/evidence/rust-rewrite/task-7/receipt.json`, exit 0, 1097ms.
-- **CODE APPROVE. PUBLICATION APPROVE.** T8 (audit chains) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged. Domain baseline 214/214 unchanged.
+### Current verified increment — T8 accepted (`bf78a01`)
+- `forge-storage/src/audit.rs` (new, 644 lines): `append_control_audit_event` (SHA-256 hash chain), `verify_control_audit_chain`, `list_control_audit_events`, `control_audit_hash`/`canonical_json` public hash primitives. Hash algorithm byte-for-byte compatible with Python's `_control_audit_hash` (`json.dumps(record, sort_keys=True, separators=(',',':'))` → SHA-256). 41 unit tests + 6 audit_chain integration tests = 60/60 forge-storage total.
+- `audit_verify.rs` xtask command: 10/10 canary checks (empty chain, genesis link, 3-event chain, canonical JSON, SHA-256 determinism, chain links, tamper detection, wrong-prev-hash detection, empty event_type rejection, workspace filter). Receipt: `.omo/evidence/rust-rewrite/task-8/receipt.json`, exit 0.
+- **CODE APPROVE. PUBLICATION APPROVE.** T9 (platform Postgres state + workflow persistence) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
@@ -77,7 +77,7 @@ Final release reviews         [....]                    0 / 4
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
 - Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
 - Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
-- **Next action:** T8 audit chains — `append_control_audit_event` SHA-256 hash chain + `verify audit` xtask. T7 accepted (`fa8c74d`): forge-storage crate (39/39), verify sqlite 10/10, fmt/clippy clean. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+- **Next action:** T9 platform Postgres state + workflow persistence. T8 accepted (`bf78a01`): audit hash chain, 60/60 forge-storage tests, verify audit 10/10, fmt+clippy clean. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
