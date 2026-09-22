@@ -1,32 +1,32 @@
-# Current Task: Rust rewrite — T6 accepted; T7 storage layer next
+# Current Task: Rust rewrite — T7 accepted; T8 audit chain next
 
-**Status:** T6 accepted (`109c779` inline review CODE APPROVE + PUBLICATION APPROVE); bidirectional Python↔Rust crypto proof confirmed | Date: 2026-09-20
+**Status:** T7 accepted (`fa8c74d` — forge-storage crate, verify sqlite 10/10, 39/39 tests, fmt+clippy clean) | Date: 2026-09-22
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [####................]   4 / 36 (T3 + T4 + T5 + T6)
-Milestones with delivered work [~~~####.............]   7 / 36 (T1/T2 partial; T3+T4+T5+T6 accepted; T7 queued)
+Major milestones fully closed  [#####...............]   5 / 36 (T3+T4+T5+T6+T7)
+Milestones with delivered work [~~~#####............]   8 / 36 (T1/T2 partial; T3+T4+T5+T6+T7 accepted; T8 queued)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
-Latest domain test run         [####################] 214 / 214 passed (workspace last: ~373: domain 214 + xtask 79 units + integration suites all ok)
+Latest domain test run         [####################] 214 / 214 passed (workspace last: ~440: domain 214 + xtask 79 units + storage 39 + integration suites; red_e slow test pre-existing)
 Final release reviews         [....]                    0 / 4
 ```
 
 | Phase | Tasks | Current state |
 | --- | --- | --- |
 | Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; **T3 accepted; T4 accepted; T5 accepted; T6 accepted** (`109c779` inline review); wave complete |
-| Storage, audit, buses, plugins, runtime | T7-T12 | Not started |
+| Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); T8 queued |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T6 accepted (`109c779`)
-- Inline review (Oracle subagent unavailable; per AGENTS.md — work directly). **Found and fixed a real cross-language bug**: connector_secrets.rs used URL_SAFE_NO_PAD but Python's secrets.py uses padded base64.urlsafe_b64encode — would have silently broken all cross-language secret decryption in production. Fixed, then verified BIDIRECTIONALLY: (1) Python-generated envelope decrypts in Rust (committed test tests/python_cross_language_fixture.rs, uses real pycryptodome-equivalent PBKDF2/AES-GCM math); (2) Rust-generated envelope manually decrypted with real Python pycryptodome — confirmed plaintext recovered. KDF (PBKDF2-HMAC-SHA256, salt forge.connector-secrets.v1, 200k iter), AAD context binding, and sorted JSON field order all verified byte-for-byte against forge/connectors/secrets.py. ToolAdapter trait + DeterministicFakeAdapter satisfy T6's typed-adapter-with-provenance requirement; full runner.py option handling correctly deferred to T11.
-- **CODE APPROVE. PUBLICATION APPROVE.** Bounded scope: T6 crypto (forge-crypto: connector-secrets AES-256-GCM+PBKDF2 envelope) + adapter trait skeleton (forge-adapters). T7+ and full rewrite completion remain open.
-- T1/T2 blockers unchanged. Eight pre-existing fixture metadata-only drift paths remain unstaged. Domain baseline 214/214 unchanged; forge-crypto 20+1 tests, forge-adapters 10 tests, verify crypto-adapters 11/11 all green.
+### Current verified increment — T7 accepted (`fa8c74d`)
+- forge-storage crate: `schema.rs` (v48 DDL, 64 tables, 126 statements), `direct_connect.rs` (PRAGMA block), `control.rs` (workspace/membership CRUD + append-only control_audit_events triggers + tombstoned engagement_index), `engagement_ids.rs` (monotonic non-reused ID allocator). 39/39 tests (26 unit + 13 integration). rusqlite 0.32 bundled; MSVC env required for compilation (set LIB/INCLUDE/PATH from VS2022 before cargo test).
+- `sqlite_verify.rs` xtask command: 10/10 canary checks (schema v48, 64 tables, FK enforcement, control DDL, append-only triggers, engagement ID allocation, aborted-write SHA-256 guard). Receipt: `.omo/evidence/rust-rewrite/task-7/receipt.json`, exit 0, 1097ms.
+- **CODE APPROVE. PUBLICATION APPROVE.** T8 (audit chains) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged. Domain baseline 214/214 unchanged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
@@ -77,7 +77,7 @@ Final release reviews         [....]                    0 / 4
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
 - Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
 - Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
-- **Next action:** T3 serialization policy conflicts (`DehashedResult.password`, `HashCredential.hash_plaintext`, `KeyScannerFinding.key_prefix`) and `HashCredentialSet` dependency remain blocked. The 66 `reference_only` entries are not all T3 work — storage→T7, plugin/bus runtime→T10–T12; no blanket T3 blocker. T4 remains [~] (prereq: T3 acceptance). Missing baseline adapters (T2) and plan tasks T5–T36 + F1–F4 also remain open. No T3 completion claim.
+- **Next action:** T8 audit chains — `append_control_audit_event` SHA-256 hash chain + `verify audit` xtask. T7 accepted (`fa8c74d`): forge-storage crate (39/39), verify sqlite 10/10, fmt/clippy clean. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
@@ -134,12 +134,12 @@ Final release reviews         [....]                    0 / 4
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-21 20:12:29 +08:00
+- Updated: 2026-09-22 07:57:02 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 9778178
-- Dirty files: 8
+- HEAD: dc04281
+- Dirty files: 14
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
