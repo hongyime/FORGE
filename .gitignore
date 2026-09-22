@@ -104,6 +104,7 @@ templates/
 .agents/*
 !.agents/STATE.md
 !.agents/JOURNAL.md
+!.agents/CHECKLIST-T9-T36.md
 !.agents/handoffs/
 !.agents/handoffs/**
 !.gitignore
