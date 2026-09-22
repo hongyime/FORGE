@@ -1,5 +1,5 @@
-use forge_domain::config::{resolve_all, ConfigAllInputs};
-use serde_json::{json, Map, Value};
+use forge_domain::config::{ConfigAllInputs, resolve_all};
+use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 
 fn empty_inputs() -> (

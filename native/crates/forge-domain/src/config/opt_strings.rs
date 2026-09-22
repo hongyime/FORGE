@@ -278,13 +278,13 @@ fn env_layer(
                 key,
                 source: ConfigSource::Environment,
                 kind: OptStrErrorKind::AmbiguousEnvironmentKey,
-            })
+            });
         }
         Ok(Some(s)) => {
             return Ok(Some(ResolvedOptStr::new(
                 non_empty(s),
                 ConfigSource::Environment,
-            )))
+            )));
         }
         Ok(None) => {}
     }
@@ -297,13 +297,13 @@ fn env_layer(
                     key,
                     source: ConfigSource::Environment,
                     kind: OptStrErrorKind::AmbiguousEnvironmentKey,
-                })
+                });
             }
             Ok(Some(s)) => {
                 return Ok(Some(ResolvedOptStr::new(
                     non_empty(s),
                     ConfigSource::Environment,
-                )))
+                )));
             }
             Ok(None) => {}
         }

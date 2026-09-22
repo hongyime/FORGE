@@ -308,7 +308,7 @@ fn from_json_array(
                     key,
                     source,
                     kind: StrListErrorKind::InvalidItemType,
-                })
+                });
             }
         }
     }
@@ -319,11 +319,7 @@ fn parse_csv(raw: &str, key: StrListKey) -> Vec<String> {
     raw.split(',')
         .filter_map(|item| {
             let n = normalize_item(key, item);
-            if n.is_empty() {
-                None
-            } else {
-                Some(n)
-            }
+            if n.is_empty() { None } else { Some(n) }
         })
         .collect()
 }

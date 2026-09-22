@@ -1,7 +1,7 @@
 use forge_domain::config::{
-    resolve_counts, ConfigSource, CountError, CountErrorKind, CountInputs, CountKey,
+    ConfigSource, CountError, CountErrorKind, CountInputs, CountKey, resolve_counts,
 };
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 
 fn count(key: CountKey, value: Value, source: ConfigSource) -> Result<i64, CountError> {

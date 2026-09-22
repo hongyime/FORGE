@@ -83,7 +83,9 @@ fn normalise_authority(auth: &str) -> String {
         return t[1..t.len() - 1].to_owned();
     }
     // IPv6 with port [::1]:8080 → ::1
-    if t.starts_with('[') && let Some(bracket_end) = t.find(']') {
+    if t.starts_with('[')
+        && let Some(bracket_end) = t.find(']')
+    {
         t = t[1..bracket_end].to_owned();
         return t;
     }
@@ -124,7 +126,10 @@ pub fn matches_scope_entry(normalised_target: &str, entry: &str) -> bool {
         return true;
     }
     // Wildcard *.example.com
-    if let Some(suffix) = entry_lower.strip_prefix("*.") && normalised_target != suffix && normalised_target.ends_with(&format!(".{suffix}")) {
+    if let Some(suffix) = entry_lower.strip_prefix("*.")
+        && normalised_target != suffix
+        && normalised_target.ends_with(&format!(".{suffix}"))
+    {
         return true;
     }
     // CIDR notation

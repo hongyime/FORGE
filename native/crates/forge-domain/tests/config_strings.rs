@@ -1,7 +1,7 @@
 use forge_domain::config::{
-    resolve_str_keys, ConfigSource, ResolvedStr, StrKey, StrKeyError, StrKeyErrorKind, StrKeyInputs,
+    ConfigSource, ResolvedStr, StrKey, StrKeyError, StrKeyErrorKind, StrKeyInputs, resolve_str_keys,
 };
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 
 /// Resolve a single key from one JSON-bearing layer (CLI or Local) or env.

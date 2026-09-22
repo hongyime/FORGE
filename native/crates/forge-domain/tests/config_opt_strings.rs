@@ -1,8 +1,8 @@
 use forge_domain::config::{
-    resolve_opt_strs, ConfigSource, OptStrError, OptStrErrorKind, OptStrInputs, OptStrKey,
-    ResolvedOptStr,
+    ConfigSource, OptStrError, OptStrErrorKind, OptStrInputs, OptStrKey, ResolvedOptStr,
+    resolve_opt_strs,
 };
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 
 fn empty_inputs() -> (

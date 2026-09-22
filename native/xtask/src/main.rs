@@ -47,6 +47,7 @@ mod python;
 mod receipt;
 mod rust_declarations;
 mod scan;
+mod sqlite_verify;
 mod syntax;
 mod verify;
 mod verify_checks;
@@ -129,6 +130,7 @@ fn run() -> model::Result<i32> {
             "config" => return config_verify::run(&root, &evidence),
             "policy" => return policy_verify::run(&root, &evidence),
             "crypto-adapters" => return crypto_adapters_verify::run(&root, &evidence),
+            "sqlite" => return sqlite_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;

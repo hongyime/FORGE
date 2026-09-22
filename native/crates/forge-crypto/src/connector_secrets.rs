@@ -308,7 +308,7 @@ mod tests {
     #[test]
     fn derive_key_different_material_different_key() {
         let k1 = derive_key(&test_key()).unwrap();
-        let k2 = derive_key(&"forge-test-key-for-unit-tests-only-5678".to_owned()).unwrap();
+        let k2 = derive_key("forge-test-key-for-unit-tests-only-5678").unwrap();
         assert_ne!(*k1, *k2);
     }
 
