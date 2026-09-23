@@ -516,6 +516,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "forge-discovery"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "forge-domain"
 version = "0.1.0"
 dependencies = [
@@ -561,6 +569,7 @@ dependencies = [
  "clap",
  "forge-adapters",
  "forge-crypto",
+ "forge-discovery",
  "forge-domain",
  "forge-policy",
  "forge-runtime",

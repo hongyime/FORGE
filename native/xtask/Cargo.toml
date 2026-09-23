@@ -12,6 +12,8 @@ forge-adapters = { path = "../crates/forge-adapters" }
 forge-storage = { path = "../crates/forge-storage" }
 # T10: bus_verify needs direct access to forge-runtime types
 forge-runtime = { path = "../crates/forge-runtime" }
+# T13: discovery_verify needs forge-discovery types
+forge-discovery = { path = "../crates/forge-discovery" }
 rusqlite = { version = "0.32", features = ["bundled"] }
 # T9: postgres_verify needs direct access to sqlx queries and tokio runtime
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-rustls"] }

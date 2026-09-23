@@ -28,6 +28,7 @@ mod config_file;
 mod config_verify;
 mod crypto_adapters_verify;
 mod declaration_ids;
+mod discovery_verify;
 mod documents;
 mod domain_artifacts;
 mod domain_checks;
@@ -141,6 +142,7 @@ fn run() -> model::Result<i32> {
             "bus" => return bus_verify::run(&root, &evidence),
             "plugins" => return plugins_verify::run(&root, &evidence),
             "runtime" => return runtime_verify::run(&root, &evidence),
+            "discovery" => return discovery_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;
