@@ -1,6 +1,13 @@
-//! `forge-adapters` — Typed tool adapter traits and deterministic fakes.
+//! `forge-adapters` — Typed tool adapters, plugin contracts and process runner.
 //!
-//! Ports `forge/connectors/runner.py` adapter contracts to pure Rust traits.
-//! No I/O in this crate; callers inject real or fake adapters.
+//! # Modules
+//!
+//! - `tool_adapter` — T6: `ToolAdapter` trait, `AdapterConfig`, fakes.
+//! - `plugins` — T11: `NativePlugin` trait, `CapabilityManifest`, `PluginRegistry`,
+//!   `TaskSpec`, `TaskResult`.
+//! - `process_runner` — T11: `ExternalPluginRunner` (JSON-over-stdio, timeout,
+//!   output-size cap).
 
+pub mod plugins;
+pub mod process_runner;
 pub mod tool_adapter;

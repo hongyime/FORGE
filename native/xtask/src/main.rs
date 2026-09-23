@@ -44,6 +44,7 @@ mod ledger;
 mod model;
 mod paths;
 mod persist;
+mod plugins_verify;
 mod policy_verify;
 mod postgres_verify;
 mod python;
@@ -137,6 +138,7 @@ fn run() -> model::Result<i32> {
             "postgres" => return postgres_verify::run(&root, &evidence),
             "sqlite" => return sqlite_verify::run(&root, &evidence),
             "bus" => return bus_verify::run(&root, &evidence),
+            "plugins" => return plugins_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;
