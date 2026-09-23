@@ -1,5 +1,5 @@
 [workspace]
-members = ["xtask", "crates/forge-domain", "crates/forge-policy", "crates/forge-crypto", "crates/forge-adapters", "crates/forge-storage"]
+members = ["xtask", "crates/forge-domain", "crates/forge-policy", "crates/forge-crypto", "crates/forge-adapters", "crates/forge-storage", "crates/forge-runtime"]
 resolver = "3"
 
 [workspace.package]

@@ -23,6 +23,7 @@ mod baseline_vitest_report;
 mod baseline_vitest_snapshot;
 mod baseline_vitest_source_drift;
 mod baseline_vitest_tools;
+mod bus_verify;
 mod config_file;
 mod config_verify;
 mod crypto_adapters_verify;
@@ -135,6 +136,7 @@ fn run() -> model::Result<i32> {
             "audit" => return audit_verify::run(&root, &evidence),
             "postgres" => return postgres_verify::run(&root, &evidence),
             "sqlite" => return sqlite_verify::run(&root, &evidence),
+            "bus" => return bus_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;

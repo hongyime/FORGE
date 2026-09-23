@@ -1,0 +1,15 @@
+[package]
+name = "forge-runtime"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Redis bus — integration tests gated by FORGE_TEST_REDIS_URL
+redis = { version = "0.25", features = ["tokio-comp", "connection-manager"] }
+
+[lints]
+workspace = true
