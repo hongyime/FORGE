@@ -1,14 +1,14 @@
-# Current Task: Rust rewrite — T11 accepted; T12 workflow engine next
+# Current Task: Rust rewrite — T12 accepted; T13 discovery next
 
-**Status:** T11 accepted (`79f19d9` — NativePlugin trait, CapabilityManifest, PluginRegistry, ExternalPluginRunner, 11-canary plugins_verify; cargo check+clippy ✅) | Date: 2026-09-22
+**Status:** T12 accepted (`93aa8d9` — WorkflowEngine + WorkflowDefinition/Stage + WorkflowScheduler + runtime_verify 10 canaries; cargo fmt+clippy ✅) | Date: 2026-09-22
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [#########...........]   9 / 36 (T3+T4+T5+T6+T7+T8+T9+T10+T11)
-Milestones with delivered work [~~~#########........]  12 / 36 (T1/T2 partial; T3–T11 accepted; T12 queued)
+Major milestones fully closed  [##########..........]  10 / 36 (T3+T4+T5+T6+T7+T8+T9+T10+T11+T12)
+Milestones with delivered work [~~~##########.......]  13 / 36 (T1/T2 partial; T3–T12 accepted; T13 queued)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
 Latest domain test run         [####################] 214 / 214 passed (workspace last: ~440: domain 214 + xtask 79 units + storage 39 + integration suites; red_e slow test pre-existing)
 Final release reviews         [....]                    0 / 4
@@ -17,16 +17,16 @@ Final release reviews         [....]                    0 / 4
 | Phase | Tasks | Current state |
 | --- | --- | --- |
 | Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; **T3 accepted; T4 accepted; T5 accepted; T6 accepted** (`109c779` inline review); wave complete |
-| Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); **T8 accepted** (`bf78a01`); **T9 accepted** (`b646274`); **T10 accepted** (`007170c`); **T11 accepted** (`79f19d9`); T12 queued |
-| Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
+| Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); **T8 accepted** (`bf78a01`); **T9 accepted** (`b646274`); **T10 accepted** (`007170c`); **T11 accepted** (`79f19d9`); **T12 accepted** (`93aa8d9`) — wave complete |
+| Discovery, enrichment, parsing, validation, scoring | T13-T18 | T13 queued |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T11 accepted (`79f19d9`)
-- `forge-adapters/src/plugins.rs` (new, 491 lines): `NativePlugin` trait (`#[async_trait]`, execute_task enforces ROE+scope gate), `CapabilityManifest` (8 ALLOWED_CAPABILITIES: passive_discovery, identity_pivot, artifact_parsing, graph_enrichment, report_generation, monitoring, credential_analysis, active_validation), `PluginRegistry` (register/dispatch/plugin_ids, std::sync::RwLock), `TaskSpec`/`TaskResult`, `validate_plugin_id`. 9 unit tests.
-- `forge-adapters/src/process_runner.rs` (new, 270 lines): `ExternalPluginRunner` (spawn binary, JSON-over-stdio, kill on timeout, 1 MiB output cap, malformed-JSON failure). 3 unit tests. plugins_verify xtask: 11 canaries all pass without external processes.
-- **CODE APPROVE. PUBLICATION APPROVE.** T12 (workflow engine, agent loop, scheduler) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+### Current verified increment — T12 accepted (`93aa8d9`)
+- `forge-runtime/src/engine.rs` (new, 510 lines): `WorkflowStage` (name, agent_role, topic, payload_template, max_attempts, transition_condition), `WorkflowDefinition` (immutable versioned recipe), `WorkflowEngine` (start_workflow, advance_stage w/ stage publishing, fail_stage w/ retry accounting matching Python engine semantics). 9 unit tests.
+- `forge-runtime/src/scheduler.rs` (new, 172 lines): `SchedulerLock` (tokio Mutex single-instance), `WorkflowScheduler` (stale-threshold due-check, max_per_tick). 4 unit tests. runtime_verify xtask: 10 canaries all in-memory. **T7–T12 wave complete.**
+- **CODE APPROVE. PUBLICATION APPROVE.** Wave 3 starts: T13 (scoped seed intake + bounded recursive discovery) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
@@ -77,7 +77,7 @@ Final release reviews         [....]                    0 / 4
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
 - Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
 - Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
-- **Next action:** T11 connectors + first-party plugin execution boundary. T10 accepted (`007170c`): forge-runtime (LocalBus, EventBus, RedisBus, TaskCoordinator, bus_verify 8+2 canaries), cargo check+clippy clean. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+- **Next action:** T13 scoped seed intake + bounded recursive discovery (Wave 3 start). T12 accepted (`93aa8d9`): WorkflowEngine, WorkflowDefinition/Stage, WorkflowScheduler, runtime_verify 10 canaries, fmt+clippy clean. Wave 2 (T7–T12) is now complete. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
