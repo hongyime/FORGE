@@ -1,4 +1,4 @@
-//! `forge-discovery` — Seed intake, feed import, discovery, enrichment, artifacts, validation (T13–T16).
+//! `forge-discovery` — Seed intake, feed import, discovery, enrichment, artifacts, validation, scoring (T13–T17).
 //!
 //! # Modules
 //!
@@ -17,6 +17,7 @@ pub mod resume;
 pub mod seed;
 pub mod snapshot;
 pub mod validation;
+pub mod scoring;
 
 pub use artifacts::{
     ArtifactMetadata, ArtifactType, Confidence, MAX_READ_BYTES, MAX_ZIP_ENTRIES, check_zip_bomb,
@@ -34,4 +35,10 @@ pub use snapshot::{SnapshotResult, StableSnapshotGuard};
 pub use validation::{
     JobStatus, ProofEntry, ValidationError, ValidationJob, ValidationMode, ValidationState,
     latest_proof_is_reportable,
+};
+
+pub use scoring::{
+    CvssVersion, ExploitMaturity, FindingCategory, RuleEngine, ScoredFinding, ScoringContext,
+    ScoringRule, SeverityLevel, DEFAULT_ENGINE, category_default_severity, cvss_to_severity,
+    score_finding,
 };
