@@ -58,6 +58,7 @@ mod scan;
 mod sqlite_verify;
 mod syntax;
 mod verify;
+mod validation_verify;
 mod verify_checks;
 
 use clap::{Parser, Subcommand};
@@ -147,6 +148,7 @@ fn run() -> model::Result<i32> {
             "discovery" => return discovery_verify::run(&root, &evidence),
             "enrichment" => return enrichment_verify::run(&root, &evidence),
             "artifacts" => return artifacts_verify::run(&root, &evidence),
+            "validation" => return validation_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;
