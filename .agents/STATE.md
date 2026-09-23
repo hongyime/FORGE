@@ -1,14 +1,14 @@
-# Current Task: Rust rewrite — T15 accepted; T16 validation next
+# Current Task: Rust rewrite — T16 accepted; T17 scoring next
 
-**Status:** T15 accepted (`c154d8b` — artifacts.rs: 9 ArtifactTypes, ZIP-bomb guard, classify_artifact, 11 unit tests, artifacts_verify 17 canaries; cargo clippy ✅) | Date: 2026-09-22
+**Status:** T16 accepted (`eec38d5` — validation.rs: ValidationState/Mode/Job/ProofEntry, latest_proof_is_reportable, 11 unit tests, validation_verify 28 canaries; cargo clippy ✅) | Date: 2026-09-23
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [#############.......]  13 / 36 (T3–T15)
-Milestones with delivered work [~~~#############....]  16 / 36 (T1/T2 partial; T3–T15 accepted; T16 queued)
+Major milestones fully closed  [##############......]  14 / 36 (T3–T16)
+Milestones with delivered work [~~~##############...]  17 / 36 (T1/T2 partial; T3–T16 accepted; T17 queued)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
 Latest domain test run         [####################] 214 / 214 passed (workspace last: ~440: domain 214 + xtask 79 units + storage 39 + integration suites; red_e slow test pre-existing)
 Final release reviews         [....]                    0 / 4
@@ -18,15 +18,15 @@ Final release reviews         [....]                    0 / 4
 | --- | --- | --- |
 | Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; **T3 accepted; T4 accepted; T5 accepted; T6 accepted** (`109c779` inline review); wave complete |
 | Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); **T8 accepted** (`bf78a01`); **T9 accepted** (`b646274`); **T10 accepted** (`007170c`); **T11 accepted** (`79f19d9`); **T12 accepted** (`93aa8d9`) — wave complete |
-| Discovery, enrichment, parsing, validation, scoring | T13-T18 | **T13 accepted** (`d82f00e`); **T14 accepted** (`90c7620`); **T15 accepted** (`c154d8b`); T16 queued |
+| Discovery, enrichment, parsing, validation, scoring | T13-T18 | **T13 accepted** (`d82f00e`); **T14 accepted** (`90c7620`); **T15 accepted** (`c154d8b`); **T16 accepted** (`eec38d5`); T17 queued |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T15 accepted (`c154d8b`)
-- `forge-discovery/src/artifacts.rs` (new, 338 lines): `ArtifactType` (9 types: Msi/Dmg/Rpm/JavaArchive/Pdf/OleOffice/Outlook/Keepass/Pkcs12/Unknown), `Confidence`, `ArtifactMetadata` (type/confidence/fields/warnings), `classify_artifact` (magic-byte + extension: PDF=%PDF-, ZIP=PK0304, CFBF=D0CF11E0, RPM=EDABEEDB, PST=21424E4E, KDBX=03D9A29A), `read_head` (1 MiB cap), `is_dmg_koly`, `check_zip_bomb` (10k entry + 50 MiB uncompressed guard). 11 unit tests.
-- `artifacts_verify.rs` xtask: 17 canaries (magic-byte classification ×7, extension fallback ×2, unknown, constants, metadata builder). All in-memory. **cargo fmt ✅ cargo clippy -D warnings ✅.**
-- **CODE APPROVE. PUBLICATION APPROVE.** T16 (non-destructive validation + latest-proof reportability) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+### Current verified increment — T16 accepted (`eec38d5`)
+- `forge-discovery/src/validation.rs` (new, 389 lines): `ValidationState` (7 variants: Active/Revoked/Unconfirmed/Dead/Error/Unsupported/Superseded) with `is_reportable()` + `is_terminal()`. `ValidationMode` (DryRun/Lab/ReadOnlyLive) with `is_live()`. `ProofEntry` (finding_id/method/mode/state/evidence_summary/recorded_at/is_latest). `ValidationJob` with 9-gate constructor (live mode requires approved=true + non-empty roe_id + scope_manifest_ref). `latest_proof_is_reportable` (latest-by-timestamp wins; no proof = not reportable). 11 unit tests.
+- `validation_verify.rs` xtask: 28 canaries (state variants ×7, terminal ×5, str ×3, mode ×6, proof fields, reportability ×5, job gates ×7). All in-memory. **cargo clippy -p forge-discovery -D warnings ✅.**
+- **CODE APPROVE. PUBLICATION APPROVE.** T17 (deterministic scoring + standards enrichment) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
@@ -77,7 +77,7 @@ Final release reviews         [....]                    0 / 4
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
 - Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
 - Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
-- **Next action:** T16 non-destructive validation + latest-proof reportability. T15 accepted (`c154d8b`): artifacts.rs (9 types, classify_artifact, ZIP-bomb guard), artifacts_verify 17 canaries, clippy clean. Wave 3 T13–T15 accepted, T16–T18 queued. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+- **Next action:** T17 deterministic scoring + standards enrichment. T16 accepted (`eec38d5`): validation.rs (ValidationState/Mode/Job/ProofEntry, latest_proof_is_reportable), validation_verify 28 canaries, clippy clean. Wave 3 T13–T16 accepted, T17–T18 queued. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
