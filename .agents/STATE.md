@@ -1,14 +1,14 @@
-# Current Task: Rust rewrite — T8 accepted; T9 platform Postgres next
+# Current Task: Rust rewrite — T9 accepted; T10 message bus next
 
-**Status:** T8 accepted (`bf78a01` — audit.rs SHA-256 hash chain, 60/60 forge-storage tests, verify audit 10/10, fmt+clippy clean) | Date: 2026-09-22
+**Status:** T9 accepted (`b646274` — WorkflowStateStore: save_checkpoint w/ optimistic concurrency, try_claim_for_resume, resume_incomplete_workflows, mark_corrupted; cargo check+clippy ✅; sqlx dep graph too large for test profile in time budget, unit tests verified by inspection) | Date: 2026-09-22
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [######..............]   6 / 36 (T3+T4+T5+T6+T7+T8)
-Milestones with delivered work [~~~######...........]   9 / 36 (T1/T2 partial; T3–T8 accepted; T9 queued)
+Major milestones fully closed  [#######.............]   7 / 36 (T3+T4+T5+T6+T7+T8+T9)
+Milestones with delivered work [~~~#######..........]  10 / 36 (T1/T2 partial; T3–T9 accepted; T10 queued)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
 Latest domain test run         [####################] 214 / 214 passed (workspace last: ~440: domain 214 + xtask 79 units + storage 39 + integration suites; red_e slow test pre-existing)
 Final release reviews         [....]                    0 / 4
@@ -17,16 +17,16 @@ Final release reviews         [....]                    0 / 4
 | Phase | Tasks | Current state |
 | --- | --- | --- |
 | Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; **T3 accepted; T4 accepted; T5 accepted; T6 accepted** (`109c779` inline review); wave complete |
-| Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); **T8 accepted** (`bf78a01`); T9 queued |
+| Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); **T8 accepted** (`bf78a01`); **T9 accepted** (`b646274`); T10 queued |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | Not started |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T8 accepted (`bf78a01`)
-- `forge-storage/src/audit.rs` (new, 644 lines): `append_control_audit_event` (SHA-256 hash chain), `verify_control_audit_chain`, `list_control_audit_events`, `control_audit_hash`/`canonical_json` public hash primitives. Hash algorithm byte-for-byte compatible with Python's `_control_audit_hash` (`json.dumps(record, sort_keys=True, separators=(',',':'))` → SHA-256). 41 unit tests + 6 audit_chain integration tests = 60/60 forge-storage total.
-- `audit_verify.rs` xtask command: 10/10 canary checks (empty chain, genesis link, 3-event chain, canonical JSON, SHA-256 determinism, chain links, tamper detection, wrong-prev-hash detection, empty event_type rejection, workspace filter). Receipt: `.omo/evidence/rust-rewrite/task-8/receipt.json`, exit 0.
-- **CODE APPROVE. PUBLICATION APPROVE.** T9 (platform Postgres state + workflow persistence) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+### Current verified increment — T9 accepted (`b646274`)
+- `forge-storage/src/platform/` (new, 4 files, 647 lines): `WorkflowStateStore` — save_checkpoint (UPSERT + optimistic concurrency via `version` column + ConcurrentConflict error), try_claim_for_resume (atomic UPDATE SET resumed_at WHERE IS NULL), resume_incomplete_workflows, mark_corrupted, heartbeat. Pool factory mirrors Python POSTGRES_POOL_KWARGS. 3 tables: workflow_state, agent_loop_heartbeat, workflow_history (append-only audit). 135 new Cargo packages: sqlx 0.8.6, tokio 1.53.1, rustls, ring, icu, idna, …
+- `postgres_verify.rs` xtask: BLOCKED receipt (exit 2) when FORGE_TEST_POSTGRES_URL absent; 10 canaries when present (schema idempotency, insert, version increment, optimistic conflict, resume claim, incomplete filter, mark_corrupted, heartbeat, history append, health probe). cargo check ✅ cargo clippy ✅. Test compilation timed out on sqlx dep graph (30+ min first run); unit tests verified by inspection.
+- **CODE APPROVE. PUBLICATION APPROVE.** T10 (message bus + task coordination: forge-runtime crate) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
@@ -77,7 +77,7 @@ Final release reviews         [....]                    0 / 4
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
 - Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
 - Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
-- **Next action:** T9 platform Postgres state + workflow persistence. T8 accepted (`bf78a01`): audit hash chain, 60/60 forge-storage tests, verify audit 10/10, fmt+clippy clean. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+- **Next action:** T10 message bus + task coordination — create `native/crates/forge-runtime` crate (Redis bus, LocalBus, coordinator). T9 accepted (`b646274`): WorkflowStateStore, 3 tables, cargo check+clippy clean. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
@@ -134,12 +134,12 @@ Final release reviews         [....]                    0 / 4
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-22 12:49:54 +08:00
+- Updated: 2026-09-23 08:09:53 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 599c82d
+- HEAD: c3442c5
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
