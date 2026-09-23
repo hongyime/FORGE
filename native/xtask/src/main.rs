@@ -37,6 +37,7 @@ mod domain_inputs;
 mod domain_revision;
 mod domain_verify;
 mod domain_wire;
+mod enrichment_verify;
 mod exclusions;
 mod fixture;
 mod frontend;
@@ -143,6 +144,7 @@ fn run() -> model::Result<i32> {
             "plugins" => return plugins_verify::run(&root, &evidence),
             "runtime" => return runtime_verify::run(&root, &evidence),
             "discovery" => return discovery_verify::run(&root, &evidence),
+            "enrichment" => return enrichment_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;
