@@ -49,6 +49,7 @@ mod policy_verify;
 mod postgres_verify;
 mod python;
 mod receipt;
+mod runtime_verify;
 mod rust_declarations;
 mod scan;
 mod sqlite_verify;
@@ -139,6 +140,7 @@ fn run() -> model::Result<i32> {
             "sqlite" => return sqlite_verify::run(&root, &evidence),
             "bus" => return bus_verify::run(&root, &evidence),
             "plugins" => return plugins_verify::run(&root, &evidence),
+            "runtime" => return runtime_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;
