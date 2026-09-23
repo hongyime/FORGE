@@ -63,6 +63,7 @@ mod scoring_verify;
 mod pipeline_verify;
 mod graphs_verify;
 mod reports_verify;
+mod monitoring_verify;
 mod verify_checks;
 
 use clap::{Parser, Subcommand};
@@ -157,6 +158,7 @@ fn run() -> model::Result<i32> {
             "pipeline" => return pipeline_verify::run(&root, &evidence),
             "graphs" => return graphs_verify::run(&root, &evidence),
             "reports" => return reports_verify::run(&root, &evidence),
+            "monitoring" => return monitoring_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;
