@@ -1,4 +1,5 @@
 mod aliases;
+mod artifacts_verify;
 mod audit_verify;
 mod baseline;
 mod baseline_discovery;
@@ -145,6 +146,7 @@ fn run() -> model::Result<i32> {
             "runtime" => return runtime_verify::run(&root, &evidence),
             "discovery" => return discovery_verify::run(&root, &evidence),
             "enrichment" => return enrichment_verify::run(&root, &evidence),
+            "artifacts" => return artifacts_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;
