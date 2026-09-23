@@ -1,14 +1,14 @@
-# Current Task: Rust rewrite — T18 accepted; Wave 3 complete; T19 graphs next
+# Current Task: Rust rewrite — T19 accepted; T20 reports next
 
-**Status:** T18 accepted (`257395f` — pipeline.rs: 6-phase pipeline, run_pipeline_fixture, PipelineState/Entry/Result, 12 unit tests, pipeline_verify 47 canaries; cargo clippy ✅) | Wave 3 COMPLETE | Date: 2026-09-23
+**Status:** T19 accepted (`0b668f0` — forge-reporting: GraphEntity/Relationship/AttackGraph, 6 export formats, 15 unit tests, graphs_verify 58 canaries; cargo clippy ✅) | Date: 2026-09-23
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [################....]  16 / 36 (T3–T18)
-Milestones with delivered work [~~~################.]  19 / 36 (T1/T2 partial; T3–T18 accepted; T19 queued)
+Major milestones fully closed  [#################...]  17 / 36 (T3–T19)
+Milestones with delivered work [~~~#################]  20 / 36 (T1/T2 partial; T3–T19 accepted; T20 queued)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
 Latest domain test run         [####################] 214 / 214 passed (workspace last: ~440: domain 214 + xtask 79 units + storage 39 + integration suites; red_e slow test pre-existing)
 Final release reviews         [....]                    0 / 4
@@ -19,14 +19,14 @@ Final release reviews         [....]                    0 / 4
 | Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; **T3 accepted; T4 accepted; T5 accepted; T6 accepted** (`109c779` inline review); wave complete |
 | Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); **T8 accepted** (`bf78a01`); **T9 accepted** (`b646274`); **T10 accepted** (`007170c`); **T11 accepted** (`79f19d9`); **T12 accepted** (`93aa8d9`) — wave complete |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | **T13–T18 all accepted** (`d82f00e`…`257395f`) — **Wave 3 COMPLETE** |
-| Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
+| Graphs, reports, monitoring, remediation, automation | T19-T24 | **T19 accepted** (`0b668f0`); T20 queued |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T18 accepted (`257395f`) — Wave 3 COMPLETE
-- `forge-discovery/src/pipeline.rs` (new, 485 lines): `PipelinePhase` (SeedIntake/Enrichment/ArtifactAnalysis/Validation/Scoring/Output, ordered). `StageResult`, `PipelineEntry` (seed/seed_type/normalized_seed/normalized_identity/artifact_meta/proofs/is_reportable/scored_finding). `PipelineState` + `PipelineResult` + `SeverityCounts`. `run_pipeline_fixture`: 6-phase deterministic runner (Phase 0 classify_seed, Phase 1 normalize_email, Phase 2 classify_artifact, Phase 3 latest_proof_is_reportable gate, Phase 4 score_finding, Phase 5 tally). Fixed API mismatches vs T13–T17 signatures. 12 unit tests.
-- `pipeline_verify.rs` xtask: 47 canaries (phase ordering/str ×7, entry construction, empty pipeline, 6-stage order, seed classification, email normalization, artifact classification, validation gate, scoring, severity counts, engagement ID). All in-memory. **cargo clippy -p forge-discovery -D warnings ✅. Wave 3 (T13–T18) COMPLETE.**
-- **CODE APPROVE. PUBLICATION APPROVE.** T19 (attack graph builder) is next. Wave 4 (T19–T24): Graphs, reports, monitoring, remediation, automation. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+### Current verified increment — T19 accepted (`0b668f0`)
+- `forge-reporting/src/graph.rs` (new crate, 627 lines): `EntityKind` (19 variants), `RelationshipKind` (15 variants), `GraphEntity` (entity_key/kind/display_name/properties/is_tier_zero/confidence), `GraphRelationship` (from_key/to_key/kind), `OwnershipClaim`, `AttackGraph` (add_entity with dedup+tier_zero-OR-merge, tier_zero_keys, tier_zero_candidates choke-point scoring). Export formats: JSON (secrets redacted), Mermaid (⚠ tier_zero), DOT (red tier_zero), GraphML, CSV, Cypher CREATE. 15 unit tests.
+- `graphs_verify.rs` xtask: 58 canaries (entity key/properties/tier_zero, rel str ×5, graph add/dedup, tz keys, choke-point, ownership, JSON/Mermaid/DOT/GraphML/CSV/Cypher exclusion of secrets + format checks). All in-memory. **cargo clippy -p forge-reporting -D warnings ✅.**
+- **CODE APPROVE. PUBLICATION APPROVE.** T20 (reports, templates, raw fallback) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
@@ -77,7 +77,7 @@ Final release reviews         [....]                    0 / 4
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
 - Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
 - Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
-- **Next action:** T19 attack graph builder. Wave 3 COMPLETE (T13–T18 accepted). T18 accepted (`257395f`): pipeline.rs (6-phase pipeline, run_pipeline_fixture, 12 tests), pipeline_verify 47 canaries, clippy clean. Wave 4 (T19–T24) starts. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+- **Next action:** T20 reports, templates, and narrative providers. T19 accepted (`0b668f0`): forge-reporting crate (GraphEntity/Relationship/AttackGraph, 6 export formats), graphs_verify 58 canaries, clippy clean. Wave 4 T19 accepted, T20–T24 queued. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
