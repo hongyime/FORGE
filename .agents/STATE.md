@@ -1,14 +1,14 @@
-# Current Task: Rust rewrite — T13 accepted; T14 enrichment next
+# Current Task: Rust rewrite — T14 accepted; T15 artifact parsing next
 
-**Status:** T13 accepted (`d82f00e` — forge-discovery: SeedType, classify_seed, TargetFeedImporter, ResumeCandidates, StableSnapshotGuard; 32 unit tests; discovery_verify 12 canaries; cargo clippy ✅) | Date: 2026-09-22
+**Status:** T14 accepted (`90c7620` — enrichment.rs: 6 identity normalizers, DnsRecord, SaaSSignalFamily, RateLimitConfig, 20 unit tests, enrichment_verify 12 canaries; cargo clippy ✅) | Date: 2026-09-22
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [###########.........]  11 / 36 (T3–T13)
-Milestones with delivered work [~~~###########......]  14 / 36 (T1/T2 partial; T3–T13 accepted; T14 queued)
+Major milestones fully closed  [############........]  12 / 36 (T3–T14)
+Milestones with delivered work [~~~############.....]  15 / 36 (T1/T2 partial; T3–T14 accepted; T15 queued)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
 Latest domain test run         [####################] 214 / 214 passed (workspace last: ~440: domain 214 + xtask 79 units + storage 39 + integration suites; red_e slow test pre-existing)
 Final release reviews         [....]                    0 / 4
@@ -18,15 +18,15 @@ Final release reviews         [....]                    0 / 4
 | --- | --- | --- |
 | Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; **T3 accepted; T4 accepted; T5 accepted; T6 accepted** (`109c779` inline review); wave complete |
 | Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); **T8 accepted** (`bf78a01`); **T9 accepted** (`b646274`); **T10 accepted** (`007170c`); **T11 accepted** (`79f19d9`); **T12 accepted** (`93aa8d9`) — wave complete |
-| Discovery, enrichment, parsing, validation, scoring | T13-T18 | **T13 accepted** (`d82f00e`); T14 queued |
+| Discovery, enrichment, parsing, validation, scoring | T13-T18 | **T13 accepted** (`d82f00e`); **T14 accepted** (`90c7620`); T15 queued |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | Not started |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T13 accepted (`d82f00e`)
-- `forge-discovery` crate (new, 4 src files, ~1 004 lines): `SeedType` enum (12 canonical types + Other), `classify_seed` (heuristic auto-detection: IPv4/6 via std::net, email/URL/phone/username/cloud_ref patterns), `resolve_alias` (9 aliases), `normalize_seed`. `TargetFeedImporter` (target-feed.v1 JSON, MAX_FEED_BYTES=64 MiB, MAX_FEED_ITEMS=100k). `ResumeCandidates` (watchdog_timeout, pending_recursive_work, stale_run_recovery, abandoned). `StableSnapshotGuard` (max_iterations, budget exhaustion). 32 unit tests total.
-- `discovery_verify.rs` xtask: 12 canaries (seed classification, normalisation, feed import, schema rejection, resume classification, snapshot stability+budget). All in-memory, no network/Postgres/Redis. **cargo fmt ✅ cargo clippy -D warnings ✅.**
-- **CODE APPROVE. PUBLICATION APPROVE.** T14 (passive identity, DNS, history, provider enrichment) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+### Current verified increment — T14 accepted (`90c7620`)
+- `forge-discovery/src/enrichment.rs` (new, 492 lines): `NormalizedIdentity` + `IdentityKind` (6 kinds); `normalize_email` (Gmail dot/alias collapse, disposable-domain detection); `normalize_username` (@ strip, lowercase); `normalize_phone` (E.164); `normalize_company` (legal-suffix stripping: Inc/Ltd/Corp/LLC/GmbH/…); `normalize_social_url` (http→https, trailing-slash). `DnsRecord` enum (A/AAAA/MX/TXT/NS/CNAME). `SaaSSignalFamily` enum. `RateLimitConfig` (request_delay, fallback_backoff, max_retry_after, max_retries, sleep_secs). 20 unit tests.
+- `enrichment_verify.rs` xtask: 12 canaries (email dot/alias/disposable, username, phone, company suffix ×2, social URL ×2, DNS record, rate-limit cap). All in-memory. **cargo fmt ✅ cargo clippy -D warnings ✅.**
+- **CODE APPROVE. PUBLICATION APPROVE.** T15 (static artifact decoding, parsing, queue processing) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
@@ -77,7 +77,7 @@ Final release reviews         [....]                    0 / 4
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
 - Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
 - Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
-- **Next action:** T14 passive identity + DNS + history + provider enrichment. T13 accepted (`d82f00e`): forge-discovery (SeedType, feed importer, resume candidates, stable snapshot), discovery_verify 12 canaries, clippy clean. Wave 3 (T13–T18) in progress. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+- **Next action:** T15 static artifact decoding + parsing + queue. T14 accepted (`90c7620`): enrichment.rs (6 normalizers, DnsRecord, RateLimitConfig), enrichment_verify 12 canaries, clippy clean. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
