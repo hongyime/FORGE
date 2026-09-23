@@ -44,6 +44,7 @@ mod model;
 mod paths;
 mod persist;
 mod policy_verify;
+mod postgres_verify;
 mod python;
 mod receipt;
 mod rust_declarations;
@@ -132,6 +133,7 @@ fn run() -> model::Result<i32> {
             "policy" => return policy_verify::run(&root, &evidence),
             "crypto-adapters" => return crypto_adapters_verify::run(&root, &evidence),
             "audit" => return audit_verify::run(&root, &evidence),
+            "postgres" => return postgres_verify::run(&root, &evidence),
             "sqlite" => return sqlite_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },

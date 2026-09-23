@@ -8,6 +8,9 @@ rust-version.workspace = true
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde_json = "1"
 sha2 = "0.10"
+# T9: Postgres workflow persistence (runtime query checking only — no compile-time DB required)
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-rustls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [lints]
 workspace = true
