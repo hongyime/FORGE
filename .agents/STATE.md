@@ -1,14 +1,14 @@
-# Current Task: Rust rewrite — T23 accepted; T24 service parity next
+# Current Task: Rust rewrite — T24 accepted; Wave 4 COMPLETE; T25 CLI next
 
-**Status:** T23 accepted (`64e4d4e` — operations.rs: RetentionRun/LegalHold/WorkspaceMemberRole/AuditEvent/AutostartGate, 11 unit tests, operations_verify 40 canaries; cargo clippy ✅) | Date: 2026-09-23
+**Status:** T24 accepted (`9fafee9` — parity.rs: CapabilityKind/ParityReceipt/LedgerCheck/ParitySummary/wave4_receipts, 9 unit tests, parity_verify 48 canaries; cargo clippy ✅) | Wave 4 COMPLETE | Date: 2026-09-23
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [#####################]  21 / 36 (T3–T23)
-Milestones with delivered work [~~~#####################]  24 / 36 (T1/T2 partial; T3–T23 accepted; T24 queued)
+Major milestones fully closed  [######################]  22 / 36 (T3–T24)
+Milestones with delivered work [~~~######################]  25 / 36 (T1/T2 partial; T3–T24 accepted; T25 queued)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
 Latest domain test run         [####################] 214 / 214 passed (workspace last: ~440: domain 214 + xtask 79 units + storage 39 + integration suites; red_e slow test pre-existing)
 Final release reviews         [....]                    0 / 4
@@ -19,14 +19,14 @@ Final release reviews         [....]                    0 / 4
 | Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; **T3 accepted; T4 accepted; T5 accepted; T6 accepted** (`109c779` inline review); wave complete |
 | Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); **T8 accepted** (`bf78a01`); **T9 accepted** (`b646274`); **T10 accepted** (`007170c`); **T11 accepted** (`79f19d9`); **T12 accepted** (`93aa8d9`) — wave complete |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | **T13–T18 all accepted** (`d82f00e`…`257395f`) — **Wave 3 COMPLETE** |
-| Graphs, reports, monitoring, remediation, automation | T19-T24 | **T19–T22 accepted**; **T23 accepted** (`64e4d4e`); T24 queued |
+| Graphs, reports, monitoring, remediation, automation | T19-T24 | **T19–T23 accepted**; **T24 accepted** (`9fafee9`) — **Wave 4 COMPLETE** |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T23 accepted (`64e4d4e`)
-- `forge-operations/src/operations.rs` (new, 302 lines): `RetentionStatus` (Preview/Applied/LegalHoldBlocked). `LegalHold` (blocks destructive retention). `RetentionRun` (`preview/apply/blocked` factory methods). `WorkspaceMemberRole` (Viewer/Operator/Owner, `can_write()`). `WorkspaceMember`. `AuditEvent` + `append_audit_event` (FNV-1a hash chain, deterministic, redacted payload). `AutostartGate` (`all_pass()` requires all 6 gates, `blockers()` lists failing gates). 11 unit tests.
-- `operations_verify.rs` xtask: 40 canaries (retention preview/apply/blocked, role str/write, audit chain determinism/diff/chain2, gate all-pass/no-roe/disabled/apply-off/mem/lock/multi-blockers). All in-memory. **cargo clippy -p forge-operations -D warnings ✅.**
-- **CODE APPROVE. PUBLICATION APPROVE.** T24 (service parity receipts, ledger checks) is next. Wave 4 T19–T23 accepted, T24 queued. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+### Current verified increment — T24 accepted (`9fafee9`) — Wave 4 COMPLETE
+- `forge-operations/src/parity.rs` (new, 333 lines): `CapabilityKind` (13 variants, `as_str()`, `task_range()`). `ParityReceipt` (capability/commit_sha/xtask_case/summary/verified_at). `LedgerCheck` (wave4/full builders, `check()`, `all_receipted()`, `required_count()`). `ParitySummary` (total_required/total_receipted/missing/is_complete). `service_parity_summary` deterministic. `wave4_receipts()` canonical 11-receipt set (T3–T23). 9 unit tests proving Wave 4 parity complete.
+- `parity_verify.rs` xtask: 48 canaries (capability str ×13, task_range ×3, receipt fields, wave4 receipts ×7, ledger wave4 all-pass, missing detected, full-check requires CLI+pkg, summary complete/partial/deterministic). All in-memory. **cargo clippy -p forge-operations -D warnings ✅. Wave 4 (T19–T24) COMPLETE.**
+- **CODE APPROVE. PUBLICATION APPROVE.** T25 (complete public/hidden CLI, native TUI) is next. Wave 5 (T25–T30): CLI, APIs, Rust UI. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
@@ -77,7 +77,7 @@ Final release reviews         [....]                    0 / 4
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
 - Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
 - Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
-- **Next action:** T24 service parity receipts and ledger checks. T23 accepted (`64e4d4e`): operations.rs (RetentionRun, AuditEvent chain, AutostartGate), operations_verify 40 canaries, clippy clean. Wave 4 T19–T23 accepted, T24 queued. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+- **Next action:** T25 CLI port. Wave 4 COMPLETE (T19–T24 accepted). T24 accepted (`9fafee9`): parity.rs (CapabilityKind, LedgerCheck, wave4_receipts), parity_verify 48 canaries, clippy clean. Wave 5 (T25–T30) starts. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
