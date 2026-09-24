@@ -65,6 +65,7 @@ mod graphs_verify;
 mod reports_verify;
 mod monitoring_verify;
 mod remediation_verify;
+mod operations_verify;
 mod verify_checks;
 
 use clap::{Parser, Subcommand};
@@ -161,6 +162,7 @@ fn run() -> model::Result<i32> {
             "reports" => return reports_verify::run(&root, &evidence),
             "monitoring" => return monitoring_verify::run(&root, &evidence),
             "remediation" => return remediation_verify::run(&root, &evidence),
+            "operations" => return operations_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;

@@ -9,6 +9,7 @@
 
 pub mod monitoring;
 pub mod remediation;
+pub mod operations;
 
 pub use monitoring::{
     Alert, AlertSeverity, AlertStatus, ExposureMetric, MonitoringPolicy, MonitoringSnapshot,
@@ -18,4 +19,9 @@ pub use monitoring::{
 pub use remediation::{
     RemediationItem, RemediationStatus, RiskAcceptance, RiskAcceptanceState,
     TicketEvent, TicketEventStatus, TicketKind,
+};
+
+pub use operations::{
+    AuditEvent, AutostartGate, LegalHold, RetentionRun, RetentionStatus,
+    WorkspaceMember, WorkspaceMemberRole, append_audit_event,
 };
