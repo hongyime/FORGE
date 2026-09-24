@@ -8,8 +8,14 @@
 //! - `parity` — T24: `ParityReceipt`, `LedgerCheck`, service-parity verification.
 
 pub mod monitoring;
+pub mod remediation;
 
 pub use monitoring::{
     Alert, AlertSeverity, AlertStatus, ExposureMetric, MonitoringPolicy, MonitoringSnapshot,
     PolicyMode, PolicyStatus,
+};
+
+pub use remediation::{
+    RemediationItem, RemediationStatus, RiskAcceptance, RiskAcceptanceState,
+    TicketEvent, TicketEventStatus, TicketKind,
 };
