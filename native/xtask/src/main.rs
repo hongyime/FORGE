@@ -67,6 +67,7 @@ mod monitoring_verify;
 mod remediation_verify;
 mod operations_verify;
 mod parity_verify;
+mod cli_verify;
 mod verify_checks;
 
 use clap::{Parser, Subcommand};
@@ -165,6 +166,7 @@ fn run() -> model::Result<i32> {
             "remediation" => return remediation_verify::run(&root, &evidence),
             "operations" => return operations_verify::run(&root, &evidence),
             "service-parity" => return parity_verify::run(&root, &evidence),
+            "cli" => return cli_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;
