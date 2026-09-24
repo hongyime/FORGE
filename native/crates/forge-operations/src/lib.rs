@@ -10,6 +10,7 @@
 pub mod monitoring;
 pub mod remediation;
 pub mod operations;
+pub mod parity;
 
 pub use monitoring::{
     Alert, AlertSeverity, AlertStatus, ExposureMetric, MonitoringPolicy, MonitoringSnapshot,
@@ -24,4 +25,9 @@ pub use remediation::{
 pub use operations::{
     AuditEvent, AutostartGate, LegalHold, RetentionRun, RetentionStatus,
     WorkspaceMember, WorkspaceMemberRole, append_audit_event,
+};
+
+pub use parity::{
+    CapabilityKind, LedgerCheck, ParityReceipt, ParitySummary,
+    service_parity_summary, wave4_receipts,
 };
