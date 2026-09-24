@@ -1,14 +1,14 @@
-# Current Task: Rust rewrite — T20 accepted; T21 monitoring next
+# Current Task: Rust rewrite — T21 accepted; T22 remediation next
 
-**Status:** T20 accepted (`27f5a60` — reports.rs: ReportFamily/ProviderCascade/ReportArtifact/render_template_report/raw exports, 14 unit tests, reports_verify 55 canaries; cargo clippy ✅) | Date: 2026-09-23
+**Status:** T21 accepted (`fd1057e` — monitoring.rs: MonitoringPolicy/Alert/ExposureMetric/MonitoringSnapshot, 11 unit tests, monitoring_verify 47 canaries; cargo clippy ✅) | Date: 2026-09-23
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [##################..]  18 / 36 (T3–T20)
-Milestones with delivered work [~~~##################]  21 / 36 (T1/T2 partial; T3–T20 accepted; T21 queued)
+Major milestones fully closed  [###################.]  19 / 36 (T3–T21)
+Milestones with delivered work [~~~###################]  22 / 36 (T1/T2 partial; T3–T21 accepted; T22 queued)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
 Latest domain test run         [####################] 214 / 214 passed (workspace last: ~440: domain 214 + xtask 79 units + storage 39 + integration suites; red_e slow test pre-existing)
 Final release reviews         [....]                    0 / 4
@@ -19,14 +19,14 @@ Final release reviews         [....]                    0 / 4
 | Foundations, tests, domain, config, gates | T1-T6 | T1/T2 partial; **T3 accepted; T4 accepted; T5 accepted; T6 accepted** (`109c779` inline review); wave complete |
 | Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); **T8 accepted** (`bf78a01`); **T9 accepted** (`b646274`); **T10 accepted** (`007170c`); **T11 accepted** (`79f19d9`); **T12 accepted** (`93aa8d9`) — wave complete |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | **T13–T18 all accepted** (`d82f00e`…`257395f`) — **Wave 3 COMPLETE** |
-| Graphs, reports, monitoring, remediation, automation | T19-T24 | **T19 accepted** (`0b668f0`); **T20 accepted** (`27f5a60`); T21 queued |
+| Graphs, reports, monitoring, remediation, automation | T19-T24 | **T19 accepted** (`0b668f0`); **T20 accepted** (`27f5a60`); **T21 accepted** (`fd1057e`); T22 queued |
 | Native CLI, APIs and Rust UI | T25-T30 | Not started |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T20 accepted (`27f5a60`)
-- `forge-reporting/src/reports.rs` (new, 553 lines): `ReportFamily` (EngagementFull/ExecutiveSummary/TechnicalDetail/FindingDetail/RemediationPlan/DeltaSummary). `ProviderKind` (Template/LlamaCpp/OpenRouterFree/Claude/OpenAi) with `is_always_available()` + `requires_network()`. `ProviderCascade` (template_only/auto/full cascade builders, `has_template_fallback()`). `ReportContext` (counts+summaries only, no raw secrets). `render_template_report` (deterministic, never fails). `checksum_sha256_hex` (FNV-1a 64-char hex, deterministic). `raw_json_export` + `raw_csv_export` with checksums. 14 unit tests.
-- `reports_verify.rs` xtask: 55 canaries (family/provider str, cascade cascade builders ×3, 6-family render each ×6, determinism, empty ctx, content checks, checksum, raw exports). All in-memory. **cargo clippy -p forge-reporting -D warnings ✅.**
-- **CODE APPROVE. PUBLICATION APPROVE.** T21 (monitoring, alerts, exposure history) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+### Current verified increment — T21 accepted (`fd1057e`)
+- `forge-operations/src/monitoring.rs` (new crate, 390 lines): `PolicyMode` (SeedExposure/Connector/ActiveValidation/Manual). `PolicyStatus` (Enabled/Disabled/Idle/Overdue, `is_active()`). `MonitoringPolicy` (`new()`, `is_due(now)`). `AlertStatus` (Open/Acknowledged/Resolved/Suppressed). `AlertSeverity` (Critical/High/Medium/Low/Info). `Alert` (`new()`, `suppress(reason, now)`). `ExposureMetric` (`new()`, `observe(now)`, `close(now)` computing MTTR). `MonitoringSnapshot` (`diff(prev, curr)`, `is_stable()`, `diff_fingerprint()` for duplicate-alert prevention). 11 unit tests.
+- `monitoring_verify.rs` xtask: 47 canaries (mode/status str, policy creation/due/overdue, alert creation/suppress, exposure observe/close/MTTR, snapshot diff add/remove/stable/fingerprint). All in-memory. **cargo clippy -p forge-operations -D warnings ✅.**
+- **CODE APPROVE. PUBLICATION APPROVE.** T22 (remediation, ticket handoffs, retest lifecycle) is next. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
@@ -77,7 +77,7 @@ Final release reviews         [....]                    0 / 4
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
 - Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
 - Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
-- **Next action:** T21 monitoring, alerts, and exposure history. T20 accepted (`27f5a60`): reports.rs (ReportFamily, ProviderCascade, render_template_report, raw exports), reports_verify 55 canaries, clippy clean. Wave 4 T19–T20 accepted, T21–T24 queued. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+- **Next action:** T22 remediation, ticket handoffs, retest lifecycle. T21 accepted (`fd1057e`): monitoring.rs (MonitoringPolicy, Alert, ExposureMetric, MonitoringSnapshot, diff/fingerprint), monitoring_verify 47 canaries, clippy clean. Wave 4 T19–T21 accepted, T22–T24 queued. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
