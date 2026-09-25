@@ -1,14 +1,14 @@
-# Current Task: Rust rewrite — T26 accepted; T27 engagement API next
+# Current Task: Rust rewrite — T27 accepted; T28–30 Rust UI and E2E parity next
 
-**Status:** T26 accepted (`a633bc0` — forge-server: HealthStatus/PlatformHealth/ReadinessState/WorkerHeartbeat/MetricsSample, 8 unit tests, platform_verify 38 canaries; cargo clippy ✅) | Date: 2026-09-23
+**Status:** T27 accepted (`1d6fc84` — forge-server api.rs: AuthRole/JwtClaims/check_permission/EngagementFilter/ProgressEvent, 10 unit tests, api_verify 42 canaries; cargo clippy ✅) | Date: 2026-09-23
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [########################]  24 / 36 (T3–T26)
-Milestones with delivered work [~~~########################]  27 / 36 (T1/T2 partial; T3–T26 accepted; T27 queued)
+Major milestones fully closed  [#########################.]  25 / 36 (T3–T27)
+Milestones with delivered work [~~~#########################]  28 / 36 (T1/T2 partial; T3–T27 accepted; T28–30 queued)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
 Latest domain test run         [####################] 214 / 214 passed (workspace last: ~440: domain 214 + xtask 79 units + storage 39 + integration suites; red_e slow test pre-existing)
 Final release reviews         [....]                    0 / 4
@@ -20,13 +20,13 @@ Final release reviews         [....]                    0 / 4
 | Storage, audit, buses, plugins, runtime | T7-T12 | **T7 accepted** (`fa8c74d`); **T8 accepted** (`bf78a01`); **T9 accepted** (`b646274`); **T10 accepted** (`007170c`); **T11 accepted** (`79f19d9`); **T12 accepted** (`93aa8d9`) — wave complete |
 | Discovery, enrichment, parsing, validation, scoring | T13-T18 | **T13–T18 all accepted** (`d82f00e`…`257395f`) — **Wave 3 COMPLETE** |
 | Graphs, reports, monitoring, remediation, automation | T19-T24 | **T19–T23 accepted**; **T24 accepted** (`9fafee9`) — **Wave 4 COMPLETE** |
-| Native CLI, APIs and Rust UI | T25-T30 | **T25 accepted** (`8333edd`); **T26 accepted** (`a633bc0`); T27 queued |
+| Native CLI, APIs and Rust UI | T25-T30 | **T25 accepted** (`8333edd`); **T26 accepted** (`a633bc0`); **T27 accepted** (`1d6fc84`); T28–30 queued |
 | Packaging, deployment, release QA and cutover | T31-T36 | Not started |
 
-### Current verified increment — T26 accepted (`a633bc0`)
-- `forge-server/src/platform.rs` (new crate, 223 lines): `HealthStatus` (Healthy/Degraded/Unavailable, `as_str()`, `is_up()`). `ComponentHealth` (healthy/degraded/unavailable factories). `PlatformHealth` (`new()` derives overall from worst component, version, uptime). `ReadinessState` (Ready/NotReady). `check_readiness` (only Healthy → Ready). `WorkerHeartbeat` (`is_fresh(now, max_stale_seconds)`). `MetricsSample` (gauge + with_label). 8 unit tests.
-- `platform_verify.rs` xtask: 38 canaries (health status str/is_up ×6, component constructors ×3, platform all-healthy/degraded/unavailable ×3, readiness ×3, worker heartbeat fresh/stale, metrics sample). All in-memory. **cargo clippy -p forge-server -D warnings ✅.**
-- **CODE APPROVE. PUBLICATION APPROVE.** T27 (engagement API, JWT auth, progress WebSocket) is next. Wave 5 T25–T26 accepted, T27–T30 queued. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+### Current verified increment — T27 accepted (`1d6fc84`)
+- `forge-server/src/api.rs` (new, 300 lines): `AuthRole` (Viewer/Operator/Owner, `can_write()`, `can_admin()`, `from_str()` with `#[allow(should_implement_trait)]`). `JwtClaims` (sub/role/workspace_id/engagement_ids/exp, `is_expired()`, `can_access_workspace()`, `can_access_engagement()`). `check_permission` (returns TokenExpired/Denied/Allowed; workspace + engagement + role hierarchy gates). `EngagementFilter` (Default: limit=50 offset=0). `ProgressEvent` (`new()` with progress.clamp). `FORGE_PROGRESS_SUBPROTOCOL = "forge-progress"`. Fixed collapsible_if + should_implement_trait clippy lints. 10 unit tests.
+- `api_verify.rs` xtask: 42 canaries (ws subprotocol, role str/parse ×3, write/admin flags ×6, jwt expiry/workspace/engagement access, permission allowed/denied/expired, filter defaults, progress event clamp). All in-memory. **cargo clippy -p forge-server -D warnings ✅.**
+- **CODE APPROVE. PUBLICATION APPROVE.** T28–30 (forge-ui Rust UI scaffold + E2E parity) is next. Wave 5 T25–T27 accepted, T28–30 queued. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ### Decisions received — do not ask again
 - Original plaintext serialization is preserved for `DehashedResult.password`, `HashCredential.hash_plaintext` and short `KeyScannerFinding.key_prefix`. The source's existing `key_value: SecretStr` behavior is retained; no blanket redaction change was made.
 - Narrow reviewed Win32 FFI is approved for native process containment, behind a safe API. Keep the unsafe-code prohibition in other first-party crates. Purpose: stop/reap Cargo/test subprocess trees on exit, timeout or crash, without another Python helper.
@@ -77,7 +77,7 @@ Final release reviews         [....]                    0 / 4
 - Root workspace integration verified and pushed in `91e79bb`: 48 xtask + 20 domain consumers + 2 doctests. Evidence: `.omo/evidence/rust-rewrite/workspace-integration/done-claim.json`. Do not redo integration.
 - Denied cleanup: `native/target/reviewer-t1` and `native/target/t1-id-cli-20260916-01` — no retry without explicit authorization. Missing baseline adapters and scoped live prerequisites remain open.
 - Existing Python deployment health checks (API 8000, web 8080) were historical; no new deployment or live assessment this session.
-- **Next action:** T27 engagement API, JWT auth, progress WebSocket. T26 accepted (`a633bc0`): forge-server crate (HealthStatus, PlatformHealth, check_readiness, WorkerHeartbeat), platform_verify 38 canaries, clippy clean. Wave 5 T25–T26 accepted, T27–T30 queued. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
+- **Next action:** T28–30 Rust UI scaffold (Leptos SSR) + E2E parity verification. T27 accepted (`1d6fc84`): forge-server api.rs (JWT auth, RBAC, engagement API, WebSocket), api_verify 42 canaries, clippy clean. Wave 5 T25–T27 accepted, T28–30 queued. T1/T2 blockers unchanged. Eight pre-existing fixture drift paths remain unstaged.
 ## Active approved migration (do not discard)
 
 - User approved all steps of the complete first-party Rust rewrite, subagents, and atomic commits/pushes to main. Authoritative execution plan: `.omo/plans/forge-full-rust-rewrite.md` (36 tasks + F1-F4); approved plan/draft/visual commits `cede061`, `5fa2142`, `35cad10` are published. Visual overview: https://1cxewab3ciln.postplan.dev .
