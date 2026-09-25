@@ -174,7 +174,7 @@ jobs:
           USER_NAME: testuser
           USER_PASSWORD: testpass
       mock-smb:
-        image: dperson/samba:latest
+        image: dperson/samba:amd64  # :latest returns "manifest unknown" (broken multi-arch manifest); amd64 matches GitHub-hosted runners and resolves correctly
         ports:
           - "4445:445"
         options: >-
