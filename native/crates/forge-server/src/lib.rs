@@ -8,8 +8,14 @@
 //!   `WebSocketSubprotocol`.
 
 pub mod platform;
+pub mod api;
 
 pub use platform::{
     ComponentHealth, HealthStatus, MetricsSample, PlatformHealth, ReadinessState,
     WorkerHeartbeat, check_readiness,
+};
+
+pub use api::{
+    AuthRole, EngagementFilter, JwtClaims, PermissionResult, ProgressEvent,
+    check_permission, FORGE_PROGRESS_SUBPROTOCOL,
 };

@@ -69,6 +69,7 @@ mod operations_verify;
 mod parity_verify;
 mod cli_verify;
 mod platform_verify;
+mod api_verify;
 mod verify_checks;
 
 use clap::{Parser, Subcommand};
@@ -169,6 +170,7 @@ fn run() -> model::Result<i32> {
             "service-parity" => return parity_verify::run(&root, &evidence),
             "cli" => return cli_verify::run(&root, &evidence),
             "platform-api" => return platform_verify::run(&root, &evidence),
+            "engagement-api" => return api_verify::run(&root, &evidence),
             _ => Err(format!("unknown verify case: {case}")),
         },
     }?;
