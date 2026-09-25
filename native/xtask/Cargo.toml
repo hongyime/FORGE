@@ -22,6 +22,10 @@ forge-operations = { path = "../crates/forge-operations" }
 forge-cli = { path = "../crates/forge-cli" }
 # T26: platform_verify needs forge-server types
 forge-server = { path = "../crates/forge-server" }
+# T28–30: ui_verify needs forge-ui types
+forge-ui = { path = "../crates/forge-ui" }
+# T31–36: release_verify needs forge-release types
+forge-release = { path = "../crates/forge-release" }
 rusqlite = { version = "0.32", features = ["bundled"] }
 # T9: postgres_verify needs direct access to sqlx queries and tokio runtime
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-rustls"] }

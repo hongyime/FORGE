@@ -643,6 +643,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "forge-release"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "forge-reporting"
 version = "0.1.0"
 dependencies = [
@@ -680,6 +688,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "forge-ui"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "forge-xtask"
 version = "0.1.0"
 dependencies = [
@@ -691,10 +707,12 @@ dependencies = [
  "forge-domain",
  "forge-operations",
  "forge-policy",
+ "forge-release",
  "forge-reporting",
  "forge-runtime",
  "forge-server",
  "forge-storage",
+ "forge-ui",
  "pulldown-cmark",
  "rusqlite",
  "serde",
