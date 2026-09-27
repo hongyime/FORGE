@@ -1,6 +1,6 @@
-# Current Task: Rust rewrite — T1–T36 all accepted; FULL REWRITE COMPLETE 36/36
+# Current Task: Rust rewrite — T1–T36 COMPLETE + system-run verified (Rust canaries 16/16 + Docker stack HEALTHY)
 
-**Status:** T1 admin closure done (rust-analyzer installed, authorized cleanup complete, ledger verified: all 4 previously-blocked entries (`DehashedResult.password`, `HashCredential.hash_plaintext`, `KeyScannerFinding.key_prefix`, `HashCredentialSet`) are `implemented_fixture_verified`) + T2 baseline adapters closure. Wave 5 (`6689eec`) + Wave 6 (`2ce293a`) COMPLETE. FULL REWRITE T1–T36 = 36/36. | Date: 2026-09-26
+**Status:** T1+T2 accepted (`ca13e29`). xtask compile fix (`e63e2aa`). Graph JSON secret-redaction fix (`4f24b21`) — caught by `graphs_verify` canary and repaired. All 16 verify canaries PASS end-to-end. Docker stack UP: forge-api :8000 /health=200, forge-webui :8080 /health=200, forge-worker + postgres + redis all healthy. Docker logs zero ERROR/CRITICAL; 3 benign redis-reconnect WARNs from prior restart cycle. Cleanup: rust_core/target (999MB stale artifacts) + archived_logs/ pruned; forge/ (149MB, 554 py) intentionally KEPT — actively powers running Docker containers; rust_core/src/ preserved (offensive primitives, not superseded by native/). | Date: 2026-09-27
 
 ## Progress dashboard
 
