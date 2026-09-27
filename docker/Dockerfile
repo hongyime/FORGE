@@ -10,6 +10,8 @@ WORKDIR /app/frontend
 COPY forge/reporting/webui/package.json forge/reporting/webui/package-lock.json ./
 RUN npm ci
 FROM frontend-dependencies AS frontend-dev
+RUN chown -R node:node /app/frontend
+USER node
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 FROM frontend-dependencies AS frontend-builder
 COPY forge/reporting/webui/ ./
