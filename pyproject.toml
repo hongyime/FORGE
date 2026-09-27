@@ -76,9 +76,9 @@ artifacts = [
     "pyzbar>=0.1.9,<0.2",
 ]
 offensive = [
-    "impacket==0.12.0",
-    # asyncssh 2.23.1 patches GHSA-qr67-gv47-xwwh / CVE-2026-54590
-    # without pulling newer cryptography majors that conflict with Azure deps.
+    "impacket==0.13.1",
+    # Keep the patched SSH dependency; impacket 0.13.1 permits compatible
+    # modern pyOpenSSL/cryptography versions in the existing optional extra.
     "asyncssh==2.24.0",
     "pywinrm==0.4.3",
     "smbprotocol==1.14.0",
