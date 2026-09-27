@@ -68,7 +68,7 @@ impl NativePlugin for EchoPlugin {
     fn capability_manifest(&self) -> &CapabilityManifest {
         &self.manifest
     }
-    async fn run_task(&self, task: &TaskSpec) -> Result<TaskResult, PluginError> {
+    async fn run_task(&self, task: &TaskSpec) -> std::result::Result<TaskResult, PluginError> {
         Ok(TaskResult::success(
             &task.task_id,
             self.id(),
