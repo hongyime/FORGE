@@ -1,0 +1,52 @@
+#!/bin/sh
+# .githooks/pre-push
+#
+# FORGE pre-push hook: run the 16 xtask verify canaries in --Quick mode
+# before allowing a push. Blocks push if any canary fails.
+#
+# Skip with FORGE_SKIP_CANARIES=1 for emergency pushes.
+#
+# Wired via:
+#   git config --local core.hooksPath .githooks
+#
+# Cross-platform: uses `pwsh` if available (Windows/Linux/macOS with
+# PowerShell 7+ installed), otherwise skips gracefully with a warning.
+# Git hooks are extensionless, so this file is a POSIX sh wrapper that
+# delegates to the PowerShell canary runner — avoids pwsh -File's
+# `.ps1`-only restriction.
+
+if [ "${FORGE_SKIP_CANARIES:-0}" = "1" ]; then
+    echo "[pre-push] FORGE_SKIP_CANARIES=1 set, skipping canaries"
+    exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+SCRIPT="$REPO_ROOT/scripts/run-canaries.ps1"
+
+if [ ! -f "$SCRIPT" ]; then
+    echo "[pre-push] run-canaries.ps1 not found at $SCRIPT, skipping"
+    exit 0
+fi
+
+if ! command -v pwsh >/dev/null 2>&1; then
+    echo "[pre-push] WARNING: pwsh (PowerShell 7+) not found, skipping canaries"
+    echo "[pre-push] Install PowerShell 7+ or set FORGE_SKIP_CANARIES=1 to acknowledge"
+    exit 0
+fi
+
+echo "[pre-push] Running FORGE canaries (quick mode)..."
+echo "[pre-push] Set FORGE_SKIP_CANARIES=1 to skip (emergency only)"
+
+pwsh -NoProfile -File "$SCRIPT" -Quick
+RC=$?
+
+if [ $RC -ne 0 ]; then
+    echo ""
+    echo "[pre-push] BLOCKED: canary failure (exit $RC). Fix before push."
+    echo "[pre-push] Run 'pwsh scripts/run-canaries.ps1' for full output."
+    echo "[pre-push] Override with FORGE_SKIP_CANARIES=1 (documented emergency only)."
+    exit 1
+fi
+
+echo "[pre-push] Canaries green, push allowed"
+exit 0
