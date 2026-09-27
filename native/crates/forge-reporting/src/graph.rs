@@ -322,28 +322,63 @@ pub fn export_attack_graph(graph: &AttackGraph, format: GraphExportFormat) -> St
 }
 
 fn export_json(graph: &AttackGraph) -> String {
+    let mut secret_counter: usize = 0;
     let redacted: HashMap<String, serde_json::Value> = graph.entities.iter().map(|(k, e)| {
-        let display = if e.kind == EntityKind::Secret {
-            "[REDACTED]".to_owned()
+        let (out_key, out_entity_key, display) = if e.kind == EntityKind::Secret {
+            secret_counter += 1;
+            let redacted_key = format!("secret:[REDACTED-{}]", secret_counter);
+            (redacted_key.clone(), redacted_key, "[REDACTED]".to_owned())
         } else {
-            e.display_name.clone()
+            (k.clone(), e.entity_key.clone(), e.display_name.clone())
         };
         let v = serde_json::json!({
-            "entity_key": e.entity_key,
+            "entity_key": out_entity_key,
             "kind": e.kind.as_str(),
             "display_name": display,
             "is_tier_zero": e.is_tier_zero,
             "confidence": e.confidence,
             "properties": e.properties,
         });
-        (k.clone(), v)
+        (out_key, v)
+    }).collect();
+
+    // Redact relationships referencing secret entities: replace secret endpoints
+    // with their redacted keys so JSON export never contains raw secret values.
+    let secret_key_map: HashMap<String, String> = {
+        let mut m = HashMap::new();
+        let mut c: usize = 0;
+        for (k, e) in graph.entities.iter() {
+            if e.kind == EntityKind::Secret {
+                c += 1;
+                m.insert(k.clone(), format!("secret:[REDACTED-{}]", c));
+            }
+        }
+        m
+    };
+    let redacted_rels: Vec<serde_json::Value> = graph.relationships.iter().map(|r| {
+        let from = secret_key_map.get(&r.from_key).cloned().unwrap_or_else(|| r.from_key.clone());
+        let to   = secret_key_map.get(&r.to_key).cloned().unwrap_or_else(|| r.to_key.clone());
+        serde_json::json!({
+            "from_key": from,
+            "to_key": to,
+            "kind": r.kind.as_str(),
+        })
+    }).collect();
+    let redacted_claims: Vec<serde_json::Value> = graph.ownership_claims.iter().map(|c| {
+        let ekey = secret_key_map.get(&c.entity_key).cloned().unwrap_or_else(|| c.entity_key.clone());
+        serde_json::json!({
+            "entity_key": ekey,
+            "owner": c.owner,
+            "source": c.source,
+            "is_active": c.is_active,
+        })
     }).collect();
 
     let out = serde_json::json!({
         "engagement_id": graph.engagement_id,
         "entities": redacted,
-        "relationships": graph.relationships,
-        "ownership_claims": graph.ownership_claims,
+        "relationships": redacted_rels,
+        "ownership_claims": redacted_claims,
     });
     serde_json::to_string_pretty(&out).unwrap_or_default()
 }
