@@ -135,7 +135,7 @@ Final release reviews         [....]                    0 / 4
 ## Auto State
 
 - Updated: 2026-09-27 11:03:22 +08:00
-- Machine: PRAWN-E14
+- Machine: dev-host-2.example
 - Harness: claude
 - Event: stop
 - Branch: main
@@ -143,3 +143,17 @@ Final release reviews         [....]                    0 / 4
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
+
+Machine-specific values in this document use privacy placeholders.
+
+2026-09-27: Applied reviewed container development and remote publishing maintenance. Development source delivery and dependency isolation were checked locally; image builds, full runtime, and live CI publication remain unverified. Existing unrelated changes were preserved; no commit or push.
+
+2026-09-27: Privacy follow-up replaced personal home literals with escaped current-home patterns while preserving the approved directories and operation settings. Independent pure policy review passed 181 checks on Windows and 181 on Ubuntu; no operations were executed. Generated home patterns reject parent traversal; separate legacy export rules remain unchanged. Named engagement data-route identifiers remain as functional links.
+
+2026-09-27: Current upstream changes are preserved in the publication branch. Initial CI, bounded runtime validation and resource teardown are in progress under the user-approved maintenance release.
+
+2026-09-27: Corrected existing CI fixture configuration, two moved test selectors and the reporting-validator coverage module; mocked cloud unit tests no longer require an unavailable external tool image. Coverage thresholds and existing job settings remain unchanged. Twelve other stale selectors remain explicit blockers; no application or offensive capability changes were made. Remote verification is pending.
+
+2026-09-27: PR #30 maintenance verification reached the existing tests after CI fixture repairs. Run 36299279170 passed Bandit, Semgrep, TruffleHog, CodeQL and dependency review. CI is not green: Phase 2 integration has 10 passed/2 failed and 2.42% coverage against 70%; Phase 3 has 130 passed and 79.42% coverage before a missing selector; OPSEC has 23 passed and 9.86% against 75%; Phase 5 has 179 passed/5 failed and 52.78% against 75%; Phase 6 has 155 passed/1 deselected and 81.95% phase coverage, but its validator reaches 94.02% against 100%. Twelve stale selectors remain. Core verification was still running when recorded. Phase 5 fixture/guard mismatches and the missing SMB exception API exist in unchanged baseline source/tests; the SMB success assertion remains unresolved, despite matching synthetic fixture credentials and port. Thresholds and operational source were not changed. Remote image publication and operational runtime remain unverified.
+
+2026-09-27: Bound all twelve existing FORGE test jobs to 20 minutes, preserving every job name, selector, assertion and coverage threshold. The prior Core test step exceeded 30 minutes; its result remains unresolved and the obsolete run will be cancelled after this reviewed head is pushed. Deadline exhaustion is a failure, never a pass. No narrower equivalent selector was established, so the existing Core suite remains intact.

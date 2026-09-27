@@ -38,3 +38,18 @@ forge_primary_secret.key
 
 node_modules
 forge/reporting/webui/node_modules
+
+# Private/local state. tests remain available to the existing ci Docker target.
+**/.git
+**/.agents
+**/.env*
+**/node_modules
+**/.venv
+**/__pycache__
+**/target
+**/credentials.json
+**/*.pem
+**/*.key
+
+# Production UI assets are rebuilt in the dedicated frontend stage.
+forge/reporting/webui/dist/

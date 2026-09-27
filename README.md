@@ -1536,3 +1536,91 @@ explicitly configured scoped storage only. The free-first storage backend is a
 mounted absolute path or `file://` URI, uses exclusive-create writes, stores
 only portable manifest bundles plus a receipt, and never copies raw engagement
 DB rows.
+
+## Container development on Windows and Linux
+
+The current Python API/web/worker runtime has an explicit standalone development
+stack in compose.dev.yaml. It does not change the separate native Rust migration.
+Create .env.dev with development settings. These commands work in PowerShell and
+Linux shells:
+
+~~~sh
+# Initial build, or after pyproject.toml/dependency/system-package changes only:
+docker compose --env-file .env.dev -f compose.dev.yaml build
+# Daily development; mounted source reloads without an image build:
+docker compose --env-file .env.dev -f compose.dev.yaml up --no-build
+~~~
+
+API and web UI bind to loopback ports 8000 and 8080. The worker is opt-in with
+--profile workers. Development uses separate database/data/plugin/model volumes;
+the production guarded live-autostart cycle is not part of this dev stack.
+Polling handles SMB/Windows filesystem events. Dependencies live in /opt/forge/venv,
+outside source mounts. Production dependency/browser installation is cached before
+source copies; the final runtime excludes compiler/header packages. Tests remain
+in the build context because the existing ci target copies them, but production
+copies only application files.
+
+Production publishing runs in GitHub Actions on main, v* tags, or manual dispatch.
+Images use latest, short SHA tags and semver release tags. Explicit optional pull:
+
+~~~sh
+docker pull ghcr.io/hongyime/forge/runtime:latest
+~~~
+
+Local dev images use pull_policy: never and never pull GHCR automatically. CI uses
+Buildx/GHA cache and single-architecture linux/amd64 images without provenance/SBOM
+attestations. A manifest inspection guard stops cleanup for indexes, attestations,
+unknown formats, or registry errors. Retention keeps three tagged versions plus
+latest, and three untagged versions; old SHA/release tags can expire. Package
+Actions admin access is required for deletion.
+
+Image size is unknown until CI builds it. Chromium and native ML dependencies may
+exceed the approximate 200 MB target. Verify package visibility and current
+[GitHub billing limits](https://docs.github.com/en/billing/concepts/product-billing/github-packages);
+500 MB storage and 1 GB/month transfer for private packages are planning assumptions.
+GITHUB_TOKEN-authenticated downloads inside GitHub Actions do not consume package
+transfer quota.
+
+
+### Windows and Linux development shortcuts
+
+The explicit development Compose commands above also have native launchers:
+
+| Step | Windows PowerShell | Linux |
+| --- | --- | --- |
+| First build, or after dependency manifest changes | `pwsh -File ./dev.ps1 build` | `sh dev.sh build` |
+| Daily development | `pwsh -File ./dev.ps1` | `sh dev.sh` |
+| Stop the development stack | `pwsh -File ./dev.ps1 down` | `sh dev.sh down` |
+| View development logs | `pwsh -File ./dev.ps1 logs` | `sh dev.sh logs` |
+
+Create the documented local `.env.dev` first. Daily startup always passes
+`--no-build`; source edits use the development mounts and reloaders. Dependency
+changes require the explicit build command, then the documented dependency-volume
+refresh where applicable. Pulling a production image remains a separate explicit
+Compose command. Optional profiles are selected explicitly with `COMPOSE_PROFILES`
+or the full Compose command; they are not enabled by these launchers.
+
+The scripts resolve the checkout directory and preserve Docker's exit code.
+Invoke Linux scripts with `sh` on SMB mounts where executable bits are unavailable.
+Mount paths must exist on the Docker daemon's host; a Windows drive letter is not
+a Linux mount path. Existing production and Windows administration launchers remain
+separate from these development commands.
+
+React UI development uses http://localhost:5173, with Vite polling and API/WebSocket
+proxies to the authenticated web UI backend on port 8080. TypeScript/React edits
+hot-reload through the source mount; Node dependencies use an anonymous volume.
+After changing the UI package manifest/lockfile, rebuild the dev image explicitly
+and use `docker compose --env-file .env.dev -f compose.dev.yaml up --no-build --renew-anon-volumes`
+to refresh that dependency volume. Existing named database/data volumes are retained.
+The production image now compiles the React UI in a separate Node build stage and
+copies only its static output into the Python runtime.
+
+### SMB and remote Docker hosts
+
+Run Compose from a checkout path that the selected Docker daemon can access.
+A mapped Windows drive is not automatically available inside WSL or on a remote
+Linux Docker host; use that host's mounted share path or a local checkout when
+necessary. Polling handles missing file-change events after the bind mount works;
+it cannot make an inaccessible path visible. The maintenance checks validated
+Compose configuration and Windows/Linux reload fixtures, but did not launch this
+full stack or verify its actual SMB bind mount.

@@ -4,6 +4,19 @@
 # for container-parity tests. Build from the repository root:
 #   docker build -f docker/Dockerfile --target runtime -t forge-toolkit:local .
 
+# UI dependencies are cached independently of UI source.
+FROM node:22-slim AS frontend-dependencies
+WORKDIR /app/frontend
+COPY forge/reporting/webui/package.json forge/reporting/webui/package-lock.json ./
+RUN npm ci
+FROM frontend-dependencies AS frontend-dev
+RUN chown -R node:node /app/frontend
+USER node
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+FROM frontend-dependencies AS frontend-builder
+COPY forge/reporting/webui/ ./
+RUN npm run build
+
 FROM ubuntu:24.04 AS base
 
 LABEL org.opencontainers.image.title="FORGE Toolkit"
@@ -69,22 +82,61 @@ USER forge
 
 CMD ["python", "-m", "pytest", "tests/", "--vcr-record=none", "-v", "--tb=short"]
 
-FROM base AS runtime
+# Resolve runtime dependencies before copying application source.
+FROM base AS runtime-dependencies
+COPY pyproject.toml README.md ./
+RUN python -c "import tomllib,pathlib; p=tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']; d=p['dependencies']+p['optional-dependencies']['artifacts']+p['optional-dependencies']['graph']; pathlib.Path('/tmp/runtime-requirements.txt').write_text('\n'.join(d))" \
+    && python -m pip install -r /tmp/runtime-requirements.txt \
+    && python -m playwright install chromium
 
+# Keep UI source and tests out of the final image's source layer.
+FROM ubuntu:24.04 AS runtime-source
+COPY forge/ /app/forge/
+RUN rm -rf /app/forge/reporting/webui
+
+# Runtime shares the builder's OS/Python ABI, without its compiler/development headers.
+FROM ubuntu:24.04 AS runtime
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    VIRTUAL_ENV=/opt/forge/venv \
+    PATH="/opt/forge/venv/bin:$PATH" \
+    PYTHONPATH=/app \
+    HOME=/home/forge \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+LABEL org.opencontainers.image.title="FORGE Toolkit"
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-venv curl git ca-certificates \
+        libkrb5-3 krb5-user libstdc++6 libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=runtime-dependencies /opt/forge/venv /opt/forge/venv
+COPY --from=runtime-dependencies /ms-playwright /ms-playwright
+RUN python -m playwright install-deps chromium \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --shell /bin/bash --uid 10001 forge \
+    && mkdir -p /app /data /plugins /remote-audit /home/forge/.cache/forge/models \
+    && chown -R forge:forge /data /plugins /remote-audit /home/forge/.cache
+WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY alembic.ini ./
 COPY alembic ./alembic
-COPY forge ./forge
+COPY --from=runtime-source /app/forge ./forge
+COPY --from=frontend-builder /app/frontend/dist/ ./forge/reporting/webui/dist/
 COPY forge-autopilot.sh forge-autopilot.bat ./
-
 RUN chmod +x forge-autopilot.sh \
-    && python -m pip install ".[artifacts,graph]" \
-    && python -m playwright install --with-deps chromium \
-    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install --no-deps --no-build-isolation . \
     && python -m pip check
-
 USER forge
-
 VOLUME ["/data", "/plugins", "/remote-audit", "/home/forge/.cache/forge/models"]
-
 CMD ["forge", "--help"]
+
+FROM runtime AS dev
+USER root
+RUN python -m pip install watchfiles==1.3.0
+USER forge
+CMD ["uvicorn", "forge.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/forge"]
+
+FROM runtime AS production

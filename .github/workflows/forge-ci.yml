@@ -79,6 +79,7 @@ jobs:
 
 # ── Evasion assertions ─────────────────────────────────────────────────────────
   test-opsec:
+    timeout-minutes: 20
     name: OPSEC — Evasion Assertions
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -102,6 +103,7 @@ jobs:
 
 # ── Phase 0 + Phase 1 core ────────────────────────────────────────────────────
   test-core:
+    timeout-minutes: 20
     name: Core — Phase 0 KB + Phase 1 Recon
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -126,6 +128,7 @@ jobs:
 
 # ── Phase 2 OSINT (VCR replay) ────────────────────────────────────────────────
   test-phase2-core:
+    timeout-minutes: 20
     name: Phase 2 — OSINT Core (VCR)
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -147,7 +150,7 @@ jobs:
                  tests/phase2/test_paste_monitor.py \
                  tests/phase2/test_scavenger.py \
                  tests/phase2/test_secret_finder.py \
-                 tests/phase2/test_scavenger_scope_gate.py \
+                 tests/phase2/test_scavenger.py::test_run_scavenger_scope_violation \
             --record-mode=none \
             --cov=forge/utils/intel \
             --cov-report=term-missing \
@@ -160,6 +163,7 @@ jobs:
 
 # ── Phase 2 credential validation (Docker) ────────────────────────────────────
   test-phase2-extended:
+    timeout-minutes: 20
     name: Phase 2 — Credential Validation (Docker SSH/SMB)
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -177,9 +181,9 @@ jobs:
         image: dperson/samba:amd64  # :latest returns "manifest unknown" (broken multi-arch manifest); amd64 matches GitHub-hosted runners and resolves correctly
         ports:
           - "4445:445"
-        options: >-
-          -u "testuser;testpass"
-          -s "test;/tmp"
+        env:
+          USER: "testuser;testpass"
+          SHARE: "test;/tmp"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -203,6 +207,7 @@ jobs:
 
 # ── Phase 3 Evasion & Payload ─────────────────────────────────────────────────
   test-phase3:
+    timeout-minutes: 20
     name: Phase 3 — Evasion & Payload Generation
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -228,6 +233,7 @@ jobs:
 
 # ── Phase 4 exploit correlation ───────────────────────────────────────────────
   test-phase4-correlation:
+    timeout-minutes: 20
     name: Phase 4 — Exploit Correlation (Modules 4-A through 4-C)
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -242,7 +248,7 @@ jobs:
         run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run correlation tests
         run: |
-          pytest tests/phase4/test_correlator.py \
+          pytest tests/phase4/test_exploit_correlator.py \
                  tests/phase4/test_hash_taxonomy.py \
                  tests/phase4/test_hash_credential_bridge.py \
                  tests/phase4/test_hash_correlation_integration.py \
@@ -257,12 +263,12 @@ jobs:
 
 # ── Phase 4 cloud vulnerability discovery ─────────────────────────────────────
   test-phase4-cloud:
+    timeout-minutes: 20
     name: Phase 4 — Cloud Vulnerability Discovery (Modules 4-D through 4-G)
     runs-on: ubuntu-24.04
     continue-on-error: true
     needs: lint
-    container:
-      image: ghcr.io/redhuntlabs/agneyastra:1.0.0   # provides agneyastra binary for 4-E tests
+    # Unit tests mock cloud clients/tool subprocesses; no external tool image is required.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -290,6 +296,7 @@ jobs:
 
 # ── Phase 5 post-exploitation ─────────────────────────────────────────────────
   test-phase5:
+    timeout-minutes: 20
     name: Phase 5 — Post-Exploitation
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -335,6 +342,7 @@ jobs:
 
 # ── Phase 6 LLM reporting ─────────────────────────────────────────────────────
   test-phase6:
+    timeout-minutes: 20
     name: Phase 6 — LLM-Assisted Reporting
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -358,12 +366,13 @@ jobs:
       - name: Assert validator 100% coverage
         run: |
           pytest tests/phase6/ \
-            --cov=forge/phase6/llm_validator \
+            --cov=forge.phase6.llm_validator \
             --cov-fail-under=100 \
             -q
 
 # ── OPSEC invariants (cross-phase) ────────────────────────────────────────────
   test-opsec-invariants:
+    timeout-minutes: 20
     name: OPSEC — Cross-Phase Invariants
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -389,6 +398,7 @@ jobs:
 
 # ── Kill-chain integration smoke test ─────────────────────────────────────────
   test-integration:
+    timeout-minutes: 20
     name: Kill-Chain Integration Smoke Test
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -412,6 +422,7 @@ jobs:
 
 # ── Graph rendering perf ──────────────────────────────────────────
   test-performance-graph:
+    timeout-minutes: 20
     name: Graph rendering perf (U5.4)
     runs-on: ubuntu-24.04
     # Perf regressions warn via the JSON artifact; hard ceilings still fail.

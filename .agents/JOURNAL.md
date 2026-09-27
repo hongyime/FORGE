@@ -81,8 +81,8 @@
 - 2026-09-17: Published bounded Vitest input-drift guard `11c6014`: 8 files (baseline_vitest_source_drift.rs snapshot/diff/insert_prefixed, baseline_vitest_drift_wire.rs before/after wiring + block-apply with prior-reason preservation, unit tests, real CLI integration tests in tests/baseline_vitest_drift.rs proving passing mutation/unchanged control/failing mutation/collect-top-level mutation); source coverage bounded to known frontend extensions/manifests + 3 tool identities, NOT universal dependency closure; cross-mode reconciliation DEFERRED; lane.complete remains false. Reviewer ses_f5216b9a6ffecql5TpWZbOQk8n approved, no blockers. Parent verification: 253 workspace tests pass (129 domain + 124 xtask), fmt/clippy -D warnings clean, mutex released.
 
 - 2026-09-11: Rust LSASS MiniDump NTLM parser (parse_dump_file + parse_lsass_dump, LM-sentinel scan + Win7/Win10 offset tables, 4 unit tests); fixed 16 cargo check errors from windows-sys 0.59 migration (features, null ptrs, ldap3 sync API, MiniDumpWriteDump extern); fixed pyo3 0.29 test breakage in spray.rs; fixed LLM retry-budget convergence in integration test (section header mismatch); shipped Explore #14 architecture plan doc + Explore #15 OpenGraph Plugin Interface (forge.identity.v1 schema, parse/emit/adapt_provider_output, 38 tests). Commits 5148227..34236b4 pushed to origin/main.
-- 2026-09-15: Explore #14 Agent Ecosystem — Bryan approved; implemented forge/agents/event_bus.py (bounded asyncio pub/sub), forge/agents/capability_manifest.py (forge.agent.capability.v1 schema validation), forge/agents/base_plugin.py (ForgePlugin ABC with ROE+scope gate in execute_task), forge/agents/coordinator.py (TaskCoordinator: register/route/track), forge/agents/cli.py (read-only forge agents list/task-status); updated forge/agents/__init__.py and forge/cli_registry.py (agents_app). Tests: tests/unit/test_agents_event_bus.py (13 tests), test_agents_coordinator.py (9), test_agents_plugin_base.py (7) — 29/29 pass. Fixed test_registry.py: added pytestmark = pytest.mark.network; pyproject.toml adds network marker excluded from default addopts so the file no longer hangs normal runs.
-- 2026-09-14: pyo3 0.29 unit-test init — `PyErr::Display` requires Python runtime; 7 spray+credential tests were calling `.to_string()` on `PyErr` without Python initialized. Removed the message-check assertions (keep `is_err()` only) so tests compile and run without Python host. 21/21 pass. Connectors pytest 102/102 pass (test_registry.py excluded — hangs on network call). Explore #14 gate: Bryan not approved this session, skipped. Graph export canonical fixes: `forge/graph/tier_zero.py` `asset_graph_nodes/edges` → `asset_entities/asset_relationships` with JOIN; `forge/graph/neo4j_export.py` `node_type`/`edge_type`/`source_node_id`/`target_node_id` precedence; `forge/graph/nemesis_export.py` `findings`→`vulnerability_findings`, `seeds`→`engagement_seeds`, `pattern_name`/`validation_state`, URL param sanitization via `strip_sensitive_url_query`, per-section skip logging. Worker peak tests: `tests/phase1/test_artifact_api_spec_workers.py` both tests had exactly 4 items, triggering `len(items)<=4` sequential fallback → peak=1; added 5th no-URL item to each document and `monkeypatch.delenv(FORGE_LOCAL_BATCH_WORKERS)` → peak=4. Retention focused slice 16/16 pass. Four atomic commits staged for push.
+- 2026-09-15: Explore #14 Agent Ecosystem — the maintainer approved; implemented forge/agents/event_bus.py (bounded asyncio pub/sub), forge/agents/capability_manifest.py (forge.agent.capability.v1 schema validation), forge/agents/base_plugin.py (ForgePlugin ABC with ROE+scope gate in execute_task), forge/agents/coordinator.py (TaskCoordinator: register/route/track), forge/agents/cli.py (read-only forge agents list/task-status); updated forge/agents/__init__.py and forge/cli_registry.py (agents_app). Tests: tests/unit/test_agents_event_bus.py (13 tests), test_agents_coordinator.py (9), test_agents_plugin_base.py (7) — 29/29 pass. Fixed test_registry.py: added pytestmark = pytest.mark.network; pyproject.toml adds network marker excluded from default addopts so the file no longer hangs normal runs.
+- 2026-09-14: pyo3 0.29 unit-test init — `PyErr::Display` requires Python runtime; 7 spray+credential tests were calling `.to_string()` on `PyErr` without Python initialized. Removed the message-check assertions (keep `is_err()` only) so tests compile and run without Python host. 21/21 pass. Connectors pytest 102/102 pass (test_registry.py excluded — hangs on network call). Explore #14 gate: the maintainer not approved this session, skipped. Graph export canonical fixes: `forge/graph/tier_zero.py` `asset_graph_nodes/edges` → `asset_entities/asset_relationships` with JOIN; `forge/graph/neo4j_export.py` `node_type`/`edge_type`/`source_node_id`/`target_node_id` precedence; `forge/graph/nemesis_export.py` `findings`→`vulnerability_findings`, `seeds`→`engagement_seeds`, `pattern_name`/`validation_state`, URL param sanitization via `strip_sensitive_url_query`, per-section skip logging. Worker peak tests: `tests/phase1/test_artifact_api_spec_workers.py` both tests had exactly 4 items, triggering `len(items)<=4` sequential fallback → peak=1; added 5th no-URL item to each document and `monkeypatch.delenv(FORGE_LOCAL_BATCH_WORKERS)` → peak=4. Retention focused slice 16/16 pass. Four atomic commits staged for push.
 - 2026-09-03: MEDIUM 8 — cloud-creds CLI + ROE integration. Fixed missing `_cli_audit` import in `forge/cli_cloud.py` (NameError at runtime). Fixed `SyntaxError` in `forge/collection/cloud/__init__.py` (`}` → `]`). Added 14-test regression suite `tests/cli/test_cloud_credentials_cli.py` covering: command registration, importability, safe defaults (metadata off), ROE gate, scope check, audit logging, provider/format validation, output correctness. All 14 pass.
 - 2026-08-29: B739 refreshed and re-uploaded the autonomous target loop PostPlan HTML so the published plan matches the latest hardening commits through c4e30b4.
 - 2026-08-29: B738 added total_count/ready_count/blocked_count/ignored_count aliases to queue and guarded source-queue summaries for supervisor-friendly parsing.
@@ -154,7 +154,7 @@
 - 2026-08-20: Added a kill-chain soft runtime budget that exits the spider loop at iteration boundaries and preserves graceful finalization/report closeout before external watchdog termination.
 - 2026-08-20: Hardened dashboard artifact payload/card rendering so missing or OS-invalid report artifact paths no longer abort static dashboard refresh.
 - 2026-08-20: Restored `forge targets resume-candidates --json` compatibility for the read-only resume-candidate workflow while keeping JSON as the default output.
-- 2026-08-20 15:31:25 +08:00 [PRAWN-E14/claude/session-start] branch=main head=0e89ae7 dirty=8
+- 2026-08-20 15:31:25 +08:00 [dev-host-2.example/claude/session-start] branch=main head=0e89ae7 dirty=8
 - 2026-08-20: Accepted `forge report quality-audit --top-limit` as an alias for `--top` so audit automation can use the explicit internal option name.
 - 2026-08-20: Split report quality-audit dashboard refresh failures into current unresolved failures and historical pre-refresh evidence so old audit rows do not imply current dashboard breakage.
 - 2026-08-20: Added latest-report-only fallback/backend/write-error counts to report quality-audit so historical GGUF fallbacks do not masquerade as current latest-report degradation.
@@ -250,10 +250,10 @@
 - 2026-08-21: B644 scheduled target imports now fit started child runtime budgets to the watchdog task window instead of disabling start by default.
 - 2026-08-21: B645 report/dashboard display paths now share render-time sanitization for GGUF fallbacks, malformed CLI help, abandoned-run wording, and scope manifest assignments with spaces.
 - 2026-08-21: B646 target import and resume-run child kill-chain launches now use contained subprocess cleanup to terminate child process trees on timeout.
-- 2026-08-21 16:34:50 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
-- 2026-08-21 16:48:09 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
-- 2026-08-21 16:54:07 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
-- 2026-08-21 17:04:15 +08:00 [PRAWN-E14/codex/session-start] branch=main head=398a9db dirty=3
+- 2026-08-21 16:34:50 +08:00 [dev-host-2.example/codex/session-start] branch=main head=398a9db dirty=3
+- 2026-08-21 16:48:09 +08:00 [dev-host-2.example/codex/session-start] branch=main head=398a9db dirty=3
+- 2026-08-21 16:54:07 +08:00 [dev-host-2.example/codex/session-start] branch=main head=398a9db dirty=3
+- 2026-08-21 17:04:15 +08:00 [dev-host-2.example/codex/session-start] branch=main head=398a9db dirty=3
 - 2026-08-21: Recovery sessions should resume from repo state and handoffs instead of the oversized Codex thread; resume-run stale-lock breaking remains explicit and refuses active locks.
 - 2026-08-21: B647 pushed stale resume-lock recovery as ba0bf43; next sessions should continue product hardening from doctor/quality-audit backlog without resuming the oversized Codex thread.
 - 2026-08-21: B648 resume-lock hardening treats live PIDs as authoritative, protects lock ownership with per-run tokens, redacts lock metadata by allowlist, and documents the operator lock workflow.
@@ -262,8 +262,8 @@
 - 2026-08-21: B651 makes test taxonomy enforceable in pytest config: importlib mode prevents duplicate basename collection failures, pythonpath is explicit, directory-based markers expose unit/functional/integration/e2e slices, and the real-target E2E harness now has a pytest-visible contract test.
 - 2026-08-21: B652 keeps resume-run sequential by default but adds bounded `--max-parallel` execution with one batch lock and serialized ledger writes; public third-party resume candidates remain dry-run/planned from this chat.
 - 2026-08-21: B653 adds `forge-autopilot` launchers as the daily all-in-one operator path: optional target-feed import/start, parallel resume, due monitoring, and dashboard refresh with a dry-run rehearsal mode.
-- 2026-08-21 22:36:37 +08:00 [PRAWN-E14/codex/session-start] branch=main head=efec6db dirty=0
-- 2026-08-22 08:38:33 +08:00 [PRAWN-E14/codex/session-start] branch=main head=8671f8d dirty=0
+- 2026-08-21 22:36:37 +08:00 [dev-host-2.example/codex/session-start] branch=main head=efec6db dirty=0
+- 2026-08-22 08:38:33 +08:00 [dev-host-2.example/codex/session-start] branch=main head=8671f8d dirty=0
 - 2026-08-27: Created a PostPlan HTML plan for the free-first FORGE autonomous hardening backlog at https://nepckuwxuhgp.postplan.dev; primary implementation track excludes paid/API-key-required dependencies by default and treats the pasted OpenRouter key as exposed, omitted secret material.
 - 2026-08-27: B654 adds the autonomous target-feed builder and autopilot feed-build phase: local artifacts and optional read-only Supabase table selects merge into `target-feed.v1` with canonical dedupe, per-source-group provenance, dry-run defaults, local-only Supabase config, and no committed keys or live actions during verification.
 - 2026-08-27: B655 adds a read-only automation self-heal plan for resource-safe startup readiness; it blocks live auto-start when memory/disk/tool/Docker guardrails fail and records packaged Go binary status without running Docker mutations or live work.
@@ -293,7 +293,7 @@
 - 2026-08-29: B690 made OpenRouter free-only discovery request newest models and accept only capable numerically zero-priced free model families when paid backends are disabled.
 - 2026-08-29: B691 made self-heal/defaults command plans prefer `automation cycle` for startup/daily operation and leave direct guarded-autostart as a lower-level probe.
 - 2026-08-29: B692 made `automation status` resolve default engagement from local autostart config, matching `automation cycle`, and set ignored local autostart engagement to existing local engagement 1001.
-- 2026-08-29 03:58:58 +08:00 [PRAWN-E14/codex/session-start] branch=main head=39a92b7 dirty=0
+- 2026-08-29 03:58:58 +08:00 [dev-host-2.example/codex/session-start] branch=main head=39a92b7 dirty=0
 - 2026-08-29: B702 keeps guarded-autostart feed reuse but rebuilds the feed after successful local queue imports, and surfaces monitoring due backlog in `automation status`/`cycle` as read-only summary data.
 - 2026-08-29: B703 makes live-start source confirmation configurable with `--min-start-source-count`, importing broad targets while reserving scan budget for multi-source targets when local autostart sets the threshold to 2.
 - 2026-08-29: B704 makes automation status/cycle show threshold-aware startable target counts, so raw scan eligibility is not confused with live-start budget eligibility.
@@ -301,7 +301,7 @@
 - 2026-08-29: B706 makes the Windows guarded-autostart timeout path terminate the process tree with taskkill before falling back to Stop-Process.
 - 2026-08-29: B707 changes Docker guarded-autostart to a low-resource controlled loop with startup delay and cadence, while keeping live execution behind Forge guard gates.
 - 2026-08-29: B708 makes compose-dependency Docker readiness report that app service health is delegated/not inspected and points operators to a host-compose probe for full container health.
-- 2026-08-29 05:25:06 +08:00 [PRAWN-E14/codex/session-start] branch=main head=faac599 dirty=0
+- 2026-08-29 05:25:06 +08:00 [dev-host-2.example/codex/session-start] branch=main head=faac599 dirty=0
 - 2026-08-29: B709 surfaces resume backlog in automation status/cycle as a redacted read-only summary and only includes legacy DBs when using the configured Forge data dir.
 - 2026-08-29: B710 makes command-review report daily-use layer completeness and downgrades command-surface pressure when the documented daily layer is complete.
 - 2026-08-29: B711 adds report_review to automation status/cycle so report/dashboard drift is visible in the daily loop without running report repair or resume commands.
@@ -324,7 +324,7 @@
 - 2026-08-29: B728 standardizes monitoring-due automation summaries with total/selected/omitted count aliases while preserving existing due-plan fields.
 - 2026-08-29: B729 adds URLhaus as a free-keyed public CTI refresh provider and makes CTI readiness report both ThreatFox and URLhaus without exposing Auth-Key material.
 - 2026-08-29: B730 adds a read-only automation limits command so operators can inspect active resource/run/provider caps without parsing defaults or status payloads.
-- 2026-08-29 09:29:31 +08:00 [PRAWN-E14/codex/session-start] branch=main head=dccdbcb dirty=0
+- 2026-08-29 09:29:31 +08:00 [dev-host-2.example/codex/session-start] branch=main head=dccdbcb dirty=0
 - 2026-08-29: B740 closes resumed audit gaps by enforcing shared discovery import budgets, adding report quality status labels, making only explicit startup-critical Go tools block autostart, documenting a 960 MiB Docker low-memory profile, and routing status launchers through automation status.
 - 2026-08-29: B741 refreshes the autonomous target loop PostPlan draft to version 3 so the public HTML includes the B740 hardening checkpoint.
 - 2026-08-29: B742 adds direct queue alias regression coverage for automation status and guarded-autostart skipped/unavailable source-queue paths.
@@ -337,7 +337,7 @@
 - 2026-08-29: B748 refreshes the autonomous target loop PostPlan draft to version 6 so the public HTML includes Supabase secret-ref metadata verification.
 - 2026-08-29: B749 makes feed-build Supabase secret refs honor the active data dir, reports local input scan-cap omissions, and keeps discovery-artifact next actions dry-run-first with a 1000-item cap.
 - 2026-08-29: B750 makes startup fail closed earlier and more repeatably by adding guarded cycle preflight, blocked-run failure backoff, a pre-live resource recheck, and a low-memory Docker env override for container-local memory gates.
-- 2026-08-29 11:03:21 +08:00 [PRAWN-E14/codex/session-start] branch=main head=991b1d7 dirty=5
+- 2026-08-29 11:03:21 +08:00 [dev-host-2.example/codex/session-start] branch=main head=991b1d7 dirty=5
 
 - 2026-08-29 B751: Autopilot dry-run is intentionally fully non-mutating: it may rehearse target import/start without ROE, but skips dashboard refresh because dashboard generation writes local artifacts; apply mode still requires ROE before live phases.
 
@@ -353,107 +353,107 @@
 - 2026-08-29 B757: Daily-use import guidance must be both dry-run-first and explicitly bounded, and startup wrapper loops must back off then surface repeated wrapper-level failures instead of retrying forever.
 - 2026-08-29 B758: Refreshed the autonomous target loop PostPlan draft to version 10 so the public HTML includes bounded import guidance and startup wrapper backoff.
 - 2026-08-29 B759: Auto-live is local opt-in only; when `auto_live_when_roe_ready=true` and the configured ROE env var is present, `automation cycle --apply` may promote to the guarded live path after the same preflight gates, while dry-run remains non-mutating.
-- 2026-08-29 15:08:49 +08:00 [PRAWN-E14/claude/session-start] branch=main head=6c04634 dirty=0
-- 2026-08-29 15:11:14 +08:00 [PRAWN-E14/codex/session-start] branch=main head=6c04634 dirty=0
+- 2026-08-29 15:08:49 +08:00 [dev-host-2.example/claude/session-start] branch=main head=6c04634 dirty=0
+- 2026-08-29 15:11:14 +08:00 [dev-host-2.example/codex/session-start] branch=main head=6c04634 dirty=0
 - 2026-08-29 B760: Guarded autostart now runs core autopilot apply with dashboard skipped, then refreshes the dashboard as a separate bounded command; dashboard-only failure is attention, not a failed live batch.
 - 2026-08-29 B761: Forge module subprocess launch errors are normal failed child results (`127`) so missing optional prerequisite executables audit as follow-up work instead of crashing an otherwise completed kill-chain.
-- 2026-08-29 16:15:17 +08:00 [PRAWN-E14/claude/session-start] branch=main head=32b1558 dirty=0
-- 2026-08-29 16:15:53 +08:00 [PRAWN-E14/codex/session-start] branch=main head=32b1558 dirty=0
-- 2026-08-29 16:20:32 +08:00 [PRAWN-E14/claude/session-start] branch=main head=32b1558 dirty=0
-- 2026-08-29 16:20:59 +08:00 [PRAWN-E14/codex/session-start] branch=main head=32b1558 dirty=0
-- 2026-08-29 16:51:03 +08:00 [PRAWN-E14/claude/session-start] branch=main head=036a094 dirty=0
+- 2026-08-29 16:15:17 +08:00 [dev-host-2.example/claude/session-start] branch=main head=32b1558 dirty=0
+- 2026-08-29 16:15:53 +08:00 [dev-host-2.example/codex/session-start] branch=main head=32b1558 dirty=0
+- 2026-08-29 16:20:32 +08:00 [dev-host-2.example/claude/session-start] branch=main head=32b1558 dirty=0
+- 2026-08-29 16:20:59 +08:00 [dev-host-2.example/codex/session-start] branch=main head=32b1558 dirty=0
+- 2026-08-29 16:51:03 +08:00 [dev-host-2.example/claude/session-start] branch=main head=036a094 dirty=0
 - 2026-08-29: Missing executables launched through the contained subprocess helper must be ordinary command failures, not unhandled Python tracebacks; `run_contained_subprocess` now returns code `127` on `OSError` from `Popen`.
 - 2026-08-29: Noisy live targets can produce huge phone-like seed queues from page text; autonomous runs now cap phone fan-out before expensive scheduling with `FORGE_PHONE_FANOUT_BATCH_LIMIT` (default 10, bounded 0..100) so one target cannot monopolize low-resource startup.
 - 2026-08-29: Live guarded automation can be blocked by final report generation even after target execution completes; Forge now uses `FORGE_REPORT_GENERATE_SUBPROCESS_TIMEOUT_SECONDS` (default 300s, bounded 30..86400) for `report generate` module children so kill-chain closeout can fall back deterministically instead of hanging the hands-off loop.
 - 2026-08-29: Autonomous phone fan-out must dispatch only strong phone candidates; weak date-like or impossible phone seeds are recorded as skipped seed-runs and marked processed instead of invoking `osint phone`.
-- 2026-08-29 18:54:49 +08:00 [PRAWN-E14/claude/session-start] branch=main head=97a5f12 dirty=0
+- 2026-08-29 18:54:49 +08:00 [dev-host-2.example/claude/session-start] branch=main head=97a5f12 dirty=0
 - 2026-08-29: Optional post-report prerequisite auto-runs must have a shorter timeout than general module children; labels beginning `prereq:` now use `FORGE_PREREQ_SUBPROCESS_TIMEOUT_SECONDS` defaulting to 120 seconds.
 - 2026-08-29: Target import should not fail a live cycle just because the kill-chain wrapper exits nonzero after the engagement DB already records the matching run as completed.
-- 2026-08-29 19:36:35 +08:00 [PRAWN-E14/claude/session-start] branch=main head=05f0d8d dirty=0
-- 2026-08-29 19:56:53 +08:00 [PRAWN-E14/claude/session-start] branch=main head=a869843 dirty=0
-- 2026-08-29 19:57:11 +08:00 [PRAWN-E14/codex/session-start] branch=main head=a869843 dirty=0
-- 2026-08-29 20:18:45 +08:00 [PRAWN-E14/claude/session-start] branch=main head=a869843 dirty=0
-- 2026-08-29 20:40:08 +08:00 [PRAWN-E14/claude/session-start] branch=main head=a869843 dirty=6
+- 2026-08-29 19:36:35 +08:00 [dev-host-2.example/claude/session-start] branch=main head=05f0d8d dirty=0
+- 2026-08-29 19:56:53 +08:00 [dev-host-2.example/claude/session-start] branch=main head=a869843 dirty=0
+- 2026-08-29 19:57:11 +08:00 [dev-host-2.example/codex/session-start] branch=main head=a869843 dirty=0
+- 2026-08-29 20:18:45 +08:00 [dev-host-2.example/claude/session-start] branch=main head=a869843 dirty=0
+- 2026-08-29 20:40:08 +08:00 [dev-host-2.example/claude/session-start] branch=main head=a869843 dirty=6
 - 2026-08-29: Target-import parents should stop waiting as soon as the engagement DB confirms kill-chain completion; Docker guarded autostart must receive ignored local `.env` values so provider keys survive hands-off Docker restarts without committing secrets.
-- 2026-08-29 21:01:42 +08:00 [PRAWN-E14/claude/session-start] branch=main head=97348eb dirty=0
-- 2026-08-29 21:06:10 +08:00 [PRAWN-E14/codex/session-start] branch=main head=97348eb dirty=1
+- 2026-08-29 21:01:42 +08:00 [dev-host-2.example/claude/session-start] branch=main head=97348eb dirty=0
+- 2026-08-29 21:06:10 +08:00 [dev-host-2.example/codex/session-start] branch=main head=97348eb dirty=1
 - 2026-08-29: Docker-managed startup must validate real service health; Redis bus health checks now lazy-connect on first probe and pub/sub clients no longer impose idle socket read timeouts that caused noisy reconnect loops.
-- 2026-08-29 23:46:38 +08:00 [PRAWN-E14/codex/session-start] branch=main head=97348eb dirty=11
+- 2026-08-29 23:46:38 +08:00 [dev-host-2.example/codex/session-start] branch=main head=97348eb dirty=11
 - 2026-08-30 B769: Docker hands-off startup needs runtime health gates sized for actual constrained startup, not only nominal low-memory totals; production Compose now uses 256 MiB API/web/worker caps, 1536 MiB guarded autostart cap, longer API/web health probes, cgroup-aware memory checks that ignore reclaimable file cache and prefer finite Linux cgroup limits, and container-first `/app/tools/bin` tool validation while keeping local secrets in ignored env/config files only.
 - 2026-08-30 B770: Linper/InfraHunter/InfraSpyder should influence Forge as free/local upgrades first: defensive persistence coverage, hunt-plan catalogs, suppression signatures, artifact spidering, and priority scoring; keyed live provider sync stays optional and disabled by default.
-- 2026-08-30 10:09:56 +08:00 [PRAWN-E14/claude/stop] branch=main head=731699e dirty=1
-- 2026-08-30 10:21:29 +08:00 [PRAWN-E14/claude/stop] branch=main head=731699e dirty=1
-- 2026-08-30 10:48:26 +08:00 [PRAWN-E14/claude/stop] branch=main head=770145c dirty=1
-- 2026-08-30 11:28:40 +08:00 [PRAWN-E14/claude/stop] branch=main head=8f48c00 dirty=1
-- 2026-08-30 14:24:15 +08:00 [PRAWN-E14/claude/stop] branch=main head=8f48c00 dirty=2
-- 2026-08-30 15:08:57 +08:00 [PRAWN-E14/claude/stop] branch=main head=8f48c00 dirty=5
-- 2026-08-30 16:08:44 +08:00 [PRAWN-E14/claude/stop] branch=main head=8f48c00 dirty=5
-- 2026-08-30 17:41:27 +08:00 [PRAWN-E14/claude/stop] branch=main head=8f48c00 dirty=6
-- 2026-08-30 18:32:03 +08:00 [PRAWN-E14/claude/stop] branch=main head=8f48c00 dirty=6
-- 2026-08-30 18:51:18 +08:00 [PRAWN-E14/claude/stop] branch=main head=8f48c00 dirty=7
-- 2026-08-30 20:21:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=11
-- 2026-08-30 21:40:11 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=18
-- 2026-08-30 22:55:34 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=18
-- 2026-08-30 23:05:51 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=18
+- 2026-08-30 10:09:56 +08:00 [dev-host-2.example/claude/stop] branch=main head=731699e dirty=1
+- 2026-08-30 10:21:29 +08:00 [dev-host-2.example/claude/stop] branch=main head=731699e dirty=1
+- 2026-08-30 10:48:26 +08:00 [dev-host-2.example/claude/stop] branch=main head=770145c dirty=1
+- 2026-08-30 11:28:40 +08:00 [dev-host-2.example/claude/stop] branch=main head=8f48c00 dirty=1
+- 2026-08-30 14:24:15 +08:00 [dev-host-2.example/claude/stop] branch=main head=8f48c00 dirty=2
+- 2026-08-30 15:08:57 +08:00 [dev-host-2.example/claude/stop] branch=main head=8f48c00 dirty=5
+- 2026-08-30 16:08:44 +08:00 [dev-host-2.example/claude/stop] branch=main head=8f48c00 dirty=5
+- 2026-08-30 17:41:27 +08:00 [dev-host-2.example/claude/stop] branch=main head=8f48c00 dirty=6
+- 2026-08-30 18:32:03 +08:00 [dev-host-2.example/claude/stop] branch=main head=8f48c00 dirty=6
+- 2026-08-30 18:51:18 +08:00 [dev-host-2.example/claude/stop] branch=main head=8f48c00 dirty=7
+- 2026-08-30 20:21:41 +08:00 [dev-host-2.example/claude/stop] branch=main head=0f36a8d dirty=11
+- 2026-08-30 21:40:11 +08:00 [dev-host-2.example/claude/stop] branch=main head=0f36a8d dirty=18
+- 2026-08-30 22:55:34 +08:00 [dev-host-2.example/claude/stop] branch=main head=0f36a8d dirty=18
+- 2026-08-30 23:05:51 +08:00 [dev-host-2.example/claude/stop] branch=main head=0f36a8d dirty=18
 - 2026-08-30: T4-T8 test repair should align tests to the currently implemented public APIs instead of adding placeholder compatibility methods for planned interfaces.
-- 2026-08-30 23:12:30 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=18
+- 2026-08-30 23:12:30 +08:00 [dev-host-2.example/claude/stop] branch=main head=0f36a8d dirty=18
 - 2026-08-30: Revised T4-T8 repair direction: add inert placeholder APIs for genuinely missing methods and keep test-only fixes for renamed APIs and fixture type/field mistakes.
-- 2026-08-30 23:35:22 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=18
-- 2026-08-31 00:03:29 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=18
+- 2026-08-30 23:35:22 +08:00 [dev-host-2.example/claude/stop] branch=main head=0f36a8d dirty=18
+- 2026-08-31 00:03:29 +08:00 [dev-host-2.example/claude/stop] branch=main head=0f36a8d dirty=18
 - 2026-08-31: Started comprehensive Forge module audit across core, OSINT, active scanning, T1-T8, automation, monitoring, and remediation modules; output will be a durable report with severity-ranked findings and file:line evidence.
-- 2026-08-31 00:33:58 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=19
-- 2026-08-31 09:17:43 +08:00 [PRAWN-E14/claude/stop] branch=main head=0f36a8d dirty=24
-- 2026-08-31 10:44:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=0
-- 2026-08-31 12:55:19 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=2
-- 2026-08-31 14:09:23 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=7
-- 2026-08-31 14:18:55 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=9
-- 2026-08-31 17:06:04 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=10
+- 2026-08-31 00:33:58 +08:00 [dev-host-2.example/claude/stop] branch=main head=0f36a8d dirty=19
+- 2026-08-31 09:17:43 +08:00 [dev-host-2.example/claude/stop] branch=main head=0f36a8d dirty=24
+- 2026-08-31 10:44:41 +08:00 [dev-host-2.example/claude/stop] branch=main head=27dfb35 dirty=0
+- 2026-08-31 12:55:19 +08:00 [dev-host-2.example/claude/stop] branch=main head=27dfb35 dirty=2
+- 2026-08-31 14:09:23 +08:00 [dev-host-2.example/claude/stop] branch=main head=27dfb35 dirty=7
+- 2026-08-31 14:18:55 +08:00 [dev-host-2.example/claude/stop] branch=main head=27dfb35 dirty=9
+- 2026-08-31 17:06:04 +08:00 [dev-host-2.example/claude/stop] branch=main head=27dfb35 dirty=10
 - 2026-08-31: Rust core build resumed from `FORGE_RUST_HANDOFF.md`; decision is to produce a minimal PyO3 crypto-capable `forge_core.dll` first by pruning unused networking/parser/Windows crates and disabling release LTO, then treat full Rust offensive modules as future enhancement if needed.
 - 2026-08-31: Rust core release build completed; `forge_core.dll` exists, repo-root `forge_core.pyd` imports `aes_encrypt`, Rust tests pass, and Defender reported no matching detections.
 - 2026-08-31: Validated GLM obfuscation summary against actual commands; fixed `forge_loader.py` PyArmor class exposure, strengthened `tests/test_obfuscated.py`, re-enabled release LTO after dependency pruning, and corrected stale docs to avoid broad EDR/AV bypass claims.
-- 2026-08-31 17:26:01 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=11
-- 2026-08-31 17:37:35 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=12
-- 2026-08-31 17:43:50 +08:00 [PRAWN-E14/claude/stop] branch=main head=27dfb35 dirty=12
-- 2026-08-31 18:31:23 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=0
+- 2026-08-31 17:26:01 +08:00 [dev-host-2.example/claude/stop] branch=main head=27dfb35 dirty=11
+- 2026-08-31 17:37:35 +08:00 [dev-host-2.example/claude/stop] branch=main head=27dfb35 dirty=12
+- 2026-08-31 17:43:50 +08:00 [dev-host-2.example/claude/stop] branch=main head=27dfb35 dirty=12
+- 2026-08-31 18:31:23 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=0
 - 2026-08-31: Re-vet of `f3041c1` found Cargo build artifacts committed under `rust_core/target`; decision is to ignore/untrack Cargo target output and keep `forge_core.pyd` as a local rebuildable artifact.
-- 2026-08-31 23:25:56 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=433
+- 2026-08-31 23:25:56 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=433
 - 2026-08-31: Direct `obfuscated.*` imports should be supported without `forge_loader.py`; patched package initializers to expose PyArmor runtime paths while preserving ROE/scope constructor requirements.
 - 2026-08-31: Competitive upgrade decision is to adapt BloodHound/AzureHound/SharpHound/Nemesis patterns as offline import, data-quality, graph-review, and artifact-enrichment work; do not copy C2, persistence, credential-harvesting, or bypass behaviors.
-- 2026-08-31 23:57:08 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=441
-- 2026-09-01 00:37:00 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=442
-- 2026-09-01 06:52:10 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=442
-- 2026-09-01 07:08:03 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=442
-- 2026-09-01 07:20:29 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=442
-- 2026-09-01 08:54:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=446
-- 2026-09-01 10:37:00 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=446
-- 2026-09-01 10:37:00 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=446
-- 2026-09-01 12:47:54 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=458
-- 2026-09-01 19:16:10 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=482
-- 2026-09-02 00:04:59 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=491
-- 2026-09-02 09:43:20 +08:00 [PRAWN-E14/claude/stop] branch=main head=f3041c1 dirty=491
-- 2026-09-02 09:55:48 +08:00 [PRAWN-E14/codex/session-start] branch=main head=f3041c1 dirty=491
+- 2026-08-31 23:57:08 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=441
+- 2026-09-01 00:37:00 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=442
+- 2026-09-01 06:52:10 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=442
+- 2026-09-01 07:08:03 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=442
+- 2026-09-01 07:20:29 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=442
+- 2026-09-01 08:54:41 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=446
+- 2026-09-01 10:37:00 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=446
+- 2026-09-01 10:37:00 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=446
+- 2026-09-01 12:47:54 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=458
+- 2026-09-01 19:16:10 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=482
+- 2026-09-02 00:04:59 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=491
+- 2026-09-02 09:43:20 +08:00 [dev-host-2.example/claude/stop] branch=main head=f3041c1 dirty=491
+- 2026-09-02 09:55:48 +08:00 [dev-host-2.example/codex/session-start] branch=main head=f3041c1 dirty=491
 2026-09-02 | Codex review verdict is BLOCKING_ISSUES pending integration fixes: root BloodHound CLI/ROE wiring, frontend/API contract alignment and build dependencies, active-session schema migration, plugin boundary enforcement, and safe detection-surface reporting.
-- 2026-09-02 10:33:24 +08:00 [PRAWN-E14/codex/session-start] branch=main head=25aa7b5 dirty=0
-- 2026-09-02 10:36:02 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=0
-- 2026-09-02 21:26:19 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=31
-- 2026-09-03 08:51:11 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=46
-- 2026-09-03 09:18:11 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=46
-- 2026-09-03 09:58:25 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=50
-- 2026-09-03 11:06:32 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=50
-- 2026-09-03 11:28:34 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=52
-- 2026-09-03 14:21:09 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=58
-- 2026-09-03 15:01:56 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=70
-- 2026-09-03 15:29:49 +08:00 [PRAWN-E14/codex/session-start] branch=main head=25aa7b5 dirty=73
-- 2026-09-03 20:02:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=76
-- 2026-09-03 20:20:37 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=80
+- 2026-09-02 10:33:24 +08:00 [dev-host-2.example/codex/session-start] branch=main head=25aa7b5 dirty=0
+- 2026-09-02 10:36:02 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=0
+- 2026-09-02 21:26:19 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=31
+- 2026-09-03 08:51:11 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=46
+- 2026-09-03 09:18:11 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=46
+- 2026-09-03 09:58:25 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=50
+- 2026-09-03 11:06:32 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=50
+- 2026-09-03 11:28:34 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=52
+- 2026-09-03 14:21:09 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=58
+- 2026-09-03 15:01:56 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=70
+- 2026-09-03 15:29:49 +08:00 [dev-host-2.example/codex/session-start] branch=main head=25aa7b5 dirty=73
+- 2026-09-03 20:02:41 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=76
+- 2026-09-03 20:20:37 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=80
 2026-09-03: Plugin event boundary v1 is fail-closed: trusted registration is mandatory, accepted events are audited before dispatch, both documented rate windows are enforced, and repeated violations disable only the affected engagement binding.
-- 2026-09-03 21:02:10 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=82
-- 2026-09-03 23:17:03 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=83
-- 2026-09-04 09:14:20 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=83
-- 2026-09-04 09:45:14 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=83
-- 2026-09-04 10:26:04 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=83
-- 2026-09-04 10:53:54 +08:00 [PRAWN-E14/claude/stop] branch=main head=25aa7b5 dirty=83
-- 2026-09-04 12:38:48 +08:00 [PRAWN-E14/claude/stop] branch=main head=65577ed dirty=0
+- 2026-09-03 21:02:10 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=82
+- 2026-09-03 23:17:03 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=83
+- 2026-09-04 09:14:20 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=83
+- 2026-09-04 09:45:14 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=83
+- 2026-09-04 10:26:04 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=83
+- 2026-09-04 10:53:54 +08:00 [dev-host-2.example/claude/stop] branch=main head=25aa7b5 dirty=83
+- 2026-09-04 12:38:48 +08:00 [dev-host-2.example/claude/stop] branch=main head=65577ed dirty=0
 
 ## 2026-09-12 A/B/C repair contract and confirmed diagnosis
 - User approved the review's A/B/C sequence. Baseline is `48eb95f`; `5148227` already corrects the local-LLM fixture headings, so verify rather than duplicate it. Other agents' Rust work and long-running test tasks are not owned by this run.
@@ -461,73 +461,88 @@
 - Plan: add failing focused regressions first, then repair each shared boundary without changing authorization, reportability, or deterministic severity. Relevant SPEC invariants: V1, V3, V6-V11; interfaces: CLI, web API, stored SQLite evidence, graph/report exports. Native credential operations and live targets are excluded.
 - Scenario contract: real boolean retention confirmation preserves authorized apply while malformed values return HTTP 400 without mutation; canonical synthetic evidence exports preserve bounded counts and remove secret/path canaries without DB writes; canonical graph types and critical-node/path evidence survive exports; missing-engagement and worker behavior have explicit tests; tracked continuation links resolve in clean checkouts; browser artifact/graph/timeline workflows operate on synthetic data. Focused pytest, compilation, diagnostics, live local API/browser probes, and teardown receipts are required before each completion claim. No full-suite run is requested.
 - 2026-09-14: Paused A/B/C repairs on user request for relocation outside OneDrive. Retention confirmation has six failing-first API regressions and a green 16-test focused slice, plus compilation and Python diagnostics; changes remain uncommitted. Initial live QA exposed legacy DB fallback from repo cwd and ran a schema migration before duplicate-ID insertion failed; subsequent QA must isolate cwd as well as data directory. Both owned QA servers were stopped. No relocation, new commit, or push was performed; preserve the dirty worktree for continuation.
-- 2026-09-12 09:56:28 +08:00 [PRAWN-E14/claude/stop] branch=main head=48eb95f dirty=1
-- 2026-09-13 16:22:20 +08:00 [PRAWN-E14/claude/stop] branch=main head=48eb95f dirty=3
-- 2026-09-14 09:20:10 +08:00 [PRAWN-E14/claude/stop] branch=main head=48eb95f dirty=3
-- 2026-09-14 09:26:07 +08:00 [PRAWN-E14/claude/stop] branch=main head=48eb95f dirty=3
+- 2026-09-12 09:56:28 +08:00 [dev-host-2.example/claude/stop] branch=main head=48eb95f dirty=1
+- 2026-09-13 16:22:20 +08:00 [dev-host-2.example/claude/stop] branch=main head=48eb95f dirty=3
+- 2026-09-14 09:20:10 +08:00 [dev-host-2.example/claude/stop] branch=main head=48eb95f dirty=3
+- 2026-09-14 09:26:07 +08:00 [dev-host-2.example/claude/stop] branch=main head=48eb95f dirty=3
 - 2026-09-14: Relocated the working repository to `C:\forge` on request, preserving hidden/ignored content, Git metadata, and all five uncommitted-file hashes. Git root/branch/HEAD and connectivity checks passed. OneDrive error 383 blocked moving the virtualenv; recovery copied 34,425 files but 23 dependency files failed. Kept the source environment/residual files intact and marked the copied virtualenv incomplete; rebuild it before resuming. No commit, push, dependency reinstall, or scheduler/config rewrite was performed.
-- 2026-09-14 20:04:45 +08:00 [PRAWN-E14/claude/stop] branch=main head=bbd59ce dirty=0
-- 2026-09-14 20:37:09 +08:00 [PRAWN-E14/claude/stop] branch=main head=1ea61cf dirty=0
-- 2026-09-14 23:33:06 +08:00 [PRAWN-E14/claude/stop] branch=main head=1ea61cf dirty=0
-- 2026-09-15 01:40:23 +08:00 [PRAWN-E14/claude/stop] branch=main head=6b0edce dirty=0
-- 2026-09-15 07:03:19 +08:00 [PRAWN-E14/claude/stop] branch=main head=6b0edce dirty=0
+- 2026-09-14 20:04:45 +08:00 [dev-host-2.example/claude/stop] branch=main head=bbd59ce dirty=0
+- 2026-09-14 20:37:09 +08:00 [dev-host-2.example/claude/stop] branch=main head=1ea61cf dirty=0
+- 2026-09-14 23:33:06 +08:00 [dev-host-2.example/claude/stop] branch=main head=1ea61cf dirty=0
+- 2026-09-15 01:40:23 +08:00 [dev-host-2.example/claude/stop] branch=main head=6b0edce dirty=0
+- 2026-09-15 07:03:19 +08:00 [dev-host-2.example/claude/stop] branch=main head=6b0edce dirty=0
 - 2026-09-15: Began requested readiness/session/test audit and initialized the requested Ralph prompt. Verified CLI agents-list, 29 agent tests, and existing native Rust AES roundtrip; started Docker Desktop and confirmed Forge development Postgres/Redis healthy. Restored frontend lockfile dependencies with npm ci (Vitest 3.2.7 drift corrected to 5.0.0). Full pytest collection crashed with a Windows access violation, Rust source rebuild timed out, frontend workers timed out, and production Compose preflight timed out; API/web remain unavailable. Preserved historical TODOs and existing session-hook edits rather than declaring unverified work complete. Full-Rust meaning and resource headroom require clarification before further retries; no source-code changes, live assessment launch, commit, or push performed.
-- 2026-09-15 08:01:26 +08:00 [PRAWN-E14/claude/stop] branch=main head=e4caf4c dirty=1
+- 2026-09-15 08:01:26 +08:00 [dev-host-2.example/claude/stop] branch=main head=e4caf4c dirty=1
 - 2026-09-15: User clarified a complete Rust rewrite and requested planning first, superseding immediate repair implementation. Created the planning draft at `.omo/drafts/forge-full-rust-rewrite.md` with parity, data/test/session accounting, UI and external-runtime decisions. With explicit permission, gracefully stopped all ten running theprawnhunter containers to release RAM and recorded the exact restart set; retained Forge Postgres/Redis and Pi-hole. Preserved the unrelated dirty Rust source edit and all prior failed-verification evidence.
-- 2026-09-15 08:12:09 +08:00 [PRAWN-E14/claude/stop] branch=main head=e4caf4c dirty=1
-- 2026-09-15 09:02:25 +08:00 [PRAWN-E14/claude/stop] branch=main head=3433ce7 dirty=0
-- 2026-09-15 11:35:34 +08:00 [PRAWN-E14/claude/stop] branch=main head=0717e42 dirty=0
-- 2026-09-15 22:52:34 +08:00 [PRAWN-E14/codex/session-start] branch=main head=0717e42 dirty=0
-- 2026-09-15 23:32:58 +08:00 [PRAWN-E14/codex/session-start] branch=main head=cede061 dirty=0
-- 2026-09-16 01:32:50 +08:00 [PRAWN-E14/codex/session-start] branch=main head=cede061 dirty=8
-- 2026-09-16 02:50:15 +08:00 [PRAWN-E14/claude/stop] branch=main head=bb6d85d dirty=2
-- 2026-09-16 03:02:01 +08:00 [PRAWN-E14/claude/stop] branch=main head=35cad10 dirty=1
-- 2026-09-16 03:05:27 +08:00 [PRAWN-E14/codex/session-start] branch=main head=35cad10 dirty=1
+- 2026-09-15 08:12:09 +08:00 [dev-host-2.example/claude/stop] branch=main head=e4caf4c dirty=1
+- 2026-09-15 09:02:25 +08:00 [dev-host-2.example/claude/stop] branch=main head=3433ce7 dirty=0
+- 2026-09-15 11:35:34 +08:00 [dev-host-2.example/claude/stop] branch=main head=0717e42 dirty=0
+- 2026-09-15 22:52:34 +08:00 [dev-host-2.example/codex/session-start] branch=main head=0717e42 dirty=0
+- 2026-09-15 23:32:58 +08:00 [dev-host-2.example/codex/session-start] branch=main head=cede061 dirty=0
+- 2026-09-16 01:32:50 +08:00 [dev-host-2.example/codex/session-start] branch=main head=cede061 dirty=8
+- 2026-09-16 02:50:15 +08:00 [dev-host-2.example/claude/stop] branch=main head=bb6d85d dirty=2
+- 2026-09-16 03:02:01 +08:00 [dev-host-2.example/claude/stop] branch=main head=35cad10 dirty=1
+- 2026-09-16 03:05:27 +08:00 [dev-host-2.example/codex/session-start] branch=main head=35cad10 dirty=1
 - 2026-09-16: Published approved full-Rust plan and reviewed corrections/visual in `cede061`, `5fa2142`, `35cad10`, preserving concurrent baseline-repair commits. Independent plan review approved dependency DAG, explicit legacy subsystem ownership, lossless rollback and final-artifact test binding; HTML structure passed, browser inspection remained unavailable. PostPlan version 2: https://1cxewab3ciln.postplan.dev .
 - 2026-09-16: Implemented and pushed native migration inventory checkpoint `5b7b82e` through separate workers and independent verification. Corrected duplicate-declaration ID/owner loss with failing-first regressions; 28 native tests, fmt, Clippy and fixture CLI checks pass. Existing plan T1 already specified the invariant. Full T1 closure remains blocked by policy-denied cleanup of two exact owned fixture directories and unavailable LSP; generated ledgers remain local, all later migration tasks uncompleted. Verified existing Python API/web health and worker container state; no Rust cutover claimed.
-- 2026-09-16 04:02:13 +08:00 [PRAWN-E14/claude/stop] branch=main head=260d923 dirty=1
-- 2026-09-16 04:10:51 +08:00 [PRAWN-E14/codex/session-start] branch=main head=260d923 dirty=2
-- 2026-09-16 05:21:51 +08:00 [PRAWN-E14/codex/session-start] branch=main head=260d923 dirty=15
+- 2026-09-16 04:02:13 +08:00 [dev-host-2.example/claude/stop] branch=main head=260d923 dirty=1
+- 2026-09-16 04:10:51 +08:00 [dev-host-2.example/codex/session-start] branch=main head=260d923 dirty=2
+- 2026-09-16 05:21:51 +08:00 [dev-host-2.example/codex/session-start] branch=main head=260d923 dirty=15
 - 2026-09-16: Continued T2/T3 using the independently accepted T1 code/interface while retaining T1 cleanup/LSP blockers and unchecked closure. T2 produced an honest partial baseline (29 agent tests passed; 3,318 observed cases; 492 files incompletely collected), but independent review found duplicate-result, deadline and conftest-provenance defects; assigned failing-first fixes. T3 domain modeling runs in a disjoint standalone crate, with shared heavy QA serialized. No denied cleanup or full-task completion claimed.
-- 2026-09-16 05:43:10 +08:00 [PRAWN-E14/codex/session-start] branch=main head=260d923 dirty=16
-- 2026-09-16 09:27:46 +08:00 [PRAWN-E14/claude/stop] branch=main head=69dc11b dirty=0
+- 2026-09-16 05:43:10 +08:00 [dev-host-2.example/codex/session-start] branch=main head=260d923 dirty=16
+- 2026-09-16 09:27:46 +08:00 [dev-host-2.example/claude/stop] branch=main head=69dc11b dirty=0
 - 2026-09-16: On user request, fetched and pulled main with fast-forward-only; confirmed `69dc11b` already included parallel commit `486c344` (domain/baseline/ledger work). Reconciled stale local state instead of redoing landed implementations. T2 corrective code independently confirmed (48 tests); T3 scoped verification passed (20 consumers, 2 doctests) after standard Rustup partial-install repair.
 - 2026-09-16: Published `91e79bb` integrating forge-domain into the root Cargo workspace and lockfile without dependency upgrades. Metadata membership failed before and passed after; root fmt/Clippy and all 48 xtask + 20 domain consumer + 2 doctests passed. Only three Cargo files changed; nested lock retained. Full baseline/type parity, earlier cleanup denials and LSP remain open. Reduced further work to concrete remaining gaps and verified checkpoints.
-- 2026-09-16 10:59:21 +08:00 [PRAWN-E14/claude/stop] branch=main head=9f7da1d dirty=0
-- 2026-09-16 17:24:49 +08:00 [PRAWN-E14/claude/stop] branch=main head=9df98c0 dirty=23
+- 2026-09-16 10:59:21 +08:00 [dev-host-2.example/claude/stop] branch=main head=9f7da1d dirty=0
+- 2026-09-16 17:24:49 +08:00 [dev-host-2.example/claude/stop] branch=main head=9df98c0 dirty=23
 - 2026-09-16: Scoped checkpoint verified for T3 unaffected domain increment: parent workspace `cargo test --workspace --locked --offline --jobs 1 -- --test-threads=1` passed 118 tests/doctests (68 domain + 2 doctests + 48 xtask), 0 failures; scoped reviewer ses_f55a27f13ffe2J6r6558QASYQM approved (no blockers); 26 `implemented_fixture_verified` contracts (24 DTOs + 2 agent); fixture-canonicalization LF/metadata fix and test-budget fix applied; LSP unavailable (daemon timeout); 3 serialization-policy conflicts and 1 dependency block remain open.
 - 2026-09-16: Published T3 native checkpoints to origin/main. Commits pushed: `a446679` (portable fixtures), `f8a9361` (typed records), `5e12b89` (canonical LF fixture metadata + integrity guard, sha2 dev-dep), `37cf5c4` (functional baseline attempt budget 120 s). Remote HEAD confirmed `37cf5c4`. Untracked `native/migration/domain-contracts.json` left untracked per task scope; 8 LF-normalized payload fixtures confirmed git-blob-identical (no JSON value changes).
 - 2026-09-16: Published T3 enum-boundary checkpoint to origin/main. Commit `d92464d` (enum boundary parity consumer and fixtures): enum_boundary_consumer.rs with typed structs + ALL/as_str variant check + 4 sensitivity tests; enum-boundary-cases.json (32494 bytes, 290 cases, 16 sections, 81 accept/209 reject); enum-boundary-cases-provenance.json. Parent workspace passed 123 tests/doctests (73 domain + 2 doctests + 48 xtask), 0 failures; scoped reviewer ses_f55a27f13ffe2J6r6558QASYQM approved after corrections. Remote HEAD confirmed `d92464d`. LOCAL UNTRACKED ledger: 42 `implemented_fixture_verified`, 6 `existing_partial`, 66 `reference_only`, 3 `blocked_policy_conflict`, 1 `blocked_dependency`; `native/migration/domain-contracts.json` remains untracked.
 - 2026-09-17: Responded to the user's speed request by launching three concurrent bounded read-only tasks for baseline adapters, dependency mapping and recent domain-proof claims. Retained the approved maximum of two disjoint coding agents, one heavy QA command and lead-only shared-state/commit ownership to avoid contention and uncontrolled scope growth.
 - 2026-09-17: Parallel subagent routing failed to produce findings: background sessions stalled with empty assistant messages and were cancelled; concurrent synchronous retries returned empty responses too. Recorded the blocker rather than claiming parallel progress; further routing attempts require a user decision after these two failed invocation paths.
-- 2026-09-17 09:05:34 +08:00 [PRAWN-E14/claude/stop] branch=main head=87520ec dirty=8
-- 2026-09-17 20:20:34 +08:00 [PRAWN-E14/claude/stop] branch=main head=49edc12 dirty=8
+- 2026-09-17 09:05:34 +08:00 [dev-host-2.example/claude/stop] branch=main head=87520ec dirty=8
+- 2026-09-17 20:20:34 +08:00 [dev-host-2.example/claude/stop] branch=main head=49edc12 dirty=8
 - 2026-09-17: Following the user's Defender/cache report, checked Defender history read-only and found detections involving Impacket-related scripts; antivirus and real-time protection were enabled. Recorded Rust-first new-helper development, core-only routine dependency selection, no new Python/uv helper generation or offensive bundle reinstalls, and no AV exclusions or detection-evasion rewrites. No quarantine restoration, dependency installation, or Defender setting changes were performed; no guarantee of future detection-free files was made.
-- 2026-09-18 00:04:47 +08:00 [PRAWN-E14/claude/stop] branch=main head=590f331 dirty=8
+- 2026-09-18 00:04:47 +08:00 [dev-host-2.example/claude/stop] branch=main head=590f331 dirty=8
 - 2026-09-18: Committed core-only bootstrap defaults and regression tests as `7ca7fa0`; parent pytest 19/19, Ruff and CLI help passed without installing dependencies. Native cross-mode reconciliation remains local/uncommitted: worker targeted proof is retained, parent fmt/Clippy passed, but combined native QA failed/timed out and the independent reviewer returned no verdict after model routing/stale cancellation. Existing valid-attempt and new collect-only failures passed isolated; approximately 0.6 GB free RAM suggests resource pressure but does not establish root cause. Fixed only the new metadata fixture's missing-parent assumption and improved an existing assertion's attempt diagnostics; no product invariant or runtime/test budget was changed. Existing plan requires isolated owned fixtures and truthful failures. Full native-suite, independent-review and LSP acceptance remain open; no complete-T2/T3/rewrite claim.
-- 2026-09-18 05:39:05 +08:00 [PRAWN-E14/claude/stop] branch=main head=195d57a dirty=22
-- 2026-09-18 13:43:52 +08:00 [PRAWN-E14/claude/stop] branch=main head=8fbe566 dirty=8
-- 2026-09-18 17:28:40 +08:00 [PRAWN-E14/claude/stop] branch=main head=8fbe566 dirty=10
-- 2026-09-18 17:28:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=8fbe566 dirty=10
-- 2026-09-18 18:20:34 +08:00 [PRAWN-E14/claude/stop] branch=main head=f27db67 dirty=8
-- 2026-09-18 18:53:05 +08:00 [PRAWN-E14/claude/stop] branch=main head=9ffa01e dirty=8
-- 2026-09-18 19:08:22 +08:00 [PRAWN-E14/claude/stop] branch=main head=9ffa01e dirty=9
-- 2026-09-18 20:07:10 +08:00 [PRAWN-E14/claude/stop] branch=main head=c7b2c8a dirty=8
-- 2026-09-18 20:21:07 +08:00 [PRAWN-E14/claude/stop] branch=main head=c7b2c8a dirty=8
-- 2026-09-18 21:25:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=e97a997 dirty=8
+- 2026-09-18 05:39:05 +08:00 [dev-host-2.example/claude/stop] branch=main head=195d57a dirty=22
+- 2026-09-18 13:43:52 +08:00 [dev-host-2.example/claude/stop] branch=main head=8fbe566 dirty=8
+- 2026-09-18 17:28:40 +08:00 [dev-host-2.example/claude/stop] branch=main head=8fbe566 dirty=10
+- 2026-09-18 17:28:41 +08:00 [dev-host-2.example/claude/stop] branch=main head=8fbe566 dirty=10
+- 2026-09-18 18:20:34 +08:00 [dev-host-2.example/claude/stop] branch=main head=f27db67 dirty=8
+- 2026-09-18 18:53:05 +08:00 [dev-host-2.example/claude/stop] branch=main head=9ffa01e dirty=8
+- 2026-09-18 19:08:22 +08:00 [dev-host-2.example/claude/stop] branch=main head=9ffa01e dirty=9
+- 2026-09-18 20:07:10 +08:00 [dev-host-2.example/claude/stop] branch=main head=c7b2c8a dirty=8
+- 2026-09-18 20:21:07 +08:00 [dev-host-2.example/claude/stop] branch=main head=c7b2c8a dirty=8
+- 2026-09-18 21:25:41 +08:00 [dev-host-2.example/claude/stop] branch=main head=e97a997 dirty=8
 - 2026-09-19: Committed bounded domain verifier as `2eac6f4` (15 inseparable source/dependency/test files). Parent independently passed290 native tests/doctests, zero failed/ignored, and workspace all-target Clippy; worker fmt passed. Reviewer `ses_f4a00b418ffe0FRwFYtq28yRSJ` approved scoped publication with the now-satisfied parent-suite condition. Parent CLI records19 in-process assertions,52 mappings,9 fixture hashes and0 Cargo tests executed. Evidence: `.omo/evidence/rust-rewrite/task-3/remaining-contracts/fixture-canonicalization/parent-domain-workspace-complete-20260919.{json,log}`, `parent-domain-clippy-20260919.{json,log}`, `parent-domain-cli-20260919/receipt.json`. First1800s outer-timeout log retained;3600s retry passed without test-budget/assertion changes; parent observed no matching children, but interrupted fixture-directory cleanup is unproven. Verifier subtask delivered; actual canonicalization properties and T3 acceptance/full review remain next, then T4/native containment per dependencies. Keep0/36 fully closed,3 partial, complete_t3=false and LSP unavailable. Eight pre-existing fixture metadata-only drift paths remain unstaged; no ledger/fixture change.
 - 2026-09-19: Published `570c397` to origin/main after fetch confirmed no divergence: exactly two generated-property test files,7 Rust tests,60,337 generated evaluations and479 sensitivity errors detected by TEST-LOCAL bad adapters; no production mutation or fresh Python differential. Reviewer `ses_f4a00b418ffe0FRwFYtq28yRSJ` approved the increment with no further bounded T3 implementation gap; parent prepublication workspace297/297, fmt and all-target Clippy passed (fixture-canonicalization/parent-properties-{workspace,fmt,clippy}-20260919 receipts, exit0/mutex released). Latest parent-properties-domain-cli-20260919 receipt records19 passed assertions,52 mappings,9 fixtures and0 Cargo tests. Prepared STATE/plan acceptance locally; final sign-off remains pending, T3 unchecked/complete_t3=false,0/36 closed, T1/T2 partial and T3 pending closure. Preserve66 later-owner references, prior parity fixtures, signed64 SQL IDs, declared-JSON/non-list limitations, manifest-only verifier hashing, unavailable LSP and separate T1 denied-cleanup/outer-timeout uncertainty. No ledger/fixture changes, test reruns, production changes or deployment/full-rewrite claim; parent owns final verdict and doc publication.
 - 2026-09-19: FINAL T3 implementation acceptance APPROVED by reviewer `ses_f4a00b418ffe0FRwFYtq28yRSJ` under the T1 scheduling exception; no unmet T3 criterion remains identified. Properties `570c397`, verifier `2eac6f4`, prior parity fixtures and parent297/297 workspace/fmt/Clippy gates support checked T3 and ledger complete_t3=true:1/36 closed,2 partial(T1/T2),33 queued; T4 configuration next. Correct evidence references: fixture-canonicalization/parent-properties-{workspace,clippy}-20260919.{json,log}, parent-properties-fmt-20260919.json (no fmt log), parent-properties-domain-cli-20260919/receipt.json. Existing compiled verifier validated closure metadata in t3-accepted-records-20260919:19 passed assertions,52 mappings,9 fixtures,0 Cargo tests, exit0; its complete_t3=false remains the intentional limited-checker statement. All118 entries/52 T3 mappings/66 later-owner references unchanged. Retain signed64 SQL IDs, declared-JSON dataclass boundary, manifest-only verifier hashes, no LSP, old denied T1 cleanup/interrupted-baseline-fixture uncertainty and incomplete T2. No production/fixture changes, suite rerun, F1-F4 approval, full-rewrite completion or deployment cutover; earlier pending-signoff entries are historical.
 - 2026-09-19: Published T4 first slice `97a796f` feat(config): add pure five-budget configuration resolver. New module `native/crates/forge-domain/src/config/` (mod+budgets+error, 322 lines) + 3 consumer test files (479 lines, 11 tests). `resolve_budgets(BudgetInputs)` is pure injected-source; CLI > env > local > default with provenance; five PlatformSettings defaults: provider_timeout=5, heartbeat_interval=30, telemetry_threshold_ms=5000, message_retry_max=3, message_ack_timeout=60. Parent308/308 workspace tests/doctests, domain fmt+all-target-Clippy, exit0. Reviewer `ses_f48e7bea2ffeA60Z6h7mikRzZL` APPROVED scoped partial-library. Unicode decimal text rejection documented as concrete remaining T4 work. Score: 1/36 closed (T3), 3 partial (T1/T2/T4), 32 queued. Next: complete T4 (full key inventory, file adapter, logging, verify config, lifecycle) and T2 containment in parallel.
-- 2026-09-19 10:35:46 +08:00 [PRAWN-E14/claude/stop] branch=main head=6b5b712 dirty=8
+- 2026-09-19 10:35:46 +08:00 [dev-host-2.example/claude/stop] branch=main head=6b5b712 dirty=8
 - 2026-09-19: Published T4 second slice `8cafea7` feat(config): add thirteen ForgeConfig boolean flag resolver. New `flags.rs` (327 lines) + `tests/config_flags.rs` (299 lines, 9 tests). Three coercion rules match `forge/config.py:222-312` exactly: Strict1 (offline_strict, only "1"), Truthy3 (safe_mode, "1"/"true"/"yes"), Truthy4 (eleven discovery/web/detection flags). Domain163/163 tests/doctests, fmt+all-target Clippy exit0; evidence: `t4-flags-{red,green,domain,fmt-final,clippy}-20260919.{json,log}`. Next: ForgeConfig non-negative integer keys.
-- 2026-09-20 08:43:41 +08:00 [PRAWN-E14/claude/stop] branch=main head=c7cd362 dirty=8
-- 2026-09-21 20:12:29 +08:00 [PRAWN-E14/claude/stop] branch=main head=9778178 dirty=8
-- 2026-09-22 07:11:40 +08:00 [PRAWN-E14/claude/stop] branch=main head=dc04281 dirty=14
-- 2026-09-22 07:21:03 +08:00 [PRAWN-E14/claude/stop] branch=main head=dc04281 dirty=14
-- 2026-09-22 07:29:21 +08:00 [PRAWN-E14/claude/stop] branch=main head=dc04281 dirty=14
-- 2026-09-22 07:57:02 +08:00 [PRAWN-E14/claude/stop] branch=main head=dc04281 dirty=14
-- 2026-09-22 12:49:54 +08:00 [PRAWN-E14/claude/stop] branch=main head=599c82d dirty=0
-- 2026-09-23 08:09:53 +08:00 [PRAWN-E14/claude/stop] branch=main head=c3442c5 dirty=0
-- 2026-09-27 10:33:59 +08:00 [PRAWN-E14/claude/stop] branch=main head=0e1c1a1 dirty=0
-- 2026-09-27 11:03:22 +08:00 [PRAWN-E14/claude/stop] branch=main head=0e1c1a1 dirty=0
+- 2026-09-20 08:43:41 +08:00 [dev-host-2.example/claude/stop] branch=main head=c7cd362 dirty=8
+- 2026-09-21 20:12:29 +08:00 [dev-host-2.example/claude/stop] branch=main head=9778178 dirty=8
+- 2026-09-22 07:11:40 +08:00 [dev-host-2.example/claude/stop] branch=main head=dc04281 dirty=14
+- 2026-09-22 07:21:03 +08:00 [dev-host-2.example/claude/stop] branch=main head=dc04281 dirty=14
+- 2026-09-22 07:29:21 +08:00 [dev-host-2.example/claude/stop] branch=main head=dc04281 dirty=14
+- 2026-09-22 07:57:02 +08:00 [dev-host-2.example/claude/stop] branch=main head=dc04281 dirty=14
+- 2026-09-22 12:49:54 +08:00 [dev-host-2.example/claude/stop] branch=main head=599c82d dirty=0
+- 2026-09-23 08:09:53 +08:00 [dev-host-2.example/claude/stop] branch=main head=c3442c5 dirty=0
+- 2026-09-27 10:33:59 +08:00 [dev-host-2.example/claude/stop] branch=main head=0e1c1a1 dirty=0
+- 2026-09-27 11:03:22 +08:00 [dev-host-2.example/claude/stop] branch=main head=0e1c1a1 dirty=0
+
+
+Machine-specific values in this document use privacy placeholders.
+
+2026-09-27: Applied reviewed container development and remote publishing maintenance. Development source delivery and dependency isolation were checked locally; image builds, full runtime, and live CI publication remain unverified. Existing unrelated changes were preserved; no commit or push.
+
+2026-09-27: Privacy follow-up replaced personal home literals with escaped current-home patterns while preserving the approved directories and operation settings. Independent pure policy review passed 181 checks on Windows and 181 on Ubuntu; no operations were executed. Generated home patterns reject parent traversal; separate legacy export rules remain unchanged. Named engagement data-route identifiers remain as functional links.
+
+2026-09-27: Current upstream changes are preserved in the publication branch. Initial CI, bounded runtime validation and resource teardown are in progress under the user-approved maintenance release.
+
+- 2026-09-27: Corrected existing CI fixture configuration, two moved test selectors and the reporting-validator coverage module; mocked cloud unit tests no longer require an unavailable external tool image. Coverage thresholds and existing job settings remain unchanged. Twelve other stale selectors remain explicit blockers; no application or offensive capability changes were made. Remote verification is pending.
+
+- 2026-09-27: PR #30 maintenance verification reached the existing tests after CI fixture repairs. Run 36299279170 passed Bandit, Semgrep, TruffleHog, CodeQL and dependency review. CI is not green: Phase 2 integration has 10 passed/2 failed and 2.42% coverage against 70%; Phase 3 has 130 passed and 79.42% coverage before a missing selector; OPSEC has 23 passed and 9.86% against 75%; Phase 5 has 179 passed/5 failed and 52.78% against 75%; Phase 6 has 155 passed/1 deselected and 81.95% phase coverage, but its validator reaches 94.02% against 100%. Twelve stale selectors remain. Core verification was still running when recorded. Phase 5 fixture/guard mismatches and the missing SMB exception API exist in unchanged baseline source/tests; the SMB success assertion remains unresolved, despite matching synthetic fixture credentials and port. Thresholds and operational source were not changed. Remote image publication and operational runtime remain unverified.
+
+- 2026-09-27: Bound all twelve existing FORGE test jobs to 20 minutes, preserving every job name, selector, assertion and coverage threshold. The prior Core test step exceeded 30 minutes; its result remains unresolved and the obsolete run will be cancelled after this reviewed head is pushed. Deadline exhaustion is a failure, never a pass. No narrower equivalent selector was established, so the existing Core suite remains intact.

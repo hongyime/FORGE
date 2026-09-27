@@ -1,0 +1,291 @@
+# Standalone development stack; no production mounts or automatic live cycles.
+name: forge-dev
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: forge
+      POSTGRES_USER: forge
+      POSTGRES_PASSWORD: ${FORGE_POSTGRES_PASSWORD:?set FORGE_POSTGRES_PASSWORD}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U forge -d forge
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    volumes:
+    - dev-postgres:/var/lib/postgresql/data
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    volumes:
+    - dev-redis:/data
+  forge-api:
+    image: forge-dev:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev
+    init: true
+    env_file:
+    - path: .env.dev
+      required: false
+    environment:
+      FORGE_DEPLOYMENT_PROFILE: production
+      FORGE_ENV: production
+      FORGE_DATA_DIR: /data
+      FORGE_SAFE_MODE: '1'
+      FORGE_REQUIRE_SCOPE_MANIFEST: '1'
+      FORGE_NO_TOR: '1'
+      FORGE_WEB_ENABLED: '1'
+      FORGE_WEB_HOST: 0.0.0.0
+      FORGE_WEB_PORT: '8080'
+      FORGE_WEB_AUTH: jwt
+      FORGE_WEB_SECRET_KEY: ${FORGE_WEB_SECRET_KEY:?set FORGE_WEB_SECRET_KEY >=32
+        chars}
+      FORGE_WEB_BOOTSTRAP_TOKEN: ${FORGE_WEB_BOOTSTRAP_TOKEN:?set FORGE_WEB_BOOTSTRAP_TOKEN
+        >=32 chars}
+      FORGE_ENGAGEMENT_KEY: ${FORGE_ENGAGEMENT_KEY:?set FORGE_ENGAGEMENT_KEY >=32
+        chars}
+      FORGE_SECURITY_HEADERS_DISABLE: '0'
+      FORGE_SECURITY_HSTS_SECONDS: ${FORGE_SECURITY_HSTS_SECONDS:-31536000}
+      FORGE_PUBLIC_BASE_URL: ${FORGE_PUBLIC_BASE_URL:?set FORGE_PUBLIC_BASE_URL to
+        the external https URL}
+      FORGE_TLS_TERMINATED_BY: ${FORGE_TLS_TERMINATED_BY:-reverse-proxy}
+      FORGE_DISTRIBUTED_ENABLED: '1'
+      FORGE_REDIS_URL: redis://redis:6379/0
+      FORGE_STATE_DB_URL: postgresql+asyncpg://forge:${FORGE_POSTGRES_PASSWORD:?set
+        FORGE_POSTGRES_PASSWORD}@postgres:5432/forge
+      FORGE_AUDIT_DB_URL: postgresql+asyncpg://forge:${FORGE_POSTGRES_PASSWORD:?set
+        FORGE_POSTGRES_PASSWORD}@postgres:5432/forge
+      FORGE_AUDIT_LOG_PATH: /data/audit/audit.jsonl
+      FORGE_AUDIT_BUNDLE_REMOTE_URI: ${FORGE_AUDIT_BUNDLE_REMOTE_URI:-file:///remote-audit}
+      FORGE_AUDIT_BUNDLE_REMOTE_SCOPE: ${FORGE_AUDIT_BUNDLE_REMOTE_SCOPE:?set customer/workspace
+        audit scope}
+      FORGE_PLUGIN_DIR: /plugins
+      FORGE_SCOPE_JSON: ${FORGE_SCOPE_JSON:-}
+      FORGE_GOVERNANCE_RULES: ${FORGE_GOVERNANCE_RULES:-}
+      FORGE_LLM_PROVIDER: ${FORGE_LLM_PROVIDER:-llama_cpp}
+      FORGE_LLM_MODEL_PATH: ${FORGE_LLM_MODEL_PATH:-}
+      FORGE_PROVIDER_TIMEOUT: ${FORGE_PROVIDER_TIMEOUT:-5}
+      FORGE_HEARTBEAT_INTERVAL: ${FORGE_HEARTBEAT_INTERVAL:-30}
+      FORGE_TELEMETRY_THRESHOLD_MS: ${FORGE_TELEMETRY_THRESHOLD_MS:-5000}
+      FORGE_MESSAGE_RETRY_MAX: ${FORGE_MESSAGE_RETRY_MAX:-3}
+      FORGE_MESSAGE_ACK_TIMEOUT: ${FORGE_MESSAGE_ACK_TIMEOUT:-60}
+      FORGE_LOG_LEVEL: ${FORGE_LOG_LEVEL:-INFO}
+      WATCHFILES_FORCE_POLLING: 'true'
+      WATCHFILES_POLL_DELAY_MS: '500'
+    command:
+    - uvicorn
+    - forge.api.app:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8000'
+    - --reload
+    - --reload-dir
+    - /app/forge
+    volumes:
+    - ./forge:/app/forge:ro
+    - ./alembic:/app/alembic:ro
+    - ./alembic.ini:/app/alembic.ini:ro
+    - dev-data:/data
+    - dev-plugins:/plugins
+    - dev-audit:/remote-audit
+    - dev-models:/home/forge/.cache/forge/models
+    depends_on:
+    - postgres
+    - redis
+    ports:
+    - 127.0.0.1:8000:8000
+  forge-webui:
+    image: forge-dev:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev
+    init: true
+    env_file:
+    - path: .env.dev
+      required: false
+    environment:
+      FORGE_DEPLOYMENT_PROFILE: production
+      FORGE_ENV: production
+      FORGE_DATA_DIR: /data
+      FORGE_SAFE_MODE: '1'
+      FORGE_REQUIRE_SCOPE_MANIFEST: '1'
+      FORGE_NO_TOR: '1'
+      FORGE_WEB_ENABLED: '1'
+      FORGE_WEB_HOST: 0.0.0.0
+      FORGE_WEB_PORT: '8080'
+      FORGE_WEB_AUTH: jwt
+      FORGE_WEB_SECRET_KEY: ${FORGE_WEB_SECRET_KEY:?set FORGE_WEB_SECRET_KEY >=32
+        chars}
+      FORGE_WEB_BOOTSTRAP_TOKEN: ${FORGE_WEB_BOOTSTRAP_TOKEN:?set FORGE_WEB_BOOTSTRAP_TOKEN
+        >=32 chars}
+      FORGE_ENGAGEMENT_KEY: ${FORGE_ENGAGEMENT_KEY:?set FORGE_ENGAGEMENT_KEY >=32
+        chars}
+      FORGE_SECURITY_HEADERS_DISABLE: '0'
+      FORGE_SECURITY_HSTS_SECONDS: ${FORGE_SECURITY_HSTS_SECONDS:-31536000}
+      FORGE_PUBLIC_BASE_URL: ${FORGE_PUBLIC_BASE_URL:?set FORGE_PUBLIC_BASE_URL to
+        the external https URL}
+      FORGE_TLS_TERMINATED_BY: ${FORGE_TLS_TERMINATED_BY:-reverse-proxy}
+      FORGE_DISTRIBUTED_ENABLED: '1'
+      FORGE_REDIS_URL: redis://redis:6379/0
+      FORGE_STATE_DB_URL: postgresql+asyncpg://forge:${FORGE_POSTGRES_PASSWORD:?set
+        FORGE_POSTGRES_PASSWORD}@postgres:5432/forge
+      FORGE_AUDIT_DB_URL: postgresql+asyncpg://forge:${FORGE_POSTGRES_PASSWORD:?set
+        FORGE_POSTGRES_PASSWORD}@postgres:5432/forge
+      FORGE_AUDIT_LOG_PATH: /data/audit/audit.jsonl
+      FORGE_AUDIT_BUNDLE_REMOTE_URI: ${FORGE_AUDIT_BUNDLE_REMOTE_URI:-file:///remote-audit}
+      FORGE_AUDIT_BUNDLE_REMOTE_SCOPE: ${FORGE_AUDIT_BUNDLE_REMOTE_SCOPE:?set customer/workspace
+        audit scope}
+      FORGE_PLUGIN_DIR: /plugins
+      FORGE_SCOPE_JSON: ${FORGE_SCOPE_JSON:-}
+      FORGE_GOVERNANCE_RULES: ${FORGE_GOVERNANCE_RULES:-}
+      FORGE_LLM_PROVIDER: ${FORGE_LLM_PROVIDER:-llama_cpp}
+      FORGE_LLM_MODEL_PATH: ${FORGE_LLM_MODEL_PATH:-}
+      FORGE_PROVIDER_TIMEOUT: ${FORGE_PROVIDER_TIMEOUT:-5}
+      FORGE_HEARTBEAT_INTERVAL: ${FORGE_HEARTBEAT_INTERVAL:-30}
+      FORGE_TELEMETRY_THRESHOLD_MS: ${FORGE_TELEMETRY_THRESHOLD_MS:-5000}
+      FORGE_MESSAGE_RETRY_MAX: ${FORGE_MESSAGE_RETRY_MAX:-3}
+      FORGE_MESSAGE_ACK_TIMEOUT: ${FORGE_MESSAGE_ACK_TIMEOUT:-60}
+      FORGE_LOG_LEVEL: ${FORGE_LOG_LEVEL:-INFO}
+      WATCHFILES_FORCE_POLLING: 'true'
+      WATCHFILES_POLL_DELAY_MS: '500'
+    command:
+    - uvicorn
+    - forge.webui.app:create_app
+    - --factory
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8080'
+    - --reload
+    - --reload-dir
+    - /app/forge
+    volumes:
+    - ./forge:/app/forge:ro
+    - ./alembic:/app/alembic:ro
+    - ./alembic.ini:/app/alembic.ini:ro
+    - dev-data:/data
+    - dev-plugins:/plugins
+    - dev-audit:/remote-audit
+    - dev-models:/home/forge/.cache/forge/models
+    depends_on:
+    - postgres
+    - redis
+    ports:
+    - 127.0.0.1:8080:8080
+  forge-worker:
+    image: forge-dev:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev
+    init: true
+    env_file:
+    - path: .env.dev
+      required: false
+    environment:
+      FORGE_DEPLOYMENT_PROFILE: production
+      FORGE_ENV: production
+      FORGE_DATA_DIR: /data
+      FORGE_SAFE_MODE: '1'
+      FORGE_REQUIRE_SCOPE_MANIFEST: '1'
+      FORGE_NO_TOR: '1'
+      FORGE_WEB_ENABLED: '1'
+      FORGE_WEB_HOST: 0.0.0.0
+      FORGE_WEB_PORT: '8080'
+      FORGE_WEB_AUTH: jwt
+      FORGE_WEB_SECRET_KEY: ${FORGE_WEB_SECRET_KEY:?set FORGE_WEB_SECRET_KEY >=32
+        chars}
+      FORGE_WEB_BOOTSTRAP_TOKEN: ${FORGE_WEB_BOOTSTRAP_TOKEN:?set FORGE_WEB_BOOTSTRAP_TOKEN
+        >=32 chars}
+      FORGE_ENGAGEMENT_KEY: ${FORGE_ENGAGEMENT_KEY:?set FORGE_ENGAGEMENT_KEY >=32
+        chars}
+      FORGE_SECURITY_HEADERS_DISABLE: '0'
+      FORGE_SECURITY_HSTS_SECONDS: ${FORGE_SECURITY_HSTS_SECONDS:-31536000}
+      FORGE_PUBLIC_BASE_URL: ${FORGE_PUBLIC_BASE_URL:?set FORGE_PUBLIC_BASE_URL to
+        the external https URL}
+      FORGE_TLS_TERMINATED_BY: ${FORGE_TLS_TERMINATED_BY:-reverse-proxy}
+      FORGE_DISTRIBUTED_ENABLED: '1'
+      FORGE_REDIS_URL: redis://redis:6379/0
+      FORGE_STATE_DB_URL: postgresql+asyncpg://forge:${FORGE_POSTGRES_PASSWORD:?set
+        FORGE_POSTGRES_PASSWORD}@postgres:5432/forge
+      FORGE_AUDIT_DB_URL: postgresql+asyncpg://forge:${FORGE_POSTGRES_PASSWORD:?set
+        FORGE_POSTGRES_PASSWORD}@postgres:5432/forge
+      FORGE_AUDIT_LOG_PATH: /data/audit/audit.jsonl
+      FORGE_AUDIT_BUNDLE_REMOTE_URI: ${FORGE_AUDIT_BUNDLE_REMOTE_URI:-file:///remote-audit}
+      FORGE_AUDIT_BUNDLE_REMOTE_SCOPE: ${FORGE_AUDIT_BUNDLE_REMOTE_SCOPE:?set customer/workspace
+        audit scope}
+      FORGE_PLUGIN_DIR: /plugins
+      FORGE_SCOPE_JSON: ${FORGE_SCOPE_JSON:-}
+      FORGE_GOVERNANCE_RULES: ${FORGE_GOVERNANCE_RULES:-}
+      FORGE_LLM_PROVIDER: ${FORGE_LLM_PROVIDER:-llama_cpp}
+      FORGE_LLM_MODEL_PATH: ${FORGE_LLM_MODEL_PATH:-}
+      FORGE_PROVIDER_TIMEOUT: ${FORGE_PROVIDER_TIMEOUT:-5}
+      FORGE_HEARTBEAT_INTERVAL: ${FORGE_HEARTBEAT_INTERVAL:-30}
+      FORGE_TELEMETRY_THRESHOLD_MS: ${FORGE_TELEMETRY_THRESHOLD_MS:-5000}
+      FORGE_MESSAGE_RETRY_MAX: ${FORGE_MESSAGE_RETRY_MAX:-3}
+      FORGE_MESSAGE_ACK_TIMEOUT: ${FORGE_MESSAGE_ACK_TIMEOUT:-60}
+      FORGE_LOG_LEVEL: ${FORGE_LOG_LEVEL:-INFO}
+      WATCHFILES_FORCE_POLLING: 'true'
+      WATCHFILES_POLL_DELAY_MS: '500'
+    command:
+    - watchfiles
+    - --target-type
+    - command
+    - python -m forge.core.runner
+    - /app/forge
+    volumes:
+    - ./forge:/app/forge:ro
+    - ./alembic:/app/alembic:ro
+    - ./alembic.ini:/app/alembic.ini:ro
+    - dev-data:/data
+    - dev-plugins:/plugins
+    - dev-audit:/remote-audit
+    - dev-models:/home/forge/.cache/forge/models
+    depends_on:
+    - postgres
+    - redis
+    profiles:
+    - workers
+  frontend:
+    image: forge-frontend-dev:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: frontend-dev
+    init: true
+    environment:
+      DEV_API_URL: http://forge-webui:8080
+      CHOKIDAR_USEPOLLING: 'true'
+    volumes:
+    - ./forge/reporting/webui:/app/frontend
+    - /app/frontend/node_modules
+    ports:
+    - 127.0.0.1:5173:5173
+    depends_on:
+    - forge-webui
+volumes:
+  dev-postgres: {}
+  dev-redis: {}
+  dev-data: {}
+  dev-plugins: {}
+  dev-audit: {}
+  dev-models: {}
