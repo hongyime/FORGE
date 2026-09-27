@@ -5,7 +5,7 @@ import json
 import re
 import warnings
 from collections import Counter, defaultdict
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 SCHEMA_VERSION = "forge.automation_policy.v1"
@@ -70,14 +70,27 @@ DAILY_USE_LAYER: tuple[dict[str, str], ...] = (
     },
 )
 
+def _current_home_pattern(*parts: str, child_pattern: str = r".*") -> str:
+    """Match only the current user's selected directory, with literal home characters."""
+    home = Path.home()
+    base = str(home.joinpath(*parts))
+    windows = isinstance(home, PureWindowsPath)
+    separator = r"[\\/]" if windows else "/"
+    prefix = re.escape(base)
+    if windows:
+        prefix = prefix.replace(r"\\", separator)
+    # Reject parent traversal before matching the exact approved directory.
+    return rf"^(?!.*{separator}\.\.(?:{separator}|$)){prefix}{separator}{child_pattern}$"
+
+
 APPROVED_LOCAL_PATHS: dict[str, list[str]] = {
     "allow_regex": [
-        r"^C:\\Users\\bryan\\OneDrive\\01 TOOLKITS\\forgetoolkit\\imports\\.*$",
+        _current_home_pattern("OneDrive", "01 TOOLKITS", "forgetoolkit", "imports"),
         r"^X:\\01 REPOSITORIES\\[^\\]+\\exports\\.*$",
-        r"^C:\\Users\\bryan\\Downloads\\forge-imports\\.*$",
+        _current_home_pattern("Downloads", "forge-imports"),
     ],
     "deny_regex": [
-        r"\\AppData\\",
+        r"[\\/]AppData[\\/]",
     ],
 }
 
@@ -119,7 +132,7 @@ WILDCARD_SCOPE_TEMPLATE: dict[str, Any] = {
     "url_prefixes": ["https://*.*.*/", "http://*.*.*/"],
     "automation_policy": {
         "approved_local_path_regex": [
-            r"^C:\\Users\\bryan\\OneDrive\\01 REPOSITORIES\\[^\\]+$",
+            _current_home_pattern("OneDrive", "01 REPOSITORIES", child_pattern=r"[^\\/]+"),
             r"^X:\\01 REPOSITORIES\\[^\\]+$",
         ],
         "wildcard_execution": True,
@@ -514,14 +527,14 @@ def validate_automation_policy() -> dict[str, Any]:
         "unknown_connectors": unknown_connectors,
         "path_regex_examples": [
             {
-                "path": r"C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\imports\scope.json",
+                "path": str(Path.home() / "OneDrive" / "01 TOOLKITS" / "forgetoolkit" / "imports" / "scope.json"),
                 "allowed": approved_local_path(
-                    r"C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\imports\scope.json"
+                    str(Path.home() / "OneDrive" / "01 TOOLKITS" / "forgetoolkit" / "imports" / "scope.json")
                 ),
             },
             {
-                "path": r"C:\Users\bryan\AppData\Local\Temp\secret.txt",
-                "allowed": approved_local_path(r"C:\Users\bryan\AppData\Local\Temp\secret.txt"),
+                "path": str(Path.home() / "AppData" / "Local" / "Temp" / "secret.txt"),
+                "allowed": approved_local_path(str(Path.home() / "AppData" / "Local" / "Temp" / "secret.txt")),
             },
         ],
     }

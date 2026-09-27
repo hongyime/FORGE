@@ -156,7 +156,7 @@ Current measurements (forge/security/detection_surface.py):
 
 ## Explore #14 — Agent Ecosystem Architecture Plan
 
-**Status**: Plan-only (implementation blocked on Bryan review)
+**Status**: Plan-only (implementation blocked on the maintainer review)
 
 ### Goal
 Adopt Mythic-style collaboration and eventing patterns for FORGE plugin coordination.
@@ -251,8 +251,10 @@ tests/unit/
 5. **Bounded queues**: No unbounded growth; backpressure propagates to callers.
 
 ### Open Gates Before Implementation
-- [ ] Bryan reviews and approves this plan.
+- [ ] the maintainer reviews and approves this plan.
 - [ ] Decide whether `asyncio` or a thread-safe sync queue is preferred (asyncio recommended).
 - [ ] Confirm whether `forge agents list` should appear in public CLI help or stay hidden.
 
 ---
+
+Machine-specific values in this document use privacy placeholders.

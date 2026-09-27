@@ -135,7 +135,7 @@ Final release reviews         [....]                    0 / 4
 ## Auto State
 
 - Updated: 2026-09-27 11:03:22 +08:00
-- Machine: PRAWN-E14
+- Machine: dev-host-2.example
 - Harness: claude
 - Event: stop
 - Branch: main
@@ -143,3 +143,11 @@ Final release reviews         [....]                    0 / 4
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
+
+Machine-specific values in this document use privacy placeholders.
+
+2026-09-27: Applied reviewed container development and remote publishing maintenance. Development source delivery and dependency isolation were checked locally; image builds, full runtime, and live CI publication remain unverified. Existing unrelated changes were preserved; no commit or push.
+
+2026-09-27: Privacy follow-up replaced personal home literals with escaped current-home patterns while preserving the approved directories and operation settings. Independent pure policy review passed 181 checks on Windows and 181 on Ubuntu; no operations were executed. Generated home patterns reject parent traversal; separate legacy export rules remain unchanged. Named engagement data-route identifiers remain as functional links.
+
+2026-09-27: Current upstream changes are preserved in the publication branch. Initial CI, bounded runtime validation and resource teardown are in progress under the user-approved maintenance release.

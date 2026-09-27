@@ -53,8 +53,8 @@ context, not as current blocked-state instructions.
 
 ### Option 1: Check if build completed
 ```powershell
-Test-Path "C:\Users\bryan\AppData\Local\Temp\forge-rust-target\release\forge_core.dll"
-Get-ChildItem "C:\Users\bryan\AppData\Local\Temp\forge-rust-target\release" -Filter "*.dll"
+Test-Path "<user-home>\AppData\Local\Temp\forge-rust-target\release\forge_core.dll"
+Get-ChildItem "<user-home>\AppData\Local\Temp\forge-rust-target\release" -Filter "*.dll"
 ```
 
 ### Option 2: Reduce crate dependencies
@@ -79,9 +79,9 @@ full = ["tokio", "reqwest", "kerberos-parser"]
 
 ### Option 3: Build with verbose output
 ```powershell
-$env:CARGO_TARGET_DIR = "C:\Users\bryan\AppData\Local\Temp\forge-rust-target"
-Set-Location "C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\rust_core"
-cargo build --release -vv 2>&1 | Tee-Object -FilePath "C:\Users\bryan\AppData\Local\Temp\rust-build.log"
+$env:CARGO_TARGET_DIR = "<user-home>\AppData\Local\Temp\forge-rust-target"
+Set-Location "<user-home>\OneDrive\01 TOOLKITS\forgetoolkit\rust_core"
+cargo build --release -vv 2>&1 | Tee-Object -FilePath "<user-home>\AppData\Local\Temp\rust-build.log"
 ```
 
 ### Option 4: Build in stages
@@ -152,3 +152,5 @@ If future native Rust work is unavailable:
 
 ## Contact
 Continue with Codex CLI: `codex exec "Continue building FORGE Rust core. See FORGE_RUST_HANDOFF.md. Build timed out. Check if DLL exists or reduce dependencies."`
+
+Machine-specific values in this document use privacy placeholders.

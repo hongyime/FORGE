@@ -212,7 +212,7 @@ silently degrades.
 | `osint social` (epieos) | ~~P0~~ **FIXED** | Runs; Epieos returns 403 upstream (their block) |
 | `osint usernames --backend sherlock` | P1 | Silent 0 rows; sherlock backend broken |
 | `osint phone 00000000` | PASS | Full 4-tier: parse + PhoneInfoga + Telegram/WhatsApp + dork mining |
-| `osint name "Bryan Seah"` | PASS | Zero hits (DDG rate-limit expected) |
+| `osint name "the maintainer"` | PASS | Zero hits (DDG rate-limit expected) |
 | `osint gravatar` | PASS | 5 social profiles written (Threads/X/LinkedIn/TikTok + summary) |
 | `osint keyscan --dry-run` | PASS | 12 patterns iterated |
 
@@ -386,7 +386,7 @@ The audit was NOT dry-run only. Engagement 5010 accumulated real data:
 - **1 evasion payload** written (SHA256 `65ed4faa2b583b31eeab40e9831dfdffc70da7e7e56d8804f1b5309964e79526`, stealth score 4)
 - **Report + Maltego + Dashboard** all generated
 
-Bryan's real emails from earlier engagements also yielded fresh Gravatar hits + Xposed breach rows post scope-fix.
+the maintainer's real emails from earlier engagements also yielded fresh Gravatar hits + Xposed breach rows post scope-fix.
 
 ---
 
@@ -403,3 +403,5 @@ forge menu        forge kb          forge graph      forge report
 **No pending P0 crashes.** All P1s documented above are non-blocking (return 0 with empty result or warning). P2/P3 UX items are for follow-up.
 
 **Audit report artifact:** `AUDIT_RESULTS.md` at repo root (this file).
+
+Machine-specific values in this document use privacy placeholders.

@@ -408,7 +408,9 @@ This reduces (but may not eliminate) content-based scanning on upload.
 
 ### Windows Defender exclusions (still needed for local scanning):
 ```powershell
-Add-MpPreference -ExclusionPath "C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\forge\phase3"
-Add-MpPreference -ExclusionPath "C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\forge\phase5"
-Add-MpPreference -ExclusionPath "C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\.venv"
+Add-MpPreference -ExclusionPath "<user-home>\OneDrive\01 TOOLKITS\forgetoolkit\forge\phase3"
+Add-MpPreference -ExclusionPath "<user-home>\OneDrive\01 TOOLKITS\forgetoolkit\forge\phase5"
+Add-MpPreference -ExclusionPath "<user-home>\OneDrive\01 TOOLKITS\forgetoolkit\.venv"
 ```
+
+Machine-specific values in this document use privacy placeholders.
