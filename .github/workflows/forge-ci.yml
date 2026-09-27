@@ -147,7 +147,7 @@ jobs:
                  tests/phase2/test_paste_monitor.py \
                  tests/phase2/test_scavenger.py \
                  tests/phase2/test_secret_finder.py \
-                 tests/phase2/test_scavenger_scope_gate.py \
+                 tests/phase2/test_scavenger.py::test_run_scavenger_scope_violation \
             --record-mode=none \
             --cov=forge/utils/intel \
             --cov-report=term-missing \
@@ -177,9 +177,9 @@ jobs:
         image: dperson/samba:amd64  # :latest returns "manifest unknown" (broken multi-arch manifest); amd64 matches GitHub-hosted runners and resolves correctly
         ports:
           - "4445:445"
-        options: >-
-          -u "testuser;testpass"
-          -s "test;/tmp"
+        env:
+          USER: "testuser;testpass"
+          SHARE: "test;/tmp"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -242,7 +242,7 @@ jobs:
         run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run correlation tests
         run: |
-          pytest tests/phase4/test_correlator.py \
+          pytest tests/phase4/test_exploit_correlator.py \
                  tests/phase4/test_hash_taxonomy.py \
                  tests/phase4/test_hash_credential_bridge.py \
                  tests/phase4/test_hash_correlation_integration.py \
@@ -261,8 +261,7 @@ jobs:
     runs-on: ubuntu-24.04
     continue-on-error: true
     needs: lint
-    container:
-      image: ghcr.io/redhuntlabs/agneyastra:1.0.0   # provides agneyastra binary for 4-E tests
+    # Unit tests mock cloud clients/tool subprocesses; no external tool image is required.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -358,7 +357,7 @@ jobs:
       - name: Assert validator 100% coverage
         run: |
           pytest tests/phase6/ \
-            --cov=forge/phase6/llm_validator \
+            --cov=forge.phase6.llm_validator \
             --cov-fail-under=100 \
             -q
 

@@ -540,3 +540,5 @@ Machine-specific values in this document use privacy placeholders.
 2026-09-27: Privacy follow-up replaced personal home literals with escaped current-home patterns while preserving the approved directories and operation settings. Independent pure policy review passed 181 checks on Windows and 181 on Ubuntu; no operations were executed. Generated home patterns reject parent traversal; separate legacy export rules remain unchanged. Named engagement data-route identifiers remain as functional links.
 
 2026-09-27: Current upstream changes are preserved in the publication branch. Initial CI, bounded runtime validation and resource teardown are in progress under the user-approved maintenance release.
+
+- 2026-09-27: Corrected existing CI fixture configuration, two moved test selectors and the reporting-validator coverage module; mocked cloud unit tests no longer require an unavailable external tool image. Coverage thresholds and existing job settings remain unchanged. Twelve other stale selectors remain explicit blockers; no application or offensive capability changes were made. Remote verification is pending.
