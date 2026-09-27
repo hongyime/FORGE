@@ -338,7 +338,7 @@ async fn canaries_async() -> Vec<CheckResult> {
         let _ = lock; // no-op, just ensure compile
         // Hold the lock externally using the scheduler's lock field via interior access.
         // We test this by running tick twice rapidly (second should be blocked by stale check).
-        let ids1 = sched.tick().await;
+        let _ids1 = sched.tick().await;
         let ids2 = sched.tick().await; // second tick within stale window should be empty
         if ids2.is_empty() {
             out.push(CheckResult::pass(name));

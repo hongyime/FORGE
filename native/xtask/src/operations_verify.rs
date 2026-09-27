@@ -4,7 +4,7 @@
 
 use std::path::Path;
 use forge_operations::{
-    AuditEvent, AutostartGate, LegalHold, RetentionRun, RetentionStatus,
+    AutostartGate, LegalHold, RetentionRun, RetentionStatus,
     WorkspaceMemberRole, append_audit_event,
 };
 
