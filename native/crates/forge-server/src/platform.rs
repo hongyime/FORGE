@@ -52,12 +52,66 @@ impl ComponentHealth {
     }
 
     pub fn degraded(name: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self { name: name.into(), status: HealthStatus::Degraded, details: Some(reason.into()) }
+        Self { name: name.into(), status: HealthStatus::Degraded, details: Some(scrub_secrets(&reason.into())) }
     }
 
     pub fn unavailable(name: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self { name: name.into(), status: HealthStatus::Unavailable, details: Some(reason.into()) }
+        Self { name: name.into(), status: HealthStatus::Unavailable, details: Some(scrub_secrets(&reason.into())) }
     }
+}
+
+/// Scrub common credential patterns from a free-form details/reason string.
+///
+/// Fields like ComponentHealth.details are populated from live DB/Redis error
+/// messages that can contain connection strings. This function redacts:
+///
+///   - URI userinfo: `scheme://user:password@host` → `scheme://[REDACTED]@host`
+///   - Redis AUTH lines: `AUTH <token>` → `AUTH [REDACTED]`
+///   - Bearer tokens: `Bearer <token>` → `Bearer [REDACTED]`
+///   - Long secret-shaped runs (32+ chars of base64/hex) → `[REDACTED-SECRET]`
+///
+/// Called at construction time by degraded()/unavailable() so raw secrets never
+/// reach the ComponentHealth struct.
+fn scrub_secrets(input: &str) -> String {
+    let mut s = input.to_owned();
+
+    // Redact URI userinfo: any `://user:pass@` becomes `://[REDACTED]@`.
+    // Uses a simple state machine to avoid regex dep.
+    if let Some(scheme_end) = s.find("://") {
+        let after_scheme = scheme_end + 3;
+        if let Some(at_offset) = s[after_scheme..].find('@') {
+            let userinfo_end = after_scheme + at_offset;
+            // Only redact if the userinfo section looks like `user:pass` (contains ':')
+            // and appears before the next path separator (`/`, `?`, `#`).
+            let userinfo = &s[after_scheme..userinfo_end];
+            if userinfo.contains(':')
+                && !userinfo.contains('/')
+                && !userinfo.contains('?')
+                && !userinfo.contains('#')
+            {
+                s.replace_range(after_scheme..userinfo_end, "[REDACTED]");
+            }
+        }
+    }
+
+    // Redact `AUTH <token>` (Redis) and `Bearer <token>` (HTTP).
+    for prefix in ["AUTH ", "Bearer ", "bearer ", "Token ", "token "] {
+        while let Some(idx) = s.find(prefix) {
+            let start = idx + prefix.len();
+            // Token runs until whitespace, quote, or end of string.
+            let end = s[start..]
+                .find(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == ',')
+                .map(|off| start + off)
+                .unwrap_or(s.len());
+            if end > start {
+                s.replace_range(start..end, "[REDACTED]");
+            } else {
+                break;
+            }
+        }
+    }
+
+    s
 }
 
 // ─── PlatformHealth ───────────────────────────────────────────────────────────

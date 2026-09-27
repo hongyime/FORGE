@@ -159,6 +159,12 @@ pub struct ReportContext {
     pub graph_entity_count: usize,
     pub graph_relationship_count: usize,
     /// Free-form key/value pairs for template interpolation.
+    ///
+    /// SECURITY: `extra` is caller-controlled and may contain secrets, tokens,
+    /// or session IDs used only during Markdown template rendering. It MUST NOT
+    /// appear in JSON exports (`raw_json_export`, `json_sidecar`), which are
+    /// operator-visible artifacts.
+    #[serde(skip_serializing, default)]
     pub extra: HashMap<String, String>,
 }
 

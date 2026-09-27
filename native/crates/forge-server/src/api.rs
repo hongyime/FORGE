@@ -197,10 +197,106 @@ impl ProgressEvent {
             phase: phase.into(),
             iteration,
             progress: progress.clamp(0.0, 1.0),
-            message: message.into(),
+            message: scrub_progress_message(&message.into()),
             event_at,
         }
     }
+}
+
+/// Scrub secret-shaped substrings from a ProgressEvent message.
+///
+/// ProgressEvent.message is broadcast verbatim over the /ws/progress WebSocket
+/// to every connected client. Live phase output (keyscan, secret-scanner,
+/// bearer-token dumps) MUST NOT reach subscribers in raw form.
+///
+/// Redacts common leak shapes:
+///   - Long alphanumeric runs (32+ chars, base64/hex/token-like) → `[REDACTED-SECRET]`
+///   - Bearer/AUTH/Token/API-key prefix + value → `<prefix> [REDACTED]`
+///   - GitHub PAT-shaped tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_` + 36 chars)
+///   - OpenAI-style `sk-...` runs (20+ chars)
+///
+/// This is a defense-in-depth guard; the phase producer should also scrub, but
+/// this ensures the WebSocket broadcast surface has its own redaction floor.
+fn scrub_progress_message(input: &str) -> String {
+    let mut s = input.to_owned();
+
+    // Redact prefix-tagged tokens: `<prefix> <value>`.
+    for prefix in [
+        "Bearer ", "bearer ", "AUTH ", "Token ", "token ",
+        "api_key=", "api-key=", "apikey=", "key=", "password=", "pass=",
+    ] {
+        while let Some(idx) = s.find(prefix) {
+            let start = idx + prefix.len();
+            let end = s[start..]
+                .find(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == ',' || c == '&' || c == ';')
+                .map(|off| start + off)
+                .unwrap_or(s.len());
+            if end > start {
+                s.replace_range(start..end, "[REDACTED]");
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Redact GitHub PAT-shaped tokens: `gh[porus]_` + 36+ alphanumeric.
+    for pat_prefix in ["ghp_", "gho_", "ghu_", "ghs_", "ghr_"] {
+        while let Some(idx) = s.find(pat_prefix) {
+            let start = idx + pat_prefix.len();
+            let end = s[start..]
+                .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                .map(|off| start + off)
+                .unwrap_or(s.len());
+            if end - start >= 20 {
+                s.replace_range(idx..end, "[REDACTED-GITHUB-TOKEN]");
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Redact OpenAI-style `sk-` tokens: `sk-` + 20+ alphanumeric.
+    while let Some(idx) = s.find("sk-") {
+        let start = idx + 3;
+        let end = s[start..]
+            .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '-')
+            .map(|off| start + off)
+            .unwrap_or(s.len());
+        if end - start >= 20 {
+            s.replace_range(idx..end, "[REDACTED-OPENAI-KEY]");
+        } else {
+            break;
+        }
+    }
+
+    // Redact bare long alphanumeric runs (32+ chars). These are token-shaped
+    // regardless of prefix. Only redact when surrounded by non-alphanumeric.
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i].is_ascii_alphanumeric() || chars[i] == '_' || chars[i] == '-' {
+            let start = i;
+            while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_' || chars[i] == '-') {
+                i += 1;
+            }
+            let run: String = chars[start..i].iter().collect();
+            // Only redact if the run is 32+ chars AND looks token-like (mixed
+            // case OR digits AND letters). Skip pure-alpha long strings (like
+            // long English words or path components) to avoid noise.
+            let has_digit = run.chars().any(|c| c.is_ascii_digit());
+            let has_alpha = run.chars().any(|c| c.is_ascii_alphabetic());
+            if run.len() >= 32 && has_digit && has_alpha {
+                out.push_str("[REDACTED-SECRET]");
+            } else {
+                out.push_str(&run);
+            }
+        } else {
+            out.push(chars[i]);
+            i += 1;
+        }
+    }
+    out
 }
 
 // ─── Unit tests ────────────────────────────────────────────────────────────────
