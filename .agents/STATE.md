@@ -1,14 +1,14 @@
-# Current Task: Rust rewrite — T28–36 accepted; Wave 5+6 COMPLETE; full rewrite at 34/36
+# Current Task: Rust rewrite — T1–T36 all accepted; FULL REWRITE COMPLETE 36/36
 
-**Status:** T28–36 accepted — Wave 5 (`6689eec`) + Wave 6 (`2ce293a`) COMPLETE | forge-ui (UIRoute/OverviewView/DetailTab) + forge-release (ReleaseManifest/PackagingTarget/CutoverState) | Date: 2026-09-23
+**Status:** T1 admin closure done (rust-analyzer installed, authorized cleanup complete, ledger verified: all 4 previously-blocked entries (`DehashedResult.password`, `HashCredential.hash_plaintext`, `KeyScannerFinding.key_prefix`, `HashCredentialSet`) are `implemented_fixture_verified`) + T2 baseline adapters closure. Wave 5 (`6689eec`) + Wave 6 (`2ce293a`) COMPLETE. FULL REWRITE T1–T36 = 36/36. | Date: 2026-09-26
 
 ## Progress dashboard
 
 These are different measurements, not an estimated overall completion percentage.
 
 ```text
-Major milestones fully closed  [##################################]  34 / 36 (T3–T36; T1/T2 partial)
-Milestones with delivered work [~~~##################################]  36 / 36 (T1/T2 partial; T3–T36 all accepted)
+Major milestones fully closed  [####################################]  36 / 36 (T1–T36)
+Milestones with delivered work [~~~####################################]  36 / 36 (T1–T36 all accepted)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
 Latest domain test run         [####################] 214 / 214 passed (workspace last: ~440: domain 214 + xtask 79 units + storage 39 + integration suites; red_e slow test pre-existing)
 Final release reviews         [....]                    0 / 4
@@ -134,12 +134,12 @@ Final release reviews         [....]                    0 / 4
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-23 08:09:53 +08:00
+- Updated: 2026-09-27 11:03:22 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: c3442c5
+- HEAD: 0e1c1a1
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
