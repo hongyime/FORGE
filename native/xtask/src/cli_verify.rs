@@ -84,6 +84,58 @@ pub fn run(_root: &Path, _evidence: &Path) -> crate::model::Result<i32> {
                HiddenCommandKind::from_str(s).is_some());
     }
 
+    // ── Leak-class canaries: dangerous commands must NOT be read-only ────────
+    //
+    // Commands that mutate state, execute live checks, or wipe data must not
+    // report is_read_only() == true.  A regression here would let a UI layer
+    // silently allow a mutating call through a read-only gate check.
+
+    // Destructive: wipes engagement artefacts
+    check!("danger/clean_not_read_only",       !CommandKind::Clean.is_read_only());
+    // Live active checks requiring ROE — not read-only
+    check!("danger/active_val_not_read_only",  !CommandKind::ActiveValidation.is_read_only());
+    // kill-chain mutates engagement data
+    check!("danger/kill_chain_not_read_only",  !CommandKind::KillChain.is_read_only());
+    // Connectors can import/write data
+    check!("danger/connectors_not_read_only",  !CommandKind::Connectors.is_read_only());
+    // Automation can launch live targets
+    check!("danger/automation_not_read_only",  !CommandKind::Automation.is_read_only());
+    // Remediation writes ticket/owner state
+    check!("danger/remediation_not_read_only", !CommandKind::Remediation.is_read_only());
+
+    // ── Leak-class canaries: ROE gate coverage ─────────────────────────
+    //
+    // Commands that perform live network operations or destructive actions
+    // require a ROE/scope manifest before execution.  The `requires_roe()`
+    // predicate is the gate.  A missing entry here means the gate would be
+    // skipped and a live scan could run without written authorisation.
+
+    // These three are already covered by the existing canaries; repeat here
+    // explicitly so the gap-coverage intent is clear.
+    check!("roe/kill_chain_explicit",    CommandKind::KillChain.requires_roe());
+    check!("roe/targets_explicit",       CommandKind::Targets.requires_roe());
+    check!("roe/active_val_explicit",    CommandKind::ActiveValidation.requires_roe());
+
+    // Read-only commands must not spuriously require ROE (regression guard).
+    check!("roe/menu_no_roe",         !CommandKind::Menu.requires_roe());
+    check!("roe/doctor_no_roe",       !CommandKind::Doctor.requires_roe());
+    check!("roe/dashboard_no_roe",    !CommandKind::Dashboard.requires_roe());
+    check!("roe/scaffold_no_roe",     !CommandKind::Scaffold.requires_roe());
+
+    // ── Leak-class canaries: hidden commands are NEVER publicly routable ────
+    //
+    // Hidden sub-apps (recon, exploit, etc.) must return CommandOutcome::Hidden
+    // and never accidentally become CommandOutcome::Supported, which would
+    // expose them in --help output and bypass safe-mode / ROE gate text.
+
+    for s in ["recon", "osint", "evasion", "exploit", "vuln", "cloud", "web", "auth", "post"] {
+        let outcome = route_command(s);
+        check!(format!("leak/hidden_{s}_not_supported"),
+               !matches!(outcome, CommandOutcome::Supported(_)));
+        check!(format!("leak/hidden_{s}_is_hidden"),
+               matches!(outcome, CommandOutcome::Hidden(_)));
+    }
+
     // ── Summary ───────────────────────────────────────────────────────────────
 
     if failures.is_empty() {

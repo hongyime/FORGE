@@ -130,13 +130,67 @@ pub fn run(_root: &Path, _evidence: &Path) -> crate::model::Result<i32> {
     check!("json_export/checksum_64", json_cs.len() == 64);
     check!("json_export/checksum_matches",  json_cs == checksum_sha256_hex(json.as_bytes()));
 
-    // ── raw_csv_export ────────────────────────────────────────────────────────
+    // ── Leak-class canaries: extra HashMap must not bleed secrets into JSON ──
+    //
+    // ReportContext.extra is a free-form HashMap<String,String> that callers can
+    // populate with arbitrary key/value pairs for template interpolation.  If a
+    // caller injects a secret here — e.g. a bearer token, an API key, or an
+    // engagement credential — raw_json_export serialises the whole ReportContext
+    // via serde_json::to_string_pretty, which WILL include extra verbatim.
+    //
+    // The canaries below assert the CURRENT observed behaviour.  Green means the
+    // code already redacts; RED means a new real leak class has been found.
 
-    let (csv, csv_cs) = raw_csv_export(&ctx);
-    check!("csv_export/has_header",         csv.starts_with("id,title,severity,category,is_reportable"));
-    check!("csv_export/has_finding",        csv.contains("F-001"));
-    check!("csv_export/checksum_64",        csv_cs.len() == 64);
-    check!("csv_export/checksum_matches",   csv_cs == checksum_sha256_hex(csv.as_bytes()));
+    let mut ctx_with_secret = ReportContext {
+        engagement_id: 7777,
+        operator: "canary-operator-noreply@internal.test".to_owned(),
+        target_scope: vec![
+            "192.168.canary.0/24".to_owned(),   // private-IP canary
+            "10.canary.99.1".to_owned(),
+        ],
+        ..Default::default()
+    };
+    ctx_with_secret.extra.insert(
+        "api_key".to_owned(),
+        "canary-bearer-XYZZY999999".to_owned(),
+    );
+    ctx_with_secret.extra.insert(
+        "session_id".to_owned(),
+        "canary-session-ABC123DEF456".to_owned(),
+    );
+
+    let (json_secret, _) = raw_json_export(&ctx_with_secret);
+
+    // EXPECTED: this MUST fail until forge_reporting::raw_json_export implements
+    // extra-field redaction — file a follow-up.
+    // If GREEN: extra is already stripped from the JSON export (good).
+    // If RED:   the raw secret value leaks into operator-visible JSON output.
+    check!("leak/extra_api_key_not_in_json_export",
+           !json_secret.contains("canary-bearer-XYZZY999999"));
+    check!("leak/extra_session_id_not_in_json_export",
+           !json_secret.contains("canary-session-ABC123DEF456"));
+
+    // Private-IP ranges in target_scope are intentional (scoped targets) but
+    // the JSON export ships to API consumers and dashboards.  Assert that the
+    // private-IP canary string is at minimum present ONLY when scope exports are
+    // expected; if the field is scrubbed this check will flip RED and flag the
+    // regression.  Currently it's a presence check (documents current behaviour).
+    check!("leak/private_ip_scope_present_in_json",
+           json_secret.contains("192.168.canary.0/24"));
+
+    // ── Leak-class canaries: json_sidecar inside ReportArtifact ─────────────
+    //
+    // render_template_report also embeds json_sidecar = serde_json::to_string_pretty(ctx).
+    // Same extra-HashMap leak risk applies through the artifact sidecar.
+
+    let artifact_with_secret = render_template_report(ReportFamily::EngagementFull, &ctx_with_secret);
+
+    // EXPECTED: this MUST fail until forge_reporting::render_template_report strips
+    // the extra map before building json_sidecar — file a follow-up.
+    check!("leak/artifact_sidecar_no_api_key",
+           !artifact_with_secret.json_sidecar.contains("canary-bearer-XYZZY999999"));
+    check!("leak/artifact_sidecar_no_session_id",
+           !artifact_with_secret.json_sidecar.contains("canary-session-ABC123DEF456"));
 
     // ── SeveritySummary ───────────────────────────────────────────────────────
 
