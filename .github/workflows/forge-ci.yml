@@ -79,6 +79,7 @@ jobs:
 
 # ── Evasion assertions ─────────────────────────────────────────────────────────
   test-opsec:
+    timeout-minutes: 20
     name: OPSEC — Evasion Assertions
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -102,6 +103,7 @@ jobs:
 
 # ── Phase 0 + Phase 1 core ────────────────────────────────────────────────────
   test-core:
+    timeout-minutes: 20
     name: Core — Phase 0 KB + Phase 1 Recon
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -126,6 +128,7 @@ jobs:
 
 # ── Phase 2 OSINT (VCR replay) ────────────────────────────────────────────────
   test-phase2-core:
+    timeout-minutes: 20
     name: Phase 2 — OSINT Core (VCR)
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -160,6 +163,7 @@ jobs:
 
 # ── Phase 2 credential validation (Docker) ────────────────────────────────────
   test-phase2-extended:
+    timeout-minutes: 20
     name: Phase 2 — Credential Validation (Docker SSH/SMB)
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -203,6 +207,7 @@ jobs:
 
 # ── Phase 3 Evasion & Payload ─────────────────────────────────────────────────
   test-phase3:
+    timeout-minutes: 20
     name: Phase 3 — Evasion & Payload Generation
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -228,6 +233,7 @@ jobs:
 
 # ── Phase 4 exploit correlation ───────────────────────────────────────────────
   test-phase4-correlation:
+    timeout-minutes: 20
     name: Phase 4 — Exploit Correlation (Modules 4-A through 4-C)
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -257,6 +263,7 @@ jobs:
 
 # ── Phase 4 cloud vulnerability discovery ─────────────────────────────────────
   test-phase4-cloud:
+    timeout-minutes: 20
     name: Phase 4 — Cloud Vulnerability Discovery (Modules 4-D through 4-G)
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -289,6 +296,7 @@ jobs:
 
 # ── Phase 5 post-exploitation ─────────────────────────────────────────────────
   test-phase5:
+    timeout-minutes: 20
     name: Phase 5 — Post-Exploitation
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -334,6 +342,7 @@ jobs:
 
 # ── Phase 6 LLM reporting ─────────────────────────────────────────────────────
   test-phase6:
+    timeout-minutes: 20
     name: Phase 6 — LLM-Assisted Reporting
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -363,6 +372,7 @@ jobs:
 
 # ── OPSEC invariants (cross-phase) ────────────────────────────────────────────
   test-opsec-invariants:
+    timeout-minutes: 20
     name: OPSEC — Cross-Phase Invariants
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -388,6 +398,7 @@ jobs:
 
 # ── Kill-chain integration smoke test ─────────────────────────────────────────
   test-integration:
+    timeout-minutes: 20
     name: Kill-Chain Integration Smoke Test
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -411,6 +422,7 @@ jobs:
 
 # ── Graph rendering perf ──────────────────────────────────────────
   test-performance-graph:
+    timeout-minutes: 20
     name: Graph rendering perf (U5.4)
     runs-on: ubuntu-24.04
     # Perf regressions warn via the JSON artifact; hard ceilings still fail.
