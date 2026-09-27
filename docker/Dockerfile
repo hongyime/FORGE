@@ -10,6 +10,7 @@ WORKDIR /app/frontend
 COPY forge/reporting/webui/package.json forge/reporting/webui/package-lock.json ./
 RUN npm ci
 FROM frontend-dependencies AS frontend-dev
+COPY --chown=node:node forge/reporting/webui/ /app/frontend/
 RUN chown -R node:node /app/frontend
 USER node
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
@@ -135,7 +136,12 @@ CMD ["forge", "--help"]
 
 FROM runtime AS dev
 USER root
-RUN python -m pip install watchfiles==1.3.0
+RUN python -m pip install watchfiles==1.3.0 \
+    && chown forge:forge /app
+# Seed the initial dev image; later source edits arrive through Compose sync.
+COPY --chown=forge:forge forge/ /app/forge/
+COPY --chown=forge:forge alembic/ /app/alembic/
+COPY --chown=forge:forge alembic.ini /app/alembic.ini
 USER forge
 CMD ["uvicorn", "forge.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/forge"]
 

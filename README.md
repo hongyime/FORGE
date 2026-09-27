@@ -1624,3 +1624,56 @@ necessary. Polling handles missing file-change events after the bind mount works
 it cannot make an inaccessible path visible. The maintenance checks validated
 Compose configuration and Windows/Linux reload fixtures, but did not launch this
 full stack or verify its actual SMB bind mount.
+
+### Compose Watch for SMB source checkouts
+
+When the Docker daemon cannot mount this checkout, use the explicit
+`compose.watch.yaml` overlay with Docker Compose 2.32.0 or newer. Compose reads
+source from the client checkout and synchronizes edits into the existing dev
+containers. The initial dev image seeds only the existing application/migration
+source paths after dependency installation. Subsequent edits use `sync` rules;
+there are no automatic rebuild rules. This overlay applies to the Python/React
+development stack only and leaves the native Rust workflow unchanged.
+
+Create the documented private `.env.dev`, then run these commands from the
+checkout in PowerShell or a Linux shell:
+
+~~~sh
+# Explicit first-time third-party image pull:
+docker compose --env-file .env.dev -f compose.dev.yaml -f compose.watch.yaml pull postgres redis
+# One initial dev build; repeat only after dependency/system-package changes:
+docker compose --env-file .env.dev -f compose.dev.yaml -f compose.watch.yaml build forge-api frontend
+# Daily startup, with every implicit pull and build disabled:
+docker compose --env-file .env.dev -f compose.dev.yaml -f compose.watch.yaml up -d --no-build --pull never
+docker compose --env-file .env.dev -f compose.dev.yaml -f compose.watch.yaml watch --no-up
+~~~
+
+Compose Watch needs the client to receive changes from the SMB filesystem; verify
+an ordinary source edit on the actual share. Application polling helps observe
+files after synchronization. It does not guarantee that every SMB client emits
+watch events. The worker remains behind its existing opt-in `workers` profile.
+
+Python dependencies stay in `/opt/forge/venv`; frontend dependencies stay in the
+image's `/app/frontend/node_modules`. This overlay removes the anonymous Node
+volume because no source bind covers those dependencies. Manifest changes need
+an explicit rebuild, then an ordinary `up --no-build --pull never` to use it.
+Existing database/data/plugin/audit/model volumes remain separate and retained.
+
+Ctrl-C stops the Watch client; the detached stack remains running. Stop only this
+development project explicitly:
+
+~~~sh
+docker compose --env-file .env.dev -f compose.dev.yaml -f compose.watch.yaml down --remove-orphans
+~~~
+
+For an intentionally disposable dev session, add `--volumes` to that final
+command to delete this project's dev volumes. Images are retained. Never use it
+on a session whose development data you need.
+
+Watch excludes environment files, key/certificate files, secrets/credential
+JSON/YAML/TOML settings, dependency folders/manifests, caches and local
+database/log outputs. Existing functional Python modules whose names mention
+secrets or credentials remain source; those names alone do not establish that
+they are private settings. Their protected-name matches were not content-audited
+in this pass. Filename filters are not a guarantee that ordinary source is free
+of embedded private values. The existing production build context is unchanged.

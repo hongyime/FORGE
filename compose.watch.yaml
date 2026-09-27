@@ -1,0 +1,85 @@
+# Explicit SMB/remote-daemon overlay: one initial image build, then source sync.
+# Private settings/data filenames are excluded; functional Python modules remain.
+x-watch-ignore: &watch-ignore
+  - "**/.[eE][nN][vV]*"
+  - "**/*.[pP][eE][mM]"
+  - "**/*.[kK][eE][yY]"
+  - "**/*.[pP]12"
+  - "**/*.[pP][fF][xX]"
+  - "**/*[cC][rR][eE][dD][eE][nN][tT][iI][aA][lL]*.[jJ][sS][oO][nN]"
+  - "**/*[cC][rR][eE][dD][eE][nN][tT][iI][aA][lL]*.[yY][aA][mM][lL]"
+  - "**/*[cC][rR][eE][dD][eE][nN][tT][iI][aA][lL]*.[yY][mM][lL]"
+  - "**/*[cC][rR][eE][dD][eE][nN][tT][iI][aA][lL]*.[tT][oO][mM][lL]"
+  - "**/[sS][eE][cC][rR][eE][tT][sS]*.[jJ][sS][oO][nN]"
+  - "**/[sS][eE][cC][rR][eE][tT][sS]*.[yY][aA][mM][lL]"
+  - "**/[sS][eE][cC][rR][eE][tT][sS]*.[yY][mM][lL]"
+  - "**/[sS][eE][cC][rR][eE][tT][sS]*.[tT][oO][mM][lL]"
+  - "**/[sS][eE][cC][rR][eE][tT].[jJ][sS][oO][nN]"
+  - "**/[sS][eE][cC][rR][eE][tT].[yY][aA][mM][lL]"
+  - "**/[sS][eE][cC][rR][eE][tT].[yY][mM][lL]"
+  - "**/[sS][eE][cC][rR][eE][tT].[tT][oO][mM][lL]"
+  - "**/.git/**"
+  - "**/.agents/**"
+  - "**/node_modules/**"
+  - "**/.venv/**"
+  - "**/__pycache__/**"
+  - "**/*.pyc"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/target/**"
+  - "**/*.db"
+  - "**/*.sqlite*"
+  - "**/*.jsonl"
+  - "**/*.log"
+  - "**/package.json"
+  - "**/package-lock.json"
+  - "**/pyproject.toml"
+  - "**/requirements*.txt"
+  - "**/uv.lock"
+x-forge-watch: &forge-watch
+  watch:
+    - action: sync
+      path: ./forge
+      target: /app/forge
+      initial_sync: true
+      ignore: *watch-ignore
+    - action: sync
+      path: ./alembic
+      target: /app/alembic
+      initial_sync: true
+      ignore: *watch-ignore
+    - action: sync
+      path: ./alembic.ini
+      target: /app/alembic.ini
+      initial_sync: true
+services:
+  forge-api:
+    volumes: !override
+      - dev-data:/data
+      - dev-plugins:/plugins
+      - dev-audit:/remote-audit
+      - dev-models:/home/forge/.cache/forge/models
+    develop: *forge-watch
+  forge-webui:
+    volumes: !override
+      - dev-data:/data
+      - dev-plugins:/plugins
+      - dev-audit:/remote-audit
+      - dev-models:/home/forge/.cache/forge/models
+    develop: *forge-watch
+  forge-worker:
+    volumes: !override
+      - dev-data:/data
+      - dev-plugins:/plugins
+      - dev-audit:/remote-audit
+      - dev-models:/home/forge/.cache/forge/models
+    develop: *forge-watch
+  frontend:
+    volumes: !reset []
+    develop:
+      watch:
+        - action: sync
+          path: ./forge/reporting/webui
+          target: /app/frontend
+          initial_sync: true
+          ignore: *watch-ignore
