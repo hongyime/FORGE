@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 # Dockerfile - FORGE Toolkit v7.2
 #
 # Production/runtime image for the self-hosted Compose stack plus a CI target
@@ -161,14 +163,19 @@ FROM runtime AS production
 # This stage is included to prove the Linux build works end-to-end and to
 # establish the correct layer structure for when the binary entrypoints land.
 # ---------------------------------------------------------------------------
-FROM rust:1.82-slim AS rust-builder
+FROM rust:1.94-slim AS rust-builder
 WORKDIR /build
 # Minimal system deps for openssl, sqlite, and postgres native builds
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev libsqlite3-dev libpq-dev ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY native/ native/
-RUN cd native && cargo build --release --workspace
+RUN mkdir -p /out
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/build/native/target,sharing=locked \
+    cd native && cargo build --release --workspace && \
+    cp target/release/forge-xtask /out/forge-xtask
 
 # ---------------------------------------------------------------------------
 # rust-runtime target — minimal Debian runtime image for Rust binaries.
@@ -179,14 +186,14 @@ RUN cd native && cargo build --release --workspace
 #
 # Current smoke-test: forge-xtask --help (the only binary built at this time).
 # ---------------------------------------------------------------------------
-FROM debian:bookworm-slim AS rust-runtime
+FROM debian:trixie-slim AS rust-runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 libsqlite3-0 tini \
     && rm -rf /var/lib/apt/lists/*
 RUN groupadd -g 10001 forge && useradd -u 10001 -g 10001 -M -s /bin/false forge
 # Phase 1: install forge-xtask as the only available binary.
 # Phase 2+: replace with forge-server, forge, and worker when [[bin]] targets land.
-COPY --from=rust-builder /build/native/target/release/forge-xtask /usr/local/bin/forge-xtask
+COPY --from=rust-builder /out/forge-xtask /usr/local/bin/forge-xtask
 # Placeholders for production binaries (uncomment when crates gain [[bin]] targets):
 # COPY --from=rust-builder /build/native/target/release/forge-server /usr/local/bin/forge-server
 # COPY --from=rust-builder /build/native/target/release/forge        /usr/local/bin/forge
