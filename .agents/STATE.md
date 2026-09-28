@@ -1,6 +1,6 @@
-# Current Task: Rust rewrite — T1–T36 COMPLETE + system-run verified (Rust canaries 16/16 + Docker stack HEALTHY)
+# Current Task: FORGE dev-mode scale-down COMPLETE + Path A/B canary hardening COMPLETE + 36/36 rewrite milestones accepted
 
-**Status:** T1+T2 accepted (`ca13e29`). xtask compile fix (`e63e2aa`). Graph JSON secret-redaction fix (`4f24b21`) — caught by `graphs_verify` canary and repaired. All 16 verify canaries PASS end-to-end. Docker stack UP: forge-api :8000 /health=200, forge-webui :8080 /health=200, forge-worker + postgres + redis all healthy. Docker logs zero ERROR/CRITICAL; 3 benign redis-reconnect WARNs from prior restart cycle. Cleanup: rust_core/target (999MB stale artifacts) + archived_logs/ pruned; forge/ (149MB, 554 py) intentionally KEPT — actively powers running Docker containers; rust_core/src/ preserved (offensive primitives, not superseded by native/). | Date: 2026-09-27
+**Status:** Dev-mode pivot delivered. Single `forge-dev` stack (5 services) running at 385 MiB actual / 1.66 GiB cap: forge-api :8000 /health=200, forge-webui :8080 /health=200, forge-worker + postgres + redis all healthy. Path A: `scripts/run-canaries.ps1` + `.githooks/pre-push` wired — canaries auto-run on every push (`a4145f6`). Path B: 47 new leak canaries across 4 verify files caught 7 real bugs (`ed2a786`), fixed at source (`8d25158`): ReportContext.extra `#[serde(skip_serializing)]`, ComponentHealth.details credential scrubbing on construction, ProgressEvent.message secret-shape redaction on WebSocket broadcast. All 16 canaries GREEN. 5 commits this session: `9cbda31` xtask warnings, `8d25158` leak fixes, `ed2a786` 47 canaries, `a4145f6` runner+hook, `07a8b8c` dev stack redesign. | Date: 2026-09-28
 
 ## Progress dashboard
 
@@ -134,13 +134,13 @@ Final release reviews         [....]                    0 / 4
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-27 11:03:22 +08:00
-- Machine: dev-host-2.example
+- Updated: 2026-09-28 08:01:29 +08:00
+- Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 0e1c1a1
-- Dirty files: 0
+- HEAD: a4145f6
+- Dirty files: 4
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
 
