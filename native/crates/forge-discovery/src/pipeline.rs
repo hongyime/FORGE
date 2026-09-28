@@ -312,7 +312,7 @@ fn seed_type_to_category(seed_type: SeedType) -> FindingCategory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::validation::ValidationMode;
+    use crate::validation::{ValidationMode, ValidationState};
 
     fn active_proof(seed: &str) -> (String, ProofEntry) {
         (
