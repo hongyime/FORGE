@@ -1,6 +1,6 @@
 # Current Task: FORGE dev-mode scale-down COMPLETE + Path A/B canary hardening COMPLETE + 36/36 rewrite milestones accepted
 
-**Status:** Dev-mode pivot delivered. Single `forge-dev` stack (5 services) running at 385 MiB actual / 1.66 GiB cap: forge-api :8000 /health=200, forge-webui :8080 /health=200, forge-worker + postgres + redis all healthy. Path A: `scripts/run-canaries.ps1` + `.githooks/pre-push` wired — canaries auto-run on every push (`a4145f6`). Path B: 47 new leak canaries across 4 verify files caught 7 real bugs (`ed2a786`), fixed at source (`8d25158`): ReportContext.extra `#[serde(skip_serializing)]`, ComponentHealth.details credential scrubbing on construction, ProgressEvent.message secret-shape redaction on WebSocket broadcast. All 16 canaries GREEN. 5 commits this session: `9cbda31` xtask warnings, `8d25158` leak fixes, `ed2a786` 47 canaries, `a4145f6` runner+hook, `07a8b8c` dev stack redesign. | Date: 2026-09-28
+**Status:** Blocker cleanup + cutover plan tracked + real bug caught by cargo test workspace. Redis restart + api restart restored :8000 to HTTP 200 `{status:ok,bus_connected:true,version:7.2.0-platform}`; :8080 to HTTP 200 `{status:ok,version:7.2.0}`. Cutover plan pushed at `4c5d6f1` (1272 lines, force-added past docs/ gitignore). Old docker-compose.yml renamed to .legacy.yml at `34c3f0c`. Stale .env.local deleted. cargo clean freed 16.6 GB from native/target. `cargo test --workspace` online run caught 8th real bug: E0433 in forge-discovery/src/pipeline.rs:315 (ValidationState not imported in `#[cfg(test)]` scope) — fixed in `4f34025`. Session commits: `9cbda31` warnings, `8d25158` leak fixes, `ed2a786` 47 canaries, `a4145f6` runner+hook, `07a8b8c` dev stack, `cca412e` MOLT, `4c5d6f1` cutover plan, `34c3f0c` compose rename, `4f34025` discovery test import. Path A + Path B canary hardening COMPLETE. All 16 canaries GREEN. 5-service forge-dev stack healthy. Verification subagent bg_2784edeb running full workspace test post-fix. | Date: 2026-09-28
 
 ## Progress dashboard
 
@@ -134,13 +134,13 @@ Final release reviews         [....]                    0 / 4
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-28 08:01:29 +08:00
+- Updated: 2026-09-28 17:41:29 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: a4145f6
-- Dirty files: 4
+- HEAD: 34c3f0c
+- Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
 
