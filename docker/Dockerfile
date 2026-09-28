@@ -175,30 +175,23 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/native/target,sharing=locked \
     cd native && cargo build --release --workspace && \
-    cp target/release/forge-xtask /out/forge-xtask
+    cp target/release/forge-xtask  /out/forge-xtask && \
+    cp target/release/forge-server /out/forge-server && \
+    cp target/release/forge        /out/forge
 
 # ---------------------------------------------------------------------------
 # rust-runtime target — minimal Debian runtime image for Rust binaries.
 #
-# Once [[bin]] entrypoints exist in the production crates, add COPY lines
-# below to install each binary from rust-builder.  The entrypoint and CMD
-# lines are commented-out placeholders; un-comment when the binaries exist.
-#
-# Current smoke-test: forge-xtask --help (the only binary built at this time).
+# Phase 2: forge-server and forge binaries are now available.
 # ---------------------------------------------------------------------------
 FROM debian:trixie-slim AS rust-runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 libsqlite3-0 tini \
     && rm -rf /var/lib/apt/lists/*
 RUN groupadd -g 10001 forge && useradd -u 10001 -g 10001 -M -s /bin/false forge
-# Phase 1: install forge-xtask as the only available binary.
-# Phase 2+: replace with forge-server, forge, and worker when [[bin]] targets land.
-COPY --from=rust-builder /out/forge-xtask /usr/local/bin/forge-xtask
-# Placeholders for production binaries (uncomment when crates gain [[bin]] targets):
-# COPY --from=rust-builder /build/native/target/release/forge-server /usr/local/bin/forge-server
-# COPY --from=rust-builder /build/native/target/release/forge        /usr/local/bin/forge
-# COPY --from=rust-builder /build/native/target/release/forge-worker /usr/local/bin/forge-worker
+COPY --from=rust-builder /out/forge-xtask  /usr/local/bin/forge-xtask
+COPY --from=rust-builder /out/forge-server /usr/local/bin/forge-server
+COPY --from=rust-builder /out/forge        /usr/local/bin/forge
 USER 10001
 ENTRYPOINT ["/usr/bin/tini", "--"]
-# Default: print xtask help to prove the binary runs. Phase 2 will set forge-server.
-CMD ["/usr/local/bin/forge-xtask", "--help"]
+CMD ["/usr/local/bin/forge-server"]
