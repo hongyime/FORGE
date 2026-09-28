@@ -146,3 +146,52 @@ USER forge
 CMD ["uvicorn", "forge.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/forge"]
 
 FROM runtime AS production
+
+# ---------------------------------------------------------------------------
+# rust-builder stage — compiles the Rust workspace inside a Linux container.
+# Produces Linux ELF binaries (distinct from the Windows .exes built locally).
+#
+# NOTE (Phase 1 finding): All production crates (forge-server, forge-cli,
+# forge-ui, forge-operations, etc.) are currently LIBRARY crates with no
+# [[bin]] sections or main.rs entry points. The only binary produced by
+# `cargo build --release --workspace` is `forge-xtask` (the build/verify
+# tool). Before Phase 2 can proceed, each production crate that maps to a
+# runtime service must gain a [[bin]] target + main.rs entrypoint.
+#
+# This stage is included to prove the Linux build works end-to-end and to
+# establish the correct layer structure for when the binary entrypoints land.
+# ---------------------------------------------------------------------------
+FROM rust:1.82-slim AS rust-builder
+WORKDIR /build
+# Minimal system deps for openssl, sqlite, and postgres native builds
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev libsqlite3-dev libpq-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY native/ native/
+RUN cd native && cargo build --release --workspace
+
+# ---------------------------------------------------------------------------
+# rust-runtime target — minimal Debian runtime image for Rust binaries.
+#
+# Once [[bin]] entrypoints exist in the production crates, add COPY lines
+# below to install each binary from rust-builder.  The entrypoint and CMD
+# lines are commented-out placeholders; un-comment when the binaries exist.
+#
+# Current smoke-test: forge-xtask --help (the only binary built at this time).
+# ---------------------------------------------------------------------------
+FROM debian:bookworm-slim AS rust-runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 libsqlite3-0 tini \
+    && rm -rf /var/lib/apt/lists/*
+RUN groupadd -g 10001 forge && useradd -u 10001 -g 10001 -M -s /bin/false forge
+# Phase 1: install forge-xtask as the only available binary.
+# Phase 2+: replace with forge-server, forge, and worker when [[bin]] targets land.
+COPY --from=rust-builder /build/native/target/release/forge-xtask /usr/local/bin/forge-xtask
+# Placeholders for production binaries (uncomment when crates gain [[bin]] targets):
+# COPY --from=rust-builder /build/native/target/release/forge-server /usr/local/bin/forge-server
+# COPY --from=rust-builder /build/native/target/release/forge        /usr/local/bin/forge
+# COPY --from=rust-builder /build/native/target/release/forge-worker /usr/local/bin/forge-worker
+USER 10001
+ENTRYPOINT ["/usr/bin/tini", "--"]
+# Default: print xtask help to prove the binary runs. Phase 2 will set forge-server.
+CMD ["/usr/local/bin/forge-xtask", "--help"]

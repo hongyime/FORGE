@@ -2,7 +2,7 @@
 #
 # Single project: forge-prod
 # 5 services always: postgres, redis, forge-api, forge-webui, forge-worker
-# 1 optional service behind --profile autostart: forge-guarded-autostart
+# (forge-guarded-autostart removed 2026-09-28 — user authorization: not needed)
 #
 # Resource caps default to the same minimal footprint as the dev stack.
 # Operators can override upward via environment variables when deploying
@@ -16,8 +16,7 @@
 #   # Bring up core services:
 #   docker compose --env-file .env.prod -f docker/docker-compose.prod.yml up -d
 #
-#   # Bring up with guarded autostart loop:
-#   docker compose --env-file .env.prod -f docker/docker-compose.prod.yml --profile autostart up -d
+# (guarded autostart profile removed)
 #
 # See docker/README.md for full usage guide and migration notes.
 
@@ -235,73 +234,6 @@ services:
       redis:
         condition: service_healthy
 
-  # --------------------------------------------------------------------------
-  # forge-guarded-autostart — production-only guarded autopilot loop
-  # Opt-in: only starts with --profile autostart
-  # --------------------------------------------------------------------------
-  forge-guarded-autostart:
-    <<: *forge-service
-    build: *forge-build
-    profiles: ["autostart"]
-    restart: on-failure:3
-    cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"
-    mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-512m}"
-    command:
-      - /bin/sh
-      - -c
-      - |
-        sleep "$${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
-        failures=0
-        while true; do
-          timeout --preserve-status "$${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}" \
-          python -m forge.cli automation cycle \
-            --autostart-config /app/imports/autostart.local.json \
-            --docker-probe-mode compose-dependency \
-            --apply \
-            --live \
-            --json
-          rc="$$?"
-          if [ "$$rc" -eq 0 ]; then
-            failures=0
-            sleep "$${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
-          else
-            failures=$$((failures + 1))
-            echo "forge guarded autostart cycle failed rc=$$rc consecutive_failures=$$failures" >&2
-            if [ "$$failures" -ge "$${FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES:-3}" ]; then
-              echo "forge guarded autostart exiting after consecutive failures=$$failures" >&2
-              exit "$$rc"
-            fi
-            sleep "$${FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS:-1800}"
-          fi
-        done
-    environment:
-      <<: *forge-env
-      FORGE_ROE_ID: "${FORGE_ROE_ID:-}"
-      FORGE_AUTOSTART_STARTUP_DELAY_SECONDS: "${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
-      FORGE_AUTOSTART_TIMEOUT_SECONDS: "${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}"
-      FORGE_AUTOSTART_EVERY_SECONDS: "${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
-      FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS: "${FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS:-1800}"
-      FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES: "${FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES:-3}"
-      FORGE_AUTOSTART_MIN_FREE_MEMORY_MB: "${FORGE_AUTOSTART_MIN_FREE_MEMORY_MB:-512}"
-    volumes:
-      - forge-prod-data:/data
-      - forge-prod-plugins:/plugins:ro
-      - forge-prod-remote-audit:/remote-audit
-      - forge-prod-models:/home/forge/.cache/forge/models:ro
-      - ../imports:/app/imports:rw
-      - ../reports:/app/reports:rw
-      - ${FORGE_HOST_CONNECTOR_BIN_DIR:-../tools/bin}:/app/tools/bin:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      forge-api:
-        condition: service_healthy
-      forge-webui:
-        condition: service_healthy
-      forge-worker:
-        condition: service_started
 
 # ---------------------------------------------------------------------------
 # Named volumes
