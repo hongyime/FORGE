@@ -1,0 +1,331 @@
+# FORGE production self-host stack — minimal-default, operator-scalable.
+#
+# Single project: forge-prod
+# 5 services always: postgres, redis, forge-api, forge-webui, forge-worker
+# 1 optional service behind --profile autostart: forge-guarded-autostart
+#
+# Resource caps default to the same minimal footprint as the dev stack.
+# Operators can override upward via environment variables when deploying
+# on a larger host. The minimal defaults are intentional — "even when
+# the real prod" (operator constraint).
+#
+# Usage:
+#   # Validate first:
+#   docker compose --env-file .env.prod -f docker/docker-compose.prod.yml config --quiet
+#
+#   # Bring up core services:
+#   docker compose --env-file .env.prod -f docker/docker-compose.prod.yml up -d
+#
+#   # Bring up with guarded autostart loop:
+#   docker compose --env-file .env.prod -f docker/docker-compose.prod.yml --profile autostart up -d
+#
+# See docker/README.md for full usage guide and migration notes.
+
+name: forge-prod
+
+# ---------------------------------------------------------------------------
+# Shared YAML anchors
+# ---------------------------------------------------------------------------
+
+x-forge-build: &forge-build
+  context: ..
+  dockerfile: docker/Dockerfile
+  target: runtime
+
+x-forge-env: &forge-env
+  # Runtime profile — always production here
+  FORGE_DEPLOYMENT_PROFILE: production
+  FORGE_ENV: production
+  FORGE_DATA_DIR: /data
+  FORGE_SAFE_MODE: "1"
+  FORGE_REQUIRE_SCOPE_MANIFEST: "1"
+  FORGE_NO_TOR: "1"
+  # Web service
+  FORGE_WEB_ENABLED: "1"
+  FORGE_WEB_HOST: 0.0.0.0
+  FORGE_WEB_PORT: "8080"
+  FORGE_WEB_AUTH: jwt
+  FORGE_WEB_SECRET_KEY: "${FORGE_WEB_SECRET_KEY:?set FORGE_WEB_SECRET_KEY >=32 chars in .env.prod}"
+  FORGE_WEB_BOOTSTRAP_TOKEN: "${FORGE_WEB_BOOTSTRAP_TOKEN:?set FORGE_WEB_BOOTSTRAP_TOKEN >=32 chars in .env.prod}"
+  FORGE_ENGAGEMENT_KEY: "${FORGE_ENGAGEMENT_KEY:?set FORGE_ENGAGEMENT_KEY >=32 chars in .env.prod}"
+  # Security headers — enabled in production
+  FORGE_SECURITY_HEADERS_DISABLE: "0"
+  FORGE_SECURITY_HSTS_SECONDS: "${FORGE_SECURITY_HSTS_SECONDS:-31536000}"
+  FORGE_PUBLIC_BASE_URL: "${FORGE_PUBLIC_BASE_URL:?set FORGE_PUBLIC_BASE_URL to the external https URL}"
+  FORGE_TLS_TERMINATED_BY: "${FORGE_TLS_TERMINATED_BY:-reverse-proxy}"
+  # Distributed state
+  FORGE_DISTRIBUTED_ENABLED: "1"
+  FORGE_REDIS_URL: redis://redis:6379/0
+  FORGE_STATE_DB_URL: "postgresql+asyncpg://forge:${FORGE_POSTGRES_PASSWORD:?set FORGE_POSTGRES_PASSWORD}@postgres:5432/forge"
+  FORGE_AUDIT_DB_URL: "postgresql+asyncpg://forge:${FORGE_POSTGRES_PASSWORD}@postgres:5432/forge"
+  # Audit
+  FORGE_AUDIT_LOG_PATH: /data/audit/audit.jsonl
+  FORGE_AUDIT_BUNDLE_REMOTE_URI: "${FORGE_AUDIT_BUNDLE_REMOTE_URI:-file:///remote-audit}"
+  FORGE_AUDIT_BUNDLE_REMOTE_SCOPE: "${FORGE_AUDIT_BUNDLE_REMOTE_SCOPE:?set customer/workspace audit scope}"
+  # Plugins / scope / governance
+  FORGE_PLUGIN_DIR: /plugins
+  FORGE_SCOPE_JSON: "${FORGE_SCOPE_JSON:-}"
+  FORGE_GOVERNANCE_RULES: "${FORGE_GOVERNANCE_RULES:-}"
+  # LLM
+  FORGE_LLM_PROVIDER: "${FORGE_LLM_PROVIDER:-template}"
+  FORGE_LLM_MODEL_PATH: "${FORGE_LLM_MODEL_PATH:-}"
+  FORGE_PROVIDER_TIMEOUT: "${FORGE_PROVIDER_TIMEOUT:-5}"
+  # Worker / messaging
+  FORGE_HEARTBEAT_INTERVAL: "${FORGE_HEARTBEAT_INTERVAL:-30}"
+  FORGE_TELEMETRY_THRESHOLD_MS: "${FORGE_TELEMETRY_THRESHOLD_MS:-5000}"
+  FORGE_MESSAGE_RETRY_MAX: "${FORGE_MESSAGE_RETRY_MAX:-3}"
+  FORGE_MESSAGE_ACK_TIMEOUT: "${FORGE_MESSAGE_ACK_TIMEOUT:-60}"
+  # Logging
+  FORGE_LOG_LEVEL: "${FORGE_LOG_LEVEL:-INFO}"
+
+x-forge-service: &forge-service
+  image: "forge-toolkit:${FORGE_IMAGE_TAG:-local}"
+  restart: on-failure:3
+  init: true
+  user: "10001:10001"
+  # Resource caps — minimal defaults, override upward with env vars for larger hosts
+  cpus: "${FORGE_CONTAINER_CPUS:-0.50}"
+  mem_limit: "${FORGE_CONTAINER_MEM_LIMIT:-512m}"
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=128m
+  volumes:
+    - forge-prod-data:/data
+    - forge-prod-plugins:/plugins:ro
+    - forge-prod-remote-audit:/remote-audit
+    - forge-prod-models:/home/forge/.cache/forge/models:ro
+  networks:
+    - forge-prod-net
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
+
+services:
+
+  # --------------------------------------------------------------------------
+  # postgres — state and audit database
+  # Internal only: no host port published
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    restart: on-failure:3
+    cpus: "${FORGE_POSTGRES_CPUS:-0.25}"
+    mem_limit: "${FORGE_POSTGRES_MEM_LIMIT:-256m}"
+    environment:
+      POSTGRES_DB: forge
+      POSTGRES_USER: forge
+      POSTGRES_PASSWORD: "${FORGE_POSTGRES_PASSWORD:?set FORGE_POSTGRES_PASSWORD}"
+    volumes:
+      - forge-prod-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forge -d forge"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - forge-prod-net
+
+  # --------------------------------------------------------------------------
+  # redis — distributed workflow bus
+  # Internal only: no host port published
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    restart: on-failure:3
+    cpus: "${FORGE_REDIS_CPUS:-0.15}"
+    mem_limit: "${FORGE_REDIS_MEM_LIMIT:-128m}"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    networks:
+      - forge-prod-net
+
+  # --------------------------------------------------------------------------
+  # forge-api — REST / WebSocket API
+  # Binds to loopback by default; operators can override FORGE_BIND_HOST=0.0.0.0
+  # when running behind a reverse proxy.
+  # --------------------------------------------------------------------------
+  forge-api:
+    <<: *forge-service
+    build: *forge-build
+    cpus: "${FORGE_API_CPUS:-0.50}"
+    mem_limit: "${FORGE_API_MEM:-512m}"
+    command:
+      - uvicorn
+      - forge.api.app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    ports:
+      - "${FORGE_BIND_HOST:-127.0.0.1}:${FORGE_API_PORT:-8000}:8000"
+    environment:
+      <<: *forge-env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'python -c "import urllib.request, sys; urllib.request.urlopen(''http://localhost:8000/health'', timeout=15); sys.exit(0)" || exit 1'
+      interval: 15s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # forge-webui — web UI
+  # --------------------------------------------------------------------------
+  forge-webui:
+    <<: *forge-service
+    build: *forge-build
+    cpus: "${FORGE_WEB_CPUS:-0.35}"
+    mem_limit: "${FORGE_WEB_MEM:-384m}"
+    command:
+      - uvicorn
+      - forge.webui.app:create_app
+      - --factory
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    ports:
+      - "${FORGE_BIND_HOST:-127.0.0.1}:${FORGE_WEB_PORT:-8080}:8080"
+    environment:
+      <<: *forge-env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'python -c "import urllib.request, sys; urllib.request.urlopen(''http://localhost:8080/health'', timeout=15); sys.exit(0)" || exit 1'
+      interval: 15s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # forge-worker — background task runner
+  # --------------------------------------------------------------------------
+  forge-worker:
+    <<: *forge-service
+    build: *forge-build
+    cpus: "${FORGE_WORKER_CPUS:-0.35}"
+    mem_limit: "${FORGE_WORKER_MEM:-384m}"
+    command: ["python", "-m", "forge.core.runner"]
+    environment:
+      <<: *forge-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # forge-guarded-autostart — production-only guarded autopilot loop
+  # Opt-in: only starts with --profile autostart
+  # --------------------------------------------------------------------------
+  forge-guarded-autostart:
+    <<: *forge-service
+    build: *forge-build
+    profiles: ["autostart"]
+    restart: on-failure:3
+    cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"
+    mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-512m}"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        sleep "$${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
+        failures=0
+        while true; do
+          timeout --preserve-status "$${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}" \
+          python -m forge.cli automation cycle \
+            --autostart-config /app/imports/autostart.local.json \
+            --docker-probe-mode compose-dependency \
+            --apply \
+            --live \
+            --json
+          rc="$$?"
+          if [ "$$rc" -eq 0 ]; then
+            failures=0
+            sleep "$${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
+          else
+            failures=$$((failures + 1))
+            echo "forge guarded autostart cycle failed rc=$$rc consecutive_failures=$$failures" >&2
+            if [ "$$failures" -ge "$${FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES:-3}" ]; then
+              echo "forge guarded autostart exiting after consecutive failures=$$failures" >&2
+              exit "$$rc"
+            fi
+            sleep "$${FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS:-1800}"
+          fi
+        done
+    environment:
+      <<: *forge-env
+      FORGE_ROE_ID: "${FORGE_ROE_ID:-}"
+      FORGE_AUTOSTART_STARTUP_DELAY_SECONDS: "${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
+      FORGE_AUTOSTART_TIMEOUT_SECONDS: "${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}"
+      FORGE_AUTOSTART_EVERY_SECONDS: "${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
+      FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS: "${FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS:-1800}"
+      FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES: "${FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES:-3}"
+      FORGE_AUTOSTART_MIN_FREE_MEMORY_MB: "${FORGE_AUTOSTART_MIN_FREE_MEMORY_MB:-512}"
+    volumes:
+      - forge-prod-data:/data
+      - forge-prod-plugins:/plugins:ro
+      - forge-prod-remote-audit:/remote-audit
+      - forge-prod-models:/home/forge/.cache/forge/models:ro
+      - ../imports:/app/imports:rw
+      - ../reports:/app/reports:rw
+      - ${FORGE_HOST_CONNECTOR_BIN_DIR:-../tools/bin}:/app/tools/bin:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      forge-api:
+        condition: service_healthy
+      forge-webui:
+        condition: service_healthy
+      forge-worker:
+        condition: service_started
+
+# ---------------------------------------------------------------------------
+# Named volumes
+# ---------------------------------------------------------------------------
+
+volumes:
+  forge-prod-postgres-data:
+    name: forge-prod-postgres-data
+  forge-prod-redis-data:
+    name: forge-prod-redis-data
+  forge-prod-data:
+    name: forge-prod-data
+  forge-prod-plugins:
+    name: forge-prod-plugins
+  forge-prod-remote-audit:
+    name: forge-prod-remote-audit
+  forge-prod-models:
+    name: forge-prod-models
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+
+networks:
+  forge-prod-net:
+    name: forge-prod-net
+    driver: bridge

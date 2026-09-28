@@ -1,92 +1,251 @@
-# FORGE evidence + test infrastructure stack.
+# FORGE dev stack — local development and testing only.
 #
-# Purpose: stable forge-* containers for evidence harnesses, integration
-# tests, and local development. NOT for production deployment - that's
-# the job of docker-compose.yml.
+# Single project: forge-dev
+# 5 services: postgres, redis, forge-api, forge-webui, forge-worker
+# Target memory ceiling: ~1.7 GB total
+# DO NOT use for production deployments.
 #
-# Usage:
-#   # Bring everything up
-#   docker compose -f docker/docker-compose.dev.yml up -d
+# Quick start (from repo root):
+#   docker compose --env-file .env.dev -f docker/docker-compose.dev.yml up -d
+#   docker compose --env-file .env.dev -f docker/docker-compose.dev.yml logs -f forge-api
+#   docker compose --env-file .env.dev -f docker/docker-compose.dev.yml down
 #
-#   # Bring up only Postgres (for state-store work)
-#   docker compose -f docker/docker-compose.dev.yml up -d postgres
-#
-#   # Include Ollama (opt-in via profile - pulls a 400MB model)
-#   docker compose -f docker/docker-compose.dev.yml --profile llm up -d
-#
-#   # Tear everything down (preserves volumes by default)
-#   docker compose -f docker/docker-compose.dev.yml down
-#
-#   # Tear down + wipe data
-#   docker compose -f docker/docker-compose.dev.yml down -v
-#
-# Each container uses a stable forge-* name so it shows up cleanly in
-# `docker ps` next to the production stack.
+# See docker/README.md for full usage guide.
+
+name: forge-dev
+
+# ---------------------------------------------------------------------------
+# Shared YAML anchors — dev-specific overrides of production defaults
+# ---------------------------------------------------------------------------
+
+x-forge-build: &forge-build
+  context: ..
+  dockerfile: docker/Dockerfile
+  target: runtime
+
+x-forge-env: &forge-env
+  # Runtime profile
+  FORGE_DEPLOYMENT_PROFILE: ""
+  FORGE_ENV: development
+  FORGE_DATA_DIR: /data
+  FORGE_SAFE_MODE: "1"
+  FORGE_REQUIRE_SCOPE_MANIFEST: "0"
+  FORGE_NO_TOR: "1"
+  # Web service
+  FORGE_WEB_ENABLED: "1"
+  FORGE_WEB_HOST: 0.0.0.0
+  FORGE_WEB_PORT: "8080"
+  FORGE_WEB_AUTH: jwt
+  FORGE_WEB_SECRET_KEY: "${FORGE_WEB_SECRET_KEY:?set FORGE_WEB_SECRET_KEY in .env.dev}"
+  FORGE_WEB_BOOTSTRAP_TOKEN: "${FORGE_WEB_BOOTSTRAP_TOKEN:?set FORGE_WEB_BOOTSTRAP_TOKEN in .env.dev}"
+  FORGE_ENGAGEMENT_KEY: "${FORGE_ENGAGEMENT_KEY:?set FORGE_ENGAGEMENT_KEY in .env.dev}"
+  # Security headers — relaxed for dev (no HSTS, no TLS)
+  FORGE_SECURITY_HEADERS_DISABLE: "0"
+  FORGE_SECURITY_HSTS_SECONDS: "0"
+  FORGE_PUBLIC_BASE_URL: "${FORGE_PUBLIC_BASE_URL:-http://127.0.0.1:8080}"
+  FORGE_TLS_TERMINATED_BY: "${FORGE_TLS_TERMINATED_BY:-none}"
+  # Distributed state
+  FORGE_DISTRIBUTED_ENABLED: "1"
+  FORGE_REDIS_URL: redis://redis:6379/0
+  FORGE_STATE_DB_URL: "postgresql+asyncpg://forge:${FORGE_POSTGRES_PASSWORD:?set FORGE_POSTGRES_PASSWORD in .env.dev}@postgres:5432/forge"
+  FORGE_AUDIT_DB_URL: "postgresql+asyncpg://forge:${FORGE_POSTGRES_PASSWORD}@postgres:5432/forge"
+  # Audit — local only in dev, no remote bundle store
+  FORGE_AUDIT_LOG_PATH: /data/audit/audit.jsonl
+  FORGE_AUDIT_BUNDLE_REMOTE_URI: ""
+  FORGE_AUDIT_BUNDLE_REMOTE_SCOPE: ""
+  # Plugins / scope / governance
+  FORGE_PLUGIN_DIR: /plugins
+  FORGE_SCOPE_JSON: "${FORGE_SCOPE_JSON:-}"
+  FORGE_GOVERNANCE_RULES: "${FORGE_GOVERNANCE_RULES:-}"
+  # LLM — template (deterministic, no model required) in dev
+  FORGE_LLM_PROVIDER: "${FORGE_LLM_PROVIDER:-template}"
+  FORGE_LLM_MODEL_PATH: "${FORGE_LLM_MODEL_PATH:-}"
+  FORGE_PROVIDER_TIMEOUT: "${FORGE_PROVIDER_TIMEOUT:-5}"
+  # Worker / messaging
+  FORGE_HEARTBEAT_INTERVAL: "${FORGE_HEARTBEAT_INTERVAL:-30}"
+  FORGE_TELEMETRY_THRESHOLD_MS: "${FORGE_TELEMETRY_THRESHOLD_MS:-5000}"
+  FORGE_MESSAGE_RETRY_MAX: "${FORGE_MESSAGE_RETRY_MAX:-3}"
+  FORGE_MESSAGE_ACK_TIMEOUT: "${FORGE_MESSAGE_ACK_TIMEOUT:-60}"
+  # Logging
+  FORGE_LOG_LEVEL: "${FORGE_LOG_LEVEL:-DEBUG}"
+
+x-forge-service: &forge-service
+  image: "forge-toolkit:${FORGE_IMAGE_TAG:-local}"
+  restart: on-failure:3
+  init: true
+  user: "10001:10001"
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=128m
+  volumes:
+    - forge-dev-data:/data
+    - forge-dev-plugins:/plugins:ro
+    - forge-dev-models:/home/forge/.cache/forge/models:ro
+    # Bind-mount output directories so the operator can inspect results
+    - ${FORGE_HOST_REPORTS_DIR:-../reports}:/app/reports:rw
+    - ${FORGE_HOST_IMPORTS_DIR:-../imports}:/app/imports:rw
+    - ${FORGE_HOST_FORGE_DATA_DIR:-./../.forge_data}:/app/.forge_data:rw
+  networks:
+    - forge-dev-net
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
 
 services:
 
-  # ---- State store (sprint #4: now the default backend) -----------------
+  # --------------------------------------------------------------------------
+  # postgres — state and audit database
+  # Internal only: no host port published
+  # --------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
-    container_name: forge-postgres
-    restart: unless-stopped
+    restart: on-failure:3
+    cpus: "0.25"
+    mem_limit: 256m
     environment:
-      POSTGRES_USER: forge
-      POSTGRES_PASSWORD: forge_dev_only
       POSTGRES_DB: forge
-    ports:
-      - "5433:5432"
+      POSTGRES_USER: forge
+      POSTGRES_PASSWORD: "${FORGE_POSTGRES_PASSWORD:?set FORGE_POSTGRES_PASSWORD in .env.dev}"
     volumes:
-      - forge-postgres-data:/var/lib/postgresql/data
+      - forge-dev-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "forge", "-d", "forge"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 5s
-    networks:
-      - forge-dev-net
-
-  # ---- Message bus for evidence harnesses + integration tests ----------
-  soak-redis:
-    image: redis:7-alpine
-    container_name: forge-soak-redis
-    restart: unless-stopped
-    ports:
-      - "6390:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-      start_period: 5s
-    networks:
-      - forge-dev-net
-
-  # ---- Optional local LLM (profile-gated - won't start by default) ----
-  ollama:
-    image: ollama/ollama:latest
-    container_name: forge-ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - forge-ollama-data:/root/.ollama
-    profiles: ["llm"]
-    healthcheck:
-      test: ["CMD-SHELL", "ollama list || exit 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U forge -d forge"]
+      interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
     networks:
       - forge-dev-net
 
+  # --------------------------------------------------------------------------
+  # redis — distributed workflow bus
+  # Internal only: no host port published
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    restart: on-failure:3
+    cpus: "0.15"
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    networks:
+      - forge-dev-net
+
+  # --------------------------------------------------------------------------
+  # forge-api — REST / WebSocket API (uvicorn)
+  # Binds to loopback only: 127.0.0.1:8000
+  # --------------------------------------------------------------------------
+  forge-api:
+    <<: *forge-service
+    build: *forge-build
+    cpus: "0.50"
+    mem_limit: 512m
+    command:
+      - uvicorn
+      - forge.api.app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    ports:
+      - "127.0.0.1:${FORGE_API_PORT:-8000}:8000"
+    environment:
+      <<: *forge-env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'python -c "import urllib.request, sys; urllib.request.urlopen(''http://localhost:8000/health'', timeout=15); sys.exit(0)" || exit 1'
+      interval: 15s
+      timeout: 20s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # forge-webui — web UI (uvicorn)
+  # Binds to loopback only: 127.0.0.1:8080
+  # --------------------------------------------------------------------------
+  forge-webui:
+    <<: *forge-service
+    build: *forge-build
+    cpus: "0.35"
+    mem_limit: 384m
+    command:
+      - uvicorn
+      - forge.webui.app:create_app
+      - --factory
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    ports:
+      - "127.0.0.1:${FORGE_WEB_PORT:-8080}:8080"
+    environment:
+      <<: *forge-env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'python -c "import urllib.request, sys; urllib.request.urlopen(''http://localhost:8080/health'', timeout=15); sys.exit(0)" || exit 1'
+      interval: 15s
+      timeout: 20s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # forge-worker — background task runner
+  # No ports — internal only. Replicas always 1 in dev.
+  # --------------------------------------------------------------------------
+  forge-worker:
+    <<: *forge-service
+    build: *forge-build
+    cpus: "0.35"
+    mem_limit: 384m
+    command: ["python", "-m", "forge.core.runner"]
+    environment:
+      <<: *forge-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+# ---------------------------------------------------------------------------
+# Named volumes
+# ---------------------------------------------------------------------------
+
 volumes:
-  forge-postgres-data:
-    name: forge-postgres-data
-  forge-ollama-data:
-    name: forge-ollama-data
+  forge-dev-postgres-data:
+    name: forge-dev-postgres-data
+  forge-dev-redis-data:
+    name: forge-dev-redis-data
+  forge-dev-data:
+    name: forge-dev-data
+  forge-dev-plugins:
+    name: forge-dev-plugins
+  forge-dev-models:
+    name: forge-dev-models
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
 
 networks:
   forge-dev-net:
