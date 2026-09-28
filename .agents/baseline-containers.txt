@@ -1,0 +1,5 @@
+forge-dev-forge-api-1|forge-toolkit:local|2026-09-28 08:34:30 +0800 +08
+forge-dev-forge-webui-1|forge-toolkit:local|2026-09-28 08:34:27 +0800 +08
+forge-dev-forge-worker-1|forge-toolkit:local|2026-09-28 08:34:26 +0800 +08
+forge-dev-postgres-1|postgres:16-alpine|2026-09-28 08:34:12 +0800 +08
+forge-dev-redis-1|redis:7-alpine|2026-09-28 08:34:12 +0800 +08
