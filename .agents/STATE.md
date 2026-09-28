@@ -1,6 +1,6 @@
-# Current Task: FORGE dev-mode scale-down COMPLETE + Path A/B canary hardening COMPLETE + 36/36 rewrite milestones accepted
+# Current Task: Rust cutover Phase 0+1 DONE, off-repo backup DONE, 5 gaps resolved. Phase 2 blocked on adding [[bin]] targets to production crates.
 
-**Status:** Full session closure. `cargo test --workspace` verified 779 tests PASS / 0 fail / 0 ignored + 2 doctests — prior journal claim of ~440 was undercounted by +77%. E0433 fix at `4f34025` verified working (bg_2784edeb, 25m08s full run, 2m47s incremental compile check). Blocker cleanup complete: redis+api restart restored :8000 HTTP 200 `{bus_connected:true}`, :8080 HTTP 200. Cutover plan pushed at `4c5d6f1` (1272 lines, force-added past docs/ gitignore). docker-compose.yml → .legacy.yml at `34c3f0c`. .env.local deleted. cargo clean freed 16.6 GB. Session commits: `9cbda31` warnings, `8d25158` leak fixes, `ed2a786` 47 canaries, `a4145f6` runner+hook, `07a8b8c` dev stack, `cca412e` MOLT, `4c5d6f1` cutover plan, `34c3f0c` compose rename, `4f34025` discovery test import, `ecc87e7` MOLT2. Path A + Path B canary hardening COMPLETE. All 16 canaries GREEN. 5-service forge-dev stack healthy (385 MiB actual usage). Cumulative bug catch: 8 real bugs. | Date: 2026-09-28
+**Status:** Backup + gaps + Phase 0 + Phase 1 all delivered in one arc. Off-repo backup at `X:\01 REPOSITORIES\forge-backup-20260928-201422\` (8471 files/1201 MB, refresh script + RESTORE.md, committed as `14c902c`). 5 gap resolutions (`6517fca`): GAP-1/2/3/5 documented, GAP-4 executed (guarded-autostart removed from prod compose + install script deleted per user "I don't need guarded auto start loop"). Cutover Phase 0 baseline (`95ff8c3`): `python-primary-baseline` tag pushed, 5 baseline artifacts under `.agents/baseline-*` (git HEAD, python test files=497, docker image SHA, postgres schema=3796 bytes, container versions), canaries 13/13 PASS at baseline. Cutover Phase 1 (`a04ba2b`): `forge-toolkit-rust:local` Docker image built (149 MB, under 200 MB target), rust:1.94-slim + debian:trixie-slim (GLIBC parity), BuildKit cache mounts enabled. **Only `forge-xtask` binary exists** — all 13 production crates are library-only. Phase 2 (shadow endpoints) BLOCKED until forge-server + forge-cli crates get `[[bin]]` + `main.rs`. | Date: 2026-09-29
 
 ## Progress dashboard
 
@@ -134,13 +134,13 @@ Final release reviews         [....]                    0 / 4
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-28 19:17:42 +08:00
+- Updated: 2026-09-29 04:11:41 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: ecc87e7
-- Dirty files: 0
+- HEAD: 95ff8c3
+- Dirty files: 1
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
 
