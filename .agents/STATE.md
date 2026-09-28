@@ -1,6 +1,6 @@
 # Current Task: FORGE dev-mode scale-down COMPLETE + Path A/B canary hardening COMPLETE + 36/36 rewrite milestones accepted
 
-**Status:** Blocker cleanup + cutover plan tracked + real bug caught by cargo test workspace. Redis restart + api restart restored :8000 to HTTP 200 `{status:ok,bus_connected:true,version:7.2.0-platform}`; :8080 to HTTP 200 `{status:ok,version:7.2.0}`. Cutover plan pushed at `4c5d6f1` (1272 lines, force-added past docs/ gitignore). Old docker-compose.yml renamed to .legacy.yml at `34c3f0c`. Stale .env.local deleted. cargo clean freed 16.6 GB from native/target. `cargo test --workspace` online run caught 8th real bug: E0433 in forge-discovery/src/pipeline.rs:315 (ValidationState not imported in `#[cfg(test)]` scope) — fixed in `4f34025`. Session commits: `9cbda31` warnings, `8d25158` leak fixes, `ed2a786` 47 canaries, `a4145f6` runner+hook, `07a8b8c` dev stack, `cca412e` MOLT, `4c5d6f1` cutover plan, `34c3f0c` compose rename, `4f34025` discovery test import. Path A + Path B canary hardening COMPLETE. All 16 canaries GREEN. 5-service forge-dev stack healthy. Verification subagent bg_2784edeb running full workspace test post-fix. | Date: 2026-09-28
+**Status:** Full session closure. `cargo test --workspace` verified 779 tests PASS / 0 fail / 0 ignored + 2 doctests — prior journal claim of ~440 was undercounted by +77%. E0433 fix at `4f34025` verified working (bg_2784edeb, 25m08s full run, 2m47s incremental compile check). Blocker cleanup complete: redis+api restart restored :8000 HTTP 200 `{bus_connected:true}`, :8080 HTTP 200. Cutover plan pushed at `4c5d6f1` (1272 lines, force-added past docs/ gitignore). docker-compose.yml → .legacy.yml at `34c3f0c`. .env.local deleted. cargo clean freed 16.6 GB. Session commits: `9cbda31` warnings, `8d25158` leak fixes, `ed2a786` 47 canaries, `a4145f6` runner+hook, `07a8b8c` dev stack, `cca412e` MOLT, `4c5d6f1` cutover plan, `34c3f0c` compose rename, `4f34025` discovery test import, `ecc87e7` MOLT2. Path A + Path B canary hardening COMPLETE. All 16 canaries GREEN. 5-service forge-dev stack healthy (385 MiB actual usage). Cumulative bug catch: 8 real bugs. | Date: 2026-09-28
 
 ## Progress dashboard
 
@@ -10,7 +10,7 @@ These are different measurements, not an estimated overall completion percentage
 Major milestones fully closed  [####################################]  36 / 36 (T1–T36)
 Milestones with delivered work [~~~####################################]  36 / 36 (T1–T36 all accepted)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
-Latest domain test run         [####################] 214 / 214 passed (workspace last: ~440: domain 214 + xtask 79 units + storage 39 + integration suites; red_e slow test pre-existing)
+Latest workspace test run        [####################] 779 / 779 passed (0 failed, 0 ignored, 2 doctests — measured 2026-09-28 at HEAD `4f34025`, run duration 25m08s, evidence at .omo/evidence/rust-rewrite/cargo-test-workspace-fix-verify-20260928-184726/)
 Final release reviews         [....]                    0 / 4
 ```
 
@@ -134,12 +134,12 @@ Final release reviews         [....]                    0 / 4
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-28 17:41:29 +08:00
+- Updated: 2026-09-28 19:17:42 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 34c3f0c
+- HEAD: ecc87e7
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
