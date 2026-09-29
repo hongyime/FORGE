@@ -1,6 +1,6 @@
-# Current Task: Rust cutover Phases 0-3 DONE + Phase 3 parity smoke 6/6 GREEN. Phase 4 code prep running (bg_ba0b5e51). Soak + port flip queued.
+# Current Task: Rust cutover Phases 0-3 DONE + Phase 4 CODE prep DONE. Docker rebuild + Phase 3 soak + port flip queued for operator/next session.
 
-**Status:** Full arc across a single session: off-repo backup (`14c902c`), 5 gap resolutions (`6517fca` - GAP-4 EXECUTED, 4 RECOMMENDED), Phase 0 baseline + `python-primary-baseline` tag (`95ff8c3`), Phase 1 Docker image `forge-toolkit-rust:local` 149 MB (`a04ba2b`), MOLT (`91310d0`), PRE-PHASE-2 skeleton binaries 150 MB (`79af906`), Phase 2 shadow endpoints (`62f16cc`), Phase 3 axum HTTP + parity harness 173 MB (`91d5b90`). Initial parity smoke: **6/6 GREEN** across platform/health + webui/health. Dev stack: 7 containers healthy (postgres + redis + forge-{api,webui,worker} + forge-rust-{api,webui}). scripts/parity_check.ps1 uses docker exec to bypass WSL2 loopback flake. Phase 4 code prep subagent `bg_ba0b5e51` in flight (real Redis dial for bus_connected, JWT bearer middleware skeleton, /ws/progress echo websocket). Wall-clock 3-10 day soak still to run before actual port flip. 3 subagents aborted this arc but disk-side work survived every time. | Date: 2026-09-29
+**Status:** Full arc across a single session. Off-repo backup (`14c902c`), 5 gap resolutions (`6517fca` - GAP-4 EXECUTED, 4 RECOMMENDED), Phase 0 baseline + `python-primary-baseline` tag (`95ff8c3`), Phase 1 Docker image 149 MB (`a04ba2b`), MOLT (`91310d0`), PRE-PHASE-2 skeleton binaries 150 MB (`79af906`), Phase 2 shadow endpoints (`62f16cc`), Phase 3 axum HTTP + parity harness 173 MB, **6/6 GREEN** initial smoke (`91d5b90`), MOLT2 (`fccce89`), Phase 4 CODE prep (`be65fdc`): real Redis TCP dial for bus_connected (was hardcoded), JWT bearer middleware skeleton (401/202 verified), /ws/progress websocket echo (state=Open verified). Phase 4 code all host-verified via release binary at 2514 KB (was 2137). **DEFERRED**: Docker image rebuild with Phase 4 binary + shadow service restart (daemon flake, retry next session). Currently running containers still use Phase 3 image (173 MB, unchanged). Dev stack: 7 healthy containers (postgres+redis+forge-{api,webui,worker}+forge-rust-{api,webui}). scripts/parity_check.ps1 uses docker exec to bypass WSL2 loopback. scripts/ws_smoke.ps1 delivered. **5 subagents aborted this arc** (bg_bdea0582/9bffa672/f34e16c2/8849582a/ba0b5e51) but disk-side work survived every time — parent salvaged each. 12 commits pushed to main this arc. Wall-clock 3-10 day Phase 3 soak still to run. | Date: 2026-09-29
 
 ## Progress dashboard
 
@@ -134,13 +134,13 @@ Final release reviews         [....]                    0 / 4
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-29 08:28:08 +08:00
+- Updated: 2026-09-29 14:05:33 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 62f16cc
-- Dirty files: 0
+- HEAD: fccce89
+- Dirty files: 2
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
 

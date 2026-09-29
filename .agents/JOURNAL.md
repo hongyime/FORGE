@@ -1,5 +1,29 @@
 # Agent Journal
 
+- 2026-09-29 (Phase 4 CODE prep + arc closure): Subagent bg_ba0b5e51 fired to land 3 additive deliverables on forge-server axum binary. Hit 500-tool-call limit at 3h 0m 49s (2nd subagent this arc to hit the ceiling, both burned calls in Docker rebuild loops). Disk state salvaged:
+  * **A) Real Redis TCP dial for bus_connected**: parses FORGE_REDIS_URL (default redis://redis:6379), background tokio task refreshes every 5s via TcpStream::connect + tokio::time::timeout 500ms, latest bool stored in AppState atomic. GET /health reads atomic instead of hardcoded true. Verified on host with FORGE_REDIS_URL=redis://nonexistent:6379 → `{status:ok,bus_connected:false,version:7.2.0-rust}`. Phase 3 would have returned bus_connected:true.
+  * **B) JWT bearer middleware skeleton**: axum::middleware::from_fn layer on write endpoints. Missing/non-Bearer Authorization header returns 401; any Bearer token returns 202 on new POST /ready/refresh (signature verification deferred to Phase 4 continuation). Read endpoints stay unprotected. Verified: no-header → 401, `Bearer x` → 202.
+  * **C) /ws/progress WebSocket echo**: added `ws` feature to axum, new dep tokio-tungstenite 0.29. GET /ws/progress upgrades to WebSocket via WebSocketUpgrade extractor, echoes text messages. Anonymous (JWT param support is Phase 4 continuation). Verified via scripts/ws_smoke.ps1 (105 lines, uses System.Net.WebSockets.ClientWebSocket): connection Open confirmed.
+
+  **Cargo.toml deps added since Phase 3**: axum `ws` feature, tokio-tungstenite 0.29, tokio `time` feature. Binary size 2137 KB → 2514 KB (+377 KB for tokio-tungstenite).
+
+  **DEFERRED**: Docker image rebuild (2 attempts hit shell timeout + daemon flake). Running containers still on Phase 3 image (173 MB, 8 hours old). New Phase 4 code is on disk + host-verified but not yet in running stack. Rebuild procedure documented at docs/cutover-phase-4-code-prep.md 'Next actions for operator' section — next stable-daemon session runs `docker build ... --target rust-runtime -t forge-toolkit-rust:local` + `docker compose up -d --force-recreate forge-rust-api forge-rust-webui` + parity_check.ps1 re-verify.
+
+  **Commits pushed this Phase 4 sub-arc**: `be65fdc` (Phase 4 code prep). Also `fccce89` (arc closure MOLT before Phase 4 code prep fired). Running total across the entire arc (this session): 12 pushed to main.
+
+  **Subagent failure analysis this arc (5 aborts, all recovered)**:
+  1. bg_bdea0582 Phase 1 Docker first-attempt — rustup network timeout at 453s. Disk: Dockerfile edited, build log saved. Recovery: bg_f35f7a5c retry with rust:1.94-slim base image + BuildKit cache mounts + debian:trixie-slim runtime for GLIBC parity — completed cleanly at 2h07m.
+  2. bg_9bffa672 gap fixes — aborted at 4h35m. Disk: 6 gap docs + prod compose edit + install script delete. Recovery: parent staged + committed as `6517fca`.
+  3. bg_f34e16c2 Phase 0 baseline — aborted at 5h04m. Disk: 3 helper scripts (removed by parent). Recovery: parent re-executed Phase 0 directly in main thread (pure evidence capture, zero re-work loss); committed as `95ff8c3` with `python-primary-baseline` tag.
+  4. bg_8849582a Phase 3 axum HTTP — hit 500-tool-call limit at 3h53m. Disk: axum deps + forge-server.rs rewrite + compose edits all survived. Recovery: parent tested binary on host (perfect), wrote missing scripts/parity_check.ps1 directly, rebuilt Docker image (173 MB), restarted services, ran smoke test (6/6 GREEN); committed as `91d5b90`.
+  5. bg_ba0b5e51 Phase 4 code prep — hit 500-tool-call limit at 3h01m. Disk: Cargo deps + forge-server.rs handlers + ws_smoke.ps1 survived. Recovery: parent host-verified all 3 deliverables working, wrote docs directly, committed as `be65fdc`, deferred Docker rebuild.
+
+  **Lesson**: subagents crash → disk state PERSISTS → parent MUST inspect + salvage + host-verify + commit. Never assume subagent failure means work is lost. Docker rebuild loops are the recurring failure mode; keep Docker builds in main thread going forward.
+
+  **Rollback anchors active**: git tag `python-primary-baseline` on origin — checkout to fully revert to Python-primary. Postgres schema baseline at `.agents/baseline-postgres-schema.sql`. Off-repo backup at `X:\01 REPOSITORIES\forge-backup-20260928-201422\` (8471 files, 1201 MB, RESTORE.md).
+
+  **Wall-clock work remaining (not code)**: (1) rebuild Docker image with Phase 4 binary in fresh session, (2) run 3-10 day Phase 3 parity soak via `pwsh scripts\parity_check.ps1 -Iterations 60 -DelaySeconds 30` continuously, (3) Phase 4 port flip after soak green, (4) 48h monitoring window, (5) Phase 5 Python delete, (6) Phase 6 full cleanup. Cutover plan estimates ~3-4 weeks end-to-end.
+
 - 2026-09-29 (cutover Phases 2-3 + arc closure): Continuation of same-day arc. Phases delivered:
   * **Phase 2** (`62f16cc`) — shadow endpoints in-place in the single forge-dev stack. 2 new services `forge-rust-api` (:9000) and `forge-rust-webui` (:9080) using forge-toolkit-rust:local image. Skeleton wrapped with `sleep infinity` to hold containers open past the immediate-exit banner. 7 total services in stack after add. Python :8000/:8080 unaffected. Design choice A (in-place, one stack) chosen over overlay-file design B per user's "all containers under same stack" constraint. Prod compose mirrored with prod caps.
   * **PRE-PHASE-2** (`79af906`) between Phase 1 and Phase 2 — added `[[bin]]` targets to forge-server + forge-cli crates. Skeleton binaries call real library functions (route_command, check_readiness) to prove crates link. Docker image 149→150 MB. 13/13 canaries GREEN. Design choice B (skeleton runtime) because Step 1 recon found zero HTTP-serving code in either crate.
@@ -595,3 +619,4 @@ Machine-specific values in this document use privacy placeholders.
 - 2026-09-29 07:26:11 +08:00 [PRAWN-E14/claude/stop] branch=main head=79af906 dirty=1
 - 2026-09-29 07:55:25 +08:00 [PRAWN-E14/claude/stop] branch=main head=79af906 dirty=2
 - 2026-09-29 08:28:08 +08:00 [PRAWN-E14/claude/stop] branch=main head=62f16cc dirty=0
+- 2026-09-29 14:05:33 +08:00 [PRAWN-E14/claude/stop] branch=main head=fccce89 dirty=2
