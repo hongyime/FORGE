@@ -236,10 +236,9 @@ services:
 
 
   # --------------------------------------------------------------------------
-  # forge-rust-api — Rust shadow API service (Phase 2 shadow endpoint)
+  # forge-rust-api -- Rust shadow API service (Phase 3 real HTTP server)
   # Binds to loopback by default: 127.0.0.1:9000
-  # Skeleton behaviour: forge-server prints banner + exits 0; sleep infinity holds
-  # the container open for Phase 2 verification. No HTTP listener yet (Phase 3).
+  # Phase 3: forge-server is a real axum HTTP server on :9000/:9080.
   # --------------------------------------------------------------------------
   forge-rust-api:
     image: forge-toolkit-rust:local
@@ -263,12 +262,13 @@ services:
       FORGE_LOG_LEVEL: "${FORGE_LOG_LEVEL:-INFO}"
       FORGE_STATE_DB_URL: "postgresql://forge:${FORGE_POSTGRES_PASSWORD:?set FORGE_POSTGRES_PASSWORD}@postgres:5432/forge"
       FORGE_REDIS_URL: "redis://redis:6379"
-    command: >
-      /bin/sh -c "
-        /usr/local/bin/forge-server;
-        echo '--- forge-server skeleton exited; sleeping to keep container alive for Phase 2 verification ---';
-        sleep infinity
-      "
+    command: ["/usr/local/bin/forge-server"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -276,13 +276,11 @@ services:
         condition: service_healthy
     networks:
       - forge-prod-net
-    # No healthcheck yet — skeleton has no HTTP listener; Phase 3 adds it
 
   # --------------------------------------------------------------------------
-  # forge-rust-webui — Rust shadow web UI service (Phase 2 shadow endpoint)
+  # forge-rust-webui -- Rust shadow web UI service (Phase 3 real HTTP server)
   # Binds to loopback by default: 127.0.0.1:9080
-  # Same skeleton binary as forge-rust-api; distinguished by port + container name.
-  # Phase 3 will add distinct command args when the HTTP handler is implemented.
+  # Same binary as forge-rust-api; distinguished by FORGE_WEB_PORT env.
   # --------------------------------------------------------------------------
   forge-rust-webui:
     image: forge-toolkit-rust:local
@@ -306,12 +304,13 @@ services:
       FORGE_LOG_LEVEL: "${FORGE_LOG_LEVEL:-INFO}"
       FORGE_STATE_DB_URL: "postgresql://forge:${FORGE_POSTGRES_PASSWORD:?set FORGE_POSTGRES_PASSWORD}@postgres:5432/forge"
       FORGE_REDIS_URL: "redis://redis:6379"
-    command: >
-      /bin/sh -c "
-        /usr/local/bin/forge-server;
-        echo '--- forge-server skeleton exited; sleeping to keep container alive for Phase 2 verification ---';
-        sleep infinity
-      "
+    command: ["/usr/local/bin/forge-server"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -319,7 +318,6 @@ services:
         condition: service_healthy
     networks:
       - forge-prod-net
-    # No healthcheck yet — skeleton has no HTTP listener; Phase 3 adds it
 # ---------------------------------------------------------------------------
 # Named volumes
 # ---------------------------------------------------------------------------

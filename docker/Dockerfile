@@ -180,13 +180,35 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cp target/release/forge        /out/forge
 
 # ---------------------------------------------------------------------------
+# rust-builder stage — compiles the Rust workspace inside a Linux container.
+# Produces Linux ELF binaries (distinct from the Windows .exes built locally).
+#
+# Phase 3: forge-server now has a real axum HTTP server on :9000/:9080.
+# ---------------------------------------------------------------------------
+FROM rust:1.94-slim AS rust-builder
+WORKDIR /build
+# Minimal system deps for openssl, sqlite, and postgres native builds
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev libsqlite3-dev libpq-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY native/ native/
+RUN mkdir -p /out
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/build/native/target,sharing=locked \
+    cd native && cargo build --release --workspace && \
+    cp target/release/forge-xtask  /out/forge-xtask && \
+    cp target/release/forge-server /out/forge-server && \
+    cp target/release/forge        /out/forge
+
+# ---------------------------------------------------------------------------
 # rust-runtime target — minimal Debian runtime image for Rust binaries.
 #
-# Phase 2: forge-server and forge binaries are now available.
+# Phase 3: curl added for Docker healthchecks (test: curl -sf http://localhost:9000/health).
 # ---------------------------------------------------------------------------
 FROM debian:trixie-slim AS rust-runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libssl3 libsqlite3-0 tini \
+    ca-certificates libssl3 libsqlite3-0 tini curl \
     && rm -rf /var/lib/apt/lists/*
 RUN groupadd -g 10001 forge && useradd -u 10001 -g 10001 -M -s /bin/false forge
 COPY --from=rust-builder /out/forge-xtask  /usr/local/bin/forge-xtask
