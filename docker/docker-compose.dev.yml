@@ -1,8 +1,8 @@
 # FORGE dev stack — local development and testing only.
 #
 # Single project: forge-dev
-# 5 services: postgres, redis, forge-api, forge-webui, forge-worker
-# Target memory ceiling: ~1.7 GB total
+# 7 services: postgres, redis, forge-api, forge-webui, forge-worker, forge-rust-api, forge-rust-webui
+# Target memory ceiling: ~2.18 GB total (adds 2x 256 MB Rust shadow services)
 # DO NOT use for production deployments.
 #
 # Quick start (from repo root):
@@ -226,6 +226,92 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # forge-rust-api — Rust shadow API service (Phase 2 shadow endpoint)
+  # Binds to loopback only: 127.0.0.1:9000
+  # Skeleton behaviour: forge-server prints banner + exits 0; sleep infinity holds
+  # the container open for Phase 2 verification. No HTTP listener yet (Phase 3).
+  # --------------------------------------------------------------------------
+  forge-rust-api:
+    image: forge-toolkit-rust:local
+    container_name: forge-dev-forge-rust-api-1
+    restart: on-failure:3
+    mem_limit: 256m
+    cpus: "0.30"
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    ports:
+      - "127.0.0.1:9000:9000"
+    environment:
+      FORGE_API_PORT: "9000"
+      FORGE_WEB_PORT: "9080"
+      FORGE_LOG_LEVEL: "DEBUG"
+      FORGE_STATE_DB_URL: "postgresql://forge:${FORGE_POSTGRES_PASSWORD:?set FORGE_POSTGRES_PASSWORD in .env.dev}@postgres:5432/forge"
+      FORGE_REDIS_URL: "redis://redis:6379"
+    command: >
+      /bin/sh -c "
+        /usr/local/bin/forge-server;
+        echo '--- forge-server skeleton exited; sleeping to keep container alive for Phase 2 verification ---';
+        sleep infinity
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - forge-dev-net
+    # No healthcheck yet — skeleton has no HTTP listener; Phase 3 adds it
+
+  # --------------------------------------------------------------------------
+  # forge-rust-webui — Rust shadow web UI service (Phase 2 shadow endpoint)
+  # Binds to loopback only: 127.0.0.1:9080
+  # Same skeleton binary as forge-rust-api; distinguished by port + container name.
+  # Phase 3 will add distinct command args when the HTTP handler is implemented.
+  # --------------------------------------------------------------------------
+  forge-rust-webui:
+    image: forge-toolkit-rust:local
+    container_name: forge-dev-forge-rust-webui-1
+    restart: on-failure:3
+    mem_limit: 256m
+    cpus: "0.30"
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    ports:
+      - "127.0.0.1:9080:9080"
+    environment:
+      FORGE_API_PORT: "9000"
+      FORGE_WEB_PORT: "9080"
+      FORGE_LOG_LEVEL: "DEBUG"
+      FORGE_STATE_DB_URL: "postgresql://forge:${FORGE_POSTGRES_PASSWORD:?set FORGE_POSTGRES_PASSWORD in .env.dev}@postgres:5432/forge"
+      FORGE_REDIS_URL: "redis://redis:6379"
+    command: >
+      /bin/sh -c "
+        /usr/local/bin/forge-server;
+        echo '--- forge-server skeleton exited; sleeping to keep container alive for Phase 2 verification ---';
+        sleep infinity
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - forge-dev-net
+    # No healthcheck yet — skeleton has no HTTP listener; Phase 3 adds it
 
 # ---------------------------------------------------------------------------
 # Named volumes
