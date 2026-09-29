@@ -1,5 +1,21 @@
 # Agent Journal
 
+- 2026-09-29 (dev-scaledown reorg per user pivot): User urgently pivoted back to dev-only work with new constraints: "scaling back to dev work / do not run full prod / all containers under same stack / minimal footprint even when real prod / deleted all docker containers". Reorg delivered in single commit `8a7db2f`:
+  1. Both Rust shadow services (`forge-rust-api`, `forge-rust-webui`) moved behind `profiles: [rust-shadow]` in BOTH `docker/docker-compose.dev.yml` and `docker/docker-compose.prod.yml`. Default `docker compose up -d` now starts EXACTLY 5 Python services (postgres, redis, forge-api, forge-webui, forge-worker). `--profile rust-shadow` opts into 7 total.
+  2. Prod compose bloat audit — found + fixed 2 `restart: unless-stopped` violations on prod Rust services (lines 246, 288); changed to `on-failure:3` for consistency with all other services and user's minimal-default rule. No other violations (mem/cpu already env-var overridable, no deploy.replicas, no prod-only bind mounts).
+  3. `docker/README.md` rewritten: two-stacks table now shows Default/With-Profile columns, resource budget split into default (5 services, 1.66 GB) vs `--profile rust-shadow` (7 services, 2.18 GB), stale `forge-guarded-autostart` row removed (already deleted in GAP-4 executed on 2026-09-28), command cheatsheet updated to reflect 5-service default, new `Rust shadow endpoints (opt-in)` section explains --profile mechanics.
+  4. `docs/cutover-status-consolidated.md` (170 lines, force-added past docs/ gitignore) — executive summary + full phase table + how-to-bring-shadow-back + how-to-retire-cutover-for-now (which is 'do nothing; default is already Python-only').
+  
+  **Docker cleanup**: user's "deleted all docker containers" wasn't fully done (7 forge-dev containers still running when session started). Parent ran `docker compose down` cleanly — all 5+2 containers stopped + removed, `forge-dev-net` network removed. Then `up -d` (no profile) restored the minimal 5-service dev stack; all healthy, `:8000/health` returns `{status:ok,bus_connected:true}`, `:8080/health` returns `{status:ok}`. Single `forge-dev` compose project on host — no split stacks, honoring user's single-stack constraint.
+  
+  **Verification**: `docker compose --env-file .env.dev -f docker/docker-compose.dev.yml config --services` returns exactly 5 services; with `--profile rust-shadow` returns 7. `config --quiet` exit 0. Prod compose has 2 required env vars (`FORGE_AUDIT_BUNDLE_REMOTE_SCOPE`, `FORGE_PUBLIC_BASE_URL`) that dev's `.env.dev` intentionally omits — expected + safe.
+  
+  **Subagent bg_7fc98cb5** — completed cleanly at 1h28m44s. First non-aborted subagent this arc after 5 straight aborts on other tasks. Compose+doc editing task doesn't hit the Docker-rebuild-loop failure mode.
+  
+  **Rollback anchor still active**: git tag `python-primary-baseline` on origin. Off-repo backup at `X:\01 REPOSITORIES\forge-backup-20260928-201422\`. To bring shadow services back (any future date): (1) fresh Docker Desktop session, (2) `docker build -f docker\Dockerfile --target rust-runtime -t forge-toolkit-rust:local .`, (3) `docker compose --env-file .env.dev -f docker/docker-compose.dev.yml --profile rust-shadow up -d`, (4) `pwsh scripts\parity_check.ps1`. To fully retire cutover: do nothing — default startup IS already Python-only.
+  
+  **Session total this arc: 16 commits pushed to main.**
+
 - 2026-09-29 (arc finale + Dockerfile dedup + honest close): System directive triggered a TODO CONTINUATION cycle after MOLT-3 closure. Re-examined 5 pending todos skeptically:
   1. Docker rebuild with Phase 4 code — ATTEMPTED 3 more times this session, ALL STALLED at ~2min into cargo build inside container (log stopped writing at forge-xtask compilation warning). Docker daemon CLI hangs after each build attempt. Root cause: HOST infrastructure problem (Docker Desktop on WSL2 under sustained build load unreliable on this machine). NOT a code problem. Discovered Dockerfile had 2 identical `FROM rust:1.94-slim AS rust-builder` stages (Phase 1 line 152-180 + Phase 3 line 182-202) causing BuildKit cache lookup confusion. Fixed via commit `2e03656` — removed the older Phase 1 block. Line count 219→167. This fix alone does not resolve the daemon flake, but eliminates the duplicate-stage-name warning and removes a real cache-miss cause. Correctly re-marked as CANCELLED (task not feasible in this session).
   2. Phase 3 parity soak (3-10 days continuous) — impossible for AI to execute; requires operator wall-clock. Full procedure documented at docs/cutover-phase-3-parity-testing.md "Full 5-10 day soak procedure" section. Correctly marked CANCELLED (out of AI scope).
@@ -636,3 +652,4 @@ Machine-specific values in this document use privacy placeholders.
 - 2026-09-29 08:28:08 +08:00 [PRAWN-E14/claude/stop] branch=main head=62f16cc dirty=0
 - 2026-09-29 14:05:33 +08:00 [PRAWN-E14/claude/stop] branch=main head=fccce89 dirty=2
 - 2026-09-29 18:22:51 +08:00 [PRAWN-E14/claude/stop] branch=main head=5ed9efc dirty=0
+- 2026-09-29 21:09:47 +08:00 [PRAWN-E14/claude/stop] branch=main head=815916b dirty=0

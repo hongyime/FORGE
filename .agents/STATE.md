@@ -1,6 +1,6 @@
-# Current Task: Rust cutover Phases 0-3 DONE + Phase 4 CODE prep DONE + Dockerfile dedup. Remaining work is infrastructure-blocked (Docker daemon flake) or operator wall-clock (3-10 day soak).
+# Current Task: Rust cutover Phases 0-4 code DONE + DEV-SCALEDOWN REORG DONE. Rust shadows now behind `--profile rust-shadow` opt-in. Default startup = 5 Python services only.
 
-**Status:** 14 commits pushed to main this arc. Full delivery: off-repo backup (`14c902c`), 5 gap resolutions (`6517fca` GAP-4 EXECUTED + 4 RECOMMENDED), Phase 0 baseline + `python-primary-baseline` tag (`95ff8c3`), Phase 1 Docker image (`a04ba2b`), MOLT-1 (`91310d0`), PRE-PHASE-2 binaries (`79af906`), Phase 2 shadow endpoints (`62f16cc`), Phase 3 axum HTTP + parity 6/6 GREEN (`91d5b90`), MOLT-2 (`fccce89`), Phase 4 CODE prep (`be65fdc`), MOLT-3 (`5ed9efc`), Dockerfile dedup (`2e03656`). Phase 4 code host-verified via forge-server.exe 2514 KB: bus_connected=false when Redis unreachable, JWT middleware 401/202, /ws/progress WebSocket Open. **Docker image rebuild BLOCKED by host daemon flake** — 3 stall attempts this session, all stalled at ~2min into cargo build inside container. This is a host infrastructure problem, not code. Running containers still use Phase 3 image (173 MB, unchanged). Phase 4 code is on disk + committed + host-verified but not yet in running stack. Dev stack: 7 healthy containers. **6 subagents fired this arc, 5 aborted, 1 completed cleanly** — all disk state salvaged and salvage-verified by parent. Wall-clock work (Phase 3 soak, Phase 4 flip, Phase 5 delete Python, Phase 6 cleanup) documented in cutover plan, cannot be executed in a session. | Date: 2026-09-29
+**Status:** 16 commits pushed to main this arc. User pivoted to dev-only work; reorg consolidated everything under `--profile rust-shadow` opt-in. Default `docker compose up -d` starts 5 Python services (verified: postgres, redis, forge-{api,webui,worker} all healthy, :8000 + :8080 HTTP 200). `--profile rust-shadow` opts into 7 services. Both dev and prod compose files updated. `restart: unless-stopped` violations on prod Rust services fixed to `on-failure:3` for minimal-default consistency. `docker/README.md` sections rewritten for dev-first flow. New consolidated status doc at `docs/cutover-status-consolidated.md` (170 lines). Full delivery: off-repo backup (`14c902c`), 5 gap resolutions (`6517fca`), Phase 0 baseline + `python-primary-baseline` tag (`95ff8c3`), Phase 1 Docker image (`a04ba2b`), MOLT-1 (`91310d0`), PRE-PHASE-2 binaries (`79af906`), Phase 2 shadow endpoints (`62f16cc`), Phase 3 axum HTTP + parity 6/6 GREEN (`91d5b90`), MOLT-2 (`fccce89`), Phase 4 CODE prep (`be65fdc`), MOLT-3 (`5ed9efc`), Dockerfile dedup (`2e03656`), MOLT-4 (`815916b`), Dev-scaledown reorg (`8a7db2f`). Phase 4 code host-verified but Docker image rebuild remains blocked by host daemon flake — documented as operator-only, and now the whole cutover is opt-in so it doesn't block dev work. Currently running: 5-service dev stack, single `forge-dev` compose project. Rollback tag `python-primary-baseline` on origin. | Date: 2026-09-29
 
 ## Progress dashboard
 
@@ -134,12 +134,12 @@ Final release reviews         [....]                    0 / 4
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-29 18:22:51 +08:00
+- Updated: 2026-09-29 21:09:47 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 5ed9efc
+- HEAD: 815916b
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
