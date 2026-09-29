@@ -1,6 +1,6 @@
-# Current Task: Rust cutover Phase 0+1 DONE, off-repo backup DONE, 5 gaps resolved. Phase 2 blocked on adding [[bin]] targets to production crates.
+# Current Task: Rust cutover Phases 0-3 DONE + Phase 3 parity smoke 6/6 GREEN. Phase 4 code prep running (bg_ba0b5e51). Soak + port flip queued.
 
-**Status:** Backup + gaps + Phase 0 + Phase 1 all delivered in one arc. Off-repo backup at `X:\01 REPOSITORIES\forge-backup-20260928-201422\` (8471 files/1201 MB, refresh script + RESTORE.md, committed as `14c902c`). 5 gap resolutions (`6517fca`): GAP-1/2/3/5 documented, GAP-4 executed (guarded-autostart removed from prod compose + install script deleted per user "I don't need guarded auto start loop"). Cutover Phase 0 baseline (`95ff8c3`): `python-primary-baseline` tag pushed, 5 baseline artifacts under `.agents/baseline-*` (git HEAD, python test files=497, docker image SHA, postgres schema=3796 bytes, container versions), canaries 13/13 PASS at baseline. Cutover Phase 1 (`a04ba2b`): `forge-toolkit-rust:local` Docker image built (149 MB, under 200 MB target), rust:1.94-slim + debian:trixie-slim (GLIBC parity), BuildKit cache mounts enabled. **Only `forge-xtask` binary exists** — all 13 production crates are library-only. Phase 2 (shadow endpoints) BLOCKED until forge-server + forge-cli crates get `[[bin]]` + `main.rs`. | Date: 2026-09-29
+**Status:** Full arc across a single session: off-repo backup (`14c902c`), 5 gap resolutions (`6517fca` - GAP-4 EXECUTED, 4 RECOMMENDED), Phase 0 baseline + `python-primary-baseline` tag (`95ff8c3`), Phase 1 Docker image `forge-toolkit-rust:local` 149 MB (`a04ba2b`), MOLT (`91310d0`), PRE-PHASE-2 skeleton binaries 150 MB (`79af906`), Phase 2 shadow endpoints (`62f16cc`), Phase 3 axum HTTP + parity harness 173 MB (`91d5b90`). Initial parity smoke: **6/6 GREEN** across platform/health + webui/health. Dev stack: 7 containers healthy (postgres + redis + forge-{api,webui,worker} + forge-rust-{api,webui}). scripts/parity_check.ps1 uses docker exec to bypass WSL2 loopback flake. Phase 4 code prep subagent `bg_ba0b5e51` in flight (real Redis dial for bus_connected, JWT bearer middleware skeleton, /ws/progress echo websocket). Wall-clock 3-10 day soak still to run before actual port flip. 3 subagents aborted this arc but disk-side work survived every time. | Date: 2026-09-29
 
 ## Progress dashboard
 
@@ -134,13 +134,13 @@ Final release reviews         [....]                    0 / 4
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-29 04:11:41 +08:00
+- Updated: 2026-09-29 08:28:08 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 95ff8c3
-- Dirty files: 1
+- HEAD: 62f16cc
+- Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->
 
