@@ -149,35 +149,6 @@ CMD ["uvicorn", "forge.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--r
 
 FROM runtime AS production
 
-# ---------------------------------------------------------------------------
-# rust-builder stage — compiles the Rust workspace inside a Linux container.
-# Produces Linux ELF binaries (distinct from the Windows .exes built locally).
-#
-# NOTE (Phase 1 finding): All production crates (forge-server, forge-cli,
-# forge-ui, forge-operations, etc.) are currently LIBRARY crates with no
-# [[bin]] sections or main.rs entry points. The only binary produced by
-# `cargo build --release --workspace` is `forge-xtask` (the build/verify
-# tool). Before Phase 2 can proceed, each production crate that maps to a
-# runtime service must gain a [[bin]] target + main.rs entrypoint.
-#
-# This stage is included to prove the Linux build works end-to-end and to
-# establish the correct layer structure for when the binary entrypoints land.
-# ---------------------------------------------------------------------------
-FROM rust:1.94-slim AS rust-builder
-WORKDIR /build
-# Minimal system deps for openssl, sqlite, and postgres native builds
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    pkg-config libssl-dev libsqlite3-dev libpq-dev ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-COPY native/ native/
-RUN mkdir -p /out
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/build/native/target,sharing=locked \
-    cd native && cargo build --release --workspace && \
-    cp target/release/forge-xtask  /out/forge-xtask && \
-    cp target/release/forge-server /out/forge-server && \
-    cp target/release/forge        /out/forge
 
 # ---------------------------------------------------------------------------
 # rust-builder stage — compiles the Rust workspace inside a Linux container.
