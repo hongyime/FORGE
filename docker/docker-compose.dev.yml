@@ -1,8 +1,8 @@
 # FORGE dev stack — local development and testing only.
 #
 # Single project: forge-dev
-# 7 services: postgres, redis, forge-api, forge-webui, forge-worker, forge-rust-api, forge-rust-webui
-# Target memory ceiling: ~2.18 GB total (adds 2x 256 MB Rust shadow services)
+# 7 services: postgres, redis, forge-{api,webui,worker} (default) + forge-rust-{api,webui} (--profile rust-shadow)
+# Target memory ceiling: ~1.66 GB default (5 services) / ~2.18 GB with --profile rust-shadow (7 services)
 # DO NOT use for production deployments.
 #
 # Quick start (from repo root):
@@ -235,6 +235,7 @@ services:
   forge-rust-api:
     image: forge-toolkit-rust:local
     container_name: forge-dev-forge-rust-api-1
+    profiles: [rust-shadow]
     restart: on-failure:3
     mem_limit: 256m
     cpus: "0.30"
@@ -277,6 +278,7 @@ services:
   forge-rust-webui:
     image: forge-toolkit-rust:local
     container_name: forge-dev-forge-rust-webui-1
+    profiles: [rust-shadow]
     restart: on-failure:3
     mem_limit: 256m
     cpus: "0.30"

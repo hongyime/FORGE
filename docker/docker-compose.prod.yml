@@ -1,8 +1,8 @@
 # FORGE production self-host stack — minimal-default, operator-scalable.
 #
 # Single project: forge-prod
-# 7 services always: postgres, redis, forge-api, forge-webui, forge-worker, forge-rust-api, forge-rust-webui
-# (forge-guarded-autostart removed 2026-09-28 — user authorization: not needed)
+# 5 services default: postgres, redis, forge-{api,webui,worker}
+# +2 opt-in: forge-rust-{api,webui} behind --profile rust-shadow
 #
 # Resource caps default to the same minimal footprint as the dev stack.
 # Operators can override upward via environment variables when deploying
@@ -243,7 +243,8 @@ services:
   forge-rust-api:
     image: forge-toolkit-rust:local
     container_name: forge-prod-forge-rust-api-1
-    restart: unless-stopped
+    profiles: [rust-shadow]
+    restart: on-failure:3
     mem_limit: "${FORGE_RUST_API_MEM:-256m}"
     cpus: "${FORGE_RUST_API_CPUS:-0.30}"
     init: true
@@ -285,7 +286,8 @@ services:
   forge-rust-webui:
     image: forge-toolkit-rust:local
     container_name: forge-prod-forge-rust-webui-1
-    restart: unless-stopped
+    profiles: [rust-shadow]
+    restart: on-failure:3
     mem_limit: "${FORGE_RUST_WEBUI_MEM:-256m}"
     cpus: "${FORGE_RUST_WEBUI_CPUS:-0.30}"
     init: true

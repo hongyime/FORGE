@@ -6,10 +6,10 @@ Two Compose stacks: `forge-dev` for local development and testing, `forge-prod` 
 
 ## Two stacks: dev and prod
 
-| Stack | File | Env file | Project name | Services |
-|-------|------|----------|--------------|----------|
-| Dev | `docker/docker-compose.dev.yml` | `.env.dev` | `forge-dev` | 5 (no autostart) |
-| Prod | `docker/docker-compose.prod.yml` | `.env.prod` | `forge-prod` | 5 core + autostart (opt-in) |
+| Stack | File | Env file | Project name | Default services | With profile |
+|-------|------|----------|--------------|------------------|--------------|
+| Dev | `docker/docker-compose.dev.yml` | `.env.dev` | `forge-dev` | 5 (Python only) | +2 with `--profile rust-shadow` |
+| Prod | `docker/docker-compose.prod.yml` | `.env.prod` | `forge-prod` | 5 core | +2 with `--profile rust-shadow`; +1 with `--profile autostart` |
 
 The old `docker/docker-compose.yml` remains as a reference but is superseded by these two files.
 
@@ -76,6 +76,8 @@ Both stacks use the same minimal-footprint defaults. In prod, all caps are overr
 
 ### Dev stack (`forge-dev`) — hard-coded minimums
 
+#### Default startup (5 services — Python stack only)
+
 | Service | Memory | CPU | Notes |
 |---------|--------|-----|-------|
 | postgres | 256 MB | 0.25 | State + audit DB |
@@ -85,7 +87,17 @@ Both stacks use the same minimal-footprint defaults. In prod, all caps are overr
 | forge-worker | 384 MB | 0.35 | Background task runner |
 | **Total** | **~1.66 GB** | **~1.60** | Under 2 GB ceiling |
 
+#### With `--profile rust-shadow` (7 services — adds Rust shadow endpoints)
+
+| Service | Memory | CPU | Notes |
+|---------|--------|-----|-------|
+| forge-rust-api | 256 MB | 0.30 | Rust axum API on :9000 (opt-in) |
+| forge-rust-webui | 256 MB | 0.30 | Rust axum web UI on :9080 (opt-in) |
+| **Total (all 7)** | **~2.17 GB** | **~2.20** | Requires `forge-toolkit-rust:local` image |
+
 ### Prod stack (`forge-prod`) — minimal defaults, env-var scalable
+
+#### Default startup (5 services)
 
 | Service | Default memory | Override env var | Default CPU | Override env var |
 |---------|----------------|------------------|-------------|------------------|
@@ -94,9 +106,15 @@ Both stacks use the same minimal-footprint defaults. In prod, all caps are overr
 | forge-api | 512 MB | `FORGE_API_MEM` | 0.50 | `FORGE_API_CPUS` |
 | forge-webui | 384 MB | `FORGE_WEB_MEM` | 0.35 | `FORGE_WEB_CPUS` |
 | forge-worker | 384 MB | `FORGE_WORKER_MEM` | 0.35 | `FORGE_WORKER_CPUS` |
-| forge-guarded-autostart | 512 MB | `FORGE_AUTOSTART_MEM_LIMIT` | 0.25 | `FORGE_AUTOSTART_CPUS` |
 | **Core total** | **~1.66 GB** | | **~1.60** | |
-| **With autostart** | **~2.17 GB** | | **~1.85** | |
+
+#### With `--profile rust-shadow` (+2 services)
+
+| Service | Default memory | Override env var | Default CPU | Override env var |
+|---------|----------------|------------------|-------------|------------------|
+| forge-rust-api | 256 MB | `FORGE_RUST_API_MEM` | 0.30 | `FORGE_RUST_API_CPUS` |
+| forge-rust-webui | 256 MB | `FORGE_RUST_WEBUI_MEM` | 0.30 | `FORGE_RUST_WEBUI_CPUS` |
+| **+rust-shadow total** | **~2.17 GB** | | **~2.20** | |
 
 To scale up for a larger host, set overrides in `.env.prod`:
 
@@ -131,7 +149,9 @@ FORGE_POSTGRES_MEM_LIMIT=512m
 | Healthcheck interval | 10–15s | 15s | 15s |
 | Healthcheck start_period | 60s | 30s (faster dev feedback) | 60s |
 | Worker replicas | `${FORGE_WORKER_REPLICAS:-1}` | always 1 | always 1 (no `deploy:` block) |
-| forge-guarded-autostart | included (profile-gated) | **dropped** | profile-gated (`--profile autostart`) |
+| forge-guarded-autostart | included (profile-gated) | **dropped** | removed (2026-09-28) |
+| forge-rust-api | not present | `--profile rust-shadow` (opt-in) | `--profile rust-shadow` (opt-in) |
+| forge-rust-webui | not present | `--profile rust-shadow` (opt-in) | `--profile rust-shadow` (opt-in) |
 | Volume namespace | `forge-*` | `forge-dev-*` | `forge-prod-*` |
 | Network name | `forge-net` | `forge-dev-net` | `forge-prod-net` |
 | Source bind-mount | no | no | no |
@@ -159,7 +179,7 @@ docker compose --env-file .env.dev -f docker/docker-compose.dev.yml config --qui
 docker compose --env-file .env.dev -f docker/docker-compose.dev.yml config --services
 ```
 
-Expected output from `--services`: `forge-api`, `forge-webui`, `forge-worker`, `postgres`, `redis`
+Expected output from `--services` (default, no profile): `forge-api`, `forge-webui`, `forge-worker`, `postgres`, `redis`
 
 ### Step 3 — Remove old containers (if any)
 
@@ -217,7 +237,7 @@ docker run --rm `
 ### 5 most common dev commands
 
 ```powershell
-# 1. Start dev stack
+# 1. Start dev stack (5 Python services — default, no Rust shadow)
 docker compose --env-file .env.dev -f docker/docker-compose.dev.yml up -d
 
 # 2. Check service health
@@ -250,6 +270,56 @@ docker compose --env-file .env.dev -f docker/docker-compose.dev.yml config | Sel
 
 # Validate prod config before deploying
 docker compose --env-file .env.prod -f docker/docker-compose.prod.yml config --quiet
+```
+
+---
+
+## Rust shadow endpoints (opt-in)
+
+The Rust shadow services (`forge-rust-api` on :9000 and `forge-rust-webui` on :9080) are
+**behind `--profile rust-shadow`** in both the dev and prod stacks. They do NOT start
+automatically on a plain `docker compose up -d`.
+
+### Why opt-in?
+
+User pivot (2026-09-29): _"dont want the full system running yet / scaling back to dev work /
+all docker need to be minimal footprint (even when real prod)"_. Rust shadow services require
+the `forge-toolkit-rust:local` image which must be built separately. Until Phase 4+ parity
+work is actively underway, the default stack is the 5-service Python-only configuration.
+
+### Default startup — Python stack only (5 services)
+
+```powershell
+# Dev — starts ONLY postgres, redis, forge-api, forge-webui, forge-worker
+docker compose --env-file .env.dev -f docker/docker-compose.dev.yml up -d
+
+# Prod equivalent
+docker compose --env-file .env.prod -f docker/docker-compose.prod.yml up -d
+```
+
+### Opt-in Rust shadow startup — 7 services (for Phase 3+ parity work)
+
+**Prerequisites:** build the Rust image first:
+```powershell
+docker build -f docker/Dockerfile.rust -t forge-toolkit-rust:local .
+```
+Then start with the profile:
+```powershell
+# Dev — all 7 services including Rust shadow on :9000 and :9080
+docker compose --env-file .env.dev -f docker/docker-compose.dev.yml --profile rust-shadow up -d
+
+# Prod equivalent
+docker compose --env-file .env.prod -f docker/docker-compose.prod.yml --profile rust-shadow up -d
+```
+
+### Verify active service count
+
+```powershell
+# Default mode — should list 5 services
+docker compose --env-file .env.dev -f docker/docker-compose.dev.yml config --services
+
+# With rust-shadow — should list 7 services
+docker compose --env-file .env.dev -f docker/docker-compose.dev.yml --profile rust-shadow config --services
 ```
 
 ---
