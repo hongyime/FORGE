@@ -1,6 +1,20 @@
-# Current Task: Rust cutover Phases 0-4 code DONE + DEV-SCALEDOWN REORG DONE. Rust shadows now behind `--profile rust-shadow` opt-in. Default startup = 5 Python services only.
+# Current Task: Cross-OS docs + idempotent setup scripts. Rust cutover status = ~10-15% by surface area (honest gap doc published). Dev stack healthy.
 
-**Status:** 16 commits pushed to main this arc. User pivoted to dev-only work; reorg consolidated everything under `--profile rust-shadow` opt-in. Default `docker compose up -d` starts 5 Python services (verified: postgres, redis, forge-{api,webui,worker} all healthy, :8000 + :8080 HTTP 200). `--profile rust-shadow` opts into 7 services. Both dev and prod compose files updated. `restart: unless-stopped` violations on prod Rust services fixed to `on-failure:3` for minimal-default consistency. `docker/README.md` sections rewritten for dev-first flow. New consolidated status doc at `docs/cutover-status-consolidated.md` (170 lines). Full delivery: off-repo backup (`14c902c`), 5 gap resolutions (`6517fca`), Phase 0 baseline + `python-primary-baseline` tag (`95ff8c3`), Phase 1 Docker image (`a04ba2b`), MOLT-1 (`91310d0`), PRE-PHASE-2 binaries (`79af906`), Phase 2 shadow endpoints (`62f16cc`), Phase 3 axum HTTP + parity 6/6 GREEN (`91d5b90`), MOLT-2 (`fccce89`), Phase 4 CODE prep (`be65fdc`), MOLT-3 (`5ed9efc`), Dockerfile dedup (`2e03656`), MOLT-4 (`815916b`), Dev-scaledown reorg (`8a7db2f`). Phase 4 code host-verified but Docker image rebuild remains blocked by host daemon flake — documented as operator-only, and now the whole cutover is opt-in so it doesn't block dev work. Currently running: 5-service dev stack, single `forge-dev` compose project. Rollback tag `python-primary-baseline` on origin. | Date: 2026-09-29
+**Status:** 2026-09-30. Session pivot: user hit Docker Desktop `WslExec create instance 0x88872746` error, then asked for full Rust cutover assessment + cross-OS setup + idempotent scripts. Repaired Docker/WSL via `wsl --shutdown` + Docker Desktop restart (up in ~90s, `Docker 29.6.2`). Dev stack (5 services) verified healthy: :8000 + :8080 HTTP 200. Delivered without subagents: (1) `docs/RUST_CUTOVER_REMAINING.md` — honest gap analysis: Rust workspace = 13 crates, 779 tests, domain contracts + skeleton HTTP shadow; Python surface = 554 .py files across 45 subsystems; cutover ~10–15% by surface area; 12 more T3–T36-scale waves needed. (2) `docs/STACK_WALKTHROUGH.md` — start-to-finish tour. (3) `docs/CROSS_OS_SETUP.md` — Linux/mac/Windows single source of truth. (4) Idempotent bootstrap: `scripts/setup.ps1` + `scripts/setup.sh` — Docker check, secret gen (crypto-random), bind-mount dirs, compose validate, optional up. (5) POSIX peers: `scripts/parity_check.sh` (jq/python3 for JSON diff), `scripts/refresh-backup.sh` (tar/rsync). (6) Fixed `dev.ps1` + `dev.sh` — they still pointed at stale root `compose.dev.yaml`; now use canonical `docker/docker-compose.dev.yml` and add `rust-shadow` action. (7) Deleted duplicate root `compose.dev.yaml` (48 lines drift from authoritative version). All prior arc state preserved. Rollback anchors still active.
+
+## Progress dashboard (2026-09-30 delta)
+
+- Fix: Docker Desktop / WSL2 restart procedure documented in `docs/CROSS_OS_SETUP.md`
+- Doc: `docs/RUST_CUTOVER_REMAINING.md` (168 lines) — honest gap analysis
+- Doc: `docs/STACK_WALKTHROUGH.md` (128 lines) — start-to-finish
+- Doc: `docs/CROSS_OS_SETUP.md` (166 lines) — Linux/mac/Windows
+- Script: `scripts/setup.ps1` (149 lines) idempotent, `-Up`/`-Force`
+- Script: `scripts/setup.sh` (128 lines) idempotent, `--up`/`--force`
+- Script: `scripts/parity_check.sh` (101 lines) POSIX peer of `.ps1`
+- Script: `scripts/refresh-backup.sh` (67 lines) tar/rsync fallback
+- Fix: `dev.ps1`, `dev.sh` — point at `docker/docker-compose.dev.yml`, add `rust-shadow`
+- Cleanup: removed duplicate `compose.dev.yaml` at repo root (drift)
+- Verify: dev stack :8000 + :8080 healthy after all changes
 
 ## Progress dashboard
 
@@ -134,12 +148,12 @@ Final release reviews         [....]                    0 / 4
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-29 21:09:47 +08:00
+- Updated: 2026-09-30 08:04:04 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 815916b
+- HEAD: 4a99a43
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->

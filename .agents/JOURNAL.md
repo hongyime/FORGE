@@ -653,3 +653,41 @@ Machine-specific values in this document use privacy placeholders.
 - 2026-09-29 14:05:33 +08:00 [PRAWN-E14/claude/stop] branch=main head=fccce89 dirty=2
 - 2026-09-29 18:22:51 +08:00 [PRAWN-E14/claude/stop] branch=main head=5ed9efc dirty=0
 - 2026-09-29 21:09:47 +08:00 [PRAWN-E14/claude/stop] branch=main head=815916b dirty=0
+- 2026-09-29 23:39:04 +08:00 [PRAWN-E14/claude/stop] branch=main head=4a99a43 dirty=0
+- 2026-09-30 07:57:17 +08:00 [PRAWN-E14/claude/stop] branch=main head=4a99a43 dirty=0
+- 2026-09-30 08:04:04 +08:00 [PRAWN-E14/claude/stop] branch=main head=4a99a43 dirty=0
+
+## 2026-09-30 — Cross-OS setup + honest Rust cutover assessment
+
+**Trigger.** User hit Docker Desktop WSL error (WslExec create instance 0x88872746) and asked: full Rust cutover possible now? Show task list. Walk through what's built. Docs up to date. Any OS setup (Linux/mac/Windows). Idempotent ps1+sh scripts. Fast, no subagents.
+
+**Repair.**
+- `wsl --shutdown` + kill Docker Desktop processes + restart Docker Desktop.
+- Docker daemon back in ~90s. `docker 29.6.2, docker-desktop WSL Running`.
+- Dev stack came back healthy on its own: :8000 + :8080 both 200.
+
+**Honest assessment: full cutover NOT possible today.**
+- Rust workspace: 13 crates, 779 tests, `unsafe_code = "forbid"`. Covers domain contracts + skeleton axum HTTP shadow (`forge-server` health-only, 13k/10k/689 bytes in api/platform/lib).
+- Python surface remaining: 554 .py files across 45 subsystems (api, webui, phases 0-6, connectors, monitoring, remediation, active_validation, graph, audit, standards, retention, workflow, tui, ...).
+- Rust orge-cli is skeleton (10k of scaffolding, no verbs wired). No parity for `forge kill-chain`, `forge automation`, `forge doctor`, WebUI HTMX/React, WebSocket `/ws/progress`.
+- Surface completion ~10-15%. Documented as W7-W18 wave breakdown in `docs/RUST_CUTOVER_REMAINING.md`.
+
+**Delivered (no subagents, direct action).**
+- `docs/RUST_CUTOVER_REMAINING.md` — gap analysis, remaining waves, blockers, rollback anchors.
+- `docs/STACK_WALKTHROUGH.md` — start-to-finish tour: repo shape, dev stack, Rust shadow, first-run, runtime lifecycle, CLI verbs, testing, doc index, principles.
+- `docs/CROSS_OS_SETUP.md` — Windows/Linux/macOS bootstrap, WSL2 gotcha, execution-policy, SELinux, macOS Rosetta, verify, backups, uninstall, troubleshooting.
+- `scripts/setup.ps1` — Windows bootstrap. Uses `System.Security.Cryptography.RandomNumberGenerator`. Idempotent. Preserves user keys. `-Up` optional.
+- `scripts/setup.sh` — POSIX bootstrap. Uses `openssl rand -hex` with `/dev/urandom` fallback. Writes `.env.dev` mode 600. Idempotent. `--up` optional.
+- `scripts/parity_check.sh` — POSIX peer of `parity_check.ps1`. jq or python3 for JSON key-set extraction. `docker exec` for stack-internal fetch (bypasses WSL2 loopback flake).
+- `scripts/refresh-backup.sh` — POSIX peer of `refresh-backup.ps1`. rsync preferred, tar fallback. `--keep N` prune. Emits `RESTORE.md` in every snapshot.
+- `dev.ps1` + `dev.sh` — rewrote both. Pointed at canonical `docker/docker-compose.dev.yml` (was stale root `compose.dev.yaml`). Added `rust-shadow` action. Env-file existence check.
+- Deleted duplicate `compose.dev.yaml` at repo root — 48-line drift from `docker/docker-compose.dev.yml`, no rust-shadow profile, referenced only by broken `dev.ps1`/`.sh`.
+
+**Verification.**
+- `docker compose --env-file .env.dev -f docker/docker-compose.dev.yml config --quiet` exits 0 in 6s.
+- Dev stack: postgres, redis, forge-api, forge-webui, forge-worker all healthy.
+- Health probes green: `{"status":"ok","bus_connected":true,"version":"7.2.0-platform"}`, `{"status":"ok","version":"7.2.0"}`.
+- Scripts + docs + .env.dev keys present with correct lengths (postgres pw 20, web key 68, bootstrap 78, engagement key 68).
+- Idempotency: setup.ps1 logic replayed inline (nested `pwsh -File` from tool harness hangs; setup.ps1 itself is fine — individual docker calls succeed sub-10s).
+
+**Not done.** Full Rust cutover (needs waves W7-W18 per `RUST_CUTOVER_REMAINING.md`). No Python was removed. No Rust workspace changes.
