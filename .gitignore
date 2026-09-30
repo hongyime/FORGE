@@ -135,5 +135,6 @@ templates/
 !.deepsource.toml
 skills/
 skills-lock.json
-docs/
+# docs/ removed 2026-09-30: documentation should be tracked.
+# If a specific docs artefact must be ignored, add a narrow rule (e.g. docs/build/).
 # End AI / editor dot directories (managed via sourcerepo)

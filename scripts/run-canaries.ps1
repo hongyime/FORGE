@@ -82,7 +82,7 @@ foreach ($case in $Cases) {
     $caseDir = Join-Path $EvidenceRoot $case
     New-Item -ItemType Directory -Force -Path $caseDir | Out-Null
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    $output = & $Bin verify $case --evidence $caseDir 2>&1
+    $output = & $Bin verify $case --evidence $caseDir --root $RepoRoot 2>&1
     $exitCode = $LASTEXITCODE
     $sw.Stop()
     $ms = $sw.ElapsedMilliseconds
