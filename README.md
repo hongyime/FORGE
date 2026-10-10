@@ -262,6 +262,8 @@ forge collection profiles list [--json]  # List built-in collection profile mani
 forge collection profiles show NAME [--json]  # Show flags and operator notes for a profile
 forge collection profiles emit NAME --seed SEED --engagement N [--json]  # Emit a pre-configured kill-chain command (read-only)
 forge artifacts nemesis-export --engagement N [--output PATH]  # Nemesis C2 handoff: sanitized evidence bundle (Explore #13)
+forge agents list [--json]  # List registered agent plugins and capability manifests (Explore #14, read-only)
+forge agents task-status --task-id ID [--json]  # Read-only agent task state query
 forge graph cypher-export --engagement N --graph-json PATH [--output PATH]  # Neo4j Cypher CREATE export from attack graph (Explore #12)
 forge graph tier-zero --engagement N [--top N] [--json]  # Tier-zero exposure scoring + remediation hints (Explore #16)
 forge audit manifest-verify --engagement N

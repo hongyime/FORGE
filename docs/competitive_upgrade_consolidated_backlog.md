@@ -2,6 +2,8 @@
 
 **Created**: 2026-09-01 | **Sources**: Plan 1 (SpecterOps), Plan 2 (Offensive Security), ODIN, Codex verification
 
+**Updated**: 2026-10-10 — Added Wave 1-3 items from competitive research against Strix, Cairn, Muraena, Necrobrowser (`docs/competitive_research_strix_cairn_muraena.md`). Wave 1 ships Strix-style tool-wrapper hardening + `strix_findings_import` connector + Muraena/Necro catalog-only entries (Do Next #17-#19). Wave 2 formalizes Cairn's Fact/Intent/Hint model + API-spec seed type (Explore #20-#21). Wave 3 adds MCP server surface + skill manifest + authenticated-scraping spec (Explore #22-#24). Existing Do Next #7, Explore #14, Explore #16, and Open Question #1 updated with research cross-references. Numbering continues globally; the dated note explains the gap between Do Next #11 and #17.
+
 ## Do Now (6 items — High Value, Lower Effort)
 
 | # | Upgrade | Source | Effort | Risk | Description |
@@ -13,25 +15,33 @@
 | 5 | Sigma.js Graph UI | Plan 2 + ODIN | Low | UI complexity | Real-time graph rendering matching BloodHound/ODIN visualization |
 | 6 | Session Enumeration Module | Plan 2 | Low | OPSEC concerns | Correlate active sessions for lateral movement; SharpHound session collection pattern |
 
-## Do Next (5 items — Medium Features)
+## Do Next (8 items — Medium Features)
 
 | # | Upgrade | Source | Effort | Risk | Description |
 |---|---------|--------|--------|------|-------------|
-| 7 | Collection Profile Manifests | Plan 1 | Medium | Hidden unsafe defaults | Reusable setup plans for engagement modes; read-only profiles emit commands |
+| 7 | Collection Profile Manifests | Plan 1 + Necrobrowser research | Medium | Hidden unsafe defaults | Reusable setup plans for engagement modes; read-only profiles emit commands. Adopt Necrobrowser's `{type, name, params}` task-JSON contract shape (minus the eval dispatch) — proven at scale, parses cleanly, and matches how scoped manifests already flow through FORGE. See research 2026-10-10 §4.2, §5.3 |
 | 8 | Unified Engagement Activity Timeline | Plan 1 + ODIN | Medium | RBAC mistakes | Who changed what, what ran, failed, needs review; RBAC-filtered + redacted |
 | 9 | AD/LDAP Collection Module | Plan 2 | Medium | AV flags | Windows environment coverage (groups, trusts, GPOs); SharpHound native/LDAP pattern |
 | 10 | AzureHound Data Ingestion | Plan 2 | Medium | Auth permissions | Parse Entra ID/AzureRM JSON; merge with FORGE asset graph |
 | 11 | Hybrid Path Derivation | Plan 2 | Medium | Complexity | Cross-domain paths from synced users; tier-zero exposure scoring |
+| 17 | Strix-style universal tool-wrapper hardening | Strix research | Low | Pattern already partially present | Apply bounded-output cap, argument-coercion normalization, and error-as-result wrappers universally across `forge/connectors/*` and `forge/phase4/*`. Already partial via `output_store.py` equivalents; make it exhaustive so every connector output is capped before entering any downstream parser or LLM context window. See research 2026-10-10 §1.2, §5.4 Wave 1 |
+| 18 | `strix_findings_import` connector | Strix research | Low | Finding provenance drift | Accept Strix JSON report format as import-only, scope-gated validation evidence. Mirror the Burp/JUnit DAST XML import path at `forge connectors import-validation`. Static JSON parsing only; do not shell out to Strix, do not auto-promote exploits to reportable findings without the normal validation gate. See research 2026-10-10 §1.5, §5.4 Wave 1 |
+| 19 | Muraena + Necrobrowser catalog-only entries | Muraena/Necro research | Trivial | Catalog pollution | Add catalog-only, unsafe-text entries to `forge connectors policy-summary` under an "offensive adversary emulation reference" tier (same tier as the existing `ukr.pw` snippet-archive entries). Documents FORGE's doctrine-aware stance without creating a runnable surface; reverse-proxy phishing and post-login hijacking remain explicitly out of scope. See research 2026-10-10 §3.5, §4.5, §5.4 Wave 1 |
 
-## Explore (5 items — Large Bets)
+## Explore (10 items — Large Bets)
 
 | # | Upgrade | Source | Effort | Risk | Description |
 |---|---------|--------|--------|------|-------------|
 | 12 | Neo4j/OpenGraph Export Bridge | Plan 1 + ODIN | High | Complexity | Native Neo4j export alongside GraphML/JSON; portable FORGE evidence to graph workflows |
 | 13 | Nemesis-Compatible Artifact Handoff | Plan 1 | High | API stability | Exchange sanitized engagement artifacts between systems |
-| 14 | Agent Ecosystem (collaboration only) | Plan 2 | High | Scope creep | Collaboration/plugin patterns from Mythic; execution features excluded |
+| 14 | Agent Ecosystem (collaboration only) | Plan 2 + Strix/Cairn research | High | Scope creep | Collaboration/plugin patterns from Mythic; execution features excluded. Cairn validates stigmergy (no direct agent-to-agent calls, all coordination through a shared Fact/Intent/Hint board). Strix validates typed tool-wrapping with lifecycle semantics (only `finish_scan` ends the loop) and MCP-based tool discovery. See research 2026-10-10 §1.4, §2.3, §5.3 |
 | 15 | OpenGraph Plugin Interface | Plan 2 | High | Schema lock-in | Standardize JSON schema for identity providers |
-| 16 | Attack Path Management Framework | Plan 2 | High | Large scope | Tier-zero exposure measurement; remediation prioritization |
+| 16 | Attack Path Management Framework | Plan 2 + Cairn research | High | Large scope | Tier-zero exposure measurement; remediation prioritization. Cairn's state-space search framing (origin → goal → path with Bootstrap / Reason / Explore task types) is the formal underpinning for FORGE's path semantics; adopt the Reason-task concept as the attack-path recomputation primitive. Keep goals pre-defined (reportable finding, validated exposure, remediation action) — do not adopt Cairn's "any goal, any domain" free-form framing. See research 2026-10-10 §2.3, §5.3 |
+| 20 | Fact/Intent/Hint evidence model formalization | Cairn research | Medium | DB migration risk, operator surface drift | Formalize FORGE's internal evidence shapes against Cairn's primitives: existing `hosts`, `services`, `cloud_refs`, `vulnerability_findings` already behave as Facts. Add a first-class `recursion_intents` table recording `intent_id`, `source_fact_id`, `target_seed`, `rationale`, `created_at`, `claimed_by`, `claimed_at`, `completed_fact_id`, `status`. Operator Hints via `--related-seed` get their own audit event. Expose through `forge recursion intents list --engagement N --json` (read-only). Dashboard surfaces open intents alongside recursion backlog. View + audit upgrade only — no scheduler rewrite. See research 2026-10-10 §2.4, §5.4 Wave 2 |
+| 21 | API-spec seed type for passive route enumeration | Strix research | Low-Medium | Scope-manifest extension complexity | Accept OpenAPI / Postman / Swagger spec files as a scoped seed type for passive route enumeration (static parsing only; discovered endpoints join the normal in-scope crawl queue, no out-of-manifest probing). Scope manifest extension: `api_spec_prefixes` allow-list anchored to existing `urls`/`domains` entries. See research 2026-10-10 §1.4, §5.4 Wave 2 |
+| 22 | `forge mcp serve` — MCP server surface for FORGE evidence | Strix research | Medium | Protocol stability, exposure surface | Expose FORGE evidence (hosts, services, findings, graph) through Model Context Protocol so coding agents (Strix, Claude Code, Codex, Gemini, Kiro) can read engagement state the way they read other MCP servers. Read-only by default; any write-capable endpoint gated by the same workspace membership + JWT scope policy as the web API. Loopback bind + token-authenticated by default; no public exposure without the production hardening checklist. See research 2026-10-10 §1.4, §5.4 Wave 3 |
+| 23 | `forge.skill.v1` manifest + skill registry | Strix research | Medium | Schema sprawl | Add a sibling to `forge.connector.plugin.v1` for coding-agent delegation playbooks. SKILL.md-compatible with Strix's `npx skills add` convention. Data-only manifests, no executable code; safety-class gating same as connector plugins (manifest IDs must start with `skill_`, approved domains/safety-classes only, cannot claim FORGE runner commands). Enables `forge operator-guide` to surface operator playbooks that agent harnesses can load. See research 2026-10-10 §1.4, §5.4 Wave 3 |
+| 24 | Authenticated-scraping spec (resolves Open Question #1) | Necro research | High | Capability drift into offensive post-exploitation | Write the deferred authenticated-scraping spec using Necrobrowser as the explicit anti-example. Enumerate what the FORGE equivalent CANNOT do (every Necrobrowser Office 365 extrude task — `AddAuthenticatorApp`, `ScreenshotApps`, `SharepointExtrude`, `OneDriveExtrude`, `OutlookWriteEmail`, `OutlookExtrude`). Enumerate what FORGE CAN do (observation-only crawl of operator-scoped URL prefixes, no form submission, no download trigger, no state change, no mail send). Scope manifest extension: `authenticated_crawl_scope` block with explicit URL-prefix allow-list and operator-supplied session cookies — session material never captured by FORGE itself. See research 2026-10-10 §4.4-§4.5, §5.4 Wave 3 |
 
 ## ODIN Integration Items
 
@@ -70,7 +80,7 @@ Tracked separately from competitive upgrades. Codex verified 2026-09-01 (commit 
 4. Audit log entries for every authenticated scraping action
 5. Separate `/to-spec` task to define the exact behavior
 
-**Status**: Deferred — create separate spec task.
+**Status**: Deferred — create separate spec task. Tracked as **Explore #24** (Wave 3). The spec must use Necrobrowser as the explicit anti-example: every Necrobrowser Office 365 extrude task (`AddAuthenticatorApp`, `ScreenshotApps`, `SharepointExtrude`, `OneDriveExtrude`, `OutlookWriteEmail`, `OutlookExtrude`) is explicitly out of scope. FORGE's authenticated scraping is observation-only — no form submission, no download trigger, no setting change, no mail send, no authenticator-app registration. Session cookies must be operator-supplied in the scope manifest; FORGE never captures live credentials. See research 2026-10-10 §4.4-§4.5.
 
 ### 2. Rust Native Behavior Expansion
 **Question**: When to expand Rust beyond AES-GCM/BLAKE3?
