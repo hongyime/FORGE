@@ -72,7 +72,11 @@ pub struct RiskAcceptance {
 
 impl RiskAcceptance {
     pub fn new(reason: impl Into<String>, expires_at: f64) -> Self {
-        Self { reason: reason.into(), expires_at, review_date: None }
+        Self {
+            reason: reason.into(),
+            expires_at,
+            review_date: None,
+        }
     }
 
     /// Classify the acceptance relative to `now`.
@@ -108,13 +112,13 @@ pub enum TicketKind {
 impl TicketKind {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::GitHub     => "github",
-            Self::Jira       => "jira",
+            Self::GitHub => "github",
+            Self::Jira => "jira",
             Self::ServiceNow => "servicenow",
-            Self::Tines      => "tines",
-            Self::Splunk     => "splunk",
-            Self::Torq       => "torq",
-            Self::Internal   => "internal",
+            Self::Tines => "tines",
+            Self::Splunk => "splunk",
+            Self::Torq => "torq",
+            Self::Internal => "internal",
         }
     }
 }
@@ -148,11 +152,7 @@ pub struct TicketEvent {
 }
 
 impl TicketEvent {
-    pub fn new(
-        remediation_item_id: impl Into<String>,
-        kind: TicketKind,
-        created_at: f64,
-    ) -> Self {
+    pub fn new(remediation_item_id: impl Into<String>, kind: TicketKind, created_at: f64) -> Self {
         Self {
             remediation_item_id: remediation_item_id.into(),
             kind,

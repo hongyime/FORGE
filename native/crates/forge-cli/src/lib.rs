@@ -7,6 +7,4 @@
 
 pub mod cli;
 
-pub use cli::{
-    CommandKind, CommandOutcome, ExitCode, HiddenCommandKind, route_command,
-};
+pub use cli::{CommandKind, CommandOutcome, ExitCode, HiddenCommandKind, route_command};

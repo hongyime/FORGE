@@ -60,7 +60,10 @@ impl ValidationState {
 
     /// Return `true` when this state is terminal (no further validation needed).
     pub fn is_terminal(&self) -> bool {
-        matches!(self, Self::Active | Self::Revoked | Self::Dead | Self::Unsupported)
+        matches!(
+            self,
+            Self::Active | Self::Revoked | Self::Dead | Self::Unsupported
+        )
     }
 }
 
@@ -219,7 +222,12 @@ impl ValidationJob {
             if roe_id.as_deref().map(str::trim).unwrap_or("").is_empty() {
                 return Err(ValidationError::LiveRequiresRoe);
             }
-            if scope_manifest_ref.as_deref().map(str::trim).unwrap_or("").is_empty() {
+            if scope_manifest_ref
+                .as_deref()
+                .map(str::trim)
+                .unwrap_or("")
+                .is_empty()
+            {
                 return Err(ValidationError::LiveRequiresScopeManifest);
             }
         }
@@ -233,7 +241,11 @@ impl ValidationJob {
             roe_id,
             scope_manifest_ref,
             requested_by: requested_by.into(),
-            status: if approved { JobStatus::Approved } else { JobStatus::Queued },
+            status: if approved {
+                JobStatus::Approved
+            } else {
+                JobStatus::Queued
+            },
         })
     }
 }
@@ -249,7 +261,9 @@ impl ValidationJob {
 /// Matches Python `forge/db/validation.py` `is_reportable_from_proof` logic.
 pub fn latest_proof_is_reportable(proofs: &[ProofEntry]) -> bool {
     match proofs.iter().filter(|p| p.is_latest).max_by(|a, b| {
-        a.recorded_at.partial_cmp(&b.recorded_at).unwrap_or(std::cmp::Ordering::Equal)
+        a.recorded_at
+            .partial_cmp(&b.recorded_at)
+            .unwrap_or(std::cmp::Ordering::Equal)
     }) {
         Some(latest) => latest.state.is_reportable(),
         None => false, // No proof → UNCONFIRMED → not reportable
@@ -326,7 +340,10 @@ mod tests {
     #[test]
     fn live_mode_requires_approval() {
         let result = ValidationJob::new(
-            "j1", 1, "target", "http_reachability",
+            "j1",
+            1,
+            "target",
+            "http_reachability",
             ValidationMode::ReadOnlyLive,
             false, // not approved
             Some("ROE-001".to_owned()),
@@ -339,7 +356,10 @@ mod tests {
     #[test]
     fn live_mode_requires_roe() {
         let result = ValidationJob::new(
-            "j2", 1, "target", "http_reachability",
+            "j2",
+            1,
+            "target",
+            "http_reachability",
             ValidationMode::ReadOnlyLive,
             true,
             None, // no roe
@@ -352,22 +372,33 @@ mod tests {
     #[test]
     fn live_mode_requires_scope_manifest() {
         let result = ValidationJob::new(
-            "j3", 1, "target", "http_reachability",
+            "j3",
+            1,
+            "target",
+            "http_reachability",
             ValidationMode::ReadOnlyLive,
             true,
             Some("ROE-001".to_owned()),
             None, // no manifest
             "analyst",
         );
-        assert!(matches!(result, Err(ValidationError::LiveRequiresScopeManifest)));
+        assert!(matches!(
+            result,
+            Err(ValidationError::LiveRequiresScopeManifest)
+        ));
     }
 
     #[test]
     fn dry_run_does_not_require_approval() {
         let result = ValidationJob::new(
-            "j4", 1, "target", "fixture_replay",
+            "j4",
+            1,
+            "target",
+            "fixture_replay",
             ValidationMode::DryRun,
-            false, None, None,
+            false,
+            None,
+            None,
             "analyst",
         );
         assert!(result.is_ok());
@@ -376,13 +407,17 @@ mod tests {
     #[test]
     fn valid_live_job_is_approved() {
         let j = ValidationJob::new(
-            "j5", 1, "https://target.example/login", "http_reachability",
+            "j5",
+            1,
+            "https://target.example/login",
+            "http_reachability",
             ValidationMode::ReadOnlyLive,
             true,
             Some("ROE-001".to_owned()),
             Some("scope.json".to_owned()),
             "analyst",
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(j.status, JobStatus::Approved);
     }
 }

@@ -12,16 +12,18 @@
 //! For the Python CLI still in production:
 //!   python -m forge.cli <cmd>
 
+use forge_cli::{CommandOutcome, ExitCode, route_command};
 use std::env;
-use forge_cli::{route_command, CommandOutcome, ExitCode};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
     // No subcommand or explicit --help/-h
     if args.len() < 2 || args[1] == "--help" || args[1] == "-h" {
-        println!("forge (Rust CLI) v{} — shadow of Python `forge` entry point",
-            env!("CARGO_PKG_VERSION"));
+        println!(
+            "forge (Rust CLI) v{} — shadow of Python `forge` entry point",
+            env!("CARGO_PKG_VERSION")
+        );
         println!();
         println!("Usage: forge <COMMAND> [args...]");
         println!();
@@ -50,7 +52,8 @@ fn main() {
             eprintln!(
                 "forge (Rust CLI): command '{}' recognised (kind={:?}) but not yet \
                  implemented in Rust.",
-                kind.as_str(), kind
+                kind.as_str(),
+                kind
             );
             eprintln!(
                 "Fall back to Python CLI: python -m forge.cli {}",
@@ -62,7 +65,8 @@ fn main() {
             eprintln!(
                 "forge (Rust CLI): hidden command '{}' recognised (kind={:?}) but not \
                  yet implemented in Rust.",
-                kind.as_str(), kind
+                kind.as_str(),
+                kind
             );
             eprintln!(
                 "Fall back to Python CLI: python -m forge.cli {}",
@@ -71,9 +75,7 @@ fn main() {
             std::process::exit(ExitCode::UserError.as_i32());
         }
         CommandOutcome::Unknown => {
-            eprintln!(
-                "forge (Rust CLI): unknown command '{cmd_name}'."
-            );
+            eprintln!("forge (Rust CLI): unknown command '{cmd_name}'.");
             eprintln!("Run `forge --help` for available commands.");
             std::process::exit(ExitCode::UserError.as_i32());
         }

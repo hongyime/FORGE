@@ -197,9 +197,9 @@ pub struct ScoredFinding {
 /// Matches Python `forge.scoring.score_finding` logic.
 pub fn score_finding(ctx: &ScoringContext) -> ScoredFinding {
     // 1. Derive base severity
-    let base_severity = ctx.base_override.unwrap_or_else(|| {
-        cvss_to_severity(ctx.cvss_base, ctx.category)
-    });
+    let base_severity = ctx
+        .base_override
+        .unwrap_or_else(|| cvss_to_severity(ctx.cvss_base, ctx.category));
 
     let mut severity = base_severity;
     let mut kev_promoted = false;
@@ -239,7 +239,14 @@ pub fn score_finding(ctx: &ScoringContext) -> ScoredFinding {
         }
     }
 
-    let rationale = build_rationale(ctx, base_severity, severity, kev_promoted, epss_promoted, maturity_promoted);
+    let rationale = build_rationale(
+        ctx,
+        base_severity,
+        severity,
+        kev_promoted,
+        epss_promoted,
+        maturity_promoted,
+    );
 
     ScoredFinding {
         severity,
@@ -280,21 +287,21 @@ pub fn cvss_to_severity(cvss: Option<f64>, category: FindingCategory) -> Severit
 /// the finding category. Matches Python `_CATEGORY_DEFAULT_SEVERITY`.
 pub fn category_default_severity(category: FindingCategory) -> SeverityLevel {
     match category {
-        FindingCategory::Secret          => SeverityLevel::High,
-        FindingCategory::Vulnerability   => SeverityLevel::Medium,
-        FindingCategory::CloudAudit      => SeverityLevel::Medium,
+        FindingCategory::Secret => SeverityLevel::High,
+        FindingCategory::Vulnerability => SeverityLevel::Medium,
+        FindingCategory::CloudAudit => SeverityLevel::Medium,
         FindingCategory::ActiveValidation => SeverityLevel::Info,
-        FindingCategory::Exposure        => SeverityLevel::Low,
-        FindingCategory::Generic         => SeverityLevel::Info,
+        FindingCategory::Exposure => SeverityLevel::Low,
+        FindingCategory::Generic => SeverityLevel::Info,
     }
 }
 
 /// Promote a level by one step (capped at Critical).
 fn next_level(level: SeverityLevel) -> SeverityLevel {
     match level {
-        SeverityLevel::None   => SeverityLevel::Info,
-        SeverityLevel::Info   => SeverityLevel::Low,
-        SeverityLevel::Low    => SeverityLevel::Medium,
+        SeverityLevel::None => SeverityLevel::Info,
+        SeverityLevel::Info => SeverityLevel::Low,
+        SeverityLevel::Low => SeverityLevel::Medium,
         SeverityLevel::Medium => SeverityLevel::High,
         SeverityLevel::High | SeverityLevel::Critical => SeverityLevel::Critical,
     }
@@ -316,9 +323,15 @@ fn build_rationale(
     } else {
         parts.push(format!("category-default→{base}"));
     }
-    if kev     { parts.push("KEV↑High".into()); }
-    if epss    { parts.push(format!("EPSS({:.2})↑", ctx.epss_score.unwrap_or(0.0))); }
-    if maturity { parts.push("maturity↑".into()); }
+    if kev {
+        parts.push("KEV↑High".into());
+    }
+    if epss {
+        parts.push(format!("EPSS({:.2})↑", ctx.epss_score.unwrap_or(0.0)));
+    }
+    if maturity {
+        parts.push("maturity↑".into());
+    }
     if final_sev != base && !kev && !epss && !maturity {
         parts.push(format!("→{final_sev}"));
     }
@@ -342,7 +355,9 @@ pub struct RuleEngine {
 
 impl RuleEngine {
     pub fn apply_all(&self, ctx: &ScoringContext, base: SeverityLevel) -> SeverityLevel {
-        self.rules.iter().fold(base, |acc, rule| (rule.apply)(ctx, acc))
+        self.rules
+            .iter()
+            .fold(base, |acc, rule| (rule.apply)(ctx, acc))
     }
 }
 
@@ -357,31 +372,36 @@ mod tests {
 
     #[test]
     fn cvss_critical_9_0() {
-        let ctx = ScoringContext::new(FindingCategory::Vulnerability).with_cvss(9.0, CvssVersion::V3);
+        let ctx =
+            ScoringContext::new(FindingCategory::Vulnerability).with_cvss(9.0, CvssVersion::V3);
         assert_eq!(score_finding(&ctx).severity, SeverityLevel::Critical);
     }
 
     #[test]
     fn cvss_high_7_5() {
-        let ctx = ScoringContext::new(FindingCategory::Vulnerability).with_cvss(7.5, CvssVersion::V3);
+        let ctx =
+            ScoringContext::new(FindingCategory::Vulnerability).with_cvss(7.5, CvssVersion::V3);
         assert_eq!(score_finding(&ctx).severity, SeverityLevel::High);
     }
 
     #[test]
     fn cvss_medium_5_0() {
-        let ctx = ScoringContext::new(FindingCategory::Vulnerability).with_cvss(5.0, CvssVersion::V3);
+        let ctx =
+            ScoringContext::new(FindingCategory::Vulnerability).with_cvss(5.0, CvssVersion::V3);
         assert_eq!(score_finding(&ctx).severity, SeverityLevel::Medium);
     }
 
     #[test]
     fn cvss_low_2_0() {
-        let ctx = ScoringContext::new(FindingCategory::Vulnerability).with_cvss(2.0, CvssVersion::V3);
+        let ctx =
+            ScoringContext::new(FindingCategory::Vulnerability).with_cvss(2.0, CvssVersion::V3);
         assert_eq!(score_finding(&ctx).severity, SeverityLevel::Low);
     }
 
     #[test]
     fn cvss_zero_is_none() {
-        let ctx = ScoringContext::new(FindingCategory::Vulnerability).with_cvss(0.0, CvssVersion::V3);
+        let ctx =
+            ScoringContext::new(FindingCategory::Vulnerability).with_cvss(0.0, CvssVersion::V3);
         assert_eq!(score_finding(&ctx).severity, SeverityLevel::None);
     }
 
@@ -477,8 +497,17 @@ mod tests {
 
     #[test]
     fn promote_helper_picks_higher() {
-        assert_eq!(SeverityLevel::Low.promote(SeverityLevel::High), SeverityLevel::High);
-        assert_eq!(SeverityLevel::High.promote(SeverityLevel::Low), SeverityLevel::High);
-        assert_eq!(SeverityLevel::Medium.promote(SeverityLevel::Medium), SeverityLevel::Medium);
+        assert_eq!(
+            SeverityLevel::Low.promote(SeverityLevel::High),
+            SeverityLevel::High
+        );
+        assert_eq!(
+            SeverityLevel::High.promote(SeverityLevel::Low),
+            SeverityLevel::High
+        );
+        assert_eq!(
+            SeverityLevel::Medium.promote(SeverityLevel::Medium),
+            SeverityLevel::Medium
+        );
     }
 }

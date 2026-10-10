@@ -29,10 +29,10 @@ pub enum PolicyMode {
 impl PolicyMode {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::SeedExposure     => "seed_exposure",
-            Self::Connector        => "connector",
+            Self::SeedExposure => "seed_exposure",
+            Self::Connector => "connector",
             Self::ActiveValidation => "active_validation",
-            Self::Manual           => "manual",
+            Self::Manual => "manual",
         }
     }
 }
@@ -85,7 +85,11 @@ impl MonitoringPolicy {
         mode: PolicyMode,
         interval_hours: u32,
     ) -> Self {
-        let status = if interval_hours == 0 { PolicyStatus::Idle } else { PolicyStatus::Enabled };
+        let status = if interval_hours == 0 {
+            PolicyStatus::Idle
+        } else {
+            PolicyStatus::Enabled
+        };
         Self {
             id: id.into(),
             engagement_id,
@@ -264,7 +268,7 @@ impl MonitoringSnapshot {
         use std::collections::HashSet;
         let prev: HashSet<&str> = prev_keys.iter().map(|s| s.as_str()).collect();
         let curr: HashSet<&str> = curr_keys.iter().map(|s| s.as_str()).collect();
-        let added: Vec<String>   = curr.difference(&prev).map(|s| s.to_string()).collect();
+        let added: Vec<String> = curr.difference(&prev).map(|s| s.to_string()).collect();
         let removed: Vec<String> = prev.difference(&curr).map(|s| s.to_string()).collect();
         let unchanged = curr.intersection(&prev).count();
         Self {
@@ -286,7 +290,10 @@ impl MonitoringSnapshot {
 
     /// Stable fingerprint for dedup: sorted comma-joined added+removed.
     pub fn diff_fingerprint(&self) -> String {
-        let mut parts: Vec<&str> = self.added_keys.iter().map(|s| s.as_str())
+        let mut parts: Vec<&str> = self
+            .added_keys
+            .iter()
+            .map(|s| s.as_str())
             .chain(self.removed_keys.iter().map(|s| s.as_str()))
             .collect();
         parts.sort_unstable();
@@ -323,14 +330,30 @@ mod tests {
 
     #[test]
     fn alert_new_is_open() {
-        let a = Alert::new("a1", "p1", 1, AlertSeverity::High, "fp1", "New host", 1000.0);
+        let a = Alert::new(
+            "a1",
+            "p1",
+            1,
+            AlertSeverity::High,
+            "fp1",
+            "New host",
+            1000.0,
+        );
         assert!(a.status.is_open());
         assert!(a.suppression_reason.is_none());
     }
 
     #[test]
     fn alert_suppress_changes_status() {
-        let mut a = Alert::new("a2", "p1", 1, AlertSeverity::Medium, "fp2", "Old host", 1000.0);
+        let mut a = Alert::new(
+            "a2",
+            "p1",
+            1,
+            AlertSeverity::Medium,
+            "fp2",
+            "Old host",
+            1000.0,
+        );
         a.suppress("scheduled maintenance", 2000.0);
         assert_eq!(a.status, AlertStatus::Suppressed);
         assert!(a.suppression_reason.is_some());

@@ -8,6 +8,6 @@
 pub mod ui;
 
 pub use ui::{
-    DetailTab, EngagementDetailView, EngagementStatus, EngagementSummary,
-    OverviewView, UIRoute, WorkspacePanel,
+    DetailTab, EngagementDetailView, EngagementStatus, EngagementSummary, OverviewView, UIRoute,
+    WorkspacePanel,
 };

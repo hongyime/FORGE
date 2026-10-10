@@ -1,4 +1,4 @@
-﻿//! forge-server — Rust shadow of the Python platform API + web UI service.
+//! forge-server — Rust shadow of the Python platform API + web UI service.
 //!
 //! Phase 4 prerequisites (CODE-PREP):
 //!   A. Real Redis TCP dial for `bus_connected` (AtomicBool, 5s refresh)
@@ -42,9 +42,7 @@ use serde_json::json;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
-use forge_server::{
-    ComponentHealth, PlatformHealth, ReadinessState, check_readiness,
-};
+use forge_server::{ComponentHealth, PlatformHealth, ReadinessState, check_readiness};
 
 // ─── Redis dial helpers ────────────────────────────────────────────────────────
 
@@ -52,14 +50,12 @@ use forge_server::{
 /// Returns `None` if the URL doesn't match the expected shape.
 fn parse_redis_addr(url: &str) -> Option<String> {
     // Strip `redis://` prefix (case-insensitive for the scheme).
-    let rest = url.strip_prefix("redis://").or_else(|| url.strip_prefix("Redis://"))?;
+    let rest = url
+        .strip_prefix("redis://")
+        .or_else(|| url.strip_prefix("Redis://"))?;
     // Strip any trailing path segments or auth info — keep only `host:port`.
     // We support only the plain `redis://HOST:PORT` shape per the spec.
-    let host_port = rest
-        .split('/')
-        .next()?
-        .split('@')
-        .last()?;
+    let host_port = rest.split('/').next()?.split('@').next_back()?;
     // Validate that host_port contains at least one colon (has a port).
     if host_port.contains(':') {
         Some(host_port.to_owned())
@@ -72,15 +68,14 @@ fn parse_redis_addr(url: &str) -> Option<String> {
 /// Attempt a 500 ms TCP connect to `addr`. Returns `true` on success.
 async fn tcp_dial(addr: &str) -> bool {
     use tokio::time::{Duration, timeout};
-    match timeout(
-        Duration::from_millis(500),
-        tokio::net::TcpStream::connect(addr),
+    matches!(
+        timeout(
+            Duration::from_millis(500),
+            tokio::net::TcpStream::connect(addr),
+        )
+        .await,
+        Ok(Ok(_))
     )
-    .await
-    {
-        Ok(Ok(_)) => true,
-        _ => false,
-    }
 }
 
 // ─── Shared state ─────────────────────────────────────────────────────────────
@@ -100,8 +95,8 @@ impl AppState {
     fn new() -> Self {
         // Use CARGO_PKG_VERSION at compile time; fall through to the env var
         // only as a runtime override so the binary always has a version baked in.
-        let version: String = env::var("FORGE_VERSION")
-            .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_owned());
+        let version: String =
+            env::var("FORGE_VERSION").unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_owned());
         // Normalise: if crate says "0.1.0" substitute the platform version.
         let version = if version == "0.1.0" {
             "7.2.0-rust".to_owned()
@@ -130,8 +125,7 @@ impl AppState {
 /// Spawns a tokio task that dials FORGE_REDIS_URL every 5 s and updates
 /// `bus_flag`. On parse failure or dial failure, stores `false`.
 fn spawn_bus_probe(bus_flag: Arc<AtomicBool>) {
-    let redis_url = env::var("FORGE_REDIS_URL")
-        .unwrap_or_else(|_| "redis://redis:6379".to_owned());
+    let redis_url = env::var("FORGE_REDIS_URL").unwrap_or_else(|_| "redis://redis:6379".to_owned());
 
     let addr = parse_redis_addr(&redis_url).unwrap_or_default();
 
@@ -193,18 +187,16 @@ async fn require_bearer(
     next: Next,
 ) -> Response {
     match headers.get("authorization") {
-        Some(value) => {
-            match value.to_str() {
-                Ok(v) if v.starts_with("Bearer ") && v.len() > "Bearer ".len() => {
-                    next.run(request).await
-                }
-                _ => (
-                    StatusCode::UNAUTHORIZED,
-                    Json(json!({"error": "invalid Authorization header — expected Bearer <token>"})),
-                )
-                    .into_response(),
+        Some(value) => match value.to_str() {
+            Ok(v) if v.starts_with("Bearer ") && v.len() > "Bearer ".len() => {
+                next.run(request).await
             }
-        }
+            _ => (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"error": "invalid Authorization header — expected Bearer <token>"})),
+            )
+                .into_response(),
+        },
         None => (
             StatusCode::UNAUTHORIZED,
             Json(json!({"error": "Authorization header required"})),
@@ -335,15 +327,15 @@ async fn webui_health(State(state): State<AppState>) -> impl IntoResponse {
 
 /// GET / — root placeholder for Phase 3.
 async fn webui_root() -> impl IntoResponse {
-    (StatusCode::OK, "forge webui (Rust shadow) -- Phase 4 CODE-PREP")
+    (
+        StatusCode::OK,
+        "forge webui (Rust shadow) -- Phase 4 CODE-PREP",
+    )
 }
 
 /// Fallback 404.
 async fn not_found() -> impl IntoResponse {
-    (
-        StatusCode::NOT_FOUND,
-        Json(json!({"error": "not found"})),
-    )
+    (StatusCode::NOT_FOUND, Json(json!({"error": "not found"})))
 }
 
 // ─── Router builders ──────────────────────────────────────────────────────────
@@ -402,8 +394,7 @@ async fn main() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(9080);
     let db_url = env::var("FORGE_STATE_DB_URL").unwrap_or_else(|_| "(not set)".into());
-    let redis_url = env::var("FORGE_REDIS_URL")
-        .unwrap_or_else(|_| "redis://redis:6379".to_owned());
+    let redis_url = env::var("FORGE_REDIS_URL").unwrap_or_else(|_| "redis://redis:6379".to_owned());
 
     let state = AppState::new();
 

@@ -36,12 +36,12 @@ pub enum UIRoute {
 impl UIRoute {
     pub fn path_template(self) -> &'static str {
         match self {
-            Self::Overview          => "/",
-            Self::EngagementDetail  => "/engagements/{ref}",
-            Self::EngagementTab     => "/engagements/{ref}/tab/{name}",
-            Self::WorkspaceAdmin    => "/workspaces",
-            Self::Login             => "/login",
-            Self::Health            => "/health",
+            Self::Overview => "/",
+            Self::EngagementDetail => "/engagements/{ref}",
+            Self::EngagementTab => "/engagements/{ref}/tab/{name}",
+            Self::WorkspaceAdmin => "/workspaces",
+            Self::Login => "/login",
+            Self::Health => "/health",
         }
     }
 
@@ -78,11 +78,11 @@ pub enum EngagementStatus {
 impl EngagementStatus {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Running   => "running",
+            Self::Running => "running",
             Self::Completed => "completed",
-            Self::Failed    => "failed",
-            Self::Paused    => "paused",
-            Self::New       => "new",
+            Self::Failed => "failed",
+            Self::Paused => "paused",
+            Self::New => "new",
         }
     }
 }
@@ -137,29 +137,29 @@ pub enum DetailTab {
 impl DetailTab {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Overview          => "overview",
-            Self::Seeds             => "seeds",
-            Self::Findings          => "findings",
-            Self::Graph             => "graph",
-            Self::Report            => "report",
-            Self::Audit             => "audit",
-            Self::ActiveValidation  => "active-validation",
-            Self::Remediation       => "remediation",
+            Self::Overview => "overview",
+            Self::Seeds => "seeds",
+            Self::Findings => "findings",
+            Self::Graph => "graph",
+            Self::Report => "report",
+            Self::Audit => "audit",
+            Self::ActiveValidation => "active-validation",
+            Self::Remediation => "remediation",
         }
     }
 
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "overview"          => Some(Self::Overview),
-            "seeds"             => Some(Self::Seeds),
-            "findings"          => Some(Self::Findings),
-            "graph"             => Some(Self::Graph),
-            "report"            => Some(Self::Report),
-            "audit"             => Some(Self::Audit),
+            "overview" => Some(Self::Overview),
+            "seeds" => Some(Self::Seeds),
+            "findings" => Some(Self::Findings),
+            "graph" => Some(Self::Graph),
+            "report" => Some(Self::Report),
+            "audit" => Some(Self::Audit),
             "active-validation" => Some(Self::ActiveValidation),
-            "remediation"       => Some(Self::Remediation),
-            _                   => None,
+            "remediation" => Some(Self::Remediation),
+            _ => None,
         }
     }
 }
@@ -209,7 +209,7 @@ mod tests {
 
     #[test]
     fn engagement_status_str() {
-        assert_eq!(EngagementStatus::Running.as_str(),   "running");
+        assert_eq!(EngagementStatus::Running.as_str(), "running");
         assert_eq!(EngagementStatus::Completed.as_str(), "completed");
     }
 
@@ -217,13 +217,22 @@ mod tests {
     fn overview_view_page_count() {
         let mut v = OverviewView::empty("ws1");
         v.total_count = 51;
-        v.page_size   = 25;
+        v.page_size = 25;
         assert_eq!(v.page_count(), 3); // ceil(51/25)
     }
 
     #[test]
     fn detail_tab_round_trip() {
-        for s in ["overview","seeds","findings","graph","report","audit","active-validation","remediation"] {
+        for s in [
+            "overview",
+            "seeds",
+            "findings",
+            "graph",
+            "report",
+            "audit",
+            "active-validation",
+            "remediation",
+        ] {
             let t = DetailTab::from_str(s).expect("known tab");
             assert_eq!(t.as_str(), s);
         }

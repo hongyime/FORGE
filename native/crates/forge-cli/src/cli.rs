@@ -23,7 +23,9 @@ pub enum ExitCode {
 }
 
 impl ExitCode {
-    pub fn as_i32(self) -> i32 { self as i32 }
+    pub fn as_i32(self) -> i32 {
+        self as i32
+    }
 }
 
 // ─── CommandKind ──────────────────────────────────────────────────────────────
@@ -62,44 +64,52 @@ pub enum CommandKind {
 impl CommandKind {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::KillChain       => "kill-chain",
-            Self::Menu            => "menu",
-            Self::Kb              => "kb",
-            Self::Report          => "report",
-            Self::Graph           => "graph",
-            Self::Import          => "import",
-            Self::Sessions        => "sessions",
-            Self::Artifacts       => "artifacts",
-            Self::Collection      => "collection",
-            Self::AuditManifest   => "audit",
-            Self::Targets         => "targets",
-            Self::Monitoring      => "monitoring",
-            Self::Remediation     => "remediation",
+            Self::KillChain => "kill-chain",
+            Self::Menu => "menu",
+            Self::Kb => "kb",
+            Self::Report => "report",
+            Self::Graph => "graph",
+            Self::Import => "import",
+            Self::Sessions => "sessions",
+            Self::Artifacts => "artifacts",
+            Self::Collection => "collection",
+            Self::AuditManifest => "audit",
+            Self::Targets => "targets",
+            Self::Monitoring => "monitoring",
+            Self::Remediation => "remediation",
             Self::ActiveValidation => "active-validation",
-            Self::Automation      => "automation",
-            Self::Connectors      => "connectors",
-            Self::Standards       => "standards",
-            Self::Workspaces      => "workspaces",
-            Self::Demo            => "demo",
-            Self::Retention       => "retention",
-            Self::Dashboard       => "dashboard",
-            Self::Doctor          => "doctor",
-            Self::OperatorGuide   => "operator-guide",
-            Self::Scaffold        => "scaffold",
-            Self::Clean           => "clean",
+            Self::Automation => "automation",
+            Self::Connectors => "connectors",
+            Self::Standards => "standards",
+            Self::Workspaces => "workspaces",
+            Self::Demo => "demo",
+            Self::Retention => "retention",
+            Self::Dashboard => "dashboard",
+            Self::Doctor => "doctor",
+            Self::OperatorGuide => "operator-guide",
+            Self::Scaffold => "scaffold",
+            Self::Clean => "clean",
         }
     }
 
     /// Whether this command requires a ROE/scope manifest for live execution.
     pub fn requires_roe(self) -> bool {
-        matches!(self, Self::KillChain | Self::Targets | Self::ActiveValidation)
+        matches!(
+            self,
+            Self::KillChain | Self::Targets | Self::ActiveValidation
+        )
     }
 
     /// Whether this command is read-only (never mutates engagement data).
     pub fn is_read_only(self) -> bool {
-        matches!(self,
-            Self::Menu | Self::Doctor | Self::OperatorGuide |
-            Self::Dashboard | Self::Scaffold | Self::Collection
+        matches!(
+            self,
+            Self::Menu
+                | Self::Doctor
+                | Self::OperatorGuide
+                | Self::Dashboard
+                | Self::Scaffold
+                | Self::Collection
         )
     }
 
@@ -107,32 +117,32 @@ impl CommandKind {
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "kill-chain"        => Some(Self::KillChain),
-            "menu"              => Some(Self::Menu),
-            "kb"                => Some(Self::Kb),
-            "report"            => Some(Self::Report),
-            "graph"             => Some(Self::Graph),
-            "import"            => Some(Self::Import),
-            "sessions"          => Some(Self::Sessions),
-            "artifacts"         => Some(Self::Artifacts),
-            "collection"        => Some(Self::Collection),
-            "audit"             => Some(Self::AuditManifest),
-            "targets"           => Some(Self::Targets),
-            "monitoring"        => Some(Self::Monitoring),
-            "remediation"       => Some(Self::Remediation),
+            "kill-chain" => Some(Self::KillChain),
+            "menu" => Some(Self::Menu),
+            "kb" => Some(Self::Kb),
+            "report" => Some(Self::Report),
+            "graph" => Some(Self::Graph),
+            "import" => Some(Self::Import),
+            "sessions" => Some(Self::Sessions),
+            "artifacts" => Some(Self::Artifacts),
+            "collection" => Some(Self::Collection),
+            "audit" => Some(Self::AuditManifest),
+            "targets" => Some(Self::Targets),
+            "monitoring" => Some(Self::Monitoring),
+            "remediation" => Some(Self::Remediation),
             "active-validation" => Some(Self::ActiveValidation),
-            "automation"        => Some(Self::Automation),
-            "connectors"        => Some(Self::Connectors),
-            "standards"         => Some(Self::Standards),
-            "workspaces"        => Some(Self::Workspaces),
-            "demo"              => Some(Self::Demo),
-            "retention"         => Some(Self::Retention),
-            "dashboard"         => Some(Self::Dashboard),
-            "doctor"            => Some(Self::Doctor),
-            "operator-guide"    => Some(Self::OperatorGuide),
-            "scaffold"          => Some(Self::Scaffold),
-            "clean"             => Some(Self::Clean),
-            _                   => None,
+            "automation" => Some(Self::Automation),
+            "connectors" => Some(Self::Connectors),
+            "standards" => Some(Self::Standards),
+            "workspaces" => Some(Self::Workspaces),
+            "demo" => Some(Self::Demo),
+            "retention" => Some(Self::Retention),
+            "dashboard" => Some(Self::Dashboard),
+            "doctor" => Some(Self::Doctor),
+            "operator-guide" => Some(Self::OperatorGuide),
+            "scaffold" => Some(Self::Scaffold),
+            "clean" => Some(Self::Clean),
+            _ => None,
         }
     }
 }
@@ -158,31 +168,31 @@ pub enum HiddenCommandKind {
 impl HiddenCommandKind {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Recon   => "recon",
-            Self::Osint   => "osint",
+            Self::Recon => "recon",
+            Self::Osint => "osint",
             Self::Evasion => "evasion",
             Self::Exploit => "exploit",
-            Self::Vuln    => "vuln",
-            Self::Cloud   => "cloud",
-            Self::Web     => "web",
-            Self::Auth    => "auth",
-            Self::Post    => "post",
+            Self::Vuln => "vuln",
+            Self::Cloud => "cloud",
+            Self::Web => "web",
+            Self::Auth => "auth",
+            Self::Post => "post",
         }
     }
 
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "recon"   => Some(Self::Recon),
-            "osint"   => Some(Self::Osint),
+            "recon" => Some(Self::Recon),
+            "osint" => Some(Self::Osint),
             "evasion" => Some(Self::Evasion),
             "exploit" => Some(Self::Exploit),
-            "vuln"    => Some(Self::Vuln),
-            "cloud"   => Some(Self::Cloud),
-            "web"     => Some(Self::Web),
-            "auth"    => Some(Self::Auth),
-            "post"    => Some(Self::Post),
-            _         => None,
+            "vuln" => Some(Self::Vuln),
+            "cloud" => Some(Self::Cloud),
+            "web" => Some(Self::Web),
+            "auth" => Some(Self::Auth),
+            "post" => Some(Self::Post),
+            _ => None,
         }
     }
 }
@@ -238,15 +248,30 @@ mod tests {
 
     #[test]
     fn route_known_public_command() {
-        assert_eq!(route_command("kill-chain"), CommandOutcome::Supported(CommandKind::KillChain));
-        assert_eq!(route_command("doctor"), CommandOutcome::Supported(CommandKind::Doctor));
-        assert_eq!(route_command("menu"), CommandOutcome::Supported(CommandKind::Menu));
+        assert_eq!(
+            route_command("kill-chain"),
+            CommandOutcome::Supported(CommandKind::KillChain)
+        );
+        assert_eq!(
+            route_command("doctor"),
+            CommandOutcome::Supported(CommandKind::Doctor)
+        );
+        assert_eq!(
+            route_command("menu"),
+            CommandOutcome::Supported(CommandKind::Menu)
+        );
     }
 
     #[test]
     fn route_hidden_command() {
-        assert_eq!(route_command("recon"), CommandOutcome::Hidden(HiddenCommandKind::Recon));
-        assert_eq!(route_command("exploit"), CommandOutcome::Hidden(HiddenCommandKind::Exploit));
+        assert_eq!(
+            route_command("recon"),
+            CommandOutcome::Hidden(HiddenCommandKind::Recon)
+        );
+        assert_eq!(
+            route_command("exploit"),
+            CommandOutcome::Hidden(HiddenCommandKind::Exploit)
+        );
     }
 
     #[test]
@@ -258,8 +283,12 @@ mod tests {
     #[test]
     fn all_public_commands_have_str() {
         let cmds = [
-            CommandKind::KillChain, CommandKind::Menu, CommandKind::Kb,
-            CommandKind::Report, CommandKind::Graph, CommandKind::Doctor,
+            CommandKind::KillChain,
+            CommandKind::Menu,
+            CommandKind::Kb,
+            CommandKind::Report,
+            CommandKind::Graph,
+            CommandKind::Doctor,
         ];
         for cmd in cmds {
             assert!(!cmd.as_str().is_empty());
@@ -271,13 +300,17 @@ mod tests {
     #[test]
     fn active_validation_str() {
         assert_eq!(CommandKind::ActiveValidation.as_str(), "active-validation");
-        assert_eq!(route_command("active-validation"),
-            CommandOutcome::Supported(CommandKind::ActiveValidation));
+        assert_eq!(
+            route_command("active-validation"),
+            CommandOutcome::Supported(CommandKind::ActiveValidation)
+        );
     }
 
     #[test]
     fn hidden_commands_from_str() {
-        for s in ["recon", "osint", "evasion", "exploit", "vuln", "cloud", "web", "auth", "post"] {
+        for s in [
+            "recon", "osint", "evasion", "exploit", "vuln", "cloud", "web", "auth", "post",
+        ] {
             assert!(HiddenCommandKind::from_str(s).is_some(), "missing: {s}");
         }
     }

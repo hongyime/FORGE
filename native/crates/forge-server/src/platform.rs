@@ -25,8 +25,8 @@ pub enum HealthStatus {
 impl HealthStatus {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Healthy     => "healthy",
-            Self::Degraded    => "degraded",
+            Self::Healthy => "healthy",
+            Self::Degraded => "degraded",
             Self::Unavailable => "unavailable",
         }
     }
@@ -48,15 +48,27 @@ pub struct ComponentHealth {
 
 impl ComponentHealth {
     pub fn healthy(name: impl Into<String>) -> Self {
-        Self { name: name.into(), status: HealthStatus::Healthy, details: None }
+        Self {
+            name: name.into(),
+            status: HealthStatus::Healthy,
+            details: None,
+        }
     }
 
     pub fn degraded(name: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self { name: name.into(), status: HealthStatus::Degraded, details: Some(scrub_secrets(&reason.into())) }
+        Self {
+            name: name.into(),
+            status: HealthStatus::Degraded,
+            details: Some(scrub_secrets(&reason.into())),
+        }
     }
 
     pub fn unavailable(name: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self { name: name.into(), status: HealthStatus::Unavailable, details: Some(scrub_secrets(&reason.into())) }
+        Self {
+            name: name.into(),
+            status: HealthStatus::Unavailable,
+            details: Some(scrub_secrets(&reason.into())),
+        }
     }
 }
 
@@ -126,15 +138,30 @@ pub struct PlatformHealth {
 }
 
 impl PlatformHealth {
-    pub fn new(components: Vec<ComponentHealth>, version: impl Into<String>, uptime_seconds: u64) -> Self {
-        let overall = if components.iter().any(|c| c.status == HealthStatus::Unavailable) {
+    pub fn new(
+        components: Vec<ComponentHealth>,
+        version: impl Into<String>,
+        uptime_seconds: u64,
+    ) -> Self {
+        let overall = if components
+            .iter()
+            .any(|c| c.status == HealthStatus::Unavailable)
+        {
             HealthStatus::Unavailable
-        } else if components.iter().any(|c| c.status == HealthStatus::Degraded) {
+        } else if components
+            .iter()
+            .any(|c| c.status == HealthStatus::Degraded)
+        {
             HealthStatus::Degraded
         } else {
             HealthStatus::Healthy
         };
-        Self { overall, components, version: version.into(), uptime_seconds }
+        Self {
+            overall,
+            components,
+            version: version.into(),
+            uptime_seconds,
+        }
     }
 }
 
@@ -196,7 +223,11 @@ pub struct MetricsSample {
 
 impl MetricsSample {
     pub fn gauge(name: impl Into<String>, value: f64) -> Self {
-        Self { name: name.into(), value, labels: Vec::new() }
+        Self {
+            name: name.into(),
+            value,
+            labels: Vec::new(),
+        }
     }
 
     pub fn with_label(mut self, key: impl Into<String>, val: impl Into<String>) -> Self {
@@ -212,16 +243,20 @@ mod tests {
     use super::*;
 
     fn all_healthy() -> PlatformHealth {
-        PlatformHealth::new(vec![
-            ComponentHealth::healthy("db"),
-            ComponentHealth::healthy("bus"),
-        ], "1.0.0", 3600)
+        PlatformHealth::new(
+            vec![
+                ComponentHealth::healthy("db"),
+                ComponentHealth::healthy("bus"),
+            ],
+            "1.0.0",
+            3600,
+        )
     }
 
     #[test]
     fn health_status_str() {
-        assert_eq!(HealthStatus::Healthy.as_str(),     "healthy");
-        assert_eq!(HealthStatus::Degraded.as_str(),    "degraded");
+        assert_eq!(HealthStatus::Healthy.as_str(), "healthy");
+        assert_eq!(HealthStatus::Degraded.as_str(), "degraded");
         assert_eq!(HealthStatus::Unavailable.as_str(), "unavailable");
     }
 
@@ -241,20 +276,28 @@ mod tests {
 
     #[test]
     fn degraded_one_component() {
-        let h = PlatformHealth::new(vec![
-            ComponentHealth::healthy("db"),
-            ComponentHealth::degraded("bus", "slow consumers"),
-        ], "1.0.0", 0);
+        let h = PlatformHealth::new(
+            vec![
+                ComponentHealth::healthy("db"),
+                ComponentHealth::degraded("bus", "slow consumers"),
+            ],
+            "1.0.0",
+            0,
+        );
         assert_eq!(h.overall, HealthStatus::Degraded);
         assert_eq!(check_readiness(&h), ReadinessState::NotReady);
     }
 
     #[test]
     fn unavailable_one_component() {
-        let h = PlatformHealth::new(vec![
-            ComponentHealth::healthy("db"),
-            ComponentHealth::unavailable("redis", "connection refused"),
-        ], "1.0.0", 0);
+        let h = PlatformHealth::new(
+            vec![
+                ComponentHealth::healthy("db"),
+                ComponentHealth::unavailable("redis", "connection refused"),
+            ],
+            "1.0.0",
+            0,
+        );
         assert_eq!(h.overall, HealthStatus::Unavailable);
         assert_eq!(check_readiness(&h), ReadinessState::NotReady);
     }
@@ -268,8 +311,7 @@ mod tests {
 
     #[test]
     fn metrics_sample_gauge() {
-        let m = MetricsSample::gauge("forge_jobs_total", 42.0)
-            .with_label("worker", "w1");
+        let m = MetricsSample::gauge("forge_jobs_total", 42.0).with_label("worker", "w1");
         assert_eq!(m.value, 42.0);
         assert_eq!(m.labels[0], ("worker".to_owned(), "w1".to_owned()));
     }

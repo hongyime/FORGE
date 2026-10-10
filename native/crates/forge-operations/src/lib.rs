@@ -8,9 +8,9 @@
 //! - `parity` — T24: `ParityReceipt`, `LedgerCheck`, service-parity verification.
 
 pub mod monitoring;
-pub mod remediation;
 pub mod operations;
 pub mod parity;
+pub mod remediation;
 
 pub use monitoring::{
     Alert, AlertSeverity, AlertStatus, ExposureMetric, MonitoringPolicy, MonitoringSnapshot,
@@ -18,16 +18,16 @@ pub use monitoring::{
 };
 
 pub use remediation::{
-    RemediationItem, RemediationStatus, RiskAcceptance, RiskAcceptanceState,
-    TicketEvent, TicketEventStatus, TicketKind,
+    RemediationItem, RemediationStatus, RiskAcceptance, RiskAcceptanceState, TicketEvent,
+    TicketEventStatus, TicketKind,
 };
 
 pub use operations::{
-    AuditEvent, AutostartGate, LegalHold, RetentionRun, RetentionStatus,
-    WorkspaceMember, WorkspaceMemberRole, append_audit_event,
+    AuditEvent, AutostartGate, LegalHold, RetentionRun, RetentionStatus, WorkspaceMember,
+    WorkspaceMemberRole, append_audit_event,
 };
 
 pub use parity::{
-    CapabilityKind, LedgerCheck, ParityReceipt, ParitySummary,
-    service_parity_summary, wave4_receipts,
+    CapabilityKind, LedgerCheck, ParityReceipt, ParitySummary, service_parity_summary,
+    wave4_receipts,
 };

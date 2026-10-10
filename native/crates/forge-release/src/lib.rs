@@ -8,6 +8,6 @@
 pub mod release;
 
 pub use release::{
-    CutoverState, DeploymentProfile, PackagingTarget, PreCheckResult,
-    ReleaseManifest, all_prechecks_pass,
+    CutoverState, DeploymentProfile, PackagingTarget, PreCheckResult, ReleaseManifest,
+    all_prechecks_pass,
 };

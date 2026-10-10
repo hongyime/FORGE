@@ -20,11 +20,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::artifacts::{ArtifactType, classify_artifact};
 use crate::enrichment::{NormalizedIdentity, normalize_email};
-use crate::scoring::{FindingCategory, ScoredFinding, ScoringContext, SeverityLevel, score_finding};
-use crate::seed::{SeedType, classify_seed, normalize_seed};
-use crate::validation::{
-    ProofEntry, latest_proof_is_reportable,
+use crate::scoring::{
+    FindingCategory, ScoredFinding, ScoringContext, SeverityLevel, score_finding,
 };
+use crate::seed::{SeedType, classify_seed, normalize_seed};
+use crate::validation::{ProofEntry, latest_proof_is_reportable};
 
 // ─── PipelinePhase ────────────────────────────────────────────────────────────
 
@@ -48,12 +48,12 @@ pub enum PipelinePhase {
 impl PipelinePhase {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::SeedIntake      => "seed_intake",
-            Self::Enrichment      => "enrichment",
+            Self::SeedIntake => "seed_intake",
+            Self::Enrichment => "enrichment",
             Self::ArtifactAnalysis => "artifact_analysis",
-            Self::Validation      => "validation",
-            Self::Scoring         => "scoring",
-            Self::Output          => "output",
+            Self::Validation => "validation",
+            Self::Scoring => "scoring",
+            Self::Output => "output",
         }
     }
 }
@@ -72,7 +72,13 @@ pub struct StageResult {
 
 impl StageResult {
     pub fn new(phase: PipelinePhase, items_in: usize, items_out: usize) -> Self {
-        Self { phase, items_in, items_out, warnings: Vec::new(), elapsed_ms: 0 }
+        Self {
+            phase,
+            items_in,
+            items_out,
+            warnings: Vec::new(),
+            elapsed_ms: 0,
+        }
     }
 }
 
@@ -152,7 +158,10 @@ impl PipelineState {
     }
 
     pub fn scored_count(&self) -> usize {
-        self.entries.iter().filter(|e| e.scored_finding.is_some()).count()
+        self.entries
+            .iter()
+            .filter(|e| e.scored_finding.is_some())
+            .count()
     }
 }
 
@@ -184,11 +193,11 @@ impl SeverityCounts {
     fn tally(&mut self, level: SeverityLevel) {
         match level {
             SeverityLevel::Critical => self.critical += 1,
-            SeverityLevel::High     => self.high     += 1,
-            SeverityLevel::Medium   => self.medium   += 1,
-            SeverityLevel::Low      => self.low      += 1,
-            SeverityLevel::Info     => self.info     += 1,
-            SeverityLevel::None     => self.none     += 1,
+            SeverityLevel::High => self.high += 1,
+            SeverityLevel::Medium => self.medium += 1,
+            SeverityLevel::Low => self.low += 1,
+            SeverityLevel::Info => self.info += 1,
+            SeverityLevel::None => self.none += 1,
         }
     }
 }
@@ -217,7 +226,11 @@ pub fn run_pipeline_fixture(
     for entry in &mut state.entries {
         entry.normalized_seed = Some(normalize_seed(&entry.seed, entry.seed_type));
     }
-    state.stage_results.push(StageResult::new(PipelinePhase::SeedIntake, n_in, state.entry_count()));
+    state.stage_results.push(StageResult::new(
+        PipelinePhase::SeedIntake,
+        n_in,
+        state.entry_count(),
+    ));
     state.current_phase = PipelinePhase::Enrichment;
 
     // Phase 1 – Identity enrichment (email normalization as representative)
@@ -228,7 +241,11 @@ pub fn run_pipeline_fixture(
             entry.normalized_identity = Some(id);
         }
     }
-    state.stage_results.push(StageResult::new(PipelinePhase::Enrichment, n_in, state.entry_count()));
+    state.stage_results.push(StageResult::new(
+        PipelinePhase::Enrichment,
+        n_in,
+        state.entry_count(),
+    ));
     state.current_phase = PipelinePhase::ArtifactAnalysis;
 
     // Phase 2 – Artifact analysis
@@ -242,7 +259,11 @@ pub fn run_pipeline_fixture(
             }
         }
     }
-    state.stage_results.push(StageResult::new(PipelinePhase::ArtifactAnalysis, n_in, state.entry_count()));
+    state.stage_results.push(StageResult::new(
+        PipelinePhase::ArtifactAnalysis,
+        n_in,
+        state.entry_count(),
+    ));
     state.current_phase = PipelinePhase::Validation;
 
     // Phase 3 – Validation gate
@@ -259,7 +280,11 @@ pub fn run_pipeline_fixture(
         }
         // Seeds with no proofs remain not reportable
     }
-    state.stage_results.push(StageResult::new(PipelinePhase::Validation, n_in, state.entry_count()));
+    state.stage_results.push(StageResult::new(
+        PipelinePhase::Validation,
+        n_in,
+        state.entry_count(),
+    ));
     state.current_phase = PipelinePhase::Scoring;
 
     // Phase 4 – Scoring
@@ -273,7 +298,11 @@ pub fn run_pipeline_fixture(
         });
         entry.scored_finding = Some(score_finding(&ctx));
     }
-    state.stage_results.push(StageResult::new(PipelinePhase::Scoring, n_in, state.entry_count()));
+    state.stage_results.push(StageResult::new(
+        PipelinePhase::Scoring,
+        n_in,
+        state.entry_count(),
+    ));
     state.current_phase = PipelinePhase::Output;
 
     // Phase 5 – Output assembly
@@ -283,7 +312,11 @@ pub fn run_pipeline_fixture(
             severity_counts.tally(sf.severity);
         }
     }
-    state.stage_results.push(StageResult::new(PipelinePhase::Output, state.entry_count(), state.entry_count()));
+    state.stage_results.push(StageResult::new(
+        PipelinePhase::Output,
+        state.entry_count(),
+        state.entry_count(),
+    ));
     state.is_complete = true;
 
     PipelineResult {
@@ -317,14 +350,26 @@ mod tests {
     fn active_proof(seed: &str) -> (String, ProofEntry) {
         (
             seed.to_owned(),
-            ProofEntry::new(seed, "fixture_replay", ValidationMode::DryRun, ValidationState::Active, 1000.0),
+            ProofEntry::new(
+                seed,
+                "fixture_replay",
+                ValidationMode::DryRun,
+                ValidationState::Active,
+                1000.0,
+            ),
         )
     }
 
     fn dead_proof(seed: &str) -> (String, ProofEntry) {
         (
             seed.to_owned(),
-            ProofEntry::new(seed, "fixture_replay", ValidationMode::DryRun, ValidationState::Dead, 1000.0),
+            ProofEntry::new(
+                seed,
+                "fixture_replay",
+                ValidationMode::DryRun,
+                ValidationState::Dead,
+                1000.0,
+            ),
         )
     }
 
@@ -340,14 +385,17 @@ mod tests {
         let result = run_pipeline_fixture(1, vec!["test.example".into()], vec![], vec![], vec![]);
         assert_eq!(result.stage_results.len(), 6);
         let phases: Vec<_> = result.stage_results.iter().map(|s| s.phase).collect();
-        assert_eq!(phases, vec![
-            PipelinePhase::SeedIntake,
-            PipelinePhase::Enrichment,
-            PipelinePhase::ArtifactAnalysis,
-            PipelinePhase::Validation,
-            PipelinePhase::Scoring,
-            PipelinePhase::Output,
-        ]);
+        assert_eq!(
+            phases,
+            vec![
+                PipelinePhase::SeedIntake,
+                PipelinePhase::Enrichment,
+                PipelinePhase::ArtifactAnalysis,
+                PipelinePhase::Validation,
+                PipelinePhase::Scoring,
+                PipelinePhase::Output,
+            ]
+        );
     }
 
     #[test]
@@ -355,10 +403,20 @@ mod tests {
         let result = run_pipeline_fixture(
             1,
             vec!["user@example.com".into(), "target.example".into()],
-            vec![], vec![], vec![],
+            vec![],
+            vec![],
+            vec![],
         );
-        let email_entry = result.entries.iter().find(|e| e.seed == "user@example.com").unwrap();
-        let domain_entry = result.entries.iter().find(|e| e.seed == "target.example").unwrap();
+        let email_entry = result
+            .entries
+            .iter()
+            .find(|e| e.seed == "user@example.com")
+            .unwrap();
+        let domain_entry = result
+            .entries
+            .iter()
+            .find(|e| e.seed == "target.example")
+            .unwrap();
         assert_eq!(email_entry.seed_type, SeedType::Email);
         assert_eq!(domain_entry.seed_type, SeedType::Domain);
     }
@@ -368,7 +426,9 @@ mod tests {
         let result = run_pipeline_fixture(
             1,
             vec!["User.Name+tag@Gmail.COM".into()],
-            vec![], vec![], vec![],
+            vec![],
+            vec![],
+            vec![],
         );
         let entry = &result.entries[0];
         assert!(entry.normalized_identity.is_some());
@@ -385,7 +445,8 @@ mod tests {
             1,
             vec!["report.pdf".into()],
             vec![("report.pdf".into(), pdf_bytes)],
-            vec![], vec![],
+            vec![],
+            vec![],
         );
         let entry = &result.entries[0];
         assert!(entry.artifact_meta.is_some());
@@ -429,15 +490,25 @@ mod tests {
         let result = run_pipeline_fixture(
             1,
             vec!["a.example".into(), "b.example".into()],
-            vec![], vec![], vec![],
+            vec![],
+            vec![],
+            vec![],
         );
-        assert_eq!(result.entries.iter().filter(|e| e.scored_finding.is_some()).count(), 2);
+        assert_eq!(
+            result
+                .entries
+                .iter()
+                .filter(|e| e.scored_finding.is_some())
+                .count(),
+            2
+        );
     }
 
     #[test]
     fn custom_scoring_context_applied() {
         use crate::scoring::{CvssVersion, FindingCategory, ScoringContext};
-        let ctx = ScoringContext::new(FindingCategory::Vulnerability).with_cvss(9.5, CvssVersion::V3);
+        let ctx =
+            ScoringContext::new(FindingCategory::Vulnerability).with_cvss(9.5, CvssVersion::V3);
         let result = run_pipeline_fixture(
             1,
             vec!["vuln.example".into()],
@@ -452,8 +523,10 @@ mod tests {
     #[test]
     fn severity_counts_accurate() {
         use crate::scoring::{CvssVersion, FindingCategory, ScoringContext};
-        let high_ctx = ScoringContext::new(FindingCategory::Vulnerability).with_cvss(8.0, CvssVersion::V3);
-        let medium_ctx = ScoringContext::new(FindingCategory::Vulnerability).with_cvss(5.0, CvssVersion::V3);
+        let high_ctx =
+            ScoringContext::new(FindingCategory::Vulnerability).with_cvss(8.0, CvssVersion::V3);
+        let medium_ctx =
+            ScoringContext::new(FindingCategory::Vulnerability).with_cvss(5.0, CvssVersion::V3);
         let result = run_pipeline_fixture(
             1,
             vec!["a.example".into(), "b.example".into()],

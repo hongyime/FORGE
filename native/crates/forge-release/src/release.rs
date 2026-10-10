@@ -27,11 +27,11 @@ pub enum PackagingTarget {
 impl PackagingTarget {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::LinuxX86_64    => "linux-x86_64",
-            Self::MacosAarch64   => "macos-aarch64",
-            Self::WindowsX86_64  => "windows-x86_64",
-            Self::DockerImage    => "docker-image",
-            Self::HelmChart      => "helm-chart",
+            Self::LinuxX86_64 => "linux-x86_64",
+            Self::MacosAarch64 => "macos-aarch64",
+            Self::WindowsX86_64 => "windows-x86_64",
+            Self::DockerImage => "docker-image",
+            Self::HelmChart => "helm-chart",
         }
     }
 }
@@ -56,9 +56,9 @@ impl DeploymentProfile {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Development => "development",
-            Self::Staging     => "staging",
-            Self::Production  => "production",
-            Self::Offline     => "offline",
+            Self::Staging => "staging",
+            Self::Production => "production",
+            Self::Offline => "offline",
         }
     }
 
@@ -99,7 +99,15 @@ impl ReleaseManifest {
         let release_notes = release_notes.into();
         let content = format!("{version}|{git_sha}|{profile:?}|{release_notes}");
         let manifest_hash = fnv1a_hex(content.as_bytes());
-        Self { version, git_sha, targets, profile, manifest_hash, release_notes, is_signed: false }
+        Self {
+            version,
+            git_sha,
+            targets,
+            profile,
+            manifest_hash,
+            release_notes,
+            is_signed: false,
+        }
     }
 
     pub fn sign(&mut self) {
@@ -113,8 +121,12 @@ impl ReleaseManifest {
 
 fn fnv1a_hex(data: &[u8]) -> String {
     let mut h: u64 = 14695981039346656037;
-    for &b in data { h ^= b as u64; h = h.wrapping_mul(1099511628211); }
-    let s = format!("{h:016x}"); format!("{s}{s}{s}{s}")
+    for &b in data {
+        h ^= b as u64;
+        h = h.wrapping_mul(1099511628211);
+    }
+    let s = format!("{h:016x}");
+    format!("{s}{s}{s}{s}")
 }
 
 // ─── CutoverState ────────────────────────────────────────────────────────────
@@ -157,10 +169,18 @@ pub struct PreCheckResult {
 
 impl PreCheckResult {
     pub fn pass(name: impl Into<String>) -> Self {
-        Self { check_name: name.into(), passed: true, details: None }
+        Self {
+            check_name: name.into(),
+            passed: true,
+            details: None,
+        }
     }
     pub fn fail(name: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self { check_name: name.into(), passed: false, details: Some(reason.into()) }
+        Self {
+            check_name: name.into(),
+            passed: false,
+            details: Some(reason.into()),
+        }
     }
 }
 
@@ -198,15 +218,33 @@ mod tests {
 
     #[test]
     fn release_manifest_hash_deterministic() {
-        let m1 = ReleaseManifest::new("1.0.0", "abc123", vec![PackagingTarget::DockerImage], DeploymentProfile::Production, "Initial release");
-        let m2 = ReleaseManifest::new("1.0.0", "abc123", vec![PackagingTarget::DockerImage], DeploymentProfile::Production, "Initial release");
+        let m1 = ReleaseManifest::new(
+            "1.0.0",
+            "abc123",
+            vec![PackagingTarget::DockerImage],
+            DeploymentProfile::Production,
+            "Initial release",
+        );
+        let m2 = ReleaseManifest::new(
+            "1.0.0",
+            "abc123",
+            vec![PackagingTarget::DockerImage],
+            DeploymentProfile::Production,
+            "Initial release",
+        );
         assert_eq!(m1.manifest_hash, m2.manifest_hash);
         assert_eq!(m1.manifest_hash.len(), 64);
     }
 
     #[test]
     fn release_manifest_sign() {
-        let mut m = ReleaseManifest::new("1.0.0", "abc", vec![], DeploymentProfile::Development, "test");
+        let mut m = ReleaseManifest::new(
+            "1.0.0",
+            "abc",
+            vec![],
+            DeploymentProfile::Development,
+            "test",
+        );
         assert!(!m.is_signed);
         m.sign();
         assert!(m.is_signed);
@@ -228,13 +266,19 @@ mod tests {
 
     #[test]
     fn all_prechecks_pass_happy_path() {
-        let checks = vec![PreCheckResult::pass("rust_tests"), PreCheckResult::pass("python_tests")];
+        let checks = vec![
+            PreCheckResult::pass("rust_tests"),
+            PreCheckResult::pass("python_tests"),
+        ];
         assert!(all_prechecks_pass(&checks));
     }
 
     #[test]
     fn all_prechecks_fail_on_one_failure() {
-        let checks = vec![PreCheckResult::pass("rust_tests"), PreCheckResult::fail("python_tests", "timeout")];
+        let checks = vec![
+            PreCheckResult::pass("rust_tests"),
+            PreCheckResult::fail("python_tests", "timeout"),
+        ];
         assert!(!all_prechecks_pass(&checks));
     }
 

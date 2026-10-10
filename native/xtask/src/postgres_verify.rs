@@ -99,7 +99,7 @@ async fn live_canaries(store: &WorkflowStateStore, pool: &sqlx::PgPool) -> Vec<C
         .fetch_one(pool)
         .await
         {
-            Ok(n) if n == 3 => out.push(CheckResult::pass(label)),
+            Ok(3) => out.push(CheckResult::pass(label)),
             Ok(n) => out.push(CheckResult::fail(
                 label,
                 format!("expected 3 tables, found {n}"),

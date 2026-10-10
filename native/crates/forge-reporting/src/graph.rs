@@ -12,8 +12,8 @@
 //!   from canonical type + value; duplicate insertions deduplicate by key.
 //! - Tier-zero classification is based only on stored evidence; no live calls.
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // ─── EntityKind ───────────────────────────────────────────────────────────────
 
@@ -45,25 +45,25 @@ pub enum EntityKind {
 impl EntityKind {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Host         => "host",
-            Self::Subdomain    => "subdomain",
-            Self::Service      => "service",
-            Self::Url          => "url",
-            Self::Email        => "email",
-            Self::Username     => "username",
-            Self::Phone        => "phone",
-            Self::Company      => "company",
+            Self::Host => "host",
+            Self::Subdomain => "subdomain",
+            Self::Service => "service",
+            Self::Url => "url",
+            Self::Email => "email",
+            Self::Username => "username",
+            Self::Phone => "phone",
+            Self::Company => "company",
             Self::Organization => "organization",
             Self::CloudResource => "cloud_resource",
             Self::CloudAccount => "cloud_account",
-            Self::Finding      => "finding",
-            Self::Secret       => "secret",
+            Self::Finding => "finding",
+            Self::Secret => "secret",
             Self::Vulnerability => "vulnerability",
-            Self::Credential   => "credential",
-            Self::Identity     => "identity",
-            Self::TechStack    => "tech_stack",
-            Self::ThirdParty   => "third_party",
-            Self::Unknown      => "unknown",
+            Self::Credential => "credential",
+            Self::Identity => "identity",
+            Self::TechStack => "tech_stack",
+            Self::ThirdParty => "third_party",
+            Self::Unknown => "unknown",
         }
     }
 }
@@ -94,21 +94,21 @@ pub enum RelationshipKind {
 impl RelationshipKind {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Contains       => "CONTAINS",
-            Self::Resolves       => "RESOLVES",
-            Self::Owns           => "OWNS",
-            Self::Operates       => "OPERATES",
-            Self::ExposedBy      => "EXPOSED_BY",
-            Self::FoundIn        => "FOUND_IN",
-            Self::LinkedTo       => "LINKED_TO",
-            Self::ValidatedBy    => "VALIDATED_BY",
-            Self::BreachedVia    => "BREACHED_VIA",
-            Self::Impersonates   => "IMPERSONATES",
-            Self::Uses           => "USES",
-            Self::HostedOn       => "HOSTED_ON",
+            Self::Contains => "CONTAINS",
+            Self::Resolves => "RESOLVES",
+            Self::Owns => "OWNS",
+            Self::Operates => "OPERATES",
+            Self::ExposedBy => "EXPOSED_BY",
+            Self::FoundIn => "FOUND_IN",
+            Self::LinkedTo => "LINKED_TO",
+            Self::ValidatedBy => "VALIDATED_BY",
+            Self::BreachedVia => "BREACHED_VIA",
+            Self::Impersonates => "IMPERSONATES",
+            Self::Uses => "USES",
+            Self::HostedOn => "HOSTED_ON",
             Self::AssociatedWith => "ASSOCIATED_WITH",
-            Self::DependsOn      => "DEPENDS_ON",
-            Self::Controls       => "CONTROLS",
+            Self::DependsOn => "DEPENDS_ON",
+            Self::Controls => "CONTROLS",
         }
     }
 }
@@ -178,7 +178,11 @@ pub struct GraphRelationship {
 }
 
 impl GraphRelationship {
-    pub fn new(from_key: impl Into<String>, to_key: impl Into<String>, kind: RelationshipKind) -> Self {
+    pub fn new(
+        from_key: impl Into<String>,
+        to_key: impl Into<String>,
+        kind: RelationshipKind,
+    ) -> Self {
         Self {
             from_key: from_key.into(),
             to_key: to_key.into(),
@@ -232,7 +236,10 @@ pub struct AttackGraph {
 
 impl AttackGraph {
     pub fn new(engagement_id: i64) -> Self {
-        Self { engagement_id, ..Default::default() }
+        Self {
+            engagement_id,
+            ..Default::default()
+        }
     }
 
     /// Insert or merge an entity. If a key collision occurs, the existing
@@ -267,7 +274,9 @@ impl AttackGraph {
 
     /// Return all tier-zero entity keys, sorted.
     pub fn tier_zero_keys(&self) -> Vec<&str> {
-        let mut keys: Vec<_> = self.entities.values()
+        let mut keys: Vec<_> = self
+            .entities
+            .values()
             .filter(|e| e.is_tier_zero)
             .map(|e| e.entity_key.as_str())
             .collect();
@@ -312,35 +321,39 @@ pub enum GraphExportFormat {
 /// redacted placeholder.
 pub fn export_attack_graph(graph: &AttackGraph, format: GraphExportFormat) -> String {
     match format {
-        GraphExportFormat::Json     => export_json(graph),
-        GraphExportFormat::Mermaid  => export_mermaid(graph),
-        GraphExportFormat::Dot      => export_dot(graph),
-        GraphExportFormat::GraphMl  => export_graphml(graph),
-        GraphExportFormat::Csv      => export_csv(graph),
-        GraphExportFormat::Cypher   => export_cypher(graph),
+        GraphExportFormat::Json => export_json(graph),
+        GraphExportFormat::Mermaid => export_mermaid(graph),
+        GraphExportFormat::Dot => export_dot(graph),
+        GraphExportFormat::GraphMl => export_graphml(graph),
+        GraphExportFormat::Csv => export_csv(graph),
+        GraphExportFormat::Cypher => export_cypher(graph),
     }
 }
 
 fn export_json(graph: &AttackGraph) -> String {
     let mut secret_counter: usize = 0;
-    let redacted: HashMap<String, serde_json::Value> = graph.entities.iter().map(|(k, e)| {
-        let (out_key, out_entity_key, display) = if e.kind == EntityKind::Secret {
-            secret_counter += 1;
-            let redacted_key = format!("secret:[REDACTED-{}]", secret_counter);
-            (redacted_key.clone(), redacted_key, "[REDACTED]".to_owned())
-        } else {
-            (k.clone(), e.entity_key.clone(), e.display_name.clone())
-        };
-        let v = serde_json::json!({
-            "entity_key": out_entity_key,
-            "kind": e.kind.as_str(),
-            "display_name": display,
-            "is_tier_zero": e.is_tier_zero,
-            "confidence": e.confidence,
-            "properties": e.properties,
-        });
-        (out_key, v)
-    }).collect();
+    let redacted: HashMap<String, serde_json::Value> = graph
+        .entities
+        .iter()
+        .map(|(k, e)| {
+            let (out_key, out_entity_key, display) = if e.kind == EntityKind::Secret {
+                secret_counter += 1;
+                let redacted_key = format!("secret:[REDACTED-{}]", secret_counter);
+                (redacted_key.clone(), redacted_key, "[REDACTED]".to_owned())
+            } else {
+                (k.clone(), e.entity_key.clone(), e.display_name.clone())
+            };
+            let v = serde_json::json!({
+                "entity_key": out_entity_key,
+                "kind": e.kind.as_str(),
+                "display_name": display,
+                "is_tier_zero": e.is_tier_zero,
+                "confidence": e.confidence,
+                "properties": e.properties,
+            });
+            (out_key, v)
+        })
+        .collect();
 
     // Redact relationships referencing secret entities: replace secret endpoints
     // with their redacted keys so JSON export never contains raw secret values.
@@ -355,24 +368,41 @@ fn export_json(graph: &AttackGraph) -> String {
         }
         m
     };
-    let redacted_rels: Vec<serde_json::Value> = graph.relationships.iter().map(|r| {
-        let from = secret_key_map.get(&r.from_key).cloned().unwrap_or_else(|| r.from_key.clone());
-        let to   = secret_key_map.get(&r.to_key).cloned().unwrap_or_else(|| r.to_key.clone());
-        serde_json::json!({
-            "from_key": from,
-            "to_key": to,
-            "kind": r.kind.as_str(),
+    let redacted_rels: Vec<serde_json::Value> = graph
+        .relationships
+        .iter()
+        .map(|r| {
+            let from = secret_key_map
+                .get(&r.from_key)
+                .cloned()
+                .unwrap_or_else(|| r.from_key.clone());
+            let to = secret_key_map
+                .get(&r.to_key)
+                .cloned()
+                .unwrap_or_else(|| r.to_key.clone());
+            serde_json::json!({
+                "from_key": from,
+                "to_key": to,
+                "kind": r.kind.as_str(),
+            })
         })
-    }).collect();
-    let redacted_claims: Vec<serde_json::Value> = graph.ownership_claims.iter().map(|c| {
-        let ekey = secret_key_map.get(&c.entity_key).cloned().unwrap_or_else(|| c.entity_key.clone());
-        serde_json::json!({
-            "entity_key": ekey,
-            "owner": c.owner,
-            "source": c.source,
-            "is_active": c.is_active,
+        .collect();
+    let redacted_claims: Vec<serde_json::Value> = graph
+        .ownership_claims
+        .iter()
+        .map(|c| {
+            let ekey = secret_key_map
+                .get(&c.entity_key)
+                .cloned()
+                .unwrap_or_else(|| c.entity_key.clone());
+            serde_json::json!({
+                "entity_key": ekey,
+                "owner": c.owner,
+                "source": c.source,
+                "is_active": c.is_active,
+            })
         })
-    }).collect();
+        .collect();
 
     let out = serde_json::json!({
         "engagement_id": graph.engagement_id,
@@ -385,7 +415,9 @@ fn export_json(graph: &AttackGraph) -> String {
 
 fn export_mermaid(graph: &AttackGraph) -> String {
     let mut lines = vec!["graph LR".to_owned()];
-    let entities: Vec<_> = graph.entities.values()
+    let entities: Vec<_> = graph
+        .entities
+        .values()
         .filter(|e| e.kind != EntityKind::Secret)
         .collect();
     for e in &entities {
@@ -397,12 +429,15 @@ fn export_mermaid(graph: &AttackGraph) -> String {
             lines.push(format!("  {}[\"{}\"]", node_id, label));
         }
     }
-    let secret_keys: std::collections::HashSet<&str> = graph.entities.values()
+    let secret_keys: std::collections::HashSet<&str> = graph
+        .entities
+        .values()
         .filter(|e| e.kind == EntityKind::Secret)
         .map(|e| e.entity_key.as_str())
         .collect();
     for rel in &graph.relationships {
-        if secret_keys.contains(rel.from_key.as_str()) || secret_keys.contains(rel.to_key.as_str()) {
+        if secret_keys.contains(rel.from_key.as_str()) || secret_keys.contains(rel.to_key.as_str())
+        {
             continue;
         }
         let from = node_id_from_key(&rel.from_key);
@@ -413,24 +448,43 @@ fn export_mermaid(graph: &AttackGraph) -> String {
 }
 
 fn export_dot(graph: &AttackGraph) -> String {
-    let mut lines = vec!["digraph forge_attack_graph {".to_owned(), "  rankdir=LR;".to_owned()];
-    let secret_keys: std::collections::HashSet<&str> = graph.entities.values()
+    let mut lines = vec![
+        "digraph forge_attack_graph {".to_owned(),
+        "  rankdir=LR;".to_owned(),
+    ];
+    let secret_keys: std::collections::HashSet<&str> = graph
+        .entities
+        .values()
         .filter(|e| e.kind == EntityKind::Secret)
         .map(|e| e.entity_key.as_str())
         .collect();
-    for e in graph.entities.values().filter(|e| e.kind != EntityKind::Secret) {
+    for e in graph
+        .entities
+        .values()
+        .filter(|e| e.kind != EntityKind::Secret)
+    {
         let nid = dot_escape(&e.entity_key);
         let label = dot_escape(&e.display_name);
-        let color = if e.is_tier_zero { "color=red" } else { "color=black" };
+        let color = if e.is_tier_zero {
+            "color=red"
+        } else {
+            "color=black"
+        };
         lines.push(format!("  \"{}\" [label=\"{}\" {}];", nid, label, color));
     }
     for rel in &graph.relationships {
-        if secret_keys.contains(rel.from_key.as_str()) || secret_keys.contains(rel.to_key.as_str()) {
+        if secret_keys.contains(rel.from_key.as_str()) || secret_keys.contains(rel.to_key.as_str())
+        {
             continue;
         }
         let from = dot_escape(&rel.from_key);
         let to = dot_escape(&rel.to_key);
-        lines.push(format!("  \"{}\" -> \"{}\" [label=\"{}\"];", from, to, rel.kind.as_str()));
+        lines.push(format!(
+            "  \"{}\" -> \"{}\" [label=\"{}\"];",
+            from,
+            to,
+            rel.kind.as_str()
+        ));
     }
     lines.push("}".to_owned());
     lines.join("\n")
@@ -442,7 +496,11 @@ fn export_graphml(graph: &AttackGraph) -> String {
         r#"<graphml xmlns="http://graphml.graphstruct.org/graphml">"#.to_owned(),
         r#"  <graph id="G" edgedefault="directed">"#.to_owned(),
     ];
-    for e in graph.entities.values().filter(|e| e.kind != EntityKind::Secret) {
+    for e in graph
+        .entities
+        .values()
+        .filter(|e| e.kind != EntityKind::Secret)
+    {
         let label = xml_escape(&e.display_name);
         let tier = if e.is_tier_zero { "true" } else { "false" };
         lines.push(format!(
@@ -450,17 +508,23 @@ fn export_graphml(graph: &AttackGraph) -> String {
             xml_escape(&e.entity_key), e.kind.as_str(), label, tier
         ));
     }
-    let secret_keys: std::collections::HashSet<&str> = graph.entities.values()
+    let secret_keys: std::collections::HashSet<&str> = graph
+        .entities
+        .values()
         .filter(|e| e.kind == EntityKind::Secret)
         .map(|e| e.entity_key.as_str())
         .collect();
     for (i, rel) in graph.relationships.iter().enumerate() {
-        if secret_keys.contains(rel.from_key.as_str()) || secret_keys.contains(rel.to_key.as_str()) {
+        if secret_keys.contains(rel.from_key.as_str()) || secret_keys.contains(rel.to_key.as_str())
+        {
             continue;
         }
         lines.push(format!(
             r#"    <edge id="e{}" source="{}" target="{}"><data key="kind">{}</data></edge>"#,
-            i, xml_escape(&rel.from_key), xml_escape(&rel.to_key), rel.kind.as_str()
+            i,
+            xml_escape(&rel.from_key),
+            xml_escape(&rel.to_key),
+            rel.kind.as_str()
         ));
     }
     lines.push("  </graph>".to_owned());
@@ -470,15 +534,20 @@ fn export_graphml(graph: &AttackGraph) -> String {
 
 fn export_csv(graph: &AttackGraph) -> String {
     let mut lines = vec!["entity_key,kind,display_name,is_tier_zero,confidence".to_owned()];
-    let mut sorted: Vec<_> = graph.entities.values()
+    let mut sorted: Vec<_> = graph
+        .entities
+        .values()
         .filter(|e| e.kind != EntityKind::Secret)
         .collect();
     sorted.sort_unstable_by_key(|e| e.entity_key.as_str());
     for e in sorted {
         lines.push(format!(
             "{},{},{},{},{}",
-            csv_escape(&e.entity_key), e.kind.as_str(),
-            csv_escape(&e.display_name), e.is_tier_zero, e.confidence
+            csv_escape(&e.entity_key),
+            e.kind.as_str(),
+            csv_escape(&e.display_name),
+            e.is_tier_zero,
+            e.confidence
         ));
     }
     lines.join("\n")
@@ -486,7 +555,11 @@ fn export_csv(graph: &AttackGraph) -> String {
 
 fn export_cypher(graph: &AttackGraph) -> String {
     let mut lines = vec!["// Forge Attack Graph — Neo4j Cypher CREATE".to_owned()];
-    for e in graph.entities.values().filter(|e| e.kind != EntityKind::Secret) {
+    for e in graph
+        .entities
+        .values()
+        .filter(|e| e.kind != EntityKind::Secret)
+    {
         let label = e.kind.as_str().to_uppercase();
         let name = cypher_escape(&e.display_name);
         let key = cypher_escape(&e.entity_key);
@@ -495,12 +568,15 @@ fn export_cypher(graph: &AttackGraph) -> String {
             e.is_tier_zero
         ));
     }
-    let secret_keys: std::collections::HashSet<&str> = graph.entities.values()
+    let secret_keys: std::collections::HashSet<&str> = graph
+        .entities
+        .values()
         .filter(|e| e.kind == EntityKind::Secret)
         .map(|e| e.entity_key.as_str())
         .collect();
     for rel in &graph.relationships {
-        if secret_keys.contains(rel.from_key.as_str()) || secret_keys.contains(rel.to_key.as_str()) {
+        if secret_keys.contains(rel.from_key.as_str()) || secret_keys.contains(rel.to_key.as_str())
+        {
             continue;
         }
         let from = cypher_escape(&rel.from_key);
@@ -515,10 +591,17 @@ fn export_cypher(graph: &AttackGraph) -> String {
 
 // ─── String helpers ───────────────────────────────────────────────────────────
 
-fn mermaid_escape(s: &str) -> String { s.replace('"', "'").replace('[', "(").replace(']', ")") }
-fn dot_escape(s: &str)    -> String { s.replace('"', "\\\"") }
-fn xml_escape(s: &str)    -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+fn mermaid_escape(s: &str) -> String {
+    s.replace('"', "'").replace('[', "(").replace(']', ")")
+}
+fn dot_escape(s: &str) -> String {
+    s.replace('"', "\\\"")
+}
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 fn csv_escape(s: &str) -> String {
     if s.contains(',') || s.contains('"') || s.contains('\n') {
@@ -527,10 +610,14 @@ fn csv_escape(s: &str) -> String {
         s.to_owned()
     }
 }
-fn cypher_escape(s: &str) -> String { s.replace('"', "\\\"").replace('\\', "\\\\") }
+fn cypher_escape(s: &str) -> String {
+    s.replace('"', "\\\"").replace('\\', "\\\\")
+}
 
 fn node_id_from_key(key: &str) -> String {
-    key.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect()
+    key.chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect()
 }
 
 // ─── Unit tests ────────────────────────────────────────────────────────────────
@@ -543,8 +630,7 @@ mod tests {
         let mut g = AttackGraph::new(1);
         g.add_entity(GraphEntity::new(EntityKind::Host, "target.example"));
         g.add_entity(
-            GraphEntity::new(EntityKind::Service, "https://target.example:443")
-                .with_tier_zero(),
+            GraphEntity::new(EntityKind::Service, "https://target.example:443").with_tier_zero(),
         );
         g.add_entity(GraphEntity::new(EntityKind::Email, "admin@target.example"));
         g.add_entity(GraphEntity::new(EntityKind::Secret, "sk-secret-key-value"));

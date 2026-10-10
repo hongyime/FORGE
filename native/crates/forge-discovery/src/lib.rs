@@ -13,12 +13,12 @@
 pub mod artifacts;
 pub mod enrichment;
 pub mod feed;
+pub mod pipeline;
 pub mod resume;
+pub mod scoring;
 pub mod seed;
 pub mod snapshot;
 pub mod validation;
-pub mod scoring;
-pub mod pipeline;
 
 pub use artifacts::{
     ArtifactMetadata, ArtifactType, Confidence, MAX_READ_BYTES, MAX_ZIP_ENTRIES, check_zip_bomb,
@@ -39,8 +39,8 @@ pub use validation::{
 };
 
 pub use scoring::{
-    CvssVersion, ExploitMaturity, FindingCategory, RuleEngine, ScoredFinding, ScoringContext,
-    ScoringRule, SeverityLevel, DEFAULT_ENGINE, category_default_severity, cvss_to_severity,
+    CvssVersion, DEFAULT_ENGINE, ExploitMaturity, FindingCategory, RuleEngine, ScoredFinding,
+    ScoringContext, ScoringRule, SeverityLevel, category_default_severity, cvss_to_severity,
     score_finding,
 };
 

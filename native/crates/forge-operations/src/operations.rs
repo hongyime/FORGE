@@ -46,7 +46,12 @@ impl LegalHold {
         created_by: impl Into<String>,
         now: f64,
     ) -> Self {
-        Self { engagement_id, reason: reason.into(), created_at: now, created_by: created_by.into() }
+        Self {
+            engagement_id,
+            reason: reason.into(),
+            created_at: now,
+            created_by: created_by.into(),
+        }
     }
 }
 
@@ -66,26 +71,40 @@ pub struct RetentionRun {
 impl RetentionRun {
     pub fn preview(engagement_id: i64, rows_eligible: usize, run_at: f64) -> Self {
         Self {
-            engagement_id, status: RetentionStatus::Preview,
-            rows_eligible, rows_deleted: 0,
-            legal_hold_reason: None, run_at,
+            engagement_id,
+            status: RetentionStatus::Preview,
+            rows_eligible,
+            rows_deleted: 0,
+            legal_hold_reason: None,
+            run_at,
         }
     }
 
-    pub fn apply(engagement_id: i64, rows_eligible: usize, rows_deleted: usize, run_at: f64) -> Self {
+    pub fn apply(
+        engagement_id: i64,
+        rows_eligible: usize,
+        rows_deleted: usize,
+        run_at: f64,
+    ) -> Self {
         Self {
-            engagement_id, status: RetentionStatus::Applied,
-            rows_eligible, rows_deleted,
-            legal_hold_reason: None, run_at,
+            engagement_id,
+            status: RetentionStatus::Applied,
+            rows_eligible,
+            rows_deleted,
+            legal_hold_reason: None,
+            run_at,
         }
     }
 
     /// Block the run due to a legal hold.
     pub fn blocked(engagement_id: i64, hold: &LegalHold, run_at: f64) -> Self {
         Self {
-            engagement_id, status: RetentionStatus::LegalHoldBlocked,
-            rows_eligible: 0, rows_deleted: 0,
-            legal_hold_reason: Some(hold.reason.clone()), run_at,
+            engagement_id,
+            status: RetentionStatus::LegalHoldBlocked,
+            rows_eligible: 0,
+            rows_deleted: 0,
+            legal_hold_reason: Some(hold.reason.clone()),
+            run_at,
         }
     }
 }
@@ -104,9 +123,9 @@ pub enum WorkspaceMemberRole {
 impl WorkspaceMemberRole {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Viewer   => "viewer",
+            Self::Viewer => "viewer",
             Self::Operator => "operator",
-            Self::Owner    => "owner",
+            Self::Owner => "owner",
         }
     }
 
@@ -158,7 +177,14 @@ pub fn append_audit_event(
     // Deterministic chain using FNV-1a (same approach as checksum in reports.rs)
     let content = format!("{prev_hash}|{workspace_id}|{actor}|{action}|{redacted_payload}|{now}");
     let chain_hash = fnv1a_hex(content.as_bytes());
-    AuditEvent { workspace_id, actor, action, redacted_payload, event_at: now, chain_hash }
+    AuditEvent {
+        workspace_id,
+        actor,
+        action,
+        redacted_payload,
+        event_at: now,
+        chain_hash,
+    }
 }
 
 fn fnv1a_hex(data: &[u8]) -> String {
@@ -193,7 +219,14 @@ impl AutostartGate {
         disk_ok: bool,
         no_active_lock: bool,
     ) -> Self {
-        Self { enabled, apply_enabled, roe_present, memory_ok, disk_ok, no_active_lock }
+        Self {
+            enabled,
+            apply_enabled,
+            roe_present,
+            memory_ok,
+            disk_ok,
+            no_active_lock,
+        }
     }
 
     /// Return `true` when ALL gates pass (live work may launch).
@@ -209,12 +242,24 @@ impl AutostartGate {
     /// Collect names of failing gates.
     pub fn blockers(&self) -> Vec<&'static str> {
         let mut b = Vec::new();
-        if !self.enabled         { b.push("enabled"); }
-        if !self.apply_enabled   { b.push("apply_enabled"); }
-        if !self.roe_present     { b.push("roe_present"); }
-        if !self.memory_ok       { b.push("memory_ok"); }
-        if !self.disk_ok         { b.push("disk_ok"); }
-        if !self.no_active_lock  { b.push("no_active_lock"); }
+        if !self.enabled {
+            b.push("enabled");
+        }
+        if !self.apply_enabled {
+            b.push("apply_enabled");
+        }
+        if !self.roe_present {
+            b.push("roe_present");
+        }
+        if !self.memory_ok {
+            b.push("memory_ok");
+        }
+        if !self.disk_ok {
+            b.push("disk_ok");
+        }
+        if !self.no_active_lock {
+            b.push("no_active_lock");
+        }
         b
     }
 }

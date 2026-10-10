@@ -53,18 +53,18 @@ impl CapabilityKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Foundations => "foundations",
-            Self::Storage     => "storage",
-            Self::Discovery   => "discovery",
-            Self::Validation  => "validation",
-            Self::Scoring     => "scoring",
-            Self::Pipeline    => "pipeline",
-            Self::Graphs      => "graphs",
-            Self::Reports     => "reports",
-            Self::Monitoring  => "monitoring",
+            Self::Storage => "storage",
+            Self::Discovery => "discovery",
+            Self::Validation => "validation",
+            Self::Scoring => "scoring",
+            Self::Pipeline => "pipeline",
+            Self::Graphs => "graphs",
+            Self::Reports => "reports",
+            Self::Monitoring => "monitoring",
             Self::Remediation => "remediation",
-            Self::Operations  => "operations",
-            Self::CliApi      => "cli_api",
-            Self::Packaging   => "packaging",
+            Self::Operations => "operations",
+            Self::CliApi => "cli_api",
+            Self::Packaging => "packaging",
         }
     }
 
@@ -72,18 +72,18 @@ impl CapabilityKind {
     pub fn task_range(self) -> &'static str {
         match self {
             Self::Foundations => "T3–T6",
-            Self::Storage     => "T7–T12",
-            Self::Discovery   => "T13–T15",
-            Self::Validation  => "T16",
-            Self::Scoring     => "T17",
-            Self::Pipeline    => "T18",
-            Self::Graphs      => "T19",
-            Self::Reports     => "T20",
-            Self::Monitoring  => "T21",
+            Self::Storage => "T7–T12",
+            Self::Discovery => "T13–T15",
+            Self::Validation => "T16",
+            Self::Scoring => "T17",
+            Self::Pipeline => "T18",
+            Self::Graphs => "T19",
+            Self::Reports => "T20",
+            Self::Monitoring => "T21",
             Self::Remediation => "T22",
-            Self::Operations  => "T23",
-            Self::CliApi      => "T25–T30",
-            Self::Packaging   => "T31–T36",
+            Self::Operations => "T23",
+            Self::CliApi => "T25–T30",
+            Self::Packaging => "T31–T36",
         }
     }
 }
@@ -224,17 +224,83 @@ pub fn service_parity_summary(check: &LedgerCheck, receipts: &[ParityReceipt]) -
 /// Build the canonical Wave 4 receipt set (T3–T23 + foundations/storage).
 pub fn wave4_receipts() -> Vec<ParityReceipt> {
     vec![
-        ParityReceipt::new(CapabilityKind::Foundations, "109c779", "domain", "forge-domain T3–T6", 0.0),
-        ParityReceipt::new(CapabilityKind::Storage,     "93aa8d9", "sqlite", "forge-storage T7–T12", 0.0),
-        ParityReceipt::new(CapabilityKind::Discovery,   "d82f00e", "discovery", "forge-discovery T13–T15", 0.0),
-        ParityReceipt::new(CapabilityKind::Validation,  "eec38d5", "validation", "forge-discovery T16", 0.0),
-        ParityReceipt::new(CapabilityKind::Scoring,     "a144d5c", "scoring", "forge-discovery T17", 0.0),
-        ParityReceipt::new(CapabilityKind::Pipeline,    "257395f", "pipeline", "forge-discovery T18", 0.0),
-        ParityReceipt::new(CapabilityKind::Graphs,      "0b668f0", "graphs", "forge-reporting T19", 0.0),
-        ParityReceipt::new(CapabilityKind::Reports,     "27f5a60", "reports", "forge-reporting T20", 0.0),
-        ParityReceipt::new(CapabilityKind::Monitoring,  "fd1057e", "monitoring", "forge-operations T21", 0.0),
-        ParityReceipt::new(CapabilityKind::Remediation, "a7c3b96", "remediation", "forge-operations T22", 0.0),
-        ParityReceipt::new(CapabilityKind::Operations,  "bc29b76", "operations", "forge-operations T23", 0.0),
+        ParityReceipt::new(
+            CapabilityKind::Foundations,
+            "109c779",
+            "domain",
+            "forge-domain T3–T6",
+            0.0,
+        ),
+        ParityReceipt::new(
+            CapabilityKind::Storage,
+            "93aa8d9",
+            "sqlite",
+            "forge-storage T7–T12",
+            0.0,
+        ),
+        ParityReceipt::new(
+            CapabilityKind::Discovery,
+            "d82f00e",
+            "discovery",
+            "forge-discovery T13–T15",
+            0.0,
+        ),
+        ParityReceipt::new(
+            CapabilityKind::Validation,
+            "eec38d5",
+            "validation",
+            "forge-discovery T16",
+            0.0,
+        ),
+        ParityReceipt::new(
+            CapabilityKind::Scoring,
+            "a144d5c",
+            "scoring",
+            "forge-discovery T17",
+            0.0,
+        ),
+        ParityReceipt::new(
+            CapabilityKind::Pipeline,
+            "257395f",
+            "pipeline",
+            "forge-discovery T18",
+            0.0,
+        ),
+        ParityReceipt::new(
+            CapabilityKind::Graphs,
+            "0b668f0",
+            "graphs",
+            "forge-reporting T19",
+            0.0,
+        ),
+        ParityReceipt::new(
+            CapabilityKind::Reports,
+            "27f5a60",
+            "reports",
+            "forge-reporting T20",
+            0.0,
+        ),
+        ParityReceipt::new(
+            CapabilityKind::Monitoring,
+            "fd1057e",
+            "monitoring",
+            "forge-operations T21",
+            0.0,
+        ),
+        ParityReceipt::new(
+            CapabilityKind::Remediation,
+            "a7c3b96",
+            "remediation",
+            "forge-operations T22",
+            0.0,
+        ),
+        ParityReceipt::new(
+            CapabilityKind::Operations,
+            "bc29b76",
+            "operations",
+            "forge-operations T23",
+            0.0,
+        ),
     ]
 }
 
@@ -272,7 +338,8 @@ mod tests {
     #[test]
     fn wave4_check_missing_detected() {
         // Remove one receipt
-        let receipts: Vec<_> = sample_receipts().into_iter()
+        let receipts: Vec<_> = sample_receipts()
+            .into_iter()
             .filter(|r| r.capability != CapabilityKind::Operations)
             .collect();
         let check = LedgerCheck::wave4();
@@ -302,7 +369,8 @@ mod tests {
 
     #[test]
     fn parity_summary_incomplete_missing_noted() {
-        let receipts: Vec<_> = sample_receipts().into_iter()
+        let receipts: Vec<_> = sample_receipts()
+            .into_iter()
             .filter(|r| r.capability != CapabilityKind::Monitoring)
             .collect();
         let check = LedgerCheck::wave4();

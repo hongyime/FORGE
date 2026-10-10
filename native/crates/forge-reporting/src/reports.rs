@@ -12,8 +12,8 @@
 //! - No raw finding text, credentials, or secret values appear in the
 //!   narrative template; only redacted summaries and counts are used.
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // ─── ReportFamily ─────────────────────────────────────────────────────────────
 
@@ -38,12 +38,12 @@ pub enum ReportFamily {
 impl ReportFamily {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::EngagementFull  => "engagement_full",
+            Self::EngagementFull => "engagement_full",
             Self::ExecutiveSummary => "executive_summary",
             Self::TechnicalDetail => "technical_detail",
-            Self::FindingDetail   => "finding_detail",
+            Self::FindingDetail => "finding_detail",
             Self::RemediationPlan => "remediation_plan",
-            Self::DeltaSummary    => "delta_summary",
+            Self::DeltaSummary => "delta_summary",
         }
     }
 }
@@ -69,11 +69,11 @@ pub enum ProviderKind {
 impl ProviderKind {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Template        => "template",
-            Self::LlamaCpp        => "llama_cpp",
-            Self::OpenRouterFree  => "openrouter_free",
-            Self::Claude          => "claude",
-            Self::OpenAi          => "openai",
+            Self::Template => "template",
+            Self::LlamaCpp => "llama_cpp",
+            Self::OpenRouterFree => "openrouter_free",
+            Self::Claude => "claude",
+            Self::OpenAi => "openai",
         }
     }
 
@@ -102,7 +102,9 @@ pub struct ProviderCascade {
 impl ProviderCascade {
     /// Standard cascade: template only (safe default for offline/CI use).
     pub fn template_only() -> Self {
-        Self { providers: vec![ProviderKind::Template] }
+        Self {
+            providers: vec![ProviderKind::Template],
+        }
     }
 
     /// Auto cascade: llama_cpp → openrouter_free → template.
@@ -136,7 +138,9 @@ impl ProviderCascade {
 }
 
 impl Default for ProviderCascade {
-    fn default() -> Self { Self::template_only() }
+    fn default() -> Self {
+        Self::template_only()
+    }
 }
 
 // ─── ReportContext ────────────────────────────────────────────────────────────
@@ -232,7 +236,9 @@ pub fn checksum_sha256_hex(data: &[u8]) -> String {
 }
 
 #[allow(non_snake_case)]
-fn u64(b: u8) -> u64 { b as u64 }
+fn u64(b: u8) -> u64 {
+    b as u64
+}
 
 // ─── Template renderer ────────────────────────────────────────────────────────
 
@@ -242,12 +248,12 @@ fn u64(b: u8) -> u64 { b as u64 }
 /// `ctx` is sparse.
 pub fn render_template_report(family: ReportFamily, ctx: &ReportContext) -> ReportArtifact {
     let markdown = match family {
-        ReportFamily::EngagementFull  => render_full(ctx),
+        ReportFamily::EngagementFull => render_full(ctx),
         ReportFamily::ExecutiveSummary => render_executive(ctx),
         ReportFamily::TechnicalDetail => render_technical(ctx),
-        ReportFamily::FindingDetail   => render_finding_detail(ctx),
+        ReportFamily::FindingDetail => render_finding_detail(ctx),
         ReportFamily::RemediationPlan => render_remediation(ctx),
-        ReportFamily::DeltaSummary    => render_delta(ctx),
+        ReportFamily::DeltaSummary => render_delta(ctx),
     };
     let json_sidecar = serde_json::to_string_pretty(ctx).unwrap_or_else(|_| "{}".to_owned());
     let checksum = checksum_sha256_hex(markdown.as_bytes());
@@ -273,12 +279,12 @@ fn render_full(ctx: &ReportContext) -> String {
          ## Technical Findings\n\n{tech}\n\n\
          ## Remediation Plan\n\n{remed}\n",
         title = ctx.engagement_title,
-        id    = ctx.engagement_id,
-        date  = ctx.run_date,
-        op    = ctx.operator,
+        id = ctx.engagement_id,
+        date = ctx.run_date,
+        op = ctx.operator,
         scope = format_scope(ctx),
-        exec  = render_executive_body(ctx),
-        tech  = render_technical_body(ctx),
+        exec = render_executive_body(ctx),
+        tech = render_technical_body(ctx),
         remed = render_remediation_body(ctx),
     )
 }
@@ -289,8 +295,8 @@ fn render_executive(ctx: &ReportContext) -> String {
          **Date:** {date}\n\n\
          {body}\n",
         title = ctx.engagement_title,
-        date  = ctx.run_date,
-        body  = render_executive_body(ctx),
+        date = ctx.run_date,
+        body = render_executive_body(ctx),
     )
 }
 
@@ -299,22 +305,30 @@ fn render_technical(ctx: &ReportContext) -> String {
         "# Technical Detail — {title}\n\n\
          {body}\n",
         title = ctx.engagement_title,
-        body  = render_technical_body(ctx),
+        body = render_technical_body(ctx),
     )
 }
 
 fn render_finding_detail(ctx: &ReportContext) -> String {
-    let findings = ctx.top_findings.iter()
-        .map(|f| format!(
-            "### {} ({})\n\n- **Severity:** {}\n- **Category:** {}\n- **Reportable:** {}\n",
-            f.title, f.id, f.severity, f.category, f.is_reportable
-        ))
+    let findings = ctx
+        .top_findings
+        .iter()
+        .map(|f| {
+            format!(
+                "### {} ({})\n\n- **Severity:** {}\n- **Category:** {}\n- **Reportable:** {}\n",
+                f.title, f.id, f.severity, f.category, f.is_reportable
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n");
     format!(
         "# Finding Details — Engagement {id}\n\n{findings}\n",
         id = ctx.engagement_id,
-        findings = if findings.is_empty() { "_No findings._".to_owned() } else { findings },
+        findings = if findings.is_empty() {
+            "_No findings._".to_owned()
+        } else {
+            findings
+        },
     )
 }
 
@@ -323,7 +337,7 @@ fn render_remediation(ctx: &ReportContext) -> String {
         "# Remediation Plan — {title}\n\n\
          {body}\n",
         title = ctx.engagement_title,
-        body  = render_remediation_body(ctx),
+        body = render_remediation_body(ctx),
     )
 }
 
@@ -332,11 +346,11 @@ fn render_delta(ctx: &ReportContext) -> String {
         "# Delta Summary — Engagement {id}\n\n\
          **Date:** {date}\n\n\
          _Delta report: {total} findings total ({reportable} reportable) across {seeds} seeds._\n",
-        id         = ctx.engagement_id,
-        date       = ctx.run_date,
-        total      = ctx.total_findings,
+        id = ctx.engagement_id,
+        date = ctx.run_date,
+        total = ctx.total_findings,
         reportable = ctx.reportable_findings,
-        seeds      = ctx.total_seeds,
+        seeds = ctx.total_seeds,
     )
 }
 
@@ -344,7 +358,11 @@ fn format_scope(ctx: &ReportContext) -> String {
     if ctx.target_scope.is_empty() {
         return "_Scope not specified._".to_owned();
     }
-    ctx.target_scope.iter().map(|s| format!("- {s}")).collect::<Vec<_>>().join("\n")
+    ctx.target_scope
+        .iter()
+        .map(|s| format!("- {s}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn render_executive_body(ctx: &ReportContext) -> String {
@@ -361,22 +379,25 @@ fn render_executive_body(ctx: &ReportContext) -> String {
          | Info | {info} |\n",
         reportable = ctx.reportable_findings,
         seeds = ctx.total_seeds,
-        critical = s.critical, high = s.high, medium = s.medium,
-        low = s.low, info = s.info,
+        critical = s.critical,
+        high = s.high,
+        medium = s.medium,
+        low = s.low,
+        info = s.info,
     )
 }
 
 fn render_technical_body(ctx: &ReportContext) -> String {
-    let findings = ctx.top_findings.iter()
+    let findings = ctx
+        .top_findings
+        .iter()
         .map(|f| format!("| {} | {} | {} |", f.id, f.title, f.severity))
         .collect::<Vec<_>>()
         .join("\n");
     if findings.is_empty() {
         return "_No reportable findings._".to_owned();
     }
-    format!(
-        "| ID | Title | Severity |\n|---|---|---|\n{findings}"
-    )
+    format!("| ID | Title | Severity |\n|---|---|---|\n{findings}")
 }
 
 fn render_remediation_body(ctx: &ReportContext) -> String {
@@ -389,7 +410,9 @@ fn render_remediation_body(ctx: &ReportContext) -> String {
         "**Immediate action required:** {total} critical/high findings.\n\n\
          Prioritize remediation of all {critical} critical and {high} high severity items \
          before the next assessment window.",
-        total = total, critical = s.critical, high = s.high
+        total = total,
+        critical = s.critical,
+        high = s.high
     )
 }
 
@@ -408,7 +431,11 @@ pub fn raw_csv_export(ctx: &ReportContext) -> (String, String) {
     for f in &ctx.top_findings {
         lines.push(format!(
             "{},{},{},{},{}",
-            f.id, csv_escape(&f.title), f.severity, f.category, f.is_reportable
+            f.id,
+            csv_escape(&f.title),
+            f.severity,
+            f.category,
+            f.is_reportable
         ));
     }
     let csv = lines.join("\n");
@@ -440,16 +467,26 @@ mod tests {
             total_seeds: 10,
             total_findings: 7,
             reportable_findings: 3,
-            severity_counts: SeveritySummary { critical: 1, high: 2, medium: 3, low: 1, info: 0 },
+            severity_counts: SeveritySummary {
+                critical: 1,
+                high: 2,
+                medium: 3,
+                low: 1,
+                info: 0,
+            },
             top_findings: vec![
                 FindingSummary {
-                    id: "F-001".to_owned(), title: "SQL Injection".to_owned(),
-                    severity: "CRITICAL".to_owned(), category: "vulnerability".to_owned(),
+                    id: "F-001".to_owned(),
+                    title: "SQL Injection".to_owned(),
+                    severity: "CRITICAL".to_owned(),
+                    category: "vulnerability".to_owned(),
                     is_reportable: true,
                 },
                 FindingSummary {
-                    id: "F-002".to_owned(), title: "Leaked API key".to_owned(),
-                    severity: "HIGH".to_owned(), category: "secret".to_owned(),
+                    id: "F-002".to_owned(),
+                    title: "Leaked API key".to_owned(),
+                    severity: "HIGH".to_owned(),
+                    category: "secret".to_owned(),
                     is_reportable: true,
                 },
             ],

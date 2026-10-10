@@ -33,9 +33,9 @@ pub enum AuthRole {
 impl AuthRole {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Viewer   => "viewer",
+            Self::Viewer => "viewer",
             Self::Operator => "operator",
-            Self::Owner    => "owner",
+            Self::Owner => "owner",
         }
     }
 
@@ -52,10 +52,10 @@ impl AuthRole {
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "viewer"   => Some(Self::Viewer),
+            "viewer" => Some(Self::Viewer),
             "operator" => Some(Self::Operator),
-            "owner"    => Some(Self::Owner),
-            _          => None,
+            "owner" => Some(Self::Owner),
+            _ => None,
         }
     }
 }
@@ -99,7 +99,7 @@ impl JwtClaims {
     /// Return `true` when the caller can access `workspace_id`.
     pub fn can_access_workspace(&self, workspace_id: &str) -> bool {
         match &self.workspace_id {
-            None     => true, // workspaces:any
+            None => true, // workspaces:any
             Some(id) => id == workspace_id,
         }
     }
@@ -145,11 +145,15 @@ pub fn check_permission(
     }
     // Role hierarchy: Owner ≥ Operator ≥ Viewer
     let role_ok = match required_role {
-        AuthRole::Viewer   => true,
+        AuthRole::Viewer => true,
         AuthRole::Operator => claims.role.can_write(),
-        AuthRole::Owner    => claims.role.can_admin(),
+        AuthRole::Owner => claims.role.can_admin(),
     };
-    if role_ok { PermissionResult::Allowed } else { PermissionResult::Denied }
+    if role_ok {
+        PermissionResult::Allowed
+    } else {
+        PermissionResult::Denied
+    }
 }
 
 // ─── EngagementFilter ────────────────────────────────────────────────────────
@@ -165,7 +169,12 @@ pub struct EngagementFilter {
 
 impl Default for EngagementFilter {
     fn default() -> Self {
-        Self { workspace_id: None, engagement_id: None, limit: 50, offset: 0 }
+        Self {
+            workspace_id: None,
+            engagement_id: None,
+            limit: 50,
+            offset: 0,
+        }
     }
 }
 
@@ -222,13 +231,24 @@ fn scrub_progress_message(input: &str) -> String {
 
     // Redact prefix-tagged tokens: `<prefix> <value>`.
     for prefix in [
-        "Bearer ", "bearer ", "AUTH ", "Token ", "token ",
-        "api_key=", "api-key=", "apikey=", "key=", "password=", "pass=",
+        "Bearer ",
+        "bearer ",
+        "AUTH ",
+        "Token ",
+        "token ",
+        "api_key=",
+        "api-key=",
+        "apikey=",
+        "key=",
+        "password=",
+        "pass=",
     ] {
         while let Some(idx) = s.find(prefix) {
             let start = idx + prefix.len();
             let end = s[start..]
-                .find(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == ',' || c == '&' || c == ';')
+                .find(|c: char| {
+                    c.is_whitespace() || c == '"' || c == '\'' || c == ',' || c == '&' || c == ';'
+                })
                 .map(|off| start + off)
                 .unwrap_or(s.len());
             if end > start {
@@ -277,7 +297,9 @@ fn scrub_progress_message(input: &str) -> String {
     while i < chars.len() {
         if chars[i].is_ascii_alphanumeric() || chars[i] == '_' || chars[i] == '-' {
             let start = i;
-            while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_' || chars[i] == '-') {
+            while i < chars.len()
+                && (chars[i].is_ascii_alphanumeric() || chars[i] == '_' || chars[i] == '-')
+            {
                 i += 1;
             }
             let run: String = chars[start..i].iter().collect();
