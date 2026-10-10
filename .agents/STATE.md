@@ -1,20 +1,25 @@
-# Current Task: Cross-OS docs + idempotent setup scripts. Rust cutover status = ~10-15% by surface area (honest gap doc published). Dev stack healthy.
+# Current Task: T7 storage TDD + competitive upgrade + Docker rebuild + competitive research — ALL DONE. Clean stopping point.
 
-**Status:** 2026-09-30. Session pivot: user hit Docker Desktop `WslExec create instance 0x88872746` error, then asked for full Rust cutover assessment + cross-OS setup + idempotent scripts. Repaired Docker/WSL via `wsl --shutdown` + Docker Desktop restart (up in ~90s, `Docker 29.6.2`). Dev stack (5 services) verified healthy: :8000 + :8080 HTTP 200. Delivered without subagents: (1) `docs/RUST_CUTOVER_REMAINING.md` — honest gap analysis: Rust workspace = 13 crates, 779 tests, domain contracts + skeleton HTTP shadow; Python surface = 554 .py files across 45 subsystems; cutover ~10–15% by surface area; 12 more T3–T36-scale waves needed. (2) `docs/STACK_WALKTHROUGH.md` — start-to-finish tour. (3) `docs/CROSS_OS_SETUP.md` — Linux/mac/Windows single source of truth. (4) Idempotent bootstrap: `scripts/setup.ps1` + `scripts/setup.sh` — Docker check, secret gen (crypto-random), bind-mount dirs, compose validate, optional up. (5) POSIX peers: `scripts/parity_check.sh` (jq/python3 for JSON diff), `scripts/refresh-backup.sh` (tar/rsync). (6) Fixed `dev.ps1` + `dev.sh` — they still pointed at stale root `compose.dev.yaml`; now use canonical `docker/docker-compose.dev.yml` and add `rust-shadow` action. (7) Deleted duplicate root `compose.dev.yaml` (48 lines drift from authoritative version). All prior arc state preserved. Rollback anchors still active.
+**Status:** 2026-10-10. Kiro session via 4 parallel subagents (yolo role). All 4 workstreams completed:
 
-## Progress dashboard (2026-09-30 delta)
+1. **T7 forge-storage TDD** — 13 new TDD tests added to `schema_apply.rs` (26 total). File-backed DB, index counts, triple-apply idempotency, CHECK constraints (seed_type, source, engagement status, confidence, entity_type), FK self-references, multi-engagement coexistence. Clippy regressions from Rust 1.94.1 fixed across 14 xtask verify files + forge-server. `cargo test --workspace`: **792 passed / 0 failed**. `cargo fmt` + `cargo clippy -D warnings`: clean. `verify sqlite` xtask: 10/10 checks GREEN.
 
-- Fix: Docker Desktop / WSL2 restart procedure documented in `docs/CROSS_OS_SETUP.md`
-- Doc: `docs/RUST_CUTOVER_REMAINING.md` (168 lines) — honest gap analysis
-- Doc: `docs/STACK_WALKTHROUGH.md` (128 lines) — start-to-finish
-- Doc: `docs/CROSS_OS_SETUP.md` (166 lines) — Linux/mac/Windows
-- Script: `scripts/setup.ps1` (149 lines) idempotent, `-Up`/`-Force`
-- Script: `scripts/setup.sh` (128 lines) idempotent, `--up`/`--force`
-- Script: `scripts/parity_check.sh` (101 lines) POSIX peer of `.ps1`
-- Script: `scripts/refresh-backup.sh` (67 lines) tar/rsync fallback
-- Fix: `dev.ps1`, `dev.sh` — point at `docker/docker-compose.dev.yml`, add `rust-shadow`
-- Cleanup: removed duplicate `compose.dev.yaml` at repo root (drift)
-- Verify: dev stack :8000 + :8080 healthy after all changes
+2. **Competitive upgrade tests** — All BloodHound + cloud + AzureHound + competitive upgrade tests already GREEN: **140 passed, 1 deselected, 0 failed**. Fixed in prior OpenCode sessions. Only unrelated failure: `test_readme_public_commands_match_registered_public_groups` (forge agents not in README — pre-existing registry/README sync issue).
+
+3. **Docker Rust image rebuild** — `forge-toolkit-rust:local` rebuilt: 174 MB, sha256:957e5c6139aa. 6/7 services healthy (postgres, redis, forge-api, forge-webui, forge-rust-api :9000, forge-rust-webui :9080). Worker has pre-existing postgres password mismatch (FORGE_POSTGRES_PASSWORD in .env.dev differs from baked pg data volume). Both Rust shadow endpoints respond: `{status:ok,bus_connected:true,version:7.2.0-rust}`.
+
+4. **Competitive research** — `docs/competitive_research_strix_cairn_muraena.md` (557 lines) delivered. Strix: adopt tool-wrapper patterns + findings-import connector, NOT autonomous exploitation. Cairn: adopt Fact/Intent/Hint model for recursion intents. Muraena: catalog-only (violates assert_in_scope). Necrobrowser: catalog-only, anti-example for authenticated-scraping spec. 3-wave priority roadmap mapped to existing backlog items.
+
+## Progress dashboard (2026-10-10 delta)
+
+- T7: 13 new TDD tests in `native/crates/forge-storage/tests/schema_apply.rs`
+- T7: Clippy fixes across 14 xtask verify files + forge-server (Rust 1.94.1 regressions)
+- T7: 792 workspace tests pass, fmt+clippy clean, sqlite_verify 10/10
+- Competitive: 140 BloodHound/cloud/AzureHound/upgrade tests confirmed GREEN
+- Docker: forge-toolkit-rust:local rebuilt (174MB), 6/7 services healthy
+- Research: `docs/competitive_research_strix_cairn_muraena.md` (557 lines)
+- Research: Strix/Cairn/Muraena/Necrobrowser analyzed with code-level citations
+- Research: 3-wave integration roadmap mapped to existing backlog
 
 ## Progress dashboard
 
@@ -24,7 +29,7 @@ These are different measurements, not an estimated overall completion percentage
 Major milestones fully closed  [####################################]  36 / 36 (T1–T36)
 Milestones with delivered work [~~~####################################]  36 / 36 (T1–T36 all accepted)
 Contract inventory verified    [#########...........]  52 / 118 (44%, all owners)
-Latest workspace test run        [####################] 779 / 779 passed (0 failed, 0 ignored, 2 doctests — measured 2026-09-28 at HEAD `4f34025`, run duration 25m08s, evidence at .omo/evidence/rust-rewrite/cargo-test-workspace-fix-verify-20260928-184726/)
+Latest workspace test run        [####################] 792 / 792 passed (0 failed, 0 ignored — measured 2026-10-10 by Kiro subagent, cargo test --workspace --test-threads=1)
 Final release reviews         [....]                    0 / 4
 ```
 
@@ -148,12 +153,12 @@ Final release reviews         [....]                    0 / 4
 <!-- MOLT_AUTO_START -->
 ## Auto State
 
-- Updated: 2026-09-30 09:11:22 +08:00
+- Updated: 2026-09-30 10:09:35 +08:00
 - Machine: PRAWN-E14
 - Harness: claude
 - Event: stop
 - Branch: main
-- HEAD: 332b910
+- HEAD: a2f9b5e
 - Dirty files: 0
 - Resume hint: Read .agents/STATE.md, then the latest file in .agents/handoffs/ if present.
 <!-- MOLT_AUTO_END -->

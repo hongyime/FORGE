@@ -1,5 +1,13 @@
 # Agent Journal
 
+
+- 2026-10-10 (Kiro session — 4 parallel subagents): Executed via `kiro-cli chat` yolo agent with 4 parallel blocking subagents. All 4 workstreams completed:
+  1. **T7 forge-storage TDD** — 13 new TDD tests in `schema_apply.rs` (26 total), clippy regressions from Rust 1.94.1 fixed across 14 xtask verify files + forge-server (check! macro pattern, last→next_back, ==None→is_none, redundant_guards). 792 workspace tests pass, fmt+clippy clean, sqlite_verify 10/10.
+  2. **Competitive upgrade tests** — Confirmed already GREEN from prior OpenCode sessions: 140 passed, 1 deselected, 0 failed across BloodHound/cloud/AzureHound/competitive tests. Only unrelated failure: `test_readme_public_commands_match_registered_public_groups` (forge agents not in README).
+  3. **Docker Rust rebuild** — `forge-toolkit-rust:local` rebuilt successfully: 174 MB, 6/7 services healthy. Worker has pre-existing postgres password mismatch (env vs baked volume). Both Rust shadow endpoints respond at :9000/:9080.
+  4. **Competitive research** — `docs/competitive_research_strix_cairn_muraena.md` (557 lines) with code-level citations from Strix factory.py, Muraena replacer.go/transformer.go/necrobrowser.go, Necrobrowser office365/necrotask.js, Cairn cli.py. Verdicts: Strix=adopt patterns not tool, Cairn=adopt Fact/Intent/Hint, Muraena/Necrobrowser=catalog-only (violate assert_in_scope/non-destructive). 3-wave integration roadmap mapped to backlog items (Do Next #7, Explore #14/#16, Open Question #1). Surfaced pre-existing worker postgres password mismatch — not caused by rebuild, fix requires volume recreation or ALTER USER.
+
+
 - 2026-09-29 (dev-scaledown reorg per user pivot): User urgently pivoted back to dev-only work with new constraints: "scaling back to dev work / do not run full prod / all containers under same stack / minimal footprint even when real prod / deleted all docker containers". Reorg delivered in single commit `8a7db2f`:
   1. Both Rust shadow services (`forge-rust-api`, `forge-rust-webui`) moved behind `profiles: [rust-shadow]` in BOTH `docker/docker-compose.dev.yml` and `docker/docker-compose.prod.yml`. Default `docker compose up -d` now starts EXACTLY 5 Python services (postgres, redis, forge-api, forge-webui, forge-worker). `--profile rust-shadow` opts into 7 total.
   2. Prod compose bloat audit — found + fixed 2 `restart: unless-stopped` violations on prod Rust services (lines 246, 288); changed to `on-failure:3` for consistency with all other services and user's minimal-default rule. No other violations (mem/cpu already env-var overridable, no deploy.replicas, no prod-only bind mounts).
@@ -708,3 +716,4 @@ Machine-specific values in this document use privacy placeholders.
 **Also.** Removed the bare `docs/` rule from `.gitignore` (line 138). It was masking 7 already-authored docs and 2 doc dirs (`docs/explore/`, `docs/specs/`) that had been sitting untracked. Replaced with a comment noting narrow rules should be preferred if any docs artefact must be ignored.
 
 **Verification.** `pwsh -File scripts/run-canaries.ps1 -Quick -SkipBuild` -> PASSED: 13/13, exit 0. Push retried without --no-verify.
+- 2026-09-30 10:09:35 +08:00 [PRAWN-E14/claude/stop] branch=main head=a2f9b5e dirty=0
