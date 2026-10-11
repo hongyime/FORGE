@@ -43,6 +43,9 @@ class ForgeCliApps:
     artifacts_app: typer.Typer
     collection_app: typer.Typer
     agents_app: typer.Typer
+    recursion_app: typer.Typer
+    mcp_app: typer.Typer
+    skills_app: typer.Typer
 
 
 def _make_sub(name: str, help_text: str) -> typer.Typer:
@@ -75,6 +78,12 @@ def _register_modular_commands(apps: ForgeCliApps) -> None:
     register_import_commands(apps.import_app)
     from forge.agents.cli import register_agents_commands
     register_agents_commands(apps.agents_app)
+    from forge.recursion.cli import register_recursion_commands
+    register_recursion_commands(apps.recursion_app)
+    from forge.mcp.cli import register_mcp_commands
+    register_mcp_commands(apps.mcp_app)
+    from forge.skills.cli import register_skills_commands
+    register_skills_commands(apps.skills_app)
 
 
 def register_extracted_cli_commands(
@@ -162,6 +171,9 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
         artifacts_app=_make_sub("artifacts", "Artifact Enrichment \u2014 Queue Status and Parser Lineage"),
         collection_app=_make_sub("collection", "Collection Profiles \u2014 Named engagement setup manifests"),
         agents_app=_make_sub("agents", "Agent plugin ecosystem — collaboration and eventing (Explore #14)"),
+        recursion_app=_make_sub("recursion", "Recursion intents — Cairn Fact/Intent/Hint board (Wave 2 #20)"),
+        mcp_app=_make_sub("mcp", "MCP (Model Context Protocol) server surface — read-only FORGE evidence (Explore #22)"),
+        skills_app=_make_sub("skills", "Skill manifest registry — operator playbooks for coding agents (Explore #23)"),
     )
 
     root_app.add_typer(apps.kb_app)
@@ -192,6 +204,9 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
     root_app.add_typer(apps.artifacts_app)
     root_app.add_typer(apps.collection_app)
     root_app.add_typer(apps.agents_app)
+    root_app.add_typer(apps.recursion_app)
+    root_app.add_typer(apps.mcp_app)
+    root_app.add_typer(apps.skills_app)
 
     _register_modular_commands(apps)
     return apps
