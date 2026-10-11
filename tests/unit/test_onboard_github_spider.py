@@ -54,11 +54,15 @@ def test_extract_seeds_from_text_denylist_strips_localhost() -> None:
 
 
 def test_extract_seeds_from_text_dedupes_within_single_call() -> None:
-    text = "example.com example.com example.com https://example.com"
+    # Use a non-denylisted host so dedup is the only behavior exercised.
+    text = (
+        "api.corp.local-target.io api.corp.local-target.io "
+        "api.corp.local-target.io https://api.corp.local-target.io"
+    )
     seeds = extract_seeds_from_text(text)
     hosts = [s for s in seeds if s["target_type"] == "domain"]
-    # Only one domain entry for example.com even with repeated occurrences.
-    assert sum(1 for h in hosts if h["target_value"] == "example.com") == 1
+    # Only one domain entry for the host even with repeated occurrences.
+    assert sum(1 for h in hosts if h["target_value"] == "api.corp.local-target.io") == 1
 
 
 # ---------------------------------------------------------------------------

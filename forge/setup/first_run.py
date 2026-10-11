@@ -99,6 +99,81 @@ class SetupResult:
         }
 
 
+#: Service connections auto-detected from environment variables. On
+#: ``forge setup``, if any of these env vars resolves to a non-empty
+#: value and no existing connection is stored, the setup wraps it in
+#: ``forge connect <service> --token-env <VAR>`` so the autopilot's
+#: connected-services phase can pick it up immediately.
+#:
+#: Each entry declares the service id, the credential field name, the
+#: credential env var, and optional supplementary fields (project ref,
+#: email, orgs/users) sourced from secondary env vars. Values are
+#: stored by :class:`forge.onboard.service_connections.ServiceConnectionManager`
+#: as plaintext because the operator opted into that storage model;
+#: this module never echoes the raw secret back.
+AUTO_CONNECT_SERVICES: tuple[dict[str, Any], ...] = (
+    {
+        "service": "github",
+        "credential_field": "token",
+        "credential_env": "FORGE_GITHUB_TOKEN",
+        "extra_fields": {
+            "orgs": "FORGE_GITHUB_ORGS",
+            "users": "FORGE_GITHUB_USERS",
+        },
+    },
+    {
+        "service": "supabase",
+        "credential_field": "key",
+        "credential_env": "FORGE_SUPABASE_KEY",
+        "required_fields": {
+            "project_ref": "FORGE_SUPABASE_PROJECT_REF",
+        },
+    },
+    {
+        "service": "shodan",
+        "credential_field": "key",
+        "credential_env": "FORGE_SHODAN_API_KEY",
+    },
+    {
+        "service": "virustotal",
+        "credential_field": "key",
+        "credential_env": "FORGE_VIRUSTOTAL_API_KEY",
+    },
+    {
+        "service": "urlscan",
+        "credential_field": "key",
+        "credential_env": "FORGE_URLSCAN_API_KEY",
+    },
+    {
+        "service": "censys",
+        "credential_field": "api_secret",
+        "credential_env": "FORGE_CENSYS_API_SECRET",
+        "required_fields": {
+            "api_id": "FORGE_CENSYS_API_ID",
+        },
+        "credential_source_fields": {
+            "api_id": "FORGE_CENSYS_API_ID",
+            "api_secret": "FORGE_CENSYS_API_SECRET",
+        },
+    },
+    {
+        "service": "dehashed",
+        "credential_field": "key",
+        "credential_env": "FORGE_DEHASHED_API_KEY",
+        "required_fields": {
+            "email": "FORGE_DEHASHED_EMAIL",
+        },
+    },
+    {
+        "service": "replit",
+        "credential_field": None,
+        "required_fields": {
+            "username": "FORGE_REPLIT_USERNAME",
+        },
+    },
+)
+
+
 # ---------------------------------------------------------------------------
 # Python version
 # ---------------------------------------------------------------------------
@@ -138,6 +213,157 @@ def check_python_version(
             "Install a newer interpreter and re-run `forge setup`."
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Auto-connect from environment variables
+# ---------------------------------------------------------------------------
+
+
+def auto_connect_services_from_env(
+    *,
+    data_dir: Path,
+    env: Mapping[str, str],
+    service_table: Iterable[Mapping[str, Any]] | None = None,
+) -> list[SetupAction]:
+    """Wire ``forge connect`` for every service with env vars present.
+
+    Scans :data:`AUTO_CONNECT_SERVICES` and, for each entry whose
+    required env vars resolve to non-empty values, stores a connection
+    through :class:`forge.onboard.service_connections.ServiceConnectionManager`.
+
+    Returns a list of :class:`SetupAction` entries so the operator can
+    see what was auto-wired. Existing connections are not overwritten
+    unless the operator deletes them first; the setup is intentionally
+    non-destructive.
+
+    No credential value is echoed. ``SetupAction.detail`` only reports
+    the env var name used as the source.
+    """
+    actions: list[SetupAction] = []
+    try:
+        from forge.onboard.service_connections import (  # noqa: PLC0415
+            ConnectionError as _ConnectionError,
+            ServiceConnectionManager,
+        )
+    except Exception as exc:  # noqa: BLE001
+        actions.append(
+            SetupAction(
+                name="auto_connect",
+                status="skipped",
+                detail=(
+                    f"forge.onboard import failed: "
+                    f"{exc.__class__.__name__}: {str(exc)[:120]}"
+                ),
+            )
+        )
+        return actions
+
+    try:
+        manager = ServiceConnectionManager(data_dir)
+    except Exception as exc:  # noqa: BLE001
+        actions.append(
+            SetupAction(
+                name="auto_connect",
+                status="skipped",
+                detail=(
+                    f"could not init ServiceConnectionManager: "
+                    f"{exc.__class__.__name__}: {str(exc)[:120]}"
+                ),
+            )
+        )
+        return actions
+
+    table = list(service_table) if service_table else list(AUTO_CONNECT_SERVICES)
+    for entry in table:
+        service = str(entry.get("service") or "").strip()
+        if not service:
+            continue
+        cred_field = entry.get("credential_field")
+        cred_env = str(entry.get("credential_env") or "").strip()
+        required_fields = dict(entry.get("required_fields") or {})
+        extra_fields = dict(entry.get("extra_fields") or {})
+        credential_source_fields = dict(entry.get("credential_source_fields") or {})
+
+        # Resolve credential value when the service has one.
+        cred_value = ""
+        if cred_field:
+            cred_value = str(env.get(cred_env, "") or "").strip()
+            if not cred_value:
+                continue  # nothing to connect
+        # Resolve required supplementary fields (project_ref, email, ...).
+        resolved: dict[str, Any] = {}
+        missing_required: list[str] = []
+        for field_name, env_name in required_fields.items():
+            value = str(env.get(env_name, "") or "").strip()
+            if not value:
+                missing_required.append(env_name)
+                continue
+            resolved[field_name] = value
+        if missing_required:
+            actions.append(
+                SetupAction(
+                    name=f"auto_connect:{service}",
+                    status="skipped",
+                    detail=(
+                        f"required env vars missing: "
+                        f"{sorted(missing_required)}"
+                    ),
+                )
+            )
+            continue
+        # Resolve optional fields.
+        for field_name, env_name in extra_fields.items():
+            value = str(env.get(env_name, "") or "").strip()
+            if value:
+                resolved[field_name] = value
+        if cred_field and cred_value:
+            resolved[cred_field] = cred_value
+
+        # Skip if a connection for this service is already stored.
+        existing = manager.get_connection(service)
+        if existing is not None:
+            actions.append(
+                SetupAction(
+                    name=f"auto_connect:{service}",
+                    status="exists",
+                    detail="connection already stored",
+                )
+            )
+            continue
+
+        # Build credential sources map so the manager accepts the entry.
+        credential_sources: dict[str, str] = {}
+        if cred_field and cred_env:
+            credential_sources[cred_field] = f"env:{cred_env}"
+        for extra_cred_field, extra_env in credential_source_fields.items():
+            if extra_cred_field in resolved:
+                credential_sources[extra_cred_field] = f"env:{extra_env}"
+
+        try:
+            manager.add_connection(
+                service,
+                replace=False,
+                credential_sources=credential_sources,
+                **resolved,
+            )
+        except _ConnectionError as exc:
+            actions.append(
+                SetupAction(
+                    name=f"auto_connect:{service}",
+                    status="error",
+                    detail=f"{exc.__class__.__name__}: {str(exc)[:120]}",
+                )
+            )
+            continue
+        actions.append(
+            SetupAction(
+                name=f"auto_connect:{service}",
+                status="created",
+                detail=f"stored from env {cred_env or sorted(required_fields.values())}",
+            )
+        )
+    return actions
 
 
 # ---------------------------------------------------------------------------
@@ -643,6 +869,27 @@ def run_first_run_setup(
             )
         )
 
+    # 5.5. Auto-connect service tokens found in .env / environment.
+    # After the .env file is created, any FORGE_<SERVICE>_TOKEN /
+    # FORGE_<SERVICE>_KEY variables that resolve to a non-empty value
+    # become a stored connection via ``forge connect``, so the
+    # autopilot's connected-services phase can spider them on the next
+    # cycle. Existing connections are preserved.
+    merged_env = dict(environ)
+    if env_path.exists():
+        try:
+            for key, value in _parse_env_keys(_read_env_lines(env_path)).items():
+                if value:
+                    merged_env.setdefault(key, value)
+        except OSError:
+            pass
+    result.actions.extend(
+        auto_connect_services_from_env(
+            data_dir=data_dir_path,
+            env=merged_env,
+        )
+    )
+
     # 6. Doctor.
     if not skip_doctor:
         result.doctor = _run_doctor_summary()
@@ -693,6 +940,7 @@ def _build_summary(
 
 
 __all__ = [
+    "AUTO_CONNECT_SERVICES",
     "DEFAULT_OPERATOR",
     "FREE_FEED_SOURCES",
     "MIN_PYTHON",
@@ -700,6 +948,7 @@ __all__ = [
     "SETUP_SCHEMA_VERSION",
     "SetupAction",
     "SetupResult",
+    "auto_connect_services_from_env",
     "check_python_version",
     "ensure_env_file",
     "ensure_directories",

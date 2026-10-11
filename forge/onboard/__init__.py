@@ -21,33 +21,25 @@ daily-use workflows do not require hand-editing ``manifests/*.json``,
   manifest when they are related to already-scoped targets. Unrelated
   discoveries are returned as review-required candidates instead of
   silently expanding scope.
-- :mod:`forge.onboard.github_spider` — GitHub repo spider that uses
-  the GitHub REST API (via a stored PAT) to extract URLs, IPs,
-  domains, and email addresses from repository metadata, README files,
-  and GitHub Actions workflows. The parser is deliberately offline-safe
-  for tests (mock HTTP) and returns ``target-feed.v1`` compatible items.
+- :mod:`forge.onboard.patterns` — shared regex patterns and seed/secret
+  extraction primitives used by both the GitHub and Supabase deep
+  scanners.
+- :mod:`forge.onboard.github_spider` — GitHub repo spider that uses the
+  GitHub REST API (via a stored PAT) to extract URLs, IPs, domains,
+  cloud references, and email addresses from repository metadata,
+  README files, config files, branches, commits, pull requests,
+  deployment environments, GitHub Actions workflows, and GitHub Pages.
+  The parser is deliberately offline-safe for tests (mock HTTP) and
+  returns ``target-feed.v1`` compatible items.
+- :mod:`forge.onboard.supabase_scanner` — PostgREST-driven Supabase
+  deep scanner that walks every exposed table through an owned
+  read-only key and reports seed-like strings extracted from each row.
 
 Every public operation remains ROE/scope aware. The onboarding layer
 does not grant any live-execution capability by itself — it only
 makes the "normalize scope + plumb credentials" paperwork less painful.
 """
 
-from forge.onboard.service_connections import (
-    CONNECTION_SCHEMA_VERSION,
-    CONNECTIONS_FILENAME,
-    SUPPORTED_SERVICES,
-    ConnectionError,
-    ServiceConnection,
-    ServiceConnectionManager,
-    read_env_credential,
-    read_stdin_credential,
-)
-from forge.onboard.target_wizard import (
-    TARGET_WIZARD_SCHEMA_VERSION,
-    AddTargetResult,
-    add_target,
-    detect_seed_type,
-)
 from forge.onboard.auto_scope import (
     AUTO_SCOPE_SCHEMA_VERSION,
     ScopeExpansion,
@@ -58,12 +50,45 @@ from forge.onboard.auto_scope import (
     write_scope_manifest,
 )
 from forge.onboard.github_spider import (
+    GITHUB_DEEP_SCANNER_SCHEMA_VERSION,
     GITHUB_SPIDER_SCHEMA_VERSION,
+    GitHubDeepScanner,
     GitHubSpiderError,
     GitHubSpiderResult,
     extract_seeds_from_text,
     parse_github_repo_payload,
     spider_github,
+)
+from forge.onboard.patterns import (
+    DENY_LIST_DOMAINS,
+    PATTERNS,
+    PATTERNS_SCHEMA_VERSION,
+    SECRET_INDICATORS,
+    classify_cloud_reference,
+    scan_secrets,
+)
+from forge.onboard.service_connections import (
+    CONNECTION_SCHEMA_VERSION,
+    CONNECTIONS_FILENAME,
+    SUPPORTED_SERVICES,
+    ConnectionError,
+    ServiceConnection,
+    ServiceConnectionManager,
+    read_env_credential,
+    read_stdin_credential,
+)
+from forge.onboard.supabase_scanner import (
+    SUPABASE_DEEP_SCANNER_SCHEMA_VERSION,
+    SupabaseDeepScanner,
+    SupabaseScanResult,
+    SupabaseScannerError,
+    SupabaseTableSummary,
+)
+from forge.onboard.target_wizard import (
+    TARGET_WIZARD_SCHEMA_VERSION,
+    AddTargetResult,
+    add_target,
+    detect_seed_type,
 )
 
 
@@ -73,16 +98,28 @@ __all__ = [
     "CONNECTIONS_FILENAME",
     "CONNECTION_SCHEMA_VERSION",
     "ConnectionError",
+    "DENY_LIST_DOMAINS",
+    "GITHUB_DEEP_SCANNER_SCHEMA_VERSION",
     "GITHUB_SPIDER_SCHEMA_VERSION",
+    "GitHubDeepScanner",
     "GitHubSpiderError",
     "GitHubSpiderResult",
+    "PATTERNS",
+    "PATTERNS_SCHEMA_VERSION",
+    "SECRET_INDICATORS",
+    "SUPABASE_DEEP_SCANNER_SCHEMA_VERSION",
     "SUPPORTED_SERVICES",
     "ScopeExpansion",
     "ScopeExpansionCandidate",
     "ServiceConnection",
     "ServiceConnectionManager",
+    "SupabaseDeepScanner",
+    "SupabaseScanResult",
+    "SupabaseScannerError",
+    "SupabaseTableSummary",
     "TARGET_WIZARD_SCHEMA_VERSION",
     "add_target",
+    "classify_cloud_reference",
     "detect_seed_type",
     "expand_scope_from_feeds",
     "extract_seeds_from_text",
@@ -91,6 +128,7 @@ __all__ = [
     "parse_github_repo_payload",
     "read_env_credential",
     "read_stdin_credential",
+    "scan_secrets",
     "spider_github",
     "write_scope_manifest",
 ]

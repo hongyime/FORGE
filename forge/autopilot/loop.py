@@ -187,12 +187,15 @@ class ForgeAutopilot:
         Phases:
 
         1. Feed-fetch — refresh free/no-key threat-intel sources.
-        2. Auto-seed — build/refresh ``imports/target-feed.json``.
-        3. Auto-engage — import feed, create engagements, start
+        2. Connected-services scan — spider GitHub + Supabase using
+           stored connections so results flow into the target feed on
+           the next ``feed_build`` pass.
+        3. Auto-seed — build/refresh ``imports/target-feed.json``.
+        4. Auto-engage — import feed, create engagements, start
            kill-chain for new targets.
-        4. Auto-resume — resume ready paused/failed engagement runs.
-        5. Auto-monitor — run due monitoring policies.
-        6. Auto-dashboard — refresh the static operator dashboard.
+        5. Auto-resume — resume ready paused/failed engagement runs.
+        6. Auto-monitor — run due monitoring policies.
+        7. Auto-dashboard — refresh the static operator dashboard.
 
         Returns a schema-versioned summary payload.
         """
@@ -201,6 +204,7 @@ class ForgeAutopilot:
         started_at = _now_iso()
         phases: list[AutopilotPhaseResult] = []
         phases.append(self._maybe_phase("feed_fetch", is_dry_run))
+        phases.append(self._maybe_phase("connected_services_scan", is_dry_run))
         phases.append(self._maybe_phase("feed_build", is_dry_run))
         phases.append(self._maybe_phase("auto_scope", is_dry_run))
         phases.append(self._maybe_phase("import_targets", is_dry_run))
@@ -252,6 +256,7 @@ class ForgeAutopilot:
 
     _PHASE_DISPATCH = {
         "feed_fetch": "_phase_feed_fetch",
+        "connected_services_scan": "_phase_connected_services_scan",
         "feed_build": "_phase_feed_build",
         "auto_scope": "_phase_auto_scope",
         "import_targets": "_phase_import_targets",
@@ -324,6 +329,322 @@ class ForgeAutopilot:
                 "total_item_count": int(payload.get("total_item_count") or 0),
             },
         )
+
+    def _phase_connected_services_scan(
+        self, *, dry_run: bool
+    ) -> AutopilotPhaseResult:
+        """Spider every stored service connection into local seeds.
+
+        Reads ``<data_dir>/connections.json`` and runs the deep scanner
+        for each connection:
+
+        - ``github`` → :class:`forge.onboard.github_spider.GitHubDeepScanner`
+          over every stored org/user. Writes a sanitized seed drop to
+          ``imports/connected-services-github-seeds.local.json`` so the
+          next ``feed_build`` pass picks it up without a second network
+          call.
+        - ``supabase`` → :class:`forge.onboard.supabase_scanner.SupabaseDeepScanner`
+          against the stored project ref using the stored anon/service
+          key. Output goes to
+          ``imports/connected-services-supabase-seeds.local.json``.
+
+        Dry-run never hits the network and never writes files; it only
+        reports what *would* run. Apply fails per-service rather than
+        aborting the loop — one bad token should not disable the other
+        services.
+        """
+        try:
+            from forge.onboard.service_connections import (  # noqa: PLC0415
+                ServiceConnectionManager,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return AutopilotPhaseResult(
+                name="connected_services_scan",
+                status="error",
+                detail=f"import_error:{_bounded_text(exc)}",
+            )
+
+        try:
+            manager = ServiceConnectionManager(self.data_dir)
+            connections = manager.list_connections()
+        except Exception as exc:  # noqa: BLE001
+            return AutopilotPhaseResult(
+                name="connected_services_scan",
+                status="error",
+                detail=_bounded_text(exc),
+            )
+
+        if not connections:
+            return AutopilotPhaseResult(
+                name="connected_services_scan",
+                status="skipped",
+                detail="no_service_connections_stored",
+            )
+
+        services_summary: list[dict[str, Any]] = []
+        total_seeds = 0
+        total_secret_hits = 0
+        errors = 0
+        for connection in connections:
+            service = connection.service
+            if service == "github":
+                outcome = self._scan_github_connection(connection, dry_run=dry_run)
+            elif service == "supabase":
+                outcome = self._scan_supabase_connection(connection, dry_run=dry_run)
+            else:
+                outcome = {
+                    "service": service,
+                    "status": "skipped",
+                    "detail": "no_deep_scanner_for_service",
+                    "seeds": 0,
+                    "secret_hits": 0,
+                }
+            services_summary.append(outcome)
+            total_seeds += int(outcome.get("seeds") or 0)
+            total_secret_hits += int(outcome.get("secret_hits") or 0)
+            if outcome.get("status") == "error":
+                errors += 1
+
+        status = "ok" if errors == 0 else "error"
+        return AutopilotPhaseResult(
+            name="connected_services_scan",
+            status=status,
+            detail=(
+                f"services={len(connections)} "
+                f"seeds={total_seeds} "
+                f"secrets={total_secret_hits} "
+                f"errors={errors}"
+            ),
+            data={
+                "dry_run": dry_run,
+                "service_count": len(connections),
+                "seeds_total": total_seeds,
+                "secret_hits_total": total_secret_hits,
+                "errors": errors,
+                "services": services_summary,
+            },
+        )
+
+    def _scan_github_connection(
+        self, connection: Any, *, dry_run: bool
+    ) -> dict[str, Any]:
+        """Deep-scan a single GitHub connection."""
+        config = connection.config or {}
+        token = str(config.get("token") or "").strip()
+        orgs = [str(o) for o in (config.get("orgs") or []) if o]
+        users = [str(u) for u in (config.get("users") or []) if u]
+        if not token:
+            return {
+                "service": "github",
+                "status": "skipped",
+                "detail": "no_token_in_connection",
+                "seeds": 0,
+                "secret_hits": 0,
+            }
+        if dry_run:
+            return {
+                "service": "github",
+                "status": "skipped",
+                "detail": "dry_run_skips_network_scan",
+                "owners_planned": sorted(set(orgs + users)),
+                "seeds": 0,
+                "secret_hits": 0,
+            }
+        try:
+            from forge.onboard.github_spider import (  # noqa: PLC0415
+                GitHubDeepScanner,
+                GitHubSpiderError,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "service": "github",
+                "status": "error",
+                "detail": f"import_error:{_bounded_text(exc)}",
+                "seeds": 0,
+                "secret_hits": 0,
+            }
+        try:
+            scanner = GitHubDeepScanner(token=token, max_repos=100)
+            result = scanner.scan_all(orgs=orgs or None, users=users or None)
+        except GitHubSpiderError as exc:
+            return {
+                "service": "github",
+                "status": "error",
+                "detail": _bounded_text(exc),
+                "seeds": 0,
+                "secret_hits": 0,
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "service": "github",
+                "status": "error",
+                "detail": _bounded_text(exc),
+                "seeds": 0,
+                "secret_hits": 0,
+            }
+        output_path = self.imports_dir / "connected-services-github-seeds.local.json"
+        try:
+            self._write_seed_drop(
+                output_path,
+                connector_id="github_deep_spider",
+                input_kind="connected_services",
+                seeds=result.seeds,
+                secret_hits=result.secret_hits,
+                extra={
+                    "repos_scanned": result.repos_scanned,
+                    "repos_total": result.repos_total,
+                    "orgs_scanned": result.orgs_scanned,
+                    "users_scanned": result.users_scanned,
+                    "source_errors": result.source_errors[-20:],
+                    "rate_limit": result.rate_limit,
+                },
+            )
+        except OSError as exc:
+            return {
+                "service": "github",
+                "status": "error",
+                "detail": f"write_error:{_bounded_text(exc)}",
+                "seeds": len(result.seeds),
+                "secret_hits": len(result.secret_hits),
+            }
+        return {
+            "service": "github",
+            "status": "ok",
+            "repos_scanned": result.repos_scanned,
+            "seeds": len(result.seeds),
+            "secret_hits": len(result.secret_hits),
+            "output_path": str(output_path),
+        }
+
+    def _scan_supabase_connection(
+        self, connection: Any, *, dry_run: bool
+    ) -> dict[str, Any]:
+        """Deep-scan a single Supabase connection."""
+        config = connection.config or {}
+        project_ref = str(config.get("project_ref") or "").strip()
+        key = str(config.get("key") or "").strip()
+        if not project_ref or not key:
+            return {
+                "service": "supabase",
+                "status": "skipped",
+                "detail": "incomplete_connection_fields",
+                "seeds": 0,
+                "secret_hits": 0,
+            }
+        if dry_run:
+            return {
+                "service": "supabase",
+                "status": "skipped",
+                "detail": "dry_run_skips_network_scan",
+                "project_ref": project_ref,
+                "seeds": 0,
+                "secret_hits": 0,
+            }
+        try:
+            from forge.onboard.supabase_scanner import (  # noqa: PLC0415
+                SupabaseDeepScanner,
+                SupabaseScannerError,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "service": "supabase",
+                "status": "error",
+                "detail": f"import_error:{_bounded_text(exc)}",
+                "seeds": 0,
+                "secret_hits": 0,
+            }
+        try:
+            scanner = SupabaseDeepScanner(
+                project_ref=project_ref,
+                api_key=key,
+                max_tables=200,
+                max_rows_per_table=10_000,
+            )
+            result = scanner.scan_all()
+        except SupabaseScannerError as exc:
+            return {
+                "service": "supabase",
+                "status": "error",
+                "detail": _bounded_text(exc),
+                "seeds": 0,
+                "secret_hits": 0,
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "service": "supabase",
+                "status": "error",
+                "detail": _bounded_text(exc),
+                "seeds": 0,
+                "secret_hits": 0,
+            }
+        output_path = (
+            self.imports_dir / "connected-services-supabase-seeds.local.json"
+        )
+        try:
+            self._write_seed_drop(
+                output_path,
+                connector_id="supabase_deep_scanner",
+                input_kind="connected_services",
+                seeds=result.seeds,
+                secret_hits=result.secret_hits,
+                extra={
+                    "project_ref": result.project_ref,
+                    "tables_total": result.tables_total,
+                    "tables_scanned": result.tables_scanned,
+                    "rows_scanned": result.rows_scanned,
+                    "source_errors": result.source_errors[-20:],
+                },
+            )
+        except OSError as exc:
+            return {
+                "service": "supabase",
+                "status": "error",
+                "detail": f"write_error:{_bounded_text(exc)}",
+                "seeds": len(result.seeds),
+                "secret_hits": len(result.secret_hits),
+            }
+        return {
+            "service": "supabase",
+            "status": "ok",
+            "tables_scanned": result.tables_scanned,
+            "rows_scanned": result.rows_scanned,
+            "seeds": len(result.seeds),
+            "secret_hits": len(result.secret_hits),
+            "output_path": str(output_path),
+        }
+
+    def _write_seed_drop(
+        self,
+        path: Path,
+        *,
+        connector_id: str,
+        input_kind: str,
+        seeds: list[dict[str, Any]],
+        secret_hits: list[dict[str, Any]],
+        extra: dict[str, Any],
+    ) -> None:
+        """Write a scanner seed drop to disk atomically.
+
+        The output shape matches the other ``imports/*.local.json`` feed
+        drop files so ``automation_target_feed.build_target_feed`` picks
+        them up on the next cycle.
+        """
+        self.imports_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "schema_version": "forge.connected_services_scan.v1",
+            "connector_id": connector_id,
+            "input_kind": input_kind,
+            "generated_at": _now_iso(),
+            "seeds": list(seeds),
+            "secret_hits": list(secret_hits),
+            **extra,
+        }
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        tmp_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        os.replace(tmp_path, path)
 
     def _phase_feed_build(self, *, dry_run: bool) -> AutopilotPhaseResult:
         """Build and (when applying) write the local target feed."""

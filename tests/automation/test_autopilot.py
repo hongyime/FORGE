@@ -449,6 +449,7 @@ def test_autopilot_full_cycle_phase_order(
     names = [phase["name"] for phase in payload["phases"]]
     assert names == [
         "feed_fetch",
+        "connected_services_scan",
         "feed_build",
         "auto_scope",
         "import_targets",
