@@ -126,6 +126,10 @@ include-package-data = true
 include = ["forge*"]
 exclude = ["tests*", "data*", "latest_logs*", "archived_logs*"]
 
+[tool.setuptools.package-data]
+"forge.skills" = ["manifests/*.json"]
+"forge.phase6" = ["templates/*.md"]
+
 
 # ── Ruff ──────────────────────────────────────────────────────────────────────
 

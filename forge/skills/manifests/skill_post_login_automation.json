@@ -1,0 +1,31 @@
+{
+  "schema": "forge.skill.v1",
+  "skill_id": "skill_post_login_automation",
+  "name": "Post-Login Browser Automation",
+  "version": "1.0.0",
+  "description": "Scoped authorized post-login browser automation playbook: operator approves the authenticated-session action list in the scope manifest `post_login_automation` block, then FORGE replays captured session cookies through a Playwright browser to perform the pre-authorized, bounded, read-only steps against the target web app. All navigation, screenshots, and extracted data references are stored as audit evidence encrypted under FORGE_ENGAGEMENT_KEY. The playbook refuses to run unless the current engagement scope manifest declares the exact navigation targets and ROE reference.",
+  "capabilities": [
+    "active_validation",
+    "attack_path_review"
+  ],
+  "required_gates": [
+    "approval",
+    "roe_id",
+    "scope_manifest",
+    "live_gate",
+    "write_permission"
+  ],
+  "safety_class": "active_validation_gated",
+  "execution_paths": [
+    "operator:approve-post-login-automation-roe",
+    "manual:review-authenticated-session-steps",
+    "docs:README.md#design-principles"
+  ],
+  "tags": [
+    "phase5",
+    "exploitation",
+    "post-login",
+    "browser-automation",
+    "scoped-authorized"
+  ]
+}

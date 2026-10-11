@@ -138,7 +138,7 @@ Every module feeds every other module automatically.
 
   # 1. Pick a collection profile
   forge collection profiles list
-  forge collection profiles emit passive --seed <SEED> -e <N>
+  forge collection profiles emit passive_recon --seed <SEED> -e <N>
 
   # 2. Run the emitted kill-chain command (add --roe-id + --scope-manifest)
   forge kill-chain <SEED> -e <N> --no-attack-mode ...
@@ -168,11 +168,11 @@ Every module feeds every other module automatically.
     "profiles": """
 [bold cyan]━━  COLLECTION PROFILES (emit kill-chain commands)  ━━[/bold cyan]
 
-  passive       No live scanning. subdomain+DNS+CT logs only.
-  quick-recon   Fast 2-iteration passive scan. Good for scoping.
-  standard      Default kill-chain. Requires ROE + scope-manifest.
-  full-scope    Max iterations + parallelism. High-impact.
-  cloud-focus   Standard + keyscan + cloud asset audit.
+  quick_scan            Fast passive subset. Two iterations, no attack mode.
+  passive_recon         Passive OSINT only. No live scanning, no exploitation.
+  standard_assessment   Passive + bounded active validation. Needs ROE.
+  full_engagement       + scoped authorized exploitation. Needs full ROE.
+  red_team              All phases incl. Cairn-style goal-directed loop.
 
   forge collection profiles emit <name> --seed <SEED> -e <N>
 """,

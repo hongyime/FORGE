@@ -50,6 +50,7 @@ __all__ = [
     "SKILL_SCHEMA",
     "SkillDefinition",
     "SkillValidationError",
+    "builtin_skill_dir",
     "load_skill_manifest",
     "load_skill_manifests",
     "skill_plugin_dirs",
@@ -73,6 +74,17 @@ _SKILL_PLUGIN_DIR_ENV_VARS = (
     "FORGE_SKILL_PLUGIN_DIR",
     "FORGE_SKILL_PLUGIN_DIRS",
 )
+
+#: Repo-shipped manifests under ``forge/skills/manifests/``.
+#: Resolved lazily by :func:`builtin_skill_dir` so tests that monkeypatch
+#: ``__file__`` or copy the registry module see the same directory as the
+#: production tree.
+_BUILTIN_SKILL_DIR = Path(__file__).resolve().parent / "manifests"
+
+
+def builtin_skill_dir() -> Path:
+    """Return the path to the repo-shipped skill manifest directory."""
+    return _BUILTIN_SKILL_DIR
 
 ALLOWED_SAFETY_CLASSES: frozenset[str] = frozenset(
     {
@@ -354,10 +366,20 @@ def skill_plugin_dirs(
     data_dir: str | Path | None = None,
     env: Mapping[str, str] | None = None,
     extra_dirs: Sequence[str | Path] = (),
+    include_builtin: bool = True,
 ) -> tuple[Path, ...]:
-    """Return the resolved, deduplicated list of skill manifest directories."""
+    """Return the resolved, deduplicated list of skill manifest directories.
+
+    The repo-shipped ``forge/skills/manifests/`` directory is prepended by
+    default so ``forge skills list`` always exposes the built-in playbook
+    library. Pass ``include_builtin=False`` to search only operator-local
+    directories (useful for tests that validate only operator-provided
+    manifests).
+    """
     environ = env if env is not None else os.environ
     candidates: list[Path] = []
+    if include_builtin:
+        candidates.append(_BUILTIN_SKILL_DIR)
     if data_dir is not None:
         candidates.append(Path(data_dir).expanduser() / "skills")
     else:

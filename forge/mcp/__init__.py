@@ -17,8 +17,10 @@ Protocol: JSON-RPC 2.0 (see https://modelcontextprotocol.io/).
 from __future__ import annotations
 
 from forge.mcp.server import (
+    DEFAULT_WRITE_ROLES,
     MCP_SERVER_VERSION,
     MCP_PROTOCOL_VERSION,
+    AuthContext,
     ForgeMCPServer,
     MCPError,
     MCPResponse,
@@ -27,8 +29,10 @@ from forge.mcp.server import (
 )
 
 __all__ = [
+    "DEFAULT_WRITE_ROLES",
     "MCP_SERVER_VERSION",
     "MCP_PROTOCOL_VERSION",
+    "AuthContext",
     "ForgeMCPServer",
     "MCPError",
     "MCPResponse",

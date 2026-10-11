@@ -60,6 +60,10 @@ _INTERNAL_ERROR = -32603
 
 ToolHandler = Callable[[Mapping[str, Any], "ServerContext"], dict[str, Any]]
 
+#: Roles that imply write access when carried as the ``role`` claim in an
+#: :class:`AuthContext`. Case-insensitive comparison.
+DEFAULT_WRITE_ROLES: tuple[str, ...] = ("operator", "owner", "admin")
+
 
 # ---------------------------------------------------------------------------
 # Error / response envelopes
@@ -99,6 +103,52 @@ class MCPResponse:
 
 
 # ---------------------------------------------------------------------------
+# Auth / permission context
+
+
+@dataclass
+class AuthContext:
+    """Per-request authentication / authorization state.
+
+    Write-capable tools reject the call unless ``has_write_access`` is true
+    against the ambient :class:`ServerContext`. Read-only tools ignore the
+    auth context entirely so the existing read surface stays unchanged.
+    """
+
+    role: str | None = None
+    write_token: str | None = None
+    source: str = "unknown"
+
+    def normalized_role(self) -> str | None:
+        if not self.role:
+            return None
+        return self.role.strip().lower() or None
+
+    def has_write_access(self, ctx: "ServerContext") -> bool:
+        """Return ``True`` when this auth context grants write permission.
+
+        Two independent paths grant write access:
+
+        * ``write_token`` matches ``ctx.expected_write_token`` byte-for-byte.
+        * ``role`` is in ``ctx.allowed_write_roles`` (case-insensitive).
+
+        Either path is sufficient; neither is required when the other
+        passes. Falls back to ``False`` when both are missing or empty.
+        """
+        token_claim = (self.write_token or "").strip()
+        if ctx.expected_write_token and token_claim:
+            # ``compare_digest`` guards against timing side channels when the
+            # server-side secret is set. Both values must be non-empty for
+            # the comparison to be meaningful.
+            if secrets.compare_digest(token_claim, ctx.expected_write_token):
+                return True
+        role = self.normalized_role()
+        if role and role in {r.lower() for r in ctx.allowed_write_roles}:
+            return True
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Server context (shared across tool handlers)
 
 
@@ -110,6 +160,18 @@ class ServerContext:
     limit_default: int = _DEFAULT_LIMIT
     limit_max: int = _MAX_LIMIT
     tools: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: Server-side write token. Clients present a matching ``write_token``
+    #: via :class:`AuthContext` to prove permission for write-capable tools.
+    #: ``None`` means no write-token path is enabled on this server.
+    expected_write_token: str | None = None
+    #: Role names that imply write access when carried as the ``role`` claim
+    #: in an :class:`AuthContext`. Case-insensitive comparison.
+    allowed_write_roles: tuple[str, ...] = DEFAULT_WRITE_ROLES
+    #: Per-request auth context, populated by the dispatcher immediately
+    #: before a handler runs and reset to ``None`` afterwards. Handlers that
+    #: want to inspect it must copy it into a local variable; it is not
+    #: safe to hold across awaits or threads.
+    auth: AuthContext | None = None
 
     def engagement_db_path(self, engagement_id: int) -> Path:
         return self.data_dir / "engagements" / f"{int(engagement_id)}.db"
@@ -162,6 +224,138 @@ def _open_engagement_db(engagement_id: int, ctx: ServerContext) -> sqlite3.Conne
         ) from exc
     conn.row_factory = sqlite3.Row
     return conn
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers for write-capable tools
+
+
+_SEVERITY_VALUES: frozenset[str] = frozenset(
+    {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
+)
+_FINDINGS_TEXT_FIELDS: Mapping[str, int] = {
+    "vuln_type": 128,
+    "target_url": 2048,
+    "title": 512,
+    "description": 4096,
+    "parameter": 256,
+    "cve_id": 32,
+    "evidence": 512,
+}
+#: Exploitation modules that the MCP ``forge.exploitation.start`` tool may
+#: record an authorized-start intent for. Keep this list conservative; the
+#: operator still runs the actual module through the audited CLI.
+_EXPLOITATION_MODULES: frozenset[str] = frozenset(
+    {
+        "credential_capture",
+        "post_login_automation",
+        "autonomous_exploit",
+        "goal_directed",
+    }
+)
+#: Audit-log phase prefix used for exploitation-related events, including
+#: both the ``forge.exploitation.start`` intent and any downstream module
+#: outcomes written by the orchestrator.
+_EXPLOITATION_AUDIT_PHASE: str = "exploitation"
+
+
+def _require_text(
+    params: Mapping[str, Any],
+    key: str,
+    *,
+    max_length: int,
+) -> str:
+    raw = params.get(key)
+    if raw is None:
+        raise MCPError(_INVALID_PARAMS, f"{key} is required")
+    value = str(raw).strip()
+    if not value:
+        raise MCPError(_INVALID_PARAMS, f"{key} must be a non-empty string")
+    if len(value) > max_length:
+        raise MCPError(
+            _INVALID_PARAMS,
+            f"{key} too long ({len(value)} > {max_length})",
+        )
+    return value
+
+
+def _optional_text(
+    params: Mapping[str, Any],
+    key: str,
+    *,
+    max_length: int,
+) -> str | None:
+    raw = params.get(key)
+    if raw is None:
+        return None
+    value = str(raw).strip()
+    if not value:
+        return None
+    if len(value) > max_length:
+        raise MCPError(
+            _INVALID_PARAMS,
+            f"{key} too long ({len(value)} > {max_length})",
+        )
+    return value
+
+
+def _optional_number(
+    params: Mapping[str, Any],
+    key: str,
+    *,
+    min_value: float | None = None,
+    max_value: float | None = None,
+) -> float | None:
+    raw = params.get(key)
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise MCPError(_INVALID_PARAMS, f"{key} must be numeric: {raw!r}") from exc
+    if min_value is not None and value < min_value:
+        raise MCPError(_INVALID_PARAMS, f"{key} must be >= {min_value}")
+    if max_value is not None and value > max_value:
+        raise MCPError(_INVALID_PARAMS, f"{key} must be <= {max_value}")
+    return value
+
+
+def _require_bool(
+    params: Mapping[str, Any],
+    key: str,
+) -> bool:
+    raw = params.get(key)
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        raise MCPError(_INVALID_PARAMS, f"{key} is required")
+    raise MCPError(_INVALID_PARAMS, f"{key} must be a JSON boolean")
+
+
+def _require_severity(params: Mapping[str, Any]) -> str:
+    raw = params.get("severity")
+    if raw is None:
+        raise MCPError(_INVALID_PARAMS, "severity is required")
+    value = str(raw).strip().upper()
+    if value not in _SEVERITY_VALUES:
+        raise MCPError(
+            _INVALID_PARAMS,
+            f"severity must be one of {sorted(_SEVERITY_VALUES)}; got {raw!r}",
+        )
+    return value
+
+
+def _require_exploitation_module(params: Mapping[str, Any]) -> str:
+    raw = params.get("module")
+    if raw is None:
+        raise MCPError(_INVALID_PARAMS, "module is required")
+    value = str(raw).strip().lower()
+    if value not in _EXPLOITATION_MODULES:
+        raise MCPError(
+            _INVALID_PARAMS,
+            f"module must be one of {sorted(_EXPLOITATION_MODULES)}; got {raw!r}",
+        )
+    return value
 
 
 def _tool_engagements_list(params: Mapping[str, Any], ctx: ServerContext) -> dict[str, Any]:
@@ -334,6 +528,352 @@ def _tool_graph_get(params: Mapping[str, Any], ctx: ServerContext) -> dict[str, 
     }
 
 
+# ---------------------------------------------------------------------------
+# Write-capable tools (require AuthContext.has_write_access)
+
+
+def _tool_findings_create(
+    params: Mapping[str, Any], ctx: ServerContext
+) -> dict[str, Any]:
+    """Create a new vulnerability finding row.
+
+    Enforces the UNIQUE(engagement_id, vuln_type, target_url, parameter)
+    constraint declared in the engagement schema. Severity is normalized to
+    the five canonical values before insert. Secrets and raw credentials
+    MUST NOT be passed in ``description``, ``evidence``, or ``target_url``;
+    callers should scrub those first — this handler does not sniff them.
+    """
+    engagement_id = _coerce_engagement_id(params)
+    vuln_type = _require_text(params, "vuln_type", max_length=_FINDINGS_TEXT_FIELDS["vuln_type"])
+    target_url = _require_text(params, "target_url", max_length=_FINDINGS_TEXT_FIELDS["target_url"])
+    title = _require_text(params, "title", max_length=_FINDINGS_TEXT_FIELDS["title"])
+    severity = _require_severity(params)
+    description = _optional_text(params, "description", max_length=_FINDINGS_TEXT_FIELDS["description"])
+    parameter = _optional_text(params, "parameter", max_length=_FINDINGS_TEXT_FIELDS["parameter"])
+    cve_id = _optional_text(params, "cve_id", max_length=_FINDINGS_TEXT_FIELDS["cve_id"])
+    evidence = _optional_text(params, "evidence", max_length=_FINDINGS_TEXT_FIELDS["evidence"])
+    cvss_score = _optional_number(params, "cvss_score", min_value=0.0, max_value=10.0)
+
+    conn = _open_engagement_db(engagement_id, ctx)
+    try:
+        try:
+            cursor = conn.execute(
+                """
+                INSERT INTO vulnerability_findings (
+                    engagement_id,
+                    vuln_type,
+                    target_url,
+                    parameter,
+                    severity,
+                    title,
+                    description,
+                    evidence,
+                    cve_id,
+                    cvss_score
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    engagement_id,
+                    vuln_type,
+                    target_url,
+                    parameter,
+                    severity,
+                    title,
+                    description,
+                    evidence,
+                    cve_id,
+                    cvss_score,
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise MCPError(
+                _INVALID_PARAMS,
+                f"duplicate finding or constraint violation: {exc}",
+                data={
+                    "engagement_id": engagement_id,
+                    "vuln_type": vuln_type,
+                    "target_url": target_url,
+                    "parameter": parameter,
+                },
+            ) from exc
+        finding_id = int(cursor.lastrowid or 0)
+        conn.commit()
+        row = conn.execute(
+            """
+            SELECT id, vuln_type, target_url, severity, title, cve_id,
+                   cvss_score, found_at, parameter
+            FROM vulnerability_findings
+            WHERE id = ?
+            """,
+            (finding_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:  # pragma: no cover — defensive, insert succeeded above
+        raise MCPError(
+            _INTERNAL_ERROR,
+            f"finding {finding_id} not visible after insert",
+        )
+    return {
+        "engagement_id": engagement_id,
+        "finding": {
+            "id": int(row[0]),
+            "vuln_type": row[1],
+            "target_url": row[2],
+            "severity": row[3],
+            "title": row[4],
+            "cve_id": row[5],
+            "cvss_score": row[6],
+            "found_at": row[7],
+            "parameter": row[8],
+        },
+    }
+
+
+def _tool_intents_create(
+    params: Mapping[str, Any], ctx: ServerContext
+) -> dict[str, Any]:
+    """Create a new recursion intent (Fact/Intent/Hint board, Wave 2 #20)."""
+    # Import at call time to avoid pulling the recursion store into module
+    # import tracebacks when the MCP server is used purely for reads.
+    from forge.recursion.store import IntentStoreError, add_intent
+
+    engagement_id = _coerce_engagement_id(params)
+    target_seed = _require_text(params, "target_seed", max_length=512)
+    rationale = _optional_text(params, "rationale", max_length=4096)
+    source_fact_id = _optional_text(params, "source_fact_id", max_length=256)
+    seed_type = _optional_text(params, "seed_type", max_length=64)
+    intent_id = _optional_text(params, "intent_id", max_length=64)
+
+    conn = _open_engagement_db(engagement_id, ctx)
+    try:
+        try:
+            created = add_intent(
+                conn,
+                target_seed=target_seed,
+                rationale=rationale,
+                source_fact_id=source_fact_id,
+                seed_type=seed_type,
+                engagement_id=engagement_id,
+                intent_id=intent_id,
+                status="open",
+            )
+        except IntentStoreError as exc:
+            raise MCPError(
+                _INVALID_PARAMS,
+                f"could not create recursion intent: {exc}",
+                data={"engagement_id": engagement_id, "target_seed": target_seed},
+            ) from exc
+        except sqlite3.OperationalError as exc:
+            raise MCPError(
+                _INTERNAL_ERROR,
+                f"engagement DB missing recursion_intents schema: {exc}",
+                data={"engagement_id": engagement_id},
+            ) from exc
+        conn.commit()
+    finally:
+        conn.close()
+    return {
+        "engagement_id": engagement_id,
+        "intent": created,
+    }
+
+
+def _tool_exploitation_status(
+    params: Mapping[str, Any], ctx: ServerContext
+) -> dict[str, Any]:
+    """Return the exploitation state of an engagement.
+
+    Reads:
+      * The engagement's declared status and operator.
+      * The latest audit_log entries whose ``phase`` is ``exploitation``
+        (capped by ``limit``, default 50).
+      * The number of persisted ``payloads`` rows, if any.
+      * The declared scope_json capabilities (reverse_proxy, post_login,
+        autonomous_exploit, goal_targets) parsed defensively from the
+        engagements row.
+
+    This tool is read-only and does not require write permission.
+    """
+    engagement_id = _coerce_engagement_id(params)
+    limit = _coerce_limit(params, ctx)
+    conn = _open_engagement_db(engagement_id, ctx)
+    try:
+        engagement_row = conn.execute(
+            "SELECT status, operator, scope_json FROM engagements WHERE id = ?",
+            (engagement_id,),
+        ).fetchone()
+        audit_rows = conn.execute(
+            """
+            SELECT id, phase, module, action, target, result, operator, logged_at
+            FROM audit_log
+            WHERE engagement_id = ? AND phase = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (engagement_id, _EXPLOITATION_AUDIT_PHASE, limit),
+        ).fetchall()
+        try:
+            payload_count = int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM payloads WHERE engagement_id = ?",
+                    (engagement_id,),
+                ).fetchone()[0]
+            )
+        except sqlite3.OperationalError:
+            payload_count = 0
+    finally:
+        conn.close()
+
+    scope_json_raw = engagement_row[2] if engagement_row else None
+    scope_capabilities: dict[str, bool] = {
+        module: False for module in sorted(_EXPLOITATION_MODULES)
+    }
+    if scope_json_raw:
+        try:
+            scope_payload = json.loads(scope_json_raw)
+        except json.JSONDecodeError:
+            scope_payload = None
+        if isinstance(scope_payload, Mapping):
+            policy = scope_payload.get("policy") or {}
+            if isinstance(policy, Mapping):
+                for module in scope_capabilities:
+                    if bool(policy.get(module)):
+                        scope_capabilities[module] = True
+    recent_events = [
+        {
+            "id": int(r[0]),
+            "phase": r[1],
+            "module": r[2],
+            "action": r[3],
+            "target": r[4],
+            "result": r[5],
+            "operator": r[6],
+            "logged_at": r[7],
+        }
+        for r in audit_rows
+    ]
+    return {
+        "engagement_id": engagement_id,
+        "status": engagement_row[0] if engagement_row else None,
+        "operator": engagement_row[1] if engagement_row else None,
+        "scope_authorized_capabilities": scope_capabilities,
+        "payload_count": payload_count,
+        "recent_event_count": len(recent_events),
+        "recent_events": recent_events,
+        "limit": limit,
+    }
+
+
+def _tool_exploitation_start(
+    params: Mapping[str, Any], ctx: ServerContext
+) -> dict[str, Any]:
+    """Record an operator-authorized exploitation-module start intent.
+
+    This tool does **not** execute the exploitation module itself; the
+    actual module execution runs through the normal audited CLI/orchestrator
+    path. What this tool does is persist a durable, hash-chain-ready
+    ``audit_log`` entry so coding agents can hand off "start module X
+    against target Y" intents while every FORGE invariant (scope gate,
+    ROE check, hash-chain audit) is still enforced by the executor.
+
+    Parameters:
+      * ``engagement_id``: target engagement.
+      * ``module``: one of :data:`_EXPLOITATION_MODULES`.
+      * ``target``: scope-manifest-approved target reference (host, URL,
+        or seed). Max 512 chars. The underlying executor performs the
+        actual scope check; this tool records intent only.
+      * ``roe_id``: ROE reference recorded with the intent.
+      * ``authorized``: MUST be the literal boolean ``true`` to confirm
+        the operator has reviewed the module and target. Omitting the
+        field or passing any other value rejects the call.
+    """
+    engagement_id = _coerce_engagement_id(params)
+    module = _require_exploitation_module(params)
+    target = _require_text(params, "target", max_length=512)
+    roe_id = _require_text(params, "roe_id", max_length=128)
+    authorized = _require_bool(params, "authorized")
+    if authorized is not True:
+        raise MCPError(
+            _INVALID_PARAMS,
+            "authorized must be the literal boolean true",
+            data={"module": module, "target": target},
+        )
+    rationale = _optional_text(params, "rationale", max_length=1024)
+
+    # The operator's identity comes from the auth context when present
+    # so audit rows attribute intent correctly even over MCP transport.
+    operator_claim = None
+    if ctx.auth is not None:
+        operator_claim = ctx.auth.normalized_role() or None
+    operator_text = operator_claim or "mcp-authorized"
+
+    conn = _open_engagement_db(engagement_id, ctx)
+    try:
+        try:
+            cursor = conn.execute(
+                """
+                INSERT INTO audit_log (
+                    engagement_id, phase, module, action, target, result, operator
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    engagement_id,
+                    _EXPLOITATION_AUDIT_PHASE,
+                    module,
+                    "start_intent",
+                    target,
+                    json.dumps(
+                        {
+                            "roe_id": roe_id,
+                            "rationale": rationale,
+                            "authorized": True,
+                            "source": "mcp",
+                        },
+                        sort_keys=True,
+                    ),
+                    operator_text,
+                ),
+            )
+        except sqlite3.OperationalError as exc:
+            raise MCPError(
+                _INTERNAL_ERROR,
+                f"engagement DB missing audit_log schema: {exc}",
+                data={"engagement_id": engagement_id},
+            ) from exc
+        audit_id = int(cursor.lastrowid or 0)
+        conn.commit()
+        row = conn.execute(
+            "SELECT id, phase, module, action, target, result, operator, logged_at "
+            "FROM audit_log WHERE id = ?",
+            (audit_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:  # pragma: no cover — defensive
+        raise MCPError(
+            _INTERNAL_ERROR,
+            f"audit_log row {audit_id} not visible after insert",
+        )
+    return {
+        "engagement_id": engagement_id,
+        "module": module,
+        "target": target,
+        "roe_id": roe_id,
+        "authorized": True,
+        "audit_log": {
+            "id": int(row[0]),
+            "phase": row[1],
+            "module": row[2],
+            "action": row[3],
+            "target": row[4],
+            "result": row[5],
+            "operator": row[6],
+            "logged_at": row[7],
+        },
+    }
+
+
 _TOOL_DEFINITIONS: tuple[dict[str, Any], ...] = (
     {
         "name": "forge.engagements.list",
@@ -411,6 +951,109 @@ _TOOL_DEFINITIONS: tuple[dict[str, Any], ...] = (
             "additionalProperties": False,
         },
     },
+    {
+        "name": "forge.findings.create",
+        "description": (
+            "Create a new vulnerability finding for an engagement. "
+            "Requires write permission (AuthContext role or write_token)."
+        ),
+        "handler": _tool_findings_create,
+        "requires_write": True,
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "engagement_id": {"type": "integer", "minimum": 1},
+                "vuln_type": {"type": "string", "minLength": 1, "maxLength": 128},
+                "target_url": {"type": "string", "minLength": 1, "maxLength": 2048},
+                "severity": {
+                    "type": "string",
+                    "enum": sorted(_SEVERITY_VALUES),
+                },
+                "title": {"type": "string", "minLength": 1, "maxLength": 512},
+                "description": {"type": "string", "maxLength": 4096},
+                "parameter": {"type": "string", "maxLength": 256},
+                "cve_id": {"type": "string", "maxLength": 32},
+                "evidence": {"type": "string", "maxLength": 512},
+                "cvss_score": {"type": "number", "minimum": 0, "maximum": 10},
+            },
+            "required": ["engagement_id", "vuln_type", "target_url", "severity", "title"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "forge.intents.create",
+        "description": (
+            "Record a new recursion intent (Fact/Intent/Hint board). "
+            "Requires write permission (AuthContext role or write_token)."
+        ),
+        "handler": _tool_intents_create,
+        "requires_write": True,
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "engagement_id": {"type": "integer", "minimum": 1},
+                "target_seed": {"type": "string", "minLength": 1, "maxLength": 512},
+                "rationale": {"type": "string", "maxLength": 4096},
+                "source_fact_id": {"type": "string", "maxLength": 256},
+                "seed_type": {"type": "string", "maxLength": 64},
+                "intent_id": {"type": "string", "maxLength": 64},
+            },
+            "required": ["engagement_id", "target_seed"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "forge.exploitation.status",
+        "description": (
+            "Return the exploitation state of an engagement: declared "
+            "status, recent exploitation audit events, scope-authorized "
+            "capability flags, and payload inventory. Read-only."
+        ),
+        "handler": _tool_exploitation_status,
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "engagement_id": {"type": "integer", "minimum": 1},
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": _MAX_LIMIT,
+                },
+            },
+            "required": ["engagement_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "forge.exploitation.start",
+        "description": (
+            "Record an operator-authorized exploitation module start intent "
+            "to the engagement's audit_log. The actual module execution "
+            "runs through the normal audited CLI/orchestrator path; this "
+            "tool only persists the intent so coding agents can hand off. "
+            "Requires write permission AND the literal `authorized: true` "
+            "flag in the arguments; omitting the flag rejects the call."
+        ),
+        "handler": _tool_exploitation_start,
+        "requires_write": True,
+        "requires_explicit_authorization": True,
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "engagement_id": {"type": "integer", "minimum": 1},
+                "module": {
+                    "type": "string",
+                    "enum": sorted(_EXPLOITATION_MODULES),
+                },
+                "target": {"type": "string", "minLength": 1, "maxLength": 512},
+                "roe_id": {"type": "string", "minLength": 1, "maxLength": 128},
+                "authorized": {"type": "boolean"},
+                "rationale": {"type": "string", "maxLength": 1024},
+            },
+            "required": ["engagement_id", "module", "target", "roe_id", "authorized"],
+            "additionalProperties": False,
+        },
+    },
 )
 
 
@@ -480,6 +1123,21 @@ def _handle_tools_call(params: Mapping[str, Any] | None, ctx: ServerContext) -> 
     tool = ctx.tools.get(name)
     if tool is None:
         raise MCPError(_METHOD_NOT_FOUND, f"unknown tool: {name}")
+    if tool.get("requires_write"):
+        auth = ctx.auth
+        if auth is None or not auth.has_write_access(ctx):
+            raise MCPError(
+                _INVALID_REQUEST,
+                f"tool {name!r} requires write permission "
+                "(set AuthContext.role to an allowed write role, "
+                "or supply a matching write_token)",
+                data={
+                    "tool": name,
+                    "required": "write",
+                    "has_role": bool(auth and auth.normalized_role()),
+                    "has_write_token": bool(auth and auth.write_token),
+                },
+            )
     handler: ToolHandler = tool["handler"]
     data = handler(arguments, ctx)
     return {
@@ -501,10 +1159,18 @@ _RPC_METHODS: dict[str, Callable[[Mapping[str, Any] | None, ServerContext], dict
 }
 
 
-def dispatch_jsonrpc(payload: Any, ctx: ServerContext) -> MCPResponse | None:
+def dispatch_jsonrpc(
+    payload: Any,
+    ctx: ServerContext,
+    auth: AuthContext | None = None,
+) -> MCPResponse | None:
     """Validate and dispatch a single JSON-RPC 2.0 request.
 
     Returns ``None`` for notifications (payload without an ``id`` field).
+    The optional ``auth`` context is bound to ``ctx.auth`` for the
+    duration of the dispatch so write-capable tools can gate on it; the
+    binding is reset on return to avoid leaking per-request state across
+    threads.
     """
     try:
         request_id, method, params = _validate_jsonrpc_envelope(payload)
@@ -515,6 +1181,8 @@ def dispatch_jsonrpc(payload: Any, ctx: ServerContext) -> MCPResponse | None:
     if handler is None:
         return MCPResponse(id=request_id, error=MCPError(_METHOD_NOT_FOUND, f"unknown method: {method}"))
 
+    previous_auth = ctx.auth
+    ctx.auth = auth
     try:
         result = handler(params, ctx)
     except MCPError as exc:
@@ -525,6 +1193,8 @@ def dispatch_jsonrpc(payload: Any, ctx: ServerContext) -> MCPResponse | None:
             id=request_id,
             error=MCPError(_INTERNAL_ERROR, f"internal server error: {exc}"),
         )
+    finally:
+        ctx.auth = previous_auth
 
     # Notifications (no `id` field) MUST NOT get a response per JSON-RPC 2.0.
     if request_id is None and "id" not in dict(payload):
@@ -615,17 +1285,25 @@ def _make_request_handler(server: "ForgeMCPServer") -> type[BaseHTTPRequestHandl
                     MCPResponse(id=None, error=MCPError(_PARSE_ERROR, "parse error")).to_dict(),
                 )
                 return
+            # Extract per-request AuthContext from headers; both role and
+            # write_token are optional and only consulted by write-capable
+            # tools. The HTTP transport treats missing values as empty.
+            auth = AuthContext(
+                role=self.headers.get("X-Forge-Role", "") or None,
+                write_token=self.headers.get("X-Forge-Write-Token", "") or None,
+                source="http",
+            )
             # Batch requests are a MUST for JSON-RPC 2.0, but MCP typically
             # uses single-call semantics.  Support both for robustness.
             if isinstance(payload, list):
                 responses: list[dict[str, Any]] = []
                 for item in payload:
-                    resp = dispatch_jsonrpc(item, server.context)
+                    resp = dispatch_jsonrpc(item, server.context, auth=auth)
                     if resp is not None:
                         responses.append(resp.to_dict())
                 self._write_json(200, {"responses": responses} if responses else {"responses": []})
                 return
-            resp = dispatch_jsonrpc(payload, server.context)
+            resp = dispatch_jsonrpc(payload, server.context, auth=auth)
             if resp is None:
                 self.send_response(204)
                 self.end_headers()
@@ -658,6 +1336,8 @@ class ForgeMCPServer:
         port: int = 0,
         auth_token: str | None = None,
         require_token: bool = True,
+        write_token: str | None = None,
+        allowed_write_roles: tuple[str, ...] = DEFAULT_WRITE_ROLES,
     ) -> None:
         if not _is_loopback(host):
             raise ValueError(
@@ -671,6 +1351,8 @@ class ForgeMCPServer:
         self.context = ServerContext(
             data_dir=resolved_data_dir,
             tools=build_tool_registry(),
+            expected_write_token=write_token or None,
+            allowed_write_roles=tuple(allowed_write_roles),
         )
         self.host = host
         self.port = int(port)
@@ -749,8 +1431,10 @@ class ForgeMCPServer:
 
 
 __all__ = [
+    "DEFAULT_WRITE_ROLES",
     "MCP_PROTOCOL_VERSION",
     "MCP_SERVER_VERSION",
+    "AuthContext",
     "ForgeMCPServer",
     "MCPError",
     "MCPResponse",

@@ -1,0 +1,24 @@
+{
+  "schema": "forge.skill.v1",
+  "skill_id": "skill_report_generation",
+  "name": "Report Generation Workflow",
+  "version": "1.0.0",
+  "description": "Phase 6 deterministic report generation playbook. Operator runs `forge report generate --engagement N` with the default `auto` provider cascade: local llama.cpp -> optional free-only OpenRouter model -> deterministic template fallback. Produces Markdown, PDF, HTML, JSON, and CSV reports plus the Maltego workspace and GraphML attack-path exports. Entirely offline-capable; no provider keys are required. The playbook also covers the read-only health commands `report quality-audit`, `report stale-plan`, and `report policy-plan`.",
+  "capabilities": [
+    "report_generation",
+    "operator_guide"
+  ],
+  "required_gates": [],
+  "safety_class": "passive_offline",
+  "execution_paths": [
+    "operator:forge-report-generate",
+    "operator:forge-report-quality-audit",
+    "docs:README.md#public-commands"
+  ],
+  "tags": [
+    "phase6",
+    "reporting",
+    "deterministic",
+    "offline-capable"
+  ]
+}

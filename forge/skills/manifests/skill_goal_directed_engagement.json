@@ -1,0 +1,32 @@
+{
+  "schema": "forge.skill.v1",
+  "skill_id": "skill_goal_directed_engagement",
+  "name": "Goal-Directed Engagement (Cairn-style)",
+  "version": "1.0.0",
+  "description": "Scoped authorized goal-directed engagement playbook based on the Cairn Bootstrap/Reason/Explore loop. Operator declares one or more goal targets in the scope manifest `goal_targets` block; FORGE then (1) Bootstraps from passive OSINT, (2) Reasons over the current Fact set to pick the next-best scoped intent, and (3) Explores by claiming an intent and running the authorized downstream module. Progress rows and reasoning traces land in audit; the loop stops when every declared goal is reached or when the ROE budget expires. The playbook refuses to run if any declared goal falls outside the current scope manifest.",
+  "capabilities": [
+    "active_validation",
+    "attack_path_review",
+    "operator_guide"
+  ],
+  "required_gates": [
+    "approval",
+    "roe_id",
+    "scope_manifest",
+    "live_gate",
+    "write_permission"
+  ],
+  "safety_class": "active_validation_gated",
+  "execution_paths": [
+    "operator:approve-goal-directed-engagement",
+    "manual:declare-goal-targets",
+    "docs:END_GOAL.md"
+  ],
+  "tags": [
+    "phase5",
+    "goal-directed",
+    "cairn",
+    "bootstrap-reason-explore",
+    "scoped-authorized"
+  ]
+}

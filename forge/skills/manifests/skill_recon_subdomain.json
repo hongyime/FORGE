@@ -1,0 +1,26 @@
+{
+  "schema": "forge.skill.v1",
+  "skill_id": "skill_recon_subdomain",
+  "name": "Subdomain Reconnaissance",
+  "version": "1.0.0",
+  "description": "Passive subdomain discovery playbook: run FORGE kill-chain with --no-attack-mode to enumerate hosts via crt.sh certificate transparency, the 180-label wordlist, DNS enrichment, Wayback/Common Crawl historical URLs, and HTML mining. Produces hosts, subdomains, and SaaS-signal evidence without any live scanning or credential capture. Operator reviews the generated attack-graph and report before promoting any discovered seed to further phases.",
+  "capabilities": [
+    "passive_discovery",
+    "operator_guide"
+  ],
+  "required_gates": [
+    "scope_manifest",
+    "rate_limit"
+  ],
+  "safety_class": "read_only_scope_gated",
+  "execution_paths": [
+    "operator:forge-kill-chain-passive",
+    "docs:README.md#what-kill-chain-actually-does"
+  ],
+  "tags": [
+    "phase1",
+    "reconnaissance",
+    "passive",
+    "subdomain"
+  ]
+}
