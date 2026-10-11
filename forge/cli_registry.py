@@ -49,6 +49,7 @@ class ForgeCliApps:
     exploitation_app: typer.Typer
     dashboard_app: typer.Typer
     autopilot_app: typer.Typer
+    feeds_app: typer.Typer
 
 
 def _make_sub(name: str, help_text: str) -> typer.Typer:
@@ -93,6 +94,8 @@ def _register_modular_commands(apps: ForgeCliApps) -> None:
     register_dashboard_commands(apps.dashboard_app)
     from forge.autopilot.cli import register_autopilot_commands
     register_autopilot_commands(apps.autopilot_app)
+    from forge.feeds.cli import register_feeds_commands
+    register_feeds_commands(apps.feeds_app)
     from forge.setup.cli import register_setup_command
     register_setup_command(apps.app)
 
@@ -211,6 +214,10 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
             invoke_without_command=True,
             no_args_is_help=False,
         ),
+        feeds_app=_make_sub(
+            "feeds",
+            "Free threat-intel feed fetchers (NVD, CISA KEV, EPSS, RSS, nuclei-templates, urlscan)",
+        ),
     )
 
     root_app.add_typer(apps.kb_app)
@@ -248,6 +255,7 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
     root_app.add_typer(apps.dashboard_app)
     root_app.add_typer(apps.dashboard_app)
     root_app.add_typer(apps.autopilot_app)
+    root_app.add_typer(apps.feeds_app)
 
     _wire_dashboard_default_callback(apps.dashboard_app)
     _register_modular_commands(apps)

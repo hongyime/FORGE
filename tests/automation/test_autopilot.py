@@ -255,6 +255,7 @@ def _install_safe_component_patches(monkeypatch: pytest.MonkeyPatch) -> dict[str
         "execute_resume_calls": [],
         "run_monitoring_calls": [],
         "generate_dashboard_calls": [],
+        "feed_fetch_calls": [],
     }
 
     def _fake_build_feed(**kwargs: Any) -> dict[str, Any]:
@@ -343,6 +344,32 @@ def _install_safe_component_patches(monkeypatch: pytest.MonkeyPatch) -> dict[str
     monkeypatch.setattr(
         "forge.reporting.dashboard.generate_dashboard", _fake_generate_dashboard
     )
+
+    # Feed-fetch phase: stub ``forge.feeds.FeedFetcher`` so apply-mode
+    # autopilot tests never try to reach the real NVD/KEV/EPSS/urlscan
+    # endpoints. The feed_fetch phase imports ``FeedFetcher`` lazily
+    # from ``forge.feeds``, so patching the public name is enough.
+    class _FakeFeedFetcher:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def fetch_all(self, *, timeout_per_source: int = 60) -> dict[str, Any]:
+            counters["feed_fetch_calls"].append({"timeout_per_source": timeout_per_source})
+            return {
+                "schema_version": "forge.feeds.orchestrator.v1",
+                "overall_status": "ok",
+                "status_counts": {"ok": 1},
+                "total_item_count": 1,
+                "results": {
+                    "stub": {
+                        "source_id": "stub",
+                        "status": "ok",
+                        "count": 1,
+                    }
+                },
+            }
+
+    monkeypatch.setattr("forge.feeds.FeedFetcher", _FakeFeedFetcher)
     return counters
 
 
@@ -421,6 +448,7 @@ def test_autopilot_full_cycle_phase_order(
 
     names = [phase["name"] for phase in payload["phases"]]
     assert names == [
+        "feed_fetch",
         "feed_build",
         "import_targets",
         "resume_candidates",

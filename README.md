@@ -368,6 +368,9 @@ forge autopilot --dry-run                   # Explicit rehearsal — no writes, 
 forge autopilot --apply --roe-id ROE-ID     # Explicit live loop — full feed-build / import / resume / monitor / dashboard
 forge autopilot --describe --json           # Resolved autopilot defaults and detected ROE/scope state (read-only)
 forge autopilot --loop [--iterations N] [--cooldown-minutes N]  # Continuous operation; one pass per iteration with a bounded cooldown
+forge feeds list [--imports-dir PATH] [--data-dir PATH] [--json]  # List registered free threat-intel feed fetchers (NVD, CISA KEV, EPSS, RSS, nuclei-templates, urlscan)
+forge feeds status [--imports-dir PATH] [--data-dir PATH] [--json]  # Last-fetch timestamps and item counts per source (read-only, no network)
+forge feeds fetch [--source SOURCE] [--timeout N] [--max-age-days N] [--imports-dir PATH] [--data-dir PATH] [--json]  # Refresh all free feeds or a single source
 forge doctor [--json] [--live-provider-probes] [--fix-safe]  # Operator setup, readiness checks, and safe local repairs
 forge operator-guide [--section loop|manual|profiles|rust] [--json]  # Complete workflow guide — every module linked together
 forge setup [--root PATH] [--data-dir PATH] [--skip-doctor] [--json]  # First-run bootstrap: seeds .env, data dirs, scope manifest, starter feed, runs doctor

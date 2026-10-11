@@ -185,12 +185,13 @@ class ForgeAutopilot:
 
         Phases:
 
-        1. Auto-seed — build/refresh ``imports/target-feed.json``.
-        2. Auto-engage — import feed, create engagements, start
+        1. Feed-fetch — refresh free/no-key threat-intel sources.
+        2. Auto-seed — build/refresh ``imports/target-feed.json``.
+        3. Auto-engage — import feed, create engagements, start
            kill-chain for new targets.
-        3. Auto-resume — resume ready paused/failed engagement runs.
-        4. Auto-monitor — run due monitoring policies.
-        5. Auto-dashboard — refresh the static operator dashboard.
+        4. Auto-resume — resume ready paused/failed engagement runs.
+        5. Auto-monitor — run due monitoring policies.
+        6. Auto-dashboard — refresh the static operator dashboard.
 
         Returns a schema-versioned summary payload.
         """
@@ -198,6 +199,7 @@ class ForgeAutopilot:
         is_dry_run = mode == "dry_run"
         started_at = _now_iso()
         phases: list[AutopilotPhaseResult] = []
+        phases.append(self._maybe_phase("feed_fetch", is_dry_run))
         phases.append(self._maybe_phase("feed_build", is_dry_run))
         phases.append(self._maybe_phase("import_targets", is_dry_run))
         phases.append(self._maybe_phase("resume_candidates", is_dry_run))
@@ -247,6 +249,7 @@ class ForgeAutopilot:
     # ------------------------------------------------------------------
 
     _PHASE_DISPATCH = {
+        "feed_fetch": "_phase_feed_fetch",
         "feed_build": "_phase_feed_build",
         "import_targets": "_phase_import_targets",
         "resume_candidates": "_phase_resume_candidates",
@@ -264,6 +267,60 @@ class ForgeAutopilot:
             )
         method = getattr(self, self._PHASE_DISPATCH[name])
         return method(dry_run=dry_run)
+
+    def _phase_feed_fetch(self, *, dry_run: bool) -> AutopilotPhaseResult:
+        """Refresh free/no-key threat-intel feeds before feed-build.
+
+        Dry-run skips the network calls entirely — the autopilot
+        rehearsal must stay offline-friendly. Apply runs every
+        registered fetcher in :class:`forge.feeds.FeedFetcher`, which
+        catches individual-source failures and never aborts the loop.
+        """
+        if dry_run:
+            return AutopilotPhaseResult(
+                name="feed_fetch",
+                status="skipped",
+                detail="dry_run_skips_network_fetch",
+            )
+
+        try:
+            from forge.feeds import FeedFetcher  # noqa: PLC0415
+        except Exception as exc:  # noqa: BLE001
+            return AutopilotPhaseResult(
+                name="feed_fetch",
+                status="error",
+                detail=f"import_error:{_bounded_text(exc)}",
+            )
+
+        try:
+            fetcher = FeedFetcher(
+                imports_dir=self.imports_dir,
+                data_dir=self.data_dir,
+            )
+            payload = fetcher.fetch_all(timeout_per_source=60)
+        except Exception as exc:  # noqa: BLE001
+            return AutopilotPhaseResult(
+                name="feed_fetch",
+                status="error",
+                detail=_bounded_text(exc),
+            )
+
+        status_counts = payload.get("status_counts", {}) or {}
+        overall = payload.get("overall_status", "ok")
+        return AutopilotPhaseResult(
+            name="feed_fetch",
+            status="ok" if overall in {"ok", "partial"} else "error",
+            detail=(
+                f"total_items={payload.get('total_item_count', 0)} "
+                f"overall={overall} ok={status_counts.get('ok', 0)} "
+                f"error={status_counts.get('error', 0)}"
+            ),
+            data={
+                "overall_status": overall,
+                "status_counts": dict(status_counts),
+                "total_item_count": int(payload.get("total_item_count") or 0),
+            },
+        )
 
     def _phase_feed_build(self, *, dry_run: bool) -> AutopilotPhaseResult:
         """Build and (when applying) write the local target feed."""

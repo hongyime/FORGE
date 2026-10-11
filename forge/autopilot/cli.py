@@ -158,6 +158,11 @@ def register_autopilot_commands(app: typer.Typer) -> None:
             "--skip-feed-build",
             help="Skip the auto-seed phase entirely.",
         ),
+        skip_feed_fetch: bool = typer.Option(
+            False,
+            "--skip-feed-fetch",
+            help="Skip the free-feed fetch phase entirely.",
+        ),
         feed_build: bool = typer.Option(
             False,
             "--feed-build",
@@ -241,6 +246,8 @@ def register_autopilot_commands(app: typer.Typer) -> None:
         )
 
         skip_phases: set[str] = set()
+        if skip_feed_fetch:
+            skip_phases.add("feed_fetch")
         if skip_feed_build:
             skip_phases.add("feed_build")
         if skip_import:
