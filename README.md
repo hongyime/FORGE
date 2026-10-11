@@ -187,6 +187,7 @@ Every run produces a Markdown report + Maltego workspace/GraphML artifacts + evi
 | `--scope-manifest` | empty | JSON path or inline JSON declaring authorized domains, URL prefixes, IP ranges, and exact non-network seeds for sensitive live execution |
 | `--skip-cloud` | off | Skip cloud discovery (Supabase/Firebase/Amplify/GCP/Vercel/Netlify) |
 | `--skip-keyscan` | off | Skip GitHub keyscan (protects `FORGE_GITHUB_TOKEN` quota) |
+| `--skip-exploitation` | off | Skip the goal-lock-v2 exploitation phase (Muraena reverse-proxy, Necrobrowser post-login, Strix autonomous exploit, Cairn goal engine). Phase is otherwise gated by `--attack-mode`, scope-manifest permission blocks, `FORGE_SAFE_MODE`, and `--dry-run` |
 
 Useful advanced flags:
 - `--related-seed VALUE` can be repeated for multi-seed runs.
@@ -329,7 +330,10 @@ forge standards import-stix|export-stix --engagement N --bundle-file bundle.json
 forge workspaces list|upsert|members|member-set|member-delete|audit|backfill-memberships
 forge demo proof-pack [--engagement 9901]
 forge retention preview|apply --engagement N
+forge exploitation credentials list --engagement N [--cred-type TYPE] [--json]  # Plaintext credential inventory (goal lock v2)
+forge exploitation credentials export --engagement N --output PATH [--format json|csv]
 forge dashboard                             # Generate the static local operator dashboard
+forge dashboard goal-progress --engagement N [--json] [--html PATH]  # Cairn-style goal progress visualization
 forge doctor [--json] [--live-provider-probes] [--fix-safe]  # Operator setup, readiness checks, and safe local repairs
 forge operator-guide [--section loop|manual|profiles|rust] [--json]  # Complete workflow guide — every module linked together
 forge scaffold                              # Emit obfuscated directory tree

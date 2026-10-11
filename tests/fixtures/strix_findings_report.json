@@ -1,0 +1,57 @@
+{
+  "schema": "strix.findings.v1",
+  "engagement_id": "1001",
+  "scan_id": "strix.scan.fixture0001",
+  "generated_at": "2026-10-11T04:10:00Z",
+  "roe_id": "ROE-FIXTURE-TARGET-2026",
+  "findings": [
+    {
+      "id": "strix-fixture-001",
+      "title": "SQL injection in /api/search",
+      "severity": "critical",
+      "cvss_score": 9.1,
+      "owasp_category": "A03:2021 - Injection",
+      "affected_url": "https://api.target.example/api/search",
+      "description": "Payload bypassed input validation (fixture record; non-reportable until FORGE validation gate promotes it).",
+      "proof": "payload=' OR 1=1 --",
+      "tags": ["sql", "injection", "critical"],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/89.html",
+        "https://owasp.org/Top10/A03_2021-Injection/"
+      ]
+    },
+    {
+      "id": "strix-fixture-002",
+      "title": "Reflected XSS on /login",
+      "severity": "medium",
+      "cvss_score": 5.4,
+      "owasp_category": "A03:2021 - Injection",
+      "affected_url": "https://login.target.example/login",
+      "description": "Reflected input in /login response (fixture record).",
+      "proof": "<script>alert(1)</script>",
+      "tags": ["xss", "reflected"]
+    },
+    {
+      "id": "strix-fixture-003",
+      "title": "SSRF via webhook callback",
+      "severity": "high",
+      "cvss_score": 7.5,
+      "owasp_category": "A10:2021 - SSRF",
+      "affected_url": "https://api.target.example/webhook",
+      "description": "Fixture SSRF record for parity tests.",
+      "proof": "callback=http://169.254.169.254/latest/meta-data/",
+      "tags": ["ssrf", "metadata-service"]
+    }
+  ],
+  "summary": {
+    "critical": 1,
+    "high": 1,
+    "medium": 1,
+    "low": 0
+  },
+  "metadata": {
+    "operator": "fixture-operator",
+    "goal_target": "achieve_rce",
+    "note": "Fixture only; no real exploitation performed."
+  }
+}

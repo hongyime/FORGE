@@ -17,7 +17,17 @@ from forge.cli_operator import (
 
 
 def register_root_operator_commands(app: typer.Typer, *, console: Console) -> None:
-    """Register root-level operator commands on the provided Typer app."""
+    """Register root-level operator commands on the provided Typer app.
+
+    Note: ``build_forge_cli_apps`` separately wires a ``dashboard`` Typer
+    sub-app to support ``forge dashboard goal-progress``. When this
+    function is called by the full CLI builder, the sub-app and this
+    top-level command coexist — Typer resolves bare ``forge dashboard``
+    through this command and ``forge dashboard goal-progress`` through
+    the sub-app. When callers register this function in isolation (unit
+    tests, custom embeddings) the top-level ``dashboard`` command is the
+    only entry point.
+    """
 
     @app.command("dashboard")
     def dashboard(

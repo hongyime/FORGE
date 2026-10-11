@@ -1,0 +1,58 @@
+{
+  "schema": "forge.exploitation.muraena.captured_session.v1",
+  "session_id": "muraena-session-sample-001",
+  "engagement_id": "1001",
+  "captured_at": "2026-10-11T04:00:00Z",
+  "source": "muraena_reverse_proxy",
+  "target_tenant": "login.target.example",
+  "captured_credentials": [
+    {
+      "type": "password",
+      "username": "alice@target.example",
+      "password": "ThisIsAFixtureNotARealSecret!",
+      "endpoint": "https://login.target.example/common/oauth2/authorize"
+    }
+  ],
+  "captured_cookies": [
+    {
+      "name": "ESTSAUTH",
+      "value": "fixture.ests.cookie.value",
+      "domain": "login.target.example",
+      "path": "/",
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None",
+      "expires": 0
+    },
+    {
+      "name": "ESTSAUTHPERSISTENT",
+      "value": "fixture.ests.persistent.cookie",
+      "domain": "login.target.example",
+      "path": "/",
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "SubstrateInstance",
+      "value": "fixture.substrate.instance",
+      "domain": ".office.com",
+      "path": "/",
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "captured_mfa": [
+    {
+      "type": "mfa_cookie",
+      "value": "fixture.mfa.cookie.value",
+      "endpoint": "https://login.target.example/kmsi"
+    }
+  ],
+  "metadata": {
+    "campaign": "fixture-campaign",
+    "replay_count": 0,
+    "scope_manifest_target": "login.target.example"
+  }
+}

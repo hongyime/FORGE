@@ -1,0 +1,46 @@
+{
+  "schema": "forge.exploitation.necrobrowser.task_result.v1",
+  "task_id": "office365.OneDriveExtrude.fixture0001",
+  "engagement_id": "1001",
+  "session_id": "muraena-session-sample-001",
+  "task": {
+    "type": "office365",
+    "name": "OneDriveExtrude",
+    "params": {
+      "keywords": ["password", "secret", "api_key"],
+      "max_download_bytes": 1048576
+    }
+  },
+  "status": "completed",
+  "started_at": "2026-10-11T04:05:00Z",
+  "completed_at": "2026-10-11T04:07:12Z",
+  "operator": "fixture-operator",
+  "extruded": [
+    {
+      "name": "Shared%20with%20Me%2Fplanning.docx",
+      "url": "https://target-my.sharepoint.com/personal/alice_target_example/Documents/planning.docx",
+      "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "bytes": 20418,
+      "checksum_sha256": "fixturesha256planning-reference-only"
+    },
+    {
+      "name": "MyFiles%2Fcredentials.xlsx",
+      "url": "https://target-my.sharepoint.com/personal/alice_target_example/Documents/credentials.xlsx",
+      "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "bytes": 83211,
+      "checksum_sha256": "fixturesha256credentials-reference-only"
+    },
+    {
+      "name": "Downloads%2Fnotes.txt",
+      "url": "https://target-my.sharepoint.com/personal/alice_target_example/Documents/notes.txt",
+      "mime": "text/plain",
+      "bytes": 2341,
+      "checksum_sha256": "fixturesha256notes-reference-only"
+    }
+  ],
+  "metadata": {
+    "tenant": "target.onmicrosoft.com",
+    "campaign": "fixture-campaign",
+    "scope_manifest_task": "OneDriveExtrude"
+  }
+}

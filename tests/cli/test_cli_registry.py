@@ -394,7 +394,12 @@ def test_readme_public_commands_match_actual_root_cli() -> None:
     for group in sorted(public_groups):
         assert f"forge {group}" in public_block
     for group in sorted(hidden_groups):
-        assert f"forge {group}" not in public_block
+        # Word-boundary match so `forge exploitation` (public) does not
+        # trigger a false positive against hidden `forge exploit`.
+        import re as _re  # noqa: PLC0415
+        assert not _re.search(
+            rf"forge {_re.escape(group)}\b", public_block
+        ), f"hidden group {group!r} must not appear in README public block"
     for root_command in sorted(_command_names(forge_app)):
         assert f"forge {root_command}" in public_block
     assert {"sync", "status", "fetch-breach"}.issubset(_command_names(forge_kb_app))
