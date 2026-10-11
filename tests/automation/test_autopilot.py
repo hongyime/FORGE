@@ -450,6 +450,7 @@ def test_autopilot_full_cycle_phase_order(
     assert names == [
         "feed_fetch",
         "feed_build",
+        "auto_scope",
         "import_targets",
         "resume_candidates",
         "monitoring",

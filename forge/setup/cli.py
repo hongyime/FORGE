@@ -186,10 +186,14 @@ def _print_next_steps_panel() -> None:
     body.add_column()
     body.add_row(
         "1.",
-        "Edit [bold]manifests/default.json[/bold] with your target domains, URLs, and IP ranges.",
+        "Add targets with [bold]forge targets add example.com[/bold] — auto-updates the scope manifest.",
     )
     body.add_row(
         "2.",
+        "Connect services: [bold]forge connect github --token-env FORGE_GITHUB_TOKEN --org myorg[/bold].",
+    )
+    body.add_row(
+        "3.",
         "Run [bold]forge-autopilot.bat[/bold] (Windows) or [bold]./forge-autopilot.sh[/bold] (POSIX).",
     )
     body.add_row(

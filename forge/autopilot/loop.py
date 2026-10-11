@@ -22,6 +22,7 @@ Design constraints:
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from dataclasses import asdict, dataclass, field
@@ -201,6 +202,7 @@ class ForgeAutopilot:
         phases: list[AutopilotPhaseResult] = []
         phases.append(self._maybe_phase("feed_fetch", is_dry_run))
         phases.append(self._maybe_phase("feed_build", is_dry_run))
+        phases.append(self._maybe_phase("auto_scope", is_dry_run))
         phases.append(self._maybe_phase("import_targets", is_dry_run))
         phases.append(self._maybe_phase("resume_candidates", is_dry_run))
         phases.append(self._maybe_phase("monitoring", is_dry_run))
@@ -251,6 +253,7 @@ class ForgeAutopilot:
     _PHASE_DISPATCH = {
         "feed_fetch": "_phase_feed_fetch",
         "feed_build": "_phase_feed_build",
+        "auto_scope": "_phase_auto_scope",
         "import_targets": "_phase_import_targets",
         "resume_candidates": "_phase_resume_candidates",
         "monitoring": "_phase_monitoring",
@@ -383,6 +386,104 @@ class ForgeAutopilot:
                 "feed_file": str(self.feed_file),
                 "counts": counts,
                 "source_errors": payload.get("source_errors", []),
+            },
+        )
+
+    def _phase_auto_scope(self, *, dry_run: bool) -> AutopilotPhaseResult:
+        """Auto-expand the scope manifest from recently discovered seeds.
+
+        Rules (see :mod:`forge.onboard.auto_scope`):
+
+        - Subdomains of already-scoped domains are auto-added.
+        - URLs whose hostname is already scoped are auto-added.
+        - IPs are only added when the candidate's ``related_domains``
+          list points at an already-scoped domain.
+        - New unrelated domains stay in ``review_required`` instead of
+          silently widening the operator's authorized boundary.
+
+        Dry-run returns the expansion preview without writing. Apply
+        writes the merged manifest when at least one new entry is
+        accepted.
+        """
+        if self.scope_manifest is None or not Path(self.scope_manifest).is_file():
+            return AutopilotPhaseResult(
+                name="auto_scope",
+                status="skipped",
+                detail="no_scope_manifest_configured",
+            )
+        if not self.feed_file.is_file():
+            return AutopilotPhaseResult(
+                name="auto_scope",
+                status="skipped",
+                detail="no_feed_file_present",
+            )
+
+        try:
+            from forge.onboard.auto_scope import (  # noqa: PLC0415
+                expand_scope_from_feeds,
+                normalize_candidate,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return AutopilotPhaseResult(
+                name="auto_scope",
+                status="error",
+                detail=f"import_error:{_bounded_text(exc)}",
+            )
+
+        candidates: list[dict[str, Any]] = []
+        try:
+            feed_text = Path(self.feed_file).read_text(encoding="utf-8")
+            feed_payload = json.loads(feed_text) if feed_text.strip() else {}
+        except (OSError, json.JSONDecodeError) as exc:
+            return AutopilotPhaseResult(
+                name="auto_scope",
+                status="error",
+                detail=f"feed_parse_error:{_bounded_text(exc)}",
+            )
+        for item in (feed_payload.get("items") or []):
+            if not isinstance(item, dict):
+                continue
+            try:
+                candidates.append(
+                    normalize_candidate(
+                        str(item.get("target_value") or item.get("value") or ""),
+                        seed_type=item.get("target_type") or item.get("seed_type"),
+                        related_domains=item.get("related_domains") or [],
+                    )
+                )
+            except ValueError:
+                continue
+
+        try:
+            result = expand_scope_from_feeds(
+                self.scope_manifest,
+                candidates,
+                apply=not dry_run,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return AutopilotPhaseResult(
+                name="auto_scope",
+                status="error",
+                detail=_bounded_text(exc),
+            )
+
+        return AutopilotPhaseResult(
+            name="auto_scope",
+            status="ok",
+            detail=(
+                f"accepted={len(result.accepted)} "
+                f"review={len(result.review_required)} "
+                f"unchanged={result.unchanged}"
+            ),
+            data={
+                "manifest_path": result.manifest_path,
+                "accepted_count": len(result.accepted),
+                "review_required_count": len(result.review_required),
+                "added_domains": result.added_domains,
+                "added_urls": result.added_urls,
+                "added_ip_ranges": result.added_ip_ranges,
+                "unchanged": result.unchanged,
+                "dry_run": dry_run,
             },
         )
 
