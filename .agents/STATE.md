@@ -1,4 +1,27 @@
-# Current Task: T7 storage TDD + competitive upgrade + Docker rebuild + competitive research — ALL DONE. Clean stopping point.
+# Current Task: v1 → v2 goal-lock contract rewrite — DONE (2026-10-11). Clean stopping point.
+
+**Status:** 2026-10-11. Kiro yolo session (`contract-rewrite` orchestrated role). Operator approved a fundamental contract change: FORGE is no longer non-destructive validation-only; FORGE validates AND exploits AND reports. Autonomous exploitation, reverse-proxy credential capture, post-login browser automation, and goal-directed engagement execution are first-class pipeline phases when ROE and scope manifest permit.
+
+**Files updated** (6 total — 5 primary + 1 adjacent sub-README):
+
+1. **`END_GOAL.md`** — full rewrite. Goal lock bumped: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1` → `FORGE-DETERMINISTIC-EXPLOITATION-PIPELINE-v2`. New sections: "Exploitation Means" (hard invariants for the exploitation phase) and expanded "Release Gate Semantics" (per-lane coverage requirements for reverse-proxy, post-login automation, autonomous exploit, goal-directed).
+2. **`SPEC.md`** — G/C/I/V/T sections reframed for v2. New invariants: V15 (exploitation requires ROE + scope-manifest permission), V16 (`FORGE_SAFE_MODE=1` disables exploitation), V17 (captured raw material encrypted at rest under `FORGE_ENGAGEMENT_KEY`), V18 (exploit evidence feeds rule-engine scoring), V19 (goals are FORGE-owned pre-defined constants). V6/V12/V13 reframed to describe actual-exploitation-evidence instead of forbidding post-exploitation narratives. T9 added. B659 historical entry appended.
+3. **`README.md`** — top block, End Goal section, Design principles rewritten for v2. Active-validation descriptions updated so exploitation-class methods are gated by scope-manifest permission blocks per invariant V15.
+4. **`docs/competitive_upgrade_consolidated_backlog.md`** — Do Next #17/#18/#19 promoted from pattern-adoption/catalog-only to integration targets. Explore #16 adopts Cairn goal-directed loop (goals FORGE-owned per V19). Explore #24 reframed as integration spec. Open Question #1 resolved in-scope. Do Not Copy table restructured.
+5. **`docs/competitive_research_strix_cairn_muraena.md`** — TL;DR verdicts flipped for Muraena + Necrobrowser from catalog-only to integrate. Strix §1.4-1.5, Cairn §2.3-2.4, Muraena §3.4-3.5, Necrobrowser §4.4-4.5 reframed. Section 5 integration recommendations rewritten with new 3-wave plan.
+6. **`forge/reporting/webui/README.md`** — one occurrence of "validation-before-reporting" updated.
+
+**Safety invariants preserved**: ROE/scope manifest still required before live action, hash-chain audit still records everything, `FORGE_SAFE_MODE=1` still disables the exploitation phase entirely, engagement scoping still exists (scope now permits offensive actions when ROE grants), deterministic pipeline structure stays (intake → discovery → recursion → enrichment → validation → **exploitation** → scoring → reporting), rule-engine scoring stays authoritative, raw captured material encrypted at rest.
+
+**NOT done this session** (follow-on tickets):
+- Zero code changes. Contract rewritten; exploitation phase itself unimplemented. Do Next #17/#18/#19 and Explore #16/#20/#24 are the implementation tickets.
+- Historical B-entries in SPEC.md (B79, B100, B104, B105, B106) with timestamped non-destructive/catalog-only references preserved as factual historical records.
+- Old HTML plan artifacts (`plan.html`, `forge-specterops-competitive-upgrade-plan.html`) in repo root NOT updated — dated pre-v2 planning documents.
+- Code files containing `non-destructive` wording (`forge/active_validation/`, `forge/phase6/`, `native/crates/`, test files) NOT touched — code behavior descriptions, not contract wording. Follow-on code work tied to each implementation ticket.
+
+---
+
+# Previous Task (completed 2026-10-10): T7 storage TDD + competitive upgrade + Docker rebuild + competitive research — ALL DONE.
 
 **Status:** 2026-10-10. Kiro session via 4 parallel subagents (yolo role). All 4 workstreams completed:
 
@@ -8,7 +31,7 @@
 
 3. **Docker Rust image rebuild** — `forge-toolkit-rust:local` rebuilt: 174 MB, sha256:957e5c6139aa. 6/7 services healthy (postgres, redis, forge-api, forge-webui, forge-rust-api :9000, forge-rust-webui :9080). Worker has pre-existing postgres password mismatch (FORGE_POSTGRES_PASSWORD in .env.dev differs from baked pg data volume). Both Rust shadow endpoints respond: `{status:ok,bus_connected:true,version:7.2.0-rust}`.
 
-4. **Competitive research** — `docs/competitive_research_strix_cairn_muraena.md` (557 lines) delivered. Strix: adopt tool-wrapper patterns + findings-import connector, NOT autonomous exploitation. Cairn: adopt Fact/Intent/Hint model for recursion intents. Muraena: catalog-only (violates assert_in_scope). Necrobrowser: catalog-only, anti-example for authenticated-scraping spec. 3-wave priority roadmap mapped to existing backlog items.
+4. **Competitive research** — `docs/competitive_research_strix_cairn_muraena.md` (557 lines) delivered. Strix: adopt tool-wrapper patterns + findings-import connector, NOT autonomous exploitation. Cairn: adopt Fact/Intent/Hint model for recursion intents. Muraena: catalog-only (violates assert_in_scope). Necrobrowser: catalog-only, anti-example for authenticated-scraping spec. 3-wave priority roadmap mapped to existing backlog items. **Note (2026-10-11 contract rewrite)**: Muraena/Necrobrowser verdicts were superseded on 2026-10-11 when the operator approved the v1 → v2 goal-lock shift. Both are now integration targets, not catalog-only.
 
 ## Progress dashboard (2026-10-10 delta)
 
