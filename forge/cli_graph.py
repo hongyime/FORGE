@@ -402,3 +402,13 @@ def graph_build(
 _cli_module = sys.modules.get("forge.cli")
 if _cli_module is not None:
     setattr(_cli_module, "graph_build", graph_build)
+
+
+# ---------------------------------------------------------------------------
+# Attack-path management (Explore #16) — compute_paths, tier-zero, choke
+# points, minimal fix set, bootstrap goals, reason about paths, exposure
+# score. See forge/graph/attack_paths.py and forge/graph/attack_path_cli.py.
+# ---------------------------------------------------------------------------
+from forge.graph.attack_path_cli import register_attack_path_commands  # noqa: E402
+
+register_attack_path_commands(graph_app)

@@ -99,6 +99,7 @@ class KillChainFinalizationExecutionResult:
     pregraph_results: list[int]
     sequential_results: list[int]
     report_returncode: int | None
+    exploitation_phase: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -978,6 +979,7 @@ def run_kill_chain_finalization_execution(
     record_finalization_progress: Callable[[str, dict[str, object]], None],
     batch_progress_snapshot: Callable[..., dict[str, object]],
     perf_counter: Callable[[], float],
+    exploitation_hook: Callable[[], dict[str, object] | None] | None = None,
 ) -> KillChainFinalizationExecutionResult:
     pre_validation_specs = finalization_plan.pre_validation_specs
     parallel_post_validation_specs = finalization_plan.parallel_post_validation_specs
@@ -1045,6 +1047,21 @@ def run_kill_chain_finalization_execution(
         batch_progress_snapshot=batch_progress_snapshot,
     )
 
+    exploitation_payload: dict[str, object] | None = None
+    if exploitation_hook is not None:
+        try:
+            exploitation_payload = exploitation_hook()
+        except Exception as exc:  # noqa: BLE001
+            log_callback(
+                "exploitation phase",
+                f"[red]exploitation phase hook raised: {type(exc).__name__}: {str(exc)[:160]}[/red]",
+            )
+            exploitation_payload = {
+                "schema_version": "forge.exploitation.phase.v1",
+                "status": "failed",
+                "reason": f"hook_raised:{type(exc).__name__}",
+            }
+
     sequential_results = run_kill_chain_sequential_finalization_stage(
         sequential_post_validation_specs,
         state=finalization_state,
@@ -1065,6 +1082,7 @@ def run_kill_chain_finalization_execution(
         pregraph_results=pregraph_results,
         sequential_results=sequential_results,
         report_returncode=report_returncode,
+        exploitation_phase=exploitation_payload,
     )
 
 

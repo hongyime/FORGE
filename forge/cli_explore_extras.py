@@ -71,52 +71,13 @@ def graph_cypher_export(
 # ---------------------------------------------------------------------------
 # Explore #16 — Attack Path Management / Tier-zero scoring
 # ---------------------------------------------------------------------------
-
-@graph_app.command("tier-zero")
-def graph_tier_zero(
-    engagement: str = typer.Option(..., "--engagement", "-e"),
-    top_n: int = typer.Option(10, "--top", help="Max tier-zero nodes to show."),
-    output_json: bool = typer.Option(False, "--json"),
-) -> None:
-    """Identify tier-zero assets and attack-path prioritisation (Explore #16).
-
-    Reads the asset graph from the engagement DB, scores every node by
-    inbound attack-path count, and reports the top-N tier-zero candidates
-    with remediation hints.
-
-    Use ``forge graph sync-assets -e <N>`` first to populate the graph.
-    """
-    from forge.config import ForgeConfig  # noqa: PLC0415
-    from forge.graph.tier_zero import compute_tier_zero  # noqa: PLC0415
-
-    cfg = ForgeConfig.load()
-    db_path = cfg.engagement_db_path(engagement)
-    engagement_id = int(engagement)
-
-    report = compute_tier_zero(engagement_id=engagement_id, db_path=db_path, top_n=top_n)
-
-    if output_json:
-        typer.echo(json.dumps(report.to_dict(), indent=2))
-        return
-
-    console.print(f"\n[bold blue]Tier-Zero Exposure[/bold blue]  engagement={engagement}")
-    console.print(f"  {report.summary}\n")
-
-    if not report.tier_zero_nodes:
-        console.print(
-            "  [yellow]No tier-zero nodes found.[/yellow] "
-            "Run: forge graph sync-assets -e <N>"
-        )
-        return
-
-    console.print(f"  [bold]Top {min(top_n, len(report.tier_zero_nodes))} tier-zero nodes:[/bold]")
-    for i, node in enumerate(report.tier_zero_nodes, 1):
-        console.print(
-            f"  {i:>2}. [red]{node['label']:<40}[/red]  "
-            f"[dim]{node['node_type']}  paths={node['inbound_paths']}[/dim]"
-        )
-        console.print(f"       [dim]{node['remediation_hint'][:80]}...[/dim]")
-    console.print()
+# The ``tier-zero`` command was replaced by the richer implementation in
+# ``forge.graph.attack_path_cli`` which also exposes attack-path discovery,
+# choke-point analysis, minimal-fix-set recommendations, Cairn-style goal
+# bootstrapping, path reasoning, and a deterministic 0–100 exposure score.
+# Keeping only the single registration there avoids a duplicate Typer
+# command on ``graph_app`` and preserves the ``forge graph tier-zero``
+# operator surface.
 
 
 # ---------------------------------------------------------------------------

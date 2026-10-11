@@ -46,6 +46,8 @@ class ForgeCliApps:
     recursion_app: typer.Typer
     mcp_app: typer.Typer
     skills_app: typer.Typer
+    exploitation_app: typer.Typer
+    dashboard_app: typer.Typer
 
 
 def _make_sub(name: str, help_text: str) -> typer.Typer:
@@ -84,6 +86,10 @@ def _register_modular_commands(apps: ForgeCliApps) -> None:
     register_mcp_commands(apps.mcp_app)
     from forge.skills.cli import register_skills_commands
     register_skills_commands(apps.skills_app)
+    from forge.exploitation.cli import register_exploitation_commands
+    register_exploitation_commands(apps.exploitation_app)
+    from forge.dashboard.cli import register_dashboard_commands
+    register_dashboard_commands(apps.dashboard_app)
 
 
 def register_extracted_cli_commands(
@@ -174,6 +180,20 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
         recursion_app=_make_sub("recursion", "Recursion intents — Cairn Fact/Intent/Hint board (Wave 2 #20)"),
         mcp_app=_make_sub("mcp", "MCP (Model Context Protocol) server surface — read-only FORGE evidence (Explore #22)"),
         skills_app=_make_sub("skills", "Skill manifest registry — operator playbooks for coding agents (Explore #23)"),
+        exploitation_app=_make_sub(
+            "exploitation",
+            "Scoped authorized exploitation — credentials, reverse-proxy, post-login automation, autonomous exploit, goal engine (goal lock v2)",
+        ),
+        dashboard_app=typer.Typer(
+            name="dashboard",
+            help=(
+                "Static engagement dashboard + goal-progress visualization. "
+                "Run bare `forge dashboard` to build the main overview; "
+                "use `forge dashboard goal-progress -e N` for the Cairn-style goal view."
+            ),
+            invoke_without_command=True,
+            no_args_is_help=False,
+        ),
     )
 
     root_app.add_typer(apps.kb_app)
@@ -207,9 +227,48 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
     root_app.add_typer(apps.recursion_app)
     root_app.add_typer(apps.mcp_app)
     root_app.add_typer(apps.skills_app)
+    root_app.add_typer(apps.exploitation_app)
+    root_app.add_typer(apps.dashboard_app)
+    root_app.add_typer(apps.dashboard_app)
 
+    _wire_dashboard_default_callback(apps.dashboard_app)
     _register_modular_commands(apps)
     return apps
+
+
+def _wire_dashboard_default_callback(dashboard_app: typer.Typer) -> None:
+    """Preserve ``forge dashboard`` behavior as the sub-app default callback.
+
+    ``forge dashboard`` with no sub-command still builds the static
+    engagement dashboard. ``forge dashboard goal-progress -e N ...`` is
+    the Cairn-style goal view registered by
+    :func:`forge.dashboard.cli.register_dashboard_commands`.
+    """
+    from forge.cli_operator import run_dashboard_command  # noqa: PLC0415
+
+    @dashboard_app.callback(invoke_without_command=True)
+    def _dashboard_default(
+        ctx: typer.Context,
+        output: str = typer.Option(
+            "",
+            "--output",
+            "-o",
+            help="Output HTML path. Defaults to reports/dashboard.html.",
+        ),
+        open_browser: bool = typer.Option(
+            False,
+            "--open",
+            help="Open the generated dashboard in your default browser.",
+        ),
+    ) -> None:
+        """Build the static dashboard when no sub-command is invoked."""
+        if ctx.invoked_subcommand is not None:
+            return
+        run_dashboard_command(
+            output=output or None,
+            open_browser=open_browser,
+            console=Console(stderr=True),
+        )
 
 
 __all__ = [

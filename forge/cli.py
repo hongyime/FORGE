@@ -226,6 +226,55 @@ collection_app = _cli_apps.collection_app
 
 
 # ---------------------------------------------------------------------------
+# Kill-chain exploitation phase (goal lock v2 — Muraena/Necrobrowser/Strix/Cairn)
+# ---------------------------------------------------------------------------
+
+
+def _run_kill_chain_exploitation_phase(
+    *,
+    engagement_id,
+    engagement,
+    db_path,
+    attack_mode: bool,
+    dry_run: bool,
+    skip_exploitation: bool,
+    scope_manifest_metadata,
+    roe_id: str,
+    max_runtime_minutes: int,
+    audit_callback,
+    log_callback,
+):
+    """Wrap :func:`forge.phase5.exploitation_phase.run_exploitation_phase`.
+
+    Keeps the kill-chain function slim and swaps the explicit audit/log
+    callbacks for the ones the kill-chain already uses.
+    """
+    from forge.config import ForgeConfig  # noqa: PLC0415
+    from forge.phase5.exploitation_phase import (  # noqa: PLC0415
+        run_exploitation_phase,
+    )
+
+    cfg = ForgeConfig.load()
+    data_dir = cfg.data_dir
+
+    result = run_exploitation_phase(
+        engagement_id=int(engagement_id),
+        engagement=engagement,
+        db_path=db_path,
+        data_dir=data_dir,
+        attack_mode=attack_mode,
+        dry_run=dry_run,
+        skip_exploitation=skip_exploitation,
+        scope_manifest_metadata=scope_manifest_metadata,
+        roe_id=roe_id,
+        max_runtime_minutes=int(max_runtime_minutes or 25),
+        audit_callback=audit_callback,
+        log_callback=log_callback,
+    )
+    return result.to_dict()
+
+
+# ---------------------------------------------------------------------------
 # Global callback — version flag + offline guard
 # ---------------------------------------------------------------------------
 
@@ -421,6 +470,16 @@ def kill_chain(
             "Include manual-only evasion, brute-force, auth-bypass, and "
             "post-exploitation follow-on hints in prerequisite detection. "
             "Default ASM runs suppress these suggestions."
+        ),
+    ),
+    skip_exploitation: bool = typer.Option(
+        False,
+        "--skip-exploitation/--include-exploitation",
+        help=(
+            "Skip the goal-lock-v2 exploitation phase (Muraena reverse-proxy, "
+            "Necrobrowser post-login, Strix autonomous exploit, Cairn goal "
+            "engine). The phase is otherwise gated by --attack-mode, scope-"
+            "manifest permission blocks, FORGE_SAFE_MODE, and --dry-run."
         ),
     ),
 ) -> None:
@@ -13503,7 +13562,32 @@ def kill_chain(
             break
 
     # ═══════════════════════════════════════════════════════════════════
-    # FINAL PHASE - synthesis only (per-iteration OSINT already fired above)
+    # FINAL PHASE - synthesis + scoped authorized exploitation + scoring
+    #
+    # Kill-chain step table (goal lock v2):
+    #
+    # | Step | What runs                                                    |
+    # |------|--------------------------------------------------------------|
+    # | A    | Pre-validation: HIBP + credential validation (optional)      |
+    # | B    | Cloud scan summary + pending cloud key validation            |
+    # | C    | Parallel post-validation: vuln passive, exploit correlate,   |
+    # |      | Phase 3 evasion generate (attack-mode), Phase 5 post-shell,  |
+    # |      | data-driven vuln/auth/post-lateral specs                     |
+    # | D    | Exploitation phase (goal lock v2) — gated by --attack-mode,  |
+    # |      | --roe-id, scope-manifest permission blocks, and              |
+    # |      | FORGE_SAFE_MODE. Lanes:                                      |
+    # |      |   * Muraena reverse-proxy (reverse_proxy permission)         |
+    # |      |   * Necrobrowser post-login (post_login_automation)          |
+    # |      |   * Strix autonomous (autonomous_exploit)                    |
+    # |      |   * Cairn goal engine (goal_targets)                         |
+    # |      | Skipped when --skip-exploitation, --dry-run, --no-attack-    |
+    # |      | mode, FORGE_SAFE_MODE=1, missing ROE, or no permission       |
+    # |      | blocks are granted. Each lane runs under a bounded timeout   |
+    # |      | derived from --max-runtime-minutes.                          |
+    # | E    | Scoring + report generation: attack-path graph family +      |
+    # |      | Phase 6 report (narrative + template fallback)               |
+    # | F    | Finalization sidecars: provider key validation sweep +       |
+    # |      | aggregate stats, closeout audit, Maltego artifact emit       |
     # ═══════════════════════════════════════════════════════════════════
 
     # Phase 6 report path is part of the fixed finalization pipeline shape.
@@ -13574,6 +13658,19 @@ def kill_chain(
         record_finalization_progress=_record_finalization_progress,
         batch_progress_snapshot=_batch_progress_snapshot,
         perf_counter=time.perf_counter,
+        exploitation_hook=lambda: _run_kill_chain_exploitation_phase(
+            engagement_id=engagement_id,
+            engagement=engagement,
+            db_path=db_path,
+            attack_mode=attack_mode,
+            dry_run=dry_run_all,
+            skip_exploitation=skip_exploitation,
+            scope_manifest_metadata=scope_manifest_metadata,
+            roe_id=roe_id,
+            max_runtime_minutes=int(max_runtime_minutes or 25),
+            audit_callback=_cli_audit,
+            log_callback=_log,
+        ),
     )
     report_returncode = finalization_result.report_returncode
     finalization_failed = finalization_result.state.failed
