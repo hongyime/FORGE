@@ -1468,7 +1468,7 @@ Current baseline: **2,100+ passing** / 0 failing.
 1. **Nothing operates outside scope.** `assert_in_scope` gates every network module, including exploitation.
 2. **Every action leaves a receipt.** `audit_log` rows are hash-chained; verifier proves tamper-evidence. Credential capture, exploit payloads, exploit outcomes, and goal progression are all audit records.
 3. **Exploitation is scoped, not blocked.** ROE and scope-manifest permission blocks (`reverse_proxy`, `post_login_automation`, `autonomous_exploit`, `goal_targets`) authorize specific exploitation capabilities. `FORGE_SAFE_MODE=1` disables the exploitation phase entirely for operators who want passive-only ASM.
-4. **Captured material is encrypted at rest.** Raw credentials, MFA cookies, session tokens, and extruded data references are encrypted under `FORGE_ENGAGEMENT_KEY`. Export surfaces require explicit operator decryption.
+4. **Captured material is plaintext-accessible.** Raw credentials, MFA cookies, session tokens, and extruded data references are stored as plaintext JSON under `FORGE_DATA_DIR/exploitation/`. Operators can open any file to view captured data. All capture and export operations are audit-logged.
 5. **Auto-discover, don't hardcode.** OSINT modules auto-find their target credentials.
 6. **Standalone by default.** No cloud dependency required. Template fallback works with zero LLMs.
 7. **Chaos-tested durability.** Workflow engine survives Redis crashes, SQLite lock contention, plugin SIGKILL, disk-full — proven weekly in CI.

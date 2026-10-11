@@ -1598,7 +1598,7 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
 # Schema version
 # ---------------------------------------------------------------------------
 
-SCHEMA_VERSION: int = 48
+SCHEMA_VERSION: int = 52
 
 _VERSION_TABLE: str = """
     CREATE TABLE IF NOT EXISTS _schema_version (

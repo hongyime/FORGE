@@ -43,8 +43,9 @@ exports when LLM providers fail.
   execution (Cairn Bootstrap/Reason/Explore loop toward FORGE-set pre-defined
   goals).
 - Raw captured material (credentials, MFA cookies, session tokens, extruded
-  data references) is encrypted at rest under `FORGE_ENGAGEMENT_KEY`. Export
-  surfaces require explicit operator decryption.
+  data references) is stored as plaintext JSON under `FORGE_DATA_DIR/exploitation/`.
+  Operators can open any file to view captured data. All capture and export
+  operations are audit-logged.
 - `FORGE_SAFE_MODE=1` disables the exploitation phase entirely. Operators who
   want passive-only ASM get the pre-v2 behavior through this gate.
 - URL scope entries are same-host path constraints for crawler,
@@ -138,9 +139,10 @@ exports when LLM providers fail.
 - V16. **`FORGE_SAFE_MODE=1` disables the exploitation phase entirely.**
   Operators who want passive-only ASM get the pre-v2 behavior through this
   gate. Live validation remains available but exploitation does not.
-- V17. **Captured raw credential and session material is encrypted at rest**
-  under `FORGE_ENGAGEMENT_KEY`. The capture, encryption, and decryption are
-  all audit-logged. Export surfaces require explicit operator decryption; no
+- V17. **Captured raw credential and session material is stored as plaintext JSON**
+  on disk so operators can open and inspect any captured file directly. The capture
+  and export are audit-logged. Storage layout is under
+  `FORGE_DATA_DIR/exploitation/credentials/{engagement_id}/`.
   cleartext captured material appears in logs, reports, or dashboard payloads
   by default.
 - V18. **Exploit evidence feeds the same rule-engine scoring as validation
@@ -163,7 +165,7 @@ exports when LLM providers fail.
 | T3 | ~ | Harden validation proof gates and report gates so only latest validated evidence or successful scoped exploit evidence can create deterministic findings. | V6,V7,V18 |
 | T4 | ~ | Keep dashboard, API, graph, report, raw export, validation inventory, exploitation inventory, goal-progression, and audit surfaces in factual parity. | V3,V8 |
 | T5 | . | Preserve deterministic report fallback through LLM cascade failures, quota/token failures, missing keys, local/template degradation, and raw export availability. | V7,V9,V12,V13 |
-| T6 | . | Keep scoped active checks and scoped exploitation ROE-gated, scope-manifest-permission-gated, bounded, paced, logged, dry-run capable, and audited. Audit raw credential/session capture under encryption at rest. | V3,V4,V15,V16,V17 |
+| T6 | . | Keep scoped active checks and scoped exploitation ROE-gated, scope-manifest-permission-gated, bounded, paced, logged, dry-run capable, and audited. Audit raw credential/session capture with plaintext JSON storage. | V3,V4,V15,V16,V17 |
 | T7 | . | Split or wrap large legacy modules only when it reduces risk without changing verified behavior. | V1,V10 |
 | T8 | . | Commit meaningful checkpoints to `main` with docs and handoffs updated for continuation. | V3,V10 |
 | T9 | . | Build the exploitation phase as a first-class pipeline step: reverse-proxy transport lane (Muraena-derived), post-login automation lane (Necrobrowser-derived), autonomous exploit lane (Strix-derived), goal-directed Bootstrap/Reason/Explore loop (Cairn-derived) toward FORGE-owned pre-defined goals. Prove each lane with scope-denial regressions. | V15,V16,V17,V18,V19 |
