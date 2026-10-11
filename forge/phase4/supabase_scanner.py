@@ -227,6 +227,18 @@ def scan_supabase(
         print(f"[SUPABASE] Auto-discovering Supabase config from {target_url}", flush=True)
         html = with_internet_retry(_fetch_text, target_url, cfg)
         if html:
+            # Deep-extract HTML response body for cross-service refs
+            # (cloud buckets, provider domains, additional subdomains).
+            try:
+                from forge.utils.deep_extract import deep_extract_from_content  # noqa: PLC0415
+
+                deep_extract_from_content(
+                    html,
+                    source=f"supabase_scanner:{target_url}",
+                    engagement_id=engagement_id,
+                )
+            except Exception:  # noqa: BLE001
+                pass
             candidates.extend(_extract_supabase_keys(html, target_url))
 
             # Also scan linked JS files
@@ -240,6 +252,18 @@ def scan_supabase(
                 ):
                     js_text = with_internet_retry(_fetch_text, js_url, cfg)
                     if js_text:
+                        try:
+                            from forge.utils.deep_extract import (  # noqa: PLC0415
+                                deep_extract_from_content as _de,
+                            )
+
+                            _de(
+                                js_text,
+                                source=f"supabase_scanner:{js_url}",
+                                engagement_id=engagement_id,
+                            )
+                        except Exception:  # noqa: BLE001
+                            pass
                         candidates.extend(_extract_supabase_keys(js_text, js_url))
 
     # --- Manual / env keys ---

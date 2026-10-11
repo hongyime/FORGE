@@ -348,3 +348,35 @@ def search_commoncrawl_urls_detailed(
         "urls": deduped,
         "error": "; ".join(errors),
     }
+
+
+def deep_extract_commoncrawl_urls(
+    urls: list[str],
+    *,
+    domain_name: str,
+    engagement_id: int | None = None,
+    db_path: str | None = None,
+) -> dict[str, Any]:
+    """Deep-extract targets from a batch of Common Crawl URLs.
+
+    Pure string analysis — no archive bodies are fetched. Hostnames,
+    paths with cloud bucket references, and canonical cloud refs
+    embedded in URL query strings become seeds for the next kill-chain
+    iteration.
+    """
+    try:
+        from forge.utils.deep_extract import deep_extract_from_content
+    except Exception:  # noqa: BLE001
+        return {}
+    bulk = "\n".join(str(u) for u in (urls or []) if u)
+    if not bulk.strip():
+        return {}
+    try:
+        return deep_extract_from_content(
+            bulk,
+            source=f"commoncrawl:{domain_name}",
+            engagement_id=engagement_id,
+            db_path=db_path,
+        )
+    except Exception:  # noqa: BLE001
+        return {}

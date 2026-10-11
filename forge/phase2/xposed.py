@@ -124,6 +124,20 @@ def query_xposed(
         breach_count = data.get("BreachesSummary", {}).get("site", 0)
         breach_names = list(breaches.keys()) if isinstance(breaches, dict) else []
 
+        # Deep-extract targets from breach data: breach names,
+        # categories, descriptions often contain URLs, cloud refs, and
+        # provider domains that extend the discovery graph.
+        try:
+            from forge.utils.deep_extract import deep_extract_from_content
+
+            deep_extract_from_content(
+                json.dumps(data),
+                source=f"xposedornot:{email}",
+                engagement_id=engagement_id,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
         try:
             eng_db_conn.execute(
                 """INSERT INTO email_intelligence

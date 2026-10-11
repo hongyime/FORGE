@@ -4588,6 +4588,21 @@ class ReportSynthesizer:
             self._remove_report_family_artifacts(out)
             raise
         self._audit_report_inclusion(ctx, out)
+        # Deep-extract the generated report body for cross-references.
+        # Any URLs/domains/IPs/cloud refs mentioned in finding
+        # descriptions that are not already in scope will show up in
+        # the extraction stats so operators can flag them.
+        try:
+            from forge.utils.deep_extract import deep_extract_from_content  # noqa: PLC0415
+
+            deep_extract_from_content(
+                markdown_text,
+                source=f"report:{out.name}",
+                engagement_id=ctx.engagement_id,
+                db_path=str(self._db_path),
+            )
+        except Exception:  # noqa: BLE001
+            pass
         logger.info("Report written to %s", out)
         return out
 

@@ -550,6 +550,70 @@ def parse_artifact(path: Path) -> ArtifactMetadata | None:
     return None
 
 
+_PRINTABLE_RUN_RE = re.compile(rb"[\x20-\x7e\t\r\n]{6,}")
+
+
+def extract_strings(path: Path, *, cap: int = _MAX_READ_BYTES) -> list[str]:
+    """Return printable ASCII runs of length >= 6 from the first ``cap`` bytes.
+
+    This is a deliberately small, passive helper used by callers that
+    want to deep-extract targets/secrets from binary artifacts without
+    executing or deeply parsing them.
+    """
+    data = _bounded_read(path, cap=cap)
+    if not data:
+        return []
+    strings: list[str] = []
+    for match in _PRINTABLE_RUN_RE.finditer(data):
+        try:
+            value = match.group(0).decode("ascii", errors="ignore")
+        except Exception:  # noqa: BLE001
+            continue
+        if value:
+            strings.append(value)
+    return strings
+
+
+def deep_extract_artifact(
+    path: Path,
+    *,
+    engagement_id: int | None = None,
+    db_path: str | None = None,
+    source: str | None = None,
+) -> dict[str, object]:
+    """Run deep extraction over the printable strings in ``path``.
+
+    This is a passive helper: no execution, no subprocess, no network.
+    Returns the deep_extract payload (or an empty payload if nothing
+    was extractable). Secret values are never returned — only counts
+    and redacted labels.
+    """
+    try:
+        from forge.utils.deep_extract import deep_extract_from_content
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("deep_extract import failed: %s", exc)
+        return {}
+    try:
+        strings = extract_strings(path)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("extract_strings failed for %s: %s", path, exc)
+        return {}
+    if not strings:
+        return {}
+    payload_source = source or f"artifact:{path.name}"
+    content = "\n".join(strings)
+    try:
+        return deep_extract_from_content(
+            content,
+            source=payload_source,
+            engagement_id=engagement_id,
+            db_path=db_path,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("deep_extract_from_content failed for %s: %s", path, exc)
+        return {}
+
+
 __all__ = [
     "ArtifactMetadata",
     "ArtifactParser",
@@ -563,5 +627,7 @@ __all__ = [
     "KDBXParser",
     "PFXParser",
     "PARSERS",
+    "deep_extract_artifact",
+    "extract_strings",
     "parse_artifact",
 ]

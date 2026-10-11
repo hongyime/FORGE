@@ -1938,6 +1938,26 @@ def kill_chain(
                 for marker, signal_name in _DNS_SIGNAL_MARKERS:
                     if marker in lowered_txt:
                         signals.add(signal_name)
+        # Deep-extract TXT/CNAME/MX/NS records. SPF/DMARC/verification
+        # TXT records routinely contain cloud refs, provider domains,
+        # and SaaS verification tokens that extend the discovery graph.
+        try:
+            from forge.utils.deep_extract import deep_extract_from_content  # noqa: PLC0415
+            import json as _dns_json  # noqa: PLC0415
+
+            dns_payload_pieces: list[str] = []
+            for host_label, host_probe in record_results:
+                hp = host_probe if isinstance(host_probe, dict) else {}
+                raw = hp.get("records") if hp else host_probe
+                if isinstance(raw, dict):
+                    dns_payload_pieces.append(f"{host_label}:{_dns_json.dumps(raw)}")
+            if dns_payload_pieces:
+                deep_extract_from_content(
+                    "\n".join(dns_payload_pieces),
+                    source=f"dns:{root_domain}",
+                )
+        except Exception:  # noqa: BLE001
+            pass
         if active_statuses == 0 and skipped_statuses:
             status = "skipped"
             error = "; ".join(provider_errors) or "dns_lookup_skipped"

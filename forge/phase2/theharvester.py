@@ -110,6 +110,20 @@ def run_theharvester(
     if isinstance(emails_found, dict):
         emails_found = list(emails_found.values())
 
+    # Deep-extract the full harvester payload. Hosts, emails, and
+    # cloud/service references embedded in its output beyond the
+    # top-level ``emails`` list become additional seeds.
+    try:
+        from forge.utils.deep_extract import deep_extract_from_content
+
+        deep_extract_from_content(
+            json.dumps(data),
+            source=f"theharvester:{domain}",
+            engagement_id=engagement_id,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
     # Dedup against existing engagement emails
     existing = {
         r[0].lower()

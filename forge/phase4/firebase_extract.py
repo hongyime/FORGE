@@ -194,6 +194,19 @@ def extract_firebase_config(
         text = with_internet_retry(_fetch_text, url, cfg)
         if not text:
             return None
+        # Deep-extract the full response body so cloud refs, provider
+        # domains, and additional endpoints embedded in the JS/HTML
+        # feed back into discovery.
+        try:
+            from forge.utils.deep_extract import deep_extract_from_content  # noqa: PLC0415
+
+            deep_extract_from_content(
+                text,
+                source=f"firebase_extract:{url}",
+                engagement_id=engagement_id,
+            )
+        except Exception:  # noqa: BLE001
+            pass
         config = _parse_firebase_config(text, url)
         if config.get("api_key") or config.get("project_id"):
             config["source_url"] = url

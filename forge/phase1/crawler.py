@@ -411,6 +411,23 @@ async def crawl_target(
                 tech_stack_json=json.dumps(stack, ensure_ascii=False),
             )
         )
+    # Deep-extract targets from each crawled HTML body. The hook is
+    # fire-and-forget: extraction failures must not take down the crawl.
+    try:
+        from forge.utils.deep_extract import deep_extract_from_content
+
+        for final_url, body, _stack in crawled:
+            try:
+                deep_extract_from_content(
+                    body or "",
+                    source=f"crawler:{final_url}",
+                    engagement_id=engagement_id,
+                    db_path=str(db_path),
+                )
+            except Exception:  # noqa: BLE001
+                continue
+    except Exception:  # noqa: BLE001
+        pass
     con = get_engagement_db(db_path)
     try:
         for row in results:

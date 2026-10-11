@@ -257,3 +257,35 @@ def search_wayback_urls_detailed(
         "urls": deduped,
         "error": error,
     }
+
+
+def deep_extract_wayback_urls(
+    urls: list[str],
+    *,
+    domain_name: str,
+    engagement_id: int | None = None,
+    db_path: str | None = None,
+) -> dict[str, Any]:
+    """Deep-extract targets from a batch of historical URLs.
+
+    Returns a merged :func:`forge.utils.deep_extract.deep_extract_from_content`
+    payload. Each URL body is NOT fetched — only the URL string itself
+    is parsed so hostnames, cloud refs, and query-string hints become
+    seeds without any outbound traffic.
+    """
+    try:
+        from forge.utils.deep_extract import deep_extract_from_content
+    except Exception:  # noqa: BLE001
+        return {}
+    bulk = "\n".join(str(u) for u in (urls or []) if u)
+    if not bulk.strip():
+        return {}
+    try:
+        return deep_extract_from_content(
+            bulk,
+            source=f"wayback:{domain_name}",
+            engagement_id=engagement_id,
+            db_path=db_path,
+        )
+    except Exception:  # noqa: BLE001
+        return {}
