@@ -1007,6 +1007,16 @@ def _classify_seed_value(value: str) -> str:
         return "phone"
     if re.match(r"^@[a-z0-9_.\-]{2,32}$", lowered):
         return "username"
+    # api_spec detection (Wave 2 #21) runs ahead of URL/domain checks so
+    # OpenAPI/Postman spec files are tagged for the dedicated parser.
+    try:
+        from forge.seeds.api_spec_parser import (  # noqa: PLC0415
+            classify_api_spec_value,
+        )
+        if classify_api_spec_value(text):
+            return "api_spec"
+    except Exception:  # noqa: BLE001
+        pass
     try:
         parsed_ip = ipaddress.ip_address(text)
         return "ipv6" if parsed_ip.version == 6 else "ipv4"

@@ -37,6 +37,9 @@ Migration index
   0046  Remediation risk acceptance expiry
   0047  Encrypted connector secrets
   0049  Asset graph remediation source
+  0050  Active session relationship_type CHECK rebuild
+  0051  Recursion intents (Cairn Fact/Intent/Hint)
+  0052  API-spec seed type
 
 Design constraints:
   - All ALTER TABLE statements use `IF NOT EXISTS` workaround (SQLite
@@ -2687,6 +2690,123 @@ def _m0050_active_session_relationship_check(conn: sqlite3.Connection) -> None:
             conn.execute("PRAGMA foreign_keys = ON")
 
 
+def _m0051_recursion_intents(conn: sqlite3.Connection) -> None:
+    """Add ``recursion_intents`` table (Wave 2 #20, Cairn Fact/Intent/Hint).
+
+    Formalizes FORGE's recursion backlog as explicit Intent rows that pair a
+    source Fact (hosts, services, cloud_refs, vulnerability_findings) with a
+    proposed next seed to pursue. View + audit upgrade only — the kill-chain
+    scheduler is not rewritten; this is a durable record of what *would* be
+    recursed if a scheduler/operator claimed it.
+
+    Columns match the Wave 2 backlog contract:
+      - intent_id          — stable string ID (UUID or operator-supplied).
+      - source_fact_id     — opaque pointer to the Fact row that spawned this
+                             intent (free-form; downstream code decides shape).
+      - target_seed        — the proposed next seed value.
+      - seed_type          — optional classifier hint; one of the canonical
+                             seed-type names, or NULL for operator-added
+                             intents that have not been classified yet.
+      - rationale          — free-form text explaining why this intent exists.
+      - created_at         — timestamp of intent creation.
+      - claimed_by         — operator/agent who took ownership of the intent.
+      - claimed_at         — timestamp of claim.
+      - completed_fact_id  — opaque pointer to the Fact row that closed the
+                             intent (NULL until status='completed').
+      - status             — open|claimed|completed|abandoned (CHECK constraint).
+      - engagement_id      — scope anchor (NOT NULL once engagement row exists;
+                             left loosely typed TEXT per the Wave 2 contract so
+                             operator tools without numeric engagement IDs can
+                             still reference the row).
+
+    Idempotent via CREATE TABLE IF NOT EXISTS.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS recursion_intents (
+            intent_id         TEXT PRIMARY KEY,
+            source_fact_id    TEXT,
+            target_seed       TEXT NOT NULL,
+            seed_type         TEXT,
+            rationale         TEXT,
+            created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+            claimed_by        TEXT,
+            claimed_at        TEXT,
+            completed_fact_id TEXT,
+            status            TEXT NOT NULL DEFAULT 'open'
+                              CHECK(status IN ('open','claimed','completed','abandoned')),
+            engagement_id     TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_recursion_intents_engagement
+            ON recursion_intents (engagement_id, status, created_at DESC)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_recursion_intents_target_seed
+            ON recursion_intents (engagement_id, target_seed)
+        """
+    )
+    conn.commit()
+
+
+def _m0052_api_spec_seed_type(conn: sqlite3.Connection) -> None:
+    """Extend ``engagement_seeds.seed_type`` CHECK to accept ``api_spec`` (Wave 2 #21).
+
+    OpenAPI / Postman / Swagger spec files are a first-class seed class so a
+    scoped engagement can pull API routes into the normal in-scope crawl
+    queue without smuggling them through the generic ``url`` or ``other``
+    types. Fresh installs land the full CHECK via the current schema.py
+    statement; upgraded DBs rewrite the table here.
+
+    Idempotent: skips the rewrite if the CHECK already contains ``api_spec``.
+    """
+    expected_clause = "'api_spec'"
+
+    if _table_sql_contains(conn, "engagement_seeds", expected_clause):
+        return
+
+    _rebuild_table(
+        conn,
+        "engagement_seeds",
+        """
+        CREATE TABLE engagement_seeds (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+            seed_value    TEXT    NOT NULL,
+            seed_type     TEXT    NOT NULL
+                          CHECK (seed_type IN (
+                              'domain','email','phone','username','ipv4','ipv6',
+                              'name','company','url','apk_url','subdomain',
+                              'cloud_ref','api_spec','other'
+                          )),
+            source        TEXT    NOT NULL DEFAULT 'operator'
+                          CHECK (source IN ('operator','scope','discovered','artifact','cross_reference')),
+            status        TEXT    NOT NULL DEFAULT 'pending'
+                          CHECK (status IN ('pending','running','completed','failed','ignored')),
+            depth         INTEGER NOT NULL DEFAULT 0,
+            confidence    REAL    NOT NULL DEFAULT 1.0,
+            parent_seed_id INTEGER REFERENCES engagement_seeds(id),
+            metadata_json TEXT    NOT NULL DEFAULT '{}',
+            discovered_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, seed_type, seed_value)
+        )
+        """,
+        [
+            """
+            CREATE INDEX IF NOT EXISTS idx_engagement_seeds_engagement
+                ON engagement_seeds (engagement_id, status, depth)
+            """.strip(),
+        ],
+    )
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — ordered by version number
 # ---------------------------------------------------------------------------
@@ -2746,6 +2866,8 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (48, "active_validation_http_security_headers", _m0048_active_validation_http_security_headers),
     (49, "asset_graph_remediation_source", _m0049_asset_graph_remediation_source),
     (50, "active_session_relationship_check", _m0050_active_session_relationship_check),
+    (51, "recursion_intents", _m0051_recursion_intents),
+    (52, "api_spec_seed_type", _m0052_api_spec_seed_type),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)

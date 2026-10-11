@@ -5,7 +5,7 @@ All CREATE TABLE and FTS5 virtual table statements for the FORGE engagement
 database. Tables are created idempotently (IF NOT EXISTS); ordering matters
 due to REFERENCES constraints.
 
-Schema version: 48
+Schema version: 52
 Authoritative source: PRD v7.2 §4.1–§4.5
 
 Design notes:
@@ -86,7 +86,7 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
                       CHECK (seed_type IN (
                           'domain','email','phone','username','ipv4','ipv6',
                           'name','company','url','apk_url','subdomain',
-                          'cloud_ref','other'
+                          'cloud_ref','api_spec','other'
                       )),
         source        TEXT    NOT NULL DEFAULT 'operator'
                       CHECK (source IN ('operator','scope','discovered','artifact','cross_reference')),
@@ -152,6 +152,33 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     """
     CREATE INDEX IF NOT EXISTS idx_engagement_runs_engagement
         ON engagement_runs (engagement_id, status, started_at DESC)
+    """,
+    # ------------------------------------------------------------------
+    # Recursion intents — Cairn-style Fact/Intent/Hint board (Wave 2 #20)
+    # ------------------------------------------------------------------
+    """
+    CREATE TABLE IF NOT EXISTS recursion_intents (
+        intent_id         TEXT PRIMARY KEY,
+        source_fact_id    TEXT,
+        target_seed       TEXT NOT NULL,
+        seed_type         TEXT,
+        rationale         TEXT,
+        created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+        claimed_by        TEXT,
+        claimed_at        TEXT,
+        completed_fact_id TEXT,
+        status            TEXT NOT NULL DEFAULT 'open'
+                          CHECK(status IN ('open','claimed','completed','abandoned')),
+        engagement_id     TEXT
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_recursion_intents_engagement
+        ON recursion_intents (engagement_id, status, created_at DESC)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_recursion_intents_target_seed
+        ON recursion_intents (engagement_id, target_seed)
     """,
     """
     CREATE TABLE IF NOT EXISTS run_audit_manifests (

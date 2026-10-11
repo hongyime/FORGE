@@ -31,6 +31,7 @@ MAX_TARGET_FEED_FILE_BYTES = 64 * 1024 * 1024
 MAX_TARGET_FEED_IMPORT_ITEMS = 100_000
 SUPPORTED_TARGET_TYPES = {
     "apk_url",
+    "api_spec",
     "artifact_url",
     "auto",
     "cloud_ref",
@@ -60,6 +61,7 @@ SUPPORTED_TARGET_TYPES = {
 }
 CANONICAL_TARGET_TYPES = {
     "apk_url",
+    "api_spec",
     "cloud_ref",
     "company",
     "domain",

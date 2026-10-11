@@ -545,6 +545,19 @@ def kill_chain(
             return "phone"
         if _re.match(r"^@[a-zA-Z0-9_.\-]{2,32}$", v):
             return "username"
+        # api_spec detection runs before URL/path classification because an
+        # OpenAPI/Postman spec file path otherwise looks like a plain URL
+        # or domain (Wave 2 #21). The parser only returns True when the
+        # file actually opens as a supported spec, so unrelated .json/.yaml
+        # paths still fall through to the normal classification order.
+        try:
+            from forge.seeds.api_spec_parser import (  # noqa: PLC0415
+                classify_api_spec_value,
+            )
+            if classify_api_spec_value(v):
+                return "api_spec"
+        except Exception:  # noqa: BLE001
+            pass
         try:
             parsed_ip = ipaddress.ip_address(v)
             return "ipv6" if parsed_ip.version == 6 else "ipv4"

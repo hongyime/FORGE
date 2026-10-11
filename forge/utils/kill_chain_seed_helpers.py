@@ -260,6 +260,19 @@ def canonical_initial_seed_value(
         return canonical_http_url_value(value) or canonical_cloud_ref_value(value) or value.lower().strip(".")
     if seed_type_value in {"url", "apk_url"}:
         return canonical_http_url_value(value) or value
+    if seed_type_value == "api_spec":
+        # api_spec seeds are local file paths. Normalize file:// prefixes
+        # but preserve the resolved on-disk path so the parser can open it.
+        text = value
+        if text.lower().startswith("file://"):
+            text = text[len("file://") :]
+        try:
+            from pathlib import Path as _Path  # noqa: PLC0415
+
+            resolved = _Path(text).expanduser()
+            return str(resolved)
+        except Exception:  # noqa: BLE001
+            return text
     return value
 
 
