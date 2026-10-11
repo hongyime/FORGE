@@ -1,17 +1,28 @@
 #!/usr/bin/env sh
-# FORGE Toolkit - POSIX setup launcher.
+# =============================================================================
+#  FORGE Toolkit - Setup Launcher (POSIX)
+# =============================================================================
+#  The one command a new operator runs. Ensures Python 3.11+, creates
+#  .venv, installs FORGE, then delegates to `forge setup` for the rest
+#  (.env seeding, directories, scope manifest, starter feed, free
+#  threat intel, doctor).
+#
+#  Idempotent — safe to re-run.
+#
+#  Flags are forwarded to `forge setup`. Common ones:
+#    ./setup.sh --skip-feeds-fetch   # skip free threat intel refresh
+#    ./setup.sh --skip-doctor        # skip readiness probe
+#    ./setup.sh --json               # machine-readable JSON output
+# =============================================================================
 
 ROOT=$(CDPATH= cd "$(dirname "$0")" && pwd -P) || exit 1
 cd "$ROOT" || exit 1
-BOOTSTRAP="$ROOT/bootstrap.py"
 
-wait_if_interactive() {
-    if [ -t 0 ]; then
-        printf '%s' "$1"
-        IFS= read -r _forge_wait || :
-    fi
-}
+export PYTHONIOENCODING=utf-8
 
+printf '[FORGE] Setting up...\n'
+
+# --- Resolve Python 3.11+ ----------------------------------------------------
 find_python() {
     for candidate in python3.13 python3.12 python3.11 python3 python; do
         if command -v "$candidate" >/dev/null 2>&1 &&
@@ -24,42 +35,51 @@ find_python() {
     return 1
 }
 
-if [ ! -f "$BOOTSTRAP" ]; then
-    printf '[FORGE Setup] Missing bootstrap.py at: "%s"\n' "$BOOTSTRAP"
+FORGE_PY=$(find_python)
+if [ -z "$FORGE_PY" ]; then
+    printf '[FORGE] ERROR: Python 3.11+ not found.\n'
+    printf '        Install from https://www.python.org/downloads/ and re-run.\n'
     exit 1
 fi
 
-BOOTSTRAP_PY=$(find_python)
-if [ -z "$BOOTSTRAP_PY" ]; then
-    printf '[FORGE Setup] Error: Python 3.11+ not found.\n'
-    exit 1
+# --- Create venv if missing --------------------------------------------------
+if [ ! -x "$ROOT/.venv/bin/python" ] && [ ! -x "$ROOT/.venv/Scripts/python.exe" ]; then
+    printf '[FORGE] Creating virtual environment at .venv ...\n'
+    if command -v uv >/dev/null 2>&1; then
+        printf '[FORGE] Using uv for dependency install.\n'
+        if ! uv venv .venv; then
+            printf '[FORGE] ERROR: `uv venv .venv` failed.\n'
+            exit 1
+        fi
+        if ! uv pip install --python .venv/bin/python -e .; then
+            printf '[FORGE] ERROR: `uv pip install -e .` failed.\n'
+            exit 1
+        fi
+    else
+        if ! "$FORGE_PY" -m venv .venv; then
+            printf '[FORGE] ERROR: `%s -m venv .venv` failed.\n' "$FORGE_PY"
+            exit 1
+        fi
+        if ! .venv/bin/python -m pip install --upgrade pip; then
+            printf '[FORGE] ERROR: pip upgrade failed.\n'
+            exit 1
+        fi
+        if ! .venv/bin/python -m pip install -e .; then
+            printf '[FORGE] ERROR: `pip install -e .` failed.\n'
+            exit 1
+        fi
+    fi
 fi
 
-printf '[FORGE Setup] Choose install mode:\n\n'
-printf '  [1] SAFE       Core dependencies only\n'
-printf '  [2] OFFENSIVE  Full dependency stack\n\n'
-printf 'Select mode [1/2]: '
-IFS= read -r CHOICE || CHOICE=
-
-case "$CHOICE" in
-    2)
-        export FORGE_SAFE_MODE=0
-        printf '[FORGE Setup] Running Full Offensive setup...\n'
-        ;;
-    *)
-        export FORGE_SAFE_MODE=1
-        printf '[FORGE Setup] Running Core Safe setup...\n'
-        ;;
-esac
-
-"$BOOTSTRAP_PY" "$BOOTSTRAP" --venv-mode project setup
+# --- Delegate to `forge setup` -----------------------------------------------
+.venv/bin/python -m forge.cli setup "$@"
 EXIT_CODE=$?
 
 printf '\n'
 if [ "$EXIT_CODE" -eq 0 ]; then
-    wait_if_interactive '[FORGE Setup] Completed. Press Enter to continue...'
+    printf '[FORGE] Setup complete. Next: ./forge-autopilot.sh\n'
 else
-    wait_if_interactive "[FORGE Setup] Error detected (exit code $EXIT_CODE). Press Enter to continue..."
+    printf '[FORGE] Setup exited with code %s. See output above.\n' "$EXIT_CODE"
 fi
 
 exit "$EXIT_CODE"

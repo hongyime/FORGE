@@ -1,76 +1,99 @@
 @echo off
+REM ============================================================================
+REM  FORGE Toolkit - Setup Launcher (Windows)
+REM ============================================================================
+REM  The one command a new operator runs. Ensures Python 3.11+, creates
+REM  .venv, installs FORGE, then delegates to `forge setup` for the rest
+REM  (.env seeding, directories, scope manifest, starter feed, free
+REM  threat intel, doctor).
+REM
+REM  Idempotent — safe to re-run.
+REM
+REM  Flags are forwarded to `forge setup`. Common ones:
+REM    setup.bat --skip-feeds-fetch   # skip free threat intel refresh
+REM    setup.bat --skip-doctor        # skip readiness probe
+REM    setup.bat --json               # machine-readable JSON output
+REM ============================================================================
+
 setlocal EnableExtensions
 set "ROOT=%~dp0"
-if not exist "%ROOT%bootstrap.py" (
-  echo [FORGE Setup] Missing bootstrap.py at: "%ROOT%bootstrap.py"
-  exit /b 1
-)
+cd /d "%ROOT%"
 
+set "PYTHONIOENCODING=utf-8"
+
+echo [FORGE] Setting up...
+
+REM --- Resolve Python 3.11+ ---------------------------------------------------
+set "FORGE_PY="
 call :find_python
-if errorlevel 1 (
-  echo [FORGE Setup] Error: Python 3.11+ not found.
-  exit /b 1
+if not defined FORGE_PY (
+    echo [FORGE] ERROR: Python 3.11+ not found.
+    echo         Install from https://www.python.org/downloads/ and re-run.
+    exit /b 1
 )
 
-echo [FORGE Setup] Choose install mode:
-echo.
-echo   [1] SAFE       Core dependencies only
-echo   [2] OFFENSIVE  Full dependency stack
-echo.
-choice /C 12 /N /M "Select mode [1/2]: "
-if errorlevel 2 goto setup_full
+REM --- Create venv if missing -------------------------------------------------
+if not exist ".venv\Scripts\python.exe" (
+    echo [FORGE] Creating virtual environment at .venv ...
+    where uv >nul 2>nul
+    if not errorlevel 1 (
+        echo [FORGE] Using uv for dependency install.
+        uv venv .venv
+        if errorlevel 1 goto venv_failed
+        uv pip install --python .venv\Scripts\python.exe -e .
+        if errorlevel 1 goto venv_failed
+    ) else (
+        %FORGE_PY% -m venv .venv
+        if errorlevel 1 goto venv_failed
+        .venv\Scripts\python.exe -m pip install --upgrade pip
+        if errorlevel 1 goto venv_failed
+        .venv\Scripts\python.exe -m pip install -e .
+        if errorlevel 1 goto venv_failed
+    )
+)
 
-set "FORGE_SAFE_MODE=1"
-echo [FORGE Setup] Running Core Safe setup...
-"%BOOTSTRAP_PY%" %BOOTSTRAP_PY_ARGS% "%ROOT%bootstrap.py" --venv-mode project setup
-goto end
-
-:setup_full
-set "FORGE_SAFE_MODE=0"
-echo [FORGE Setup] Running Full Offensive setup...
-"%BOOTSTRAP_PY%" %BOOTSTRAP_PY_ARGS% "%ROOT%bootstrap.py" --venv-mode project setup
-
-:end
+REM --- Delegate to `forge setup` ----------------------------------------------
+.venv\Scripts\python.exe -m forge.cli setup %*
 set "EXIT_CODE=%errorlevel%"
-echo.
+
 if "%EXIT_CODE%"=="0" (
-  set /p "FORGE_EXIT_PROMPT=[FORGE Setup] Completed. Press Enter to continue..."
+    echo.
+    echo [FORGE] Setup complete. Next: forge-autopilot.bat
 ) else (
-  set /p "FORGE_EXIT_PROMPT=[FORGE Setup] Error detected (exit code %EXIT_CODE%). Press Enter to continue..."
+    echo.
+    echo [FORGE] Setup exited with code %EXIT_CODE%. See output above.
 )
+
 exit /b %EXIT_CODE%
 
+:venv_failed
+echo [FORGE] ERROR: Failed to create or populate .venv. See output above.
+exit /b 1
+
 :find_python
-:: 1. Try py launcher
+REM Resolve a Python 3.11+ launcher into %FORGE_PY%.
 where py >nul 2>&1
 if %errorlevel%==0 (
-  :: Check for 3.11 or higher
-  py -3 -c "import sys; sys.exit(0 if sys.version_info[:2]>=(3,11) else 1)" >nul 2>&1
-  if %errorlevel%==0 (
-    set "BOOTSTRAP_PY=py"
-    set "BOOTSTRAP_PY_ARGS=-3"
-    exit /b 0
-  )
+    py -3 -c "import sys; sys.exit(0 if sys.version_info[:2] >= (3,11) else 1)" >nul 2>&1
+    if %errorlevel%==0 (
+        set "FORGE_PY=py -3"
+        exit /b 0
+    )
 )
-
-:: 2. Try python
 where python >nul 2>&1
 if %errorlevel%==0 (
-  python -c "import sys; sys.exit(0 if sys.version_info[:2]>=(3,11) else 1)" >nul 2>&1
-  if %errorlevel%==0 (
-    set "BOOTSTRAP_PY=python"
-    exit /b 0
-  )
+    python -c "import sys; sys.exit(0 if sys.version_info[:2] >= (3,11) else 1)" >nul 2>&1
+    if %errorlevel%==0 (
+        set "FORGE_PY=python"
+        exit /b 0
+    )
 )
-
-:: 3. Try python3
 where python3 >nul 2>&1
 if %errorlevel%==0 (
-  python3 -c "import sys; sys.exit(0 if sys.version_info[:2]>=(3,11) else 1)" >nul 2>&1
-  if %errorlevel%==0 (
-    set "BOOTSTRAP_PY=python3"
-    exit /b 0
-  )
+    python3 -c "import sys; sys.exit(0 if sys.version_info[:2] >= (3,11) else 1)" >nul 2>&1
+    if %errorlevel%==0 (
+        set "FORGE_PY=python3"
+        exit /b 0
+    )
 )
-
 exit /b 1

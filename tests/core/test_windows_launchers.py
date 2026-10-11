@@ -45,59 +45,84 @@ def test_status_windows_launcher_uses_consolidated_automation_status() -> None:
     assert ".forge_data/engagements" not in text
 
 
-def test_autopilot_launcher_runs_start_resume_monitor_dashboard() -> None:
+def test_autopilot_launcher_delegates_to_forge_autopilot() -> None:
+    """New simplified launcher: delegate to `forge.cli autopilot`, apply by default."""
     text = _read_launcher("forge-autopilot.bat")
-    assert "automation feed-build" in text
-    assert "--skip-feed-build" in text
-    assert "--feed-source" in text
-    assert "targets import" in text
-    assert "--start-limit" in text
-    assert "--min-start-source-count" in text
-    assert "targets resume-run" in text
-    assert "--max-parallel" in text
-    assert "monitoring run-due" in text
-    assert "dashboard" in text
-    assert "--skip-dashboard" in text
-    assert "--dry-run" in text
-    assert "roe_id_present" in text
-    assert "echo   roe_id=%roe_id%" not in text
+    assert "forge.cli autopilot" in text
+    assert "--apply" in text
+    assert "forge_safe_mode" in text
+    assert "forge_roe_id" in text
+    assert "roe-1" in text
+    assert "safe mode" in text
 
 
-def test_autopilot_windows_launcher_success_phase_order() -> None:
+def test_autopilot_windows_launcher_defaults_to_apply() -> None:
+    """Default mode is apply (live), not dry-run."""
     text = _read_launcher("forge-autopilot.bat")
+    # No dry-run first prompt — just apply.
+    assert "proceed with --apply" not in text
+    assert "set /p" not in text
+    # Default call forwards --apply.
+    assert '-m forge.cli autopilot --apply' in text
 
-    assert text.index("[feed] building target feed") < text.index("[import] importing target feed")
-    assert text.index("[import] importing target feed") < text.index("[resume] resuming ready")
-    assert text.index("[resume] resuming ready") < text.index("[monitoring] applying due")
-    assert text.index("[monitoring] applying due") < text.index("[dashboard] refreshing")
 
-
-def test_autopilot_windows_launcher_defaults_to_dry_run_and_fails_fast_on_feed_apply() -> None:
+def test_autopilot_windows_launcher_auto_detects_roe_and_safe_mode() -> None:
+    """Launcher auto-sets FORGE_ROE_ID=ROE-1 and FORGE_SAFE_MODE=0 if unset."""
     text = _read_launcher("forge-autopilot.bat")
+    assert 'if not defined forge_roe_id set "forge_roe_id=roe-1"' in text
+    assert 'if not defined forge_safe_mode set "forge_safe_mode=0"' in text
 
-    assert 'set "dry_run=1"' in text
-    assert 'if /i "%~1"=="--apply" set "dry_run=0"' in text
-    assert "failed in apply mode; stopping before stale feed import/resume/monitoring" in text
-    assert "exit /b !exit_code!" in text
-    assert 'set "start_limit=2"' in text
-    assert 'set "min_start_source_count=1"' in text
-    assert 'set "max_runtime_minutes=10"' in text
-    assert 'set "resume_limit=10"' in text
-    assert 'set "max_parallel=2"' in text
-    assert 'set "monitor_limit=10"' in text
+
+def test_autopilot_windows_launcher_prints_start_banner() -> None:
+    """Launcher prints `Starting FORGE autopilot... ROE: ..., Safe Mode: ...`."""
+    text = _read_launcher("forge-autopilot.bat")
+    assert "starting forge autopilot" in text
+    # Both labels must appear in the banner.
+    assert "roe: %forge_roe_id%" in text
+    assert "safe mode:" in text
 
 
 def test_autopilot_windows_launcher_can_run_from_packaged_path_runtime() -> None:
     text = _read_launcher("forge-autopilot.bat")
 
     assert "where python >nul 2>nul" in text
-    assert "where forge >nul 2>nul" in text
     assert 'set "python=python"' in text
     assert "use the packaged docker image" in text
     assert re.search(r"(?m)^\s*pause\s*$", text) is None
 
 
-def test_autopilot_windows_apply_requires_roe_before_python_call(tmp_path: Path) -> None:
+def test_autopilot_windows_launcher_forwards_arbitrary_flags() -> None:
+    """Any flags the operator passes still forward to `forge autopilot`."""
+    text = _read_launcher("forge-autopilot.bat")
+    assert "-m forge.cli autopilot %*" in text
+
+
+def test_windows_setup_launcher_matches_project_contract() -> None:
+    """``setup.bat`` is the simple delegator to ``forge.cli setup``.
+
+    Python 3.11+ detection, create ``.venv`` locally (uv first,
+    fall back to ``%FORGE_PY% -m venv``), ``pip install -e .``, then
+    delegate to ``python -m forge.cli setup`` with forwarded flags.
+    """
+    text = _read_launcher("setup.bat")
+
+    # Python 3.11+ guard preserved.
+    assert "sys.version_info[:2] >= (3,11)" in text
+    # Create .venv if missing.
+    assert ".venv\\scripts\\python.exe" in text
+    assert "uv venv .venv" in text
+    assert "%forge_py% -m venv .venv" in text
+    assert ".venv\\scripts\\python.exe -m pip install -e ." in text
+    assert "uv pip install --python .venv\\scripts\\python.exe -e ." in text
+    # Final delegation is to `forge.cli setup`, not bootstrap.py.
+    assert ".venv\\scripts\\python.exe -m forge.cli setup %*" in text
+    assert "bootstrap.py" not in text
+    # Operator-facing hint is correct.
+    assert "forge-autopilot.bat" in text
+
+
+def test_autopilot_windows_launcher_delegates_dry_run_flag(tmp_path: Path) -> None:
+    """Operator-passed ``--dry-run`` is forwarded verbatim to `forge autopilot`."""
     if sys.platform != "win32":
         pytest.skip("cmd launcher behavior is Windows-specific")
 
@@ -110,13 +135,13 @@ def test_autopilot_windows_apply_requires_roe_before_python_call(tmp_path: Path)
         f"@echo off\r\necho %*>>\"{python_log}\"\r\nexit /b 0\r\n",
         encoding="utf-8",
     )
-    (bin_dir / "forge.bat").write_text("@echo off\r\nexit /b 0\r\n", encoding="utf-8")
 
     env = os.environ.copy()
     env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
     env.pop("FORGE_ROE_ID", None)
+    env.pop("FORGE_SAFE_MODE", None)
     result = subprocess.run(
-        ["cmd", "/c", str(launcher), "--apply", "--skip-dashboard"],
+        ["cmd", "/c", str(launcher), "--dry-run"],
         cwd=tmp_path,
         env=env,
         text=True,
@@ -125,114 +150,48 @@ def test_autopilot_windows_apply_requires_roe_before_python_call(tmp_path: Path)
         check=False,
     )
 
-    assert result.returncode == 1
-    assert "--apply requires --roe-id or FORGE_ROE_ID" in result.stdout
-    assert not python_log.exists()
-
-
-def test_autopilot_windows_apply_stops_after_feed_build_failure(tmp_path: Path) -> None:
-    if sys.platform != "win32":
-        pytest.skip("cmd launcher behavior is Windows-specific")
-
-    launcher = tmp_path / "forge-autopilot.bat"
-    launcher.write_text((REPO_ROOT / "forge-autopilot.bat").read_text(encoding="utf-8"), encoding="utf-8")
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    python_log = tmp_path / "python.log"
-    forge_pkg = tmp_path / "forge"
-    forge_pkg.mkdir()
-    (forge_pkg / "__init__.py").write_text("", encoding="utf-8")
-    (forge_pkg / "cli.py").write_text(
-        "\n".join(
-            [
-                "from pathlib import Path",
-                "import sys",
-                f"Path({str(python_log)!r}).write_text(' '.join(sys.argv[1:]) + '\\n', encoding='utf-8')",
-                "if sys.argv[1:3] == ['automation', 'feed-build']:",
-                "    raise SystemExit(7)",
-                "raise SystemExit(0)",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    (bin_dir / "forge.bat").write_text("@echo off\r\nexit /b 0\r\n", encoding="utf-8")
-
-    env = os.environ.copy()
-    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
-    env["PYTHONPATH"] = str(tmp_path)
-    env.pop("FORGE_ROE_ID", None)
-    result = subprocess.run(
-        ["cmd", "/c", str(launcher), "--apply", "--roe-id", "ROE-TEST", "--skip-dashboard"],
-        cwd=tmp_path,
-        env=env,
-        text=True,
-        capture_output=True,
-        timeout=20,
-        check=False,
-    )
-    calls = python_log.read_text(encoding="utf-8").lower().splitlines()
-
-    assert result.returncode == 7
-    assert "failed in apply mode; stopping before stale feed import/resume/monitoring" in result.stdout
-    assert len(calls) == 1
-    assert "automation feed-build" in calls[0]
-    assert "targets import" not in "\n".join(calls)
-    assert "targets resume-run" not in "\n".join(calls)
-    assert "monitoring run-due" not in "\n".join(calls)
-
-
-def test_autopilot_windows_dry_run_without_roe_rehearses_order_and_skips_dashboard(
-    tmp_path: Path,
-) -> None:
-    if sys.platform != "win32":
-        pytest.skip("cmd launcher behavior is Windows-specific")
-
-    launcher = tmp_path / "forge-autopilot.bat"
-    launcher.write_text(
-        (REPO_ROOT / "forge-autopilot.bat").read_text(encoding="utf-8"),
-        encoding="utf-8",
-    )
-    imports = tmp_path / "imports"
-    imports.mkdir()
-    (imports / "target-feed.json").write_text(
-        json.dumps({"schema_version": "target-feed.v1", "items": []}),
-        encoding="utf-8",
-    )
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    python_log = tmp_path / "python.log"
-    (bin_dir / "python.bat").write_text(
-        f"@echo off\r\necho %*>>\"{python_log}\"\r\nexit /b 0\r\n",
-        encoding="utf-8",
-    )
-    (bin_dir / "forge.bat").write_text("@echo off\r\nexit /b 0\r\n", encoding="utf-8")
-
-    env = os.environ.copy()
-    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
-    env.pop("FORGE_ROE_ID", None)
-    result = subprocess.run(
-        ["cmd", "/c", str(launcher), "--skip-feed-build"],
-        cwd=tmp_path,
-        env=env,
-        text=True,
-        capture_output=True,
-        timeout=20,
-        check=False,
-    )
-
-    calls = python_log.read_text(encoding="utf-8").lower().splitlines()
     assert result.returncode == 0, result.stdout + result.stderr
-    assert len(calls) == 3
-    assert "targets import" in calls[0]
-    assert "--start --dry-run" in calls[0]
-    assert "--roe-id" not in calls[0]
-    assert "targets resume-run" in calls[1]
-    assert "--dry-run" in calls[1]
-    assert "monitoring run-due" in calls[2]
-    assert "--dry-run" in calls[2]
-    assert "dashboard" not in "\n".join(calls)
-    assert "skipped in dry-run mode" in result.stdout.lower()
+    assert "Starting FORGE autopilot" in result.stdout
+    assert "ROE: ROE-1" in result.stdout
+    assert "Safe Mode: OFF" in result.stdout
+    assert python_log.exists()
+    assert "--dry-run" in python_log.read_text(encoding="utf-8")
+
+
+def test_autopilot_windows_launcher_apply_default_sets_roe_1(tmp_path: Path) -> None:
+    """No flags → defaults to --apply with ROE-1."""
+    if sys.platform != "win32":
+        pytest.skip("cmd launcher behavior is Windows-specific")
+
+    launcher = tmp_path / "forge-autopilot.bat"
+    launcher.write_text((REPO_ROOT / "forge-autopilot.bat").read_text(encoding="utf-8"), encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python_log = tmp_path / "python.log"
+    (bin_dir / "python.bat").write_text(
+        f"@echo off\r\necho %*>>\"{python_log}\"\r\nexit /b 0\r\n",
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env.pop("FORGE_ROE_ID", None)
+    env.pop("FORGE_SAFE_MODE", None)
+    result = subprocess.run(
+        ["cmd", "/c", str(launcher)],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "ROE: ROE-1" in result.stdout
+    assert "Safe Mode: OFF" in result.stdout
+    # Default call includes --apply
+    assert "--apply" in python_log.read_text(encoding="utf-8")
 
 
 def test_powershell_stack_helper_uses_docker_compose_dev_file() -> None:

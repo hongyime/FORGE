@@ -3,14 +3,18 @@
 ``forge setup`` creates the local operator state needed to run the
 autopilot straight out of the box:
 
+- Verifies Python >= 3.11 (the project's minimum interpreter).
 - Writes ``.env`` from ``.env.example`` if it is missing.
-- Ensures ``FORGE_ROE_ID`` is set in that ``.env`` (defaults to
-  ``ROE-1``, matching :class:`forge.autopilot.AutopilotDefaults`).
-- Ensures ``FORGE_SAFE_MODE=0`` so the autopilot runs live by default.
+- Ensures ``FORGE_ROE_ID``, ``FORGE_SAFE_MODE=0``, ``FORGE_OPERATOR``,
+  and ``FORGE_SCOPE_MANIFEST`` are set in that ``.env``.
 - Creates the data/imports/reports/manifests directory structure.
 - Copies the shipped ``manifests/default.json`` scope manifest template
   (if missing) and the ``imports/starter-targets.example.json`` feed
   example so new operators have working references.
+- Runs ``forge feeds fetch`` to pull free threat intel — NVD CVE,
+  CISA KEV, EPSS, Security RSS, nuclei-templates, URLScan public.
+  Bounded and best-effort: if the feeds are fresh or the network is
+  unavailable, setup records the result and keeps going.
 - Runs ``forge doctor --json`` to report readiness state.
 
 The command is intentionally non-destructive: existing ``.env`` files,
@@ -18,9 +22,9 @@ existing manifests, and existing feed files are left untouched. The
 only writes are missing-file creations and additive ``.env`` key
 inserts.
 
-Nothing in this module launches live outbound work. ``forge doctor``
-runs read-only; the autopilot is advertised at the end but not auto-
-started.
+Nothing in this module launches live outbound work besides the bounded
+KB fetch. ``forge doctor`` runs read-only; the autopilot is advertised
+at the end but not auto-started.
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -36,6 +41,16 @@ from forge.autopilot.defaults import AutopilotDefaults
 
 
 SETUP_SCHEMA_VERSION = "forge.setup.v1"
+
+#: Minimum supported Python interpreter version (matches ``pyproject.toml``).
+MIN_PYTHON = (3, 11)
+
+#: Default callsign recorded in every audit_log entry when the operator
+#: has not already set one. ``.env.example`` ships with
+#: ``FORGE_OPERATOR=operator``; ``forge setup`` seeds the same default
+#: when the key is missing or empty, and preserves any operator-chosen
+#: value on re-run.
+DEFAULT_OPERATOR = "operator"
 
 
 @dataclass
@@ -49,7 +64,8 @@ class SetupAction:
     - ``exists`` — file already present, no change.
     - ``missing_source`` — a template source file was expected but
       not found. The setup continues and records the gap.
-    - ``skipped`` — operator-controlled skip.
+    - ``skipped`` — operator-controlled skip or best-effort step that
+      declined to run (e.g. KB sync when offline).
     - ``error`` — an exception occurred.
     """
 
@@ -72,13 +88,56 @@ class SetupResult:
     schema_version: str = SETUP_SCHEMA_VERSION
     actions: list[SetupAction] = field(default_factory=list)
     doctor: dict[str, Any] | None = None
+    summary: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "actions": [a.to_dict() for a in self.actions],
             "doctor": self.doctor,
+            "summary": self.summary,
         }
+
+
+# ---------------------------------------------------------------------------
+# Python version
+# ---------------------------------------------------------------------------
+
+
+def check_python_version(
+    version: tuple[int, int, int] | None = None,
+) -> SetupAction:
+    """Verify the Python interpreter satisfies :data:`MIN_PYTHON`.
+
+    Returns a ``SetupAction`` with status ``exists`` on success or
+    ``error`` on failure. Does not raise — the caller decides what to
+    do with a failed check so the JSON payload remains consistent.
+
+    Args:
+        version: Optional ``(major, minor, micro)`` override for tests.
+            Defaults to the running interpreter.
+    """
+    major, minor, micro = version or (
+        sys.version_info.major,
+        sys.version_info.minor,
+        sys.version_info.micro,
+    )
+    label = f"Python {major}.{minor}.{micro}"
+    if (major, minor) >= MIN_PYTHON:
+        return SetupAction(
+            name="python_version",
+            status="exists",
+            detail=f"{label} (>= {MIN_PYTHON[0]}.{MIN_PYTHON[1]} required)",
+        )
+    return SetupAction(
+        name="python_version",
+        status="error",
+        detail=(
+            f"{label} is below the required "
+            f"Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]}+. "
+            "Install a newer interpreter and re-run `forge setup`."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +360,116 @@ def ensure_template(
 
 
 # ---------------------------------------------------------------------------
+# forge.feeds fetch — the "free threat intel" pull
+# ---------------------------------------------------------------------------
+
+
+#: Free threat-intel feeds exercised by :class:`forge.feeds.FeedFetcher`.
+#: Kept in sync with ``FeedFetcher.fetchers`` so the boxed summary
+#: reflects what actually gets fetched.
+FREE_FEED_SOURCES = (
+    "NVD CVE",
+    "CISA KEV",
+    "EPSS",
+    "Security RSS",
+    "nuclei-templates",
+    "URLScan public",
+)
+
+
+#: Per-source HTTP timeout used by ``forge setup``. The autopilot's
+#: feed_fetch phase uses the default 60 seconds; setup is more
+#: aggressive so a fresh install never blocks on a slow mirror.
+SETUP_FEED_TIMEOUT_SECONDS = 20
+
+
+def run_feeds_fetch(
+    *,
+    imports_dir: Path,
+    data_dir: Path,
+    timeout_per_source: int = SETUP_FEED_TIMEOUT_SECONDS,
+    max_age_days: int = 7,
+) -> SetupAction:
+    """Best-effort free-threat-intel refresh (equivalent to ``forge feeds fetch``).
+
+    Returns a :class:`SetupAction`:
+
+    - ``updated`` when the orchestrator reports ``overall_status`` ok
+      or partial and at least one source succeeded.
+    - ``skipped`` when the whole run was skipped (every source was
+      already fresh and declined to re-fetch) or when the orchestrator
+      could not be imported.
+    - ``error`` when every source failed.
+
+    The function never raises — any failure is contained and recorded.
+    """
+    try:
+        from forge.feeds import FeedFetcher  # noqa: PLC0415
+    except Exception as exc:  # noqa: BLE001
+        return SetupAction(
+            name="feeds_fetch",
+            status="skipped",
+            detail=f"forge.feeds import failed: {exc.__class__.__name__}: {str(exc)[:120]}",
+        )
+
+    try:
+        fetcher = FeedFetcher(
+            imports_dir=imports_dir,
+            data_dir=data_dir,
+            max_age_days=max_age_days,
+        )
+        payload = fetcher.fetch_all(timeout_per_source=timeout_per_source)
+    except Exception as exc:  # noqa: BLE001
+        return SetupAction(
+            name="feeds_fetch",
+            status="skipped",
+            detail=f"best-effort — {exc.__class__.__name__}: {str(exc)[:120]}",
+        )
+
+    overall = str(payload.get("overall_status", "unknown"))
+    status_counts = payload.get("status_counts", {}) or {}
+    ok_count = int(status_counts.get("ok", 0))
+    error_count = int(status_counts.get("error", 0))
+    skipped_count = int(status_counts.get("skipped", 0))
+    total_items = int(payload.get("total_item_count", 0))
+
+    counts_label = (
+        f"{ok_count} ok, {error_count} error, {skipped_count} skipped"
+        f" ({total_items} items)"
+    )
+
+    if overall == "ok":
+        return SetupAction(
+            name="feeds_fetch",
+            status="updated",
+            detail=f"pulled free threat intel: {counts_label}",
+        )
+    if overall == "partial":
+        return SetupAction(
+            name="feeds_fetch",
+            status="updated",
+            detail=f"partial feeds refresh: {counts_label}",
+        )
+    if overall == "skipped":
+        return SetupAction(
+            name="feeds_fetch",
+            status="skipped",
+            detail=f"feeds already fresh: {counts_label}",
+        )
+    if overall == "error":
+        return SetupAction(
+            name="feeds_fetch",
+            status="skipped",
+            detail=f"every source errored: {counts_label}",
+        )
+    return SetupAction(
+        name="feeds_fetch",
+        status="skipped",
+        detail=f"overall_status={overall!r}: {counts_label}",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Doctor integration
 # ---------------------------------------------------------------------------
 
@@ -333,23 +502,30 @@ def run_first_run_setup(
     root: Path | None = None,
     data_dir: Path | None = None,
     skip_doctor: bool = False,
+    skip_feeds_fetch: bool = False,
     defaults: AutopilotDefaults | None = None,
     env: Mapping[str, str] | None = None,
 ) -> SetupResult:
     """Idempotent first-run setup.
 
-    - Writes a non-destructive ``.env`` from ``.env.example`` and
-      enforces the autopilot's required keys.
-    - Creates data/imports/reports/manifests directories.
-    - Copies the shipped scope-manifest and starter target feed to the
-      operator's local tree (idempotent).
-    - Runs ``forge doctor`` in JSON mode.
+    Steps:
+
+    1. Verify Python >= 3.11.
+    2. Write a non-destructive ``.env`` from ``.env.example`` and
+       enforce the autopilot's required keys.
+    3. Create data/imports/reports/manifests directories.
+    4. Copy the shipped scope-manifest and starter target feed to the
+       operator's local tree (idempotent).
+    5. Pull free threat-intel feeds via ``forge.feeds.FeedFetcher``
+       unless ``skip_feeds_fetch`` is set.
+    6. Run ``forge doctor`` in JSON mode unless ``skip_doctor`` is set.
 
     Args:
         root: Repository root (defaults to CWD).
         data_dir: ``FORGE_DATA_DIR`` to ensure. Defaults to
             ``<root>/.forge_data`` when unset.
         skip_doctor: If True, skip the readiness probe.
+        skip_feeds_fetch: If True, skip the bounded feeds refresh.
         defaults: Autopilot defaults to seed required env keys from.
         env: Environment mapping override for testing.
 
@@ -373,9 +549,14 @@ def run_first_run_setup(
 
     result = SetupResult()
 
+    # 1. Python version.
+    result.actions.append(check_python_version())
+
+    # 2. .env + required keys.
     required_env = {
         "FORGE_ROE_ID": autopilot_defaults.default_roe_id or "ROE-1",
         "FORGE_SAFE_MODE": "0",
+        "FORGE_OPERATOR": environ.get("FORGE_OPERATOR") or DEFAULT_OPERATOR,
         "FORGE_SCOPE_MANIFEST": "manifests/default.json",
     }
     result.actions.extend(
@@ -387,6 +568,7 @@ def run_first_run_setup(
         )
     )
 
+    # 3. Directories.
     result.actions.extend(
         ensure_directories(
             [
@@ -399,10 +581,10 @@ def run_first_run_setup(
         )
     )
 
-    # Scope manifest template. ``manifests/default.json`` ships with
-    # all exploitation permissions enabled by the goal lock v2
-    # contract; the operator must still populate domains/urls/ip_ranges
-    # before launching live scans.
+    # 4. Templates. Scope manifest template ships with all exploitation
+    # permissions enabled by the goal lock v2 contract; the operator
+    # must still populate domains/urls/ip_ranges before launching live
+    # scans.
     shipped_manifest = root_path / "manifests" / "default.json"
     local_manifest = manifests_dir / "default.json"
     if shipped_manifest.resolve() == local_manifest.resolve():
@@ -422,9 +604,9 @@ def run_first_run_setup(
             )
         )
 
-    # Starter target-feed example. We write a `.example.json` reference
-    # alongside the operator-maintained `target-feed.json` so a bare
-    # `forge autopilot` cycle has a documented shape to follow.
+    # Starter target-feed example sits beside the operator-maintained
+    # ``target-feed.json`` as a reference shape ``forge targets import``
+    # will accept.
     shipped_feed = root_path / "imports" / "starter-targets.example.json"
     local_feed_example = imports_dir / "starter-targets.example.json"
     if shipped_feed.resolve() == local_feed_example.resolve():
@@ -444,18 +626,84 @@ def run_first_run_setup(
             )
         )
 
+    # 5. Free threat intel — forge.feeds fetch, bounded and best-effort.
+    if not skip_feeds_fetch:
+        result.actions.append(
+            run_feeds_fetch(
+                imports_dir=imports_dir,
+                data_dir=data_dir_path,
+            )
+        )
+    else:
+        result.actions.append(
+            SetupAction(
+                name="feeds_fetch",
+                status="skipped",
+                detail="--skip-feeds-fetch requested",
+            )
+        )
+
+    # 6. Doctor.
     if not skip_doctor:
         result.doctor = _run_doctor_summary()
+
+    # Summary surface — reused by the boxed CLI output and consumers
+    # that read the JSON payload.
+    result.summary = _build_summary(
+        root=root_path,
+        env_path=env_path,
+        data_dir=data_dir_path,
+        required_env=required_env,
+        actions=result.actions,
+    )
 
     return result
 
 
+def _build_summary(
+    *,
+    root: Path,
+    env_path: Path,
+    data_dir: Path,
+    required_env: Mapping[str, str],
+    actions: Iterable[SetupAction],
+) -> dict[str, Any]:
+    """Compact summary of the setup state for the boxed output."""
+    env_values = _parse_env_keys(_read_env_lines(env_path))
+    feeds_action = next((a for a in actions if a.name == "feeds_fetch"), None)
+    feeds_status = feeds_action.status if feeds_action else "skipped"
+    feeds_detail = feeds_action.detail if feeds_action else ""
+    safe_mode_value = env_values.get("FORGE_SAFE_MODE", required_env["FORGE_SAFE_MODE"])
+    safe_mode_label = "OFF" if safe_mode_value in ("0", "false", "no", "off") else "ON"
+    return {
+        "root": str(root),
+        "env_file": str(env_path),
+        "roe_id": env_values.get("FORGE_ROE_ID", required_env["FORGE_ROE_ID"]),
+        "safe_mode": safe_mode_label,
+        "operator": env_values.get("FORGE_OPERATOR", required_env["FORGE_OPERATOR"]),
+        "scope_manifest": env_values.get(
+            "FORGE_SCOPE_MANIFEST", required_env["FORGE_SCOPE_MANIFEST"]
+        ),
+        "data_dir": str(data_dir),
+        "feed_sources": list(FREE_FEED_SOURCES),
+        "feed_source_count": len(FREE_FEED_SOURCES),
+        "feeds_fetch_status": feeds_status,
+        "feeds_fetch_detail": feeds_detail,
+    }
+
+
 __all__ = [
+    "DEFAULT_OPERATOR",
+    "FREE_FEED_SOURCES",
+    "MIN_PYTHON",
+    "SETUP_FEED_TIMEOUT_SECONDS",
     "SETUP_SCHEMA_VERSION",
     "SetupAction",
     "SetupResult",
+    "check_python_version",
     "ensure_env_file",
     "ensure_directories",
     "ensure_template",
     "run_first_run_setup",
+    "run_feeds_fetch",
 ]
