@@ -228,7 +228,16 @@ def automation_cycle(
     cfg_data_dir = data_dir or ForgeConfig.load().data_dir
     sources = list(source or ["all"])
     live_requested = bool(live)
-    auto_live = _autostart_auto_live_when_roe_ready(selected_autostart_config)
+    autostart_config_present = Path(selected_autostart_config).is_file()
+    # When the operator has not written autostart.local.json, treat ROE
+    # presence as explicit authorization to auto-promote `apply` into
+    # `apply --live`. A config file still wins when present — operators
+    # who have intentionally set `auto_live_when_roe_ready: false` keep
+    # that explicit behavior.
+    if autostart_config_present:
+        auto_live = _autostart_auto_live_when_roe_ready(selected_autostart_config)
+    else:
+        auto_live = True
     auto_live_roe_env = _autostart_roe_id_env(selected_autostart_config)
     auto_live_roe_present = bool(os.environ.get(auto_live_roe_env, "").strip())
     live_auto_promoted = False

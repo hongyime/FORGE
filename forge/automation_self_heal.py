@@ -618,6 +618,17 @@ def _direct_source_queue_status(
 def _load_autostart_config(config_path: Path) -> tuple[dict[str, Any], list[str]]:
     config = dict(DEFAULT_AUTOSTART_CONFIG)
     if not config_path.is_file():
+        # No operator-written config: fall back to env-driven defaults.
+        # When ``FORGE_ROE_ID`` is exported the operator has already
+        # declared live authorization. Treat that as explicit opt-in
+        # for ``enabled``, ``apply_enabled``, and ``auto_live_when_roe_ready``
+        # so the autopilot works out of the box without a config file.
+        roe_env = str(config.get("roe_id_env") or "FORGE_ROE_ID").strip() or "FORGE_ROE_ID"
+        if os.environ.get(roe_env, "").strip():
+            config["enabled"] = True
+            config["apply_enabled"] = True
+            config["auto_live_when_roe_ready"] = True
+            return config, []
         return config, ["autostart_config_missing"]
     try:
         payload = json.loads(config_path.read_text(encoding="utf-8"))

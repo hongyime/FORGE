@@ -90,8 +90,9 @@ Continuation order for future agents:
 git clone <repo> forge-toolkit
 cd forge-toolkit
 setup.bat        # picks safe/default or scoped active-assessment mode
-forge-autopilot.bat --dry-run  # optional feed/import/resume/monitor rehearsal; skips dashboard writes
-forge-autopilot.bat --apply --roe-id ROE-ID  # explicit live all-in-one path
+forge-autopilot.bat          # THE one command: dry-run first, then prompt for live when FORGE_ROE_ID is set
+forge-autopilot.bat --dry-run  # explicit rehearsal (safe default without FORGE_ROE_ID)
+forge-autopilot.bat --apply --roe-id ROE-ID  # explicit live loop
 ```
 
 ```bash
@@ -99,7 +100,16 @@ forge-autopilot.bat --apply --roe-id ROE-ID  # explicit live all-in-one path
 git clone <repo> forge-toolkit
 cd forge-toolkit
 ./setup.sh       # or: python3 bootstrap.py --venv-mode project setup
+./forge-autopilot.sh          # THE one command: dry-run first, then prompt for live when FORGE_ROE_ID is set
+./forge-autopilot.sh --dry-run  # explicit rehearsal
+./forge-autopilot.sh --apply --roe-id ROE-ID  # explicit live loop
 ```
+
+The autopilot runs out of the box with no config file. It auto-detects
+`FORGE_ROE_ID` and `FORGE_SAFE_MODE`, auto-seeds targets from `imports/`,
+auto-creates engagements, auto-starts kill-chains, auto-resumes paused
+runs, auto-refreshes monitoring, and auto-rebuilds the dashboard. See
+[`forge autopilot --help`](#public-commands) for every flag.
 
 Bootstrap creates `.venv` for FORGE runtime deps, installs external OSINT CLIs
 into per-tool venvs under local FORGE state, installs `phonenumbers` in the
@@ -334,6 +344,11 @@ forge exploitation credentials list --engagement N [--cred-type TYPE] [--json]  
 forge exploitation credentials export --engagement N --output PATH [--format json|csv]
 forge dashboard                             # Generate the static local operator dashboard
 forge dashboard goal-progress --engagement N [--json] [--html PATH]  # Cairn-style goal progress visualization
+forge autopilot                             # Self-running automation loop. Default: dry-run when no FORGE_ROE_ID, apply+live when ROE present.
+forge autopilot --dry-run                   # Explicit rehearsal — no writes, no live outbound work
+forge autopilot --apply --roe-id ROE-ID     # Explicit live loop — full feed-build / import / resume / monitor / dashboard
+forge autopilot --describe --json           # Resolved autopilot defaults and detected ROE/scope state (read-only)
+forge autopilot --loop [--iterations N] [--cooldown-minutes N]  # Continuous operation; one pass per iteration with a bounded cooldown
 forge doctor [--json] [--live-provider-probes] [--fix-safe]  # Operator setup, readiness checks, and safe local repairs
 forge operator-guide [--section loop|manual|profiles|rust] [--json]  # Complete workflow guide — every module linked together
 forge scaffold                              # Emit obfuscated directory tree

@@ -48,6 +48,7 @@ class ForgeCliApps:
     skills_app: typer.Typer
     exploitation_app: typer.Typer
     dashboard_app: typer.Typer
+    autopilot_app: typer.Typer
 
 
 def _make_sub(name: str, help_text: str) -> typer.Typer:
@@ -90,6 +91,8 @@ def _register_modular_commands(apps: ForgeCliApps) -> None:
     register_exploitation_commands(apps.exploitation_app)
     from forge.dashboard.cli import register_dashboard_commands
     register_dashboard_commands(apps.dashboard_app)
+    from forge.autopilot.cli import register_autopilot_commands
+    register_autopilot_commands(apps.autopilot_app)
 
 
 def register_extracted_cli_commands(
@@ -194,6 +197,16 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
             invoke_without_command=True,
             no_args_is_help=False,
         ),
+        autopilot_app=typer.Typer(
+            name="autopilot",
+            help=(
+                "Self-running automation loop. Default: dry-run when no "
+                "FORGE_ROE_ID is set, apply+live when ROE is present and "
+                "FORGE_SAFE_MODE != 1. No config file required."
+            ),
+            invoke_without_command=True,
+            no_args_is_help=False,
+        ),
     )
 
     root_app.add_typer(apps.kb_app)
@@ -230,6 +243,7 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
     root_app.add_typer(apps.exploitation_app)
     root_app.add_typer(apps.dashboard_app)
     root_app.add_typer(apps.dashboard_app)
+    root_app.add_typer(apps.autopilot_app)
 
     _wire_dashboard_default_callback(apps.dashboard_app)
     _register_modular_commands(apps)
