@@ -196,7 +196,7 @@ def _build_db(path: Path) -> sqlite3.Connection:
             (engagement_id, claim_type, asset_type, identifier, owner, expires_at)
         VALUES
             (1001, 'asset', 'aws_s3', 'acme-assets', 'storage-team',
-             '2026-09-01T00:00:00Z')
+             '2099-01-01T00:00:00Z')
         """
     )
     con.execute(
@@ -204,7 +204,7 @@ def _build_db(path: Path) -> sqlite3.Connection:
         INSERT INTO validation_claims
             (engagement_id, claim_type, key_id, owner, expires_at)
         VALUES
-            (1001, 'key', 30, 'security-team', '2026-09-01T00:00:00Z')
+            (1001, 'key', 30, 'security-team', '2099-01-01T00:00:00Z')
         """
     )
     con.commit()
