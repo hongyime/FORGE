@@ -1,12 +1,18 @@
 # FORGE Spec
 
-Last updated: 2026-07-25
+Last updated: 2026-10-11
 
-Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
+Goal lock: `FORGE-DETERMINISTIC-EXPLOITATION-PIPELINE-v2`.
 
-End goal now: FORGE must ship one comprehensive deterministic authorized ASM
-engagement pipeline, not a UI-only dashboard, scanner collection, or provider
-count project.
+Supersedes `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. The v2 contract adds
+authorized exploitation as a first-class pipeline phase. Scope manifest, ROE,
+audit hash-chain, deterministic scoring, and `FORGE_SAFE_MODE` all remain —
+their role shifts from "prevent exploitation" to "ensure exploitation is
+scoped, ROE-authorized, and audited".
+
+End goal now: FORGE must ship one comprehensive deterministic authorized
+engagement pipeline that validates, exploits, and reports — not a UI-only
+dashboard, scanner collection, or provider count project.
 
 This file is the compact root spec for implementers. It does not replace the
 normative goal in `END_GOAL.md`; it restates the contract as invariants and
@@ -15,24 +21,41 @@ execution tasks so agents can decide what to build next without moving the goal.
 ## G
 
 FORGE must be one comprehensive, deterministic, authorized engagement pipeline
-that turns scoped multi-seed intake into bounded recursive discovery,
-non-destructive validation, rule-engine findings, graph/dashboard/report/audit
-review, and guaranteed template/raw exports when LLM providers fail.
+that turns scoped multi-seed intake into bounded recursive discovery, static
+artifact enrichment, validation, scoped authorized exploitation, rule-engine
+findings, graph/dashboard/report/audit review, and guaranteed template/raw
+exports when LLM providers fail.
 
 ## C
 
-- Authorized scope is mandatory for live probing, follow-on tool execution, and
-  credential/resource validation.
+- Authorized scope is mandatory for live probing, follow-on tool execution,
+  credential/resource validation, and scoped exploitation. The same
+  `assert_in_scope` gate governs discovery and exploitation.
 - Passive discovery, static artifact parsing, and deterministic synthesis are
-  the default automation path.
-- Live work must be ROE-gated, scope-manifest-gated, bounded, paced, logged,
-  resumable, dry-run capable, and non-destructive.
+  the default automation path when `FORGE_SAFE_MODE=1` or no ROE is set.
+- Live work (validation, exploitation, follow-on tooling) must be ROE-gated,
+  scope-manifest-gated, bounded, paced, logged, resumable, dry-run capable, and
+  audited. Scoped authorized exploitation IS permitted; unscoped action remains
+  forbidden.
+- Exploitation phase includes credential capture via reverse-proxy transport
+  (Muraena-style), post-login browser automation (Necrobrowser-style),
+  autonomous exploit execution (Strix-style), and goal-directed engagement
+  execution (Cairn Bootstrap/Reason/Explore loop toward FORGE-set pre-defined
+  goals).
+- Raw captured material (credentials, MFA cookies, session tokens, extruded
+  data references) is encrypted at rest under `FORGE_ENGAGEMENT_KEY`. Export
+  surfaces require explicit operator decryption.
+- `FORGE_SAFE_MODE=1` disables the exploitation phase entirely. Operators who
+  want passive-only ASM get the pre-v2 behavior through this gate.
 - URL scope entries are same-host path constraints for crawler,
   remote-artifact, scheduled URL-task, and other URL-fetch gates. Explicit
   domain/IP scope still authorizes its own host; generic host gates may use URL
-  entries only as host authorization.
+  entries only as host authorization. Scope manifest also carries explicit
+  exploitation permissions (reverse-proxy, post-login-automation,
+  autonomous-exploit, goal-targets) — these are opt-in blocks, not defaults.
 - LLMs may write narrative only. They must not create findings, set severity,
-  weaken validation, alter evidence, or decide reportability.
+  weaken scope gates, authorize new exploitation beyond the ROE, alter
+  evidence, or decide reportability.
 - Provider failures, missing keys, quota errors, rate limits, and token limits
   are normal product paths and must degrade to deterministic template output
   plus raw exports.
@@ -44,64 +67,106 @@ review, and guaranteed template/raw exports when LLM providers fail.
 ## I
 
 - CLI: `forge kill-chain`, report commands, engagement creation, artifact
-  ingestion, and scoped active-assessment flags.
+  ingestion, scoped active-assessment flags, scoped exploitation flags
+  (`--exploit`, `--goal`, `--reverse-proxy`, `--post-login-automation`), and
+  exploit evidence inspection commands.
 - Backend/API: engagement CRUD, seed CRUD, run status, dashboard payloads,
-  findings, validation inventory, graph/export/report surfaces.
+  findings, validation inventory, exploitation inventory, goal-progression
+  state, graph/export/report surfaces.
 - Frontend: main dashboard, engagement detail route, graph/report/raw-export
-  review, audit log review.
+  review, audit log review, exploitation evidence review, goal progression
+  view.
 - Persistence: engagement SQLite stores, monotonic master ID store, migrations,
-  audit logs, graph/report/export artifacts.
+  audit logs, graph/report/export artifacts, encrypted exploit evidence tables
+  (captured credentials, MFA cookies, extruded data references, exploit
+  outcomes).
 - Providers/tools: passive OSINT, identity enrichment, web mining, static
-  artifact parsers, cloud/key validators, LLM narrative cascade.
+  artifact parsers, cloud/key validators, reverse-proxy transport
+  (Muraena-derived), post-login automation (Necrobrowser-derived), autonomous
+  exploit tooling (Strix-derived), goal-directed loop (Cairn-derived), LLM
+  narrative cascade.
 
 ## V
 
 - V1. Same scoped inputs, fixtures, config, and cached provider responses must
   produce the same findings, severities, reportability, graph/export metadata,
-  audit metadata, and fallback path.
+  audit metadata, exploitation evidence, goal-progression decisions, and
+  fallback path.
 - V2. Engagement IDs are monotonic and are not reused after deletion.
-- V3. Every seed, discovered pivot, validation attempt, finding, export, and
-  report render is traceable to an engagement and audit context.
-- V4. Recursive discovery terminates only by explicit depth, iteration, queue,
-  stable-snapshot, budget, or operator-stop conditions.
+- V3. Every seed, discovered pivot, validation attempt, exploitation action,
+  finding, export, and report render is traceable to an engagement and audit
+  context.
+- V4. Recursive discovery and exploitation terminate only by explicit depth,
+  iteration, queue, stable-snapshot, budget, goal-reached, or operator-stop
+  conditions.
 - V5. Static artifact analysis never executes the artifact being parsed.
 - V6. Unvalidated, dead, unsupported, placeholder, honeypot-suspected, or
   low-signal evidence may be analyst inventory, but cannot become a reportable
-  deterministic finding.
+  deterministic finding without proof-bound validation or successful scoped
+  exploitation evidence.
 - V7. Severity and report gates are deterministic rule-engine outputs only.
-- V8. Dashboard, graph exports, reports, raw exports, validation inventory, and
-  audit logs expose the same engagement facts.
+- V8. Dashboard, graph exports, reports, raw exports, validation inventory,
+  exploitation inventory, goal-progression state, and audit logs expose the
+  same engagement facts.
 - V9. LLM/API narrative failure must still produce deterministic template
   reports and raw JSON/CSV exports with checksums and failure metadata.
 - V10. Automated tests must clean up or isolate test engagement data and must
-  not rely on real external targets unless an explicit scoped target is provided.
+  not rely on real external targets unless an explicit scoped target is
+  provided.
 - V11. Automated cleanup may remove only proven test-owned engagement artifacts;
   it must not delete broad pytest owner containers or persistent engagement DBs
   that are not proven artifacts from the current test run.
-- V12. Deterministic reports and LLM prompts must frame Section 6 as validation
-  boundaries and evidence handling; they must not force post-exploitation,
-  persistence, lateral movement, shell access, or data-exfiltration narratives
-  into authorized ASM reports.
-- V13. Deterministic reports and LLM prompts must frame Section 5 as
-  vulnerability and exposure/finding correlation; they must not require exploit
-  correlation headings or mandatory exploit narratives for authorized ASM
-  reports.
+- V12. Deterministic reports and LLM prompts frame post-exploitation sections
+  using the actual exploitation evidence captured during the engagement
+  (credentials captured, sessions hijacked, data extruded, goals achieved).
+  They must not invent exploitation steps that did not run, and must not force
+  post-exploitation narratives when the engagement ran passive-only
+  (`FORGE_SAFE_MODE=1` or no ROE exploitation grant).
+- V13. Deterministic reports and LLM prompts frame vulnerability sections as
+  vulnerability, exposure, finding correlation, and exploit outcome. Reported
+  exploit chains must map to actual recorded exploitation events in the audit
+  log.
 - V14. Destructive retention API apply requires literal JSON boolean `true`;
   strings, numbers, arrays, objects, false, and missing confirmation must be
   rejected before the retention engine runs or evidence is changed.
+- V15. **Exploitation requires explicit ROE and scope-manifest permission.**
+  Every exploitation action (reverse-proxy traffic, post-login automation,
+  autonomous exploit execution, goal progression) checks the same
+  `assert_in_scope` gate as discovery, plus a per-capability opt-in block in
+  the scope manifest (`reverse_proxy`, `post_login_automation`,
+  `autonomous_exploit`, `goal_targets`).
+- V16. **`FORGE_SAFE_MODE=1` disables the exploitation phase entirely.**
+  Operators who want passive-only ASM get the pre-v2 behavior through this
+  gate. Live validation remains available but exploitation does not.
+- V17. **Captured raw credential and session material is encrypted at rest**
+  under `FORGE_ENGAGEMENT_KEY`. The capture, encryption, and decryption are
+  all audit-logged. Export surfaces require explicit operator decryption; no
+  cleartext captured material appears in logs, reports, or dashboard payloads
+  by default.
+- V18. **Exploit evidence feeds the same rule-engine scoring as validation
+  evidence.** A successful scoped exploit becomes a reportable deterministic
+  finding; a failed exploit becomes inventory. An LLM cannot promote or demote
+  this classification.
+- V19. **Goals are FORGE-owned pre-defined constants, not operator free-form
+  strings.** The current goal catalog (`get_domain_admin`,
+  `exfiltrate_proof_data`, `establish_persistence`, `capture_mfa_session`,
+  `achieve_rce`, `escalate_privilege`, `enumerate_tenant`) is extended by
+  explicit code change, not by runtime input. Cairn-style free-form goal
+  framing is explicitly out of scope.
 
 ## T
 
 | id | status | task | cites |
 |---|---|---|---|
-| T1 | x | Prove one representative multi-seed engagement path from intake through recursion, validation, graph/report/audit review, fallback exports, and cleanup with focused mocked E2E tests. | V1,V2,V3,V4,V8,V9,V10,V11 |
+| T1 | x | Prove one representative multi-seed engagement path from intake through recursion, validation, scoped exploitation (ROE permitting), graph/report/audit review, fallback exports, and cleanup with focused mocked E2E tests. | V1,V2,V3,V4,V8,V9,V10,V11,V15,V18 |
 | T2 | . | Continue safe recursive discovery upgrades for concrete passive parser, provider payload, identity, artifact, and source-gated metadata gaps. | V1,V3,V4,V5 |
-| T3 | ~ | Harden validation proof gates and report gates so only latest validated evidence can create deterministic findings. | V6,V7 |
-| T4 | ~ | Keep dashboard, API, graph, report, raw export, validation inventory, and audit surfaces in factual parity. | V3,V8 |
+| T3 | ~ | Harden validation proof gates and report gates so only latest validated evidence or successful scoped exploit evidence can create deterministic findings. | V6,V7,V18 |
+| T4 | ~ | Keep dashboard, API, graph, report, raw export, validation inventory, exploitation inventory, goal-progression, and audit surfaces in factual parity. | V3,V8 |
 | T5 | . | Preserve deterministic report fallback through LLM cascade failures, quota/token failures, missing keys, local/template degradation, and raw export availability. | V7,V9,V12,V13 |
-| T6 | . | Keep scoped active checks ROE-gated, non-destructive, bounded, paced, logged, and dry-run capable. | V3,V4,V6,V10 |
+| T6 | . | Keep scoped active checks and scoped exploitation ROE-gated, scope-manifest-permission-gated, bounded, paced, logged, dry-run capable, and audited. Audit raw credential/session capture under encryption at rest. | V3,V4,V15,V16,V17 |
 | T7 | . | Split or wrap large legacy modules only when it reduces risk without changing verified behavior. | V1,V10 |
 | T8 | . | Commit meaningful checkpoints to `main` with docs and handoffs updated for continuation. | V3,V10 |
+| T9 | . | Build the exploitation phase as a first-class pipeline step: reverse-proxy transport lane (Muraena-derived), post-login automation lane (Necrobrowser-derived), autonomous exploit lane (Strix-derived), goal-directed Bootstrap/Reason/Explore loop (Cairn-derived) toward FORGE-owned pre-defined goals. Prove each lane with scope-denial regressions. | V15,V16,V17,V18,V19 |
 
 ## B
 
@@ -754,3 +819,5 @@ review, and guaranteed template/raw exports when LLM providers fail.
 | B656 | 2026-08-27 | Docker/OS startup hooks needed a concrete safe entrypoint for self-healing autopilot; calling `forge-autopilot` directly at boot could run live import/start/resume/monitoring work with defaults too large for a constrained machine. | Added `forge automation guarded-autostart`, backed by ignored local `imports/autostart.local.json` config, single-instance lock, persisted cooldown/backoff state, self-heal resource/Docker/tool blockers, literal JSON boolean opt-in validation, ROE env presence checks with redacted command plans, redacted subprocess output tails, lock-race handling, and bounded autopilot command generation. The command is dry-run/read-only by default. Live apply requires CLI `--apply`, local `apply_enabled=true`, local `enabled=true`, and a non-empty configured ROE env var, runs the autopilot dry-run first, then applies only when the rehearsal succeeds. Focused guarded-autostart/self-heal/registry tests, Ruff, py_compile, and `git diff --check` passed. No Docker mutation, service install, scheduled-task registration, target import/start, resume-run, monitoring apply, provider call, engagement mutation, or credential persistence was executed. |
 | B657 | 2026-08-27 | Operators could run Burp or other DAST tools outside FORGE scope, but there was no free/local importer to bring XML validation artifacts back as scoped evidence without trusting scanner text as reportable findings. | Added `forge connectors import-validation --connector burp_dast_xml`, backed by local Burp issue XML and JUnit DAST XML parsing. The importer is offline-only, rejects DOCTYPE/ENTITY XML, caps XML size, strips sensitive URL query parameters, scope-gates URL evidence, preserves artifact hashes/proof type/scanner provenance, dedupes repeated imports by stable external ID, and writes only sanitized `active_validation_jobs`/`active_validation_runs` evidence when not in dry-run. Registry/run-plan and README public command docs now include the free-local connector. Focused validation-import/connector-registry/CLI-registry tests, Ruff, py_compile, real dry-run CLI smoke, and `git diff --check` passed. No scanner execution, network request, vulnerability-finding write, provider call, target import/start, resume-run, monitoring apply, scheduled-task change, or credential persistence was executed. |
 | B658 | 2026-09-12 | Retention API admission coerced confirmation with `bool()`, so truthy malformed JSON such as `"false"`, `1`, arrays, and objects triggered destructive apply. | Enforce V14 with identity comparison to `True`; failing-first API regressions require HTTP 400 and unchanged evidence/retention ledger for malformed confirmation while existing authorized apply, preview, legal-hold, and role boundaries remain covered. |
+
+| B659 | 2026-10-11 | Goal lock v1 (`FORGE-DETERMINISTIC-ASM-PIPELINE-v1`) framed FORGE as non-destructive validation-only ASM. The operator approved a fundamental contract change: FORGE validates, exploits, and reports. Autonomous exploitation, reverse-proxy credential capture, post-login browser automation, and goal-directed engagement execution are now in scope when ROE and scope manifest permit. Raw credentials and MFA cookies can be persisted (encrypted at rest). | Bumped goal lock to `FORGE-DETERMINISTIC-EXPLOITATION-PIPELINE-v2`. Reframed `G`, `C`, `I`, `V`, and `T` sections to add scoped authorized exploitation as a first-class pipeline phase. Added invariants V15 (exploitation requires ROE + scope-manifest permission), V16 (`FORGE_SAFE_MODE=1` disables exploitation), V17 (captured raw material encrypted at rest under `FORGE_ENGAGEMENT_KEY`, audit-logged), V18 (exploit evidence feeds same rule-engine as validation), V19 (goals are FORGE-owned pre-defined constants, not operator free-form). Rewrote V6/V12/V13 to describe actual-exploitation-evidence instead of forbidding post-exploitation narratives. Added T9 (build exploitation phase: Muraena-derived reverse-proxy lane, Necrobrowser-derived post-login lane, Strix-derived autonomous exploit lane, Cairn-derived goal-directed loop). Updated `END_GOAL.md`, `README.md`, `docs/competitive_upgrade_consolidated_backlog.md`, and `docs/competitive_research_strix_cairn_muraena.md` in the same commit arc. Code changes to implement the exploitation phase are follow-on work gated by their own task tickets; this entry records the contract change, not an implementation. Safety gates (`assert_in_scope`, hash-chained audit, `FORGE_SAFE_MODE`, scope manifest permission blocks) all remain intact; they now authorize scoped exploitation rather than block all exploitation. |

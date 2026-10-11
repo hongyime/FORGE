@@ -1,40 +1,52 @@
 # FORGE Toolkit
 
-**Deterministic authorized ASM pipeline** - create a scoped engagement from one
-or more typed seeds, then run bounded recursive discovery, static enrichment,
-non-destructive validation, rule-engine scoring, graph/dashboard/report review,
-and fallback exports.
+**Deterministic authorized offensive security pipeline** - create a scoped
+engagement from one or more typed seeds, then run bounded recursive discovery,
+static enrichment, validation, scoped authorized exploitation (when ROE
+permits), rule-engine scoring, graph/dashboard/report review, and fallback
+exports.
 
-Every operation is scope-gated and hash-chain audit-logged. Zero API keys are
-required for the recommended deterministic template/report path.
+Every operation is scope-gated, ROE-authorized, and hash-chain audit-logged.
+Zero API keys are required for the recommended deterministic template/report
+path.
 
 ## End Goal
 
-Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
+Goal lock: `FORGE-DETERMINISTIC-EXPLOITATION-PIPELINE-v2`.
+
+Supersedes `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. The v1 contract framed FORGE
+as validation-only ASM. The v2 contract adds scoped authorized exploitation as
+a first-class pipeline phase. ROE, scope manifest, hash-chained audit,
+deterministic scoring, and `FORGE_SAFE_MODE` all remain — their role shifts
+from "prevent exploitation" to "ensure exploitation is scoped, ROE-authorized,
+and audited".
 
 Canonical one-line answer: FORGE must be one comprehensive, deterministic,
-authorized ASM engagement pipeline from scoped multi-seed intake through bounded
-recursive discovery, static artifact enrichment, non-destructive
-validation-before-reporting, rule-engine scoring, graph/dashboard/report/audit
-review, guaranteed template/raw fallback, and test-data cleanup.
+authorized engagement pipeline from scoped multi-seed intake through bounded
+recursive discovery, static artifact enrichment, validation, scoped authorized
+exploitation, rule-engine scoring, graph/dashboard/report/audit review,
+guaranteed template/raw fallback, and test-data cleanup.
 
-FORGE's end goal is one comprehensive, deterministic, authorized ASM workflow:
-multi-seed engagement intake, bounded recursive discovery, passive artifact and
-provider enrichment, scoped live checks only when ROE/scope explicitly allows
-them, non-destructive validation-before-reporting, deterministic risk scoring,
+FORGE's end goal is one comprehensive, deterministic, authorized offensive
+security workflow: multi-seed engagement intake, bounded recursive discovery,
+passive artifact and provider enrichment, scoped live checks when ROE/scope
+explicitly allows them, validation, scoped authorized exploitation (credential
+capture via reverse-proxy transport, post-login browser automation, autonomous
+exploit chaining, goal-directed Bootstrap/Reason/Explore progression) when the
+scope manifest grants the capability, deterministic risk scoring,
 graph/dashboard/report/audit review, and guaranteed template/raw exports when
 LLM/API narrative providers fail, hit quota, have no key, or exceed token
 limits.
 
 Implementation work should strengthen that workflow or its tests. It should not
-move the goal to UI-only polish, provider breadth without recursive value, or any
-path that weakens scope gates, validation gates, auditability, deterministic
+move the goal to UI-only polish, provider breadth without recursive value, or
+any path that weakens scope gates, ROE gates, auditability, deterministic
 severity, or report fallback.
 
 Before editing code, state the deterministic gate being advanced: intake,
-discovery, recursion, artifact analysis, validation, scoring, review, fallback,
-or testing/cleanup. If none applies, stop and choose a concrete release-gate gap
-instead.
+discovery, recursion, artifact analysis, validation, exploitation, scoring,
+review, fallback, or testing/cleanup. If none applies, stop and choose a
+concrete release-gate gap instead.
 
 Do not replace this goal with a new project direction in a task handoff. If the
 goal needs clarification, update `END_GOAL.md` and `SPEC.md` together so every
@@ -264,6 +276,12 @@ forge collection profiles emit NAME --seed SEED --engagement N [--json]  # Emit 
 forge artifacts nemesis-export --engagement N [--output PATH]  # Nemesis C2 handoff: sanitized evidence bundle (Explore #13)
 forge agents list [--json]  # List registered agent plugins and capability manifests (Explore #14, read-only)
 forge agents task-status --task-id ID [--json]  # Read-only agent task state query
+forge recursion intents list --engagement N [--status STATUS] [--limit N] [--json]  # Fact/Intent/Hint recursion intents (Wave 2 #20, read-only)
+forge recursion intents add --engagement N --target-seed SEED --rationale TEXT [--source-fact-id ID] [--seed-type TYPE] [--json]
+forge mcp serve [--host 127.0.0.1] [--port N] [--transport http|stdio] [--token TOKEN] [--token-env ENV] [--no-token] [--print-plan] [--json]  # Loopback-only MCP server over FORGE evidence (Explore #22)
+forge mcp tools [--json]  # List the read-only MCP tools exposed by `forge mcp serve`
+forge skills list [--data-dir PATH] [--skill-dir PATH] [--json]  # List validated forge.skill.v1 manifests (Explore #23, read-only)
+forge skills validate [--skill-dir PATH] [--data-dir PATH] [--json]  # Validate forge.skill.v1 manifests; exits non-zero on failure
 forge graph cypher-export --engagement N --graph-json PATH [--output PATH]  # Neo4j Cypher CREATE export from attack graph (Explore #12)
 forge graph tier-zero --engagement N [--top N] [--json]  # Tier-zero exposure scoring + remediation hints (Explore #16)
 forge audit manifest-verify --engagement N
@@ -818,10 +836,12 @@ sanitized target refs, compact proof summaries, severity based on pass/fail
 state, and stable diff fingerprints so repeated equivalent reruns do not create
 duplicate change alerts.
 Policies in `active_validation` mode, or policies with
-`{"refresh": {"type": "active_validation"}}`, run approved non-destructive
+`{"refresh": {"type": "active_validation"}}`, run approved scoped
 active-validation jobs before snapshotting. The default scheduler runs dry-run
 and lab jobs only; `read_only_live` jobs require explicit `allow_live` refresh
-metadata plus the existing ROE/scope gates.
+metadata plus the existing ROE/scope gates. Exploitation-class active-
+validation methods (credential-use, auth-bypass execution, post-login scoped
+automation) remain gated by scope-manifest permission blocks per invariant V15.
 
 `forge graph sync-assets` materializes the canonical asset graph from stored
 engagement evidence. The graph now includes typed evidence nodes and
@@ -1197,7 +1217,10 @@ explicitly enabled. The first live methods are non-destructive
 `fix_verification`: each uses one no-redirect HTTP observation against an
 approved absolute HTTP(S) URL, falls back from `HEAD` to a ranged `GET` only
 when `HEAD` is unsupported, stores no response body, and redacts
-secret-bearing URL query parameters in public run/audit evidence.
+secret-bearing URL query parameters in public run/audit evidence. Exploitation-
+class methods (credential-use, auth-bypass, post-login automation, autonomous
+exploit chaining) are gated by distinct scope-manifest permission blocks per
+invariant V15 and are only reachable when the ROE declares them.
 `http_security_headers` records only security-header posture such as CSP, HSTS,
 nosniff, frame/clickjacking, referrer, permissions, and cross-origin policy
 signals; it never stores `Set-Cookie` or response bodies. Fix-verification
@@ -1438,11 +1461,13 @@ Current baseline: **2,100+ passing** / 0 failing.
 
 ## Design principles
 
-1. **Nothing operates outside scope.** `assert_in_scope` gates every network module.
-2. **Every action leaves a receipt.** `audit_log` rows are hash-chained; verifier proves tamper-evidence.
-3. **Auto-discover, don't hardcode.** OSINT modules auto-find their target credentials.
-4. **Standalone by default.** No cloud dependency required. Template fallback works with zero LLMs.
-5. **Chaos-tested durability.** Workflow engine survives Redis crashes, SQLite lock contention, plugin SIGKILL, disk-full — proven weekly in CI.
+1. **Nothing operates outside scope.** `assert_in_scope` gates every network module, including exploitation.
+2. **Every action leaves a receipt.** `audit_log` rows are hash-chained; verifier proves tamper-evidence. Credential capture, exploit payloads, exploit outcomes, and goal progression are all audit records.
+3. **Exploitation is scoped, not blocked.** ROE and scope-manifest permission blocks (`reverse_proxy`, `post_login_automation`, `autonomous_exploit`, `goal_targets`) authorize specific exploitation capabilities. `FORGE_SAFE_MODE=1` disables the exploitation phase entirely for operators who want passive-only ASM.
+4. **Captured material is encrypted at rest.** Raw credentials, MFA cookies, session tokens, and extruded data references are encrypted under `FORGE_ENGAGEMENT_KEY`. Export surfaces require explicit operator decryption.
+5. **Auto-discover, don't hardcode.** OSINT modules auto-find their target credentials.
+6. **Standalone by default.** No cloud dependency required. Template fallback works with zero LLMs.
+7. **Chaos-tested durability.** Workflow engine survives Redis crashes, SQLite lock contention, plugin SIGKILL, disk-full — proven weekly in CI.
 
 ---
 
@@ -1478,7 +1503,9 @@ continuation state is in `.agents/STATE.md`.
 `cloud_ref` is now a first-class seed type — schema, classifier, consumers,
 filter clauses, and end-to-end round-trip regression all land on `origin/main`
 (4-slice rollout, `582703b` → `042c8db`). Cloud refs stay ROE/scope-gated and
-cannot bypass validation-before-reporting.
+go through the same proof gates as every other evidence type before becoming
+reportable findings — validation evidence or scoped exploit evidence must
+exist, LLM narrative never alone.
 
 SAST posture: Bandit (`9bf521d`) and Semgrep (`90199d8`) workflows run in CI.
 `python-jose` swapped for PyJWT (`b347cd8`) to mitigate CVE-2024-33663 and

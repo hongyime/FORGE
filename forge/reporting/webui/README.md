@@ -13,6 +13,6 @@ gates live in:
 - `docs/deterministic_engagement_contract.md`
 - `docs/engagement_overhaul_tasklist.md`
 
-Do not add UI-only polish that weakens or bypasses scope gates,
-validation-before-reporting, rule-engine severity, deterministic fallback, or
-auditability.
+Do not add UI-only polish that weakens or bypasses scope gates, proof gates
+(validation evidence or scoped exploit evidence before reportability),
+rule-engine severity, deterministic fallback, or auditability.
