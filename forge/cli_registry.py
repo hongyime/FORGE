@@ -11,6 +11,13 @@ from rich.console import Console
 
 _EM_DASH = "\N{EM DASH}"
 
+#: Lifecycle panels for ``forge --help``. Order matches operator flow:
+#: install/connect → run → review → advanced tuning.
+PANEL_GETTING_STARTED = "Getting Started"
+PANEL_RUN = "Run"
+PANEL_REVIEW = "Review"
+PANEL_ADVANCED = "Advanced"
+
 
 @dataclass(frozen=True)
 class ForgeCliApps:
@@ -167,18 +174,18 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
     )
     apps = ForgeCliApps(
         app=root_app,
-        kb_app=_make_sub("kb", f"Phase 0 {_EM_DASH} Knowledge Base ETL"),
-        recon_app=_make_sub("recon", f"Phase 1 {_EM_DASH} Reconnaissance"),
-        osint_app=_make_sub("osint", f"Phase 2 {_EM_DASH} Intelligence Operations"),
-        evasion_app=_make_sub("evasion", f"Phase 3 {_EM_DASH} Payload Preparation"),
-        exploit_app=_make_sub("exploit", f"Phase 4 {_EM_DASH} Vulnerability Correlation"),
-        vuln_app=_make_sub("vuln", f"Phase 4 {_EM_DASH} Web Vulnerability Discovery"),
-        cloud_app=_make_sub("cloud", f"Phase 4 {_EM_DASH} Cloud Misconfiguration Scanning"),
-        graph_app=_make_sub("graph", f"Phase 4 {_EM_DASH} Attack Path Visualization"),
+        kb_app=_make_sub("kb", "Knowledge Base ETL (threat intel, LOLBAS, GTFOBins, NVD)"),
+        recon_app=_make_sub("recon", f"Discovery {_EM_DASH} Reconnaissance"),
+        osint_app=_make_sub("osint", f"Enrichment {_EM_DASH} Intelligence Operations"),
+        evasion_app=_make_sub("evasion", f"Validation {_EM_DASH} Payload Preparation"),
+        exploit_app=_make_sub("exploit", f"Exploitation {_EM_DASH} Vulnerability Correlation"),
+        vuln_app=_make_sub("vuln", f"Exploitation {_EM_DASH} Web Vulnerability Discovery"),
+        cloud_app=_make_sub("cloud", f"Exploitation {_EM_DASH} Cloud Misconfiguration Scanning"),
+        graph_app=_make_sub("graph", f"Scoring {_EM_DASH} Attack Path Visualization"),
         web_app=_make_sub("web", f"Web Interface {_EM_DASH} Orchestration and Visibility"),
         auth_app=_make_sub("auth", f"Authentication Testing {_EM_DASH} Brute and Bypass"),
-        post_app=_make_sub("post", f"Phase 5 {_EM_DASH} Advanced Operations"),
-        report_app=_make_sub("report", f"Phase 6 {_EM_DASH} Reporting"),
+        post_app=_make_sub("post", f"Scoring {_EM_DASH} Advanced Operations"),
+        report_app=_make_sub("report", "Reporting (Markdown/HTML/JSON/CSV + sidecar stats)"),
         audit_app=_make_sub("audit", f"Audit Evidence {_EM_DASH} Manifest Verification"),
         targets_app=_make_sub("targets", "Target feed import"),
         monitoring_app=_make_sub("monitoring", "Continuous monitoring"),
@@ -191,23 +198,26 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
         demo_app=_make_sub("demo", "Repeatable local demo proof packs"),
         retention_app=_make_sub("retention", "Enterprise retention policies"),
         import_app=_make_sub("import", "Import external data into a FORGE engagement"),
-        sessions_app=_make_sub("sessions", "Collection \u2014 Active Session Enumeration"),
+        sessions_app=_make_sub("sessions", "Active Session Enumeration"),
         artifacts_app=_make_sub("artifacts", "Artifact Enrichment \u2014 Queue Status and Parser Lineage"),
-        collection_app=_make_sub("collection", "Collection Profiles \u2014 Named engagement setup manifests"),
-        agents_app=_make_sub("agents", "Agent plugin ecosystem — collaboration and eventing (Explore #14)"),
-        recursion_app=_make_sub("recursion", "Recursion intents — Cairn Fact/Intent/Hint board (Wave 2 #20)"),
-        mcp_app=_make_sub("mcp", "MCP (Model Context Protocol) server surface — read-only FORGE evidence (Explore #22)"),
-        skills_app=_make_sub("skills", "Skill manifest registry — operator playbooks for coding agents (Explore #23)"),
+        collection_app=_make_sub("collection", "Engagement profiles \u2014 Named engagement setup manifests"),
+        agents_app=_make_sub("agents", "Agent capabilities \u2014 plugin ecosystem (read-only inventory)"),
+        recursion_app=_make_sub("recursion", "Discovery leads \u2014 fact/intent board for proposed next-step seeds"),
+        mcp_app=_make_sub("mcp", "MCP (Model Context Protocol) server surface \u2014 read-only FORGE evidence"),
+        skills_app=_make_sub("skills", "Skill playbooks \u2014 operator playbooks for coding agents"),
         exploitation_app=_make_sub(
             "exploitation",
-            "Scoped authorized exploitation — credentials, reverse-proxy, post-login automation, autonomous exploit, goal engine (goal lock v2)",
+            (
+                "Scoped authorized exploitation \u2014 credentials, reverse-proxy, "
+                "post-login automation, autonomous exploit, Goal tracker (goal lock v2)"
+            ),
         ),
         dashboard_app=typer.Typer(
             name="dashboard",
             help=(
-                "Static engagement dashboard + goal-progress visualization. "
+                "View engagement dashboards. "
                 "Run bare `forge dashboard` to build the main overview; "
-                "use `forge dashboard goal-progress -e N` for the Cairn-style goal view."
+                "use `forge dashboard goal-progress -e N` for the goal-tracker view."
             ),
             invoke_without_command=True,
             no_args_is_help=False,
@@ -215,8 +225,7 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
         autopilot_app=typer.Typer(
             name="autopilot",
             help=(
-                "Self-running automation loop. Default: apply (live) with "
-                "the baked-in ROE handle from AutopilotDefaults. "
+                "Run the full automated pipeline (default mode). "
                 "Pass --dry-run to rehearse. FORGE_SAFE_MODE=1 still "
                 "forces dry-run as a safety override. No config file "
                 "required."
@@ -226,64 +235,79 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
         ),
         feeds_app=_make_sub(
             "feeds",
-            "Free threat-intel feed fetchers (NVD, CISA KEV, EPSS, RSS, nuclei-templates, urlscan)",
+            "Manage threat intelligence feeds (NVD, CISA KEV, EPSS, RSS, nuclei-templates, urlscan)",
         ),
         connect_app=_make_sub(
             "connect",
             (
-                "Store service connections (GitHub, Supabase, Shodan, "
-                "VirusTotal, Replit, URLScan, Censys, DeHashed). "
-                "Credentials via --token-env / --token-stdin only; "
+                "Connect services (GitHub, Supabase, Shodan, VirusTotal, "
+                "Replit, URLScan, Censys, DeHashed). "
+                "Credentials via --token-env / --key-env / stdin only; "
                 "never passed on the command line."
             ),
         ),
         scope_app=_make_sub(
             "scope",
             (
-                "View or edit the scope manifest without hand-editing JSON. "
+                "View and manage target scope without hand-editing JSON. "
                 "Supports show, add-domain, add-ip, auto-expand."
             ),
         ),
     )
 
-    root_app.add_typer(apps.kb_app)
+    # --- GETTING STARTED --------------------------------------------
+    # ``setup`` and ``doctor`` are root-level commands and get their
+    # panel assignment inside ``cli_root_commands`` / ``setup.cli``.
+    root_app.add_typer(apps.connect_app, rich_help_panel=PANEL_GETTING_STARTED)
+
+    # --- RUN ---------------------------------------------------------
+    # ``kill-chain`` is a root-level command registered by forge.cli; its
+    # panel assignment lives on that handler decorator.
+    root_app.add_typer(apps.autopilot_app, rich_help_panel=PANEL_RUN)
+    root_app.add_typer(apps.targets_app, rich_help_panel=PANEL_RUN)
+    root_app.add_typer(apps.scope_app, rich_help_panel=PANEL_RUN)
+
+    # --- REVIEW ------------------------------------------------------
+    root_app.add_typer(apps.dashboard_app, rich_help_panel=PANEL_REVIEW)
+    root_app.add_typer(apps.report_app, rich_help_panel=PANEL_REVIEW)
+    root_app.add_typer(apps.exploitation_app, rich_help_panel=PANEL_REVIEW)
+    root_app.add_typer(apps.graph_app, rich_help_panel=PANEL_REVIEW)
+
+    # --- ADVANCED ----------------------------------------------------
+    root_app.add_typer(apps.feeds_app, rich_help_panel=PANEL_ADVANCED)
+    root_app.add_typer(apps.monitoring_app, rich_help_panel=PANEL_ADVANCED)
+    root_app.add_typer(apps.remediation_app, rich_help_panel=PANEL_ADVANCED)
+    root_app.add_typer(apps.audit_app, rich_help_panel=PANEL_ADVANCED)
+    root_app.add_typer(apps.connectors_app, rich_help_panel=PANEL_ADVANCED)
+    root_app.add_typer(apps.active_validation_app, rich_help_panel=PANEL_ADVANCED)
+
+    # --- HIDDEN (accessible, but suppressed from ``forge --help``) ----
+    # Each group is still reachable with ``forge <name> --help``; they
+    # are not shown on the root listing to keep the main help focused
+    # on the lifecycle most operators follow.
+    root_app.add_typer(apps.kb_app, hidden=True)
     root_app.add_typer(apps.recon_app, hidden=True)
     root_app.add_typer(apps.osint_app, hidden=True)
     root_app.add_typer(apps.evasion_app, hidden=True)
     root_app.add_typer(apps.exploit_app, hidden=True)
     root_app.add_typer(apps.vuln_app, hidden=True)
     root_app.add_typer(apps.cloud_app, hidden=True)
-    root_app.add_typer(apps.graph_app)
     root_app.add_typer(apps.web_app, hidden=True)
     root_app.add_typer(apps.auth_app, hidden=True)
     root_app.add_typer(apps.post_app, hidden=True)
-    root_app.add_typer(apps.report_app)
-    root_app.add_typer(apps.audit_app)
-    root_app.add_typer(apps.targets_app)
-    root_app.add_typer(apps.import_app)
-    root_app.add_typer(apps.monitoring_app)
-    root_app.add_typer(apps.remediation_app)
-    root_app.add_typer(apps.active_validation_app)
-    root_app.add_typer(apps.automation_app)
-    root_app.add_typer(apps.connectors_app)
-    root_app.add_typer(apps.standards_app)
-    root_app.add_typer(apps.workspaces_app)
-    root_app.add_typer(apps.demo_app)
-    root_app.add_typer(apps.retention_app)
-    root_app.add_typer(apps.sessions_app)
-    root_app.add_typer(apps.artifacts_app)
-    root_app.add_typer(apps.collection_app)
-    root_app.add_typer(apps.agents_app)
-    root_app.add_typer(apps.recursion_app)
-    root_app.add_typer(apps.mcp_app)
-    root_app.add_typer(apps.skills_app)
-    root_app.add_typer(apps.exploitation_app)
-    root_app.add_typer(apps.dashboard_app)
-    root_app.add_typer(apps.dashboard_app)
-    root_app.add_typer(apps.autopilot_app)
-    root_app.add_typer(apps.feeds_app)
-    root_app.add_typer(apps.connect_app)
-    root_app.add_typer(apps.scope_app)
+    root_app.add_typer(apps.import_app, hidden=True)
+    root_app.add_typer(apps.automation_app, hidden=True)
+    root_app.add_typer(apps.standards_app, hidden=True)
+    root_app.add_typer(apps.workspaces_app, hidden=True)
+    root_app.add_typer(apps.demo_app, hidden=True)
+    root_app.add_typer(apps.retention_app, hidden=True)
+    root_app.add_typer(apps.sessions_app, hidden=True)
+    root_app.add_typer(apps.artifacts_app, hidden=True)
+    root_app.add_typer(apps.collection_app, hidden=True)
+    root_app.add_typer(apps.agents_app, hidden=True)
+    root_app.add_typer(apps.recursion_app, hidden=True)
+    root_app.add_typer(apps.mcp_app, hidden=True)
+    root_app.add_typer(apps.skills_app, hidden=True)
 
     _wire_dashboard_default_callback(apps.dashboard_app)
     _register_modular_commands(apps)
@@ -295,7 +319,7 @@ def _wire_dashboard_default_callback(dashboard_app: typer.Typer) -> None:
 
     ``forge dashboard`` with no sub-command still builds the static
     engagement dashboard. ``forge dashboard goal-progress -e N ...`` is
-    the Cairn-style goal view registered by
+    the goal-tracker view registered by
     :func:`forge.dashboard.cli.register_dashboard_commands`.
     """
     from forge.cli_operator import run_dashboard_command  # noqa: PLC0415

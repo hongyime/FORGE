@@ -402,6 +402,24 @@ def _print_description(snapshot: dict[str, object]) -> None:
     console.print(f"default_execution_mode={snapshot['default_execution_mode']}")
 
 
+#: Mapping from internal autopilot phase ids to user-friendly labels
+#: used in ``forge autopilot --describe`` output and summary printing.
+_PHASE_DISPLAY_LABELS = {
+    "feed_fetch": "Threat intel refresh",
+    "connected_services_scan": "Service scan",
+    "feed_build": "Target feed",
+    "auto_scope": "Scope expansion",
+    "import_targets": "Target import",
+    "resume_candidates": "Resume paused runs",
+    "monitoring": "Monitoring policies",
+    "dashboard": "Dashboard refresh",
+}
+
+
+def _phase_display_name(name: str) -> str:
+    return _PHASE_DISPLAY_LABELS.get(name, name)
+
+
 def _print_summary(payload: dict[str, object]) -> None:
     status = payload.get("status", "?")
     mode = payload.get("mode", "?")
@@ -429,9 +447,10 @@ def _print_summary(payload: dict[str, object]) -> None:
                 "error": "red",
             }.get(str(phase_status), "white")
             name = phase.get("name", "?")
+            label = _phase_display_name(str(name))
             detail = phase.get("detail", "")
             console.print(
-                f"- {name}: [{phase_color}]{phase_status}[/{phase_color}] {detail}"
+                f"- {label}: [{phase_color}]{phase_status}[/{phase_color}] {detail}"
             )
 
 

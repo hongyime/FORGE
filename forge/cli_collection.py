@@ -26,14 +26,14 @@ from forge.collection.profiles import (
 
 _profiles_app = typer.Typer(
     name="profiles",
-    help="Collection Profile Manifests (Necrobrowser-style {type, name, params}).",
+    help="Engagement profile manifests (named engagement setup plans).",
     no_args_is_help=True,
 )
 collection_app.add_typer(_profiles_app)
 
 
 def _print_profile_summary_header() -> None:
-    console.print("\n[bold blue]Collection Profiles[/bold blue]")
+    console.print("\n[bold blue]Engagement profiles[/bold blue]")
     console.print(f"  {'Name':<22} {'Phases':<48} Description")
     console.print("  " + "-" * 96)
 
@@ -63,7 +63,7 @@ def profiles_list(
         False, "--json", help="Emit machine-readable JSON list."
     ),
 ) -> None:
-    """List all built-in collection profiles with one-line descriptions.
+    """List all built-in engagement profiles with one-line descriptions.
 
     Profiles are reusable named plans that emit ``forge kill-chain``
     commands pre-configured for a specific engagement mode. Use
@@ -103,7 +103,7 @@ def profiles_show(
         False, "--json", help="Emit machine-readable JSON."
     ),
 ) -> None:
-    """Show full details for a named collection profile, including all flags.
+    """Show full details for a named engagement profile, including all flags.
 
     Use ``--json`` for machine-readable output suitable for scripting.
     """

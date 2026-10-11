@@ -21,7 +21,7 @@ console = Console(stderr=True)
 def register_setup_command(app: typer.Typer) -> None:
     """Register ``forge setup`` on the root CLI app."""
 
-    @app.command("setup")
+    @app.command("setup", rich_help_panel="Getting Started")
     def setup(
         root: Optional[Path] = typer.Option(
             None,

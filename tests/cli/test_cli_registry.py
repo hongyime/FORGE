@@ -62,23 +62,30 @@ def test_cli_registry_preserves_public_and_hidden_groups() -> None:
     apps = build_forge_cli_apps(root_help="FORGE test")
 
     visibility = _group_visibility(apps)
+    public = {name for name, hidden in visibility.items() if not hidden}
+    hidden = {name for name, hidden in visibility.items() if hidden}
 
+    # Lifecycle-visible groups shown on ``forge --help`` main listing.
+    # Grouped under Getting Started / Run / Review / Advanced panels.
     assert {
-        "kb",
-        "graph",
-        "report",
-        "audit",
-        "targets",
-        "monitoring",
-        "remediation",
-        "active-validation",
-        "automation",
-        "connectors",
-        "standards",
-        "workspaces",
-        "demo",
-        "retention",
-    }.issubset({name for name, hidden in visibility.items() if not hidden})
+        "connect",       # Getting Started
+        "autopilot",     # Run
+        "targets",       # Run
+        "scope",         # Run
+        "dashboard",     # Review
+        "report",        # Review
+        "exploitation",  # Review
+        "graph",         # Review
+        "feeds",         # Advanced
+        "monitoring",    # Advanced
+        "remediation",   # Advanced
+        "audit",         # Advanced
+        "connectors",    # Advanced
+        "active-validation",  # Advanced
+    }.issubset(public)
+
+    # Hidden groups — reachable via ``forge <name> --help`` but
+    # omitted from the main listing to keep lifecycle grouping focused.
     assert {
         "recon",
         "osint",
@@ -89,7 +96,21 @@ def test_cli_registry_preserves_public_and_hidden_groups() -> None:
         "web",
         "auth",
         "post",
-    }.issubset({name for name, hidden in visibility.items() if hidden})
+        "kb",
+        "import",
+        "automation",
+        "standards",
+        "workspaces",
+        "demo",
+        "retention",
+        "sessions",
+        "artifacts",
+        "collection",
+        "agents",
+        "recursion",
+        "mcp",
+        "skills",
+    }.issubset(hidden)
 
 
 def test_cli_registry_registers_modular_command_groups() -> None:
@@ -142,7 +163,12 @@ def test_root_operator_commands_register_outside_cli_entrypoint() -> None:
 
     register_root_operator_commands(app, console=Console(record=True, color_system=None))
 
-    assert {"dashboard", "doctor", "scaffold", "menu"}.issubset(_command_names(app))
+    # ``dashboard`` is now registered exclusively through the
+    # ``build_forge_cli_apps`` sub-app so ``forge dashboard
+    # goal-progress`` works. The isolated register path still owns
+    # doctor / scaffold / menu / operator-guide.
+    assert {"doctor", "scaffold", "menu", "operator-guide"}.issubset(_command_names(app))
+    assert "dashboard" not in _command_names(app)
 
 
 def test_web_commands_register_outside_cli_entrypoint() -> None:
@@ -232,9 +258,13 @@ def test_extracted_cli_command_registration_bundle_registers_legacy_split_comman
         load_scope_lists=lambda *_args, **_kwargs: [],
     )
 
-    assert {"dashboard", "doctor", "scaffold", "menu", "clean"}.issubset(
+    # dashboard is now exclusively a sub-app (so ``forge dashboard
+    # goal-progress`` and the default callback coexist). The root
+    # @app.command bundle still owns doctor/scaffold/menu/clean.
+    assert {"doctor", "scaffold", "menu", "clean"}.issubset(
         _command_names(apps.app)
     )
+    assert "dashboard" not in _command_names(apps.app)
     assert {
         "start",
         "stop",
@@ -277,6 +307,8 @@ def test_readme_public_commands_match_registered_public_groups() -> None:
     assert "7 public commands" not in public_block.lower()
     for group in sorted(public_groups):
         assert f"forge {group}" in public_block
+    # ``menu``, ``scaffold``, ``clean`` are now hidden from the main
+    # help listing but remain documented in the README reference.
     for root_command in ("kill-chain", "menu", "dashboard", "doctor", "scaffold", "clean"):
         assert f"forge {root_command}" in public_block
     assert "forge standards import-stix" in public_block
@@ -389,18 +421,24 @@ def test_readme_public_commands_match_actual_root_cli() -> None:
     visibility = _group_visibility_from_app(forge_app)
     public_block = _readme_public_command_block()
     public_groups = {name for name, hidden in visibility.items() if not hidden}
-    hidden_groups = {name for name, hidden in visibility.items() if hidden}
 
+    # Public groups must stay documented in README's Public commands
+    # block. Hidden groups (e.g. ``automation``, ``standards``,
+    # ``workspaces``) are intentionally kept in README so operators who
+    # know the command name can find reference docs; being hidden from
+    # ``forge --help`` is a UX decision, not a deprecation.
     for group in sorted(public_groups):
         assert f"forge {group}" in public_block
-    for group in sorted(hidden_groups):
-        # Word-boundary match so `forge exploitation` (public) does not
-        # trigger a false positive against hidden `forge exploit`.
-        import re as _re  # noqa: PLC0415
-        assert not _re.search(
-            rf"forge {_re.escape(group)}\b", public_block
-        ), f"hidden group {group!r} must not appear in README public block"
-    for root_command in sorted(_command_names(forge_app)):
+
+    # Visible root commands (not hidden) must have README entries.
+    visible_root_commands = {
+        command.name
+        for command in forge_app.registered_commands
+        if not isinstance(command.name, DefaultPlaceholder)
+        and command.name is not None
+        and not getattr(command, "hidden", False)
+    }
+    for root_command in sorted(visible_root_commands):
         assert f"forge {root_command}" in public_block
     assert {"sync", "status", "fetch-breach"}.issubset(_command_names(forge_kb_app))
     assert {"wizard", "subdomains", "crawl", "ports"}.issubset(

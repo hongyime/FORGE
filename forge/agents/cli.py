@@ -1,7 +1,7 @@
-"""Operator CLI commands for the FORGE agent ecosystem (Explore #14).
+"""Operator CLI commands for the FORGE agent ecosystem.
 
 Read-only operator views only:
-  forge agents list           — registered plugins + capability manifests
+  forge agents list           — registered plugins + agent capabilities
   forge agents task-status    — read-only task state query
 
 No execute / deploy commands — execution goes through kill-chain only.
@@ -27,7 +27,7 @@ def register_agents_commands(app: typer.Typer) -> None:  # noqa: C901
             False, "--json", help="Emit JSON instead of table output."
         ),
     ) -> None:
-        """List registered agent plugins and their capability manifests (read-only)."""
+        """List registered agent plugins and their agent capabilities (read-only)."""
         from forge.agents.coordinator import TaskCoordinator
         from forge.agents.event_bus import EventBus
 

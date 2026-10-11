@@ -723,20 +723,28 @@ def _render_modules(exploitation: Mapping[str, Any]) -> str:
         "strix": exploitation.get("strix_findings_count") or 0,
         "goal_engine": exploitation.get("goals_achieved") or 0,
     }
+    module_labels = {
+        "credential_store": "Credential vault",
+        "muraena": "Reverse-proxy capture",
+        "necrobrowser": "Post-login automation",
+        "strix": "Autonomous exploit",
+        "goal_engine": "Goal tracker",
+    }
     descriptions = {
         "credential_store": "Plaintext credential inventory (captures + exports).",
-        "muraena": "Reverse-proxy credential capture (Do Next #18).",
-        "necrobrowser": "Post-login browser automation (Do Next #19).",
-        "strix": "Autonomous exploit runner (Do Next #17).",
-        "goal_engine": "Cairn-style Bootstrap/Reason/Explore (Explore #16).",
+        "muraena": "Reverse-proxy credential capture.",
+        "necrobrowser": "Post-login browser automation.",
+        "strix": "Autonomous exploit runner.",
+        "goal_engine": "Bootstrap / Reason / Explore goal tracker.",
     }
     for module in _EXPLOITATION_MODULES:
         pill_cls = "pill ok" if module in active else "pill"
         label = "active" if module in active else "idle"
         value = status_values.get(module, 0)
+        display_name = module_labels.get(module, module)
         cards.append(
             "<div class='mod-card'>"
-            f"<h3>{html.escape(module)}</h3>"
+            f"<h3>{html.escape(display_name)}</h3>"
             f"<span class='{pill_cls}'>{html.escape(label)}</span>"
             f"<div class='value' style='font-size:22px;font-weight:700;margin-top:8px'>{int(value)}</div>"
             f"<div class='muted'>{html.escape(descriptions.get(module, ''))}</div>"

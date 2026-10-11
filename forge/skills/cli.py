@@ -32,7 +32,7 @@ def register_skills_commands(app: typer.Typer) -> None:
         skill_dir: list[str] = typer.Option(
             [],
             "--skill-dir",
-            help="Extra skill plugin directories (repeatable).",
+            help="Extra skill playbook directories (repeatable).",
         ),
         json_output: bool = typer.Option(
             False,
@@ -40,7 +40,7 @@ def register_skills_commands(app: typer.Typer) -> None:
             help="Emit JSON instead of a table.",
         ),
     ) -> None:
-        """List validated skill manifests from the configured plugin dirs."""
+        """List validated skill playbooks from the configured plugin dirs."""
         dirs = skill_plugin_dirs(
             data_dir=data_dir or None,
             extra_dirs=skill_dir or (),
@@ -63,11 +63,11 @@ def register_skills_commands(app: typer.Typer) -> None:
             return
         if not rows:
             _console.print(
-                "[yellow]No skill manifests found.[/yellow]  "
-                "Drop forge.skill.v1 JSON manifests under FORGE_DATA_DIR/skills/."
+                "[yellow]No skill playbooks found.[/yellow]  "
+                "Drop skill playbook JSON files under FORGE_DATA_DIR/skills/."
             )
             return
-        table = Table(title=f"FORGE Skill Registry ({len(valid)} valid, {len(invalid)} invalid)")
+        table = Table(title=f"FORGE Skill Playbooks ({len(valid)} valid, {len(invalid)} invalid)")
         table.add_column("Skill ID", style="cyan")
         table.add_column("Name")
         table.add_column("Version")
@@ -92,7 +92,7 @@ def register_skills_commands(app: typer.Typer) -> None:
         skill_dir: list[str] = typer.Option(
             [],
             "--skill-dir",
-            help="Skill plugin directory to validate (repeatable).",
+            help="Skill playbook directory to validate (repeatable).",
         ),
         data_dir: str = typer.Option(
             "",
@@ -105,7 +105,7 @@ def register_skills_commands(app: typer.Typer) -> None:
             help="Emit JSON instead of a table.",
         ),
     ) -> None:
-        """Validate the forge.skill.v1 manifests under the given directories.
+        """Validate skill playbook manifests under the given directories.
 
         Exits non-zero if any manifest is invalid.
         """
@@ -130,7 +130,7 @@ def register_skills_commands(app: typer.Typer) -> None:
         if json_output:
             typer.echo(json.dumps(payload, indent=2, sort_keys=True))
         else:
-            table = Table(title="FORGE Skill Manifest Validation")
+            table = Table(title="FORGE Skill Playbook Validation")
             table.add_column("Status", style="cyan")
             table.add_column("Path")
             table.add_column("Detail")

@@ -54,7 +54,7 @@ def register_dashboard_commands(app: typer.Typer) -> None:
             help="Write a self-contained HTML dashboard to this path.",
         ),
     ) -> None:
-        """Render a Cairn-style goal progress dashboard."""
+        """Render a goal progress dashboard (Bootstrap / Reason / Explore)."""
         if not json_output and not html_output:
             raise typer.BadParameter("provide --json or --html PATH (or both).")
 

@@ -36,15 +36,15 @@ Schema (serialized ``to_dict()`` output):
     }
 
 Phase vocabulary (bounded, enforced by :data:`ALLOWED_PHASES`):
-    * ``recon``                — Phase 1 subdomain/DNS/CT reconnaissance.
-    * ``osint``                — Phase 2 identity / email / breach pivots.
-    * ``artifact_enrichment``  — Phase 4 static artifact enrichment,
+    * ``recon``                — Discovery: subdomain/DNS/CT reconnaissance.
+    * ``osint``                — Enrichment: identity / email / breach pivots.
+    * ``artifact_enrichment``  — Validation: static artifact enrichment,
       cloud-ref validation.
-    * ``active_validation``    — Phase 4 scoped read-only live checks.
-    * ``exploitation``         — Phase 4-5 scoped authorized exploitation.
-    * ``goal_directed``        — Phase 5 Cairn-style Bootstrap/Reason/
-      Explore goal-directed loop.
-    * ``reporting``            — Phase 6 report + Maltego/GraphML export.
+    * ``active_validation``    — Validation: scoped read-only live checks.
+    * ``exploitation``         — Exploitation: scoped authorized exploitation.
+    * ``goal_directed``        — Scoring: goal-directed Bootstrap / Reason /
+      Explore loop.
+    * ``reporting``            — Reporting: report + Maltego / GraphML export.
 """
 
 from __future__ import annotations

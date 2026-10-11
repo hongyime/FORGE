@@ -52,7 +52,7 @@ def _open_db(engagement: str) -> sqlite3.Connection:
 def register_recursion_commands(app: typer.Typer) -> None:
     intents_app = typer.Typer(
         name="intents",
-        help="Fact/Intent/Hint recursion intents (Wave 2 #20).",
+        help="Discovery leads \u2014 fact / intent board for proposed next-step seeds.",
         no_args_is_help=True,
     )
 
@@ -62,13 +62,13 @@ def register_recursion_commands(app: typer.Typer) -> None:
             ...,
             "--engagement",
             "-e",
-            help="Engagement ID whose recursion intents should be listed.",
+            help="Engagement ID whose discovery leads should be listed.",
         ),
         status: Optional[str] = typer.Option(
             None,
             "--status",
             help=(
-                "Filter by intent status "
+                "Filter by lead status "
                 "(open, claimed, completed, abandoned, or all). Default: all."
             ),
         ),
@@ -85,7 +85,7 @@ def register_recursion_commands(app: typer.Typer) -> None:
             help="Emit machine-readable JSON.",
         ),
     ) -> None:
-        """List recursion intents for an engagement (read-only)."""
+        """List discovery leads for an engagement (read-only)."""
         con = _open_db(engagement)
         try:
             try:
@@ -122,7 +122,7 @@ def register_recursion_commands(app: typer.Typer) -> None:
             return
 
         _console.print(
-            "[bold]Recursion intents[/bold] "
+            "[bold]Discovery leads[/bold] "
             f"engagement={engagement} total={total_matching} "
             f"shown={len(intents)} status={payload['status_filter']}"
         )
@@ -141,7 +141,7 @@ def register_recursion_commands(app: typer.Typer) -> None:
             ...,
             "--engagement",
             "-e",
-            help="Engagement ID the intent is scoped to.",
+            help="Engagement ID the lead is scoped to.",
         ),
         target_seed: str = typer.Option(
             ...,
@@ -151,12 +151,12 @@ def register_recursion_commands(app: typer.Typer) -> None:
         rationale: str = typer.Option(
             "",
             "--rationale",
-            help="Operator-authored reason for recording the intent.",
+            help="Operator-authored reason for recording the lead.",
         ),
         source_fact_id: Optional[str] = typer.Option(
             None,
             "--source-fact-id",
-            help="Opaque pointer to the Fact row that spawned this intent.",
+            help="Opaque pointer to the Fact row that spawned this lead.",
         ),
         seed_type: Optional[str] = typer.Option(
             None,
@@ -166,7 +166,7 @@ def register_recursion_commands(app: typer.Typer) -> None:
         intent_id: Optional[str] = typer.Option(
             None,
             "--intent-id",
-            help="Explicit intent_id (defaults to a UUIDv4 hex).",
+            help="Explicit lead id (defaults to a UUIDv4 hex).",
         ),
         status: str = typer.Option(
             "open",
@@ -179,7 +179,7 @@ def register_recursion_commands(app: typer.Typer) -> None:
             help="Emit the persisted row as JSON.",
         ),
     ) -> None:
-        """Record a new recursion intent."""
+        """Record a new discovery lead."""
         con = _open_db(engagement)
         try:
             try:
@@ -213,7 +213,7 @@ def register_recursion_commands(app: typer.Typer) -> None:
             return
 
         _console.print(
-            "[bold]Added recursion intent[/bold] "
+            "[bold]Added discovery lead[/bold] "
             f"intent_id={created['intent_id']} status={created['status']} "
             f"target={created['target_seed']}"
         )

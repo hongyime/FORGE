@@ -25,7 +25,7 @@ def run_clean_command(*, engagement: str, confirm: bool) -> None:
 def register_clean_command(app: typer.Typer) -> None:
     """Register the root clean command on the Forge app."""
 
-    @app.command("clean")
+    @app.command("clean", hidden=True)
     def clean_command(
         engagement: str = typer.Option(..., "--engagement", "-e"),
         confirm: bool = typer.Option(

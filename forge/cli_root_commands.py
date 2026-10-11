@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import typer
 from rich.console import Console
 
 from forge.cli_operator import (
-    run_dashboard_command,
     run_doctor_command,
     run_menu_command,
     run_operator_guide_command,
@@ -19,38 +16,21 @@ from forge.cli_operator import (
 def register_root_operator_commands(app: typer.Typer, *, console: Console) -> None:
     """Register root-level operator commands on the provided Typer app.
 
-    Note: ``build_forge_cli_apps`` separately wires a ``dashboard`` Typer
-    sub-app to support ``forge dashboard goal-progress``. When this
-    function is called by the full CLI builder, the sub-app and this
-    top-level command coexist — Typer resolves bare ``forge dashboard``
-    through this command and ``forge dashboard goal-progress`` through
-    the sub-app. When callers register this function in isolation (unit
-    tests, custom embeddings) the top-level ``dashboard`` command is the
-    only entry point.
+    ``dashboard`` is registered separately by ``build_forge_cli_apps``
+    as a sub-app (so ``forge dashboard goal-progress`` can live alongside
+    the bare ``forge dashboard`` default callback). It is not re-added
+    here. The remaining root commands (``doctor``, ``scaffold``,
+    ``menu``, ``operator-guide``) only exist as plain root-level
+    commands.
+
+    Registration order determines ``forge --help`` lifecycle-panel order
+    because panels appear in order of first command insertion. Keeping
+    ``doctor`` in Getting Started and the rest hidden lets the panel
+    sequence come out as Getting Started → Run → Review → Advanced
+    once the sub-apps register themselves.
     """
 
-    @app.command("dashboard")
-    def dashboard(
-        output: Optional[str] = typer.Option(
-            None, "--output", "-o",
-            help="Output HTML path. Defaults to reports/dashboard.html.",
-        ),
-        open_browser: bool = typer.Option(
-            False,
-            "--open",
-            help="Open the generated dashboard in your default browser.",
-        ),
-    ) -> None:
-        """Build a static HTML dashboard of every engagement + report.
-
-        Generates a searchable overview page plus companion per-engagement
-        detail pages containing evidence tables, report previews, audit
-        history, and attack-graph artifact links. No web server required -
-        just open the dashboard HTML file.
-        """
-        run_dashboard_command(output=output, open_browser=open_browser, console=console)
-
-    @app.command("doctor")
+    @app.command("doctor", rich_help_panel="Getting Started")
     def doctor(
         json_output: bool = typer.Option(
             False, "--json", help="Print machine-readable doctor output."
@@ -78,14 +58,14 @@ def register_root_operator_commands(app: typer.Typer, *, console: Console) -> No
             console=console,
         )
 
-    @app.command("scaffold")
+    @app.command("scaffold", hidden=True)
     def scaffold(
         output_dir: str = typer.Option(".", "--output", "-o"),
     ) -> None:
         """Generate the full obfuscated directory scaffold for a new FORGE deployment."""
         run_scaffold_command(output_dir=output_dir)
 
-    @app.command("menu")
+    @app.command("menu", hidden=True)
     def menu(
         advanced: bool = typer.Option(
             False,
@@ -99,7 +79,7 @@ def register_root_operator_commands(app: typer.Typer, *, console: Console) -> No
         """Launch the interactive engagement menu (TUI)."""
         run_menu_command(advanced=advanced, console=console)
 
-    @app.command("operator-guide")
+    @app.command("operator-guide", hidden=True)
     def operator_guide(
         section: str | None = typer.Option(
             None, "--section", "-s",

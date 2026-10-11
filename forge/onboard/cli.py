@@ -60,7 +60,14 @@ console = Console(stderr=True)
 
 
 def register_connect_commands(app: typer.Typer) -> None:
-    """Register the ``forge connect`` sub-commands on ``app``."""
+    """Register the ``forge connect`` sub-commands on ``app``.
+
+    Each service subcommand exposes only the flags relevant to that
+    service — GitHub-specific flags do not appear on ``shodan`` help,
+    Supabase-specific flags do not appear on ``github`` help, and so
+    on. See :func:`_register_service_add_command` for the per-service
+    registration.
+    """
 
     @app.command("list")
     def connect_list(
@@ -119,58 +126,118 @@ def _register_service_add_command(
     service_id: str,
     descriptor: dict[str, Any],
 ) -> None:
-    """Create ``forge connect <service>`` for the given service."""
+    """Create ``forge connect <service>`` with only the flags that service needs.
+
+    Flag bleeding (every service showing every flag) is a known UX
+    footgun — operators running ``forge connect shodan --help`` should
+    not see GitHub-only ``--org`` / ``--user`` or Supabase-only
+    ``--project-ref`` / ``--url``. This dispatches to a per-service
+    registration function so each ``--help`` lists only its own flags.
+    """
     cred_fields = tuple(descriptor["credential_fields"])
     required_fields = tuple(descriptor["required_fields"])
     optional_fields = tuple(descriptor["optional_fields"])
     help_text = descriptor.get("description", "")
 
+    registrars: dict[str, Any] = {
+        "github": _register_github_connect,
+        "supabase": _register_supabase_connect,
+        "shodan": _register_single_key_connect,
+        "virustotal": _register_single_key_connect,
+        "urlscan": _register_single_key_connect,
+        "replit": _register_replit_connect,
+        "censys": _register_censys_connect,
+        "dehashed": _register_dehashed_connect,
+    }
+    registrar = registrars.get(service_id)
+    if registrar is None:  # pragma: no cover - defensive guard
+        raise ConnectionError(
+            f"no connect-command registrar for service {service_id!r}; "
+            "add a per-service registration function above"
+        )
+    registrar(
+        app,
+        service_id=service_id,
+        help_text=help_text,
+        cred_fields=cred_fields,
+        required_fields=required_fields,
+        optional_fields=optional_fields,
+    )
+
+
+def _register_github_connect(
+    app: typer.Typer,
+    *,
+    service_id: str,
+    help_text: str,
+    cred_fields: tuple[str, ...],
+    required_fields: tuple[str, ...],
+    optional_fields: tuple[str, ...],
+) -> None:
+    """``forge connect github --token-env VAR [--org ORG] [--user USER]``."""
+
     @app.command(service_id, help=help_text)
-    def _add_command(  # noqa: ANN202
+    def _github_add(  # noqa: ANN202
+        token_env: Optional[str] = typer.Option(
+            None,
+            "--token-env",
+            help="Env var holding the GitHub PAT.",
+        ),
+        token_stdin: bool = typer.Option(
+            False, "--token-stdin", help="Read GitHub PAT from stdin."
+        ),
         orgs: Optional[str] = typer.Option(
             None,
             "--org",
-            help="Comma-separated org slug(s) (GitHub only).",
+            help="Comma-separated org slug(s) to spider.",
         ),
         users: Optional[str] = typer.Option(
             None,
             "--user",
-            help="Comma-separated user slug(s) (GitHub only).",
+            help="Comma-separated user slug(s) to spider.",
         ),
-        token_env: Optional[str] = typer.Option(
-            None,
-            "--token-env",
-            help=(
-                "Env var holding the credential token. Required for "
-                "services with a token field."
-            ),
+        data_dir: Optional[Path] = typer.Option(
+            None, "--data-dir", envvar="FORGE_DATA_DIR"
         ),
-        token_stdin: bool = typer.Option(
-            False, "--token-stdin", help="Read token from stdin."
-        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Store the GitHub PAT and optional org/user hints."""
+        _apply_service_connection(
+            service_id=service_id,
+            cred_fields=cred_fields,
+            required=required_fields,
+            optional=optional_fields,
+            flag_values={
+                "token_env": token_env,
+                "token_stdin": token_stdin,
+                "orgs": orgs,
+                "users": users,
+            },
+            data_dir=data_dir,
+            json_output=json_output,
+        )
+
+
+def _register_supabase_connect(
+    app: typer.Typer,
+    *,
+    service_id: str,
+    help_text: str,
+    cred_fields: tuple[str, ...],
+    required_fields: tuple[str, ...],
+    optional_fields: tuple[str, ...],
+) -> None:
+    """``forge connect supabase --key-env VAR --project-ref REF [--url URL]``."""
+
+    @app.command(service_id, help=help_text)
+    def _supabase_add(  # noqa: ANN202
         key_env: Optional[str] = typer.Option(
             None,
             "--key-env",
-            help="Env var holding the credential key (Shodan/VT/urlscan/dehashed).",
+            help="Env var holding the Supabase anon/service key.",
         ),
         key_stdin: bool = typer.Option(
-            False, "--key-stdin", help="Read key from stdin."
-        ),
-        secret_env: Optional[str] = typer.Option(
-            None,
-            "--secret-env",
-            help="Env var holding the Censys api_secret.",
-        ),
-        secret_stdin: bool = typer.Option(
-            False, "--secret-stdin", help="Read Censys api_secret from stdin."
-        ),
-        api_id_env: Optional[str] = typer.Option(
-            None,
-            "--api-id-env",
-            help="Env var holding the Censys api_id.",
-        ),
-        api_id_stdin: bool = typer.Option(
-            False, "--api-id-stdin", help="Read Censys api_id from stdin."
+            False, "--key-stdin", help="Read Supabase key from stdin."
         ),
         project_ref: Optional[str] = typer.Option(
             None, "--project-ref", help="Supabase project ref."
@@ -178,62 +245,261 @@ def _register_service_add_command(
         supabase_url: Optional[str] = typer.Option(
             None, "--url", help="Supabase project URL (optional override)."
         ),
-        username: Optional[str] = typer.Option(
-            None, "--username", help="Replit username."
+        data_dir: Optional[Path] = typer.Option(
+            None, "--data-dir", envvar="FORGE_DATA_DIR"
         ),
-        email: Optional[str] = typer.Option(
-            None, "--email", help="DeHashed account email."
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Store Supabase project ref + anon/service key."""
+        _apply_service_connection(
+            service_id=service_id,
+            cred_fields=cred_fields,
+            required=required_fields,
+            optional=optional_fields,
+            flag_values={
+                "key_env": key_env,
+                "key_stdin": key_stdin,
+                "project_ref": project_ref,
+                "supabase_url": supabase_url,
+            },
+            data_dir=data_dir,
+            json_output=json_output,
+        )
+
+
+def _register_single_key_connect(
+    app: typer.Typer,
+    *,
+    service_id: str,
+    help_text: str,
+    cred_fields: tuple[str, ...],
+    required_fields: tuple[str, ...],
+    optional_fields: tuple[str, ...],
+) -> None:
+    """``forge connect <shodan|virustotal|urlscan> --key-env VAR``."""
+
+    @app.command(service_id, help=help_text)
+    def _single_key_add(  # noqa: ANN202
+        key_env: Optional[str] = typer.Option(
+            None,
+            "--key-env",
+            help=f"Env var holding the {service_id} API key.",
+        ),
+        key_stdin: bool = typer.Option(
+            False,
+            "--key-stdin",
+            help=f"Read the {service_id} API key from stdin.",
         ),
         data_dir: Optional[Path] = typer.Option(
             None, "--data-dir", envvar="FORGE_DATA_DIR"
         ),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
-        """Add or replace the stored connection for this service."""
-        try:
-            resolved, sources = _resolve_service_fields(
-                service_id,
-                cred_fields=cred_fields,
-                required=required_fields,
-                optional=optional_fields,
-                orgs=orgs,
-                users=users,
-                token_env=token_env,
-                token_stdin=token_stdin,
-                key_env=key_env,
-                key_stdin=key_stdin,
-                secret_env=secret_env,
-                secret_stdin=secret_stdin,
-                api_id_env=api_id_env,
-                api_id_stdin=api_id_stdin,
-                project_ref=project_ref,
-                supabase_url=supabase_url,
-                username=username,
-                email=email,
-            )
-        except ConnectionError as exc:
-            _emit_error(str(exc), json_output=json_output)
-            raise typer.Exit(code=1)
-        try:
-            manager = _mk_manager(data_dir)
-            manager.add_connection(
-                service_id,
-                credential_sources=sources,
-                **resolved,
-            )
-        except ConnectionError as exc:
-            _emit_error(str(exc), json_output=json_output)
-            raise typer.Exit(code=1)
-        payload = {
-            "service": service_id,
-            "connections_path": str(manager.config_path),
-            "credential_sources": sources,
-            "fields_set": sorted(resolved.keys()),
-        }
-        if json_output:
-            typer.echo(json.dumps(payload, indent=2, sort_keys=True))
-            return
-        console.print(f"[green]Stored[/green] {service_id} connection at {manager.config_path}")
+        """Store the single-key API credential for this service."""
+        _apply_service_connection(
+            service_id=service_id,
+            cred_fields=cred_fields,
+            required=required_fields,
+            optional=optional_fields,
+            flag_values={
+                "key_env": key_env,
+                "key_stdin": key_stdin,
+            },
+            data_dir=data_dir,
+            json_output=json_output,
+        )
+
+
+def _register_replit_connect(
+    app: typer.Typer,
+    *,
+    service_id: str,
+    help_text: str,
+    cred_fields: tuple[str, ...],
+    required_fields: tuple[str, ...],
+    optional_fields: tuple[str, ...],
+) -> None:
+    """``forge connect replit --username NAME [--url URL]``."""
+
+    @app.command(service_id, help=help_text)
+    def _replit_add(  # noqa: ANN202
+        username: Optional[str] = typer.Option(
+            None, "--username", help="Replit username to spider."
+        ),
+        supabase_url: Optional[str] = typer.Option(
+            None, "--url", help="Replit profile URL (optional override).",
+        ),
+        data_dir: Optional[Path] = typer.Option(
+            None, "--data-dir", envvar="FORGE_DATA_DIR"
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Store the Replit username (no credential required)."""
+        _apply_service_connection(
+            service_id=service_id,
+            cred_fields=cred_fields,
+            required=required_fields,
+            optional=optional_fields,
+            flag_values={
+                "username": username,
+                "supabase_url": supabase_url,
+            },
+            data_dir=data_dir,
+            json_output=json_output,
+        )
+
+
+def _register_censys_connect(
+    app: typer.Typer,
+    *,
+    service_id: str,
+    help_text: str,
+    cred_fields: tuple[str, ...],
+    required_fields: tuple[str, ...],
+    optional_fields: tuple[str, ...],
+) -> None:
+    """``forge connect censys --api-id-env VAR --secret-env VAR``."""
+
+    @app.command(service_id, help=help_text)
+    def _censys_add(  # noqa: ANN202
+        api_id_env: Optional[str] = typer.Option(
+            None, "--api-id-env", help="Env var holding the Censys api_id.",
+        ),
+        api_id_stdin: bool = typer.Option(
+            False, "--api-id-stdin", help="Read the Censys api_id from stdin.",
+        ),
+        secret_env: Optional[str] = typer.Option(
+            None,
+            "--secret-env",
+            help="Env var holding the Censys api_secret.",
+        ),
+        secret_stdin: bool = typer.Option(
+            False,
+            "--secret-stdin",
+            help="Read the Censys api_secret from stdin.",
+        ),
+        data_dir: Optional[Path] = typer.Option(
+            None, "--data-dir", envvar="FORGE_DATA_DIR"
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Store the Censys api_id + api_secret pair."""
+        _apply_service_connection(
+            service_id=service_id,
+            cred_fields=cred_fields,
+            required=required_fields,
+            optional=optional_fields,
+            flag_values={
+                "api_id_env": api_id_env,
+                "api_id_stdin": api_id_stdin,
+                "secret_env": secret_env,
+                "secret_stdin": secret_stdin,
+            },
+            data_dir=data_dir,
+            json_output=json_output,
+        )
+
+
+def _register_dehashed_connect(
+    app: typer.Typer,
+    *,
+    service_id: str,
+    help_text: str,
+    cred_fields: tuple[str, ...],
+    required_fields: tuple[str, ...],
+    optional_fields: tuple[str, ...],
+) -> None:
+    """``forge connect dehashed --email ADDR --key-env VAR``."""
+
+    @app.command(service_id, help=help_text)
+    def _dehashed_add(  # noqa: ANN202
+        email: Optional[str] = typer.Option(
+            None, "--email", help="DeHashed account email."
+        ),
+        key_env: Optional[str] = typer.Option(
+            None,
+            "--key-env",
+            help="Env var holding the DeHashed API key.",
+        ),
+        key_stdin: bool = typer.Option(
+            False, "--key-stdin", help="Read the DeHashed API key from stdin."
+        ),
+        data_dir: Optional[Path] = typer.Option(
+            None, "--data-dir", envvar="FORGE_DATA_DIR"
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Store the DeHashed account email + API key."""
+        _apply_service_connection(
+            service_id=service_id,
+            cred_fields=cred_fields,
+            required=required_fields,
+            optional=optional_fields,
+            flag_values={
+                "email": email,
+                "key_env": key_env,
+                "key_stdin": key_stdin,
+            },
+            data_dir=data_dir,
+            json_output=json_output,
+        )
+
+
+def _apply_service_connection(
+    *,
+    service_id: str,
+    cred_fields: tuple[str, ...],
+    required: tuple[str, ...],
+    optional: tuple[str, ...],
+    flag_values: dict[str, Any],
+    data_dir: Optional[Path],
+    json_output: bool,
+) -> None:
+    """Shared tail-call for every ``forge connect <service>`` command."""
+    try:
+        resolved, sources = _resolve_service_fields(
+            service_id,
+            cred_fields=cred_fields,
+            required=required,
+            optional=optional,
+            orgs=flag_values.get("orgs"),
+            users=flag_values.get("users"),
+            token_env=flag_values.get("token_env"),
+            token_stdin=bool(flag_values.get("token_stdin")),
+            key_env=flag_values.get("key_env"),
+            key_stdin=bool(flag_values.get("key_stdin")),
+            secret_env=flag_values.get("secret_env"),
+            secret_stdin=bool(flag_values.get("secret_stdin")),
+            api_id_env=flag_values.get("api_id_env"),
+            api_id_stdin=bool(flag_values.get("api_id_stdin")),
+            project_ref=flag_values.get("project_ref"),
+            supabase_url=flag_values.get("supabase_url"),
+            username=flag_values.get("username"),
+            email=flag_values.get("email"),
+        )
+    except ConnectionError as exc:
+        _emit_error(str(exc), json_output=json_output)
+        raise typer.Exit(code=1)
+    try:
+        manager = _mk_manager(data_dir)
+        manager.add_connection(
+            service_id,
+            credential_sources=sources,
+            **resolved,
+        )
+    except ConnectionError as exc:
+        _emit_error(str(exc), json_output=json_output)
+        raise typer.Exit(code=1)
+    payload = {
+        "service": service_id,
+        "connections_path": str(manager.config_path),
+        "credential_sources": sources,
+        "fields_set": sorted(resolved.keys()),
+    }
+    if json_output:
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    console.print(f"[green]Stored[/green] {service_id} connection at {manager.config_path}")
 
 
 # ----------------------------------------------------------------------

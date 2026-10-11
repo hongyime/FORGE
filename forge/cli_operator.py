@@ -172,7 +172,7 @@ Every module feeds every other module automatically.
   passive_recon         Passive OSINT only. No live scanning, no exploitation.
   standard_assessment   Passive + bounded active validation. Needs ROE.
   full_engagement       + scoped authorized exploitation. Needs full ROE.
-  red_team              All phases incl. Cairn-style goal-directed loop.
+  red_team              All phases incl. goal-directed Bootstrap/Reason/Explore loop.
 
   forge collection profiles emit <name> --seed <SEED> -e <N>
 """,

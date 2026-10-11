@@ -121,7 +121,7 @@ forge-autopilot.bat --dry-run
 - `.forge_data/engagements/<N>.db` — SQLite evidence DB with hash-chained
   audit log.
 
-Open the Cairn-style goal-progress view in your browser:
+Open the goal-tracker progress view in your browser:
 
 ```powershell
 forge dashboard goal-progress --engagement 1 --html progress.html
@@ -134,7 +134,7 @@ forge dashboard goal-progress --engagement 1 --html progress.html
 ```text
 forge kill-chain target.example --engagement 1            # Manual single-target run
 forge exploitation credentials list --engagement 1        # View captured creds (goal lock v2)
-forge dashboard goal-progress --engagement 1 --json       # Goal progress snapshot
+forge dashboard goal-progress --engagement 1 --json       # Goal tracker progress snapshot
 forge kb sync                                             # Refresh free threat intel manually
 forge kb status                                           # Show KB staleness
 forge doctor --json                                       # Full readiness check
