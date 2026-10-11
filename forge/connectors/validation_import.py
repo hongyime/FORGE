@@ -55,6 +55,12 @@ def import_validation_artifact(
     if con.row_factory is None:
         con.row_factory = sqlite3.Row
     connector_id = str(config.connector_id or "").strip().lower()
+    # Delegate the JSON-shaped Strix connector to its own module so the XML
+    # path below stays XML-only. See backlog #18 / strix_findings.py.
+    if connector_id == "strix_findings_import":
+        from forge.connectors.strix_findings import import_strix_findings
+
+        return import_strix_findings(con, config, report_text=report_text)
     if connector_id not in SUPPORTED_VALIDATION_IMPORT_CONNECTORS:
         raise ValueError(
             "validation import connector must be one of "

@@ -606,6 +606,59 @@ CTI_OSINT_PROVIDER_CATALOG: tuple[OsintProviderCatalogEntry, ...] = (
         notes="Cloud-init/userdata and package snippets are catalog-only source text; do not run install flows.",
     ),
     OsintProviderCatalogEntry(
+        id="muraena_proxy",
+        label="Muraena Reverse-Proxy Phishing",
+        category="adversary_emulation",
+        default_enabled=True,
+        safety_tier="integration_planned_offensive",
+        collection_method="integration_planned",
+        outputs=(
+            "credential_capture_reference",
+            "mfa_cookie_reference",
+            "scoped_phishing_evidence",
+            "provenance",
+        ),
+        required_gates=(
+            "operator_opt_in",
+            "roe_id",
+            "scope_manifest",
+            "reverse_proxy_permission",
+            "write_permission",
+        ),
+        notes=(
+            "Backlog #19: Go-based reverse-proxy phishing framework. Under the "
+            "v2 scoped-exploitation contract, Muraena is an integration target "
+            "guarded by a scope-manifest reverse_proxy permission block; the "
+            "Wave 1 ship adds this catalog entry only, no runnable surface."
+        ),
+    ),
+    OsintProviderCatalogEntry(
+        id="necrobrowser_automation",
+        label="Necrobrowser Post-Login Browser Automation",
+        category="adversary_emulation",
+        default_enabled=True,
+        safety_tier="integration_planned_offensive",
+        collection_method="integration_planned",
+        outputs=(
+            "post_login_automation_reference",
+            "scoped_session_action_evidence",
+            "provenance",
+        ),
+        required_gates=(
+            "operator_opt_in",
+            "roe_id",
+            "scope_manifest",
+            "post_login_automation_permission",
+            "write_permission",
+        ),
+        notes=(
+            "Backlog #19: Node.js post-login browser automation framework. "
+            "Integration remains gated by a scope-manifest "
+            "post_login_automation permission block; see Explore #24 for the "
+            "spec that enumerates what the FORGE equivalent CANNOT do."
+        ),
+    ),
+    OsintProviderCatalogEntry(
         id="osint_people_identity",
         label="OSINT People Identity Backlog",
         category="sensitive_identity",
@@ -662,10 +715,15 @@ def provider_catalog_policy_summary() -> dict[str, Any]:
             entry.id for entry in entries if entry.collection_method == "offline_import"
         ),
         "live_or_api_provider_ids": sorted(
-            entry.id for entry in entries if entry.collection_method != "offline_import"
+            entry.id
+            for entry in entries
+            if entry.collection_method not in {"offline_import", "integration_planned"}
         ),
         "manual_opt_in_provider_ids": sorted(
             entry.id for entry in entries if "operator_opt_in" in entry.required_gates
+        ),
+        "integration_planned_provider_ids": sorted(
+            entry.id for entry in entries if entry.collection_method == "integration_planned"
         ),
     }
 

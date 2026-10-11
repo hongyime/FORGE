@@ -127,9 +127,18 @@ def test_connector_registry_reports_free_first_readiness_without_secret_values()
     assert "paid_opt_in" in by_id["remediation_splunk_hec"]["required_gates"]
     assert "paid_opt_in" in by_id["remediation_torq"]["required_gates"]
     assert by_id["active_validation_plugins"]["execution_status"] == "planned_fail_closed"
+    # Backlog #19: Muraena + Necrobrowser catalog entries under the v2
+    # scoped-exploitation contract; both are integration-planned and
+    # must fail closed until integration lands.
+    assert by_id["muraena_proxy"]["execution_status"] == "planned_fail_closed"
+    assert by_id["muraena_proxy"]["implementation_status"] == "integration_planned"
+    assert "reverse_proxy_permission" in by_id["muraena_proxy"]["required_gates"]
+    assert by_id["necrobrowser_automation"]["execution_status"] == "planned_fail_closed"
+    assert by_id["necrobrowser_automation"]["implementation_status"] == "integration_planned"
+    assert "post_login_automation_permission" in by_id["necrobrowser_automation"]["required_gates"]
     assert summary["free_first_count"] > summary["optional_paid_count"]
     assert summary["runner_supported_count"] > summary["catalog_only_count"]
-    assert summary["planned_fail_closed_count"] == 1
+    assert summary["planned_fail_closed_count"] == 3
     assert "wired_operator_path" in summary["execution"]
     assert "secret_material_policy" in summary
     assert secret_value not in blob

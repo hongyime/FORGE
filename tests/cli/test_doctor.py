@@ -195,13 +195,13 @@ def test_collect_doctor_checks_prefers_free_local_and_redacts_env_values(tmp_pat
     assert action_by_id["review_cti_osint_policy"]["execution_policy"] == (
         "data_only_catalog_no_provider_execution"
     )
-    assert action_by_id["review_cti_osint_policy"]["total_count"] == "48"
-    assert action_by_id["review_cti_osint_policy"]["selected_count"] == "48"
+    assert action_by_id["review_cti_osint_policy"]["total_count"] == "50"
+    assert action_by_id["review_cti_osint_policy"]["selected_count"] == "50"
     assert action_by_id["review_cti_osint_policy"]["offline_import_count"] == "23"
     assert action_by_id["review_cti_osint_policy"]["live_or_api_count"] == "25"
     assert action_by_id["review_cti_osint_policy"][
         "operator_opt_in_gated_count"
-    ] == "21"
+    ] == "23"
     assert action_by_id["keep_active_validation_fail_closed"]["status"] == "gated"
     assert action_by_id["keep_active_validation_fail_closed"]["execution_policy"] == (
         "operator_decision_no_commands_executed"

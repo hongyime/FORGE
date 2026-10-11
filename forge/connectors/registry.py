@@ -249,6 +249,27 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         execution_paths=("forge connectors import-validation",),
     ),
     ConnectorDefinition(
+        id="strix_findings_import",
+        label="Strix Findings JSON Import",
+        domain="validation",
+        cost_profile="free_local",
+        safety="passive_offline",
+        description=(
+            "Offline Strix JSON findings import as scoped active-validation "
+            "evidence; no shell-out to Strix, no exploit auto-promotion."
+        ),
+        capabilities=(
+            "dast_artifact_import",
+            "strix_findings_import",
+            "proof_capture",
+            "owasp_category_capture",
+            "cvss_metadata_capture",
+        ),
+        outputs=("active_validation_jobs", "active_validation_runs"),
+        input_formats=("strix_findings_json",),
+        execution_paths=("forge connectors import-validation",),
+    ),
+    ConnectorDefinition(
         id="projectdiscovery_katana",
         label="ProjectDiscovery Katana",
         domain="discovery",
@@ -608,6 +629,60 @@ _CONNECTORS: tuple[ConnectorDefinition, ...] = (
         outputs=("active_validation_jobs", "active_validation_runs"),
         required_gates=("approval", "roe_id", "scope_manifest", "live_gate"),
         implementation_status="planned_fail_closed",
+    ),
+    ConnectorDefinition(
+        id="muraena_proxy",
+        label="Muraena Reverse-Proxy Phishing",
+        domain="active_validation",
+        cost_profile="free_local",
+        safety="active_validation_gated",
+        description=(
+            "Backlog #19: Go-based reverse-proxy phishing framework. v2 "
+            "contract treats Muraena as an integration target; this Wave 1 "
+            "entry is catalog-only and fails closed until integration lands."
+        ),
+        capabilities=(
+            "credential_capture_transport",
+            "mfa_cookie_capture",
+            "post_login_handoff",
+            "scoped_phishing_evidence",
+        ),
+        outputs=("credential_capture", "mfa_cookie", "scoped_phishing_evidence"),
+        required_gates=(
+            "approval",
+            "roe_id",
+            "scope_manifest",
+            "reverse_proxy_permission",
+            "live_gate",
+        ),
+        implementation_status="integration_planned",
+    ),
+    ConnectorDefinition(
+        id="necrobrowser_automation",
+        label="Necrobrowser Post-Login Browser Automation",
+        domain="active_validation",
+        cost_profile="free_local",
+        safety="active_validation_gated",
+        description=(
+            "Backlog #19: Node.js post-login browser automation framework. "
+            "v2 contract treats Necrobrowser as an integration target; this "
+            "Wave 1 entry is catalog-only and fails closed until integration "
+            "lands. Must honor the Explore #24 anti-example spec."
+        ),
+        capabilities=(
+            "post_login_automation",
+            "scoped_session_actions",
+            "proof_capture",
+        ),
+        outputs=("scoped_session_action_evidence", "automation_proof"),
+        required_gates=(
+            "approval",
+            "roe_id",
+            "scope_manifest",
+            "post_login_automation_permission",
+            "live_gate",
+        ),
+        implementation_status="integration_planned",
     ),
 )
 
@@ -1382,7 +1457,10 @@ def _readiness(
 
 
 def _execution_status(connector: ConnectorDefinition) -> str:
-    if connector.implementation_status.startswith("planned"):
+    if (
+        connector.implementation_status.startswith("planned")
+        or connector.implementation_status == "integration_planned"
+    ):
         return "planned_fail_closed"
     if connector.implementation_status == "plugin_manifest_catalog":
         return "plugin_manifest_catalog"

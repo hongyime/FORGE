@@ -632,20 +632,23 @@ def register_connector_commands(app: typer.Typer) -> None:
             "--report-file",
             exists=True,
             dir_okay=False,
-            help="Offline Burp/JUnit XML artifact.",
+            help=(
+                "Offline validation artifact — Burp/JUnit XML for burp_dast_xml, "
+                "Strix JSON for strix_findings_import."
+            ),
         ),
         target: str = typer.Option("", "--target", help="Optional scoped URL prefix filter."),
         dry_run: bool = typer.Option(
             False,
             "--dry-run",
-            help="Parse and scope-check the XML without writing active-validation evidence.",
+            help="Parse and scope-check the report without writing active-validation evidence.",
         ),
         limit: int | None = typer.Option(
             None,
             "--limit",
             min=1,
             max=10000,
-            help="Maximum number of XML evidence items to process.",
+            help="Maximum number of report evidence items to process.",
         ),
         operator: str = typer.Option("connector-import", "--operator"),
         json_output: bool = typer.Option(False, "--json"),

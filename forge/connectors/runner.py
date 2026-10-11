@@ -17,6 +17,14 @@ from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope, scope_e
 from forge.secrets.importers import SecretScanImportConfig, import_secret_scan_report
 from forge.standards.vulnerabilities import vulnerability_standards_metadata
 from forge.utils.artifact_url_sanitizer import strip_sensitive_url_query
+from forge.utils.tool_wrappers import bounded_output, safe_tool_call
+
+# Strix-style hardening (backlog #17): every connector stdout passes through
+# ``bounded_output`` before any parser sees it. Lines beyond this cap are
+# replaced by a ``[TRUNCATED: ...]`` marker so a runaway scanner cannot
+# flood a downstream parser or any later LLM context window.
+_CONNECTOR_STDOUT_MAX_LINES = 20_000
+_CONNECTOR_STDOUT_MAX_BYTES = 4 * 1024 * 1024
 
 SUPPORTED_EXECUTABLE_CONNECTORS = (
     "projectdiscovery_subfinder",
@@ -274,7 +282,13 @@ def _run_projectdiscovery_subfinder(
         _audit_connector_run(con, config, target=target, result=result)
         con.commit()
         return result
-    discovered_hosts = _parse_subfinder_hosts(completed.stdout)[
+    discovered_hosts = _parse_subfinder_hosts(
+        bounded_output(
+            completed.stdout,
+            max_lines=_CONNECTOR_STDOUT_MAX_LINES,
+            max_bytes=_CONNECTOR_STDOUT_MAX_BYTES,
+        )
+    )[
         : _normalize_connector_result_limit(config.max_results)
     ]
     persisted: list[str] = []
@@ -406,7 +420,14 @@ def _run_projectdiscovery_katana(
         con.commit()
         return result
 
-    discovered = _parse_katana_results(completed.stdout, target_host=target_host)[
+    discovered = _parse_katana_results(
+        bounded_output(
+            completed.stdout,
+            max_lines=_CONNECTOR_STDOUT_MAX_LINES,
+            max_bytes=_CONNECTOR_STDOUT_MAX_BYTES,
+        ),
+        target_host=target_host,
+    )[
         : _normalize_connector_result_limit(config.max_results)
     ]
     persisted: list[str] = []
@@ -538,7 +559,15 @@ def _run_projectdiscovery_httpx(
         con.commit()
         return result
 
-    discovered = _parse_httpx_results(completed.stdout, target=target, target_host=target_host)[
+    discovered = _parse_httpx_results(
+        bounded_output(
+            completed.stdout,
+            max_lines=_CONNECTOR_STDOUT_MAX_LINES,
+            max_bytes=_CONNECTOR_STDOUT_MAX_BYTES,
+        ),
+        target=target,
+        target_host=target_host,
+    )[
         : _normalize_connector_result_limit(config.max_results)
     ]
     persisted: list[str] = []
@@ -683,7 +712,14 @@ def _run_projectdiscovery_nuclei(
         con.commit()
         return result
 
-    findings = _parse_nuclei_results(completed.stdout, target_host=target_host)[
+    findings = _parse_nuclei_results(
+        bounded_output(
+            completed.stdout,
+            max_lines=_CONNECTOR_STDOUT_MAX_LINES,
+            max_bytes=_CONNECTOR_STDOUT_MAX_BYTES,
+        ),
+        target_host=target_host,
+    )[
         : _normalize_connector_result_limit(config.max_results)
     ]
     persisted: list[str] = []
@@ -1070,13 +1106,38 @@ def _default_process_runner(
     args: Sequence[str],
     timeout_seconds: float,
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        list(args),
-        capture_output=True,
-        text=True,
-        timeout=timeout_seconds,
-        check=False,
-    )
+    # Strix-style hardening (backlog #17): subprocess invocations use
+    # ``safe_tool_call`` so any unexpected OSError/Permission/attribute
+    # failure during spawn turns into a structured CompletedProcess with
+    # a non-zero returncode and the error message as stderr, instead of
+    # tearing down the connector runner. FileNotFoundError and TimeoutExpired
+    # remain real exceptions because callers rely on their specific types.
+    def _spawn() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            list(args),
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+
+    try:
+        return _spawn()
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        raise
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException as exc:  # noqa: BLE001 - error-as-result at this boundary.
+        rendered = safe_tool_call(
+            lambda e=exc: (_ for _ in ()).throw(e)  # type: ignore[func-returns-value]
+        )
+        error_text = str(rendered)
+        return subprocess.CompletedProcess(
+            args=list(args),
+            returncode=1,
+            stdout="",
+            stderr=error_text,
+        )
 
 
 def _scope_for_engagement(con: sqlite3.Connection, engagement_id: int) -> list[str]:
