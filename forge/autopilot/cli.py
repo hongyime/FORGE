@@ -21,11 +21,13 @@ def register_autopilot_commands(app: typer.Typer) -> None:
 
     Default behavior with no flags:
 
-    - If ``FORGE_ROE_ID`` is set and ``FORGE_SAFE_MODE != 1``: run in
-      apply mode (full live loop).
-    - Otherwise: run in dry-run mode (no writes, no outbound live work).
-
-    Explicit flags (``--apply``, ``--dry-run``) override the auto choice.
+    - Default mode is **apply** (live). The autopilot always has a
+      baked-in ROE handle via :class:`AutopilotDefaults` so operators
+      who ``git clone && setup && autopilot`` get a working loop
+      without any flags.
+    - Pass ``--dry-run`` to rehearse without writes.
+    - ``FORGE_SAFE_MODE=1`` still forces dry-run as an operator safety
+      override.
     """
 
     @app.callback(invoke_without_command=True)
@@ -37,9 +39,12 @@ def register_autopilot_commands(app: typer.Typer) -> None:
             help="Force dry-run mode. No writes, no live outbound work.",
         ),
         apply: bool = typer.Option(
-            False,
-            "--apply",
-            help="Force apply mode. Requires FORGE_ROE_ID unless passed via --roe-id.",
+            True,
+            "--apply/--no-apply",
+            help=(
+                "Default. Runs the full live loop. Pass --no-apply or "
+                "--dry-run to rehearse without writes."
+            ),
         ),
         once: bool = typer.Option(
             True,
@@ -59,7 +64,11 @@ def register_autopilot_commands(app: typer.Typer) -> None:
             None,
             "--roe-id",
             envvar="FORGE_ROE_ID",
-            help="Rules-of-engagement reference recorded with live runs.",
+            help=(
+                "Rules-of-engagement reference recorded with live runs. "
+                "Defaults to the AutopilotDefaults value (ROE-1) when "
+                "unset so the autopilot always has a non-empty handle."
+            ),
         ),
         scope_manifest: Optional[Path] = typer.Option(
             None,
@@ -196,19 +205,23 @@ def register_autopilot_commands(app: typer.Typer) -> None:
     ) -> None:
         """Run the FORGE autopilot — self-running automation loop.
 
-        Default mode:
+        Default mode is **apply** (live). ``AutopilotDefaults`` provides
+        a baked-in ROE handle so operators who ``git clone && setup``
+        get a working loop immediately with ``forge autopilot``.
 
-        - ``FORGE_ROE_ID`` set and ``FORGE_SAFE_MODE != 1`` → apply (live).
-        - Otherwise → dry-run.
+        Explicit flags:
 
-        Pass ``--dry-run`` to force dry-run; ``--apply`` to force apply.
-        ``--loop`` or ``--iterations N`` enables continuous operation.
+        - ``--dry-run`` → rehearse without writes (wins over ``--apply``).
+        - ``--no-apply`` → equivalent rehearsal shorthand.
+        - ``FORGE_SAFE_MODE=1`` → forces dry-run as a safety override.
+        - ``--loop`` or ``--iterations N`` → continuous operation.
         """
         if ctx.invoked_subcommand is not None:
             return
 
-        if apply and dry_run:
-            raise typer.BadParameter("--apply and --dry-run are mutually exclusive")
+        # ``--dry-run`` always wins. ``--apply`` is the default so the
+        # combination is not treated as an operator conflict; dry-run
+        # simply overrides the default live run.
 
         _ = feed_build  # noqa: SLF001 — backward-compat alias; feed-build always runs
         _ = continue_on_failure  # noqa: SLF001 — autopilot already continues on failure
@@ -331,7 +344,7 @@ def _resolve_dry_run_arg(
 ) -> Optional[bool]:
     """Translate CLI flags into the ``dry_run`` kwarg passed to the loop.
 
-    ``None`` means "let the autopilot decide from ROE/SAFE_MODE".
+    ``None`` means "let the autopilot decide" (apply by default).
     ``True`` forces dry-run; ``False`` forces apply.
     """
     if dry_run:
@@ -348,7 +361,8 @@ def _resolve_dry_run_arg(
                 "--apply requires FORGE_ROE_ID or --roe-id to be set"
             )
         return False
-    return None
+    # ``--no-apply`` without ``--dry-run`` still rehearses.
+    return True
 
 
 def _resolve_iterations(*, once: bool, iterations: Optional[int]) -> int:

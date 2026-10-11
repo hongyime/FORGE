@@ -93,6 +93,8 @@ def _register_modular_commands(apps: ForgeCliApps) -> None:
     register_dashboard_commands(apps.dashboard_app)
     from forge.autopilot.cli import register_autopilot_commands
     register_autopilot_commands(apps.autopilot_app)
+    from forge.setup.cli import register_setup_command
+    register_setup_command(apps.app)
 
 
 def register_extracted_cli_commands(
@@ -200,9 +202,11 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
         autopilot_app=typer.Typer(
             name="autopilot",
             help=(
-                "Self-running automation loop. Default: dry-run when no "
-                "FORGE_ROE_ID is set, apply+live when ROE is present and "
-                "FORGE_SAFE_MODE != 1. No config file required."
+                "Self-running automation loop. Default: apply (live) with "
+                "the baked-in ROE handle from AutopilotDefaults. "
+                "Pass --dry-run to rehearse. FORGE_SAFE_MODE=1 still "
+                "forces dry-run as a safety override. No config file "
+                "required."
             ),
             invoke_without_command=True,
             no_args_is_help=False,

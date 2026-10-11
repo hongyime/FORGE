@@ -1,0 +1,12 @@
+{
+  "schema": "target-feed.v1",
+  "generated_at": "2026-10-11T00:00:00Z",
+  "source": "forge-starter-example",
+  "targets": [
+    {"type": "domain", "value": "example.com", "source_group": "starter"},
+    {"type": "url", "value": "https://example.com", "source_group": "starter"},
+    {"type": "email", "value": "admin@example.com", "source_group": "starter"},
+    {"type": "ipv4", "value": "93.184.216.34", "source_group": "starter"}
+  ],
+  "_instructions": "Copy this to imports/target-feed.json and replace example.com with your actual targets. FORGE will auto-import on next autopilot cycle."
+}

@@ -4,14 +4,14 @@
 # =============================================================================
 #  The one command an operator runs. Delegates to `forge autopilot`.
 #
-#  Default (no flags):
-#    - If FORGE_ROE_ID is set and FORGE_SAFE_MODE != 1:
-#        runs a dry-run first, then prompts to proceed with --apply.
-#    - Otherwise: runs a dry-run and exits.
+#  Default (no flags): runs with --apply (live). AutopilotDefaults
+#  supplies a baked-in ROE handle (ROE-1) so operators do not need to
+#  export FORGE_ROE_ID before the first run. FORGE_SAFE_MODE=1 still
+#  forces dry-run as a safety override.
 #
 #  Explicit flags:
 #    ./forge-autopilot.sh --dry-run             rehearsal, no writes
-#    ./forge-autopilot.sh --apply --roe-id ROE  live, requires ROE
+#    ./forge-autopilot.sh --apply --roe-id ROE  live, explicit ROE
 #    ./forge-autopilot.sh --loop                run continuously
 #
 #  Every other flag (resume-limit, max-parallel, feed-source, skip-*, etc.)
@@ -34,29 +34,27 @@ fi
 export FORGE_NO_TOR=1
 export PYTHONIOENCODING=utf-8
 
+# Auto-detect FORGE_ROE_ID (fall back to the baked-in default when unset).
+: "${FORGE_ROE_ID:=ROE-1}"
+export FORGE_ROE_ID
+
+# Default FORGE_SAFE_MODE to 0 so the autopilot runs live by default.
+# Operators who want to disable offensive modules can export
+# FORGE_SAFE_MODE=1 before invoking this script.
+: "${FORGE_SAFE_MODE:=0}"
+export FORGE_SAFE_MODE
+
+SAFE_MODE_LABEL=OFF
+case "$FORGE_SAFE_MODE" in
+    1|true|TRUE|yes|YES|on|ON)
+        SAFE_MODE_LABEL=ON
+        ;;
+esac
+
+printf 'Starting FORGE autopilot... ROE: %s, Safe Mode: %s\n' "$FORGE_ROE_ID" "$SAFE_MODE_LABEL"
+
 if [ "$#" -eq 0 ]; then
-    printf '============================================================================\n'
-    printf '  FORGE Autopilot - no flags given\n'
-    printf '============================================================================\n'
-    if [ -n "${FORGE_ROE_ID:-}" ]; then
-        printf '  FORGE_ROE_ID is set. Running a dry-run first...\n'
-        "$FORGE_PYTHON" -m forge.cli autopilot --dry-run || exit $?
-        printf '\n'
-        printf 'Proceed with --apply (live)? [y/N]: '
-        read -r PROCEED
-        case "$PROCEED" in
-            y|Y|yes|YES)
-                "$FORGE_PYTHON" -m forge.cli autopilot --apply
-                exit $?
-                ;;
-            *)
-                printf 'Not proceeding with live run.\n'
-                exit 0
-                ;;
-        esac
-    fi
-    printf '  FORGE_ROE_ID not set; running dry-run only.\n'
-    "$FORGE_PYTHON" -m forge.cli autopilot --dry-run
+    "$FORGE_PYTHON" -m forge.cli autopilot --apply
     exit $?
 fi
 

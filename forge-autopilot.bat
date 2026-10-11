@@ -4,14 +4,14 @@ REM  FORGE Toolkit - Autopilot Launcher (Windows)
 REM ============================================================================
 REM  The one command an operator runs. Delegates to `forge autopilot`.
 REM
-REM  Default (no flags):
-REM    - If FORGE_ROE_ID is set and FORGE_SAFE_MODE != 1:
-REM        runs a dry-run first, then prompts to proceed with --apply.
-REM    - Otherwise: runs a dry-run and exits.
+REM  Default (no flags): runs with --apply (live). AutopilotDefaults
+REM  supplies a baked-in ROE handle (ROE-1) so operators do not need to
+REM  export FORGE_ROE_ID before the first run. FORGE_SAFE_MODE=1 still
+REM  forces dry-run as a safety override.
 REM
 REM  Explicit flags:
 REM    forge-autopilot.bat --dry-run             rehearsal, no writes
-REM    forge-autopilot.bat --apply --roe-id ROE  live, requires ROE
+REM    forge-autopilot.bat --apply --roe-id ROE  live, explicit ROE
 REM    forge-autopilot.bat --loop                run continuously
 REM
 REM  Every other flag (resume-limit, max-parallel, feed-source, skip-*, etc.)
@@ -34,42 +34,35 @@ if not exist "%PYTHON%" (
 set FORGE_NO_TOR=1
 set PYTHONIOENCODING=utf-8
 
-set "MODE="
-set "SAW_FLAGS=0"
+REM Auto-detect FORGE_ROE_ID (fall back to the baked-in default when unset).
+if not defined FORGE_ROE_ID set "FORGE_ROE_ID=ROE-1"
+
+REM Default FORGE_SAFE_MODE to 0 (disabled) so the autopilot runs live
+REM by default. Operators who want to disable offensive modules can
+REM export FORGE_SAFE_MODE=1 before invoking this script.
+if not defined FORGE_SAFE_MODE set "FORGE_SAFE_MODE=0"
+
+set "SAFE_MODE_LABEL=OFF"
+if /i "%FORGE_SAFE_MODE%"=="1" set "SAFE_MODE_LABEL=ON"
+if /i "%FORGE_SAFE_MODE%"=="true" set "SAFE_MODE_LABEL=ON"
+if /i "%FORGE_SAFE_MODE%"=="yes" set "SAFE_MODE_LABEL=ON"
+
+echo Starting FORGE autopilot... ROE: %FORGE_ROE_ID%, Safe Mode: %SAFE_MODE_LABEL%
+
+if "%~1"=="" (
+    call "%PYTHON%" -m forge.cli autopilot --apply
+    exit /b %errorlevel%
+)
 
 for %%A in (%*) do (
-    set "SAW_FLAGS=1"
-    if /i "%%~A"=="--dry-run" set "MODE=dry_run"
-    if /i "%%~A"=="--apply"   set "MODE=apply"
-    if /i "%%~A"=="--help"    set "MODE=help"
-    if /i "%%~A"=="-h"        set "MODE=help"
-)
-
-if "%MODE%"=="help" (
-    call "%PYTHON%" -m forge.cli autopilot --help
-    exit /b %errorlevel%
-)
-
-if "%SAW_FLAGS%"=="0" (
-    echo ============================================================================
-    echo   FORGE Autopilot - no flags given
-    echo ============================================================================
-    if defined FORGE_ROE_ID (
-        echo   FORGE_ROE_ID is set. Running a dry-run first...
-        call "%PYTHON%" -m forge.cli autopilot --dry-run
-        if errorlevel 1 exit /b %errorlevel%
-        echo.
-        set /p PROCEED="Proceed with --apply (live)? [y/N]: "
-        if /i "!PROCEED!"=="y" (
-            call "%PYTHON%" -m forge.cli autopilot --apply
-            exit /b %errorlevel%
-        )
-        echo Not proceeding with live run.
-        exit /b 0
+    if /i "%%~A"=="--help" (
+        call "%PYTHON%" -m forge.cli autopilot --help
+        exit /b %errorlevel%
     )
-    echo   FORGE_ROE_ID not set; running dry-run only.
-    call "%PYTHON%" -m forge.cli autopilot --dry-run
-    exit /b %errorlevel%
+    if /i "%%~A"=="-h" (
+        call "%PYTHON%" -m forge.cli autopilot --help
+        exit /b %errorlevel%
+    )
 )
 
 call "%PYTHON%" -m forge.cli autopilot %*

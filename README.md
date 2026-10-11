@@ -89,27 +89,46 @@ Continuation order for future agents:
 # Windows
 git clone <repo> forge-toolkit
 cd forge-toolkit
-setup.bat        # picks safe/default or scoped active-assessment mode
-forge-autopilot.bat          # THE one command: dry-run first, then prompt for live when FORGE_ROE_ID is set
-forge-autopilot.bat --dry-run  # explicit rehearsal (safe default without FORGE_ROE_ID)
-forge-autopilot.bat --apply --roe-id ROE-ID  # explicit live loop
+setup.bat
+forge-autopilot.bat   # That's it. FORGE runs automatically.
 ```
 
 ```bash
 # macOS / Linux
 git clone <repo> forge-toolkit
 cd forge-toolkit
-./setup.sh       # or: python3 bootstrap.py --venv-mode project setup
-./forge-autopilot.sh          # THE one command: dry-run first, then prompt for live when FORGE_ROE_ID is set
-./forge-autopilot.sh --dry-run  # explicit rehearsal
-./forge-autopilot.sh --apply --roe-id ROE-ID  # explicit live loop
+./setup.sh
+./forge-autopilot.sh   # That's it. FORGE runs automatically.
 ```
 
-The autopilot runs out of the box with no config file. It auto-detects
-`FORGE_ROE_ID` and `FORGE_SAFE_MODE`, auto-seeds targets from `imports/`,
-auto-creates engagements, auto-starts kill-chains, auto-resumes paused
-runs, auto-refreshes monitoring, and auto-rebuilds the dashboard. See
+The autopilot runs out of the box with no config file. It defaults to
+**apply mode** (live) with a baked-in `ROE-1` handle supplied by
+`AutopilotDefaults`, auto-seeds targets from `imports/`, auto-creates
+engagements, auto-starts kill-chains, auto-resumes paused runs,
+auto-refreshes monitoring, and auto-rebuilds the dashboard.
+
+To rehearse without any writes or live outbound work, add `--dry-run`:
+
+```powershell
+forge-autopilot.bat --dry-run
+```
+
+```bash
+./forge-autopilot.sh --dry-run
+```
+
+`FORGE_SAFE_MODE=1` still forces dry-run as a safety override, and
+`FORGE_ROE_ID` + `--scope-manifest` (defaults to `manifests/default.json`)
+remain the enforcement path for live kill-chain execution. See
 [`forge autopilot --help`](#public-commands) for every flag.
+
+For a first-run bootstrap that creates `.env`, enforces required
+autopilot env keys, scaffolds the data/imports/reports directories,
+and prints a readiness summary, run:
+
+```powershell
+forge setup
+```
 
 Bootstrap creates `.venv` for FORGE runtime deps, installs external OSINT CLIs
 into per-tool venvs under local FORGE state, installs `phonenumbers` in the
@@ -344,13 +363,14 @@ forge exploitation credentials list --engagement N [--cred-type TYPE] [--json]  
 forge exploitation credentials export --engagement N --output PATH [--format json|csv]
 forge dashboard                             # Generate the static local operator dashboard
 forge dashboard goal-progress --engagement N [--json] [--html PATH]  # Cairn-style goal progress visualization
-forge autopilot                             # Self-running automation loop. Default: dry-run when no FORGE_ROE_ID, apply+live when ROE present.
+forge autopilot                             # Self-running automation loop. Default: apply (live) with the baked-in ROE-1 handle; FORGE_SAFE_MODE=1 forces dry-run.
 forge autopilot --dry-run                   # Explicit rehearsal — no writes, no live outbound work
 forge autopilot --apply --roe-id ROE-ID     # Explicit live loop — full feed-build / import / resume / monitor / dashboard
 forge autopilot --describe --json           # Resolved autopilot defaults and detected ROE/scope state (read-only)
 forge autopilot --loop [--iterations N] [--cooldown-minutes N]  # Continuous operation; one pass per iteration with a bounded cooldown
 forge doctor [--json] [--live-provider-probes] [--fix-safe]  # Operator setup, readiness checks, and safe local repairs
 forge operator-guide [--section loop|manual|profiles|rust] [--json]  # Complete workflow guide — every module linked together
+forge setup [--root PATH] [--data-dir PATH] [--skip-doctor] [--json]  # First-run bootstrap: seeds .env, data dirs, scope manifest, starter feed, runs doctor
 forge scaffold                              # Emit obfuscated directory tree
 forge clean --engagement N [--confirm]      # Securely wipe engagement artifacts
 ```

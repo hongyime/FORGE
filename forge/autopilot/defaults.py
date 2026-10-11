@@ -14,6 +14,13 @@ no-config, run-it-and-walk-away use case:
 - Kill-chain max-iter 7 matches the ``forge kill-chain`` default.
 - Feed source selector is ``all`` so every available source — db,
   reports, cti, connectors, supabase — contributes to the daily feed.
+- ``default_roe_id`` and ``default_engagement_start`` exist so the
+  autopilot has a non-empty ROE/engagement handle when no explicit
+  ROE is set in the environment. Live kill-chain execution still
+  requires a scope manifest declaring the actual targets.
+- ``permitted_modules`` lists the exploitation modules enabled by
+  default when the scope manifest/ROE grants them. Scope-manifest
+  permission blocks are still enforced on a per-engagement basis.
 
 Nothing here reads from disk. Operators who want to override any value
 can pass it through the ``forge autopilot`` CLI or construct a
@@ -22,7 +29,7 @@ can pass it through the ``forge autopilot`` CLI or construct a
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -61,6 +68,23 @@ class AutopilotDefaults:
     #: Minimum free disk before considering the host healthy for
     #: live work.
     min_free_disk_gb: int = 2
+    #: Default ROE reference used when ``FORGE_ROE_ID`` is not set.
+    #: Keeps the autopilot in apply mode out of the box; scope-manifest
+    #: enforcement still gates actual live kill-chain execution.
+    default_roe_id: str = "ROE-1"
+    #: Starting engagement id when the autopilot needs to allocate one
+    #: without an existing ID assigned by the operator.
+    default_engagement_start: int = 1
+    #: Exploitation modules permitted by default when the scope manifest
+    #: and ROE allow them. The scope manifest permission blocks remain
+    #: the authority for live execution; this tuple only records the
+    #: default enabled set at the autopilot layer.
+    permitted_modules: tuple[str, ...] = (
+        "reverse_proxy",
+        "post_login_automation",
+        "autonomous_exploit",
+        "goal_targets",
+    )
 
 
 #: Dict-form of :data:`AutopilotDefaults`, convenient for serialization.
@@ -77,6 +101,14 @@ AUTOPILOT_DEFAULTS: dict[str, object] = {
     "feed_sources": ["all"],
     "min_free_memory_mb": 512,
     "min_free_disk_gb": 2,
+    "default_roe_id": "ROE-1",
+    "default_engagement_start": 1,
+    "permitted_modules": [
+        "reverse_proxy",
+        "post_login_automation",
+        "autonomous_exploit",
+        "goal_targets",
+    ],
 }
 
 

@@ -113,6 +113,17 @@ def test_autopilot_defaults_are_sensible_and_bounded() -> None:
     assert d.max_runtime_minutes == 25
     # Feed sources default to all so new operators get full coverage.
     assert d.feed_sources == ("all",)
+    # Baked-in defaults so autopilot runs out of the box.
+    assert d.default_roe_id == "ROE-1"
+    assert d.default_engagement_start == 1
+    # Every exploitation module permitted by default — scope manifest
+    # permission blocks are the real gate.
+    assert set(d.permitted_modules) == {
+        "reverse_proxy",
+        "post_login_automation",
+        "autonomous_exploit",
+        "goal_targets",
+    }
 
 
 def test_autopilot_defaults_dataclass_is_frozen() -> None:
@@ -127,10 +138,27 @@ def test_autopilot_defaults_dataclass_is_frozen() -> None:
 
 
 def test_autopilot_dry_run_default_without_roe(tmp_path: Path) -> None:
-    """No ROE → autopilot stays in dry-run mode by default."""
+    """No explicit ROE override → autopilot still defaults to apply.
+
+    The baked-in ``AutopilotDefaults.default_roe_id`` guarantees a
+    non-empty ROE handle, so even without the env being set the
+    autopilot picks apply by default. Scope-manifest enforcement is
+    the real gate for live kill-chain execution.
+    """
     auto = _mk_autopilot(tmp_path)
-    assert auto.has_roe is False
-    assert auto.resolve_execution_mode(dry_run=None) == "dry_run"
+    assert auto.has_roe is True  # fallback to AutopilotDefaults.default_roe_id
+    assert auto.roe_id == AutopilotDefaults().default_roe_id
+    assert auto.resolve_execution_mode(dry_run=None) == "apply"
+
+
+def test_autopilot_explicit_empty_roe_still_applies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Even with FORGE_ROE_ID blanked, defaults supply the fallback."""
+    monkeypatch.setenv("FORGE_ROE_ID", "")
+    auto = _mk_autopilot(tmp_path)
+    assert auto.has_roe is True
+    assert auto.resolve_execution_mode(dry_run=None) == "apply"
 
 
 def test_autopilot_apply_default_with_roe(tmp_path: Path) -> None:
@@ -179,7 +207,9 @@ def test_autopilot_runs_without_any_config_file(
     auto = _mk_autopilot(tmp_path)
     snapshot = auto.describe()
     assert snapshot["schema_version"] == AUTOPILOT_SCHEMA_VERSION
-    assert snapshot["default_execution_mode"] == "dry_run"
+    # New default: apply mode even without env ROE because AutopilotDefaults
+    # supplies the fallback ROE handle.
+    assert snapshot["default_execution_mode"] == "apply"
     # Config file absence is intentional and does not affect ability
     # to run run_once.
     payload = auto.run_once(dry_run=True)
@@ -408,10 +438,15 @@ def test_autopilot_full_cycle_phase_order(
 def test_autopilot_import_phase_blocks_without_roe_when_apply(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Apply mode without ROE → import phase blocks (never starts kill-chain)."""
+    """Apply mode without ANY ROE (defaults blanked too) → import phase blocks."""
     counters = _install_safe_component_patches(monkeypatch)
     _write_feed(tmp_path / "imports" / "target-feed.json")
-    auto = _mk_autopilot(tmp_path, roe_id=None)  # no ROE
+    # Blank out the baked-in default ROE too so the autopilot has no
+    # authorization handle at all.
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+    defaults_no_roe = AutopilotDefaults(default_roe_id="")
+    auto = _mk_autopilot(tmp_path, roe_id=None, defaults=defaults_no_roe)
+    assert auto.has_roe is False
 
     payload = auto.run_once(dry_run=False)
 
@@ -502,10 +537,15 @@ def _build_cli_app() -> typer.Typer:
     return app
 
 
-def test_cli_describe_without_roe_reports_dry_run_default(
-    tmp_path: Path,
+def test_cli_describe_default_promotes_to_apply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``forge autopilot --describe --json`` works with no env or config."""
+    """``forge autopilot --describe --json`` runs with no env or config.
+
+    New default: apply mode always, backed by AutopilotDefaults.default_roe_id.
+    """
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+    monkeypatch.delenv("FORGE_SAFE_MODE", raising=False)
     app = _build_cli_app()
     runner = CliRunner()
 
@@ -525,8 +565,9 @@ def test_cli_describe_without_roe_reports_dry_run_default(
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["default_execution_mode"] == "dry_run"
-    assert payload["roe_id_present"] is False
+    assert payload["default_execution_mode"] == "apply"
+    assert payload["roe_id_present"] is True
+    assert payload["defaults"]["default_roe_id"] == "ROE-1"
 
 
 def test_cli_describe_with_roe_promotes_to_apply(tmp_path: Path) -> None:
@@ -555,8 +596,14 @@ def test_cli_describe_with_roe_promotes_to_apply(tmp_path: Path) -> None:
     assert payload["roe_id_present"] is True
 
 
-def test_cli_apply_requires_roe(tmp_path: Path) -> None:
-    """``--apply`` without a ROE must raise."""
+def test_cli_apply_without_env_roe_uses_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``--apply`` without env ROE falls through to the baked-in default."""
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+    monkeypatch.delenv("FORGE_SAFE_MODE", raising=False)
+    _install_safe_component_patches(monkeypatch)
+    _write_feed(tmp_path / "imports" / "target-feed.json")
     app = _build_cli_app()
     runner = CliRunner()
 
@@ -564,6 +611,7 @@ def test_cli_apply_requires_roe(tmp_path: Path) -> None:
         app,
         [
             "--apply",
+            "--json",
             "--data-dir",
             str(tmp_path / "data"),
             "--imports-dir",
@@ -573,8 +621,39 @@ def test_cli_apply_requires_roe(tmp_path: Path) -> None:
         ],
     )
 
-    assert result.exit_code != 0
-    assert "roe" in result.output.lower()
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["mode"] == "apply"
+
+
+def test_cli_default_runs_apply_with_default_roe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``forge autopilot`` with no flags defaults to apply + default ROE."""
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+    monkeypatch.delenv("FORGE_SAFE_MODE", raising=False)
+    _install_safe_component_patches(monkeypatch)
+    _write_feed(tmp_path / "imports" / "target-feed.json")
+    app = _build_cli_app()
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "--data-dir",
+            str(tmp_path / "data"),
+            "--imports-dir",
+            str(tmp_path / "imports"),
+            "--reports-dir",
+            str(tmp_path / "reports"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["mode"] == "apply"
+    assert payload["dry_run"] is False
 
 
 def test_cli_dry_run_executes_without_live_writes(
@@ -638,7 +717,11 @@ def test_cli_apply_with_roe_runs_full_pipeline(
     assert len(counters["generate_dashboard_calls"]) == 1
 
 
-def test_cli_rejects_apply_and_dry_run_together(tmp_path: Path) -> None:
+def test_cli_dry_run_wins_over_apply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``--apply --dry-run`` → dry-run wins (apply is the default anyway)."""
+    _install_safe_component_patches(monkeypatch)
     app = _build_cli_app()
     runner = CliRunner()
     result = runner.invoke(
@@ -648,6 +731,7 @@ def test_cli_rejects_apply_and_dry_run_together(tmp_path: Path) -> None:
             "--dry-run",
             "--roe-id",
             "ROE-X",
+            "--json",
             "--data-dir",
             str(tmp_path / "data"),
             "--imports-dir",
@@ -656,7 +740,9 @@ def test_cli_rejects_apply_and_dry_run_together(tmp_path: Path) -> None:
             str(tmp_path / "reports"),
         ],
     )
-    assert result.exit_code != 0
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["mode"] == "dry_run"
 
 
 # ---------------------------------------------------------------------------

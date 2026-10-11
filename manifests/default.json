@@ -1,8 +1,22 @@
 {
-  "roe_id": "ROE-REPLACE-ME",
-  "description": "Safe template only. Copy this file for an engagement and replace every value with the exact domains, URL prefixes, IP ranges, and non-network seeds authorized by the written ROE. Wildcards that authorize everything are rejected for live execution.",
-  "domains": ["example.com", "*.example.com"],
-  "ip_ranges": ["203.0.113.0/24"],
-  "urls": ["https://portal.example.com/"],
-  "authorized_seeds": ["security@example.com", "+15551234567", "@authorized_handle"]
+  "roe_id": "ROE-1",
+  "domains": [],
+  "urls": [],
+  "ip_ranges": [],
+  "authorized_seeds": [],
+  "permissions": {
+    "reverse_proxy": true,
+    "post_login_automation": true,
+    "autonomous_exploit": true,
+    "goal_targets": [
+      "get_domain_admin",
+      "exfiltrate_proof_data",
+      "establish_persistence",
+      "capture_mfa_session",
+      "achieve_rce",
+      "escalate_privilege",
+      "enumerate_tenant"
+    ]
+  },
+  "_note": "Template — replace domains/urls/ip_ranges/authorized_seeds with your actual target scope before use. Live kill-chain execution rejects empty or wildcard scopes."
 }

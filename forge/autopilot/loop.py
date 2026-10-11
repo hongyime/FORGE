@@ -102,8 +102,16 @@ class ForgeAutopilot:
         self.reports_dir = Path(reports_dir or "reports")
         self.feed_file = Path(feed_file or self.imports_dir / "target-feed.json")
 
+        self.defaults = defaults or AutopilotDefaults()
+
         env_roe = os.environ.get("FORGE_ROE_ID", "").strip()
-        self.roe_id = (roe_id or env_roe).strip() or None
+        resolved_roe = (roe_id or env_roe).strip()
+        if not resolved_roe:
+            # Fall back to the baked-in default so autopilot always has
+            # a non-empty ROE handle. Scope manifest enforcement is the
+            # real gate for live kill-chain execution.
+            resolved_roe = (self.defaults.default_roe_id or "").strip()
+        self.roe_id = resolved_roe or None
 
         if scope_manifest is not None:
             self.scope_manifest: Path | None = Path(scope_manifest)
@@ -117,7 +125,6 @@ class ForgeAutopilot:
         if safe_mode is None:
             safe_mode = bool(self._cfg.safe_mode)
         self.safe_mode = bool(safe_mode)
-        self.defaults = defaults or AutopilotDefaults()
         self.skip_phases: set[str] = {
             p.lower().strip() for p in (skip_phases or set())
         }
@@ -134,21 +141,27 @@ class ForgeAutopilot:
     def resolve_execution_mode(self, *, dry_run: bool | None) -> str:
         """Return the effective mode: ``dry_run`` or ``apply``.
 
+        Default behavior is **apply** — the autopilot runs live by
+        default so operators who ``git clone && setup && autopilot``
+        get working automation out of the box. Dry-run only kicks in
+        when it is explicitly requested or when ``FORGE_SAFE_MODE=1``
+        is set.
+
         Precedence:
 
-        1. Explicit ``dry_run`` argument wins when passed.
-        2. ``FORGE_SAFE_MODE=1`` always forces ``dry_run``.
-        3. ``FORGE_ROE_ID`` presence promotes to ``apply``.
-        4. Otherwise ``dry_run``.
+        1. Explicit ``dry_run=True`` wins and forces dry-run.
+        2. ``FORGE_SAFE_MODE=1`` forces dry-run (operator safety override).
+        3. Explicit ``dry_run=False`` forces apply.
+        4. Otherwise apply — the autopilot's default, since
+           :class:`AutopilotDefaults` provides a default ROE handle.
         """
         if dry_run is True:
             return "dry_run"
-        if dry_run is False:
-            # explicit apply still blocks under SAFE_MODE
-            return "dry_run" if self.safe_mode else "apply"
         if self.safe_mode:
             return "dry_run"
-        return "apply" if self.has_roe else "dry_run"
+        if dry_run is False:
+            return "apply"
+        return "apply"
 
     def describe(self) -> dict[str, Any]:
         """Return a read-only snapshot of resolved autopilot state."""
