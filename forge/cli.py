@@ -342,6 +342,51 @@ globals().update(_REGISTERED_RECON_COMMANDS)
 # Phase command direct-import compatibility adapters live in forge/cli_compat.py.
 
 
+def _url_seed_metadata_query(url_count: int) -> str:
+    """Parameterized metadata lookup for URL seeds.
+
+    The ``IN`` placeholder list is generated from the batch size only, so no
+    caller-supplied value ever enters the SQL text; seed values stay bound
+    parameters.
+    """
+    placeholders = ",".join("?" for _ in range(max(0, int(url_count))))
+    return (
+        "\n"
+        "SELECT seed_value, metadata_json\n"
+        "FROM engagement_seeds\n"
+        "WHERE engagement_id=?\n"
+        "  AND seed_type='url'\n"
+        f"  AND seed_value IN ({placeholders})\n"
+    )
+
+
+def _prioritized_seed_rows_query(with_limit: bool) -> str:
+    """Parameterized prioritized seed-row query.
+
+    The optional ``LIMIT`` clause is a fixed keyword, never caller input; the
+    limit value itself stays a bound parameter.
+    """
+    limit_clause = "\nLIMIT ?" if with_limit else ""
+    return (
+        "\n"
+        "SELECT id, seed_value, COALESCE(source, ''), COALESCE(depth, 0)\n"
+        "FROM engagement_seeds\n"
+        "WHERE engagement_id=?\n"
+        "  AND seed_type=?\n"
+        "ORDER BY\n"
+        "  COALESCE(depth, 0) ASC,\n"
+        "  CASE LOWER(COALESCE(source, ''))\n"
+        "    WHEN 'operator' THEN 0\n"
+        "    WHEN 'scope' THEN 1\n"
+        "    WHEN 'cross_reference' THEN 2\n"
+        "    WHEN 'social_profile' THEN 3\n"
+        "    WHEN 'artifact' THEN 4\n"
+        "    ELSE 9\n"
+        "  END ASC,\n"
+        "  id ASC"
+        f"{limit_clause}\n"
+    )
+
 def kill_chain(
     seed: str = typer.Argument(
         ...,
@@ -7067,18 +7112,11 @@ def kill_chain(
         ]
         if not urls:
             return {}
-        placeholders = ",".join("?" for _ in urls)
         con = _sq.connect(db_path)
         try:
             try:
                 rows = con.execute(
-                    f"""
-                    SELECT seed_value, metadata_json
-                    FROM engagement_seeds
-                    WHERE engagement_id=?
-                      AND seed_type='url'
-                      AND seed_value IN ({placeholders})
-                    """,
+                    _url_seed_metadata_query(len(urls)),
                     (engagement_id, *urls),
                 ).fetchall()
             except _sq.OperationalError:
@@ -8233,30 +8271,11 @@ def kill_chain(
         con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
         try:
             try:
-                limit_sql = ""
                 params: tuple[object, ...] = (engagement_id, seed_type)
                 if row_scan_limit is not None:
-                    limit_sql = "LIMIT ?"
                     params = (engagement_id, seed_type, max(0, int(row_scan_limit)))
                 rows = con.execute(
-                    f"""
-                    SELECT id, seed_value, COALESCE(source, ''), COALESCE(depth, 0)
-                    FROM engagement_seeds
-                    WHERE engagement_id=?
-                      AND seed_type=?
-                    ORDER BY
-                      COALESCE(depth, 0) ASC,
-                      CASE LOWER(COALESCE(source, ''))
-                        WHEN 'operator' THEN 0
-                        WHEN 'scope' THEN 1
-                        WHEN 'cross_reference' THEN 2
-                        WHEN 'social_profile' THEN 3
-                        WHEN 'artifact' THEN 4
-                        ELSE 9
-                      END ASC,
-                      id ASC
-                    {limit_sql}
-                    """,
+                    _prioritized_seed_rows_query(row_scan_limit is not None),
                     params,
                 ).fetchall()
             except _sq.OperationalError:
