@@ -69,6 +69,79 @@ def test_forge_connect_shodan_requires_credential_flag(tmp_path: Path) -> None:
     assert "key" in result.output.lower()
 
 
+def test_forge_connect_supabase_stores_management_pat_without_data_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FORGE_SUPABASE_PAT", "sbp_test_placeholder")
+    result = _invoke(
+        [
+            "connect",
+            "supabase",
+            "--project-ref",
+            "abc123",
+            "--pat-env",
+            "FORGE_SUPABASE_PAT",
+            "--data-dir",
+            str(tmp_path),
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "sbp_test_placeholder" not in result.output
+    stored = json.loads((tmp_path / "connections.json").read_text(encoding="utf-8"))
+    entry = stored["connections"][0]
+    assert entry["config"] == {
+        "project_ref": "abc123",
+        "management_pat": "sbp_test_placeholder",
+    }
+    assert entry["credential_sources"]["management_pat"] == (
+        "env:FORGE_SUPABASE_PAT"
+    )
+
+
+def test_forge_connect_supabase_reads_management_pat_from_stdin(
+    tmp_path: Path,
+) -> None:
+    result = _invoke(
+        [
+            "connect",
+            "supabase",
+            "--project-ref",
+            "abc123",
+            "--pat-stdin",
+            "--data-dir",
+            str(tmp_path),
+            "--json",
+        ],
+        input_text="sbp_test_placeholder\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert "sbp_test_placeholder" not in result.output
+    stored = json.loads((tmp_path / "connections.json").read_text(encoding="utf-8"))
+    assert stored["connections"][0]["credential_sources"]["management_pat"] == "stdin"
+
+
+def test_forge_connect_supabase_requires_key_or_management_pat(
+    tmp_path: Path,
+) -> None:
+    result = _invoke(
+        [
+            "connect",
+            "supabase",
+            "--project-ref",
+            "abc123",
+            "--data-dir",
+            str(tmp_path),
+            "--json",
+        ],
+    )
+    assert result.exit_code == 1
+    assert (
+        "supabase requires --key-env/--key-stdin or --pat-env/--pat-stdin"
+        in result.output
+    )
+
+
 def test_forge_connect_list_reports_redacted_credentials(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("FORGE_SHODAN_KEY", "shodan-secret-key")
     assert _invoke(

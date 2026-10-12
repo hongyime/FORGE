@@ -227,7 +227,7 @@ def _register_supabase_connect(
     required_fields: tuple[str, ...],
     optional_fields: tuple[str, ...],
 ) -> None:
-    """``forge connect supabase --key-env VAR --project-ref REF [--url URL]``."""
+    """``forge connect supabase --project-ref REF [--key-env VAR] [--pat-env VAR] [--url URL]``."""
 
     @app.command(service_id, help=help_text)
     def _supabase_add(  # noqa: ANN202
@@ -238,6 +238,14 @@ def _register_supabase_connect(
         ),
         key_stdin: bool = typer.Option(
             False, "--key-stdin", help="Read Supabase key from stdin."
+        ),
+        pat_env: Optional[str] = typer.Option(
+            None,
+            "--pat-env",
+            help="Env var holding the Supabase Management API PAT.",
+        ),
+        pat_stdin: bool = typer.Option(
+            False, "--pat-stdin", help="Read Management API PAT from stdin."
         ),
         project_ref: Optional[str] = typer.Option(
             None, "--project-ref", help="Supabase project ref."
@@ -250,7 +258,7 @@ def _register_supabase_connect(
         ),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
-        """Store Supabase project ref + anon/service key."""
+        """Store Supabase project ref and key or Management API PAT."""
         _apply_service_connection(
             service_id=service_id,
             cred_fields=cred_fields,
@@ -259,6 +267,8 @@ def _register_supabase_connect(
             flag_values={
                 "key_env": key_env,
                 "key_stdin": key_stdin,
+                "pat_env": pat_env,
+                "pat_stdin": pat_stdin,
                 "project_ref": project_ref,
                 "supabase_url": supabase_url,
             },
@@ -472,6 +482,8 @@ def _apply_service_connection(
             secret_stdin=bool(flag_values.get("secret_stdin")),
             api_id_env=flag_values.get("api_id_env"),
             api_id_stdin=bool(flag_values.get("api_id_stdin")),
+            pat_env=flag_values.get("pat_env"),
+            pat_stdin=bool(flag_values.get("pat_stdin")),
             project_ref=flag_values.get("project_ref"),
             supabase_url=flag_values.get("supabase_url"),
             username=flag_values.get("username"),
@@ -754,6 +766,8 @@ def _resolve_service_fields(
     secret_stdin: bool,
     api_id_env: str | None,
     api_id_stdin: bool,
+    pat_env: str | None,
+    pat_stdin: bool,
     project_ref: str | None,
     supabase_url: str | None,
     username: str | None,
@@ -790,6 +804,15 @@ def _resolve_service_fields(
     _resolve_pair("key", key_env, key_stdin)
     _resolve_pair("api_secret", secret_env, secret_stdin)
     _resolve_pair("api_id", api_id_env, api_id_stdin)
+    _resolve_pair("management_pat", pat_env, pat_stdin)
+
+    if service_id == "supabase" and not fields.get("key") and not fields.get(
+        "management_pat"
+    ):
+        raise ConnectionError(
+            "supabase requires --key-env/--key-stdin or "
+            "--pat-env/--pat-stdin"
+        )
 
     if "orgs" in optional and orgs:
         fields["orgs"] = orgs

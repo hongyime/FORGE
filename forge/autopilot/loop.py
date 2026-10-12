@@ -523,7 +523,10 @@ class ForgeAutopilot:
         config = connection.config or {}
         project_ref = str(config.get("project_ref") or "").strip()
         key = str(config.get("key") or "").strip()
-        if not project_ref or not key:
+        management_pat = str(
+            config.get("management_pat") or os.environ.get("FORGE_SUPABASE_PAT") or ""
+        ).strip()
+        if not project_ref or (not key and not management_pat):
             return {
                 "service": "supabase",
                 "status": "skipped",
@@ -556,7 +559,8 @@ class ForgeAutopilot:
         try:
             scanner = SupabaseDeepScanner(
                 project_ref=project_ref,
-                api_key=key,
+                api_key=key or None,
+                management_pat=management_pat or None,
                 max_tables=200,
                 max_rows_per_table=10_000,
             )
@@ -592,6 +596,9 @@ class ForgeAutopilot:
                     "tables_total": result.tables_total,
                     "tables_scanned": result.tables_scanned,
                     "rows_scanned": result.rows_scanned,
+                    "transport": (
+                        "management_api" if management_pat else "postgrest"
+                    ),
                     "source_errors": result.source_errors[-20:],
                 },
             )

@@ -59,17 +59,24 @@ def _store_github_connection(data_dir: Path, token: str = "ghp_token") -> None:
 
 
 def _store_supabase_connection(
-    data_dir: Path, *, project_ref: str = "abc123", key: str = "anon-key"
+    data_dir: Path,
+    *,
+    project_ref: str = "abc123",
+    key: str | None = "anon-key",
+    management_pat: str | None = None,
 ) -> None:
     from forge.onboard.service_connections import ServiceConnectionManager
 
     manager = ServiceConnectionManager(data_dir)
-    manager.add_connection(
-        "supabase",
-        project_ref=project_ref,
-        key=key,
-        credential_sources={"key": "env:FORGE_SUPABASE_KEY"},
-    )
+    fields: dict[str, Any] = {"project_ref": project_ref}
+    sources: dict[str, str] = {}
+    if key:
+        fields["key"] = key
+        sources["key"] = "env:FORGE_SUPABASE_KEY"
+    if management_pat:
+        fields["management_pat"] = management_pat
+        sources["management_pat"] = "env:FORGE_SUPABASE_PAT"
+    manager.add_connection("supabase", credential_sources=sources, **fields)
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +279,64 @@ def test_phase_apply_runs_supabase_scanner_and_writes_seed_drop(
     payload = json.loads(seed_drop.read_text(encoding="utf-8"))
     assert payload["connector_id"] == "supabase_deep_scanner"
     assert payload["project_ref"] == "abc123"
+    assert payload["transport"] == "postgrest"
     assert len(payload["seeds"]) == 1
+
+
+def test_phase_supabase_uses_management_pat_from_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _store_supabase_connection(tmp_path / "data", key=None)
+    monkeypatch.setenv("FORGE_SUPABASE_PAT", "sbp_test_placeholder")
+    captured: dict[str, Any] = {}
+
+    class _FakeScanner:
+        def __init__(
+            self,
+            project_ref: str,
+            api_key: str | None,
+            *,
+            management_pat: str | None = None,
+            **_kwargs: Any,
+        ) -> None:
+            captured.update(
+                {
+                    "project_ref": project_ref,
+                    "api_key": api_key,
+                    "management_pat": management_pat,
+                }
+            )
+
+        def scan_all(self) -> Any:
+            from forge.onboard.supabase_scanner import SupabaseScanResult
+
+            return SupabaseScanResult(
+                project_ref="abc123",
+                tables_scanned=1,
+                rows_scanned=1,
+                seeds=[{"target_type": "email", "target_value": "ops@corp-target.io"}],
+            )
+
+    monkeypatch.setattr(
+        "forge.onboard.supabase_scanner.SupabaseDeepScanner", _FakeScanner
+    )
+    result = _mk_autopilot(tmp_path)._phase_connected_services_scan(dry_run=False)
+    supabase_entry = next(
+        service for service in result.data["services"] if service["service"] == "supabase"
+    )
+    assert supabase_entry["status"] == "ok"
+    assert supabase_entry["seeds"] == 1
+    assert captured == {
+        "project_ref": "abc123",
+        "api_key": None,
+        "management_pat": "sbp_test_placeholder",
+    }
+    payload = json.loads(
+        (tmp_path / "imports" / "connected-services-supabase-seeds.local.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["transport"] == "management_api"
 
 
 # ---------------------------------------------------------------------------

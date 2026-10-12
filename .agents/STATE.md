@@ -1,4 +1,12 @@
-# Current Task: v1 → v2 goal-lock contract rewrite — DONE (2026-10-11). Clean stopping point.
+# Current Task: Add Supabase Management API PAT transport — VERIFIED (2026-10-12).
+
+**Progress:** Added the Management API transport, PAT-only connection registration, CLI flags, autopilot PAT fallback, and transport metadata. Focused scanner, autopilot, CLI, and connection tests passed: 80 tests; Ruff lint passed. A bounded live scan found 41 tables, scanned 10,249 rows, extracted 27,634 seeds and 2 secret hits, with 0 source errors. The dedicated autopilot scan returned `ok` with the same counts; the seed drop records `management_api`. Verified with pytest, Ruff, and value-free scan summaries.
+
+The stored Supabase connection now contains `project_ref` and the `management_pat` credential only; the obsolete key is absent, and the local connection file is mode `0600`. Verified by reading only connection field names, credential source names, and file mode.
+
+---
+
+# Previous Task: v1 → v2 goal-lock contract rewrite — DONE (2026-10-11).
 
 **Status:** 2026-10-11. Kiro yolo session (`contract-rewrite` orchestrated role). Operator approved a fundamental contract change: FORGE is no longer non-destructive validation-only; FORGE validates AND exploits AND reports. Autonomous exploitation, reverse-proxy credential capture, post-login browser automation, and goal-directed engagement execution are first-class pipeline phases when ROE and scope manifest permit.
 

@@ -41,6 +41,24 @@ class _MockHttp:
         return {"status": 404, "headers": {}, "json": {"message": "not found"}}
 
 
+class _MockPost:
+    def __init__(self, responder: Any) -> None:
+        self.responder = responder
+        self.called: list[
+            tuple[str, dict[str, Any], dict[str, str]]
+        ] = []
+
+    def __call__(
+        self,
+        url: str,
+        *,
+        body: dict[str, Any],
+        headers: dict[str, str],
+    ) -> dict[str, Any]:
+        self.called.append((url, dict(body), dict(headers)))
+        return self.responder(url, body, headers)
+
+
 # ---------------------------------------------------------------------------
 # Constructor validation
 # ---------------------------------------------------------------------------
@@ -501,3 +519,168 @@ def test_scan_result_to_dict_shape() -> None:
     assert isinstance(payload["tables"], list)
     assert isinstance(payload["seeds"], list)
     assert isinstance(payload["secret_hits"], list)
+
+
+# ---------------------------------------------------------------------------
+# Management API transport
+# ---------------------------------------------------------------------------
+
+
+def test_management_api_pat_can_replace_api_key() -> None:
+    post = _MockPost(
+        lambda *_: {"status": 201, "headers": {}, "json": []}
+    )
+    get = _MockHttp([])
+    scanner = SupabaseDeepScanner(
+        "abc123",
+        "dead-api-key",
+        management_pat="sbp_test_placeholder",
+        http_get=get,
+        http_post=post,
+    )
+    result = scanner.scan_all()
+    assert result.project_ref == "abc123"
+    assert len(post.called) == 1
+    assert get.called == []
+
+
+def test_management_api_rejects_empty_project_ref() -> None:
+    with pytest.raises(SupabaseScannerError, match="project_ref"):
+        SupabaseDeepScanner("", management_pat="sbp_test_placeholder")
+
+
+def test_management_api_rejects_missing_credentials() -> None:
+    with pytest.raises(SupabaseScannerError, match="API key or Management API PAT"):
+        SupabaseDeepScanner("abc123")
+
+
+def test_management_api_discovers_schema_qualified_tables() -> None:
+    pat = "sbp_test_placeholder"
+    post = _MockPost(
+        lambda *_: {
+            "status": 201,
+            "headers": {},
+            "json": [
+                {"schemaname": "auth", "tablename": "users"},
+                {"schemaname": "public", "tablename": "people"},
+            ],
+        }
+    )
+    scanner = SupabaseDeepScanner(
+        "abc123", management_pat=pat, http_post=post
+    )
+    result = scanner.scan_all()
+    assert result.tables_total == 2
+    assert [table.name for table in result.tables] == [
+        "auth.users",
+        "public.people",
+    ]
+    assert post.called[0][1]["query"] == (
+        "SELECT schemaname, tablename FROM pg_tables "
+        "WHERE schemaname NOT IN ('pg_catalog','information_schema') "
+        "ORDER BY schemaname, tablename"
+    )
+    assert post.called[0][0] == (
+        "https://api.supabase.com/v1/projects/abc123/database/query"
+    )
+    assert post.called[0][2] == {
+        "Authorization": f"Bearer {pat}",
+        "Content-Type": "application/json",
+    }
+    assert result.endpoints_called == [post.called[0][0]] * 3
+
+
+def test_management_api_fetches_quoted_rows_into_seed_extraction() -> None:
+    def _respond(_url: str, body: dict[str, Any], _headers: dict[str, str]):
+        query = body["query"]
+        if query.startswith("SELECT schemaname"):
+            rows = [{"schemaname": "public", "tablename": "people"}]
+        elif 'FROM "public"."people"' in query:
+            rows = [
+                {
+                    "email": "ops@corp-target.io",
+                    "value": "ghp_" + "x" * 40,
+                }
+            ]
+        else:
+            rows = []
+        return {"status": 201, "headers": {}, "json": rows}
+
+    post = _MockPost(_respond)
+    scanner = SupabaseDeepScanner(
+        "abc123",
+        management_pat="sbp_test_placeholder",
+        http_post=post,
+        page_size=20,
+    )
+    result = scanner.scan_all()
+    queries = [call[1]["query"] for call in post.called]
+    assert 'SELECT * FROM "public"."people" LIMIT 20 OFFSET 0' in queries
+    assert result.rows_scanned == 1
+    assert any(
+        seed["target_type"] == "email"
+        and seed["target_value"] == "ops@corp-target.io"
+        for seed in result.seeds
+    )
+    assert any(hit["label"] == "github_pat" for hit in result.secret_hits)
+
+
+def test_management_api_skips_invalid_identifiers_before_query() -> None:
+    post = _MockPost(
+        lambda _url, body, _headers: {
+            "status": 201,
+            "headers": {},
+            "json": (
+                [{"schemaname": 'public"; DROP TABLE users;--', "tablename": "users"}]
+                if body["query"].startswith("SELECT schemaname")
+                else []
+            ),
+        }
+    )
+    scanner = SupabaseDeepScanner(
+        "abc123", management_pat="sbp_test_placeholder", http_post=post
+    )
+    result = scanner.scan_all()
+    assert result.tables_total == 1
+    assert result.tables[0].status == "skipped"
+    assert result.tables[0].detail == "invalid_table_identifier"
+    assert len(post.called) == 1
+    assert result.source_errors == [
+        {
+            "context": "supabase:abc123:fetch",
+            "detail": "invalid_table_identifier",
+        }
+    ]
+
+
+def test_management_api_errors_never_include_pat() -> None:
+    pat = "sbp_test_placeholder"
+
+    def _raise_pat(_url: str, _body: dict[str, Any], _headers: dict[str, str]):
+        raise RuntimeError(f"request failed with {pat}")
+
+    scanner = SupabaseDeepScanner(
+        "abc123", management_pat=pat, http_post=_MockPost(_raise_pat)
+    )
+    result = scanner.scan_all()
+    assert result.source_errors == [
+        {"context": "discover_tables", "detail": "request_failed"}
+    ]
+    assert pat not in str(result.source_errors)
+
+    rejected = SupabaseDeepScanner(
+        "abc123",
+        management_pat=pat,
+        http_post=_MockPost(
+            lambda *_: {
+                "status": 401,
+                "headers": {},
+                "json": {"message": pat},
+                "text": pat,
+            }
+        ),
+    ).scan_all()
+    assert rejected.source_errors == [
+        {"context": "discover_tables", "detail": "HTTP 401"}
+    ]
+    assert pat not in str(rejected.source_errors)

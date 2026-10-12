@@ -1,8 +1,8 @@
 """Supabase deep scanner.
 
-Reads every table exposed by a Supabase project's PostgREST Data API
-through an owned read-only API key and pulls seed-like strings out of
-every column of every row. All extraction is delegated to
+Reads every table available through either Supabase's Management API
+database-query endpoint or the PostgREST Data API and pulls seed-like
+strings out of every column of every row. All extraction is delegated to
 :mod:`forge.onboard.patterns` so URLs, bare domains, IPs, emails,
 cloud references, phone numbers, and secret hits are all surfaced
 through the same deduped shape as :class:`GitHubDeepScanner`.
@@ -125,16 +125,20 @@ class SupabaseScanResult:
 
 
 class SupabaseDeepScanner:
-    """Scan every table exposed by a Supabase project.
+    """Scan available tables in a Supabase project.
 
-    Supabase's Data API is served at ``https://<project_ref>.supabase.co``.
+    The PostgREST Data API is served at
+    ``https://<project_ref>.supabase.co``. When a Management API PAT is
+    supplied, the scanner instead discovers and reads schema-qualified
+    tables through the Management API database-query endpoint.
     The scanner:
 
-    1. ``GET /rest/v1/`` — the PostgREST root responds with an
-       OpenAPI document whose ``paths`` keys enumerate every exposed
-       table.
-    2. For each table: ``GET /rest/v1/<table>?select=*`` with
-       pagination via ``Range: 0-<page>`` / ``Content-Range``.
+    1. PostgREST discovery uses ``GET /rest/v1/`` and reads table names
+       from its OpenAPI paths; Management API discovery queries
+       ``pg_tables`` and retains each schema-qualified name.
+    2. PostgREST reads rows with ``GET /rest/v1/<table>?select=*`` and
+       Range pagination. Management API reads rows with quoted SQL
+       identifiers and bounded ``LIMIT``/``OFFSET`` pages.
     3. Every string cell is handed to
        :func:`forge.onboard.patterns.extract_seeds_from_text`.
        Significant column names are recorded for operator triage.
@@ -142,16 +146,18 @@ class SupabaseDeepScanner:
        :func:`forge.onboard.patterns.scan_secrets` — never the raw
        cell body.
 
-    The scanner never writes any data back to Supabase. All methods
-    are read-only PostgREST GETs.
+    The scanner never writes any data back to Supabase. Both transports
+    use read-only requests.
     """
 
     def __init__(
         self,
         project_ref: str,
-        api_key: str,
+        api_key: str | None = None,
         *,
+        management_pat: str | None = None,
         http_get: Callable[..., Any] | None = None,
+        http_post: Callable[..., Any] | None = None,
         base_url: str | None = None,
         max_tables: int = 1000,
         max_rows_per_table: int = 100_000,
@@ -169,14 +175,17 @@ class SupabaseDeepScanner:
                 f"invalid Supabase project_ref {project!r}"
             )
         key_value = str(api_key or "").strip()
-        if not key_value:
+        pat_value = str(management_pat or "").strip()
+        if not key_value and not pat_value:
             raise SupabaseScannerError(
-                "Supabase deep scanner requires a non-empty API key"
+                "Supabase deep scanner requires an API key or Management API PAT"
             )
         self.project_ref = project
         self._api_key = key_value
+        self._management_pat = pat_value
         self.base_url = (base_url or f"https://{project}.supabase.co").rstrip("/")
         self._http = http_get or _default_http_get
+        self._http_post = http_post or _default_http_post
         self.max_tables = max(1, int(max_tables))
         self.max_rows_per_table = max(1, int(max_rows_per_table))
         self.page_size = max(1, min(int(page_size), 10_000))
@@ -184,11 +193,14 @@ class SupabaseDeepScanner:
         self.extra_schemas = tuple(
             s.strip() for s in extra_schemas if s and s.strip()
         )
-        self.headers = {
-            "apikey": self._api_key,
-            "Authorization": f"Bearer {self._api_key}",
-            "Accept": "application/json",
-        }
+        self.headers = {"Accept": "application/json"}
+        if self._api_key:
+            self.headers.update(
+                {
+                    "apikey": self._api_key,
+                    "Authorization": f"Bearer {self._api_key}",
+                }
+            )
 
     # ------------------------------------------------------------------
     # Public entry points
@@ -257,7 +269,30 @@ class SupabaseDeepScanner:
     # ------------------------------------------------------------------
 
     def _discover_tables(self, *, result: SupabaseScanResult) -> list[str]:
-        """GET the PostgREST OpenAPI root and extract table paths."""
+        """Discover tables using the configured Supabase transport."""
+        if self._management_pat:
+            response = self._management_query(
+                "SELECT schemaname, tablename FROM pg_tables "
+                "WHERE schemaname NOT IN ('pg_catalog','information_schema') "
+                "ORDER BY schemaname, tablename",
+                result=result,
+                context="discover_tables",
+            )
+            if response is None:
+                return []
+            body = response.get("json")
+            if not isinstance(body, list):
+                return []
+            tables: list[str] = []
+            for item in body:
+                if not isinstance(item, Mapping):
+                    continue
+                schema = str(item.get("schemaname") or "").strip()
+                name = str(item.get("tablename") or "").strip()
+                if schema and name:
+                    tables.append(f"{schema}.{name}")
+            return list(dict.fromkeys(tables))
+
         url = f"{self.base_url}/rest/v1/"
         response = self._call(url, result=result, context="discover_tables")
         if response is None:
@@ -304,6 +339,16 @@ class SupabaseDeepScanner:
         if not table:
             summary.status = "skipped"
             summary.detail = "empty_table_name"
+            return summary
+        if self._management_pat and _management_table_parts(table) is None:
+            summary.status = "skipped"
+            summary.detail = "invalid_table_identifier"
+            result.source_errors.append(
+                {
+                    "context": f"supabase:{self.project_ref}:fetch",
+                    "detail": "invalid_table_identifier",
+                }
+            )
             return summary
         row_offset = 0
         columns_seen: list[str] = []
@@ -458,6 +503,27 @@ class SupabaseDeepScanner:
         result: SupabaseScanResult,
     ) -> dict[str, Any] | None:
         """Fetch one page of rows using Range/Content-Range pagination."""
+        if self._management_pat:
+            identifiers = _management_table_parts(table)
+            if identifiers is None:
+                result.source_errors.append(
+                    {
+                        "context": f"supabase:{self.project_ref}:fetch",
+                        "detail": "invalid_table_identifier",
+                    }
+                )
+                return None
+            schema, name = identifiers
+            query = (
+                f'SELECT * FROM "{schema}"."{name}" '
+                f"LIMIT {int(limit)} OFFSET {int(offset)}"
+            )
+            return self._management_query(
+                query,
+                result=result,
+                context=f"supabase:{self.project_ref}:fetch",
+            )
+
         url = f"{self.base_url}/rest/v1/{table}?select=*"
         headers = dict(self.headers)
         headers["Range-Unit"] = "items"
@@ -516,6 +582,53 @@ class SupabaseDeepScanner:
             )
             return None
         status = int(response.get("status", 0))
+        if status >= 400:
+            result.source_errors.append(
+                {"context": context, "detail": f"HTTP {status}"}
+            )
+            return None
+        return dict(response)
+
+    def _management_query(
+        self,
+        query: str,
+        *,
+        result: SupabaseScanResult,
+        context: str,
+    ) -> dict[str, Any] | None:
+        """Execute one Management API SQL query without exposing the PAT."""
+        url = (
+            "https://api.supabase.com/v1/projects/"
+            f"{self.project_ref}/database/query"
+        )
+        if len(result.endpoints_called) < 2000:
+            result.endpoints_called.append(url)
+        try:
+            response = self._http_post(
+                url,
+                body={"query": query},
+                headers={
+                    "Authorization": f"Bearer {self._management_pat}",
+                    "Content-Type": "application/json",
+                },
+            )
+        except Exception:
+            result.source_errors.append(
+                {"context": context, "detail": "request_failed"}
+            )
+            return None
+        if not isinstance(response, Mapping):
+            result.source_errors.append(
+                {"context": context, "detail": "http_post did not return a mapping"}
+            )
+            return None
+        try:
+            status = int(response.get("status", 0))
+        except (TypeError, ValueError, OverflowError):
+            result.source_errors.append(
+                {"context": context, "detail": "invalid_http_status"}
+            )
+            return None
         if status >= 400:
             result.source_errors.append(
                 {"context": context, "detail": f"HTTP {status}"}
@@ -586,6 +699,16 @@ def _normalize_table_name(value: str) -> str:
     if text.lower().startswith("public."):
         text = text.split(".", 1)[1]
     return text
+
+
+def _management_table_parts(table: str) -> tuple[str, str] | None:
+    """Return safe schema/table identifiers, rejecting SQL metacharacters."""
+    parts = str(table or "").split(".")
+    if len(parts) != 2 or any(
+        not re.fullmatch(r"[A-Za-z0-9_]+", part) for part in parts
+    ):
+        return None
+    return parts[0], parts[1]
 
 
 def _coerce_text_fragments(value: Any, *, max_bytes: int) -> Iterable[str]:
@@ -659,6 +782,32 @@ def _default_http_get(url: str, *, headers: Mapping[str, str]) -> dict[str, Any]
         "status": resp.status_code,
         "headers": headers_dict,
         "json": body,
+        "text": text,
+    }
+
+
+def _default_http_post(
+    url: str,
+    *,
+    body: Mapping[str, Any],
+    headers: Mapping[str, str],
+) -> dict[str, Any]:
+    """Default JSON POST wrapper around :mod:`httpx`."""
+    import httpx  # noqa: PLC0415
+
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.post(url, json=dict(body), headers=dict(headers))
+    headers_dict = dict(resp.headers)
+    payload: Any = None
+    text: str = ""
+    try:
+        payload = resp.json()
+    except (ValueError, json.JSONDecodeError):
+        text = resp.text
+    return {
+        "status": resp.status_code,
+        "headers": headers_dict,
+        "json": payload,
         "text": text,
     }
 

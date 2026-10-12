@@ -24,7 +24,7 @@ Supported services (see :data:`SUPPORTED_SERVICES` for the authoritative
 list of fields):
 
 - ``github`` — PAT token, optional org/user list.
-- ``supabase`` — project ref + anon/service key.
+- ``supabase`` — project ref + anon/service key or Management API PAT.
 - ``shodan`` — API key.
 - ``virustotal`` — API key.
 - ``replit`` — username or profile URL.
@@ -62,10 +62,10 @@ SUPPORTED_SERVICES: dict[str, dict[str, Any]] = {
         "credential_fields": ("token",),
     },
     "supabase": {
-        "description": "Auto-scan exposed Supabase tables for target-like data.",
-        "required_fields": ("project_ref", "key"),
-        "optional_fields": ("url",),
-        "credential_fields": ("key",),
+        "description": "Auto-scan Supabase tables for target-like data.",
+        "required_fields": ("project_ref",),
+        "optional_fields": ("key", "management_pat", "url"),
+        "credential_fields": ("key", "management_pat"),
     },
     "shodan": {
         "description": "Auto-search connected domains, discover services.",
@@ -233,8 +233,8 @@ class ServiceConnectionManager:
                 raise ConnectionError(
                     f"credential field {cred_field!r} for service "
                     f"{service!r} is missing a credential_source; "
-                    "credentials must be supplied via --token-env or "
-                    "--token-stdin"
+                    "credentials must be supplied via the service's "
+                    "environment or stdin credential options"
                 )
         existing = self._load_connections()
         if any(c.service == service for c in existing):
