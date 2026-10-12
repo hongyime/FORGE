@@ -1550,7 +1550,11 @@ def _is_connector_payload_filename(name: str) -> bool:
     lowered = name.lower()
     if Path(lowered).suffix not in _PAYLOAD_TEXT_SUFFIXES:
         return False
-    if lowered.endswith(".local.json"):
+    is_connected_services_seed_drop = (
+        lowered.startswith("connected-services-")
+        and lowered.endswith("-seeds.local.json")
+    )
+    if lowered.endswith(".local.json") and not is_connected_services_seed_drop:
         return False
     if lowered in _CONNECTOR_SOURCE_EXCLUDED_NAMES:
         return False
