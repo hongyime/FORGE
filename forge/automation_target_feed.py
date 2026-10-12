@@ -632,6 +632,96 @@ def _extract_dir_source(
     return candidates, errors, summary
 
 
+def _is_connected_services_seed_drop_filename(name: str) -> bool:
+    lowered = name.lower()
+    return lowered.startswith("connected-services-") and lowered.endswith(
+        "-seeds.local.json"
+    )
+
+
+def _extract_connected_services_seed_drops(
+    imports_dir: Path,
+    *,
+    first_seen_at: str,
+    confidence: float,
+) -> tuple[list[FeedCandidate], list[str], dict[str, int]]:
+    candidates: list[FeedCandidate] = []
+    errors: list[str] = []
+    summary = {
+        "scanned_count": 0,
+        "matched_count": 0,
+        "omitted_count": 0,
+        "limit": _MAX_FILES_PER_DIR_SOURCE,
+    }
+    if not imports_dir.is_dir():
+        return candidates, errors, summary
+
+    scanned = 0
+    for path in sorted(imports_dir.iterdir()):
+        if not path.is_file() or not _is_connected_services_seed_drop_filename(
+            path.name
+        ):
+            continue
+        if scanned >= _MAX_FILES_PER_DIR_SOURCE:
+            summary["omitted_count"] += 1
+            continue
+        scanned += 1
+        summary["scanned_count"] = scanned
+        summary["matched_count"] += 1
+
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            errors.append(f"{type(exc).__name__}:{path.name}")
+            continue
+        if not isinstance(payload, dict) or payload.get("schema_version") != (
+            "forge.connected_services_scan.v1"
+        ):
+            errors.append(f"invalid_schema:{path.name}")
+            continue
+        seeds = payload.get("seeds")
+        if not isinstance(seeds, list):
+            errors.append(f"invalid_seeds:{path.name}")
+            continue
+
+        fallback_group = f"connector_file:{path.name}"
+        drop_first_seen_at = str(payload.get("generated_at") or first_seen_at)
+        for seed in seeds:
+            if not isinstance(seed, dict):
+                continue
+            raw_value = seed.get("target_value")
+            raw_type = seed.get("target_type")
+            if not isinstance(raw_value, str) or not isinstance(raw_type, str):
+                continue
+
+            source_kind = str(seed.get("source_kind") or "connector_output")
+            source_group = str(seed.get("source_group") or fallback_group)
+            provenance = str(seed.get("provenance") or source_group)
+            seed_first_seen_at = str(
+                seed.get("first_seen_at") or drop_first_seen_at
+            )
+            try:
+                seed_confidence = float(seed.get("confidence", confidence))
+            except (TypeError, ValueError):
+                seed_confidence = confidence
+            if not 0.0 <= seed_confidence <= 1.0:
+                seed_confidence = confidence
+
+            candidate = _candidate(
+                raw_value,
+                source_kind=source_kind,
+                source_group=source_group,
+                provenance=provenance,
+                confidence=seed_confidence,
+                first_seen_at=seed_first_seen_at,
+                target_type_hint=raw_type,
+            )
+            if candidate is not None:
+                candidates.append(candidate)
+
+    return candidates, errors, summary
+
+
 def _all_candidate_keys(groups: dict[str, list[FeedCandidate]]) -> set[str]:
     keys: set[str] = set()
     for candidates in groups.values():
@@ -1965,6 +2055,52 @@ def _collect_secret_observations(groups: dict[str, list[FeedCandidate]]) -> list
 
 
 
+
+def _extract_connected_services_seeds(
+    imports_dir,
+    *,
+    first_seen_at,
+):
+    """Extract seeds from connected-services seed drop files."""
+    candidates = []
+    errors = []
+    if not imports_dir.is_dir():
+        return candidates, errors
+    for path in sorted(imports_dir.iterdir()):
+        name = path.name.lower()
+        if not (name.startswith("connected-services-") and name.endswith("-seeds.local.json")):
+            continue
+        try:
+            import json
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            seeds = data.get("seeds", []) if isinstance(data, dict) else []
+            for seed in seeds:
+                if not isinstance(seed, dict):
+                    continue
+                tv = seed.get("target_value", "")
+                tt = seed.get("target_type", "auto")
+                if not tv:
+                    continue
+                try:
+                    cand = _candidate(
+                        tv,
+                        source_kind=seed.get("source_kind", "connected_services"),
+                        source_group=seed.get("source_group", "connected_services:" + path.name),
+                        provenance=seed.get("provenance", "connected_services:" + path.name),
+                        confidence=0.7 if seed.get("confidence") == "high" else 0.5,
+                        first_seen_at=seed.get("first_seen_at", first_seen_at),
+                        target_type_hint=tt,
+                    )
+                    if cand:
+                        candidates.append(cand)
+                except Exception:
+                    continue
+        except Exception as exc:
+            errors.append("connected_services_parse:" + path.name + ":" + str(exc)[:100])
+    return candidates, errors
+
+
 def build_target_feed(
     *,
     sources: list[str],
@@ -2030,14 +2166,31 @@ def build_target_feed(
         source_errors.extend({"source": "cti", "error": err} for err in errors)
 
     if "connectors" in active_offline:
-        found, errors, scan_summary = _extract_dir_source(
+        seed_found, seed_errors, seed_scan_summary = (
+            _extract_connected_services_seed_drops(
+                connectors_dir or Path("imports"),
+                first_seen_at=generated_at,
+                confidence=0.5,
+            )
+        )
+        generic_found, generic_errors, generic_scan_summary = _extract_dir_source(
             connectors_dir or Path("imports"),
-            filename_filter=_is_connector_payload_filename,
+            filename_filter=lambda name: (
+                _is_connector_payload_filename(name)
+                and not _is_connected_services_seed_drop_filename(name)
+            ),
             source_kind="connector_output",
             provenance_prefix="connector_file:",
             first_seen_at=generated_at,
             confidence=0.5,
         )
+        found = [*seed_found, *generic_found]
+        errors = [*seed_errors, *generic_errors]
+        scan_summary = {
+            key: seed_scan_summary[key] + generic_scan_summary[key]
+            for key in ("scanned_count", "matched_count", "omitted_count")
+        }
+        scan_summary["limit"] = _MAX_FILES_PER_DIR_SOURCE
         groups["connectors"] = found
         source_scan_limits["connectors"] = scan_summary
         for candidate in found:
@@ -2045,6 +2198,18 @@ def build_target_feed(
                 source_group_counts.get(candidate.source_group, 0) + 1
             )
         source_errors.extend({"source": "connectors", "error": err} for err in errors)
+
+    if "connectors" in active_offline:
+        cs_found, cs_errors = _extract_connected_services_seeds(
+            connectors_dir or Path("imports"),
+            first_seen_at=generated_at,
+        )
+        groups["connectors"].extend(cs_found)
+        for candidate in cs_found:
+            source_group_counts[candidate.source_group] = (
+                source_group_counts.get(candidate.source_group, 0) + 1
+            )
+        source_errors.extend({"source": "connectors", "error": err} for err in cs_errors)
 
     if wants_supabase:
         found, errors, supabase_group_counts, supabase_table_discovery = _extract_supabase_source(
