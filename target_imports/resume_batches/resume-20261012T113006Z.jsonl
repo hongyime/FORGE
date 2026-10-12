@@ -1,0 +1,2 @@
+{"batch_id": "resume-20261012T113006Z", "concurrency": "parallel", "created_at": "2026-10-12T11:30:06.705806+00:00", "event": "batch_started", "max_parallel": 2, "planned_count": 0, "recorded_at": "2026-10-12T11:30:06.705833+00:00"}
+{"batch_id": "resume-20261012T113006Z", "completed_at": "2026-10-12T11:30:06.705912+00:00", "event": "batch_completed", "recorded_at": "2026-10-12T11:30:06.705934+00:00", "result_counts": {}}
