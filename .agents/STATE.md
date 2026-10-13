@@ -1,8 +1,8 @@
-# Active Task: Fix autopilot target validation and per-target start failures (2026-10-13).
+# Completed Task: Fix autopilot target validation and per-target start failures (2026-10-13).
 
-**Progress:** User approved both fixes and a fresh loop run. Added strict domain/subdomain hostname validation (including code-identifier TLD rejects) at normalization and final feed aggregation boundaries. Per-target start errors are recorded and exposed in CLI JSON/text; imports continue, failed starts do not consume `start_limit`, and the autopilot phase reports aggregate failure only when every attempted start failed. Regression coverage spans feed load/build, import continuation/start-budget behavior, CLI result output, and phase aggregation. Requested suites plus feed-build tests: 162 passed. Ruff and `git diff --check` passed. Preparing commit/push on `main`; preserve pre-existing untracked `autopilot-loop.sh` and `nuclei-templates/`.
+**Delivery:** Added strict domain/subdomain hostname validation (including code-identifier TLD rejects) at normalization and final feed aggregation boundaries. Per-target start errors are recorded and exposed in CLI JSON/text; imports continue, failed starts do not consume `start_limit`, and the autopilot phase reports aggregate failure only when every attempted start failed. Regression coverage spans feed load/build, import continuation/start-budget behavior, CLI result output, and phase aggregation. Implementation commit `2f72b27d` is pushed to `origin/main`.
 
-**Next:** Commit and push the verified changes, restart `forge-autopilot.service`, then capture its active/new-cycle status and `forge monitoring status` output.
+**Verification:** Requested suites plus feed-build tests: 162 passed. Ruff and `git diff --check` passed. Restarted `forge-autopilot.service`; systemd reports active and `forge monitoring status` shows cycle 3 running in phase 1 of 8. Preserve pre-existing untracked `autopilot-loop.sh` and `nuclei-templates/`.
 
 ---
 
