@@ -1205,6 +1205,19 @@ class ForgeAutopilot:
         started = sum(1 for r in results if r.started)
         failed = sum(1 for r in results if getattr(r, "start_failed", False))
         attempted = started + failed
+        start_stop_reason = next(
+            (
+                str(getattr(r, "start_stop_reason", ""))
+                for r in results
+                if getattr(r, "start_stop_reason", "")
+            ),
+            "",
+        )
+        if start and not effective_dry_run and not start_stop_reason:
+            start_stop_reason = "no_more_candidates"
+        unprocessed_count = sum(
+            int(getattr(r, "unprocessed_count", 0) or 0) for r in results
+        )
         status_label = "ok"
         if effective_dry_run and not dry_run:
             status_label = "blocked"
@@ -1214,18 +1227,24 @@ class ForgeAutopilot:
             name="import_targets",
             status=status_label,
             detail=(
-                f"total={len(results)} created={created} "
+                f"total={len(results) + unprocessed_count} created={created} "
+                f"processed={len(results)} "
                 f"started={started} failed={failed} attempted={attempted} "
-                f"start_requested={start}"
+                f"start_requested={start} "
+                f"start_stop_reason={start_stop_reason or 'none'} "
+                f"unprocessed={unprocessed_count}"
             ),
             data={
                 "dry_run": effective_dry_run,
                 "start_requested": start,
-                "total": len(results),
+                "total": len(results) + unprocessed_count,
+                "processed": len(results),
                 "created": created,
                 "started": started,
                 "failed": failed,
                 "attempted": attempted,
+                "start_stop_reason": start_stop_reason or None,
+                "unprocessed_count": unprocessed_count,
             },
         )
 

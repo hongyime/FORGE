@@ -541,6 +541,40 @@ def test_autopilot_import_phase_aggregates_target_start_failures(
     assert f"failed={expected_failed}" in phase.detail
 
 
+def test_autopilot_import_phase_surfaces_failure_budget_stop_reason(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_feed(tmp_path / "imports" / "target-feed.json")
+    auto = _mk_autopilot(tmp_path, roe_id="ROE-START-FAILURE")
+
+    def _fake_import_targets(**kwargs: Any) -> list[SimpleNamespace]:
+        assert kwargs["start"] is True
+        return [
+            SimpleNamespace(
+                created=True,
+                started=False,
+                start_failed=True,
+                start_stop_reason=(
+                    "consecutive_failure_budget_exhausted" if index == 2 else ""
+                ),
+                unprocessed_count=7 if index == 2 else 0,
+            )
+            for index in range(3)
+        ]
+
+    monkeypatch.setattr("forge.targets_import.import_targets", _fake_import_targets)
+
+    phase = auto._phase_import_targets(dry_run=False)
+
+    assert phase.status == "error"
+    assert phase.data["total"] == 10
+    assert phase.data["processed"] == 3
+    assert phase.data["start_stop_reason"] == "consecutive_failure_budget_exhausted"
+    assert phase.data["unprocessed_count"] == 7
+    assert "start_stop_reason=consecutive_failure_budget_exhausted" in phase.detail
+
+
 def test_autopilot_import_phase_skipped_when_feed_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

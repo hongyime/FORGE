@@ -32,6 +32,9 @@ TARGET_IMPORT_MONITORING_INTERVAL_MINUTES = 60
 DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES = 25
 TARGET_IMPORT_CHILD_TIMEOUT_GRACE_SECONDS = 120
 TARGET_FAILURE_STDERR_MAX_BYTES = 2048
+# Consecutive failed start attempts are bounded independently of the success limit.
+# A successful start resets this counter; skipped candidates do not affect it.
+MAX_CONSECUTIVE_START_FAILURES = 3
 _LOG = logging.getLogger(__name__)
 MAX_TARGET_FEED_FILE_BYTES = 64 * 1024 * 1024
 MAX_TARGET_FEED_IMPORT_ITEMS = 100_000
@@ -131,6 +134,8 @@ class TargetImportResult:
     start_skipped_reason: str = ""
     start_failed: bool = False
     start_error_type: str = ""
+    start_stop_reason: str = ""
+    unprocessed_count: int = 0
 
 
 def load_target_feed(
@@ -184,6 +189,13 @@ def import_targets(
     config: ForgeConfig | None = None,
     progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> list[TargetImportResult]:
+    """Import feed targets and optionally start scoped kill chains.
+
+    Starting stops after three consecutive failed start attempts. Only actual
+    failed starts count; a successful start resets the streak, and skipped
+    feed items neither count nor reset it. The terminal result records the
+    stop reason and number of feed candidates left unprocessed.
+    """
     if start and not dry_run and not str(roe_id or "").strip():
         raise ValueError("--start requires --roe-id so live execution is authorized")
     cfg = config or ForgeConfig.load()
@@ -197,7 +209,8 @@ def import_targets(
     starts_remaining = _normalize_start_limit(start_limit)
     min_start_sources = _normalize_min_start_source_count(min_start_source_count)
     existing_targets = _external_target_engagement_index(cfg)
-    for item in items:
+    consecutive_start_failures = 0
+    for item_index, item in enumerate(items):
         if dry_run:
             results.append(
                 TargetImportResult(
@@ -232,6 +245,8 @@ def import_targets(
         start_failed = False
         start_error_type = ""
         start_skipped_reason = ""
+        start_stop_reason = ""
+        unprocessed_count = 0
         if (
             start
             and starts_remaining != 0
@@ -275,11 +290,18 @@ def import_targets(
                 )
                 start_failed = True
                 start_error_type = type(exc).__name__
+                consecutive_start_failures += 1
+                if consecutive_start_failures >= MAX_CONSECUTIVE_START_FAILURES:
+                    start_stop_reason = "consecutive_failure_budget_exhausted"
+                    unprocessed_count = len(items) - item_index - 1
             else:
                 _notify_progress(progress_callback, "target_completed", progress_details)
                 started = True
+                consecutive_start_failures = 0
                 if starts_remaining is not None:
                     starts_remaining -= 1
+                    if starts_remaining == 0:
+                        start_stop_reason = "start_limit_reached"
         elif start and not item.scan_eligible:
             start_skipped_reason = item.scan_eligibility_reason
         elif start and item.source_count < min_start_sources:
@@ -287,6 +309,16 @@ def import_targets(
                 f"source_count_below_min_start_threshold:"
                 f"{item.source_count}<{min_start_sources}"
             )
+        elif start and starts_remaining == 0:
+            start_skipped_reason = "start_limit_reached"
+        if (
+            start
+            and not dry_run
+            and not start_stop_reason
+            and starts_remaining != 0
+            and item_index == len(items) - 1
+        ):
+            start_stop_reason = "no_more_candidates"
         results.append(
             TargetImportResult(
                 engagement_id=engagement_id,
@@ -304,8 +336,12 @@ def import_targets(
                 start_skipped_reason=start_skipped_reason,
                 start_failed=start_failed,
                 start_error_type=start_error_type,
+                start_stop_reason=start_stop_reason,
+                unprocessed_count=unprocessed_count,
             )
         )
+        if start_stop_reason == "consecutive_failure_budget_exhausted":
+            break
     return results
 
 

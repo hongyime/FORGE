@@ -2108,6 +2108,7 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
     )
 
     assert results[0].started is True
+    assert results[0].start_stop_reason == "no_more_candidates"
     command = calls[0]
     assert command[2:4] == ["forge.cli", "kill-chain"]
     assert "--roe-id" in command
@@ -2385,6 +2386,67 @@ def test_start_failure_records_and_continues_without_consuming_start_limit(
     assert [event for event, _ in events].count("target_completed") == 1
     failed_event = next(details for event, details in events if event == "target_failed")
     assert failed_event["error_type"] == "CalledProcessError"
+    assert results[1].start_stop_reason == "start_limit_reached"
+
+
+def test_consecutive_start_failures_stop_feed_early_and_report_reason(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    targets = [f"host{index}.corp-target.io" for index in range(10)]
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [
+                    {"target_type": "domain", "target_value": target}
+                    for target in targets
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = _FakeConfig(tmp_path / "data")
+    attempts: list[str] = []
+    created_targets: list[str] = []
+
+    def _fake_create(_cfg: object, item: object, _existing: object) -> tuple[int, bool]:
+        target = str(getattr(item, "canonical_value"))
+        created_targets.append(target)
+        return len(created_targets), True
+
+    def _fake_start(**kwargs: object) -> None:
+        attempts.append(str(kwargs["seed"]))
+        raise subprocess.CalledProcessError(2, ["kill-chain", str(kwargs["seed"])])
+
+    monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _cfg: {})
+    monkeypatch.setattr("forge.targets_import._create_or_reuse_engagement", _fake_create)
+    monkeypatch.setattr("forge.targets_import._ensure_target_import_monitoring", lambda **_: None)
+    monkeypatch.setattr("forge.targets_import._write_scope_manifest", lambda *_args: None)
+    monkeypatch.setattr("forge.targets_import._has_kill_chain_run", lambda *_args: False)
+    monkeypatch.setattr("forge.targets_import._start_kill_chain", _fake_start)
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=None,
+        max_iter=3,
+        start_limit=20,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert len(attempts) == 3
+    assert len(created_targets) == 3
+    assert len(results) == 3
+    assert all(result.start_failed for result in results)
+    assert results[-1].start_error_type == "CalledProcessError"
+    assert results[-1].start_stop_reason == "consecutive_failure_budget_exhausted"
+    assert results[-1].unprocessed_count == 7
 
 
 def test_start_limit_caps_scoped_kill_chain_launches(
@@ -2424,6 +2486,8 @@ def test_start_limit_caps_scoped_kill_chain_launches(
     )
 
     assert [result.started for result in results] == [True, False]
+    assert results[0].start_stop_reason == "start_limit_reached"
+    assert results[1].start_skipped_reason == "start_limit_reached"
     assert len(calls) == 1
 
 
@@ -2784,6 +2848,8 @@ def test_targets_import_cli_json_reports_per_target_start_failure(
                 dry_run=False,
                 start_failed=True,
                 start_error_type="CalledProcessError",
+                start_stop_reason="consecutive_failure_budget_exhausted",
+                unprocessed_count=5,
             )
         ],
     )
@@ -2813,6 +2879,11 @@ def test_targets_import_cli_json_reports_per_target_start_failure(
     assert payload["results"][0]["started"] is False
     assert payload["results"][0]["start_failed"] is True
     assert payload["results"][0]["start_error_type"] == "CalledProcessError"
+    assert payload["start_stop_reason"] == "consecutive_failure_budget_exhausted"
+    assert payload["unprocessed_count"] == 5
+    assert payload["total_count"] == 6
+    assert payload["omitted_count"] == 5
+    assert payload["results"][0]["start_stop_reason"] == "consecutive_failure_budget_exhausted"
 
 
 def test_targets_import_cli_passes_max_runtime_minutes(

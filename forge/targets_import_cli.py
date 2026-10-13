@@ -117,6 +117,19 @@ def register_target_import_commands(app: typer.Typer) -> None:
         reused = sum(1 for item in results if item.engagement_id is not None and not item.created)
         started = sum(1 for item in results if item.started)
         failed = sum(1 for item in results if getattr(item, "start_failed", False))
+        start_stop_reason = next(
+            (
+                str(getattr(item, "start_stop_reason", ""))
+                for item in results
+                if getattr(item, "start_stop_reason", "")
+            ),
+            "",
+        )
+        if start and not dry_run and not start_stop_reason:
+            start_stop_reason = "no_more_candidates"
+        unprocessed_count = sum(
+            int(getattr(item, "unprocessed_count", 0) or 0) for item in results
+        )
         if json_output:
             payload = {
                 "schema_version": "forge.targets_import.v1",
@@ -127,13 +140,15 @@ def register_target_import_commands(app: typer.Typer) -> None:
                 ),
                 "dry_run": bool(dry_run),
                 "start_requested": bool(start),
-                "total_count": len(results),
+                "total_count": len(results) + unprocessed_count,
                 "selected_count": len(results),
-                "omitted_count": 0,
+                "omitted_count": unprocessed_count,
                 "created_count": created,
                 "reused_count": reused,
                 "started_count": started,
                 "failed_count": failed,
+                "start_stop_reason": start_stop_reason or None,
+                "unprocessed_count": unprocessed_count,
                 "results": [_target_import_result_payload(item) for item in results],
             }
             typer.echo(json.dumps(payload, indent=2, sort_keys=True))
@@ -143,7 +158,9 @@ def register_target_import_commands(app: typer.Typer) -> None:
             return
         console.print(
             f"[green]Imported:[/green] {len(results)} target(s), "
-            f"created={created}, reused={reused}, started={started}, failed={failed}"
+            f"created={created}, reused={reused}, started={started}, failed={failed}, "
+            f"start_stop_reason={start_stop_reason or 'none'}, "
+            f"unprocessed={unprocessed_count}"
         )
         for result in results:
             start_failure = (
@@ -151,10 +168,15 @@ def register_target_import_commands(app: typer.Typer) -> None:
                 if getattr(result, "start_failed", False)
                 else ""
             )
+            stop_reason = (
+                f" start_stop_reason={result.start_stop_reason}"
+                if getattr(result, "start_stop_reason", "")
+                else ""
+            )
             console.print(
                 f"  engagement={result.engagement_id} "
                 f"target={result.target_type}:{result.target_value} "
-                f"manifest={result.scope_manifest}{start_failure}"
+                f"manifest={result.scope_manifest}{start_failure}{stop_reason}"
             )
 
     @app.command("resume-candidates")
@@ -332,6 +354,8 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "start_skipped_reason": str(getattr(result, "start_skipped_reason", "")),
             "start_failed": bool(getattr(result, "start_failed", False)),
             "start_error_type": str(getattr(result, "start_error_type", "")),
+            "start_stop_reason": str(getattr(result, "start_stop_reason", "")),
+            "unprocessed_count": int(getattr(result, "unprocessed_count", 0) or 0),
         }
 
     @app.command("resume-lock-status")
