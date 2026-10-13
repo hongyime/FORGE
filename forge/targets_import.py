@@ -21,6 +21,7 @@ import httpx
 from forge.config import ForgeConfig
 from forge.db.control import index_engagement_db_file
 from forge.db.session import get_engagement_db
+from forge.domain_validation import canonicalize_domain
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
 from forge.onboard.patterns import is_denied_target
 from forge.subprocess_tree import run_contained_subprocess
@@ -95,34 +96,6 @@ TARGET_TYPE_ALIASES = {
     "web_url": "url",
     "website": "url",
 }
-_DOMAIN_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
-_DOMAIN_TLD_RE = re.compile(r"^[a-z]{2,63}$")
-_CODE_IDENTIFIER_TLDS = frozenset(
-    {
-        "args",
-        "argv",
-        "class",
-        "cls",
-        "cwd",
-        "def",
-        "env",
-        "environ",
-        "kwargs",
-        "none",
-        "null",
-        "path",
-        "return",
-        "self",
-        "stderr",
-        "stdin",
-        "stdout",
-        "tmp",
-        "undefined",
-        "var",
-    }
-)
-
-
 @dataclass(frozen=True)
 class TargetFeedItem:
     target_type: str
@@ -579,22 +552,7 @@ def _canonical_target_value(target_type: str, value: str) -> str:
 
 
 def _canonical_domain_value(value: str) -> str:
-    text = str(value or "").lower()
-    if (
-        not text
-        or any(character.isspace() for character in text)
-        or len(text) > 253
-        or text.startswith(".")
-        or text.endswith(".")
-    ):
-        return ""
-    labels = text.split(".")
-    if len(labels) < 2 or any(not _DOMAIN_LABEL_RE.fullmatch(label) for label in labels):
-        return ""
-    tld = labels[-1]
-    if not _DOMAIN_TLD_RE.fullmatch(tld) or tld in _CODE_IDENTIFIER_TLDS:
-        return ""
-    return text
+    return canonicalize_domain(value)
 
 
 def _canonical_http_url_value(value: str) -> str:

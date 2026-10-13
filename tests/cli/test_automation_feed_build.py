@@ -191,6 +191,48 @@ def test_feed_build_rejects_code_identifiers_harvested_as_hosts(
     }
 
 
+def test_feed_build_drops_filename_hosts_and_keeps_legitimate_domains(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    legitimate_domains = [
+        "portal.corp-target.io",
+        "www.acme.org",
+        "api.example.io",
+        "example.dev",
+        "shop.example.co.uk",
+        "example.app",
+        "edge.api.corp-target.com",
+    ]
+    _make_dashboard_report(
+        reports_dir,
+        "filename-hosts",
+        {
+            "summary": {
+                "hosts": [
+                    "image.png",
+                    "worker.py",
+                    "config.yml",
+                    *legitimate_domains,
+                ]
+            }
+        },
+    )
+
+    payload = build_target_feed(
+        sources=["reports"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=None,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    canonical_values = {item["canonical_value"] for item in payload["items"]}
+    assert canonical_values.isdisjoint({"image.png", "worker.py", "config.yml"})
+    assert canonical_values == set(legitimate_domains)
+
+
 def test_feed_build_prioritizes_targets_seen_from_multiple_sources(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     reports_dir = tmp_path / "reports"

@@ -132,6 +132,33 @@ class TestClassifySeedValue:
         assert _classify_seed_value("example.com") == "domain"
         assert _classify_seed_value("portal.example.com") == "domain"
 
+    @pytest.mark.parametrize("value", ["image.png", "worker.py", "config.yml"])
+    def test_common_filenames_are_not_domains(self, value: str) -> None:
+        assert _classify_seed_value(value) == "other"
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "example.com",
+            "www.example.org",
+            "api.example.io",
+            "example.dev",
+            "shop.example.co.uk",
+            "example.app",
+            "edge.api.example.com",
+            # `.py` is intentionally denied as an ambiguous filename suffix;
+            # these colliding real TLDs remain available.
+            "example.md",
+            "example.rs",
+            "example.sh",
+            "example.ai",
+            "example.so",
+            "example.zip",
+        ],
+    )
+    def test_valid_and_colliding_tld_domains_still_classify(self, value: str) -> None:
+        assert _classify_seed_value(value) == "domain"
+
     def test_generic_http_url_still_returns_url(self) -> None:
         assert _classify_seed_value("https://portal.example.com/login") == "url"
 

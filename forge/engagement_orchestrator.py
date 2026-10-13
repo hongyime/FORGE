@@ -43,6 +43,7 @@ except Exception:  # noqa: BLE001
 
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
+from forge.domain_validation import canonicalize_domain
 from forge.orchestration.artifacts import (
     ArtifactDownloadRequest,
     ArtifactDownloadResult,
@@ -1042,10 +1043,7 @@ def _classify_seed_value(value: str) -> str:
     # generic domain — e.g. ``xyz.supabase.co`` or ``app.firebaseio.com``.
     if _hostname_is_cloud_ref(lowered):
         return "cloud_ref"
-    if re.match(
-        r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(?:\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$",
-        lowered,
-    ):
+    if canonicalize_domain(lowered):
         return "domain"
     if _looks_like_company_name(text):
         return "company"

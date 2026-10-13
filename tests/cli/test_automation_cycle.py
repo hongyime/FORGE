@@ -223,7 +223,7 @@ def test_automation_status_summarizes_existing_target_feed_scanability(
                 "items": [
                     {
                         "target_type": "domain",
-                        "target_value": "single.example",
+                        "target_value": "single.corp-target.io",
                         "source_groups": ["connector:single"],
                         "source_count": 1,
                         "priority": 100,
@@ -232,7 +232,7 @@ def test_automation_status_summarizes_existing_target_feed_scanability(
                     },
                     {
                         "target_type": "domain",
-                        "target_value": "shared.example",
+                        "target_value": "shared.corp-target.io",
                         "source_groups": ["db", "report_family:shared"],
                         "source_count": 2,
                         "priority": 90,
@@ -271,8 +271,8 @@ def test_automation_status_summarizes_existing_target_feed_scanability(
     assert scan["ineligible_count"] == 1
     assert scan["high_priority_count"] == 2
     assert scan["ineligible_reasons"] == {"non_global_ip": 1}
-    assert scan["top_targets"][0]["target_value"] == "single.example"
-    assert scan["top_startable_targets"][0]["target_value"] == "shared.example"
+    assert scan["top_targets"][0]["target_value"] == "single.corp-target.io"
+    assert scan["top_startable_targets"][0]["target_value"] == "shared.corp-target.io"
     assert payload["scan_policy"]["min_start_source_count"] == 2
     assert payload["autostart_probe"]["status"] == "blocked"
     assert payload["next_actions"] == [

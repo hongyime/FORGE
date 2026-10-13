@@ -15,7 +15,12 @@ from typer.testing import CliRunner
 
 from forge.db.session import get_engagement_db
 import forge.targets_resume_candidates as resume_candidates
-from forge.targets_import import import_targets, load_target_feed
+from forge.targets_import import (
+    _canonical_domain_value,
+    _normalize_target_value,
+    import_targets,
+    load_target_feed,
+)
 from forge.targets_import_cli import register_target_import_commands
 from forge.targets_resume_candidates import (
     _run_resume_child,
@@ -203,6 +208,74 @@ def test_load_target_feed_rejects_code_identifiers_as_domains(
         "corp-target.io",
         "sub.example.co.uk",
         "api.example.io",
+    }
+
+
+def test_domain_canonicalizer_rejects_common_filename_extensions() -> None:
+    filename_values = ("image.png", "worker.py", "config.yml")
+    for value in filename_values:
+        assert _canonical_domain_value(value) == ""
+        for target_type in ("domain", "subdomain", "auto"):
+            assert _normalize_target_value(target_type, value) is None
+
+
+def test_domain_canonicalizer_keeps_common_and_colliding_real_tlds() -> None:
+    accepted_values = (
+        "example.com",
+        "www.example.org",
+        "api.example.io",
+        "example.dev",
+        "shop.example.co.uk",
+        "example.app",
+        "edge.api.example.com",
+        # Preserve real TLDs that also commonly appear as file suffixes.
+        "example.md",
+        "example.rs",
+        "example.sh",
+        "example.ai",
+        "example.so",
+        "example.zip",
+    )
+    for value in accepted_values:
+        assert _canonical_domain_value(value) == value
+        assert _normalize_target_value("domain", value) == ("domain", value)
+
+
+def test_load_target_feed_drops_filename_values_for_domain_subdomain_and_auto(
+    tmp_path: Path,
+) -> None:
+    feed_path = tmp_path / "filename-values.json"
+    values = ("image.png", "worker.py", "config.yml")
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [
+                    {"target_type": target_type, "target_value": value}
+                    for value in values
+                    for target_type in ("domain", "subdomain", "auto")
+                ]
+                + [
+                    {"target_type": "domain", "target_value": "corp-target.io"},
+                    {"target_type": "subdomain", "target_value": "api.example.io"},
+                    {"target_type": "auto", "target_value": "shop.example.co.uk"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    items = load_target_feed(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        limit=None,
+    )
+
+    assert {item.canonical_value for item in items} == {
+        "corp-target.io",
+        "api.example.io",
+        "shop.example.co.uk",
     }
 
 
