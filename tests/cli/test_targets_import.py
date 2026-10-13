@@ -154,6 +154,64 @@ def test_load_target_feed_drops_placeholder_hosts_and_subdomains(
     assert [item.canonical_value for item in items] == ["portal.corp-target.io"]
 
 
+def test_import_start_never_launches_denylisted_placeholder_targets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "placeholder-launch-feed.json"
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [
+                    {"target_type": "domain", "target_value": "company.com"},
+                    {"target_type": "domain", "target_value": "api.company.com"},
+                    {
+                        "target_type": "url",
+                        "target_value": "https://ui.test.com/login",
+                    },
+                    {"target_type": "email", "target_value": "ops@company.com"},
+                    {
+                        "target_type": "domain",
+                        "target_value": "portal.corp-target.io",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = _FakeConfig(tmp_path / "data")
+    calls: list[list[str]] = []
+
+    def _fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-TEST",
+        start=True,
+        dry_run=False,
+        limit=None,
+        max_iter=3,
+        start_limit=20,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert [result.target_value for result in results] == ["portal.corp-target.io"]
+    assert [result.started for result in results] == [True]
+    assert len(calls) == 1
+    assert calls[0][4] == "portal.corp-target.io"
+    assert not any(
+        placeholder in calls[0]
+        for placeholder in ("company.com", "api.company.com", "ui.test.com")
+    )
+
+
 def _write_candidate_run(
     db_path: Path,
     *,

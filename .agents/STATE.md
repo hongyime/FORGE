@@ -1,4 +1,12 @@
-# Current Task: Target feed, placeholder-domain, and rate-limit fixes (2026-10-13).
+# Current Task: Extend autopilot engagement capacity (2026-10-13).
+
+**Progress:** Raised autopilot `start_limit` to 20 and `max_runtime_minutes` to 60 in the dataclass and serialized defaults. Confirmed CLI flags remain optional overrides with fallback to base defaults; added default/override coverage. Traced placeholder denylist enforcement through feed build, auto-scope, `load_target_feed`, and engagement launch; added an import/start regression test proving placeholder hosts are filtered before launch. `cooldown_minutes` remains 30 and `min_start_source_count` remains 1. Requested suites passed: 144 passed, 0 failed. No live apply/loop was run.
+
+**Next:** Review the final diff, commit with the requested message, and push to `origin/main`.
+
+---
+
+# Previous Task: Target feed, placeholder-domain, and rate-limit fixes (2026-10-13).
 
 **Progress:** Retained the valid `automation_target_feed.py` cleanup that delegates to the schema-aware connected-services seed-drop extractor. Raised the autopilot import default to 25,000 and added `--import-limit` (`--limit` alias), threaded through build and import. Added exact/subdomain placeholder checks across seed extraction, feed construction/import, and scope expansion. Added shared bounded 429 and exhausted-403 backoff for GitHub and Supabase GET/Management API POST with reset/Retry-After handling, a 3-retry/120-second cap, and skip diagnostics. Existing tracked feed artifacts remain untouched; stale placeholder items are filtered before scope or engagement decisions. `nuclei-templates/` remains untracked and excluded.
 

@@ -724,3 +724,5 @@ Machine-specific values in this document use privacy placeholders.
 - 2026-09-30 10:09:35 +08:00 [PRAWN-E14/claude/stop] branch=main head=a2f9b5e dirty=0
 
 2026-10-13: Raised the autopilot feed default to 25,000, blocked placeholder domains before feed/scope/import decisions, and added bounded Retry-After/reset backoff for GitHub and Supabase rate limits; retained the existing connected-services extractor cleanup. Focused verification passed: 270 pytest tests, Ruff, and safe-mode dry-run (21,665 feed items); no live apply. Implementation commit `8c368621` was pushed and verified at `origin/main`; the vendored `nuclei-templates/` directory remains untracked.
+
+2026-10-13: Raised autopilot engagement defaults to 20 starts per pass and 60 minutes per run; confirmed optional CLI overrides and unchanged 30-minute cooldown / one-source threshold. Traced placeholder denial from feed build and auto-scope through import to launch, and added a mocked launch regression test. Requested unit suites passed (144 passed, 0 failed); no live apply or loop was run.

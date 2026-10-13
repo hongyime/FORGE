@@ -26,6 +26,7 @@ import typer
 from typer.testing import CliRunner
 
 from forge.autopilot import (
+    AUTOPILOT_DEFAULTS,
     AUTOPILOT_SCHEMA_VERSION,
     AutopilotDefaults,
     AutopilotPhaseResult,
@@ -108,9 +109,16 @@ def test_autopilot_defaults_are_sensible_and_bounded() -> None:
     assert d.min_free_disk_gb <= 5
     # Parallelism must be bounded so SQLite doesn't deadlock.
     assert 1 <= d.max_parallel <= 4
-    # Kill-chain budget matches README defaults.
+    # Keep the default engagement capacity aligned in both representations.
     assert d.max_iter == 7
-    assert d.max_runtime_minutes == 25
+    assert d.start_limit == 20
+    assert d.max_runtime_minutes == 60
+    assert AUTOPILOT_DEFAULTS["start_limit"] == 20
+    assert AUTOPILOT_DEFAULTS["max_runtime_minutes"] == 60
+    assert d.cooldown_minutes == 30
+    assert AUTOPILOT_DEFAULTS["cooldown_minutes"] == 30
+    assert d.min_start_source_count == 1
+    assert AUTOPILOT_DEFAULTS["min_start_source_count"] == 1
     assert d.import_limit == 25_000
     # Feed sources default to all so new operators get full coverage.
     assert d.feed_sources == ("all",)
@@ -600,6 +608,36 @@ def test_cli_describe_default_promotes_to_apply(
     assert payload["roe_id_present"] is True
     assert payload["defaults"]["default_roe_id"] == "ROE-1"
     assert payload["defaults"]["import_limit"] == 25_000
+    assert payload["defaults"]["start_limit"] == 20
+    assert payload["defaults"]["max_runtime_minutes"] == 60
+
+
+def test_cli_describe_accepts_start_and_runtime_overrides(tmp_path: Path) -> None:
+    app = _build_cli_app()
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "--describe",
+            "--json",
+            "--start-limit",
+            "4",
+            "--max-runtime-minutes",
+            "13",
+            "--data-dir",
+            str(tmp_path / "data"),
+            "--imports-dir",
+            str(tmp_path / "imports"),
+            "--reports-dir",
+            str(tmp_path / "reports"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["defaults"]["start_limit"] == 4
+    assert payload["defaults"]["max_runtime_minutes"] == 13
 
 
 def test_cli_describe_with_roe_promotes_to_apply(tmp_path: Path) -> None:

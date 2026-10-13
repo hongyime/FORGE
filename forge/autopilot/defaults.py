@@ -9,8 +9,8 @@ no-config, run-it-and-walk-away use case:
 - Resume parallelism is 2 to balance throughput against the SQLite lock
   contention that happens when more than a handful of kill-chain runs
   share a data dir.
-- Max runtime per started target is 25 minutes to match the kill-chain
-  default soft budget documented in README.md.
+- Max runtime per started target is 60 minutes to match the requested
+  autopilot engagement budget.
 - Kill-chain max-iter 7 matches the ``forge kill-chain`` default.
 - Feed source selector is ``all`` so every available source — db,
   reports, cti, connectors, supabase — contributes to the daily feed.
@@ -44,14 +44,14 @@ class AutopilotDefaults:
     #: Maximum feed items selected per cycle after merging and dedupe.
     import_limit: int = 25_000
     #: Maximum new kill-chain runs launched by one import pass.
-    start_limit: int = 5
+    start_limit: int = 20
     #: Minimum independent source count required before --start may
     #: launch a live kill-chain run.
     min_start_source_count: int = 1
     #: Kill-chain iteration budget passed through to each started run.
     max_iter: int = 7
     #: Soft runtime budget (minutes) per started kill-chain run.
-    max_runtime_minutes: int = 25
+    max_runtime_minutes: int = 60
     #: Maximum resume candidates processed per cycle.
     resume_limit: int = 10
     #: Resume parallelism cap. Keep low to avoid SQLite lock contention.
@@ -90,10 +90,10 @@ class AutopilotDefaults:
 #: Dict-form of :data:`AutopilotDefaults`, convenient for serialization.
 AUTOPILOT_DEFAULTS: dict[str, object] = {
     "import_limit": 25_000,
-    "start_limit": 5,
+    "start_limit": 20,
     "min_start_source_count": 1,
     "max_iter": 7,
-    "max_runtime_minutes": 25,
+    "max_runtime_minutes": 60,
     "resume_limit": 10,
     "max_parallel": 2,
     "monitor_limit": 10,
