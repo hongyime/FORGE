@@ -25,10 +25,9 @@ Design constraints:
   pipe the output directly into ``forge targets import --feed-file``.
 
 Rate limiting: the scanner stops after ``max_repos`` repositories per
-org/user and surfaces ``X-RateLimit-Remaining`` / ``X-RateLimit-Reset``
-headers in :attr:`GitHubSpiderResult.rate_limit`. Live calls that fail
-with an HTTP 403/429 return a partial result annotated with the error
-rather than raising; the caller decides how to proceed.
+org/user, records quota headers, and retries 429s or 403s with an
+exhausted primary quota using bounded backoff. Requests are skipped when
+their retry count or total wait budget is reached.
 """
 
 from __future__ import annotations
@@ -44,8 +43,10 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 from forge.onboard.patterns import (
     DENY_LIST_DOMAINS,
     extract_seeds_from_text as _patterns_extract_seeds,
+    is_denied_target,
     scan_secrets as _patterns_scan_secrets,
 )
+from forge.onboard.rate_limit import request_with_rate_limit_backoff
 
 
 GITHUB_SPIDER_SCHEMA_VERSION = "forge.github_spider.v2"
@@ -1244,7 +1245,12 @@ class GitHubDeepScanner:
         """Invoke the injected HTTP getter with error containment."""
         result.record_endpoint(url)
         try:
-            response = self._http(url, headers=dict(self.headers))
+            backoff = request_with_rate_limit_backoff(
+                lambda: self._http(url, headers=dict(self.headers)),
+                context=context,
+                on_response=lambda item: _record_response_rate_limit(result, item),
+            )
+            response = backoff.response
         except Exception as exc:  # noqa: BLE001
             result.source_errors.append(
                 {
@@ -1253,6 +1259,18 @@ class GitHubDeepScanner:
                 }
             )
             return None
+        if backoff.events:
+            result.rate_limit.setdefault("backoff_events", []).extend(backoff.events)
+        if backoff.skipped:
+            result.source_errors.append(
+                {
+                    "context": context,
+                    "detail": "rate_limit_request_skipped",
+                    "reason": backoff.skip_reason,
+                    "status": _response_status(response),
+                    "total_wait_seconds": round(backoff.total_wait_seconds, 3),
+                }
+            )
         if not isinstance(response, Mapping):
             result.source_errors.append(
                 {
@@ -1261,10 +1279,7 @@ class GitHubDeepScanner:
                 }
             )
             return None
-        headers_dict = response.get("headers") or {}
-        if isinstance(headers_dict, Mapping):
-            _record_rate_limit(result, headers_dict)
-        status = int(response.get("status", 0))
+        status = _response_status(response)
         if status >= 400:
             result.source_errors.append(
                 {
@@ -1296,7 +1311,7 @@ class GitHubDeepScanner:
             )
             if not key[0] or not key[1]:
                 continue
-            if key[1] in _HOST_DENYLIST and key[0] in {"domain", "url"}:
+            if is_denied_target(key[1]):
                 continue
             unique.setdefault(key, seed)
         result.seeds = list(unique.values())
@@ -1397,6 +1412,23 @@ def _record_rate_limit(result: GitHubSpiderResult, headers: Mapping[str, Any]) -
             result.rate_limit["reset"] = value
         elif header.lower() == "x-ratelimit-used":
             result.rate_limit["used"] = value
+
+
+def _record_response_rate_limit(
+    result: GitHubSpiderResult, response: Mapping[str, Any]
+) -> None:
+    headers = response.get("headers") or {}
+    if isinstance(headers, Mapping):
+        _record_rate_limit(result, headers)
+
+
+def _response_status(response: object) -> int:
+    if not isinstance(response, Mapping):
+        return 0
+    try:
+        return int(response.get("status", 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
 
 
 def _decode_github_file(

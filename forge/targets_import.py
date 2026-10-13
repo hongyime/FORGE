@@ -20,6 +20,7 @@ from forge.config import ForgeConfig
 from forge.db.control import index_engagement_db_file
 from forge.db.session import get_engagement_db
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
+from forge.onboard.patterns import is_denied_target
 from forge.subprocess_tree import run_contained_subprocess
 
 TARGET_FEED_SCHEMA_VERSION = "target-feed.v1"
@@ -335,6 +336,8 @@ def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
     if raw_target_type not in SUPPORTED_TARGET_TYPES:
         return None
     target_value = str(raw_item.get("target_value") or "").strip()
+    if is_denied_target(target_value):
+        return None
     try:
         normalized = _normalize_target_value(raw_target_type, target_value)
     except ValueError:
@@ -342,6 +345,8 @@ def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
     if normalized is None:
         return None
     target_type, canonical_value = normalized
+    if is_denied_target(canonical_value):
+        return None
     target_key = external_target_key(target_type, canonical_value)
     source_group = _bounded_text(
         raw_item.get("source_group") or raw_item.get("source_kind"), 120

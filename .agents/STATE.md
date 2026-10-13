@@ -1,8 +1,8 @@
-# Current Task: Add Supabase Management API PAT transport — VERIFIED (2026-10-12).
+# Current Task: Target feed, placeholder-domain, and rate-limit fixes (2026-10-13).
 
-**Progress:** Added the Management API transport, PAT-only connection registration, CLI flags, autopilot PAT fallback, and transport metadata. Focused scanner, autopilot, CLI, and connection tests passed: 80 tests; Ruff lint passed. A bounded live scan found 41 tables, scanned 10,249 rows, extracted 27,634 seeds and 2 secret hits, with 0 source errors. The dedicated autopilot scan returned `ok` with the same counts; the seed drop records `management_api`. Verified with pytest, Ruff, and value-free scan summaries.
+**Progress:** Retained the valid `automation_target_feed.py` cleanup that delegates to the schema-aware connected-services seed-drop extractor. Raised the autopilot import default to 25,000 and added `--import-limit` (`--limit` alias), threaded through build and import. Added exact/subdomain placeholder checks across seed extraction, feed construction/import, and scope expansion. Added shared bounded 429 and exhausted-403 backoff for GitHub and Supabase GET/Management API POST with reset/Retry-After handling, a 3-retry/120-second cap, and skip diagnostics. Existing tracked feed artifacts remain untouched; stale placeholder items are filtered before scope or engagement decisions. `nuclei-templates/` remains untracked and excluded.
 
-The stored Supabase connection now contains `project_ref` and the `management_pat` credential only; the obsolete key is absent, and the local connection file is mode `0600`. Verified by reading only connection field names, credential source names, and file mode.
+**Verification:** 270 focused pytest tests passed; Ruff passed. `FORGE_SAFE_MODE=1 ./forge-autopilot.sh --dry-run` completed successfully and reported 21,665 feed items. No live `--apply` was run. Changes are ready for the approved commit and push to `origin/main`.
 
 ---
 

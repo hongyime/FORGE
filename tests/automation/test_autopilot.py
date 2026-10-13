@@ -83,7 +83,7 @@ def _write_feed(path: Path, *, items: list[dict[str, Any]] | None = None) -> Non
         or [
             {
                 "target_type": "domain",
-                "target_value": "example.com",
+                "target_value": "corp-target.io",
                 "source_kind": "test",
                 "confidence": 0.9,
                 "first_seen_at": "2026-08-07T00:00:00Z",
@@ -111,6 +111,7 @@ def test_autopilot_defaults_are_sensible_and_bounded() -> None:
     # Kill-chain budget matches README defaults.
     assert d.max_iter == 7
     assert d.max_runtime_minutes == 25
+    assert d.import_limit == 25_000
     # Feed sources default to all so new operators get full coverage.
     assert d.feed_sources == ("all",)
     # Baked-in defaults so autopilot runs out of the box.
@@ -272,9 +273,9 @@ def _install_safe_component_patches(monkeypatch: pytest.MonkeyPatch) -> dict[str
             "items": [
                 {
                     "target_type": "domain",
-                    "target_value": "example.com",
-                    "canonical_value": "example.com",
-                    "target_key": "domain:example.com",
+                    "target_value": "corp-target.io",
+                    "canonical_value": "corp-target.io",
+                    "target_key": "domain:corp-target.io",
                     "source_kind": "test",
                     "confidence": 0.9,
                     "first_seen_at": "2026-08-07T00:00:00Z",
@@ -598,6 +599,7 @@ def test_cli_describe_default_promotes_to_apply(
     assert payload["default_execution_mode"] == "apply"
     assert payload["roe_id_present"] is True
     assert payload["defaults"]["default_roe_id"] == "ROE-1"
+    assert payload["defaults"]["import_limit"] == 25_000
 
 
 def test_cli_describe_with_roe_promotes_to_apply(tmp_path: Path) -> None:
@@ -859,6 +861,7 @@ def test_cli_feed_source_flag_merges_into_defaults(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     counters = _install_safe_component_patches(monkeypatch)
+    _write_feed(tmp_path / "imports" / "target-feed.json")
     app = _build_cli_app()
     runner = CliRunner()
 
@@ -870,6 +873,8 @@ def test_cli_feed_source_flag_merges_into_defaults(
             "db",
             "--feed-source",
             "reports",
+            "--import-limit",
+            "4321",
             "--json",
             "--data-dir",
             str(tmp_path / "data"),
@@ -884,3 +889,5 @@ def test_cli_feed_source_flag_merges_into_defaults(
     assert counters["build_target_feed_calls"]
     call = counters["build_target_feed_calls"][0]
     assert call["sources"] == ["db", "reports"]
+    assert call["limit"] == 4321
+    assert counters["import_targets_calls"][0]["limit"] == 4321

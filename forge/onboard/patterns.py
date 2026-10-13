@@ -111,14 +111,17 @@ PATTERNS: dict[str, str] = {
 }
 
 
-#: Hostnames we never promote to the operator target feed. Localhost,
-#: GitHub infrastructure, package registries, and well-known CDNs are
-#: filtered out. Operators who legitimately own ``example.com`` can
-#: still add it manually via :mod:`forge.onboard.target_wizard`.
+#: Hostnames we never promote to the operator target feed. Entries are
+#: matched exactly and as parent domains, so ``api.company.com`` is
+#: filtered whenever ``company.com`` is listed here.
 DENY_LIST_DOMAINS: frozenset[str] = frozenset(
     {
         # Loopback / unspecified
         "localhost",
+        "localhost.localdomain",
+        "test",
+        "example",
+        "invalid",
         "127.0.0.1",
         "0.0.0.0",
         "::1",
@@ -138,6 +141,12 @@ DENY_LIST_DOMAINS: frozenset[str] = frozenset(
         "example.org",
         "example.net",
         "test.com",
+        "company.com",
+        "contoso.com",
+        "sample.com",
+        "yourcompany.com",
+        "mycompany.com",
+        "your-company.com",
         "placeholder.com",
         "foo.bar",
         "your-domain.com",
@@ -185,6 +194,31 @@ DENY_LIST_DOMAINS: frozenset[str] = frozenset(
         "schemas.openxmlformats.org",
         "www.w3.org",
         "www.rfc-editor.org",
+    }
+)
+
+
+#: Placeholder/example hosts rejected at seed, scope-expansion, and import gates.
+PLACEHOLDER_DENY_LIST_DOMAINS: frozenset[str] = frozenset(
+    {
+        "localhost",
+        "localhost.localdomain",
+        "test",
+        "example",
+        "invalid",
+        "example.com",
+        "example.org",
+        "example.net",
+        "test.com",
+        "company.com",
+        "contoso.com",
+        "sample.com",
+        "yourcompany.com",
+        "mycompany.com",
+        "your-company.com",
+        "placeholder.com",
+        "foo.bar",
+        "your-domain.com",
     }
 )
 
@@ -341,9 +375,9 @@ def extract_seeds_from_text(
 
             {
                 "target_type": "domain",     # feed-compatible key
-                "target_value": "api.example.com",
+                "target_value": "api.corp-target.io",
                 "type": "domain",            # short alias
-                "value": "api.example.com",
+                "value": "api.corp-target.io",
                 "confidence": "medium",
                 "source_kind": "github_spider",
                 "source_group": "github_spider",
@@ -376,6 +410,37 @@ def extract_seeds_from_text(
                 seen.add(key)
                 results.append(payload)
     return results
+
+
+def is_denied_domain(
+    value: str, *, deny_domains: Iterable[str] | None = None
+) -> bool:
+    """Return whether ``value`` is a denied hostname or its subdomain."""
+    host = _normalize_host(value)
+    if not host:
+        return False
+    deny = (
+        DENY_LIST_DOMAINS
+        if deny_domains is None
+        else frozenset(_normalize_host(domain) for domain in deny_domains)
+    )
+    return any(host == domain or host.endswith(f".{domain}") for domain in deny)
+
+
+def is_denied_target(value: str) -> bool:
+    """Return whether a URL, domain, or email targets a denied hostname."""
+    text = str(value or "").strip()
+    if not text or text.startswith("cloud_ref:"):
+        return False
+    if "@" in text and "://" not in text:
+        host = text.rsplit("@", 1)[-1]
+    else:
+        try:
+            parsed = urlsplit(text if "://" in text else f"//{text}")
+        except ValueError:
+            return False
+        host = parsed.hostname or ""
+    return is_denied_domain(host, deny_domains=PLACEHOLDER_DENY_LIST_DOMAINS)
 
 
 def scan_secrets(
@@ -493,12 +558,12 @@ def _emit_candidates(
 
     if name == "url":
         host = _host_from_url(cleaned)
-        if not host or host in deny:
+        if not host or is_denied_domain(host, deny_domains=deny):
             return []
         out: list[dict[str, Any]] = [
             _make_seed("url", cleaned, confidence, source_label, now, host=host),
         ]
-        if host not in deny:
+        if not is_denied_domain(host, deny_domains=deny):
             out.append(
                 _make_seed(
                     "domain",
@@ -511,7 +576,7 @@ def _emit_candidates(
         return out
     if name == "domain":
         host = cleaned.lower().strip(".").lstrip("*.")
-        if not host or host in deny:
+        if not host or is_denied_domain(host, deny_domains=deny):
             return []
         # Guard against domains that would validate as IPs.
         try:
@@ -537,6 +602,9 @@ def _emit_candidates(
             return []
         return [_make_seed("ipv6", value, confidence, source_label, now)]
     if name == "email":
+        email_host = cleaned.rsplit("@", 1)[-1].lower()
+        if is_denied_domain(email_host, deny_domains=deny):
+            return []
         return [_make_seed("email", cleaned.lower(), confidence, source_label, now)]
     if name == "phone_e164":
         return [_make_seed("phone", cleaned, confidence, source_label, now)]
@@ -729,8 +797,11 @@ __all__ = [
     "DENY_LIST_DOMAINS",
     "PATTERNS",
     "PATTERNS_SCHEMA_VERSION",
+    "PLACEHOLDER_DENY_LIST_DOMAINS",
     "SECRET_INDICATORS",
     "classify_cloud_reference",
     "extract_seeds_from_text",
+    "is_denied_domain",
+    "is_denied_target",
     "scan_secrets",
 ]

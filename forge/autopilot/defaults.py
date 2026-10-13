@@ -41,8 +41,8 @@ class AutopilotDefaults:
     by constructing a new instance with ``dataclasses.replace``.
     """
 
-    #: Maximum feed items imported per cycle (before dedupe).
-    import_limit: int = 100
+    #: Maximum feed items selected per cycle after merging and dedupe.
+    import_limit: int = 25_000
     #: Maximum new kill-chain runs launched by one import pass.
     start_limit: int = 5
     #: Minimum independent source count required before --start may
@@ -89,7 +89,7 @@ class AutopilotDefaults:
 
 #: Dict-form of :data:`AutopilotDefaults`, convenient for serialization.
 AUTOPILOT_DEFAULTS: dict[str, object] = {
-    "import_limit": 100,
+    "import_limit": 25_000,
     "start_limit": 5,
     "min_start_source_count": 1,
     "max_iter": 7,

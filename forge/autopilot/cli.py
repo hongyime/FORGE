@@ -114,8 +114,12 @@ def register_autopilot_commands(app: typer.Typer) -> None:
         ),
         import_limit: Optional[int] = typer.Option(
             None,
+            "--import-limit",
             "--limit",
-            help="Maximum feed items imported per cycle.",
+            help=(
+                "Maximum feed items imported per cycle (default: 25000; "
+                "--limit is an alias)."
+            ),
         ),
         resume_limit: Optional[int] = typer.Option(
             None,

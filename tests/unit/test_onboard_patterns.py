@@ -17,6 +17,8 @@ from forge.onboard.patterns import (
     SECRET_INDICATORS,
     classify_cloud_reference,
     extract_seeds_from_text,
+    is_denied_domain,
+    is_denied_target,
     scan_secrets,
 )
 
@@ -71,7 +73,36 @@ def test_deny_list_blocks_github_infra_and_test_domains() -> None:
     assert "raw.githubusercontent.com" in DENY_LIST_DOMAINS
     assert "api.github.com" in DENY_LIST_DOMAINS
     assert "example.com" in DENY_LIST_DOMAINS
+    assert "example.org" in DENY_LIST_DOMAINS
+    assert "example.net" in DENY_LIST_DOMAINS
+    assert "test.com" in DENY_LIST_DOMAINS
+    assert "company.com" in DENY_LIST_DOMAINS
     assert "localhost" in DENY_LIST_DOMAINS
+
+
+def test_placeholder_denylist_blocks_exact_hosts_and_subdomains() -> None:
+    for value in (
+        "company.com",
+        "api.company.com",
+        "example.org",
+        "portal.example.org",
+        "test.com",
+        "localhost",
+        "api.localhost",
+        "localhost.localdomain",
+        "https://docs.example.net/setup",
+        "operator@company.com",
+    ):
+        assert is_denied_target(value)
+        assert not extract_seeds_from_text(value)
+
+
+def test_placeholder_denylist_does_not_block_legitimate_domains() -> None:
+    assert not is_denied_domain("corp-target.io")
+    assert not is_denied_target("api.corp-target.io")
+    assert not is_denied_target("https://api.corp-target.io/status")
+    seeds = extract_seeds_from_text("https://api.corp-target.io/status")
+    assert any(seed["target_value"] == "api.corp-target.io" for seed in seeds)
 
 
 # ---------------------------------------------------------------------------

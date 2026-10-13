@@ -36,8 +36,10 @@ from urllib.parse import urlsplit
 from forge.onboard.patterns import (
     classify_cloud_reference,
     extract_seeds_from_text,
+    is_denied_target,
     scan_secrets,
 )
+from forge.onboard.rate_limit import request_with_rate_limit_backoff
 
 
 SUPABASE_DEEP_SCANNER_SCHEMA_VERSION = "forge.supabase_deep_scanner.v1"
@@ -114,6 +116,7 @@ class SupabaseScanResult:
     secret_hits: list[dict[str, Any]] = field(default_factory=list)
     tables: list[SupabaseTableSummary] = field(default_factory=list)
     source_errors: list[dict[str, Any]] = field(default_factory=list)
+    rate_limit: dict[str, Any] = field(default_factory=dict)
     endpoints_called: list[str] = field(default_factory=list)
     started_at: str = ""
     finished_at: str = ""
@@ -567,7 +570,11 @@ class SupabaseDeepScanner:
         if len(result.endpoints_called) < 2000:
             result.endpoints_called.append(url)
         try:
-            response = self._http(url, headers=dict(self.headers))
+            response = self._request_with_backoff(
+                lambda: self._http(url, headers=dict(self.headers)),
+                result=result,
+                context=context,
+            )
         except Exception as exc:  # noqa: BLE001
             result.source_errors.append(
                 {
@@ -581,7 +588,7 @@ class SupabaseDeepScanner:
                 {"context": context, "detail": "http_get did not return a mapping"}
             )
             return None
-        status = int(response.get("status", 0))
+        status = _response_status(response)
         if status >= 400:
             result.source_errors.append(
                 {"context": context, "detail": f"HTTP {status}"}
@@ -604,13 +611,17 @@ class SupabaseDeepScanner:
         if len(result.endpoints_called) < 2000:
             result.endpoints_called.append(url)
         try:
-            response = self._http_post(
-                url,
-                body={"query": query},
-                headers={
-                    "Authorization": f"Bearer {self._management_pat}",
-                    "Content-Type": "application/json",
-                },
+            response = self._request_with_backoff(
+                lambda: self._http_post(
+                    url,
+                    body={"query": query},
+                    headers={
+                        "Authorization": f"Bearer {self._management_pat}",
+                        "Content-Type": "application/json",
+                    },
+                ),
+                result=result,
+                context=context,
             )
         except Exception:
             result.source_errors.append(
@@ -623,7 +634,7 @@ class SupabaseDeepScanner:
             )
             return None
         try:
-            status = int(response.get("status", 0))
+            status = _response_status(response)
         except (TypeError, ValueError, OverflowError):
             result.source_errors.append(
                 {"context": context, "detail": "invalid_http_status"}
@@ -635,6 +646,32 @@ class SupabaseDeepScanner:
             )
             return None
         return dict(response)
+
+    def _request_with_backoff(
+        self,
+        request: Callable[[], Any],
+        *,
+        result: SupabaseScanResult,
+        context: str,
+    ) -> Any:
+        backoff = request_with_rate_limit_backoff(
+            request,
+            context=context,
+            on_response=lambda item: _record_supabase_rate_limit(result, item),
+        )
+        if backoff.events:
+            result.rate_limit.setdefault("backoff_events", []).extend(backoff.events)
+        if backoff.skipped:
+            result.source_errors.append(
+                {
+                    "context": context,
+                    "detail": "rate_limit_request_skipped",
+                    "reason": backoff.skip_reason,
+                    "status": _response_status(backoff.response),
+                    "total_wait_seconds": round(backoff.total_wait_seconds, 3),
+                }
+            )
+        return backoff.response
 
     # ------------------------------------------------------------------
     # Final cleanup
@@ -649,6 +686,8 @@ class SupabaseDeepScanner:
                 str(seed.get("target_value") or ""),
             )
             if not key[0] or not key[1]:
+                continue
+            if is_denied_target(key[1]):
                 continue
             unique.setdefault(key, seed)
         result.seeds = list(unique.values())
@@ -810,6 +849,31 @@ def _default_http_post(
         "json": payload,
         "text": text,
     }
+
+
+def _record_supabase_rate_limit(
+    result: SupabaseScanResult, response: Mapping[str, Any]
+) -> None:
+    headers = response.get("headers") or {}
+    if not isinstance(headers, Mapping):
+        return
+    for key, value in headers.items():
+        header = str(key).lower()
+        if header == "x-ratelimit-remaining":
+            result.rate_limit["remaining"] = value
+        elif header == "x-ratelimit-reset":
+            result.rate_limit["reset"] = value
+        elif header == "x-ratelimit-used":
+            result.rate_limit["used"] = value
+
+
+def _response_status(response: object) -> int:
+    if not isinstance(response, Mapping):
+        return 0
+    try:
+        return int(response.get("status", 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
 
 
 def _now_iso() -> str:

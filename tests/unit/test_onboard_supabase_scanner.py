@@ -14,6 +14,7 @@ import pytest
 from forge.onboard.supabase_scanner import (
     SUPABASE_DEEP_SCANNER_SCHEMA_VERSION,
     SupabaseDeepScanner,
+    SupabaseScanResult,
     SupabaseScannerError,
 )
 
@@ -57,6 +58,103 @@ class _MockPost:
     ) -> dict[str, Any]:
         self.called.append((url, dict(body), dict(headers)))
         return self.responder(url, body, headers)
+
+
+def test_supabase_http_layer_retries_429_and_records_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        "forge.onboard.rate_limit.time.sleep", lambda seconds: sleeps.append(seconds)
+    )
+    responses = iter(
+        [
+            {"status": 429, "headers": {"Retry-After": "4"}, "json": {}},
+            {"status": 200, "headers": {}, "json": {"paths": {}}},
+        ]
+    )
+    scanner = SupabaseDeepScanner(
+        "abc123",
+        "key",
+        http_get=lambda _url, *, headers: next(responses),
+    )
+    result = SupabaseScanResult(project_ref="abc123")
+
+    response = scanner._call(
+        "https://abc123.supabase.co/rest/v1/",
+        result=result,
+        context="discover_tables",
+    )
+
+    assert response is not None and response["status"] == 200
+    assert sleeps == [4.0]
+    assert result.rate_limit["backoff_events"][0]["context"] == "discover_tables"
+
+
+def test_supabase_management_post_uses_rate_limit_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        "forge.onboard.rate_limit.time.sleep", lambda seconds: sleeps.append(seconds)
+    )
+    responses = iter(
+        [
+            {"status": 429, "headers": {"Retry-After": "3"}, "json": {}},
+            {"status": 200, "headers": {}, "json": []},
+        ]
+    )
+    scanner = SupabaseDeepScanner(
+        "abc123",
+        management_pat="hidden-value",
+        http_post=lambda _url, *, body, headers: next(responses),
+    )
+    result = SupabaseScanResult(project_ref="abc123")
+
+    response = scanner._management_query("select 1", result=result, context="query")
+
+    assert response is not None and response["status"] == 200
+    assert sleeps == [3.0]
+
+
+def test_supabase_wait_cap_records_skipped_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge.onboard.rate_limit import request_with_rate_limit_backoff as retry
+
+    def _short_budget(request: Any, **kwargs: Any) -> Any:
+        kwargs["max_total_wait_seconds"] = 1
+        kwargs["sleep_fn"] = lambda _seconds: None
+        return retry(request, **kwargs)
+
+    monkeypatch.setattr(
+        "forge.onboard.supabase_scanner.request_with_rate_limit_backoff",
+        _short_budget,
+    )
+    scanner = SupabaseDeepScanner(
+        "abc123",
+        "key",
+        http_get=lambda _url, *, headers: {
+            "status": 429,
+            "headers": {"Retry-After": "2"},
+            "json": {},
+        },
+    )
+    result = SupabaseScanResult(project_ref="abc123")
+
+    response = scanner._call(
+        "https://abc123.supabase.co/rest/v1/",
+        result=result,
+        context="discover_tables",
+    )
+
+    assert response is None
+    assert result.rate_limit["backoff_events"][-1]["reason"] == "total_wait_cap"
+    assert any(
+        error["detail"] == "rate_limit_request_skipped"
+        and error["reason"] == "total_wait_cap"
+        for error in result.source_errors
+    )
 
 
 # ---------------------------------------------------------------------------

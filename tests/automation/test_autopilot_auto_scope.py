@@ -81,7 +81,7 @@ def test_auto_scope_skipped_without_feed_file(tmp_path: Path) -> None:
     manifest = tmp_path / "manifests" / "default.json"
     manifest.parent.mkdir(parents=True)
     manifest.write_text(
-        json.dumps({"domains": ["example.com"], "urls": [], "ip_ranges": []}),
+        json.dumps({"domains": ["corp-target.io"], "urls": [], "ip_ranges": []}),
         encoding="utf-8",
     )
     autopilot = _mk_autopilot(tmp_path, scope_manifest=manifest)
@@ -96,7 +96,7 @@ def test_auto_scope_expands_subdomain_of_scoped_domain(tmp_path: Path) -> None:
     manifest.write_text(
         json.dumps(
             {
-                "domains": ["example.com"],
+                "domains": ["corp-target.io"],
                 "urls": [],
                 "ip_ranges": [],
                 "authorized_seeds": [],
@@ -108,7 +108,7 @@ def test_auto_scope_expands_subdomain_of_scoped_domain(tmp_path: Path) -> None:
     _write_feed(
         autopilot.feed_file,
         items=[
-            {"target_type": "domain", "target_value": "api.example.com"},
+            {"target_type": "domain", "target_value": "api.corp-target.io"},
             {"target_type": "domain", "target_value": "unrelated.net"},
         ],
     )
@@ -117,28 +117,52 @@ def test_auto_scope_expands_subdomain_of_scoped_domain(tmp_path: Path) -> None:
     assert result.data["accepted_count"] == 1
     assert result.data["review_required_count"] == 1
     stored = json.loads(manifest.read_text(encoding="utf-8"))
-    assert "api.example.com" in stored["domains"]
+    assert "api.corp-target.io" in stored["domains"]
+
+
+def test_auto_scope_skips_placeholder_hosts_from_stale_feed(tmp_path: Path) -> None:
+    manifest = tmp_path / "manifests" / "default.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(
+        json.dumps({"domains": ["corp-target.io"], "urls": [], "ip_ranges": []}),
+        encoding="utf-8",
+    )
+    autopilot = _mk_autopilot(tmp_path, scope_manifest=manifest)
+    _write_feed(
+        autopilot.feed_file,
+        items=[
+            {"target_type": "domain", "target_value": "company.com"},
+            {"target_type": "domain", "target_value": "api.company.com"},
+        ],
+    )
+
+    result = autopilot._phase_auto_scope(dry_run=False)
+
+    assert result.status == "ok"
+    assert result.data["accepted_count"] == 0
+    stored = json.loads(manifest.read_text(encoding="utf-8"))
+    assert stored["domains"] == ["corp-target.io"]
 
 
 def test_auto_scope_dry_run_does_not_write(tmp_path: Path) -> None:
     manifest = tmp_path / "manifests" / "default.json"
     manifest.parent.mkdir(parents=True)
     manifest.write_text(
-        json.dumps({"domains": ["example.com"]}),
+        json.dumps({"domains": ["corp-target.io"]}),
         encoding="utf-8",
     )
     pre_mtime = manifest.stat().st_mtime_ns
     autopilot = _mk_autopilot(tmp_path, scope_manifest=manifest)
     _write_feed(
         autopilot.feed_file,
-        items=[{"target_type": "domain", "target_value": "api.example.com"}],
+        items=[{"target_type": "domain", "target_value": "api.corp-target.io"}],
     )
     result = autopilot._phase_auto_scope(dry_run=True)
     assert result.status == "ok"
     assert result.data["dry_run"] is True
     assert manifest.stat().st_mtime_ns == pre_mtime
     stored = json.loads(manifest.read_text(encoding="utf-8"))
-    assert stored["domains"] == ["example.com"]
+    assert stored["domains"] == ["corp-target.io"]
 
 
 def test_auto_scope_in_full_pass_appears_after_feed_build(tmp_path: Path) -> None:
@@ -146,13 +170,13 @@ def test_auto_scope_in_full_pass_appears_after_feed_build(tmp_path: Path) -> Non
     manifest = tmp_path / "manifests" / "default.json"
     manifest.parent.mkdir(parents=True)
     manifest.write_text(
-        json.dumps({"domains": ["example.com"]}),
+        json.dumps({"domains": ["corp-target.io"]}),
         encoding="utf-8",
     )
     autopilot = _mk_autopilot(tmp_path, scope_manifest=manifest, safe_mode=True)
     _write_feed(
         autopilot.feed_file,
-        items=[{"target_type": "domain", "target_value": "api.example.com"}],
+        items=[{"target_type": "domain", "target_value": "api.corp-target.io"}],
     )
     payload = autopilot.run_once()  # safe_mode forces dry-run
     phase_names = [p["name"] for p in payload["phases"]]

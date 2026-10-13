@@ -15,7 +15,9 @@ import pytest
 
 from forge.onboard.github_spider import (
     GITHUB_SPIDER_SCHEMA_VERSION,
+    GitHubDeepScanner,
     GitHubSpiderError,
+    GitHubSpiderResult,
     extract_seeds_from_text,
     parse_github_repo_payload,
     spider_github,
@@ -29,16 +31,23 @@ from forge.onboard.github_spider import (
 
 def test_extract_seeds_from_text_finds_urls_domains_ips_emails() -> None:
     text = (
-        "Our dashboard lives at https://app.example.com/login. "
-        "DNS entry api.example.com. Internal 10.0.0.5 and admin@example.com."
+        "Our dashboard lives at https://app.corp-target.io/login. "
+        "DNS entry api.corp-target.io. Internal 10.0.0.5 and admin@corp-target.io."
     )
     seeds = extract_seeds_from_text(text, source_label="readme")
     types = {(s["target_type"], s["target_value"]) for s in seeds}
-    assert ("url", "https://app.example.com/login") in types
-    assert ("domain", "app.example.com") in types
-    assert ("domain", "api.example.com") in types
+    assert ("url", "https://app.corp-target.io/login") in types
+    assert ("domain", "app.corp-target.io") in types
+    assert ("domain", "api.corp-target.io") in types
     assert ("ipv4", "10.0.0.5") in types
-    assert ("email", "admin@example.com") in types
+    assert ("email", "admin@corp-target.io") in types
+
+
+def test_spider_extraction_blocks_placeholder_domain_subdomains() -> None:
+    seeds = extract_seeds_from_text(
+        "company.com api.company.com https://portal.example.org/docs"
+    )
+    assert seeds == []
 
 
 def test_extract_seeds_from_text_denylist_strips_github_hosts() -> None:
@@ -74,14 +83,14 @@ def test_parse_github_repo_payload_extracts_homepage_and_description() -> None:
     payload = {
         "full_name": "myorg/webapp",
         "name": "webapp",
-        "description": "Routes traffic through api.example.com",
-        "homepage": "https://portal.example.com",
+        "description": "Routes traffic through api.corp-target.io",
+        "homepage": "https://portal.corp-target.io",
     }
     seeds, secrets = parse_github_repo_payload(payload)
     types = {(s["target_type"], s["target_value"]) for s in seeds}
-    assert ("url", "https://portal.example.com") in types
-    assert ("domain", "portal.example.com") in types
-    assert ("domain", "api.example.com") in types
+    assert ("url", "https://portal.corp-target.io") in types
+    assert ("domain", "portal.corp-target.io") in types
+    assert ("domain", "api.corp-target.io") in types
     assert secrets == []
 
 
@@ -109,15 +118,15 @@ def test_parse_github_repo_payload_scans_workflow_files() -> None:
         {
             "name": "deploy.yml",
             "path": ".github/workflows/deploy.yml",
-            "content": "runs-on: ubuntu-latest\nurl: https://ci.example.com/webhook",
+            "content": "runs-on: ubuntu-latest\nurl: https://ci.corp-target.io/webhook",
         }
     ]
     seeds, _ = parse_github_repo_payload(
         {"full_name": "myorg/webapp"},
         workflows=workflows,
     )
-    assert any(s["target_value"] == "https://ci.example.com/webhook" for s in seeds)
-    assert any(s["target_value"] == "ci.example.com" for s in seeds)
+    assert any(s["target_value"] == "https://ci.corp-target.io/webhook" for s in seeds)
+    assert any(s["target_value"] == "ci.corp-target.io" for s in seeds)
 
 
 # ---------------------------------------------------------------------------
@@ -163,8 +172,8 @@ def test_spider_github_scans_mock_repos_and_extracts_seeds() -> None:
         {
             "full_name": "myorg/webapp",
             "name": "webapp",
-            "description": "Hosted at api.example.com",
-            "homepage": "https://portal.example.com",
+            "description": "Hosted at api.corp-target.io",
+            "homepage": "https://portal.corp-target.io",
         },
         {
             "full_name": "myorg/other",
@@ -175,7 +184,7 @@ def test_spider_github_scans_mock_repos_and_extracts_seeds() -> None:
     ]
     readme_payload = {
         "encoding": "base64",
-        "content": _b64("Internal api at 10.0.0.5 and admin@example.com"),
+        "content": _b64("Internal api at 10.0.0.5 and admin@corp-target.io"),
     }
     workflows_listing = [
         {
@@ -185,7 +194,7 @@ def test_spider_github_scans_mock_repos_and_extracts_seeds() -> None:
             "download_url": "https://raw.githubusercontent.com/myorg/webapp/main/.github/workflows/deploy.yml",
         }
     ]
-    workflow_body = {"status": 200, "headers": {}, "text": "env:\n  URL: https://ci.example.com"}
+    workflow_body = {"status": 200, "headers": {}, "text": "env:\n  URL: https://ci.corp-target.io"}
 
     routes = [
         ("orgs/myorg/repos", {"status": 200, "headers": {"X-RateLimit-Remaining": "4999"}, "json": repo_list}),
@@ -209,13 +218,13 @@ def test_spider_github_scans_mock_repos_and_extracts_seeds() -> None:
     assert result.rate_limit.get("remaining") == "4999"
 
     values = {(s["target_type"], s["target_value"]) for s in result.seeds}
-    assert ("domain", "api.example.com") in values
-    assert ("domain", "portal.example.com") in values
-    assert ("url", "https://portal.example.com") in values
+    assert ("domain", "api.corp-target.io") in values
+    assert ("domain", "portal.corp-target.io") in values
+    assert ("url", "https://portal.corp-target.io") in values
     assert ("ipv4", "10.0.0.5") in values
-    assert ("email", "admin@example.com") in values
-    assert ("url", "https://ci.example.com") in values
-    assert ("domain", "ci.example.com") in values
+    assert ("email", "admin@corp-target.io") in values
+    assert ("url", "https://ci.corp-target.io") in values
+    assert ("domain", "ci.corp-target.io") in values
 
 
 def test_spider_github_respects_max_repos_cap() -> None:
@@ -237,7 +246,10 @@ def test_spider_github_respects_max_repos_cap() -> None:
     assert result.repos_total == 5
 
 
-def test_spider_github_records_http_errors_without_raising() -> None:
+def test_spider_github_records_http_errors_without_raising(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("forge.onboard.rate_limit.time.sleep", lambda _seconds: None)
     routes = [
         ("orgs/myorg/repos", {"status": 403, "headers": {"X-RateLimit-Remaining": "0"}, "json": {}}),
     ]
@@ -254,3 +266,32 @@ def test_spider_github_handles_getter_exception() -> None:
     result = spider_github("ghp_token", orgs=["myorg"], http_get=_boom)
     assert result.repos_scanned == 0
     assert any("network outage" in err["detail"] for err in result.source_errors)
+
+
+def test_github_http_layer_retries_429_and_records_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        "forge.onboard.rate_limit.time.sleep", lambda seconds: sleeps.append(seconds)
+    )
+    responses = iter(
+        [
+            {"status": 429, "headers": {"Retry-After": "6"}, "json": {}},
+            {"status": 200, "headers": {"X-RateLimit-Remaining": "42"}, "json": {}},
+        ]
+    )
+    scanner = GitHubDeepScanner(
+        "token",
+        http_get=lambda _url, *, headers: next(responses),
+    )
+    result = GitHubSpiderResult()
+
+    response = scanner._call(
+        "https://api.github.test/repos", result=result, context="test"
+    )
+
+    assert response is not None and response["status"] == 200
+    assert sleeps == [6.0]
+    assert result.rate_limit["remaining"] == "42"
+    assert result.rate_limit["backoff_events"][0]["context"] == "test"

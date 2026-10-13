@@ -699,7 +699,9 @@ plain web URLs. Each imported engagement is also enrolled into the default
 `Target import seed exposure` passive monitoring policy with a baseline snapshot
 so scheduled monitoring can diff future exposure state without a separate setup
 step.
-The default import slice is 100 items, with an explicit bounded max of 100,000;
+The autopilot default import slice is 25,000 items per cycle and can be changed
+with `forge autopilot --import-limit N` (`--limit` remains an alias), with an
+explicit bounded max of 100,000;
 local feed files are capped at 64 MiB so the daily merged feed can be reread
 without accepting unbounded input.
 With `--start`, the importer launches the normal scoped `forge kill-chain`

@@ -37,6 +37,8 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import urlsplit
 
+from forge.onboard.patterns import is_denied_target
+
 
 AUTO_SCOPE_SCHEMA_VERSION = "forge.auto_scope.v1"
 
@@ -154,6 +156,8 @@ def normalize_candidate(
     raw = str(value or "").strip()
     if not raw:
         raise ValueError("candidate value must be non-empty")
+    if is_denied_target(raw):
+        raise ValueError("candidate target domain is deny-listed")
     related = [d.strip().lower() for d in (related_domains or []) if d and d.strip()]
     seed = (seed_type or "").strip().lower()
     if not seed:

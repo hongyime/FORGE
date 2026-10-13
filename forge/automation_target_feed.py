@@ -27,10 +27,11 @@ from urllib.parse import quote
 
 import httpx
 
+from forge.automation_secret_auto_feed import auto_feed_secrets_to_target_feed
 from forge.connectors.secrets import resolve_connector_secret_value
 from forge.db.session import get_engagement_db
 from forge.engagement_ids import numeric_engagement_db_files
-from forge.automation_secret_auto_feed import auto_feed_secrets_to_target_feed
+from forge.onboard.patterns import is_denied_target
 from forge.targets_import import (
     MAX_TARGET_FEED_IMPORT_ITEMS,
     TARGET_FEED_SCHEMA_VERSION,
@@ -242,6 +243,8 @@ def _candidate(
     if normalized is None:
         return None
     target_type, canonical_value = normalized
+    if is_denied_target(value) or is_denied_target(canonical_value):
+        return None
     return FeedCandidate(
         target_type=target_type,
         target_value=value,
@@ -526,6 +529,8 @@ def _typed_candidate(
     if normalized is None:
         return None
     target_type, canonical_value = normalized
+    if is_denied_target(value) or is_denied_target(canonical_value):
+        return None
     return FeedCandidate(
         target_type=target_type,
         target_value=value,
@@ -1640,10 +1645,7 @@ def _is_connector_payload_filename(name: str) -> bool:
     lowered = name.lower()
     if Path(lowered).suffix not in _PAYLOAD_TEXT_SUFFIXES:
         return False
-    is_connected_services_seed_drop = (
-        lowered.startswith("connected-services-")
-        and lowered.endswith("-seeds.local.json")
-    )
+    is_connected_services_seed_drop = _is_connected_services_seed_drop_filename(name)
     if lowered.endswith(".local.json") and not is_connected_services_seed_drop:
         return False
     if lowered in _CONNECTOR_SOURCE_EXCLUDED_NAMES:
@@ -2053,54 +2055,6 @@ def _collect_secret_observations(groups: dict[str, list[FeedCandidate]]) -> list
     
     return secret_observations
 
-
-
-
-def _extract_connected_services_seeds(
-    imports_dir,
-    *,
-    first_seen_at,
-):
-    """Extract seeds from connected-services seed drop files."""
-    candidates = []
-    errors = []
-    if not imports_dir.is_dir():
-        return candidates, errors
-    for path in sorted(imports_dir.iterdir()):
-        name = path.name.lower()
-        if not (name.startswith("connected-services-") and name.endswith("-seeds.local.json")):
-            continue
-        try:
-            import json
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            seeds = data.get("seeds", []) if isinstance(data, dict) else []
-            for seed in seeds:
-                if not isinstance(seed, dict):
-                    continue
-                tv = seed.get("target_value", "")
-                tt = seed.get("target_type", "auto")
-                if not tv:
-                    continue
-                try:
-                    cand = _candidate(
-                        tv,
-                        source_kind=seed.get("source_kind", "connected_services"),
-                        source_group=seed.get("source_group", "connected_services:" + path.name),
-                        provenance=seed.get("provenance", "connected_services:" + path.name),
-                        confidence=0.7 if seed.get("confidence") == "high" else 0.5,
-                        first_seen_at=seed.get("first_seen_at", first_seen_at),
-                        target_type_hint=tt,
-                    )
-                    if cand:
-                        candidates.append(cand)
-                except Exception:
-                    continue
-        except Exception as exc:
-            errors.append("connected_services_parse:" + path.name + ":" + str(exc)[:100])
-    return candidates, errors
-
-
 def build_target_feed(
     *,
     sources: list[str],
@@ -2198,18 +2152,6 @@ def build_target_feed(
                 source_group_counts.get(candidate.source_group, 0) + 1
             )
         source_errors.extend({"source": "connectors", "error": err} for err in errors)
-
-    if "connectors" in active_offline:
-        cs_found, cs_errors = _extract_connected_services_seeds(
-            connectors_dir or Path("imports"),
-            first_seen_at=generated_at,
-        )
-        groups["connectors"].extend(cs_found)
-        for candidate in cs_found:
-            source_group_counts[candidate.source_group] = (
-                source_group_counts.get(candidate.source_group, 0) + 1
-            )
-        source_errors.extend({"source": "connectors", "error": err} for err in cs_errors)
 
     if wants_supabase:
         found, errors, supabase_group_counts, supabase_table_discovery = _extract_supabase_source(
@@ -2355,6 +2297,21 @@ def build_target_feed(
             )
     elif existing_feed_path is not None:
         new_vs_existing = len(candidate_keys)
+
+    # Filter every source at the final aggregation boundary too. Some source
+    # adapters construct FeedCandidate directly instead of using _candidate.
+    for source_candidates in groups.values():
+        source_candidates[:] = [
+            candidate
+            for candidate in source_candidates
+            if not is_denied_target(candidate.target_value)
+            and not is_denied_target(candidate.canonical_value)
+        ]
+    candidate_keys = _all_candidate_keys(groups)
+    if existing_feed_path is not None:
+        new_vs_existing = sum(
+            1 for key in candidate_keys if key not in existing_keys
+        )
 
     items, dedupe_counts = _merge_candidates(groups, existing_items_raw)
     total_before_limit = len(items)

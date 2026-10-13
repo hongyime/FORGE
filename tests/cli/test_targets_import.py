@@ -45,7 +45,7 @@ def _write_feed(path: Path) -> None:
                 "items": [
                     {
                         "target_type": "domain",
-                        "target_value": "Example.COM",
+                        "target_value": "Corp-Target.IO",
                         "source_kind": "telemetry",
                         "confidence": 0.9,
                         "first_seen_at": "2026-08-07T00:00:00Z",
@@ -54,7 +54,7 @@ def _write_feed(path: Path) -> None:
                     },
                     {
                         "target_type": "domain",
-                        "target_value": "example.com",
+                        "target_value": "corp-target.io",
                         "source_kind": "duplicate",
                         "confidence": 0.1,
                         "first_seen_at": "2026-08-07T00:00:00Z",
@@ -62,7 +62,7 @@ def _write_feed(path: Path) -> None:
                     },
                     {
                         "target_type": "url",
-                        "target_value": "HTTPS://App.Example.COM/Login?secret=drop",
+                        "target_value": "HTTPS://App.Corp-Target.IO/Login?secret=drop",
                         "source_kind": "webhook",
                         "confidence": 0.8,
                         "first_seen_at": "2026-08-07T00:00:00Z",
@@ -82,7 +82,7 @@ def _write_multi_seed_feed(path: Path) -> None:
                 "schema_version": "target-feed.v1",
                 "generated_at": "2026-08-08T00:00:00Z",
                 "items": [
-                    {"target_type": "email", "target_value": "Security@Example.COM"},
+                    {"target_type": "email", "target_value": "Security@Corp-Target.IO"},
                     {"target_type": "telephone", "target_value": "00 1 555 123 4567"},
                     {"target_type": "handle", "target_value": "Forge_Handle"},
                     {"target_type": "organization", "target_value": "Example Holdings Inc"},
@@ -93,7 +93,7 @@ def _write_multi_seed_feed(path: Path) -> None:
                     {"target_type": "cloud_ref", "target_value": "aws_s3:acme-artifacts"},
                     {
                         "target_type": "auto",
-                        "target_value": "https://files.example.com/releases/app.apk?token=drop",
+                        "target_value": "https://files.corp-target.io/releases/app.apk?token=drop",
                     },
                     {
                         "target_type": "url",
@@ -115,12 +115,43 @@ def _write_unpack_error_feed(path: Path) -> None:
                 "generated_at": "2026-08-08T00:00:00Z",
                 "items": [
                     {"target_type": "auto", "target_value": "malformed delegated target"},
-                    {"target_type": "domain", "target_value": "Example.COM"},
+                    {"target_type": "domain", "target_value": "corp-target.io"},
                 ],
             }
         ),
         encoding="utf-8",
     )
+
+
+def test_load_target_feed_drops_placeholder_hosts_and_subdomains(
+    tmp_path: Path,
+) -> None:
+    feed_path = tmp_path / "placeholder-feed.json"
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "generated_at": "2026-10-13T00:00:00Z",
+                "items": [
+                    {"target_type": "domain", "target_value": "company.com"},
+                    {"target_type": "domain", "target_value": "api.example.org"},
+                    {"target_type": "url", "target_value": "https://ui.test.com/login"},
+                    {"target_type": "domain", "target_value": "api.localhost"},
+                    {"target_type": "domain", "target_value": "portal.corp-target.io"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    items = load_target_feed(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        limit=None,
+    )
+
+    assert [item.canonical_value for item in items] == ["portal.corp-target.io"]
 
 
 def _write_candidate_run(
@@ -130,7 +161,7 @@ def _write_candidate_run(
     status: str,
     error: str = "",
     metadata: dict[str, object] | None = None,
-    seed_value: str = "example.com",
+    seed_value: str = "corp-target.io",
     updated_at: str = "2026-08-08T00:00:00Z",
 ) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -189,11 +220,11 @@ def test_import_feed_file_creates_deduped_engagements_and_manifests(tmp_path: Pa
     assert [result.created for result in results] == [True, True]
     domain_result = results[0]
     assert domain_result.engagement_id == 1
-    assert domain_result.target_value == "example.com"
+    assert domain_result.target_value == "corp-target.io"
     assert domain_result.scope_manifest is not None
     manifest = json.loads(domain_result.scope_manifest.read_text(encoding="utf-8"))
     assert manifest["roe_id"] == "ROE-ACME-2026-08"
-    assert manifest["domains"] == ["example.com"]
+    assert manifest["domains"] == ["corp-target.io"]
     assert manifest["urls"] == []
     assert manifest["policy"] == {
         "destructive_actions_allowed": True,
@@ -216,7 +247,7 @@ def test_import_feed_file_creates_deduped_engagements_and_manifests(tmp_path: Pa
     assert metadata["provenance_summary"] == "network_domain"
     persisted = json.dumps(metadata)
     assert "must-not-persist" not in persisted
-    assert json.loads(row[0]) == {"domains": ["example.com"], "urls": []}
+    assert json.loads(row[0]) == {"domains": ["corp-target.io"], "urls": []}
     monitoring_row = sqlite3.connect(db_path)
     try:
         policy = monitoring_row.execute(
@@ -264,7 +295,7 @@ def test_import_feed_file_creates_deduped_engagements_and_manifests(tmp_path: Pa
     summary = json.loads(index_rows[0][3])
     assert summary["id"] == 1
     assert summary["workspace_id"] == "default"
-    assert summary["seeds"] == ["example.com"]
+    assert summary["seeds"] == ["corp-target.io"]
     assert "must-not-persist" not in json.dumps(summary)
 
 
@@ -279,7 +310,7 @@ def test_import_targets_prioritizes_multi_source_feed_items_before_limit(
                 "items": [
                     {
                         "target_type": "domain",
-                        "target_value": "single.example",
+                        "target_value": "single.corp-target.io",
                         "source_kind": "db",
                         "source_group": "db",
                         "source_groups": ["db"],
@@ -288,7 +319,7 @@ def test_import_targets_prioritizes_multi_source_feed_items_before_limit(
                     },
                     {
                         "target_type": "domain",
-                        "target_value": "shared.example",
+                        "target_value": "shared.corp-target.io",
                         "source_kind": "reports",
                         "source_group": "report_family:shared",
                         "source_groups": ["db", "report_family:shared"],
@@ -314,7 +345,7 @@ def test_import_targets_prioritizes_multi_source_feed_items_before_limit(
         config=cfg,  # type: ignore[arg-type]
     )
 
-    assert [item.target_value for item in results] == ["shared.example"]
+    assert [item.target_value for item in results] == ["shared.corp-target.io"]
     assert results[0].source_count == 2
     assert results[0].priority == 90
     assert results[0].scan_eligible is True
@@ -409,13 +440,13 @@ def test_import_feed_accepts_canonical_multi_seed_targets(tmp_path: Path) -> Non
     )
 
     assert [(result.target_type, result.target_value) for result in results] == [
-        ("email", "security@example.com"),
+        ("email", "security@corp-target.io"),
         ("phone", "+15551234567"),
         ("username", "@forge_handle"),
         ("company", "Example Holdings Inc"),
         ("name", "Jane Doe"),
         ("cloud_ref", "aws_s3:acme-artifacts"),
-        ("apk_url", "https://files.example.com/releases/app.apk"),
+        ("apk_url", "https://files.corp-target.io/releases/app.apk"),
         ("cloud_ref", "https://demo.supabase.co:443/rest/v1"),
         ("ipv4", "203.0.113.7"),
         ("ipv6", "2001:db8::1"),
@@ -424,7 +455,7 @@ def test_import_feed_accepts_canonical_multi_seed_targets(tmp_path: Path) -> Non
     assert all(result.scope_manifest is not None for result in results)
 
     email_manifest = json.loads(results[0].scope_manifest.read_text(encoding="utf-8"))
-    assert email_manifest["authorized_seeds"] == ["security@example.com"]
+    assert email_manifest["authorized_seeds"] == ["security@corp-target.io"]
     assert email_manifest["domains"] == []
     assert email_manifest["ip_ranges"] == []
     assert email_manifest["urls"] == []
@@ -437,13 +468,13 @@ def test_import_feed_accepts_canonical_multi_seed_targets(tmp_path: Path) -> Non
     assert ipv4_manifest["ip_ranges"] == ["203.0.113.7/32"]
 
     apk_manifest = json.loads(
-        by_target["https://files.example.com/releases/app.apk"].scope_manifest.read_text(
+        by_target["https://files.corp-target.io/releases/app.apk"].scope_manifest.read_text(
             encoding="utf-8"
         )
     )
-    assert apk_manifest["domains"] == ["files.example.com"]
-    assert apk_manifest["urls"] == ["https://files.example.com/releases/app.apk"]
-    assert apk_manifest["authorized_seeds"] == ["https://files.example.com/releases/app.apk"]
+    assert apk_manifest["domains"] == ["files.corp-target.io"]
+    assert apk_manifest["urls"] == ["https://files.corp-target.io/releases/app.apk"]
+    assert apk_manifest["authorized_seeds"] == ["https://files.corp-target.io/releases/app.apk"]
 
     cloud_url_manifest = json.loads(
         by_target["https://demo.supabase.co:443/rest/v1"].scope_manifest.read_text(
@@ -463,9 +494,9 @@ def test_import_feed_accepts_canonical_multi_seed_targets(tmp_path: Path) -> Non
         scope_row = conn.execute("SELECT scope_json FROM engagements").fetchone()
     finally:
         conn.close()
-    assert seed_row == ("security@example.com", "email")
+    assert seed_row == ("security@corp-target.io", "email")
     assert json.loads(scope_row[0]) == {
-        "authorized_seeds": ["security@example.com"],
+        "authorized_seeds": ["security@corp-target.io"],
         "domains": [],
         "urls": [],
     }
@@ -588,7 +619,7 @@ def test_resume_candidates_reports_latest_failed_runs_without_sensitive_metadata
     assert first["resume_command"] == [
         "forge",
         "kill-chain",
-        "example.com",
+        "corp-target.io",
         "--engagement",
         "1",
         "--roe-id",
@@ -768,7 +799,7 @@ def test_backfill_scope_manifests_dry_run_reports_recoverable_candidate(
         status="failed",
         error="max iterations exhausted with pending recursive work: 1",
         metadata={"roe_id": "ROE-ACME-2026"},
-        seed_value="https://app.example.com/login",
+        seed_value="https://app.corp-target.io/login",
     )
 
     payload = backfill_target_resume_scope_manifests(data_dir=data_dir, apply=False)
@@ -795,7 +826,7 @@ def test_backfill_scope_manifests_apply_updates_latest_run_metadata(
         status="failed",
         error="max iterations exhausted with pending recursive work: 1",
         metadata={"roe_id": "ROE-ACME-2026"},
-        seed_value="https://app.example.com/login",
+        seed_value="https://app.corp-target.io/login",
     )
 
     payload = backfill_target_resume_scope_manifests(data_dir=data_dir, apply=True)
@@ -804,8 +835,8 @@ def test_backfill_scope_manifests_apply_updates_latest_run_metadata(
     manifest_path = Path(payload["items"][0]["planned_scope_manifest"])
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["roe_id"] == "ROE-ACME-2026"
-    assert manifest["domains"] == ["app.example.com"]
-    assert manifest["urls"] == ["https://app.example.com/login"]
+    assert manifest["domains"] == ["app.corp-target.io"]
+    assert manifest["urls"] == ["https://app.corp-target.io/login"]
     candidates = collect_target_resume_candidates(data_dir=data_dir)
     assert candidates["resume_ready_count"] == 1
     item = candidates["items"][0]
@@ -815,7 +846,7 @@ def test_backfill_scope_manifests_apply_updates_latest_run_metadata(
     assert item["resume_command"][:6] == [
         "forge",
         "kill-chain",
-        "https://app.example.com/login",
+        "https://app.corp-target.io/login",
         "--engagement",
         "1",
         "--roe-id",
@@ -875,7 +906,7 @@ def test_resume_plan_reports_sequential_ready_commands_without_execution(tmp_pat
     assert item["command"] == [
         "forge",
         "kill-chain",
-        "example.com",
+        "corp-target.io",
         "--engagement",
         "1",
         "--roe-id",
@@ -1157,7 +1188,7 @@ def test_resume_child_uses_contained_subprocess_by_default(
     )
 
     result = _run_resume_child(
-        ["forge", "kill-chain", "example.com"],
+        ["forge", "kill-chain", "corp-target.io"],
         timeout_seconds=42,
         runner=None,
     )
@@ -1165,7 +1196,7 @@ def test_resume_child_uses_contained_subprocess_by_default(
     assert result.returncode == 124
     assert calls == [
         (
-            ["forge", "kill-chain", "example.com"],
+            ["forge", "kill-chain", "corp-target.io"],
             42,
             "resume child exceeded timeout_seconds=42",
         )
@@ -1425,7 +1456,7 @@ def test_resume_run_skips_no_longer_resumable_latest_run(
                     "engagement_id": 1,
                     "run_id": 1,
                     "db_path": str(db_path),
-                    "command": ["forge", "kill-chain", "example.com"],
+                    "command": ["forge", "kill-chain", "corp-target.io"],
                     "max_runtime_minutes": 25,
                 }
             ],
@@ -1925,7 +1956,7 @@ def test_start_skips_non_global_ip_without_consuming_start_budget(
                     },
                     {
                         "target_type": "domain",
-                        "target_value": "shared.example",
+                        "target_value": "shared.corp-target.io",
                         "source_groups": ["db", "report_family:shared"],
                         "source_count": 2,
                         "priority": 90,
@@ -1957,12 +1988,12 @@ def test_start_skips_non_global_ip_without_consuming_start_budget(
         config=cfg,  # type: ignore[arg-type]
     )
 
-    assert [result.target_value for result in results] == ["shared.example", "0.0.0.0"]
+    assert [result.target_value for result in results] == ["shared.corp-target.io", "0.0.0.0"]
     assert results[0].started is True
     assert results[1].started is False
     assert results[1].start_skipped_reason == "non_global_ip"
     assert len(calls) == 1
-    assert "shared.example" in calls[0]
+    assert "shared.corp-target.io" in calls[0]
 
 
 def test_start_uses_configured_kill_chain_runtime_timeout(
@@ -2047,7 +2078,7 @@ def test_start_treats_exit_two_with_completed_db_run_as_success(
                 """
                 INSERT INTO engagement_runs
                     (engagement_id, run_kind, status, seed_value, seed_type)
-                VALUES (1, 'kill_chain', 'completed', 'example.com', 'domain')
+                VALUES (1, 'kill_chain', 'completed', 'corp-target.io', 'domain')
                 """
             )
             conn.commit()
@@ -2096,7 +2127,7 @@ def test_start_treats_timeout_with_completed_db_run_as_success(
                 """
                 INSERT INTO engagement_runs
                     (engagement_id, run_kind, status, seed_value, seed_type)
-                VALUES (1, 'kill_chain', 'completed', 'example.com', 'domain')
+                VALUES (1, 'kill_chain', 'completed', 'corp-target.io', 'domain')
                 """
             )
             conn.commit()
@@ -2210,14 +2241,14 @@ def test_start_min_source_count_skips_single_source_without_consuming_budget(
                 "items": [
                     {
                         "target_type": "domain",
-                        "target_value": "single.example",
+                        "target_value": "single.corp-target.io",
                         "source_groups": ["connector:single"],
                         "source_count": 1,
                         "priority": 100,
                     },
                     {
                         "target_type": "domain",
-                        "target_value": "shared.example",
+                        "target_value": "shared.corp-target.io",
                         "source_groups": ["db", "report_family:shared"],
                         "source_count": 2,
                         "priority": 90,
@@ -2251,14 +2282,14 @@ def test_start_min_source_count_skips_single_source_without_consuming_budget(
     )
 
     assert [result.target_value for result in results] == [
-        "single.example",
-        "shared.example",
+        "single.corp-target.io",
+        "shared.corp-target.io",
     ]
     assert results[0].started is False
     assert results[0].start_skipped_reason == "source_count_below_min_start_threshold:1<2"
     assert results[1].started is True
     assert len(calls) == 1
-    assert "shared.example" in calls[0]
+    assert "shared.corp-target.io" in calls[0]
 
 
 def test_monitoring_seed_failure_does_not_block_start(
@@ -2395,7 +2426,7 @@ def test_feed_url_uses_monitor_key_header(
                 "items": [
                     {
                         "target_type": "domain",
-                        "target_value": "example.com",
+                        "target_value": "corp-target.io",
                         "source_kind": "telemetry",
                         "confidence": 1,
                         "first_seen_at": "2026-08-08T00:00:00Z",
@@ -2442,7 +2473,7 @@ def test_load_target_feed_skips_item_level_unpack_value_error(
     )
 
     assert [(item.target_type, item.canonical_value) for item in items] == [
-        ("domain", "example.com")
+        ("domain", "corp-target.io")
     ]
 
 
@@ -2457,7 +2488,7 @@ def test_load_target_feed_accepts_daily_feed_over_legacy_two_mib_cap(tmp_path: P
                 "items": [
                     {
                         "target_type": "domain",
-                        "target_value": "large-feed.example",
+                        "target_value": "large-feed.corp-target.io",
                         "source_kind": "reports",
                         "confidence": 1,
                         "first_seen_at": "2026-08-28T00:00:00Z",
@@ -2477,7 +2508,7 @@ def test_load_target_feed_accepts_daily_feed_over_legacy_two_mib_cap(tmp_path: P
     )
 
     assert len(items) == 1
-    assert items[0].canonical_value == "large-feed.example"
+    assert items[0].canonical_value == "large-feed.corp-target.io"
 
 
 def test_targets_import_cli_registration_supports_dry_run(tmp_path: Path) -> None:

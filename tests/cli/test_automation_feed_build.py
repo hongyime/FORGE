@@ -61,21 +61,21 @@ def test_feed_build_dry_run_merges_sources_with_provenance_and_writes_nothing(
     data_dir = tmp_path / "data"
     reports_dir = tmp_path / "reports"
     imports_dir = tmp_path / "imports"
-    _make_engagement_db(data_dir, 1, [("portal.example", "domain")])
+    _make_engagement_db(data_dir, 1, [("portal.corp-target.io", "domain")])
     _make_dashboard_report(
         reports_dir,
         "abc123",
         {
             "summary": {
-                "hosts": ["web.example"],
-                "urls": ["https://api.example/v1"],
-                "emails": ["ops@example.com"],
+                "hosts": ["web.corp-target.io"],
+                "urls": ["https://api.corp-target.io/v1"],
+                "emails": ["ops@corp-target.io"],
             }
         },
     )
     imports_dir.mkdir(parents=True)
     (imports_dir / "threatfox.json").write_text(
-        json.dumps({"data": [{"ioc": "badguy.example"}]}), encoding="utf-8"
+        json.dumps({"data": [{"ioc": "badguy.corp-target.io"}]}), encoding="utf-8"
     )
     out = tmp_path / "out" / "target-feed.json"
 
@@ -105,7 +105,7 @@ def test_feed_build_dry_run_merges_sources_with_provenance_and_writes_nothing(
     typed_items = {
         (item["target_type"], item["canonical_value"]) for item in payload["items"]
     }
-    assert ("domain", "portal.example") in typed_items
+    assert ("domain", "portal.corp-target.io") in typed_items
     provenances = " ".join(item["provenance"] for item in payload["items"])
     assert "report_family:abc123" in provenances
     assert "cti_file:threatfox.json" in provenances
@@ -123,6 +123,34 @@ def test_feed_build_dry_run_merges_sources_with_provenance_and_writes_nothing(
     assert any(item["source_group"] == "report_family:abc123" for item in payload["items"])
 
 
+def test_feed_build_drops_placeholder_domains_from_database_seeds(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    _make_engagement_db(
+        data_dir,
+        1,
+        [
+            ("company.com", "domain"),
+            ("api.example.org", "domain"),
+            ("portal.corp-target.io", "domain"),
+        ],
+    )
+
+    payload = build_target_feed(
+        sources=["db"],
+        data_dir=data_dir,
+        reports_dir=None,
+        imports_dir=None,
+        limit=25_000,
+        existing_feed_path=None,
+    )
+
+    assert [item["canonical_value"] for item in payload["items"]] == [
+        "portal.corp-target.io"
+    ]
+
+
 def test_feed_build_prioritizes_targets_seen_from_multiple_sources(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     reports_dir = tmp_path / "reports"
@@ -130,14 +158,14 @@ def test_feed_build_prioritizes_targets_seen_from_multiple_sources(tmp_path: Pat
         data_dir,
         1,
         [
-            ("single-db.example", "domain"),
-            ("shared.example", "domain"),
+            ("single-db.corp-target.io", "domain"),
+            ("shared.corp-target.io", "domain"),
         ],
     )
     _make_dashboard_report(
         reports_dir,
         "sharedfam",
-        {"summary": {"hosts": ["shared.example", "single-report.example"]}},
+        {"summary": {"hosts": ["shared.corp-target.io", "single-report.corp-target.io"]}},
     )
 
     payload = build_target_feed(
@@ -150,7 +178,7 @@ def test_feed_build_prioritizes_targets_seen_from_multiple_sources(tmp_path: Pat
     )
 
     first = payload["items"][0]
-    assert first["canonical_value"] == "shared.example"
+    assert first["canonical_value"] == "shared.corp-target.io"
     assert first["source_count"] == 2
     assert first["priority"] == 90
     assert first["source_groups"] == ["db", "report_family:sharedfam"]
@@ -184,7 +212,7 @@ def test_feed_build_marks_non_global_ips_ineligible_for_autonomous_scan(
 
 def test_feed_build_apply_writes_then_rerun_reports_no_new(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
-    _make_engagement_db(data_dir, 7, [("resume.example", "domain")])
+    _make_engagement_db(data_dir, 7, [("resume.corp-target.io", "domain")])
     out = tmp_path / "imports" / "target-feed.json"
 
     first = runner.invoke(
@@ -245,7 +273,7 @@ def test_feed_build_rerun_reads_large_existing_feed_without_legacy_item_cap(
     existing_items = [
         {
             "target_type": "domain",
-            "target_value": f"bulk-{index}.example",
+            "target_value": f"bulk-{index}.corp-target.io",
             "source_kind": "previous",
             "source_group": "previous",
             "confidence": 0.9,
@@ -264,7 +292,7 @@ def test_feed_build_rerun_reads_large_existing_feed_without_legacy_item_cap(
         ),
         encoding="utf-8",
     )
-    _make_engagement_db(data_dir, 8, [("bulk-1100.example", "domain")])
+    _make_engagement_db(data_dir, 8, [("bulk-1100.corp-target.io", "domain")])
 
     payload = build_target_feed(
         sources=["db"],
@@ -285,7 +313,7 @@ def test_feed_build_rerun_reads_large_existing_feed_without_legacy_item_cap(
     assert payload["counts"]["generated_unique_candidate_total"] == 1
     assert payload["counts"]["selected_includes_existing"] is True
     matched = [
-        item for item in payload["items"] if item["canonical_value"] == "bulk-1100.example"
+        item for item in payload["items"] if item["canonical_value"] == "bulk-1100.corp-target.io"
     ]
     assert matched[0]["source_group"] == "previous"
 
@@ -303,7 +331,7 @@ def test_feed_build_source_only_counts_do_not_confuse_preserved_existing_feed(
                 "items": [
                     {
                         "target_type": "domain",
-                        "target_value": "preserved.example",
+                        "target_value": "preserved.corp-target.io",
                         "source_kind": "previous",
                         "source_group": "previous",
                         "confidence": 0.9,
@@ -653,7 +681,7 @@ def test_input_add_supports_validation_target_and_absolute_external_path(
             "--imports-dir",
             str(imports_dir),
             "--target",
-            "https://app.example",
+            "https://app.corp-target.io",
             "--apply",
             "--json",
         ],
@@ -663,12 +691,12 @@ def test_input_add_supports_validation_target_and_absolute_external_path(
     payload = json.loads(result.output)
     assert payload["input_kind"] == "validation_artifact"
     assert payload["value"] == str(artifact)
-    assert payload["target"] == "https://app.example"
+    assert payload["target"] == "https://app.corp-target.io"
     queue = json.loads(
         (imports_dir / "burp-dast-imports.local.json").read_text(encoding="utf-8")
     )
     assert queue["inputs"][0]["value"] == str(artifact)
-    assert queue["inputs"][0]["target"] == "https://app.example"
+    assert queue["inputs"][0]["target"] == "https://app.corp-target.io"
 
 
 def test_input_add_rejects_unknown_connector_control_files_and_secret_values(
@@ -785,13 +813,13 @@ def test_cti_refresh_apply_fetches_threatfox_artifact_and_queues_input(
                 "data": [
                     {
                         "id": "1",
-                        "ioc": "alpha.example",
+                        "ioc": "alpha.corp-target.io",
                         "ioc_type": "domain",
                         "confidence_level": 80,
                     },
                     {
                         "id": "2",
-                        "ioc": "https://beta.example/path",
+                        "ioc": "https://beta.corp-target.io/path",
                         "ioc_type": "url",
                         "confidence_level": 75,
                     },
@@ -848,7 +876,7 @@ def test_cti_refresh_apply_fetches_threatfox_artifact_and_queues_input(
     assert saved["schema_version"] == "forge.cti_observations.local.v1"
     assert saved["provider"] == "abusech_threatfox"
     assert saved["collection_method"] == "public_api_recent_iocs"
-    assert [item["ioc"] for item in saved["data"]] == ["alpha.example"]
+    assert [item["ioc"] for item in saved["data"]] == ["alpha.corp-target.io"]
     queue = json.loads(
         (imports_dir / "threatfox-inputs.local.json").read_text(encoding="utf-8")
     )
@@ -874,7 +902,7 @@ def test_cti_refresh_apply_defaults_to_threatfox_key_env(
                 "data": [
                     {
                         "id": "1",
-                        "ioc": "default-env.example",
+                        "ioc": "default-env.corp-target.io",
                         "ioc_type": "domain",
                     }
                 ],
@@ -956,9 +984,9 @@ def test_cti_refresh_apply_fetches_urlhaus_artifact_and_queues_input(
         text = (
             "# URLhaus recent CSV\n"
             "id,dateadded,url,url_status,threat,tags,urlhaus_link,reporter\n"
-            "1,2026-08-29 00:00:00,https://malware.example/payload.exe,online,"
+            "1,2026-08-29 00:00:00,https://malware.corp-target.io/payload.exe,online,"
             "malware_download,test,https://urlhaus.abuse.ch/url/1/,analyst\n"
-            "2,2026-08-29 00:01:00,https://second.example/dropper,online,"
+            "2,2026-08-29 00:01:00,https://second.corp-target.io/dropper,online,"
             "malware_download,test,https://urlhaus.abuse.ch/url/2/,analyst\n"
         )
 
@@ -1011,7 +1039,7 @@ def test_cti_refresh_apply_fetches_urlhaus_artifact_and_queues_input(
     assert saved["provider"] == "abusech_urlhaus"
     assert saved["source_url"] == automation_cycle_module.URLHAUS_RECENT_CSV_URL_REDACTED
     assert saved["collection_method"] == "public_api_recent_urls"
-    assert saved["data"][0]["ioc"] == "https://malware.example/payload.exe"
+    assert saved["data"][0]["ioc"] == "https://malware.corp-target.io/payload.exe"
     queue = json.loads(
         (imports_dir / "urlhaus-inputs.local.json").read_text(encoding="utf-8")
     )
@@ -1144,7 +1172,7 @@ def test_feed_build_missing_and_malformed_sources_fail_soft(tmp_path: Path) -> N
     broken_db = data_dir / "engagements" / "99.db"
     broken_db.write_bytes(b"this is not sqlite")
     reports_dir = tmp_path / "reports"
-    _make_dashboard_report(reports_dir, "goodfam", {"hosts": ["fine.example"]})
+    _make_dashboard_report(reports_dir, "goodfam", {"hosts": ["fine.corp-target.io"]})
     (reports_dir / "dashboard" / "data" / "corrupt.json").write_text(
         "{not json", encoding="utf-8"
     )
@@ -1170,10 +1198,10 @@ def test_feed_build_reports_skips_dashboard_aggregate_without_error(tmp_path: Pa
     data_dir = reports_dir / "dashboard" / "data"
     data_dir.mkdir(parents=True)
     (data_dir / "engagements.json").write_text(
-        json.dumps({"items": [{"target": "aggregate-only.example"}]}),
+        json.dumps({"items": [{"target": "aggregate-only.corp-target.io"}]}),
         encoding="utf-8",
     )
-    _make_dashboard_report(reports_dir, "detailfam", {"hosts": ["detail.example"]})
+    _make_dashboard_report(reports_dir, "detailfam", {"hosts": ["detail.corp-target.io"]})
 
     payload = build_target_feed(
         sources=["reports"],
@@ -1186,8 +1214,8 @@ def test_feed_build_reports_skips_dashboard_aggregate_without_error(tmp_path: Pa
 
     assert payload["source_errors"] == []
     values = {item["target_value"] for item in payload["items"]}
-    assert "detail.example" in values
-    assert "aggregate-only.example" not in values
+    assert "detail.corp-target.io" in values
+    assert "aggregate-only.corp-target.io" not in values
 
 
 def test_feed_build_reports_scan_current_corpus_sized_family_count(
@@ -1198,7 +1226,7 @@ def test_feed_build_reports_scan_current_corpus_sized_family_count(
         _make_dashboard_report(
             reports_dir,
             f"family_{index:03d}",
-            {"hosts": [f"family-{index}.example"]},
+            {"hosts": [f"family-{index}.corp-target.io"]},
         )
 
     payload = build_target_feed(
@@ -1215,7 +1243,7 @@ def test_feed_build_reports_scan_current_corpus_sized_family_count(
     assert (
         payload["counts"]["by_source_group"]["report_family:family_519"] == 1
     )
-    assert "family-519.example" in {
+    assert "family-519.corp-target.io" in {
         item["canonical_value"] for item in payload["items"]
     }
 
@@ -1229,26 +1257,26 @@ def test_feed_build_connector_source_ignores_local_config_files(tmp_path: Path) 
                 "projects": [],
                 "_example_project": {
                     "url": "https://abc123.supabase.co",
-                    "domain": "should-not-import.example",
+                    "domain": "should-not-import.corp-target.io",
                 },
             }
         ),
         encoding="utf-8",
     )
     (imports_dir / "autostart.local.json").write_text(
-        json.dumps({"feed_sources": ["all"], "target": "skip-autostart.example"}),
+        json.dumps({"feed_sources": ["all"], "target": "skip-autostart.corp-target.io"}),
         encoding="utf-8",
     )
     (imports_dir / "target-feed.json").write_text(
-        json.dumps({"items": [{"target_value": "skip-existing.example"}]}),
+        json.dumps({"items": [{"target_value": "skip-existing.corp-target.io"}]}),
         encoding="utf-8",
     )
     (imports_dir / "projectdiscovery-cloud-imports.local.json").write_text(
-        json.dumps({"inputs": [{"value": "skip-local-registry.example"}]}),
+        json.dumps({"inputs": [{"value": "skip-local-registry.corp-target.io"}]}),
         encoding="utf-8",
     )
     (imports_dir / "connector-output.json").write_text(
-        json.dumps({"targets": ["keep.example"]}),
+        json.dumps({"targets": ["keep.corp-target.io"]}),
         encoding="utf-8",
     )
 
@@ -1262,7 +1290,7 @@ def test_feed_build_connector_source_ignores_local_config_files(tmp_path: Path) 
     )
 
     assert payload["counts"]["by_source"]["connectors"] == 1
-    assert payload["items"][0]["canonical_value"] == "keep.example"
+    assert payload["items"][0]["canonical_value"] == "keep.corp-target.io"
     assert payload["items"][0]["source_group"] == "connector_file:connector-output.json"
 
 
@@ -1272,17 +1300,17 @@ def test_feed_build_connector_source_harvests_text_csv_xml_gzip_and_zip(
     imports_dir = tmp_path / "imports"
     imports_dir.mkdir()
     (imports_dir / "runzero-assets.csv").write_text(
-        "hostname,ip\ncsv-feed.example,198.51.100.10\n",
+        "hostname,ip\ncsv-feed.corp-target.io,198.51.100.10\n",
         encoding="utf-8",
     )
     (imports_dir / "burp-results.xml").write_text(
-        "<issue><host>xml-feed.example</host></issue>",
+        "<issue><host>xml-feed.corp-target.io</host></issue>",
         encoding="utf-8",
     )
     with gzip.open(imports_dir / "censys-hosts.json.gz", "wt", encoding="utf-8") as handle:
-        handle.write('{"services":[{"host":"gzip-feed.example"}]}')
+        handle.write('{"services":[{"host":"gzip-feed.corp-target.io"}]}')
     with zipfile.ZipFile(imports_dir / "pd-cloud-export.zip", "w") as archive:
-        archive.writestr("assets.json", '{"targets":["zip-feed.example"]}')
+        archive.writestr("assets.json", '{"targets":["zip-feed.corp-target.io"]}')
 
     payload = build_target_feed(
         sources=["connectors"],
@@ -1295,11 +1323,11 @@ def test_feed_build_connector_source_harvests_text_csv_xml_gzip_and_zip(
 
     values = {item["canonical_value"] for item in payload["items"]}
     assert {
-        "csv-feed.example",
+        "csv-feed.corp-target.io",
         "198.51.100.10",
-        "xml-feed.example",
-        "gzip-feed.example",
-        "zip-feed.example",
+        "xml-feed.corp-target.io",
+        "gzip-feed.corp-target.io",
+        "zip-feed.corp-target.io",
     } <= values
     assert payload["counts"]["by_source_group"]["connector_file:runzero-assets.csv"] == 2
     assert payload["counts"]["by_source_group"]["connector_file:burp-results.xml"] == 1
@@ -1309,11 +1337,11 @@ def test_feed_build_cti_source_ignores_source_input_queue_files(tmp_path: Path) 
     imports_dir = tmp_path / "imports"
     imports_dir.mkdir()
     (imports_dir / "threatfox-inputs.local.json").write_text(
-        json.dumps({"inputs": [{"value": "skip-queue.example"}]}),
+        json.dumps({"inputs": [{"value": "skip-queue.corp-target.io"}]}),
         encoding="utf-8",
     )
     (imports_dir / "threatfox-observations.local.json").write_text(
-        json.dumps({"iocs": ["keep-observation.example"]}),
+        json.dumps({"iocs": ["keep-observation.corp-target.io"]}),
         encoding="utf-8",
     )
 
@@ -1327,7 +1355,7 @@ def test_feed_build_cti_source_ignores_source_input_queue_files(tmp_path: Path) 
     )
 
     assert [item["canonical_value"] for item in payload["items"]] == [
-        "keep-observation.example"
+        "keep-observation.corp-target.io"
     ]
     assert payload["items"][0]["source_group"] == (
         "cti_file:threatfox-observations.local.json"
@@ -1348,7 +1376,7 @@ def test_feed_build_discovery_ignores_empty_scaffolds_and_queue_controls(
         encoding="utf-8",
     )
     (imports_dir / "real-projectdiscovery-export.json").write_text(
-        json.dumps({"targets": ["pd-real.example"]}),
+        json.dumps({"targets": ["pd-real.corp-target.io"]}),
         encoding="utf-8",
     )
 
@@ -1470,7 +1498,7 @@ def test_feed_build_dry_run_reports_discovered_input_registry_without_write(
         "input_hints",
         {
             "urls": ["https://abc123.supabase.co/rest/v1/assets?id=eq.1"],
-            "targets": ["artifact-hints.example"],
+            "targets": ["artifact-hints.corp-target.io"],
         },
     )
 
@@ -1556,7 +1584,7 @@ def test_feed_build_apply_appends_discovered_input_registry(
     imports_dir = tmp_path / "imports"
     imports_dir.mkdir()
     (imports_dir / "threatfox-observations.local.json").write_text(
-        json.dumps({"iocs": ["ioc.example"]}),
+        json.dumps({"iocs": ["ioc.corp-target.io"]}),
         encoding="utf-8",
     )
     registry = imports_dir / "discovered-inputs.local.json"
@@ -1631,7 +1659,7 @@ def test_feed_build_reports_omitted_local_input_files_after_scan_cap(
     imports_dir.mkdir()
     for index in range(205):
         (imports_dir / f"pd-cloud-{index:03}.json").write_text(
-            json.dumps({"assets": [{"host": f"host-{index}.example"}]}),
+            json.dumps({"assets": [{"host": f"host-{index}.corp-target.io"}]}),
             encoding="utf-8",
         )
 
@@ -1714,7 +1742,7 @@ def test_feed_build_apply_writes_source_specific_input_registries(
 
 def test_feed_build_db_source_skips_master_sequence_db(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
-    _make_engagement_db(data_dir, 42, [("numeric.example", "domain")])
+    _make_engagement_db(data_dir, 42, [("numeric.corp-target.io", "domain")])
     master = data_dir / "engagements" / "master.db"
     conn = sqlite3.connect(master)
     try:
@@ -1734,7 +1762,7 @@ def test_feed_build_db_source_skips_master_sequence_db(tmp_path: Path) -> None:
 
     assert payload["source_errors"] == []
     assert payload["counts"]["by_source"]["db"] == 1
-    assert payload["items"][0]["canonical_value"] == "numeric.example"
+    assert payload["items"][0]["canonical_value"] == "numeric.corp-target.io"
 
 
 def test_feed_build_supabase_selects_configured_columns_with_env_key(
@@ -1749,11 +1777,11 @@ def test_feed_build_supabase_selects_configured_columns_with_env_key(
         def json(self) -> list[dict[str, str]]:
             return [
                 {
-                    "domain": "Portal.Example",
-                    "url": "https://app.example/path?secret=drop",
-                    "ignored": "skip.example",
+                    "domain": "Portal.corp-target.io",
+                    "url": "https://app.corp-target.io/path?secret=drop",
+                    "ignored": "skip.corp-target.io",
                 },
-                {"email": "Ops@Example.com"},
+                {"email": "Ops@corp-target.io"},
             ]
 
     def _fake_get(url: str, *, headers: dict[str, str], timeout: float) -> _Response:
@@ -1806,10 +1834,10 @@ def test_feed_build_supabase_selects_configured_columns_with_env_key(
     typed_items = {
         (item["target_type"], item["canonical_value"]) for item in payload["items"]
     }
-    assert ("domain", "portal.example") in typed_items
-    assert ("url", "https://app.example/path") in typed_items
-    assert ("email", "ops@example.com") in typed_items
-    assert all("skip.example" not in item["canonical_value"] for item in payload["items"])
+    assert ("domain", "portal.corp-target.io") in typed_items
+    assert ("url", "https://app.corp-target.io/path") in typed_items
+    assert ("email", "ops@corp-target.io") in typed_items
+    assert all("skip.corp-target.io" not in item["canonical_value"] for item in payload["items"])
     assert payload["counts"]["by_source"]["supabase"] == 3
     assert payload["counts"]["by_source_group"]["supabase:abc123:targets"] == 2
     assert all(
@@ -1851,7 +1879,7 @@ def test_feed_build_supabase_secret_ref_uses_selected_data_dir(
             return None
 
         def json(self) -> list[dict[str, str]]:
-            return [{"domain": "SecretRef.Example"}]
+            return [{"domain": "SecretRef.corp-target.io"}]
 
     def _fake_get(url: str, *, headers: dict[str, str], timeout: float) -> _Response:
         observed["url"] = url
@@ -1901,7 +1929,7 @@ def test_feed_build_supabase_secret_ref_uses_selected_data_dir(
         "https://abc123.supabase.co/rest/v1/targets?select=domain&limit=2&offset=0"
     )
     assert payload["source_errors"] == []
-    assert payload["items"][0]["canonical_value"] == "secretref.example"
+    assert payload["items"][0]["canonical_value"] == "secretref.corp-target.io"
 
 
 def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
@@ -1941,8 +1969,8 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
                         "name": "Portal",
                         "username": "Alice",
                         "nested": {
-                            "urls": ["https://app.example/path?token=drop"],
-                            "owner": "ops@example.com",
+                            "urls": ["https://app.corp-target.io/path?token=drop"],
+                            "owner": "ops@corp-target.io",
                         },
                     }
                 ]
@@ -1951,7 +1979,7 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
             "https://abc123.supabase.co/rest/v1/observations"
             "?select=*&limit=1000&offset=0"
         ):
-            return _Response([{"notes": "api.example"}])
+            return _Response([{"notes": "api.corp-target.io"}])
         raise AssertionError(f"unexpected URL {url}")
 
     config = tmp_path / "supabase-projects.local.json"
@@ -1990,10 +2018,10 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
         (item["target_type"], item["canonical_value"], item["source_group"])
         for item in payload["items"]
     }
-    assert ("url", "https://app.example/path", "supabase:abc123:assets") in typed_items
-    assert ("email", "ops@example.com", "supabase:abc123:assets") in typed_items
+    assert ("url", "https://app.corp-target.io/path", "supabase:abc123:assets") in typed_items
+    assert ("email", "ops@corp-target.io", "supabase:abc123:assets") in typed_items
     assert ("username", "@alice", "supabase:abc123:assets") in typed_items
-    assert ("domain", "api.example", "supabase:abc123:observations") in typed_items
+    assert ("domain", "api.corp-target.io", "supabase:abc123:observations") in typed_items
     assert payload["counts"]["by_source"]["supabase"] == 4
     assert payload["counts"]["by_source_group"]["supabase:abc123:assets"] == 1
     assert payload["counts"]["by_source_group"]["supabase:abc123:observations"] == 1
@@ -2208,9 +2236,9 @@ def test_feed_build_supabase_paginates_and_caps_table_limit(
     def _fake_get(url: str, *, headers: dict[str, str], timeout: float) -> _Response:
         observed_urls.append(url)
         if url.endswith("&offset=0"):
-            return _Response([{"domain": f"page1-{index}.example"} for index in range(1000)])
+            return _Response([{"domain": f"page1-{index}.corp-target.io"} for index in range(1000)])
         if url.endswith("&offset=1000"):
-            return _Response([{"domain": "page2.example"}])
+            return _Response([{"domain": "page2.corp-target.io"}])
         raise AssertionError(f"unexpected URL {url}")
 
     config = tmp_path / "supabase-projects.local.json"
@@ -2268,7 +2296,7 @@ def test_feed_build_supabase_harvests_no_more_than_configured_row_cap(
             return None
 
         def json(self) -> list[dict[str, str]]:
-            return [{"domain": f"over-{index}.example"} for index in range(5)]
+            return [{"domain": f"over-{index}.corp-target.io"} for index in range(5)]
 
     def _fake_get(url: str, *, headers: dict[str, str], timeout: float) -> _Response:
         observed_urls.append(url)
@@ -2311,9 +2339,9 @@ def test_feed_build_supabase_harvests_no_more_than_configured_row_cap(
     assert payload["counts"]["by_source"]["supabase"] == 3
     assert payload["counts"]["by_source_group"]["supabase:abc123:targets"] == 3
     assert {item["canonical_value"] for item in payload["items"]} == {
-        "over-0.example",
-        "over-1.example",
-        "over-2.example",
+        "over-0.corp-target.io",
+        "over-1.corp-target.io",
+        "over-2.corp-target.io",
     }
     assert payload["source_errors"] == [
         {"source": "supabase", "error": "abc123:targets:row_limit_reached:3"}
@@ -2346,7 +2374,7 @@ def test_feed_build_supabase_project_budgets_stop_extra_tables(
         if url == "https://abc123.supabase.co/rest/v1/":
             return _Response({"paths": {"/assets": {}, "/observations": {}, "/users": {}}})
         if url == "https://abc123.supabase.co/rest/v1/assets?select=*&limit=1&offset=0":
-            return _Response([{"domain": "one.example"}])
+            return _Response([{"domain": "one.corp-target.io"}])
         raise AssertionError(f"unexpected URL {url}")
 
     config = tmp_path / "supabase-projects.local.json"
@@ -2419,7 +2447,7 @@ def test_feed_build_supabase_uses_greedy_default_limit_for_minimal_project(
         if url == "https://abc123.supabase.co/rest/v1/":
             return _Response({"paths": {"/targets": {}}})
         if url == "https://abc123.supabase.co/rest/v1/targets?select=*&limit=1000&offset=0":
-            return _Response([{"domain": "one.example"}])
+            return _Response([{"domain": "one.corp-target.io"}])
         raise AssertionError(f"unexpected URL {url}")
 
     config = tmp_path / "supabase-projects.local.json"
