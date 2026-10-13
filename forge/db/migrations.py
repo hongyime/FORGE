@@ -40,6 +40,7 @@ Migration index
   0050  Active session relationship_type CHECK rebuild
   0051  Recursion intents (Cairn Fact/Intent/Hint)
   0052  API-spec seed type
+  0053  Autopilot loop progress events
 
 Design constraints:
   - All ALTER TABLE statements use `IF NOT EXISTS` workaround (SQLite
@@ -2807,6 +2808,33 @@ def _m0052_api_spec_seed_type(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _m0053_autopilot_loop_events(conn: sqlite3.Connection) -> None:
+    """Create structured progress events for the autopilot loop."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS autopilot_cycle_events (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            cycle_id       TEXT    NOT NULL,
+            cycle_number   INTEGER NOT NULL,
+            event_type     TEXT    NOT NULL CHECK (event_type IN (
+                               'cycle_start', 'cycle_end',
+                               'phase_start', 'phase_end',
+                               'target_engaged', 'target_completed', 'target_failed',
+                               'error', 'cooldown_start'
+                           )),
+            phase_name     TEXT,
+            phase_index    INTEGER CHECK (phase_index BETWEEN 1 AND 8),
+            occurred_at    TEXT    NOT NULL,
+            details_json   TEXT    NOT NULL DEFAULT '{}'
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_autopilot_cycle_events_cycle
+            ON autopilot_cycle_events (cycle_id, id);
+        CREATE INDEX IF NOT EXISTS idx_autopilot_cycle_events_latest
+            ON autopilot_cycle_events (occurred_at DESC, id DESC);
+    """)
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — ordered by version number
 # ---------------------------------------------------------------------------
@@ -2868,6 +2896,7 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (50, "active_session_relationship_check", _m0050_active_session_relationship_check),
     (51, "recursion_intents", _m0051_recursion_intents),
     (52, "api_spec_seed_type", _m0052_api_spec_seed_type),
+    (53, "autopilot_loop_events", _m0053_autopilot_loop_events),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)

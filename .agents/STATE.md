@@ -1,4 +1,14 @@
-# Completed Task: Extend autopilot engagement capacity (2026-10-13).
+# Active Task: Autopilot loop observability (2026-10-13).
+
+**Progress:** Added migration 0053 for `autopilot_cycle_events`, a failure-safe event writer/status reader, and loop cycle/phase/target/error/cooldown instrumentation. Added optional target progress callbacks to target import and resume execution, and appended autopilot data to existing `forge monitoring status` text/JSON output. Relevant suites pass: autopilot 57, monitoring+migrations 56, target import/resume 68; Ruff lint passes.
+
+**Verification:** 181 relevant tests passed, 0 failed (autopilot 57; monitoring+migrations 56 with 4 sqlite timestamp deprecation warnings; target import/resume 68). The 8 observability tests passed again after final review edits. Ruff lint and `git diff --check` pass.
+
+**Next:** Commit and push `main`; restart the approved user service, verify the process and DB events, then capture the full existing monitoring status output. Preserve the pre-existing untracked `autopilot-loop.sh` and `nuclei-templates/` paths.
+
+---
+
+# Previous Completed Task: Extend autopilot engagement capacity (2026-10-13).
 
 **Progress:** Raised autopilot `start_limit` to 20 and `max_runtime_minutes` to 60 in the dataclass and serialized defaults. Confirmed CLI flags remain optional overrides with fallback to base defaults; added default/override coverage. Traced placeholder denylist enforcement through feed build, auto-scope, `load_target_feed`, and engagement launch; added an import/start regression test proving placeholder hosts are filtered before launch. `cooldown_minutes` remains 30 and `min_start_source_count` remains 1. Requested suites passed: 144 passed, 0 failed. No live apply/loop was run.
 

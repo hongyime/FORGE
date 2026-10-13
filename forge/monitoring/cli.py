@@ -7,6 +7,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 
+from forge.autopilot.events import autopilot_status_for_data_dir
 from forge.config import ForgeConfig
 from forge.monitoring.runner import (
     deliver_monitoring_alerts_for_data_dir,
@@ -18,6 +19,17 @@ from forge.monitoring.runner import (
 from forge.monitoring.exposure_metrics import exposure_metrics_for_data_dir
 
 console = Console(stderr=True)
+
+
+def _format_elapsed(seconds: int) -> str:
+    if seconds >= 3600:
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours}h{minutes:02d}m"
+    if seconds >= 60:
+        minutes, seconds = divmod(seconds, 60)
+        return f"{minutes}m{seconds:02d}s"
+    return f"{seconds}s"
 
 
 def register_monitoring_commands(app: typer.Typer) -> None:
@@ -42,6 +54,8 @@ def register_monitoring_commands(app: typer.Typer) -> None:
         cfg = ForgeConfig.load()
         root = data_dir or cfg.data_dir
         result = monitoring_status_for_data_dir(root, now=now)
+        autopilot = autopilot_status_for_data_dir(root, now=now)
+        result["autopilot"] = autopilot
         if json_output:
             typer.echo(json.dumps(result, sort_keys=True))
             return
@@ -56,6 +70,29 @@ def register_monitoring_commands(app: typer.Typer) -> None:
             f"suppressed_deliveries={result['suppressed_delivery_count']} "
             f"active_suppressions={result['active_suppression_count']} "
             f"errors={len(result['errors'])}"
+        )
+        if not autopilot["recorded"]:
+            console.print("[bold]Autopilot[/bold] no autopilot activity recorded")
+            return
+
+        phase = autopilot.get("phase")
+        if isinstance(phase, dict):
+            phase_text = (
+                f"{phase['index']} of {autopilot['phase_count']} {phase['name']} "
+                f"elapsed={_format_elapsed(int(phase['elapsed_seconds']))}"
+            )
+        else:
+            phase_text = str(autopilot["status"])
+        targets = autopilot["targets"]
+        next_cycle = autopilot.get("next_cycle_at") or "not scheduled"
+        console.print(
+            "[bold]Autopilot[/bold] "
+            f"cycle={autopilot['cycle_number']} status={autopilot['status']} "
+            f"phase={phase_text} "
+            f"targets_engaged={targets['engaged']} "
+            f"targets_completed={targets['completed']} "
+            f"targets_failed={targets['failed']} "
+            f"errors={autopilot['errors']} next_cycle={next_cycle}"
         )
 
     @app.command("due-plan")

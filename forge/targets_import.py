@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -11,7 +12,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
@@ -28,6 +29,7 @@ TARGET_IMPORT_MONITORING_POLICY_NAME = "Target import seed exposure"
 TARGET_IMPORT_MONITORING_INTERVAL_MINUTES = 60
 DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES = 25
 TARGET_IMPORT_CHILD_TIMEOUT_GRACE_SECONDS = 120
+_LOG = logging.getLogger(__name__)
 MAX_TARGET_FEED_FILE_BYTES = 64 * 1024 * 1024
 MAX_TARGET_FEED_IMPORT_ITEMS = 100_000
 SUPPORTED_TARGET_TYPES = {
@@ -177,6 +179,7 @@ def import_targets(
     start_limit: int | None = None,
     min_start_source_count: int = 1,
     config: ForgeConfig | None = None,
+    progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> list[TargetImportResult]:
     if start and not dry_run and not str(roe_id or "").strip():
         raise ValueError("--start requires --roe-id so live execution is authorized")
@@ -231,15 +234,30 @@ def import_targets(
             and item.source_count >= min_start_sources
             and not _has_kill_chain_run(cfg, engagement_id, item.canonical_value)
         ):
-            _start_kill_chain(
-                engagement_id=engagement_id,
-                seed=item.canonical_value,
-                roe_id=str(roe_id or "").strip(),
-                scope_manifest=manifest_path,
-                max_iter=max_iter,
-                max_runtime_minutes=max_runtime_minutes,
-                engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
-            )
+            progress_details = {
+                "engagement_id": engagement_id,
+                "target_type": item.target_type,
+                "target_value": item.canonical_value,
+            }
+            _notify_progress(progress_callback, "target_engaged", progress_details)
+            try:
+                _start_kill_chain(
+                    engagement_id=engagement_id,
+                    seed=item.canonical_value,
+                    roe_id=str(roe_id or "").strip(),
+                    scope_manifest=manifest_path,
+                    max_iter=max_iter,
+                    max_runtime_minutes=max_runtime_minutes,
+                    engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
+                )
+            except Exception as exc:
+                _notify_progress(
+                    progress_callback,
+                    "target_failed",
+                    {**progress_details, "error_type": type(exc).__name__},
+                )
+                raise
+            _notify_progress(progress_callback, "target_completed", progress_details)
             started = True
             if starts_remaining is not None:
                 starts_remaining -= 1
@@ -268,6 +286,19 @@ def import_targets(
             )
         )
     return results
+
+
+def _notify_progress(
+    callback: Callable[[str, dict[str, Any]], None] | None,
+    event_type: str,
+    details: dict[str, Any],
+) -> None:
+    if callback is None:
+        return
+    try:
+        callback(event_type, details)
+    except Exception as exc:  # noqa: BLE001 - progress observers cannot affect engagement work
+        _LOG.warning("target progress callback failed: %s", type(exc).__name__)
 
 
 def _fetch_feed(feed_url: str | None, auth_header_env: str | None) -> Any:

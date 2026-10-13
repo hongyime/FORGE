@@ -319,6 +319,7 @@ def execute_target_resume_plan(
     break_stale_lock: bool = False,
     stale_lock_minutes: int = DEFAULT_RESUME_LOCK_STALE_MINUTES,
     runner: ResumeRunner | None = None,
+    progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Execute ready resume candidates with a durable batch lock and ledger."""
 
@@ -490,6 +491,7 @@ def execute_target_resume_plan(
                     ledger_path=ledger_path,
                     ledger_lock=ledger_lock,
                     runner=runner,
+                    progress_callback=progress_callback,
                 )
                 counts[str(result["status"])] += 1
                 results.append(result)
@@ -512,6 +514,7 @@ def execute_target_resume_plan(
                             ledger_path=ledger_path,
                             ledger_lock=ledger_lock,
                             runner=runner,
+                            progress_callback=progress_callback,
                         )
                     ] = item
                 stop_scheduling = False
@@ -537,6 +540,7 @@ def execute_target_resume_plan(
                             ledger_path=ledger_path,
                             ledger_lock=ledger_lock,
                             runner=runner,
+                            progress_callback=progress_callback,
                         )
                     ] = item
         _append_ledger_event(
@@ -602,6 +606,7 @@ def _execute_resume_item(
     ledger_path: Path,
     ledger_lock: Lock,
     runner: ResumeRunner | None,
+    progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     checked = _refresh_plan_item(item)
     if checked["status"] == "skipped":
@@ -610,6 +615,12 @@ def _execute_resume_item(
     command = [str(part) for part in checked["command"]]
     timeout_seconds = _child_timeout_seconds(_safe_int(checked.get("max_runtime_minutes")))
     started_at = _utc_now()
+    progress_details = {
+        "engagement_id": checked.get("engagement_id"),
+        "run_id": checked.get("run_id"),
+        "target_value": checked.get("seed_value"),
+    }
+    _notify_progress(progress_callback, "target_engaged", progress_details)
     _append_resume_ledger_event(
         ledger_path,
         ledger_lock,
@@ -623,7 +634,19 @@ def _execute_resume_item(
             "command": command,
         },
     )
-    completed = _run_resume_child(command, timeout_seconds=timeout_seconds, runner=runner)
+    try:
+        completed = _run_resume_child(
+            command,
+            timeout_seconds=timeout_seconds,
+            runner=runner,
+        )
+    except Exception as exc:
+        _notify_progress(
+            progress_callback,
+            "target_failed",
+            {**progress_details, "error_type": type(exc).__name__},
+        )
+        raise
     status = "completed" if completed.returncode == 0 else "failed"
     result = {
         **checked,
@@ -634,8 +657,30 @@ def _execute_resume_item(
         "stdout_tail": _tail_text(completed.stdout),
         "stderr_tail": _tail_text(completed.stderr),
     }
+    _notify_progress(
+        progress_callback,
+        "target_completed" if status == "completed" else "target_failed",
+        progress_details,
+    )
     _append_resume_ledger_event(ledger_path, ledger_lock, {"event": f"item_{status}", **result})
     return result
+
+
+def _notify_progress(
+    callback: Callable[[str, dict[str, Any]], None] | None,
+    event_type: str,
+    details: dict[str, Any],
+) -> None:
+    if callback is None:
+        return
+    try:
+        callback(event_type, details)
+    except Exception as exc:  # noqa: BLE001 - progress observers cannot affect engagement work
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "resume progress callback failed: %s", type(exc).__name__
+        )
 
 
 def backfill_target_resume_scope_manifests(

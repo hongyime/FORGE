@@ -26,11 +26,12 @@ import json
 import os
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from forge.autopilot.defaults import AutopilotDefaults
+from forge.autopilot.events import AutopilotEventWriter
 from forge.config import ForgeConfig
 
 
@@ -129,6 +130,7 @@ class ForgeAutopilot:
         self.skip_phases: set[str] = {
             p.lower().strip() for p in (skip_phases or set())
         }
+        self._event_writer = AutopilotEventWriter(self.data_dir)
 
     # ------------------------------------------------------------------
     # Public API
@@ -202,23 +204,71 @@ class ForgeAutopilot:
         mode = self.resolve_execution_mode(dry_run=dry_run)
         is_dry_run = mode == "dry_run"
         started_at = _now_iso()
-        phases: list[AutopilotPhaseResult] = []
-        phases.append(self._maybe_phase("feed_fetch", is_dry_run))
-        phases.append(self._maybe_phase("connected_services_scan", is_dry_run))
-        phases.append(self._maybe_phase("feed_build", is_dry_run))
-        phases.append(self._maybe_phase("auto_scope", is_dry_run))
-        phases.append(self._maybe_phase("import_targets", is_dry_run))
-        phases.append(self._maybe_phase("resume_candidates", is_dry_run))
-        phases.append(self._maybe_phase("monitoring", is_dry_run))
-        phases.append(self._maybe_phase("dashboard", is_dry_run))
-        finished_at = _now_iso()
-        return self._summarize(
-            phases,
-            mode=mode,
-            dry_run=is_dry_run,
-            started_at=started_at,
-            finished_at=finished_at,
+        self._event_writer.start_cycle(
+            details={"mode": mode, "dry_run": is_dry_run}
         )
+        phases: list[AutopilotPhaseResult] = []
+        cycle_status = "error"
+        finished_at = ""
+        try:
+            for phase_index, name in enumerate(self._PHASE_DISPATCH, start=1):
+                self._event_writer.emit(
+                    "phase_start",
+                    phase_name=name,
+                    phase_index=phase_index,
+                    details={"dry_run": is_dry_run},
+                )
+                try:
+                    phase = self._maybe_phase(name, is_dry_run)
+                except Exception as exc:
+                    self._event_writer.emit(
+                        "error",
+                        phase_name=name,
+                        phase_index=phase_index,
+                        details={"error_type": type(exc).__name__},
+                    )
+                    self._event_writer.emit(
+                        "phase_end",
+                        phase_name=name,
+                        phase_index=phase_index,
+                        details={"status": "error"},
+                    )
+                    raise
+                phases.append(phase)
+                if phase.status == "error":
+                    self._event_writer.emit(
+                        "error",
+                        phase_name=name,
+                        phase_index=phase_index,
+                        details={"status": phase.status},
+                    )
+                self._event_writer.emit(
+                    "phase_end",
+                    phase_name=name,
+                    phase_index=phase_index,
+                    details={"status": phase.status},
+                )
+            finished_at = _now_iso()
+            payload = self._summarize(
+                phases,
+                mode=mode,
+                dry_run=is_dry_run,
+                started_at=started_at,
+                finished_at=finished_at,
+            )
+            cycle_status = str(payload["status"])
+            return payload
+        finally:
+            finished_at = finished_at or _now_iso()
+            self._event_writer.emit(
+                "cycle_end",
+                details={
+                    "status": cycle_status,
+                    "phase_count": len(phases),
+                    "dry_run": is_dry_run,
+                },
+                occurred_at=finished_at,
+            )
 
     def run(
         self,
@@ -245,6 +295,17 @@ class ForgeAutopilot:
             payload["total_iterations"] = iterations
             results.append(payload)
             if idx + 1 < iterations and cooldown:
+                next_cycle_at = datetime.now(UTC) + timedelta(seconds=cooldown)
+                self._event_writer.emit(
+                    "cooldown_start",
+                    details={
+                        "cooldown_minutes": int(self.defaults.cooldown_minutes),
+                        "cooldown_seconds": cooldown,
+                        "next_cycle_at": (
+                            next_cycle_at.isoformat().replace("+00:00", "Z")
+                        ),
+                    },
+                )
                 sleep(cooldown)
         last = results[-1] if results else {}
         last["iterations_run"] = len(results)
@@ -855,6 +916,9 @@ class ForgeAutopilot:
                 start_limit=self.defaults.start_limit,
                 min_start_source_count=self.defaults.min_start_source_count,
                 config=self._cfg,
+                progress_callback=self._target_progress_callback(
+                    "import_targets", 5
+                ),
             )
         except Exception as exc:  # noqa: BLE001
             return AutopilotPhaseResult(
@@ -906,6 +970,9 @@ class ForgeAutopilot:
                 dry_run=dry_run,
                 stop_on_failure=False,
                 break_stale_lock=True,
+                progress_callback=self._target_progress_callback(
+                    "resume_candidates", 6
+                ),
             )
         except Exception as exc:  # noqa: BLE001
             return AutopilotPhaseResult(
@@ -1023,6 +1090,23 @@ class ForgeAutopilot:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _target_progress_callback(
+        self,
+        phase_name: str,
+        phase_index: int,
+    ) -> Callable[[str, dict[str, Any]], None]:
+        """Bind per-target execution callbacks to the active cycle event stream."""
+
+        def record(event_type: str, details: dict[str, Any]) -> None:
+            self._event_writer.emit(
+                event_type,
+                phase_name=phase_name,
+                phase_index=phase_index,
+                details=details,
+            )
+
+        return record
 
     def _auto_scope_manifest(self) -> Path | None:
         """Locate a scope manifest without demanding one.
