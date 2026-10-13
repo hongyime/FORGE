@@ -766,3 +766,5 @@ Bryan: "Keep the rust in the task list. Execute it after we are done fixing all 
 2026-10-14: Bug 3 DONE (commit d120948e): phase-5 imports stop after 3 consecutive failed starts (success resets; skips neutral); stop reason + unprocessed count surfaced in per-target, CLI, and autopilot results. Fully-failing phase now creates at most 3 records. Orchestrator verified 214 relevant tests; full tests/cli 9 failures proven pre-existing on a23691ff. Loop still stopped.
 
 2026-10-14: Verification 1-2 passed (372 tests; phase-5 dry-run ok). Starting cycle 5 via forge-autopilot.service restart; proof requires target_completed > 0. Cycle 5 left running.
+
+2026-10-14: CYCLE 5 PROOF: first kill-chain COMPLETED (engagement 56, support@github.com, 20:27:37 UTC). Phase 5 at proof point: engaged=4, completed=1, failed=2 (both failures parent-timeout 124, not crashes). Cycle 5 left RUNNING; do not stop. Follow-up for Bryan: 60-min per-target budget too small for mega-targets like gmail.com.

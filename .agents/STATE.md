@@ -1,3 +1,23 @@
+## CYCLE 5 VERIFIED -- first kill-chain COMPLETED (2026-10-14, orchestrator)
+
+Status: PROOF ACHIEVED. Cycle 5 left RUNNING (phase 5 import_targets, target 4 engaged). Do NOT stop it. Rust migration remains parked.
+
+Cycle 5 timeline (UTC 2026-10-13): cycle_start 17:31:38; feed_fetch ok (32s); connected_services_scan 17:32-18:08 (36 min, in line with cycle 3's 38 min / cycle 4's 23 min); feed_build 4s; auto_scope <1s; import_targets from 18:08:46.
+
+Phase-5 results at proof point (20:27:37 UTC): targets_engaged=4, targets_completed=1, targets_failed=2.
+- Target 1: engagement 3, email mikeairola@mac.com -- FAILED on parent timeout (return_code 124, 3720s). Kill-chain ran the full budget with real recon progress (seed_runs row written -- the exact INSERT that crashed in cycle 4 with the ghost-FK OperationalError now succeeds).
+- Target 2: engagement 49, domain gmail.com -- FAILED on parent timeout (return_code 124, 3720s). Real progress: fanout_a_subdomains + fanout_b2_linkedin completed, large parallel fanout_d_host_surface batch completed.
+- Target 3 (FIRST COMPLETED): engagement 56, email support@github.com -- target_completed 20:27:37 UTC (~15 min run). Consecutive-failure streak reset; phase continued.
+- Target 4 (in progress at proof point): engagement 75, email liuwayong@gmail.com.
+
+Observability proven live (Bug 1c): target_failed events carry return_code, sanitized argv (paths redacted), stderr_tail (timeout message). Bug 3 proven live: phase continued past 2 consecutive failures and kept going after a completion reset the streak (no churn, no abort-on-first-failure).
+
+Live DB migration: engagement 3.db and 49.db verified at schema v54 with seed FKs to engagement_seeds (migrated on open via get_engagement_db). Remaining DBs migrate on open the same way.
+
+Observation / follow-up (NOT fixed in this task, Bryan's call): the 60-min per-target budget is exhausted by large targets (gmail.com mega-domain; slow email recon). Kill-chains are healthy and progressing, not stalled. Options for Bryan: raise per-target max-runtime, bound the fanout_d host-surface batch, or accept timeouts for mega-targets. No live behaviour changed for this; the 3 assigned bugs are fixed and the proof criterion (target_completed > 0) is met.
+
+---
+
 ## Verification steps 1-2 PASSED; starting CYCLE 5 (2026-10-14, orchestrator)
 
 - (1) Combined relevant suites on final tree: 372 passed (tests/db + test_targets_import + test_automation_cycle + test_automation_feed_build + test_seed_classifier_cloud_ref + tests/automation/). Full tests/cli: 436 passed, 9 failed (proven pre-existing), 1 deselected.
