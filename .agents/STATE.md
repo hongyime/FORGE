@@ -1,3 +1,18 @@
+## Bug 2 -- filenames rejected by shared domain validation (2026-10-14, Codex leg + orchestrator verification)
+
+Status: COMPLETE. Commit 53edfa26 on main (code + tests). Loop still stopped; cycle 5 not yet started. Rust migration remains parked.
+
+Rule (documented in forge/domain_validation.py): curated file-extension TLD denylist (_FILENAME_EXTENSION_TLDS, 92 suffixes: png, py, yml, yaml, json, html, css, js, ts, exe, pdf, etc.) + pre-existing code-identifier denylist, in a new shared canonicalizer canonicalize_domain(). Both entry points use it: forge/targets_import.py (_canonical_domain_value) and forge/engagement_orchestrator.py (_classify_seed_value). No other local domain validators remain (grep-verified).
+
+Trade-off (deliberate, locked in by tests): .py is denied despite being Paraguay's ccTLD -- avoiding false-positive autonomous engagements from filenames like worker.py takes priority for the unattended feed. .md (Moldova), .rs (Serbia), .sh (Saint Helena), .ai (Anguilla), .so (Somalia), .zip (real gTLD) remain accepted. The denylist cannot catch every possible file suffix; genuine .py domains are false negatives by design.
+
+Verification (orchestrator re-ran): 359 passed across test_targets_import + test_automation_feed_build + test_automation_cycle + test_seed_classifier_cloud_ref + tests/automation/. Ruff + git diff --check clean. Independent canonicalize_domain spot-check: image.png/worker.py/config.yml -> empty; example.com/example.so/single.example -> accepted.
+Pre-existing failure repaired (proven by stash test on Bug 1 head 7855c147): test_automation_status_summarizes_existing_target_feed_scanability failed with the ORIGINAL .example fixture (assert 1 == 3) because the pre-existing is_denied_target policy drops reserved .example hosts. Fixture moved to .corp-target.io hosts; deny policy unchanged.
+
+Next: Bug 3 (failed starts vs start budget) -> phase-5 dry-run -> cycle 5.
+
+---
+
 ## Bug 1 -- migration 0052 ghost FKs FIXED (2026-10-14, Codex leg + orchestrator verification)
 
 Status: COMPLETE. Commit a52bbbe5 on main (code + tests). Live DB 1 migrated to v54 via the real on-open path. Loop still stopped; cycle 5 not yet started. Rust migration remains parked.

@@ -760,3 +760,5 @@ Machine-specific values in this document use privacy placeholders.
 Bryan: "Keep the rust in the task list. Execute it after we are done fixing all the bugs." All legs halted; agy Stage 0 review leg closed mid-flight (verdict unknown). State parked in STATE.md. Migration stays on task list (goal_810c0c5c320c), resumes ONLY on Bryans say-so after Python bugs fixed.
 
 2026-10-14: Bug 1 DONE (commit a52bbbe5): v54 repairs ghost seed FKs, _rebuild_table swap preserves child FK targets, target_failed events carry sanitized return_code/argv/stderr_tail. Orchestrator verified 89 tests, copy-DB 101 row preservation, live engagement 1 v53->v54 via get_engagement_db. Loop still stopped.
+
+2026-10-14: Bug 2 DONE (commit 53edfa26): shared forge/domain_validation.py rejects filename TLDs (png/py/yml + 89 more); .py deliberately denied despite Paraguay ccTLD; .md/.rs/.sh/.ai/.so/.zip preserved. Orchestrator verified 359 tests; repaired pre-existing .example fixture failure (proven pre-existing on 7855c147). Loop still stopped.
