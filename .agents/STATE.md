@@ -1,10 +1,10 @@
 # Active Task: Autopilot loop observability (2026-10-13).
 
-**Progress:** Added migration 0053 for `autopilot_cycle_events`, a failure-safe event writer/status reader, and loop cycle/phase/target/error/cooldown instrumentation. Added optional target progress callbacks to target import and resume execution, and appended autopilot data to existing `forge monitoring status` text/JSON output. Relevant suites pass: autopilot 57, monitoring+migrations 56, target import/resume 68; Ruff lint passes.
+**Progress:** Added migration 0053 for `autopilot_cycle_events`, a failure-safe event writer/status reader, and loop cycle/phase/target/error/cooldown instrumentation. Added optional target progress callbacks to target import and resume execution, and appended autopilot data to existing `forge monitoring status` text/JSON output. Relevant suites pass: autopilot 57, monitoring+migrations 56, target import/resume 68; Ruff lint passes. Feature commit `426cdb69` is pushed to `origin/main` and verified in sync. After the approved restart, the service is active, the loop process is running, and two events have landed in the existing DB.
 
 **Verification:** 181 relevant tests passed, 0 failed (autopilot 57; monitoring+migrations 56 with 4 sqlite timestamp deprecation warnings; target import/resume 68). The 8 observability tests passed again after final review edits. Ruff lint and `git diff --check` pass.
 
-**Next:** Commit and push `main`; restart the approved user service, verify the process and DB events, then capture the full existing monitoring status output. Preserve the pre-existing untracked `autopilot-loop.sh` and `nuclei-templates/` paths.
+**Next:** Capture the full existing `forge monitoring status` output after the restart. Preserve the pre-existing untracked `autopilot-loop.sh` and `nuclei-templates/` paths.
 
 ---
 
