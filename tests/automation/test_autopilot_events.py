@@ -52,15 +52,25 @@ def _make_autopilot(data_dir: Path, *, cooldown_minutes: int = 30) -> ForgeAutop
     )
 
 
-def test_m0053_applies_to_fresh_and_v52_databases(tmp_path: Path) -> None:
+def test_m0053_and_m0054_apply_to_fresh_and_v52_databases(tmp_path: Path) -> None:
     fresh = sqlite3.connect(tmp_path / "fresh.db")
     try:
         run_migrations(fresh)
-        assert fresh.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 53
+        assert fresh.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 54
         assert fresh.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='autopilot_cycle_events'"
         ).fetchone()
-        assert TARGET_VERSION == 53
+        for table_name, expected_columns in {
+            "seed_relations": {"source_seed_id", "target_seed_id"},
+            "seed_runs": {"seed_id"},
+        }.items():
+            seed_targets = {
+                str(row[3]): str(row[2])
+                for row in fresh.execute(f'PRAGMA foreign_key_list("{table_name}")')
+            }
+            assert all(seed_targets[column] == "engagement_seeds" for column in expected_columns)
+        assert fresh.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert TARGET_VERSION == 54
     finally:
         fresh.close()
 
@@ -69,7 +79,7 @@ def test_m0053_applies_to_fresh_and_v52_databases(tmp_path: Path) -> None:
         from_v52.execute("CREATE TABLE _schema_version (version INTEGER NOT NULL)")
         from_v52.execute("INSERT INTO _schema_version (version) VALUES (52)")
         run_migrations(from_v52)
-        assert from_v52.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 53
+        assert from_v52.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 54
         columns = {row[1] for row in from_v52.execute("PRAGMA table_info(autopilot_cycle_events)")}
         assert columns == {
             "id",

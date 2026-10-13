@@ -41,6 +41,7 @@ Migration index
   0051  Recursion intents (Cairn Fact/Intent/Hint)
   0052  API-spec seed type
   0053  Autopilot loop progress events
+  0054  Repair seed relation/run foreign-key targets
 
 Design constraints:
   - All ALTER TABLE statements use `IF NOT EXISTS` workaround (SQLite
@@ -2835,6 +2836,84 @@ def _m0053_autopilot_loop_events(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _m0054_seed_fk_targets(conn: sqlite3.Connection) -> None:
+    """Repair seed child-table FKs left pointing at v52 rebuild shells."""
+    expected_targets = {
+        "seed_relations": {
+            "source_seed_id": "engagement_seeds",
+            "target_seed_id": "engagement_seeds",
+        },
+        "seed_runs": {"seed_id": "engagement_seeds"},
+    }
+
+    for table_name, expected in expected_targets.items():
+        if not _table_exists(conn, table_name):
+            continue
+        foreign_keys = conn.execute(
+            f"PRAGMA foreign_key_list({_quoted_identifier(table_name)})"
+        ).fetchall()
+        actual = {str(row[3]): str(row[2]) for row in foreign_keys}
+        if all(actual.get(column) == target for column, target in expected.items()) and all(
+            "__rebuild_" not in str(row[2]) for row in foreign_keys
+        ):
+            continue
+
+        if table_name == "seed_relations":
+            create_sql = """
+            CREATE TABLE seed_relations (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id  INTEGER NOT NULL REFERENCES engagements(id),
+                source_seed_id INTEGER NOT NULL REFERENCES engagement_seeds(id),
+                target_seed_id INTEGER NOT NULL REFERENCES engagement_seeds(id),
+                relation_type  TEXT    NOT NULL
+                               CHECK (relation_type IN ('derived_from','corroborates','conflicts_with','same_entity','related_asset')),
+                confidence     REAL    NOT NULL DEFAULT 0.5,
+                evidence_json  TEXT    NOT NULL DEFAULT '{}',
+                discovered_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (engagement_id, source_seed_id, target_seed_id, relation_type)
+            )
+            """
+            indexes = [
+                """
+                CREATE INDEX IF NOT EXISTS idx_seed_relations_engagement
+                    ON seed_relations (engagement_id, relation_type, confidence DESC)
+                """
+            ]
+        else:
+            create_sql = """
+            CREATE TABLE seed_runs (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+                seed_id       INTEGER NOT NULL REFERENCES engagement_seeds(id),
+                loop_name     TEXT    NOT NULL,
+                status        TEXT    NOT NULL DEFAULT 'queued'
+                              CHECK (status IN ('queued','running','completed','failed','skipped')),
+                input_count   INTEGER NOT NULL DEFAULT 0,
+                output_count  INTEGER NOT NULL DEFAULT 0,
+                error         TEXT,
+                metadata_json TEXT    NOT NULL DEFAULT '{}',
+                started_at    TIMESTAMP,
+                completed_at  TIMESTAMP,
+                UNIQUE (engagement_id, seed_id, loop_name, started_at)
+            )
+            """
+            indexes = [
+                """
+                CREATE INDEX IF NOT EXISTS idx_seed_runs_engagement
+                    ON seed_runs (engagement_id, status, started_at)
+                """
+            ]
+
+        _rebuild_table(conn, table_name, create_sql, indexes)
+
+
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    ).fetchone() is not None
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — ordered by version number
 # ---------------------------------------------------------------------------
@@ -2897,6 +2976,7 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (51, "recursion_intents", _m0051_recursion_intents),
     (52, "api_spec_seed_type", _m0052_api_spec_seed_type),
     (53, "autopilot_loop_events", _m0053_autopilot_loop_events),
+    (54, "seed_fk_targets", _m0054_seed_fk_targets),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)
@@ -3049,26 +3129,75 @@ def _rebuild_table(
 
     _sql_digest = _hashlib.sha1(create_table_sql.encode("utf-8")).hexdigest()[:8]
     temp_table = f"{table_name}__rebuild_{_sql_digest}"
-    conn.execute(
-        f"ALTER TABLE {_quoted_identifier(table_name)} RENAME TO {_quoted_identifier(temp_table)}"
-    )
-    conn.execute(create_table_sql)
+    import re as _re  # noqa: PLC0415
 
-    new_columns = [
-        str(row[1])
-        for row in conn.execute(f"PRAGMA table_info({_quoted_identifier(table_name)})").fetchall()
-    ]
-    copy_columns = [column for column in columns if column in new_columns]
-    if copy_columns:
-        quoted_columns = ", ".join(_quoted_identifier(column) for column in copy_columns)
-        conn.execute(
-            f"""
-            INSERT INTO {_quoted_identifier(table_name)} ({quoted_columns})
-            SELECT {quoted_columns}
-            FROM {_quoted_identifier(temp_table)}
-            """
+    create_match = _re.match(
+        r"(?is)^(\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?)("
+        r"\"[^\"]+\"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)",
+        create_table_sql,
+    )
+    if create_match is None:
+        raise ValueError(f"cannot identify CREATE TABLE name for {table_name!r}")
+    create_name = create_match.group(2).strip("\"`[]")
+    if create_name.lower() != table_name.lower():
+        raise ValueError(
+            f"CREATE TABLE name {create_name!r} does not match {table_name!r}"
+        )
+    replacement_sql = (
+        create_table_sql[: create_match.start(2)]
+        + _quoted_identifier(temp_table)
+        + create_table_sql[create_match.end(2) :]
+    )
+
+    # ALTER TABLE ... RENAME rewrites every child FK to the temporary parent
+    # name. Instead, build and populate a replacement under a temporary name,
+    # then drop the old parent and rename the replacement into its canonical
+    # name. Child FK definitions continue to refer to the canonical name.
+    fk_row = conn.execute("PRAGMA foreign_keys").fetchone()
+    foreign_keys_enabled = bool(fk_row and int(fk_row[0] or 0))
+    if foreign_keys_enabled and conn.in_transaction:
+        raise RuntimeError(
+            "_rebuild_table requires a migration boundary when foreign keys are enabled"
         )
 
-    conn.execute(f"DROP TABLE {_quoted_identifier(temp_table)}")
-    for sql in post_sql or []:
-        conn.execute(sql)
+    if foreign_keys_enabled:
+        conn.execute("PRAGMA foreign_keys = OFF")
+
+    savepoint = f"forge_rebuild_{_sql_digest}"
+    conn.execute(f"SAVEPOINT {_quoted_identifier(savepoint)}")
+    try:
+        conn.execute(replacement_sql)
+
+        new_columns = [
+            str(row[1])
+            for row in conn.execute(
+                f"PRAGMA table_info({_quoted_identifier(temp_table)})"
+            ).fetchall()
+        ]
+        copy_columns = [column for column in columns if column in new_columns]
+        if copy_columns:
+            quoted_columns = ", ".join(_quoted_identifier(column) for column in copy_columns)
+            conn.execute(
+                f"""
+                INSERT INTO {_quoted_identifier(temp_table)} ({quoted_columns})
+                SELECT {quoted_columns}
+                FROM {_quoted_identifier(table_name)}
+                """
+            )
+
+        conn.execute(f"DROP TABLE {_quoted_identifier(table_name)}")
+        conn.execute(
+            f"ALTER TABLE {_quoted_identifier(temp_table)} RENAME TO {_quoted_identifier(table_name)}"
+        )
+        for sql in post_sql or []:
+            conn.execute(sql)
+        conn.execute(f"RELEASE SAVEPOINT {_quoted_identifier(savepoint)}")
+    except Exception:
+        conn.execute(f"ROLLBACK TO SAVEPOINT {_quoted_identifier(savepoint)}")
+        conn.execute(f"RELEASE SAVEPOINT {_quoted_identifier(savepoint)}")
+        if foreign_keys_enabled:
+            conn.execute("PRAGMA foreign_keys = ON")
+        raise
+
+    if foreign_keys_enabled:
+        conn.execute("PRAGMA foreign_keys = ON")

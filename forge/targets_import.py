@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import sqlite3
 import subprocess
 import sys
@@ -29,6 +30,7 @@ TARGET_IMPORT_MONITORING_POLICY_NAME = "Target import seed exposure"
 TARGET_IMPORT_MONITORING_INTERVAL_MINUTES = 60
 DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES = 25
 TARGET_IMPORT_CHILD_TIMEOUT_GRACE_SECONDS = 120
+TARGET_FAILURE_STDERR_MAX_BYTES = 2048
 _LOG = logging.getLogger(__name__)
 MAX_TARGET_FEED_FILE_BYTES = 64 * 1024 * 1024
 MAX_TARGET_FEED_IMPORT_ITEMS = 100_000
@@ -281,10 +283,22 @@ def import_targets(
                     engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
                 )
             except Exception as exc:
+                failure_details: dict[str, Any] = {
+                    **progress_details,
+                    "error_type": type(exc).__name__,
+                }
+                if isinstance(exc, subprocess.CalledProcessError):
+                    failure_details.update(
+                        {
+                            "return_code": exc.returncode,
+                            "argv": _sanitize_failure_argv(exc.cmd),
+                            "stderr_tail": _bounded_failure_stderr(exc.stderr),
+                        }
+                    )
                 _notify_progress(
                     progress_callback,
                     "target_failed",
-                    {**progress_details, "error_type": type(exc).__name__},
+                    failure_details,
                 )
                 start_failed = True
                 start_error_type = type(exc).__name__
@@ -333,6 +347,74 @@ def _notify_progress(
         callback(event_type, details)
     except Exception as exc:  # noqa: BLE001 - progress observers cannot affect engagement work
         _LOG.warning("target progress callback failed: %s", type(exc).__name__)
+
+
+_SENSITIVE_ARGUMENT_RE = re.compile(
+    r"(?i)(?:token|secret|password|passwd|credential|api[-_]?key|"
+    r"(?:^|[-_])key(?:$|[-_])|authorization|bearer)"
+)
+_ENV_ASSIGNMENT_RE = re.compile(
+    r"(\b[A-Z_][A-Z0-9_]*\s*=\s*)([^\s&,;]+)"
+)
+_SENSITIVE_ASSIGNMENT_RE = re.compile(
+    r"(?i)(\b(?:[A-Z_][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API_KEY)|"
+    r"token|secret|password|passwd|credential|api[-_]?key|authorization|bearer)"
+    r"\s*[=:]\s*)([^\s&,;]+)"
+)
+_BEARER_VALUE_RE = re.compile(r"(?i)(\bbearer\s+)[A-Za-z0-9._~+/-]+=*")
+_POSIX_ABSOLUTE_PATH_RE = re.compile(r"(?<![A-Za-z0-9:/])/(?!/)[^\s\"'<>|,;]+")
+_WINDOWS_ABSOLUTE_PATH_RE = re.compile(r"(?i)\b[A-Z]:\\[^\s\"'<>|,;]+")
+
+
+def _sanitize_failure_text(value: object) -> str:
+    text = value.decode("utf-8", errors="replace") if isinstance(value, bytes) else str(value or "")
+    text = _ENV_ASSIGNMENT_RE.sub(r"\1[REDACTED]", text)
+    text = _SENSITIVE_ASSIGNMENT_RE.sub(r"\1[REDACTED]", text)
+    text = _BEARER_VALUE_RE.sub(r"\1[REDACTED]", text)
+    text = _POSIX_ABSOLUTE_PATH_RE.sub("[REDACTED_PATH]", text)
+    return _WINDOWS_ABSOLUTE_PATH_RE.sub("[REDACTED_PATH]", text)
+
+
+def _sanitize_failure_argv(command: object) -> list[str]:
+    if isinstance(command, (list, tuple)):
+        tokens = [str(token) for token in command]
+    elif isinstance(command, bytes):
+        tokens = [command.decode("utf-8", errors="replace")]
+    elif isinstance(command, str):
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            tokens = command.split()
+    else:
+        tokens = [str(command)]
+
+    sanitized: list[str] = []
+    redact_next = False
+    for token in tokens:
+        if redact_next:
+            sanitized.append("[REDACTED]")
+            redact_next = False
+            continue
+
+        option, separator, _value = token.partition("=")
+        if option.startswith("-") and _SENSITIVE_ARGUMENT_RE.search(option):
+            if separator:
+                sanitized.append(f"{_sanitize_failure_text(option)}=[REDACTED]")
+            else:
+                sanitized.append(_sanitize_failure_text(option))
+                redact_next = True
+            continue
+        sanitized.append(_sanitize_failure_text(token))
+    return sanitized
+
+
+def _bounded_failure_stderr(value: object) -> str:
+    text = _sanitize_failure_text(value)
+    encoded = text.encode("utf-8", errors="replace")
+    if len(encoded) <= TARGET_FAILURE_STDERR_MAX_BYTES:
+        return text
+    tail = encoded[-TARGET_FAILURE_STDERR_MAX_BYTES :].decode("utf-8", errors="replace")
+    return f"[stderr truncated; showing last {TARGET_FAILURE_STDERR_MAX_BYTES} bytes]\n{tail}"
 
 
 def _fetch_feed(feed_url: str | None, auth_header_env: str | None) -> Any:
