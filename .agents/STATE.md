@@ -1,10 +1,16 @@
-# Active Task: Fix 2026-10-13 code-scanning alerts (SQL parameterization).
+# Active Task: Fix autopilot target validation and per-target start failures (2026-10-13).
 
-**Progress:** Codex (Muse-orchestrated, L390 short-lived clone) parameterized the flagged SQL: forge/autopilot/events.py now uses literal `autopilot_cycle_events` table names with bound values (alerts #1984-#1997); forge/cli.py replaced both dynamic query builders with static SQL — URL batches via bound JSON + `json_each(?)`, row limit as bound param with `-1` = unlimited (alerts #1966-#1967). Deliberately untouched: #1968 (B104 — `0.0.0.0` is a denied-target hostname, not a bind address) and #1969-#1983 (test-only CodeQL URL-sanitization notes; fixed fixtures, stubbed/local HTTP, no production helper accepts a malicious URL). Nothing dismissed on GitHub.
+**Progress:** User approved both fixes and a fresh loop run. Added strict domain/subdomain hostname validation (including code-identifier TLD rejects) at normalization and final feed aggregation boundaries. Per-target start errors are recorded and exposed in CLI JSON/text; imports continue, failed starts do not consume `start_limit`, and the autopilot phase reports aggregate failure only when every attempted start failed. Regression coverage spans feed load/build, import continuation/start-budget behavior, CLI result output, and phase aggregation. Requested suites plus feed-build tests: 162 passed. Ruff and `git diff --check` passed. Preparing commit/push on `main`; preserve pre-existing untracked `autopilot-loop.sh` and `nuclei-templates/`.
 
-**Verification:** Focused suites 257 passed; 3 pre-existing failures in tests/automation/test_autopilot.py (CLI ROE tests) reproduce identically on clean main. Direct SQLite smoke test confirms json_each batch + LIMIT -1/1 equivalence. Ruff clean, `git diff --check` clean.
+**Next:** Commit and push the verified changes, restart `forge-autopilot.service`, then capture its active/new-cycle status and `forge monitoring status` output.
 
-**Next:** Commit + push to origin/main from the L390 clone, then delete the clone.
+---
+
+# Previous Task: Fix 2026-10-13 code-scanning alerts (SQL parameterization).
+
+**Progress:** Parameterized the flagged SQL: `forge/autopilot/events.py` uses literal `autopilot_cycle_events` table names with bound values (alerts #1984-#1997); `forge/cli.py` uses static SQL, bound JSON with `json_each(?)`, and a bound row limit (#1966-#1967). Deliberately untouched: #1968 (B104 — `0.0.0.0` is a denied-target hostname, not a bind address) and #1969-#1983 (test-only URL-sanitization notes). Nothing dismissed on GitHub.
+
+**Verification:** Focused suites 257 passed; 3 pre-existing failures in `tests/automation/test_autopilot.py` reproduce identically on clean main. SQLite smoke test, Ruff, and `git diff --check` passed. Commit `5720e8b5` is on `origin/main`.
 
 ---
 

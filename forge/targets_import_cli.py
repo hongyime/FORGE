@@ -116,6 +116,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
         created = sum(1 for item in results if item.created)
         reused = sum(1 for item in results if item.engagement_id is not None and not item.created)
         started = sum(1 for item in results if item.started)
+        failed = sum(1 for item in results if getattr(item, "start_failed", False))
         if json_output:
             payload = {
                 "schema_version": "forge.targets_import.v1",
@@ -132,6 +133,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
                 "created_count": created,
                 "reused_count": reused,
                 "started_count": started,
+                "failed_count": failed,
                 "results": [_target_import_result_payload(item) for item in results],
             }
             typer.echo(json.dumps(payload, indent=2, sort_keys=True))
@@ -141,13 +143,18 @@ def register_target_import_commands(app: typer.Typer) -> None:
             return
         console.print(
             f"[green]Imported:[/green] {len(results)} target(s), "
-            f"created={created}, reused={reused}, started={started}"
+            f"created={created}, reused={reused}, started={started}, failed={failed}"
         )
         for result in results:
+            start_failure = (
+                f" start_failed={result.start_error_type}"
+                if getattr(result, "start_failed", False)
+                else ""
+            )
             console.print(
                 f"  engagement={result.engagement_id} "
                 f"target={result.target_type}:{result.target_value} "
-                f"manifest={result.scope_manifest}"
+                f"manifest={result.scope_manifest}{start_failure}"
             )
 
     @app.command("resume-candidates")
@@ -323,6 +330,8 @@ def register_target_import_commands(app: typer.Typer) -> None:
                 getattr(result, "scan_eligibility_reason", "eligible")
             ),
             "start_skipped_reason": str(getattr(result, "start_skipped_reason", "")),
+            "start_failed": bool(getattr(result, "start_failed", False)),
+            "start_error_type": str(getattr(result, "start_error_type", "")),
         }
 
     @app.command("resume-lock-status")

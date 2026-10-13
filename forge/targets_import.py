@@ -93,6 +93,32 @@ TARGET_TYPE_ALIASES = {
     "web_url": "url",
     "website": "url",
 }
+_DOMAIN_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+_DOMAIN_TLD_RE = re.compile(r"^[a-z]{2,63}$")
+_CODE_IDENTIFIER_TLDS = frozenset(
+    {
+        "args",
+        "argv",
+        "class",
+        "cls",
+        "cwd",
+        "def",
+        "env",
+        "environ",
+        "kwargs",
+        "none",
+        "null",
+        "path",
+        "return",
+        "self",
+        "stderr",
+        "stdin",
+        "stdout",
+        "tmp",
+        "undefined",
+        "var",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -128,6 +154,8 @@ class TargetImportResult:
     scan_eligible: bool = True
     scan_eligibility_reason: str = "eligible"
     start_skipped_reason: str = ""
+    start_failed: bool = False
+    start_error_type: str = ""
 
 
 def load_target_feed(
@@ -226,6 +254,8 @@ def import_targets(
             )
         manifest_path = _write_scope_manifest(cfg, engagement_id, item, roe_id)
         started = False
+        start_failed = False
+        start_error_type = ""
         start_skipped_reason = ""
         if (
             start
@@ -256,11 +286,13 @@ def import_targets(
                     "target_failed",
                     {**progress_details, "error_type": type(exc).__name__},
                 )
-                raise
-            _notify_progress(progress_callback, "target_completed", progress_details)
-            started = True
-            if starts_remaining is not None:
-                starts_remaining -= 1
+                start_failed = True
+                start_error_type = type(exc).__name__
+            else:
+                _notify_progress(progress_callback, "target_completed", progress_details)
+                started = True
+                if starts_remaining is not None:
+                    starts_remaining -= 1
         elif start and not item.scan_eligible:
             start_skipped_reason = item.scan_eligibility_reason
         elif start and item.source_count < min_start_sources:
@@ -283,6 +315,8 @@ def import_targets(
                 scan_eligible=item.scan_eligible,
                 scan_eligibility_reason=item.scan_eligibility_reason,
                 start_skipped_reason=start_skipped_reason,
+                start_failed=start_failed,
+                start_error_type=start_error_type,
             )
         )
     return results
@@ -366,11 +400,12 @@ def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
     raw_target_type = str(raw_item.get("target_type") or "").strip().lower()
     if raw_target_type not in SUPPORTED_TARGET_TYPES:
         return None
-    target_value = str(raw_item.get("target_value") or "").strip()
+    raw_target_value = str(raw_item.get("target_value") or "")
+    target_value = raw_target_value.strip()
     if is_denied_target(target_value):
         return None
     try:
-        normalized = _normalize_target_value(raw_target_type, target_value)
+        normalized = _normalize_target_value(raw_target_type, raw_target_value)
     except ValueError:
         return None
     if normalized is None:
@@ -435,13 +470,11 @@ def _normalize_target_value(raw_target_type: str, value: str) -> tuple[str, str]
 
 
 def _canonical_target_value(target_type: str, value: str) -> str:
+    if target_type in {"domain", "subdomain"}:
+        return _canonical_domain_value(value)
     text = " ".join(str(value or "").strip().split())
     if not text:
         return ""
-    if target_type in {"domain", "subdomain"}:
-        if "://" in text or "/" in text or "@" in text:
-            return ""
-        return text.lower().strip(".")
     if target_type in {"url", "apk_url"}:
         return _canonical_http_url_value(text)
     if target_type == "cloud_ref":
@@ -461,6 +494,25 @@ def _canonical_target_value(target_type: str, value: str) -> str:
     if target_type in {"name", "company"}:
         return text[:160]
     return ""
+
+
+def _canonical_domain_value(value: str) -> str:
+    text = str(value or "").lower()
+    if (
+        not text
+        or any(character.isspace() for character in text)
+        or len(text) > 253
+        or text.startswith(".")
+        or text.endswith(".")
+    ):
+        return ""
+    labels = text.split(".")
+    if len(labels) < 2 or any(not _DOMAIN_LABEL_RE.fullmatch(label) for label in labels):
+        return ""
+    tld = labels[-1]
+    if not _DOMAIN_TLD_RE.fullmatch(tld) or tld in _CODE_IDENTIFIER_TLDS:
+        return ""
+    return text
 
 
 def _canonical_http_url_value(value: str) -> str:
@@ -546,10 +598,7 @@ def _fallback_classify_target_value(value: str) -> str:
         return "email"
     if _hostname_is_cloud_target(lowered):
         return "cloud_ref"
-    if re.match(
-        r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(?:\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$",
-        lowered.lstrip("*."),
-    ):
+    if _canonical_domain_value(lowered):
         return "domain"
     return ""
 

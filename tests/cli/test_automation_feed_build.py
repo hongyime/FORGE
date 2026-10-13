@@ -151,6 +151,46 @@ def test_feed_build_drops_placeholder_domains_from_database_seeds(
     ]
 
 
+def test_feed_build_rejects_code_identifiers_harvested_as_hosts(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _make_dashboard_report(
+        reports_dir,
+        "identifier-noise",
+        {
+            "summary": {
+                "hosts": [
+                    "os.environ",
+                    "process.env",
+                    "os.path",
+                    "sys.argv",
+                    "process.env.NODE_ENV",
+                    "bareidentifier",
+                    "corp-target.io",
+                    "sub.example.co.uk",
+                    "api.example.io",
+                ]
+            }
+        },
+    )
+
+    payload = build_target_feed(
+        sources=["reports"],
+        data_dir=tmp_path / "data",
+        reports_dir=reports_dir,
+        imports_dir=None,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert {item["canonical_value"] for item in payload["items"]} == {
+        "corp-target.io",
+        "sub.example.co.uk",
+        "api.example.io",
+    }
+
+
 def test_feed_build_prioritizes_targets_seen_from_multiple_sources(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     reports_dir = tmp_path / "reports"

@@ -233,11 +233,12 @@ def _candidate(
     first_seen_at: str,
     target_type_hint: str = "auto",
 ) -> FeedCandidate | None:
-    value = str(raw_value or "").strip()
+    raw_text = str(raw_value or "")
+    value = raw_text.strip()
     if not value or len(value) > 300:
         return None
     try:
-        normalized = _normalize_target_value(target_type_hint or "auto", value)
+        normalized = _normalize_target_value(target_type_hint or "auto", raw_text)
     except ValueError:
         return None
     if normalized is None:
@@ -254,6 +255,18 @@ def _candidate(
         confidence=confidence,
         first_seen_at=first_seen_at,
         provenance=provenance,
+    )
+
+
+def _candidate_is_valid(candidate: FeedCandidate) -> bool:
+    try:
+        normalized = _normalize_target_value(candidate.target_type, candidate.target_value)
+    except (TypeError, ValueError):
+        return False
+    return (
+        normalized == (candidate.target_type, candidate.canonical_value)
+        and not is_denied_target(candidate.target_value)
+        and not is_denied_target(candidate.canonical_value)
     )
 
 
@@ -2298,14 +2311,13 @@ def build_target_feed(
     elif existing_feed_path is not None:
         new_vs_existing = len(candidate_keys)
 
-    # Filter every source at the final aggregation boundary too. Some source
-    # adapters construct FeedCandidate directly instead of using _candidate.
+    # Validate every source at the final aggregation boundary too. This keeps
+    # directly constructed candidates and each rebuilt cycle on the same rules.
     for source_candidates in groups.values():
         source_candidates[:] = [
             candidate
             for candidate in source_candidates
-            if not is_denied_target(candidate.target_value)
-            and not is_denied_target(candidate.canonical_value)
+            if _candidate_is_valid(candidate)
         ]
     candidate_keys = _all_candidate_keys(groups)
     if existing_feed_path is not None:

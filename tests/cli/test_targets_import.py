@@ -7,6 +7,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import typer
@@ -152,6 +153,57 @@ def test_load_target_feed_drops_placeholder_hosts_and_subdomains(
     )
 
     assert [item.canonical_value for item in items] == ["portal.corp-target.io"]
+
+
+def test_load_target_feed_rejects_code_identifiers_as_domains(
+    tmp_path: Path,
+) -> None:
+    feed_path = tmp_path / "code-identifiers.json"
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [
+                    {"target_type": "domain", "target_value": "os.environ"},
+                    {"target_type": "subdomain", "target_value": "process.env"},
+                    {"target_type": "auto", "target_value": "os.path"},
+                    {"target_type": "auto", "target_value": "sys.argv"},
+                    {
+                        "target_type": "domain",
+                        "target_value": "process.env.NODE_ENV",
+                    },
+                    {"target_type": "domain", "target_value": "bareidentifier"},
+                    {"target_type": "domain", "target_value": ".leading.io"},
+                    {"target_type": "domain", "target_value": "trailing.io."},
+                    {"target_type": "domain", "target_value": "bad-.io"},
+                    {"target_type": "domain", "target_value": "bad..io"},
+                    {"target_type": "domain", "target_value": "bad_name.io"},
+                    {"target_type": "domain", "target_value": "bad host.io"},
+                    {"target_type": "domain", "target_value": " spaced.io "},
+                    {"target_type": "domain", "target_value": "corp-target.io"},
+                    {
+                        "target_type": "subdomain",
+                        "target_value": "sub.example.co.uk",
+                    },
+                    {"target_type": "auto", "target_value": "api.example.io"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    items = load_target_feed(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        limit=None,
+    )
+
+    assert {item.canonical_value for item in items} == {
+        "corp-target.io",
+        "sub.example.co.uk",
+        "api.example.io",
+    }
 
 
 def test_import_start_never_launches_denylisted_placeholder_targets(
@@ -2215,36 +2267,51 @@ def test_start_treats_timeout_with_completed_db_run_as_success(
     assert results[0].started is True
 
 
-def test_start_keeps_real_kill_chain_cli_exit_two_as_failure(
+def test_start_failure_records_and_continues_without_consuming_start_limit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     feed_path = tmp_path / "feed.json"
     _write_feed(feed_path)
     cfg = _FakeConfig(tmp_path / "data")
+    attempts: list[str] = []
+    events: list[tuple[str, dict[str, object]]] = []
 
-    def _fake_run(command: list[str], **_: object) -> object:
-        return subprocess.CompletedProcess(
-            command,
-            2,
-            stdout="",
-            stderr="Usage: python -m forge.cli kill-chain [OPTIONS]\nInvalid value\n",
-        )
+    def _fake_start(**kwargs: object) -> None:
+        seed = str(kwargs["seed"])
+        attempts.append(seed)
+        if len(attempts) == 1:
+            raise subprocess.CalledProcessError(2, ["kill-chain", seed])
 
-    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
+    def _progress(event_type: str, details: dict[str, object]) -> None:
+        events.append((event_type, details))
 
-    with pytest.raises(subprocess.CalledProcessError):
-        import_targets(
-            feed_url=None,
-            feed_file=feed_path,
-            auth_header_env=None,
-            roe_id="ROE-ACME-2026-08",
-            start=True,
-            dry_run=False,
-            limit=1,
-            max_iter=3,
-            config=cfg,  # type: ignore[arg-type]
-        )
+    monkeypatch.setattr("forge.targets_import._start_kill_chain", _fake_start)
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=None,
+        max_iter=3,
+        start_limit=1,
+        config=cfg,  # type: ignore[arg-type]
+        progress_callback=_progress,
+    )
+
+    assert len(attempts) == 2
+    assert results[0].start_failed is True
+    assert results[0].start_error_type == "CalledProcessError"
+    assert results[0].started is False
+    assert results[1].started is True
+    assert results[1].start_failed is False
+    assert [event for event, _ in events].count("target_failed") == 1
+    assert [event for event, _ in events].count("target_completed") == 1
+    failed_event = next(details for event, details in events if event == "target_failed")
+    assert failed_event["error_type"] == "CalledProcessError"
 
 
 def test_start_limit_caps_scoped_kill_chain_launches(
@@ -2622,6 +2689,57 @@ def test_targets_import_cli_supports_json_output(tmp_path: Path) -> None:
     assert payload["total_count"] == 2
     assert payload["started_count"] == 0
     assert payload["results"][0]["dry_run"] is True
+
+
+def test_targets_import_cli_json_reports_per_target_start_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    monkeypatch.setattr(
+        "forge.targets_import_cli.import_targets",
+        lambda **_: [
+            SimpleNamespace(
+                engagement_id=7,
+                target_type="domain",
+                target_value="target.corp-target.io",
+                target_key="domain:target.corp-target.io",
+                scope_manifest=None,
+                created=True,
+                started=False,
+                dry_run=False,
+                start_failed=True,
+                start_error_type="CalledProcessError",
+            )
+        ],
+    )
+
+    app = typer.Typer()
+    targets_app = typer.Typer()
+    register_target_import_commands(targets_app)
+    app.add_typer(targets_app, name="targets")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "targets",
+            "import",
+            "--feed-file",
+            str(feed_path),
+            "--start",
+            "--roe-id",
+            "ROE-TEST",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["failed_count"] == 1
+    assert payload["results"][0]["started"] is False
+    assert payload["results"][0]["start_failed"] is True
+    assert payload["results"][0]["start_error_type"] == "CalledProcessError"
 
 
 def test_targets_import_cli_passes_max_runtime_minutes(

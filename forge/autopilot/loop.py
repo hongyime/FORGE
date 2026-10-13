@@ -929,15 +929,20 @@ class ForgeAutopilot:
 
         created = sum(1 for r in results if r.created)
         started = sum(1 for r in results if r.started)
+        failed = sum(1 for r in results if getattr(r, "start_failed", False))
+        attempted = started + failed
         status_label = "ok"
         if effective_dry_run and not dry_run:
             status_label = "blocked"
+        elif start and attempted > 0 and failed == attempted:
+            status_label = "error"
         return AutopilotPhaseResult(
             name="import_targets",
             status=status_label,
             detail=(
                 f"total={len(results)} created={created} "
-                f"started={started} start_requested={start}"
+                f"started={started} failed={failed} attempted={attempted} "
+                f"start_requested={start}"
             ),
             data={
                 "dry_run": effective_dry_run,
@@ -945,6 +950,8 @@ class ForgeAutopilot:
                 "total": len(results),
                 "created": created,
                 "started": started,
+                "failed": failed,
+                "attempted": attempted,
             },
         )
 

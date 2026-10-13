@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -499,6 +500,45 @@ def test_autopilot_import_phase_blocks_without_roe_when_apply(
         p for p in payload["phases"] if p["name"] == "import_targets"
     )
     assert import_phase["status"] == "blocked"
+
+
+@pytest.mark.parametrize(
+    ("outcomes", "expected_status", "expected_attempted", "expected_failed"),
+    [
+        ([(False, True)], "error", 1, 1),
+        ([(True, False), (False, True)], "ok", 2, 1),
+    ],
+)
+def test_autopilot_import_phase_aggregates_target_start_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    outcomes: list[tuple[bool, bool]],
+    expected_status: str,
+    expected_attempted: int,
+    expected_failed: int,
+) -> None:
+    _write_feed(tmp_path / "imports" / "target-feed.json")
+    auto = _mk_autopilot(tmp_path, roe_id="ROE-START-FAILURE")
+
+    def _fake_import_targets(**kwargs: Any) -> list[SimpleNamespace]:
+        assert kwargs["start"] is True
+        return [
+            SimpleNamespace(
+                created=True,
+                started=started,
+                start_failed=start_failed,
+            )
+            for started, start_failed in outcomes
+        ]
+
+    monkeypatch.setattr("forge.targets_import.import_targets", _fake_import_targets)
+
+    phase = auto._phase_import_targets(dry_run=False)
+
+    assert phase.status == expected_status
+    assert phase.data["attempted"] == expected_attempted
+    assert phase.data["failed"] == expected_failed
+    assert f"failed={expected_failed}" in phase.detail
 
 
 def test_autopilot_import_phase_skipped_when_feed_missing(
