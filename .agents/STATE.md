@@ -2,7 +2,7 @@
 
 **Progress:** Retained the valid `automation_target_feed.py` cleanup that delegates to the schema-aware connected-services seed-drop extractor. Raised the autopilot import default to 25,000 and added `--import-limit` (`--limit` alias), threaded through build and import. Added exact/subdomain placeholder checks across seed extraction, feed construction/import, and scope expansion. Added shared bounded 429 and exhausted-403 backoff for GitHub and Supabase GET/Management API POST with reset/Retry-After handling, a 3-retry/120-second cap, and skip diagnostics. Existing tracked feed artifacts remain untouched; stale placeholder items are filtered before scope or engagement decisions. `nuclei-templates/` remains untracked and excluded.
 
-**Verification:** 270 focused pytest tests passed; Ruff passed. `FORGE_SAFE_MODE=1 ./forge-autopilot.sh --dry-run` completed successfully and reported 21,665 feed items. No live `--apply` was run. Changes are ready for the approved commit and push to `origin/main`.
+**Verification:** 270 focused pytest tests passed; Ruff passed. `FORGE_SAFE_MODE=1 ./forge-autopilot.sh --dry-run` completed successfully and reported 21,665 feed items. No live `--apply` was run. Implementation commit `8c368621` is pushed to `origin/main`, and the remote head was verified. That commit also retains the intervening remote SQL safety fix and sync heartbeat. `nuclei-templates/` remains the only untracked path.
 
 ---
 
