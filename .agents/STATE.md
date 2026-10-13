@@ -1,3 +1,17 @@
+## Bug 3 -- failed starts consume a consecutive-failure budget (2026-10-14, Codex leg + orchestrator verification)
+
+Status: COMPLETE. Commit d120948e on main (code + tests). Loop still stopped; cycle 5 not yet started. Rust migration remains parked.
+
+Rule (forge/targets_import.py, MAX_CONSECUTIVE_START_FAILURES = 3): phase-5 imports stop after 3 consecutive failed start attempts. A successful start resets the streak; skipped candidates neither count nor reset it. The terminal result records start_stop_reason=consecutive_failure_budget_exhausted + unprocessed_count (remaining candidates never attempted). Natural exhaustion reports no_more_candidates; consuming the success cap reports start_limit_reached. CLI JSON (forge/targets_import_cli.py: start_stop_reason, unprocessed_count, omitted_count, total_count includes unprocessed) and autopilot phase result (forge/autopilot/loop.py: start_stop_reason, unprocessed_count, total/processed) surface the reason.
+
+Scope notes: the autopilot import phase calls import_targets and uses this budget. The separate resume phase (existing runs, own plan/limit) does not import the feed and is out of scope. Engagement creation still precedes each start attempt, so a fully-failing phase creates at most 3 records before stopping (was: unbounded, whole candidate list). Known minor edge: with start_limit=0 the phase reports no_more_candidates instead of start_limit_reached (degenerate config; defaults are 20).
+
+Verification (orchestrator re-ran): relevant suites 214 passed (test_targets_import + test_autopilot + test_automation_cycle + test_automation_feed_build). Full tests/cli: 436 passed, 9 failed, 1 deselected -- all 9 proven PRE-EXISTING (reproduce identically on Bug 2 head a23691ff without Bug 3 changes): artifacts_status, automation_policy x2, direct_live_scope, doctor, import_cli_integration x2, onboard x2. Ruff + git diff --check clean.
+
+Next: verification -- (1) new + existing relevant tests, (2) phase-5 dry-run via phase runner, (3) START CYCLE 5 + monitor for target_completed > 0. Leave cycle 5 running.
+
+---
+
 ## Bug 2 -- filenames rejected by shared domain validation (2026-10-14, Codex leg + orchestrator verification)
 
 Status: COMPLETE. Commit 53edfa26 on main (code + tests). Loop still stopped; cycle 5 not yet started. Rust migration remains parked.

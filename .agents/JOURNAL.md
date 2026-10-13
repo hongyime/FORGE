@@ -762,3 +762,5 @@ Bryan: "Keep the rust in the task list. Execute it after we are done fixing all 
 2026-10-14: Bug 1 DONE (commit a52bbbe5): v54 repairs ghost seed FKs, _rebuild_table swap preserves child FK targets, target_failed events carry sanitized return_code/argv/stderr_tail. Orchestrator verified 89 tests, copy-DB 101 row preservation, live engagement 1 v53->v54 via get_engagement_db. Loop still stopped.
 
 2026-10-14: Bug 2 DONE (commit 53edfa26): shared forge/domain_validation.py rejects filename TLDs (png/py/yml + 89 more); .py deliberately denied despite Paraguay ccTLD; .md/.rs/.sh/.ai/.so/.zip preserved. Orchestrator verified 359 tests; repaired pre-existing .example fixture failure (proven pre-existing on 7855c147). Loop still stopped.
+
+2026-10-14: Bug 3 DONE (commit d120948e): phase-5 imports stop after 3 consecutive failed starts (success resets; skips neutral); stop reason + unprocessed count surfaced in per-target, CLI, and autopilot results. Fully-failing phase now creates at most 3 records. Orchestrator verified 214 relevant tests; full tests/cli 9 failures proven pre-existing on a23691ff. Loop still stopped.
