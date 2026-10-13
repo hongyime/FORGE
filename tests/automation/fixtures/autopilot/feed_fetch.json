@@ -1,0 +1,7 @@
+{
+  "phase": "feed_fetch",
+  "items": [
+    {"target_type": "domain", "target_value": "api.corp-target.io"},
+    {"target_type": "url", "target_value": "https://portal.corp-target.io/login"}
+  ]
+}

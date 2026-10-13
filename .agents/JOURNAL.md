@@ -1,5 +1,17 @@
 # Agent Journal
 
+- 2026-10-13: Final committed-scope verification passed: 16 isolated phase tests, 75 autopilot tests, and 70 target-import tests; Ruff and whitespace checks passed. Phase 5 CLI fixture demo and invalid-phase error were captured in the entry below. `forge-autopilot.sh` forwarded arguments; no service restart or process termination was performed. Planned direct-main commit: `feat: add isolated autopilot phase runner`.
+
+- 2026-10-13: Final count after adding explicit skip-phase coverage: 15 per-phase tests, 74 autopilot tests, and 70 target-import tests passed; Ruff and `git diff --check` passed. The single-phase dry-run still isolates phase 5, invalid phase input still exits 2 with the valid list, and no live loop or service action was performed. Commit subject is `feat: add isolated autopilot phase runner`.
+
+- 2026-10-13: Final verification passed: 14 phase tests, 73 autopilot tests, 70 target-import tests, Ruff, and `git diff --check`. `forge-autopilot.sh` forwarded the new flags. Phase 5 CLI demo returned `{"mode":"dry_run","status":"ok","only_phase":"import_targets","phases":[{"name":"import_targets","status":"ok","detail":"total=2 created=0 started=0 failed=0 attempted=0 start_requested=False"}]}`; invalid `--only-phase invalid_phase` exited 2 and listed all eight valid names. `forge autopilot --help` showed the new flags. No restart/kill command was run; Cycle 3 was left alone. Planned commit: `feat: add isolated autopilot phase runner`.
+
+- 2026-10-13: Existing verification passed: 14 isolated phase tests, 72 autopilot tests, and 70 target-import tests, with Ruff and `git diff --check` clean. No pre-existing ROE CLI failures reproduced. CLI demo recapture and final review remain; Cycle 3 was not restarted.
+
+- 2026-10-13: The new per-phase runner tests passed (13 tests), including all eight fixture paths, phase event boundaries, safe scan behavior, and the runner-level import continuation case; Ruff passed for changed Python files. Broader autopilot and target-import suites remain pending.
+
+- 2026-10-13: Added the isolated autopilot phase runner and fixture-aware CLI plumbing while keeping the full-cycle path unchanged; scan connectors require `--allow-live` alongside explicit `--apply` in single-phase mode. Verification is pending, and Cycle 3 was left alone.
+
 - 2026-10-12: Live Management API verification completed against the configured project: 41 tables discovered/scanned, 10,249 rows, 27,634 seeds, 2 redacted secret hits, and 0 source errors. The dedicated autopilot Supabase path returned `ok` with the same counts, and its seed drop recorded `management_api`. The stored connection contains only `project_ref` and `management_pat`; its file is mode `0600`. Scanner, autopilot, CLI, and connection tests passed (80 total), Ruff lint passed, and an exact credential-value scan found no match in changed files or the generated seed drop.
 - 2026-10-12: Added the Supabase Management API PAT SQL transport with schema-qualified discovery, quoted identifier validation, and PAT-safe errors; PAT takes precedence while the PostgREST path remains available. Extended PAT-only credential provenance, connect CLI options, and autopilot PAT fallback/transport metadata. The focused scanner, autopilot, and CLI suites passed 57 tests. Replaced the stored Supabase record with the PAT field only; live verification remains pending.
 

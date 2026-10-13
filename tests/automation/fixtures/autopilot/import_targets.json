@@ -1,0 +1,17 @@
+{
+  "phase": "import_targets",
+  "items": [
+    {
+      "target_type": "domain",
+      "target_value": "first.corp-target.io",
+      "source_kind": "fixture",
+      "provenance": "autopilot_phase_test"
+    },
+    {
+      "target_type": "domain",
+      "target_value": "second.corp-target.io",
+      "source_kind": "fixture",
+      "provenance": "autopilot_phase_test"
+    }
+  ]
+}

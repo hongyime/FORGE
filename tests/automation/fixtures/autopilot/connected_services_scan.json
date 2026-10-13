@@ -1,0 +1,7 @@
+{
+  "phase": "connected_services_scan",
+  "services": [
+    {"service": "github", "seeds": ["one", "two"], "secret_hits": 1},
+    {"service": "supabase", "seeds": ["three"], "secret_hits": 0}
+  ]
+}

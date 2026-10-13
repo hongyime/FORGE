@@ -1,0 +1,7 @@
+{
+  "phase": "monitoring",
+  "policies": [
+    {"policy_id": "fixture-1", "alert_count": 1, "change_count": 2},
+    {"policy_id": "fixture-2", "alert_count": 0, "change_count": 1}
+  ]
+}

@@ -97,6 +97,21 @@ def register_autopilot_commands(app: typer.Typer) -> None:
             "--feed-file",
             help="Target feed path. Default: imports/target-feed.json.",
         ),
+        only_phase: Optional[str] = typer.Option(
+            None,
+            "--only-phase",
+            help="Run one phase once. Defaults to dry-run; --apply opts into execution.",
+        ),
+        fixture_file: Optional[Path] = typer.Option(
+            None,
+            "--fixture-file",
+            help="Phase-tagged JSON fixture used by --only-phase.",
+        ),
+        allow_live: bool = typer.Option(
+            False,
+            "--allow-live",
+            help="Allow live feed/scan connectors with --only-phase and explicit --apply.",
+        ),
         max_iter: Optional[int] = typer.Option(
             None,
             "--max-iter",
@@ -167,6 +182,11 @@ def register_autopilot_commands(app: typer.Typer) -> None:
             "--skip-feed-fetch",
             help="Skip the free-feed fetch phase entirely.",
         ),
+        skip_connected_services_scan: bool = typer.Option(
+            False,
+            "--skip-connected-services-scan",
+            help="Skip the connected-services scan phase.",
+        ),
         skip_auto_scope: bool = typer.Option(
             False,
             "--skip-auto-scope",
@@ -229,9 +249,33 @@ def register_autopilot_commands(app: typer.Typer) -> None:
         - ``--no-apply`` → equivalent rehearsal shorthand.
         - ``FORGE_SAFE_MODE=1`` → forces dry-run as a safety override.
         - ``--loop`` or ``--iterations N`` → continuous operation.
+        - ``--only-phase NAME`` → run one phase once, in dry-run unless
+          ``--apply`` is explicitly supplied.
+        - ``--allow-live`` → opt into live feed/scan connectors with explicit
+          ``--apply``; it never enables engagement starts by itself.
         """
         if ctx.invoked_subcommand is not None:
             return
+
+        if only_phase is not None and only_phase not in ForgeAutopilot._PHASE_DISPATCH:
+            valid = ", ".join(ForgeAutopilot._PHASE_DISPATCH)
+            raise typer.BadParameter(
+                f"invalid phase '{only_phase}'. Valid phases: {valid}",
+                param_hint="--only-phase",
+            )
+        if only_phase is None and fixture_file is not None:
+            raise typer.BadParameter("--fixture-file requires --only-phase")
+        if only_phase is None and allow_live:
+            raise typer.BadParameter("--allow-live requires --only-phase")
+        if only_phase is not None and (not once or (iterations is not None and iterations > 1)):
+            raise typer.BadParameter(
+                "--only-phase runs once; remove --loop or use --iterations 1"
+            )
+        apply_was_explicit = (
+            ctx.get_parameter_source("apply").name == "COMMANDLINE"
+        )
+        if only_phase is not None and allow_live and (not apply_was_explicit or not apply):
+            raise typer.BadParameter("--allow-live requires an explicit --apply")
 
         # ``--dry-run`` always wins. ``--apply`` is the default so the
         # combination is not treated as an operator conflict; dry-run
@@ -257,6 +301,8 @@ def register_autopilot_commands(app: typer.Typer) -> None:
         skip_phases: set[str] = set()
         if skip_feed_fetch:
             skip_phases.add("feed_fetch")
+        if skip_connected_services_scan:
+            skip_phases.add("connected_services_scan")
         if skip_feed_build:
             skip_phases.add("feed_build")
         if skip_auto_scope:
@@ -283,6 +329,10 @@ def register_autopilot_commands(app: typer.Typer) -> None:
 
         if describe:
             snapshot = autopilot.describe()
+            if only_phase is not None:
+                snapshot["selected_phase"] = only_phase
+            if only_phase == "dashboard" and fixture_file is not None:
+                snapshot["fixture_note"] = "ignored:dashboard_has_no_fixture_inputs"
             if json_output:
                 typer.echo(json.dumps(snapshot, indent=2, sort_keys=True))
             else:
@@ -290,10 +340,26 @@ def register_autopilot_commands(app: typer.Typer) -> None:
             return
 
         resolved_dry_run = _resolve_dry_run_arg(
-            apply=apply,
+            apply=(apply if only_phase is None or apply_was_explicit else False),
             dry_run=dry_run,
             autopilot=autopilot,
         )
+
+        if only_phase is not None:
+            try:
+                payload = autopilot.run_single_phase(
+                    only_phase,
+                    dry_run=resolved_dry_run,
+                    fixture_file=fixture_file,
+                    allow_live=allow_live,
+                )
+            except ValueError as exc:
+                raise typer.BadParameter(str(exc)) from exc
+            if json_output:
+                typer.echo(json.dumps(payload, indent=2, sort_keys=True, default=str))
+                return
+            _print_summary(payload)
+            return
 
         resolved_iterations = _resolve_iterations(once=once, iterations=iterations)
         payload = autopilot.run(
@@ -404,6 +470,10 @@ def _print_description(snapshot: dict[str, object]) -> None:
     console.print(f"scope_manifest={snapshot['scope_manifest']}")
     console.print(f"safe_mode={snapshot['safe_mode']}")
     console.print(f"default_execution_mode={snapshot['default_execution_mode']}")
+    if snapshot.get("selected_phase"):
+        console.print(f"selected_phase={snapshot['selected_phase']}")
+    if snapshot.get("fixture_note"):
+        console.print(f"fixture_note={snapshot['fixture_note']}")
 
 
 #: Mapping from internal autopilot phase ids to user-friendly labels

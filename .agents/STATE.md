@@ -1,3 +1,8 @@
+# Current Task: Add isolated, fixture-backed autopilot phase runs (2026-10-13).
+
+Progress:
+- Added `ForgeAutopilot.run_single_phase`, phase-tagged JSON fixtures, safe connector opt-ins, and CLI `--only-phase`/`--fixture-file`/`--allow-live` flags. Final verification passed: 16 isolated phase tests, 75 autopilot tests, 70 target-import tests, Ruff, `git diff --check`, CLI demo/help/invalid-name checks, and launcher forwarding inspection. Direct-main commit planned as `feat: add isolated autopilot phase runner`. Cycle 3 was left alone; `autopilot-loop.sh` and `nuclei-templates/` remain excluded.
+
 # Completed Task: Fix autopilot target validation and per-target start failures (2026-10-13).
 
 **Delivery:** Added strict domain/subdomain hostname validation (including code-identifier TLD rejects) at normalization and final feed aggregation boundaries. Per-target start errors are recorded and exposed in CLI JSON/text; imports continue, failed starts do not consume `start_limit`, and the autopilot phase reports aggregate failure only when every attempted start failed. Regression coverage spans feed load/build, import continuation/start-budget behavior, CLI result output, and phase aggregation. Implementation commit `2f72b27d` is pushed to `origin/main`.

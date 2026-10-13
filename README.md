@@ -368,6 +368,7 @@ forge autopilot --dry-run                   # Explicit rehearsal — no writes, 
 forge autopilot --apply --roe-id ROE-ID     # Explicit live loop — full feed-build / import / resume / monitor / dashboard
 forge autopilot --describe --json           # Resolved autopilot defaults and detected ROE/scope state (read-only)
 forge autopilot --loop [--iterations N] [--cooldown-minutes N]  # Continuous operation; one pass per iteration with a bounded cooldown
+forge autopilot --only-phase import_targets --dry-run --fixture-file tests/automation/fixtures/autopilot/import_targets.json  # Validate one isolated phase
 forge feeds list [--imports-dir PATH] [--data-dir PATH] [--json]  # List registered free threat-intel feed fetchers (NVD, CISA KEV, EPSS, RSS, nuclei-templates, urlscan)
 forge feeds status [--imports-dir PATH] [--data-dir PATH] [--json]  # Last-fetch timestamps and item counts per source (read-only, no network)
 forge feeds fetch [--source SOURCE] [--timeout N] [--max-age-days N] [--imports-dir PATH] [--data-dir PATH] [--json]  # Refresh all free feeds or a single source
@@ -385,6 +386,9 @@ forge targets add VALUE [--engagement N] [--manifest PATH] [--no-scope] [--json]
 forge scaffold                              # Emit obfuscated directory tree
 forge clean --engagement N [--confirm]      # Securely wipe engagement artifacts
 ```
+
+For the per-phase test gate and fixture examples, see
+[Autopilot phase testing](docs/autopilot-phase-testing.md).
 
 `forge automation cycle` is the daily-use loop. Dry-run mode plans feed-build,
 source queue consumption, and optional guarded live startup without writing.

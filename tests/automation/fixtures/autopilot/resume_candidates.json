@@ -1,0 +1,7 @@
+{
+  "phase": "resume_candidates",
+  "candidates": [
+    {"engagement_id": 1001, "status": "paused"},
+    {"engagement_id": 1002, "status": "failed"}
+  ]
+}

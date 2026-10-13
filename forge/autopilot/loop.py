@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
@@ -131,6 +132,9 @@ class ForgeAutopilot:
             p.lower().strip() for p in (skip_phases or set())
         }
         self._event_writer = AutopilotEventWriter(self.data_dir)
+        self._single_phase_active = False
+        self._single_phase_fixture: dict[str, Any] | None = None
+        self._single_phase_allow_live = False
 
     # ------------------------------------------------------------------
     # Public API
@@ -270,6 +274,161 @@ class ForgeAutopilot:
                 occurred_at=finished_at,
             )
 
+    def run_single_phase(
+        self,
+        name: str,
+        *,
+        dry_run: bool | None = True,
+        fixture_file: Path | str | None = None,
+        allow_live: bool = False,
+    ) -> dict[str, Any]:
+        """Run one dispatched phase once and return a run-once shaped summary.
+
+        A phase fixture is a small JSON object whose ``phase`` member names
+        the selected phase. Fixture-backed work is isolated in a temporary
+        workspace when it needs feed or scope files. Network connectors are
+        mocked unless both apply mode and ``allow_live`` are selected.
+        """
+        if name not in self._PHASE_DISPATCH:
+            valid = ", ".join(self._PHASE_DISPATCH)
+            raise ValueError(f"Invalid phase '{name}'. Valid phases: {valid}")
+
+        fixture = _load_phase_fixture(fixture_file, name) if fixture_file else None
+        mode = self.resolve_execution_mode(dry_run=dry_run)
+        is_dry_run = mode == "dry_run"
+        phase_index = list(self._PHASE_DISPATCH).index(name) + 1
+        original_feed_file = self.feed_file
+        original_scope_manifest = self.scope_manifest
+        workspace: tempfile.TemporaryDirectory[str] | None = None
+        phases: list[AutopilotPhaseResult] = []
+        started_at = _now_iso()
+        finished_at = ""
+        cycle_status = "error"
+
+        self._single_phase_active = True
+        self._single_phase_fixture = fixture
+        self._single_phase_allow_live = bool(allow_live and not is_dry_run)
+        try:
+            if fixture is not None and name in {"auto_scope", "import_targets"}:
+                workspace = tempfile.TemporaryDirectory(prefix="forge-autopilot-phase-")
+                fixture_root = Path(workspace.name)
+                items = fixture.get("items", [])
+                if not isinstance(items, list):
+                    raise ValueError("Fixture field 'items' must be a JSON array")
+                self.feed_file = fixture_root / "target-feed.json"
+                self.feed_file.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": "target-feed.v1",
+                            "generated_at": _now_iso(),
+                            "items": items,
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                if name == "auto_scope":
+                    scope_payload = fixture.get("scope_manifest")
+                    if scope_payload is None and original_scope_manifest is not None:
+                        try:
+                            scope_payload = json.loads(
+                                Path(original_scope_manifest).read_text(encoding="utf-8")
+                            )
+                        except (OSError, json.JSONDecodeError):
+                            scope_payload = None
+                    if scope_payload is not None:
+                        if not isinstance(scope_payload, dict):
+                            raise ValueError(
+                                "Fixture field 'scope_manifest' must be a JSON object"
+                            )
+                        self.scope_manifest = fixture_root / "scope-manifest.json"
+                        self.scope_manifest.write_text(
+                            json.dumps(scope_payload), encoding="utf-8"
+                        )
+
+            self._event_writer.start_cycle(
+                details={
+                    "mode": mode,
+                    "dry_run": is_dry_run,
+                    "only_phase": name,
+                    "allow_live": self._single_phase_allow_live,
+                }
+            )
+            self._event_writer.emit(
+                "phase_start",
+                phase_name=name,
+                phase_index=phase_index,
+                details={"dry_run": is_dry_run, "single_phase": True},
+            )
+            try:
+                phase = self._maybe_phase(name, is_dry_run)
+            except Exception as exc:
+                self._event_writer.emit(
+                    "error",
+                    phase_name=name,
+                    phase_index=phase_index,
+                    details={"error_type": type(exc).__name__},
+                )
+                self._event_writer.emit(
+                    "phase_end",
+                    phase_name=name,
+                    phase_index=phase_index,
+                    details={"status": "error"},
+                )
+                raise
+
+            if name == "dashboard" and fixture is not None:
+                phase.detail = f"{phase.detail} fixture_ignored=no_phase_inputs".strip()
+                phase.data["fixture_note"] = "ignored:dashboard_has_no_fixture_inputs"
+            phases.append(phase)
+            if phase.status == "error":
+                self._event_writer.emit(
+                    "error",
+                    phase_name=name,
+                    phase_index=phase_index,
+                    details={"status": phase.status},
+                )
+            self._event_writer.emit(
+                "phase_end",
+                phase_name=name,
+                phase_index=phase_index,
+                details={"status": phase.status},
+            )
+            finished_at = _now_iso()
+            # Describe the operator's configured paths, not the temporary
+            # paths used to materialize fixture input for this invocation.
+            self.feed_file = original_feed_file
+            self.scope_manifest = original_scope_manifest
+            payload = self._summarize(
+                phases,
+                mode=mode,
+                dry_run=is_dry_run,
+                started_at=started_at,
+                finished_at=finished_at,
+                single_phase=name,
+            )
+            payload["iterations_run"] = 1
+            cycle_status = str(payload["status"])
+            return payload
+        finally:
+            finished_at = finished_at or _now_iso()
+            self._event_writer.emit(
+                "cycle_end",
+                details={
+                    "status": cycle_status,
+                    "phase_count": len(phases),
+                    "dry_run": is_dry_run,
+                    "only_phase": name,
+                },
+                occurred_at=finished_at,
+            )
+            self._single_phase_active = False
+            self._single_phase_fixture = None
+            self._single_phase_allow_live = False
+            self.feed_file = original_feed_file
+            self.scope_manifest = original_scope_manifest
+            if workspace is not None:
+                workspace.cleanup()
+
     def run(
         self,
         *,
@@ -345,6 +504,33 @@ class ForgeAutopilot:
         registered fetcher in :class:`forge.feeds.FeedFetcher`, which
         catches individual-source failures and never aborts the loop.
         """
+        fixture = self._single_phase_fixture if self._single_phase_active else None
+        if fixture is not None:
+            items = fixture.get("items", [])
+            if not isinstance(items, list):
+                return AutopilotPhaseResult(
+                    name="feed_fetch",
+                    status="error",
+                    detail="fixture_field_items_must_be_array",
+                )
+            count = len(items)
+            return AutopilotPhaseResult(
+                name="feed_fetch",
+                status="ok",
+                detail=f"mock_fixture_items={count} overall=ok",
+                data={
+                    "overall_status": "ok",
+                    "status_counts": {"fixture": 1},
+                    "total_item_count": count,
+                    "fixture_items": count,
+                },
+            )
+        if self._single_phase_active and not self._single_phase_allow_live:
+            return AutopilotPhaseResult(
+                name="feed_fetch",
+                status="skipped",
+                detail="single_phase_mock_connector_no_fixture",
+            )
         if dry_run:
             return AutopilotPhaseResult(
                 name="feed_fetch",
@@ -414,6 +600,64 @@ class ForgeAutopilot:
         aborting the loop — one bad token should not disable the other
         services.
         """
+        fixture = self._single_phase_fixture if self._single_phase_active else None
+        if fixture is not None:
+            services = fixture.get("services", [])
+            if not isinstance(services, list):
+                return AutopilotPhaseResult(
+                    name="connected_services_scan",
+                    status="error",
+                    detail="fixture_field_services_must_be_array",
+                )
+            normalized: list[dict[str, Any]] = []
+            for entry in services:
+                if not isinstance(entry, dict):
+                    continue
+                service = str(entry.get("service") or "fixture")[:80]
+                seeds_value = entry.get("seeds", 0)
+                secret_hits_value = entry.get("secret_hits", 0)
+                seeds = (
+                    len(seeds_value) if isinstance(seeds_value, list) else int(seeds_value or 0)
+                )
+                secret_hits = (
+                    len(secret_hits_value)
+                    if isinstance(secret_hits_value, list)
+                    else int(secret_hits_value or 0)
+                )
+                normalized.append(
+                    {
+                        "service": service,
+                        "status": "mock",
+                        "seeds": seeds,
+                        "secret_hits": secret_hits,
+                    }
+                )
+            seeds_total = sum(int(item["seeds"]) for item in normalized)
+            secret_hits_total = sum(int(item["secret_hits"]) for item in normalized)
+            return AutopilotPhaseResult(
+                name="connected_services_scan",
+                status="ok",
+                detail=(
+                    f"mock_fixture services={len(normalized)} "
+                    f"seeds={seeds_total} secrets={secret_hits_total} errors=0"
+                ),
+                data={
+                    "dry_run": dry_run,
+                    "fixture": True,
+                    "service_count": len(normalized),
+                    "seeds_total": seeds_total,
+                    "secret_hits_total": secret_hits_total,
+                    "errors": 0,
+                    "services": normalized,
+                },
+            )
+        if self._single_phase_active and not self._single_phase_allow_live:
+            return AutopilotPhaseResult(
+                name="connected_services_scan",
+                status="skipped",
+                detail="single_phase_mock_connectors_no_fixture",
+                data={"dry_run": dry_run, "fixture": False},
+            )
         try:
             from forge.onboard.service_connections import (  # noqa: PLC0415
                 ServiceConnectionManager,
@@ -716,6 +960,36 @@ class ForgeAutopilot:
 
     def _phase_feed_build(self, *, dry_run: bool) -> AutopilotPhaseResult:
         """Build and (when applying) write the local target feed."""
+        fixture = self._single_phase_fixture if self._single_phase_active else None
+        if fixture is not None:
+            items = fixture.get("items", [])
+            if not isinstance(items, list):
+                return AutopilotPhaseResult(
+                    name="feed_build",
+                    status="error",
+                    detail="fixture_field_items_must_be_array",
+                )
+            count = len(items)
+            counts = {"total": count, "new_vs_existing": count}
+            return AutopilotPhaseResult(
+                name="feed_build",
+                status="ok",
+                detail=f"fixture_items={count} written=False",
+                data={
+                    "written": False,
+                    "feed_file": str(self.feed_file),
+                    "counts": counts,
+                    "source_errors": [],
+                    "fixture_items": count,
+                },
+            )
+        if self._single_phase_active and not self._single_phase_allow_live:
+            return AutopilotPhaseResult(
+                name="feed_build",
+                status="skipped",
+                detail="single_phase_mock_feed_builder_no_fixture",
+                data={"dry_run": dry_run, "fixture": False},
+            )
         try:
             from forge.automation_target_feed import (  # noqa: PLC0415
                 build_target_feed,
@@ -957,6 +1231,32 @@ class ForgeAutopilot:
 
     def _phase_resume_candidates(self, *, dry_run: bool) -> AutopilotPhaseResult:
         """Resume ready paused/failed kill-chain runs."""
+        fixture = self._single_phase_fixture if self._single_phase_active else None
+        if fixture is not None:
+            candidates = fixture.get("candidates", [])
+            if not isinstance(candidates, list):
+                return AutopilotPhaseResult(
+                    name="resume_candidates",
+                    status="error",
+                    detail="fixture_field_candidates_must_be_array",
+                )
+            skipped = int(fixture.get("skipped_count") or 0)
+            return AutopilotPhaseResult(
+                name="resume_candidates",
+                status="ok",
+                detail=(
+                    f"fixture_candidates={len(candidates)} "
+                    f"planned={len(candidates)} skipped={skipped}"
+                ),
+                data={
+                    "dry_run": dry_run,
+                    "status": "fixture",
+                    "planned_count": len(candidates),
+                    "result_counts": {"planned": len(candidates)},
+                    "fixture_candidates": len(candidates),
+                    "skipped_count": skipped,
+                },
+            )
         try:
             from forge.targets_resume_candidates import (  # noqa: PLC0415
                 execute_target_resume_plan,
@@ -1007,6 +1307,38 @@ class ForgeAutopilot:
 
     def _phase_monitoring(self, *, dry_run: bool) -> AutopilotPhaseResult:
         """Run due monitoring policies in a bounded batch."""
+        fixture = self._single_phase_fixture if self._single_phase_active else None
+        if fixture is not None:
+            policies = fixture.get("policies", [])
+            if not isinstance(policies, list):
+                return AutopilotPhaseResult(
+                    name="monitoring",
+                    status="error",
+                    detail="fixture_field_policies_must_be_array",
+                )
+            alerts = sum(
+                int(policy.get("alert_count") or 0)
+                for policy in policies
+                if isinstance(policy, dict)
+            )
+            changes = sum(
+                int(policy.get("change_count") or 0)
+                for policy in policies
+                if isinstance(policy, dict)
+            )
+            return AutopilotPhaseResult(
+                name="monitoring",
+                status="ok",
+                detail=f"mock_fixture due={len(policies)} run=0 alerts={alerts}",
+                data={
+                    "dry_run": dry_run,
+                    "due_count": len(policies),
+                    "run_count": 0,
+                    "alert_count": alerts,
+                    "change_count": changes,
+                    "fixture_policies": len(policies),
+                },
+            )
         try:
             from forge.monitoring.runner import (  # noqa: PLC0415
                 run_due_monitoring_for_data_dir,
@@ -1134,6 +1466,7 @@ class ForgeAutopilot:
         dry_run: bool,
         started_at: str,
         finished_at: str,
+        single_phase: str | None = None,
     ) -> dict[str, Any]:
         """Fold phase results into a schema-versioned summary payload."""
         status_counts: dict[str, int] = {}
@@ -1151,7 +1484,11 @@ class ForgeAutopilot:
             "execution_policy": (
                 "dry_run_no_writes_or_live_commands_executed"
                 if dry_run
-                else "apply_full_automation_pipeline"
+                else (
+                    "apply_single_phase_only"
+                    if single_phase
+                    else "apply_full_automation_pipeline"
+                )
             ),
             "mode": mode,
             "dry_run": dry_run,
@@ -1161,6 +1498,7 @@ class ForgeAutopilot:
             "config": self.describe(),
             "status_counts": status_counts,
             "phases": [phase.to_dict() for phase in phases],
+            **({"only_phase": single_phase} if single_phase else {}),
         }
 
 
@@ -1178,6 +1516,33 @@ def _bounded_text(exc: BaseException, limit: int = 240) -> str:
     if len(text) > limit:
         return text[: limit - 1] + "\u2026"
     return text
+
+
+def _load_phase_fixture(
+    fixture_file: Path | str | None,
+    phase_name: str,
+) -> dict[str, Any] | None:
+    """Load and validate a phase-tagged JSON fixture without echoing its data."""
+    if fixture_file is None:
+        return None
+    path = Path(fixture_file)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"Cannot read fixture file '{path}': {_bounded_text(exc)}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Fixture file '{path}' is not valid JSON (line {exc.lineno}, column {exc.colno})"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Fixture JSON must be an object")
+    fixture_phase = payload.get("phase")
+    if fixture_phase != phase_name:
+        raise ValueError(
+            f"Fixture phase must be '{phase_name}'"
+            + (f"; got '{fixture_phase}'" if fixture_phase else "")
+        )
+    return payload
 
 
 __all__ = [

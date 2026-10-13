@@ -1,0 +1,7 @@
+{
+  "phase": "feed_build",
+  "items": [
+    {"target_type": "domain", "target_value": "api.corp-target.io"},
+    {"target_type": "domain", "target_value": "portal.corp-target.io"}
+  ]
+}

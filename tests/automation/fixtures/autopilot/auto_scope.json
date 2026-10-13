@@ -1,0 +1,13 @@
+{
+  "phase": "auto_scope",
+  "scope_manifest": {
+    "domains": ["corp-target.io"],
+    "urls": [],
+    "ip_ranges": [],
+    "authorized_seeds": []
+  },
+  "items": [
+    {"target_type": "domain", "target_value": "api.corp-target.io"},
+    {"target_type": "domain", "target_value": "unrelated.net"}
+  ]
+}
