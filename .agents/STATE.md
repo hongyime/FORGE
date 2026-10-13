@@ -1,4 +1,14 @@
-# Active Task: Autopilot loop observability (2026-10-13).
+# Active Task: Fix 2026-10-13 code-scanning alerts (SQL parameterization).
+
+**Progress:** Codex (Muse-orchestrated, L390 short-lived clone) parameterized the flagged SQL: forge/autopilot/events.py now uses literal `autopilot_cycle_events` table names with bound values (alerts #1984-#1997); forge/cli.py replaced both dynamic query builders with static SQL — URL batches via bound JSON + `json_each(?)`, row limit as bound param with `-1` = unlimited (alerts #1966-#1967). Deliberately untouched: #1968 (B104 — `0.0.0.0` is a denied-target hostname, not a bind address) and #1969-#1983 (test-only CodeQL URL-sanitization notes; fixed fixtures, stubbed/local HTTP, no production helper accepts a malicious URL). Nothing dismissed on GitHub.
+
+**Verification:** Focused suites 257 passed; 3 pre-existing failures in tests/automation/test_autopilot.py (CLI ROE tests) reproduce identically on clean main. Direct SQLite smoke test confirms json_each batch + LIMIT -1/1 equivalence. Ruff clean, `git diff --check` clean.
+
+**Next:** Commit + push to origin/main from the L390 clone, then delete the clone.
+
+---
+
+# Previous Task: Autopilot loop observability (2026-10-13).
 
 **Progress:** Added migration 0053 for `autopilot_cycle_events`, a failure-safe event writer/status reader, and loop cycle/phase/target/error/cooldown instrumentation. Added optional target progress callbacks to target import and resume execution, and appended autopilot data to existing `forge monitoring status` text/JSON output. Relevant suites pass: autopilot 57, monitoring+migrations 56, target import/resume 68; Ruff lint passes. Feature commit `426cdb69` is pushed to `origin/main` and verified in sync. After the approved restart, the service is active, the loop process is running, and two events have landed in the existing DB.
 

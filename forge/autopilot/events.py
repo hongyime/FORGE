@@ -65,7 +65,7 @@ def _select_event_db(data_dir: Path) -> Path:
                 if not _has_event_table(conn):
                     continue
                 row = conn.execute(
-                    f"SELECT occurred_at, id FROM {_EVENT_TABLE} "
+                    "SELECT occurred_at, id FROM autopilot_cycle_events "
                     "ORDER BY occurred_at DESC, id DESC LIMIT 1"
                 ).fetchone()
                 if row:
@@ -99,7 +99,7 @@ class AutopilotEventWriter:
                 conn = self._open_writer()
                 try:
                     latest = conn.execute(
-                        f"SELECT COALESCE(MAX(cycle_number), 0) FROM {_EVENT_TABLE}"
+                        "SELECT COALESCE(MAX(cycle_number), 0) FROM autopilot_cycle_events"
                     ).fetchone()
                     self.cycle_number = int(latest[0] or 0) + 1
                     self._insert(
@@ -135,7 +135,7 @@ class AutopilotEventWriter:
                 try:
                     if self.cycle_number < 1:
                         latest = conn.execute(
-                            f"SELECT COALESCE(MAX(cycle_number), 0) FROM {_EVENT_TABLE}"
+                            "SELECT COALESCE(MAX(cycle_number), 0) FROM autopilot_cycle_events"
                         ).fetchone()
                         self.cycle_number = int(latest[0] or 0) + 1
                         self._insert(
@@ -181,8 +181,8 @@ class AutopilotEventWriter:
         occurred_at: str,
     ) -> None:
         conn.execute(
-            f"""
-            INSERT INTO {_EVENT_TABLE}
+            """
+            INSERT INTO autopilot_cycle_events
                 (cycle_id, cycle_number, event_type, phase_name, phase_index,
                  occurred_at, details_json)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -229,9 +229,9 @@ def autopilot_status_for_data_dir(
                 if not _has_event_table(conn):
                     continue
                 row = conn.execute(
-                    f"""
+                    """
                     SELECT cycle_id, cycle_number, occurred_at, id
-                    FROM {_EVENT_TABLE}
+                    FROM autopilot_cycle_events
                     ORDER BY occurred_at DESC, id DESC
                     LIMIT 1
                     """
@@ -264,9 +264,9 @@ def autopilot_status_for_data_dir(
         conn = _read_only_connection(db_path)
         try:
             rows = conn.execute(
-                f"""
+                """
                 SELECT id, event_type, phase_name, phase_index, occurred_at, details_json
-                FROM {_EVENT_TABLE}
+                FROM autopilot_cycle_events
                 WHERE cycle_id=?
                 ORDER BY id
                 """,
