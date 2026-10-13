@@ -1,7 +1,7 @@
-# Current Task: Add isolated, fixture-backed autopilot phase runs (2026-10-13).
+# Completed Task: Add isolated, fixture-backed autopilot phase runs (2026-10-13).
 
 Progress:
-- Added `ForgeAutopilot.run_single_phase`, phase-tagged JSON fixtures, safe connector opt-ins, and CLI `--only-phase`/`--fixture-file`/`--allow-live` flags. Final verification passed: 16 isolated phase tests, 75 autopilot tests, 70 target-import tests, Ruff, `git diff --check`, CLI demo/help/invalid-name checks, and launcher forwarding inspection. Direct-main commit planned as `feat: add isolated autopilot phase runner`. Cycle 3 was left alone; `autopilot-loop.sh` and `nuclei-templates/` remain excluded.
+- Added `ForgeAutopilot.run_single_phase`, phase-tagged JSON fixtures, safe connector opt-ins, and CLI `--only-phase`/`--fixture-file`/`--allow-live` flags. Final verification passed: 16 isolated phase tests, 75 autopilot tests, 70 target-import tests, Ruff, `git diff --check`, CLI demo/help/invalid-name checks, and launcher forwarding inspection. Feature commit `59326769` was pushed directly to `origin/main`. Cycle 3 was left alone; `autopilot-loop.sh` and `nuclei-templates/` remain excluded.
 
 # Completed Task: Fix autopilot target validation and per-target start failures (2026-10-13).
 
