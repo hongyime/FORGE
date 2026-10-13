@@ -1,8 +1,8 @@
-# Current Task: Extend autopilot engagement capacity (2026-10-13).
+# Completed Task: Extend autopilot engagement capacity (2026-10-13).
 
 **Progress:** Raised autopilot `start_limit` to 20 and `max_runtime_minutes` to 60 in the dataclass and serialized defaults. Confirmed CLI flags remain optional overrides with fallback to base defaults; added default/override coverage. Traced placeholder denylist enforcement through feed build, auto-scope, `load_target_feed`, and engagement launch; added an import/start regression test proving placeholder hosts are filtered before launch. `cooldown_minutes` remains 30 and `min_start_source_count` remains 1. Requested suites passed: 144 passed, 0 failed. No live apply/loop was run.
 
-**Next:** Review the final diff, commit with the requested message, and push to `origin/main`.
+**Delivery:** Feature commit `4818c6dc` (`feat: raise engagement capacity (start_limit 20, max_runtime 60m)`) is pushed to `origin/main`.
 
 ---
 
