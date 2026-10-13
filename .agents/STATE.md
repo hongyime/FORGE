@@ -1,3 +1,11 @@
+## Verification steps 1-2 PASSED; starting CYCLE 5 (2026-10-14, orchestrator)
+
+- (1) Combined relevant suites on final tree: 372 passed (tests/db + test_targets_import + test_automation_cycle + test_automation_feed_build + test_seed_classifier_cloud_ref + tests/automation/). Full tests/cli: 436 passed, 9 failed (proven pre-existing), 1 deselected.
+- (2) Phase-5-only dry run via phase runner: exit 0, status ok, total=2 processed=2 started=0 failed=0, start_stop_reason=none (dry-run sets no stop reason). Fixture tests/automation/fixtures/autopilot/import_targets.json, scratch data-dir /tmp/forge-phase5-verify (removed after). One benign warning: cycle_start event write FileNotFoundError (no engagement DB in scratch dir; live loop writes to a real DB).
+- (3) STARTING CYCLE 5 now: systemctl --user restart forge-autopilot.service. Proof requires target_completed > 0 for a legitimate domain. Cycle 5 LEFT RUNNING after verification; do NOT stop it.
+
+---
+
 ## Bug 3 -- failed starts consume a consecutive-failure budget (2026-10-14, Codex leg + orchestrator verification)
 
 Status: COMPLETE. Commit d120948e on main (code + tests). Loop still stopped; cycle 5 not yet started. Rust migration remains parked.

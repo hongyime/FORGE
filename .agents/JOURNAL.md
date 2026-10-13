@@ -764,3 +764,5 @@ Bryan: "Keep the rust in the task list. Execute it after we are done fixing all 
 2026-10-14: Bug 2 DONE (commit 53edfa26): shared forge/domain_validation.py rejects filename TLDs (png/py/yml + 89 more); .py deliberately denied despite Paraguay ccTLD; .md/.rs/.sh/.ai/.so/.zip preserved. Orchestrator verified 359 tests; repaired pre-existing .example fixture failure (proven pre-existing on 7855c147). Loop still stopped.
 
 2026-10-14: Bug 3 DONE (commit d120948e): phase-5 imports stop after 3 consecutive failed starts (success resets; skips neutral); stop reason + unprocessed count surfaced in per-target, CLI, and autopilot results. Fully-failing phase now creates at most 3 records. Orchestrator verified 214 relevant tests; full tests/cli 9 failures proven pre-existing on a23691ff. Loop still stopped.
+
+2026-10-14: Verification 1-2 passed (372 tests; phase-5 dry-run ok). Starting cycle 5 via forge-autopilot.service restart; proof requires target_completed > 0. Cycle 5 left running.
