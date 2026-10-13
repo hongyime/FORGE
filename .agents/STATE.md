@@ -1,3 +1,74 @@
+## Bug 1 -- migration 0052 ghost FKs FIXED (2026-10-14, Codex leg + orchestrator verification)
+
+Status: COMPLETE. Commit a52bbbe5 on main (code + tests). Live DB 1 migrated to v54 via the real on-open path. Loop still stopped; cycle 5 not yet started. Rust migration remains parked.
+
+Root cause: Migration 0052 rebuilt engagement_seeds via _rebuild_table RENAME-to-temp. The rename rewrote child FKs to the temp name; DROP temp orphaned them. All 102 engagement DBs had seed_relations + seed_runs FKs pointing at engagement_seeds__rebuild_668460c1. Cycle 4: 99 engaged, 0 completed, 98 failed.
+
+Changes (a52bbbe5):
+- v54 (seed_fk_targets) in forge/db/migrations.py: rebuilds seed_relations + seed_runs with FKs to real engagement_seeds, preserving rows; idempotent no-op when FKs already correct. DDL verified identical to _m0001 / forge/db/schema.py except FK targets.
+- _rebuild_table: replacement-table swap -- build + populate replacement under temp name, DROP old parent, RENAME replacement to canonical name. Canonical name is never renamed away, so child FKs are never rewritten. FK enforcement toggled OFF during swap when ON (raises if called inside an active transaction with FK ON -- migration-boundary guard). Savepoint rollback on failure.
+- Observability in forge/targets_import.py: target_failed event now includes return_code, sanitized argv (sensitive option values + env assignments + bearer + absolute paths redacted), bounded stderr_tail (last 2048 bytes, truncation marker). Additive fields only.
+
+Verification (orchestrator re-ran): new regression file + tests/db + tests/cli/test_targets_import.py + tests/automation/test_autopilot_events.py = 89 passed. Ruff + git diff --check clean.
+- Copy-DB (engagement 101, the only live DB with seed child rows): v53 to v54, the 1 seed_relations row preserved byte-for-byte, FKs fixed, foreign_key_check clean.
+- Live-DB proof (engagement 1 ONLY via get_engagement_db -- FK ON + validate_canonical_schema): v53 to v54, all seed FKs to engagement_seeds, foreign_key_check clean, 0/0 rows preserved.
+- Live-DB migration path: get_engagement_db calls run_migrations on open. Remaining 101 DBs migrate on open during cycle 5. Do NOT bulk-migrate by hand.
+
+Next: Bug 2 (filenames pass domain validation) -> Bug 3 (failed starts vs start budget) -> phase-5 dry-run -> cycle 5.
+
+---
+
+## STOPPED 2026-10-13 ~23:59 SGT — FORGE Rust migration PARKED (Bryan: "Keep the rust in the task list. Execute it after we are done fixing all the bugs.")
+- Status: STOPPED. Do NOT resume without Bryans explicit say-so.
+- Done: Parity assessment (docs/rust-parity-assessment.md, on disk, git-ignored) — Codex assessed, agy vetted, all claims confirmed + 1 material correction (Python 53 migrations vs Rust 48). Stage 0 spec freeze (docs/rust-parity-spec.md, on disk, git-ignored) — Codex complete, agy review IN FLIGHT when stopped (leg closed, review NOT completed, verdict unknown).
+- NOT committed: assessment + spec docs are in git-ignored docs/ (need git add -f or .gitignore change to commit — decision pending). STATE.md/JOURNAL.md updates from these batches ARE on disk (uncommitted).
+- Next when resumed: finish agy review of Stage 0 batch → commit batch (needs force-add decision) → resolve D4 (T1/T2 definitions) → Stage 1 foundation.
+- Live Python autopilot loop: UNTOUCHED by migration work, still running. Python bug-fix work continues separately.
+
+# Stage 0 spec freeze COMPLETE (2026-10-13, Codex leg, Round 1 Batch 1) — agy review pending, NOT committed.
+
+**Deliverable:** `~/Projects/forge/docs/rust-parity-spec.md` (181 lines, 32,410 bytes). NOTE: `docs/` is git-ignored (`.gitignore:138`), so the spec does NOT appear in `git status`; this STATE.md entry is the findable record. Path: `docs/rust-parity-spec.md`.
+
+**Resolved numbers (re-derived from files, cited with file:line in the spec):**
+- Ledger `native/migration/domain-contracts.json`: **52 `implemented_fixture_verified` / 66 `reference_only` / 118 total = 44%**. By kind: domain_record 35, enum 17, sql_table_reference 64, runtime_class 2. Reference_only owners: 64 T7, 1 T11, 1 T12. Verified = T3 domain types only, JSON-boundary parity (not exhaustive equivalence).
+- Cutover plan corrected: `docs/rust-cutover-plan.md` "118/118 implemented_fixture_verified" (lines 7, 137, 1266) is FALSE; "fully shadowed" (§1/§8/§10) and "~3-4 weeks" (line 1037) marked UNRELIABLE. Record = assessment + ledger + 52/118.
+- Schema: Python migrations `TARGET_VERSION = 53` (53 entries, authoritative) vs Python `forge/db/schema.py` `SCHEMA_VERSION = 52` (fresh-install DDL snapshot, one behind) vs Rust `forge-storage` `SCHEMA_VERSION = 48` (missing migrations 49-53; stale "matches Python" comment). Missing: 49 asset_graph_remediation_source (remediation_items CHECK), 50 active_session_relationship_check (asset_relationships CHECK), 51 recursion_intents (new table), 52 api_spec_seed_type (engagement_seeds CHECK), 53 autopilot_loop_events (autopilot_cycle_events table). Stage 2 must: Rust to v53 + incremental migration engine (versioned/ordered/idempotent + drift-repair) + machine-checked SQLite schema diff + dual-read/write proof + separately reconciled Postgres/Alembic dimension.
+
+**Per-crate parity (13 crates, §1 of spec):** JSON-boundary vs BEHAVIOURAL vs ROUTE-SHAPE assigned per crate with DONE bar, explicit NOT-counts (type canaries / fixture-only runs / presence-only auth / boolean sign() never stand in for behavioural parity), and a named later acceptance harness. forge-domain only crate with genuine contract coverage today (JSON-boundary); all others model/scaffold until their behavioural harness passes. End-state rule (§0): keep BOTH Python + Rust until the Rust Stage-gate harness passes for that behaviour; delete Python only at Stage 8, per behaviour, rollback tag in place.
+
+**Open decisions (framed, NOT decided — §4, D1-D8):** D1 GAP-1 rust_core/ FFI vs native/; D2 GAP-2 Playwright (A sidecar / B Rust chromiumoxide / C scoped-out); D3 GAP-4 llama_cpp (A Rust-native / B sidecar / C template-only); D4 T1/T2 partial scope + Stage 1 gating (scope UNDEFINED in record — must recover authoritative definitions before Stage 1; do not invent); D5 GAP-3 OSINT venvs; D6 GAP-5 guarded autostart; D7 GAP-6 entry point; D8 autopilot-loop crate home (forge-operations vs new forge-autopilot crate).
+
+**Stage 0 exit criteria (§5):** Spec agy-reviewed + accepted; ledger re-derived + corrected; 13 crate rows frozen with harnesses; decision register frozen with owner/evidence per decision; Stage 2 schema scope agreed; both-implementations-until-gate rule preserved; no weaker parity meaning in later "done" claims. Stage 0 exit does NOT require deciding GAP-1/GAP-2/GAP-4/T1-T2 — but Stage 1 cannot begin until D4 (T1/T2 scope + gating) is answered.
+
+**Verification:** Codex `-s workspace-write` (log `~/.codex/log/codex-forge-stage0b-20261013.log`); spec read back by Codex (13 crates, 5 sections, 8 decisions) and independently verified by orchestrator. `git status` shows ONLY `.agents/STATE.md` + `.agents/JOURNAL.md` modified + pre-existing untracked `autopilot-loop.sh`, `nuclei-templates/`. No `.py`/`.rs` changes. HEAD unchanged `5e3518d3`. Nothing committed. Live loop untouched. First Codex run stopped per writability guard (sandbox EROFS on `.agents/`); probe proved sandbox writes `docs/` + `/tmp` fine — STATE/JOURNAL via shell, Codex wrote spec only.
+
+**Next:** agy review of this batch BEFORE commit.
+
+---
+# Stage 0 spec freeze IN PROGRESS (2026-10-13, Codex leg, Round 1 Batch 1).
+
+**Status:** Writing `docs/rust-parity-spec.md` (single spec doc). Loop untouched; no Python/Rust code changes; no commit; agy review pending before commit.
+
+**Writability note (diagnosed):** Codex `-s workspace-write` sandbox returns `OSError: [Errno 30] Read-only file system` on `.agents/STATE.md` (Codex stopped per guard, spec not started). Probe confirmed Codex sandbox CAN write `docs/` and `/tmp` but NOT `.agents/`. Filesystem itself is writable (shell `touch .agents/.writetest` OK, perms 0664, owner bryan). Split: orchestrator updates STATE.md/JOURNAL.md via shell; Codex writes ONLY `docs/rust-parity-spec.md` under `-s workspace-write` and must NOT attempt `.agents/` writes.
+
+**Scope (Stage 0 only):** One parity definition per crate (13 crates, JSON-boundary vs behavioural vs route-shape); ledger contradiction resolved (52 verified / 66 reference_only / 118); schema versions reconciled (Python migrations 53 / Python schema.py 52 / Rust forge-storage 48, missing migrations 49-53); open decisions framed, not decided (GAP-1, GAP-2, GAP-4, T1/T2 partial gating, plus GAP-3/5/6 + autopilot-loop home); Stage 0 exit criteria stated.
+
+---
+# Independent Vetting: FORGE Rust parity assessment (agy leg, 2026-10-13).
+
+**Scope:** Independent vetting of Codex's docs/rust-parity-assessment.md (606 lines) against actual code at HEAD 5e3518d3. READ-ONLY; live Python autopilot loop untouched; no code changes, no commits. Two agy runs: run 1 hit the 10m print timeout (partial output, through claim 2c detail); continuation run completed the remainder.
+
+**Verdicts (all Codex headline claims CONFIRMED):**
+- (1) Full cutover NOT possible today; only forge-domain has genuine contract coverage; NO Rust autopilot executor (grep for autopilot in native/crates/ = 0 matches; loop is Python forge/autopilot/loop.py, 8 phases).
+- (2a) forge-runtime TaskCoordinator::submit fabricates completed (coordinator.rs:232-248). (2b) forge-discovery has no network (Cargo.toml serde/serde_json/zip only; seed.rs:23 IP parsing only). (2c) forge-cli is an explicit skeleton (forge.rs:8,41,51-62; cli.rs 25 public + 9 hidden commands, zero handlers, exits UserError). (2d) forge-server 5 API routes (:9000) + 2 WebUI routes (:9080) vs 108 Python decorators; Bearer middleware presence-only (forge-server.rs:189-199; forged token passes). (2e) forge-release sign() only flips bool (release.rs:113-115); hash is FNV-1a repeated 4x (release.rs:122-130).
+- (2f) 13-crate table accurate EXCEPT Codex misidentified Python migration system (CORRECTION): Python has 53 migrations (migrations.py TARGET_VERSION=53), Rust SCHEMA_VERSION=48; Rust missing migrations 49-53 (recursion_intents, autopilot_cycle_events, CHECK updates). No further crate-table errors.
+- (3) Stages 0-8 order sound; Stage 5 (autopilot loop) is critical path; Compose flip != loop cutover (loop runs as host systemd forge-autopilot.service, outside Compose; Compose only alternates API/UI skeleton :8000/:8080 vs :9000/:9080). ADDITION: Stage 2 must include migrations 49-53.
+- (4a) Task-3 manifest is fixture-provenance (manifest.json schema forge.domain.fixture-provenance.v1, 9 fixtures). (4b) Ledger contradiction CONFIRMED: docs/rust-cutover-plan.md claims 118/118 implemented_fixture_verified (lines 7,137,1266); ledger native/migration/domain-contracts.json shows 52 verified + 66 reference_only; STATE.md:101 corroborates 52/118 (44%). (4c) Parity = 3 meanings (JSON-boundary schema, in-memory canary test, route-shape HTTP). (4d) rust_core/ FFI orphaned (forge_core: 0 hits in forge/; only tests/test_obfuscated.py:113,164). (4e) Schema equivalence asserted not proven; no differential testing vs Python SQLite (SCHEMA_VERSION=52 / TARGET_VERSION=53) or Postgres. Nuance: Python schema.py SCHEMA_VERSION=52 vs migrations TARGET_VERSION=53.
+- MISSES Codex missed: silent stubs -- POST /ready/refresh hardcoded 202 (forge-server.rs:271-278), FakeToolAdapter "fake-1.0.0" (tool_adapter.rs:107-160), reporting FNV-1a digest (reports.rs:226); stub greps: TODO 0, FIXME 0, unimplemented! 0, todo! 0, panic! 6 (all in forge-domain tests), "not yet implemented" 2; unsafe: 0 in native/crates/ (forbid(unsafe_code)), 5 in rust_core/ (credentials.rs, kerberos.rs, pth.rs -- Windows LSASS/token); Rust has no incremental migration engine; forge-storage only runs raw CREATE TABLE IF NOT EXISTS DDL.
+
+**Bottom line:** Zero production workloads can cut over to Rust today. Single most blocking gap: complete absence of an autopilot execution engine owning the 8 phases. Before any cutover: Stage 0 reconcile contract ledger, forge-storage to schema v53, shadow-traffic parity harness across phases 1-8 on identical feeds.
+
+---
 # Completed Task: Add isolated, fixture-backed autopilot phase runs (2026-10-13).
 
 Progress:
