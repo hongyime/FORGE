@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 from forge.autopilot.events import target_retry_state_for_target
 from forge.config import ForgeConfig
 from forge.engagement_ids import numeric_engagement_db_files
+from forge.governance.scope_gate import is_roe_wildcard
 from forge.orchestration.run_tracking import mark_timed_out_kill_chain_run_failed
 from forge.subprocess_tree import run_contained_subprocess
 from forge.utils.kill_chain_options import (
@@ -1160,10 +1161,11 @@ def _recovered_scope_manifest_payload(
     roe_id: str,
 ) -> dict[str, Any]:
     scope = _engagement_scope_json(db_path)
-    if not _scope_manifest_has_narrow_scope(scope):
+    roe_wildcard = is_roe_wildcard(scope)
+    if not roe_wildcard and not _scope_manifest_has_narrow_scope(scope):
         scope = _scope_from_seed(seed_value, seed_type)
     authorized = list(dict.fromkeys([*scope.get("authorized_seeds", []), seed_value]))
-    return {
+    payload = {
         "roe_id": roe_id,
         "domains": scope.get("domains", []),
         "ip_ranges": scope.get("ip_ranges", []),
@@ -1175,9 +1177,12 @@ def _recovered_scope_manifest_payload(
             "seed_type": seed_type,
         },
     }
+    if roe_wildcard:
+        payload["roe_scope"] = str(scope.get("roe_scope") or scope.get("scope") or "*")
+    return payload
 
 
-def _engagement_scope_json(db_path: Path) -> dict[str, list[str]]:
+def _engagement_scope_json(db_path: Path) -> dict[str, Any]:
     try:
         conn = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
     except sqlite3.Error:
@@ -1196,7 +1201,11 @@ def _engagement_scope_json(db_path: Path) -> dict[str, list[str]]:
         return {}
     if not isinstance(parsed, dict):
         return {}
-    result: dict[str, list[str]] = {}
+    result: dict[str, Any] = {}
+    for key in ("roe_scope", "scope"):
+        value = parsed.get(key)
+        if isinstance(value, str) and value.strip():
+            result[key] = value
     for key in ("domains", "ip_ranges", "urls", "authorized_seeds"):
         value = parsed.get(key)
         if isinstance(value, list):
@@ -1230,7 +1239,7 @@ def _scope_from_seed(seed_value: str, seed_type: str) -> dict[str, list[str]]:
 
 
 def _scope_manifest_has_narrow_scope(payload: dict[str, Any]) -> bool:
-    return any(
+    return is_roe_wildcard(payload) or any(
         payload.get(key)
         for key in ("domains", "ip_ranges", "urls", "authorized_seeds")
     )

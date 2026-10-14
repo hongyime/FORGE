@@ -297,46 +297,47 @@ def test_direct_recon_crawl_scope_manifest_url_prefix_denies_same_host_drift(
     assert calls == []
 
 
-def test_direct_scope_manifest_rejects_global_allowlist(tmp_path: Path) -> None:
-    with pytest.raises(typer.BadParameter, match="scope manifest is too broad"):
-        cli._direct_cli_load_scope_lists(
-            engagement_id=1001,
-            db_path=tmp_path / "engagement.db",
-            scope_manifest=json.dumps(
-                {
-                    "roe_id": "ROE-ACME-2026-07",
-                    "ip_ranges": ["0.0.0.0/0", "::/0"],
-                    "authorized_seeds": ["*"],
-                }
-            ),
-            target="allowed.example",
-            seed_type="domain",
-        )
+def test_direct_scope_manifest_accepts_global_allowlist(tmp_path: Path) -> None:
+    scope, urls = cli._direct_cli_load_scope_lists(
+        engagement_id=1001,
+        db_path=tmp_path / "engagement.db",
+        scope_manifest=json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "ip_ranges": ["0.0.0.0/0", "::/0"],
+                "authorized_seeds": ["*"],
+            }
+        ),
+        target="thirdparty.example",
+        seed_type="domain",
+    )
+    assert scope == ["*", "0.0.0.0/0", "::/0"]
+    assert urls == []
 
 
-def test_kill_chain_rejects_global_scope_manifest_before_attack_env(
+def test_kill_chain_scope_manifest_accepts_global_scope_before_attack_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("FORGE_ATTACK_MODE_AUTO", raising=False)
     monkeypatch.delenv("FORGE_KEYSCAN_ASSUME_YES", raising=False)
     monkeypatch.delenv("FORGE_POST_LATERAL_ASSUME_YES", raising=False)
 
-    with pytest.raises(typer.BadParameter, match="scope manifest is too broad"):
-        cli.kill_chain(
-            seed="allowed.example",
-            engagement=1001,
-            dry_run=False,
-            attack_mode=True,
-            roe_id="ROE-ACME-2026-07",
-            scope_manifest=json.dumps(
-                {
-                    "roe_id": "ROE-ACME-2026-07",
-                    "domains": [],
-                    "ip_ranges": ["0.0.0.0/0"],
-                    "authorized_seeds": ["*"],
-                }
-            ),
+    manifest = cli._load_scope_manifest(
+        json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "domains": [],
+                "ip_ranges": ["0.0.0.0/0"],
+                "authorized_seeds": ["*"],
+            }
         )
+    )
+    cli._reject_broad_scope_manifest_for_live(manifest)
+    validation = cli._validate_scope_manifest_seed_values(
+        manifest,
+        [{"value": "thirdparty.example", "seed_type": "domain"}],
+    )
+    assert validation["authorized"]
 
     assert os.environ.get("FORGE_ATTACK_MODE_AUTO") is None
     assert os.environ.get("FORGE_KEYSCAN_ASSUME_YES") is None

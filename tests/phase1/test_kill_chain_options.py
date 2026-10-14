@@ -240,6 +240,28 @@ def test_kill_chain_scope_preflight_loads_and_matches_roe() -> None:
     assert reject_calls == [metadata]
 
 
+def test_kill_chain_scope_preflight_accepts_roe_wildcard() -> None:
+    from forge.cli_helpers import _reject_broad_scope_manifest_for_live
+
+    options = _runtime_options(
+        dry_run=False,
+        roe_id="ROE-ACME-2026",
+        scope_manifest="scope.json",
+    )
+    metadata = load_kill_chain_scope_manifest_metadata(
+        options,
+        load_scope_manifest=lambda value: {
+            "source": value,
+            "roe_id": "ROE-ACME-2026",
+            "roe_scope": "*",
+        },
+        reject_broad_scope_manifest_for_live=_reject_broad_scope_manifest_for_live,
+    )
+
+    assert metadata is not None
+    assert metadata["roe_scope"] == "*"
+
+
 def test_kill_chain_scope_preflight_wraps_scope_errors() -> None:
     options = _runtime_options(
         dry_run=False,

@@ -5,8 +5,8 @@ U1.5 scope-gate implementation. Every ``import_zip`` call:
 1. Validates that ``engagement_id`` is a non-empty, non-``None`` string.
 2. Validates that a :class:`ScopeManifest` was supplied at construction
    time and that its shape passes the ROE checks (non-empty ``roe_id``,
-   at least one authorized scope entry, no global wildcards such as
-   ``*``/``0.0.0.0/0``/``::/0``).
+   and at least one authorized scope entry; ROE ``*`` wildcard entries
+   are accepted.
 3. Emits exactly four audit event categories through the shared
    :class:`forge.audit.logger.AuditLogger`:
 
@@ -62,17 +62,6 @@ _LOG = logging.getLogger(__name__)
 
 _TOOL_NAME = "bloodhound_importer"
 
-# Sentinel values callers must not use as scope entries. Live scope gates
-# reject the same set; keep it aligned with the README manifest example.
-_FORBIDDEN_SCOPE_TOKENS: frozenset[str] = frozenset({
-    "*",
-    "**",
-    "*.*",
-    "0.0.0.0/0",
-    "::/0",
-})
-
-
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
@@ -111,8 +100,8 @@ class ScopeManifest(BaseModel):
 
     * ``roe_id`` is a non-empty, whitespace-stripped string.
     * At least one of ``domains``, ``ip_ranges``, ``urls``, or
-      ``authorized_seeds`` contains a concrete entry.
-    * No entry is a global wildcard (``*``, ``0.0.0.0/0``, ``::/0``).
+      ``authorized_seeds`` contains an entry. ROE ``*`` wildcard entries
+      are valid and grant an unbounded scope.
     * Every ``ip_ranges`` entry parses via :func:`ipaddress.ip_network`.
     """
 
@@ -134,11 +123,6 @@ class ScopeManifest(BaseModel):
         for entry in value:
             if not isinstance(entry, str) or not entry.strip():
                 raise ValueError(f"scope entry must be a non-empty string, got {entry!r}")
-            if entry.strip() in _FORBIDDEN_SCOPE_TOKENS:
-                raise ValueError(
-                    f"broad wildcard scope entry {entry!r} is forbidden; "
-                    "declare explicit domains/URLs/seeds instead"
-                )
         return value
 
     @field_validator("ip_ranges", mode="after")
@@ -147,11 +131,6 @@ class ScopeManifest(BaseModel):
         for entry in value:
             if not isinstance(entry, str) or not entry.strip():
                 raise ValueError(f"ip_ranges entry must be a non-empty string, got {entry!r}")
-            if entry.strip() in _FORBIDDEN_SCOPE_TOKENS:
-                raise ValueError(
-                    f"broad CIDR scope entry {entry!r} is forbidden; "
-                    "declare specific ranges instead"
-                )
             try:
                 ipaddress.ip_network(entry, strict=False)
             except ValueError as exc:

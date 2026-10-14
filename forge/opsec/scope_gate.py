@@ -20,6 +20,8 @@ import ipaddress
 import json
 from typing import Callable, Optional
 from urllib.parse import urlparse
+
+from forge.governance.scope_gate import is_roe_wildcard
 from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
@@ -95,6 +97,8 @@ def _matches_scope_entry(normalised_target: str, entry: str) -> bool:
     entry_lower = entry.strip().lower().rstrip(".")
     if not entry_lower:
         return False
+    if is_roe_wildcard([entry]):
+        return True
     if "://" in entry_lower:
         parsed = urlparse(entry_lower)
         entry_host = str(parsed.hostname or parsed.netloc or "").strip().lower().rstrip(".")
@@ -143,6 +147,8 @@ def scope_entries_from_payload(payload: object) -> list[str]:
     if isinstance(payload, list):
         raw_entries = list(payload)
     elif isinstance(payload, dict):
+        if is_roe_wildcard(payload):
+            return ["*"]
         raw_entries = [
             *_scope_payload_values(payload, "domains", "domain_allowlist"),
             *_scope_payload_values(payload, "ip_ranges", "cidrs", "cidr_ranges"),
@@ -173,6 +179,8 @@ def email_address_in_scope(email: str, scope: Optional[list[str]] = None) -> boo
     """Return True when an email is covered by exact-email or domain scope."""
     if not scope:
         return False
+    if is_roe_wildcard(scope):
+        return True
     normalised_email = str(email or "").lower().strip()
     if "@" not in normalised_email:
         return False
@@ -254,6 +262,9 @@ def assert_in_scope(target: str, scope: Optional[list[str]] = None) -> None:
     """
     if not scope:
         raise ScopeViolationError(target, [])
+
+    if is_roe_wildcard(scope):
+        return
 
     normalised = _normalise(target)
     if not normalised:

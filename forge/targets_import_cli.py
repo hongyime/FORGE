@@ -51,6 +51,12 @@ def register_target_import_commands(app: typer.Typer) -> None:
             envvar="FORGE_ROE_ID",
             help="Rules-of-engagement reference required with --start.",
         ),
+        roe_scope: Optional[str] = typer.Option(
+            None,
+            "--roe-scope",
+            envvar="FORGE_ROE_SCOPE",
+            help="ROE scope value; '*' explicitly disables the scope gate.",
+        ),
         start: bool = typer.Option(
             False,
             "--start",
@@ -123,6 +129,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
                 parallel_fanout=parallel_fanout,
                 start_limit=start_limit,
                 min_start_source_count=min_start_source_count,
+                roe_scope=roe_scope,
             )
         except Exception as exc:
             raise typer.BadParameter(str(exc)) from exc

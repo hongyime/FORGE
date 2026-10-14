@@ -1311,6 +1311,7 @@ class ForgeAutopilot:
                 max_iter=self.defaults.max_iter,
                 max_runtime_minutes=self.defaults.max_runtime_minutes,
                 parallel_fanout=self.defaults.parallel_fanout,
+                roe_scope=os.environ.get("FORGE_ROE_SCOPE"),
                 start_limit=self.defaults.start_limit,
                 min_start_source_count=self.defaults.min_start_source_count,
                 config=self._cfg,

@@ -96,9 +96,9 @@ class TestConstructionROE:
             BloodHoundImporter(empty, audit_logger=audit_logger)
         assert "at least one" in str(excinfo.value)
 
-    def test_broad_wildcard_rejected_at_manifest_parse(self) -> None:
-        with pytest.raises(Exception):  # noqa: PT011 -- pydantic ValidationError
-            ScopeManifest(roe_id="ROE-BAD", authorized_seeds=["*"])
+    def test_broad_wildcard_is_accepted_at_manifest_parse(self) -> None:
+        manifest = ScopeManifest(roe_id="ROE-STAR", authorized_seeds=["*"])
+        assert manifest.authorized_seeds == ["*"]
 
 
 # ---------------------------------------------------------------------------

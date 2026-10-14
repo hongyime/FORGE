@@ -22,6 +22,7 @@ expansion rules that preserve the operator's existing scope boundary:
 Anything that falls outside those rules is returned as a
 :class:`ScopeExpansionCandidate` with ``accepted=False`` and a human
 ``reason`` so the operator can review before manually widening scope.
+Under ROE ``*``, every valid non-denied candidate is accepted directly.
 
 Nothing in this module makes network calls or executes offensive tools.
 """
@@ -37,6 +38,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import urlsplit
 
+from forge.governance.scope_gate import is_roe_wildcard
 from forge.onboard.patterns import is_denied_target
 
 
@@ -194,6 +196,7 @@ def expand_scope_from_feeds(
     """
     manifest_path = Path(manifest_path)
     manifest = load_scope_manifest(manifest_path)
+    roe_wildcard = is_roe_wildcard(manifest)
     scoped_domains = {d.lower().lstrip("*.") for d in manifest.get("domains", []) if d}
     scoped_urls = {str(u).strip() for u in manifest.get("urls", []) if u}
     scoped_ips: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
@@ -232,6 +235,17 @@ def expand_scope_from_feeds(
         seed_type = candidate["seed_type"]
         value = candidate["value"]
         related = candidate["related_domains"]
+
+        if roe_wildcard:
+            accepted.append(
+                ScopeExpansionCandidate(
+                    value=value,
+                    seed_type=seed_type,
+                    accepted=True,
+                    reason="roe_wildcard",
+                )
+            )
+            continue
 
         if seed_type == "domain" or seed_type == "subdomain":
             parent = _matching_parent_domain(value, scoped_domains)

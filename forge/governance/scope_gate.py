@@ -36,6 +36,7 @@ import json
 import logging
 import os
 import uuid
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
@@ -52,17 +53,80 @@ _LOG = logging.getLogger(__name__)
 _SCOPE_ENV_VAR = "FORGE_SCOPE_JSON"
 
 
+def is_roe_wildcard(scope: object) -> bool:
+    """Return whether a manifest or scope explicitly grants ROE ``*``.
+
+    Mapping inputs may use manifest fields; a flat sequence is also accepted
+    for legacy scope-gate APIs that have already flattened those fields.
+    This is the canonical ROE wildcard detector used by all scope gates.
+    """
+    scalar_values: list[object] = []
+    field_values: dict[str, object] = {}
+    if isinstance(scope, Mapping):
+        scalar_values = [scope.get("roe_scope"), scope.get("scope")]
+        field_values = {
+            name: scope.get(name)
+            for name in (
+                "domains",
+                "urls",
+                "authorized_seeds",
+                "exact_seeds",
+                "ip_ranges",
+            )
+        }
+    elif isinstance(scope, str):
+        scalar_values = [scope]
+    elif isinstance(scope, Sequence):
+        field_values = {"scope": scope}
+    else:
+        scalar_values = [getattr(scope, "roe_scope", None), getattr(scope, "scope", None)]
+        field_values = {
+            name: getattr(scope, name, None)
+            for name in (
+                "domains",
+                "urls",
+                "authorized_seeds",
+                "exact_seeds",
+                "ip_ranges",
+            )
+        }
+
+    if any(" ".join(str(value or "").split()).casefold() == "*" for value in scalar_values):
+        return True
+
+    for name, raw_values in field_values.items():
+        if raw_values is None:
+            continue
+        values = [raw_values] if isinstance(raw_values, str) else raw_values
+        if not isinstance(values, Sequence):
+            continue
+        for raw_value in values:
+            value = " ".join(str(raw_value or "").split()).casefold()
+            if value == "*":
+                return True
+            if name == "ip_ranges" and value:
+                try:
+                    if ipaddress.ip_network(value, strict=False).prefixlen == 0:
+                        return True
+                except ValueError:
+                    continue
+    return False
+
+
 class EngagementScope(BaseModel):
     """Declared engagement perimeter.
 
-    All three lists default to empty. An empty scope denies every target —
-    operators must declare at least one entry before remote actions are
-    permitted.
+    The three perimeter lists default to empty. An empty scope denies every
+    target unless the explicit ROE wildcard fields grant ROE ``*``.
     """
 
     domains: list[str] = Field(default_factory=list)
     ip_ranges: list[str] = Field(default_factory=list)
     urls: list[str] = Field(default_factory=list)
+    roe_scope: str | None = None
+    scope: str | None = None
+    authorized_seeds: list[str] = Field(default_factory=list)
+    exact_seeds: list[str] = Field(default_factory=list)
 
 
 class ScopeGate:
@@ -80,6 +144,7 @@ class ScopeGate:
         audit_logger: "AuditLogger | None" = None,
     ) -> None:
         self.scope = scope
+        self._roe_wildcard = is_roe_wildcard(scope)
         self.audit_logger = audit_logger
         # P2-6: hold strong refs to fire-and-forget audit tasks so the
         # event loop's weak-reference scheduling cannot GC them mid-flight.
@@ -124,6 +189,8 @@ class ScopeGate:
         """
         if not isinstance(target, str) or not target:
             return False
+        if self._roe_wildcard:
+            return True
 
         # 1. URL form: scheme://host[:port]/path
         if "://" in target:

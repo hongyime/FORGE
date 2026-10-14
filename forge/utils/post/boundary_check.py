@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
+from forge.governance.scope_gate import is_roe_wildcard
 
 _LOG = logging.getLogger(__name__)
 
@@ -46,16 +47,22 @@ def _load_scope_entries(db_path: Path, engagement_id: int) -> list[str]:
     """Return raw scope strings from the engagements table."""
     try:
         con = direct_connect(f"file:{db_path}?mode=ro", uri=True)
-        rows = con.execute(
-            "SELECT scope_entry FROM engagement_scope WHERE engagement_id=?",
-            (engagement_id,),
-        ).fetchall()
-        con.close()
-        return [r[0] for r in rows if r[0]]
-    except sqlite3.OperationalError:
-        # Fallback: try scope column on engagements table (older schema)
         try:
-            con = direct_connect(f"file:{db_path}?mode=ro", uri=True)
+            rows = con.execute(
+                "SELECT scope_entry FROM engagement_scope WHERE engagement_id=?",
+                (engagement_id,),
+            ).fetchall()
+        finally:
+            con.close()
+    except sqlite3.OperationalError:
+        rows = []
+    entries = [r[0] for r in rows if r[0]]
+    # Scope JSON is authoritative for ROE '*', even when an older
+    # engagement_scope table still contains the target's former narrow entries.
+    scope_row = None
+    try:
+        con = direct_connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
             columns = {
                 str(row[1])
                 for row in con.execute("PRAGMA table_info(engagements)").fetchall()
@@ -65,18 +72,27 @@ def _load_scope_entries(db_path: Path, engagement_id: int) -> list[str]:
             row = con.execute(
                 f"SELECT {selected_column} FROM engagements WHERE id=?", (engagement_id,)
             ).fetchone()
+            scope_row = row
+        finally:
             con.close()
-            if row and row[0]:
-                try:
-                    from forge.opsec.scope_gate import scope_entries_from_payload
+        if scope_row and scope_row[0]:
+            try:
+                from forge.opsec.scope_gate import scope_entries_from_payload
 
-                    return scope_entries_from_payload(json.loads(str(row[0])))
-                except json.JSONDecodeError:
-                    return [str(row[0])]
-        except Exception:
-            pass
-        _LOG.warning("Could not load scope from DB — operating with empty scope (deny all).")
-        return []
+                scope_payload = json.loads(str(scope_row[0]))
+                if is_roe_wildcard(scope_payload):
+                    return ["*"]
+                if not entries:
+                    return scope_entries_from_payload(scope_payload)
+            except json.JSONDecodeError:
+                if not entries:
+                    return [str(scope_row[0])]
+    except Exception:
+        pass
+    if entries:
+        return entries
+    _LOG.warning("Could not load scope from DB — operating with empty scope (deny all).")
+    return []
 
 
 def _extract_host(target: str) -> str:
@@ -90,6 +106,8 @@ def _extract_host(target: str) -> str:
 def _matches_entry(host: str, entry: str) -> bool:
     """Return True if host falls within scope entry."""
     entry = entry.strip()
+    if is_roe_wildcard([entry]):
+        return True
     if "://" in entry:
         parsed = urlparse(entry)
         entry_host = parsed.hostname or parsed.netloc

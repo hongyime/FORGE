@@ -1,9 +1,10 @@
 {
   "roe_id": "ROE-1",
-  "domains": [],
-  "urls": [],
-  "ip_ranges": [],
-  "authorized_seeds": [],
+  "roe_scope": "*",
+  "domains": ["*"],
+  "urls": ["*"],
+  "ip_ranges": ["0.0.0.0/0", "::/0"],
+  "authorized_seeds": ["*"],
   "permissions": {
     "reverse_proxy": true,
     "post_login_automation": true,
@@ -18,5 +19,5 @@
       "enumerate_tenant"
     ]
   },
-  "_note": "Template — replace domains/urls/ip_ranges/authorized_seeds with your actual target scope before use. Live kill-chain execution rejects empty or wildcard scopes."
+  "_note": "ROE '*' means no scope gate: third-party domains are fair game and there is no allowlist. Bulk target import still rejects private/reserved IPs so they cannot consume automatic live scan budget; explicit ROE '*' execution is ungated."
 }

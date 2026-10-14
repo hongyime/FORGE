@@ -209,17 +209,17 @@ def test_full_pipeline_persists_via_roe_gated_importer(
     assert counts == {"User": 3, "Computer": 2, "Group": 1}
 
 
-def test_wildcard_scope_manifest_rejected(
+def test_wildcard_scope_manifest_accepted(
     runner: CliRunner,
     root_app,
     tmp_path: Path,
     sample_zip: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A wildcard scope manifest is rejected by the ROE gate (no DB write)."""
+    """A wildcard scope manifest is accepted by the ROE gate."""
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / "data"))
-    bad_manifest = tmp_path / "bad-scope.json"
-    bad_manifest.write_text(
+    wildcard_manifest = tmp_path / "wildcard-scope.json"
+    wildcard_manifest.write_text(
         json.dumps({"roe_id": "ROE-TEST-002", "domains": ["*"]}),
         encoding="utf-8",
     )
@@ -230,9 +230,10 @@ def test_wildcard_scope_manifest_rejected(
             "--engagement", "8",
             "--file", str(sample_zip),
             "--roe-id", "ROE-TEST-002",
-            "--scope-manifest", str(bad_manifest),
+            "--scope-manifest", str(wildcard_manifest),
         ],
     )
-    assert result.exit_code == EXIT_VALIDATION, result.output
+    assert result.exit_code == EXIT_OK, result.output + (result.stderr or "")
+    assert "[imported]" in result.output
     db_root = tmp_path / "data" / "engagements"
-    assert not db_root.exists() or not any(db_root.glob("*.db"))
+    assert db_root.exists() and any(db_root.glob("*.db"))

@@ -23,6 +23,7 @@ from forge.db.control import index_engagement_db_file
 from forge.db.session import get_engagement_db
 from forge.domain_validation import canonicalize_domain
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
+from forge.governance.scope_gate import is_roe_wildcard
 from forge.onboard.patterns import is_denied_target
 from forge.subprocess_tree import run_contained_subprocess
 from forge.utils.kill_chain_options import (
@@ -195,6 +196,7 @@ def import_targets(
     min_start_source_count: int = 1,
     config: ForgeConfig | None = None,
     progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
+    roe_scope: str | None = None,
 ) -> list[TargetImportResult]:
     """Import feed targets and optionally start scoped kill chains.
 
@@ -206,6 +208,10 @@ def import_targets(
     if start and not dry_run and not str(roe_id or "").strip():
         raise ValueError("--start requires --roe-id so live execution is authorized")
     cfg = config or ForgeConfig.load()
+    resolved_roe_scope = str(
+        os.environ.get("FORGE_ROE_SCOPE", "") if roe_scope is None else roe_scope
+    ).strip()
+    roe_wildcard = is_roe_wildcard({"roe_scope": resolved_roe_scope})
     items = load_target_feed(
         feed_url=feed_url,
         feed_file=feed_file,
@@ -239,6 +245,12 @@ def import_targets(
             continue
 
         engagement_id, created = _create_or_reuse_engagement(cfg, item, existing_targets)
+        if roe_wildcard:
+            _write_engagement_scope_json(
+                cfg,
+                engagement_id=engagement_id,
+                scope=_scope_json_for_item(item, roe_scope=resolved_roe_scope),
+            )
         try:
             _ensure_target_import_monitoring(cfg, engagement_id=engagement_id, item=item)
         except Exception as exc:  # noqa: BLE001
@@ -247,7 +259,13 @@ def import_targets(
                 f"engagement={engagement_id} error={_bounded_text(exc, 180)}",
                 file=sys.stderr,
             )
-        manifest_path = _write_scope_manifest(cfg, engagement_id, item, roe_id)
+        manifest_path = _write_scope_manifest(
+            cfg,
+            engagement_id,
+            item,
+            roe_id,
+            resolved_roe_scope,
+        )
         started = False
         start_failed = False
         start_error_type = ""
@@ -787,6 +805,8 @@ def target_scan_eligible(target_type: str, canonical_value: str) -> tuple[bool, 
             parsed_ip = ipaddress.ip_address(canonical_value)
         except ValueError:
             return False, "invalid_ip"
+        # Bulk import keeps private/reserved IPs out of automatic scan budget;
+        # an explicit ROE '*' only ungates execution after a target is selected.
         if not parsed_ip.is_global:
             return False, "non_global_ip"
     if target_type in {"url", "apk_url"}:
@@ -1000,7 +1020,20 @@ def _external_target_engagement_index(cfg: ForgeConfig) -> dict[str, int]:
     return targets
 
 
-def _scope_json_for_item(item: TargetFeedItem) -> dict[str, list[str]]:
+def _scope_json_for_item(
+    item: TargetFeedItem,
+    *,
+    roe_scope: str | None = None,
+) -> dict[str, Any]:
+    if is_roe_wildcard({"roe_scope": str(roe_scope or "").strip()}):
+        return {
+            "roe_scope": "*",
+            "domains": ["*"],
+            "authorized_seeds": ["*"],
+            "ip_ranges": ["0.0.0.0/0", "::/0"],
+            "urls": ["*"],
+        }
+
     scope: dict[str, list[str]] = {"domains": [], "urls": []}
     if item.target_type in {"domain", "subdomain"}:
         scope["domains"] = [item.canonical_value]
@@ -1027,22 +1060,43 @@ def _scope_json_for_item(item: TargetFeedItem) -> dict[str, list[str]]:
     return scope
 
 
+def _write_engagement_scope_json(
+    cfg: ForgeConfig,
+    *,
+    engagement_id: int,
+    scope: dict[str, Any],
+) -> None:
+    conn = get_engagement_db(cfg.engagement_db_path(str(engagement_id)))
+    try:
+        conn.execute(
+            "UPDATE engagements SET scope_json=? WHERE id=?",
+            (json.dumps(scope, sort_keys=True), engagement_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _write_scope_manifest(
     cfg: ForgeConfig,
     engagement_id: int,
     item: TargetFeedItem,
     roe_id: str | None,
+    roe_scope: str | None = None,
 ) -> Path:
     manifest_dir = cfg.data_dir / "target_imports"
     manifest_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = manifest_dir / f"scope_{engagement_id}_{item.target_key[:12]}.json"
-    scope = _scope_json_for_item(item)
+    scope = _scope_json_for_item(item, roe_scope=roe_scope)
     payload = {
         "roe_id": str(roe_id or "").strip(),
+        **({"roe_scope": "*"} if is_roe_wildcard(scope) else {}),
         "domains": scope.get("domains", []),
         "ip_ranges": scope.get("ip_ranges", []),
         "urls": scope.get("urls", []),
-        "authorized_seeds": [item.canonical_value],
+        "authorized_seeds": (
+            ["*"] if is_roe_wildcard(scope) else [item.canonical_value]
+        ),
         "policy": {
             "destructive_actions_allowed": True,
             "post_exploitation_allowed": True,
