@@ -152,7 +152,16 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
     assert action_by_id["review_long_runs"]["selected_count"] == 1
     assert action_by_id["review_long_runs"]["omitted_count"] == 0
     assert action_by_id["review_long_runs"]["follow_up_commands"] == [
-        ["forge", "report", "long-run-plan", "--json", "--limit", "1"]
+        [
+            "forge",
+            "report",
+            "plan",
+            "--section",
+            "long-run",
+            "--json",
+            "--limit",
+            "1",
+        ]
     ]
     assert action_by_id["review_policy_flags"]["total_count"] == 1
     assert action_by_id["review_policy_flags"]["selected_count"] == 1
@@ -177,7 +186,16 @@ def test_collect_report_quality_audit_summarizes_dashboard_breakpoints(
         "post_ex_no": "latest_run_policy_not_true_or_missing",
     }
     assert action_by_id["review_policy_flags"]["follow_up_commands"] == [
-        ["forge", "report", "policy-plan", "--json", "--limit", "1"]
+        [
+            "forge",
+            "report",
+            "plan",
+            "--section",
+            "policy",
+            "--json",
+            "--limit",
+            "1",
+        ]
     ]
     assert "latest run metadata" in action_by_id["review_policy_flags"]["summary"]
 
@@ -486,7 +504,16 @@ def test_collect_report_quality_audit_shows_omitted_stale_report_commands(
     assert action["omitted_count"] == 1
     assert len(action["commands"]) == 2
     assert action["follow_up_commands"] == [
-        ["forge", "report", "stale-plan", "--json", "--limit", "3"],
+        [
+            "forge",
+            "report",
+            "plan",
+            "--section",
+            "stale",
+            "--json",
+            "--limit",
+            "3",
+        ],
         ["forge", "report", "stale-run", "--dry-run", "--json", "--limit", "3"],
     ]
     assert action["batch_dry_run_command"] == [
@@ -752,7 +779,7 @@ def test_report_quality_audit_cli_prints_follow_up_commands(
     )
 
     assert result.exit_code == 0, result.output
-    assert "follow_up=forge report stale-plan --json --limit 2" in result.output
+    assert "follow_up=forge report plan --section stale --json --limit 2" in result.output
     assert (
         "follow_up=forge report stale-run --dry-run --json --limit 2"
         in result.output
@@ -796,6 +823,22 @@ def test_report_stale_plan_cli_outputs_json(tmp_path: Path, monkeypatch) -> None
         "auto",
         "--yes",
     ]
+    canonical_result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "plan",
+            "--section",
+            "stale",
+            "--reports-dir",
+            str(reports_dir),
+            "--limit",
+            "1",
+            "--json",
+        ],
+    )
+    assert canonical_result.exit_code == 0, canonical_result.output
+    assert json.loads(canonical_result.output) == payload
 
 
 def test_report_stale_plan_cli_redacts_json_paths(tmp_path: Path, monkeypatch) -> None:
@@ -1068,6 +1111,24 @@ def test_report_long_run_plan_cli_outputs_json(tmp_path: Path) -> None:
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
     assert payload["commands"] == []
     assert payload["samples"][0]["id"] == "1001"
+    canonical_result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "plan",
+            "--section",
+            "long-run",
+            "--reports-dir",
+            str(reports_dir),
+            "--long-run-seconds",
+            "2700",
+            "--limit",
+            "1",
+            "--json",
+        ],
+    )
+    assert canonical_result.exit_code == 0, canonical_result.output
+    assert json.loads(canonical_result.output) == payload
 
 
 def test_report_long_run_plan_cli_redacts_json_paths(tmp_path: Path) -> None:
@@ -1157,6 +1218,22 @@ def test_report_policy_plan_cli_outputs_json(tmp_path: Path) -> None:
     assert payload["samples"][0]["flag_reasons"]["destructive_no"] == (
         "latest_run_policy_not_true_or_missing"
     )
+    canonical_result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "plan",
+            "--section",
+            "policy",
+            "--reports-dir",
+            str(reports_dir),
+            "--limit",
+            "1",
+            "--json",
+        ],
+    )
+    assert canonical_result.exit_code == 0, canonical_result.output
+    assert json.loads(canonical_result.output) == payload
 
 
 def test_report_policy_plan_cli_redacts_json_paths(tmp_path: Path) -> None:
@@ -1207,6 +1284,73 @@ def test_report_policy_plan_cli_prints_human_plan(tmp_path: Path) -> None:
     assert "execution_policy=plan_only_no_commands_executed" in result.output
     assert "flags=destructive_no,post_ex_no" in result.output
     assert "resume-run" not in result.output
+
+
+def test_report_plan_requires_section() -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    result = CliRunner().invoke(app, ["report", "plan"])
+
+    assert result.exit_code != 0
+    assert "Missing option '--section'" in result.output
+
+
+def test_report_plan_rejects_invalid_section() -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    result = CliRunner().invoke(
+        app,
+        ["report", "plan", "--section", "unknown", "--json"],
+    )
+
+    assert result.exit_code != 0
+    assert "stale, long-run, policy" in result.output
+
+
+def test_report_plan_rejects_long_run_threshold_for_other_sections() -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    for section in ("stale", "policy"):
+        result = CliRunner().invoke(
+            app,
+            [
+                "report",
+                "plan",
+                "--section",
+                section,
+                "--long-run-seconds",
+                "3000",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "only valid with --section long-run" in result.output
+
+
+def test_report_plan_long_run_threshold_changes_selection(tmp_path: Path) -> None:
+    from forge.cli import app  # noqa: PLC0415
+
+    reports_dir = tmp_path / "reports"
+    _write_dashboard_fixture(reports_dir)
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "plan",
+            "--section",
+            "long-run",
+            "--reports-dir",
+            str(reports_dir),
+            "--long-run-seconds",
+            "4000",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["long_run_threshold_seconds"] == 4000.0
+    assert payload["total_count"] == 0
 
 
 def test_report_quality_audit_cli_accepts_top_limit_alias(tmp_path: Path) -> None:

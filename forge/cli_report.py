@@ -222,56 +222,121 @@ def report_quality_audit(
                         )
 
 
-@report_app.command("stale-plan")
-def report_stale_plan(
-    reports_dir: Path = typer.Option(
-        Path("reports"),
-        "--reports-dir",
-        help="Reports directory containing dashboard/data/engagements.json.",
-    ),
-    limit: int = typer.Option(
-        DEFAULT_TOP_LIMIT,
-        "--limit",
-        help="Maximum stale-report repair commands to include.",
-    ),
-    redact_paths: bool = typer.Option(
-        False,
-        "--redact-paths",
-        help="Hide local paths in JSON output.",
-    ),
-    json_output: bool = typer.Option(
-        False,
-        "--json",
-        help="Emit machine-readable JSON.",
-    ),
+_PLAN_SECTIONS = ("stale", "long-run", "policy")
+
+
+def _emit_plan(
+    *,
+    section: str,
+    reports_dir: Path,
+    limit: int,
+    redact_paths: bool,
+    json_output: bool,
+    long_run_seconds: float = DEFAULT_LONG_RUN_SECONDS,
 ) -> None:
-    """Plan stale latest-report regeneration without mutating reports."""
-    payload = collect_stale_report_repair_plan(
-        reports_dir=reports_dir,
-        limit=limit,
-        redact_paths=redact_paths,
-    )
-    if json_output:
-        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    """Collect and render one read-only report plan section."""
+    if section == "stale":
+        payload = collect_stale_report_repair_plan(
+            reports_dir=reports_dir,
+            limit=limit,
+            redact_paths=redact_paths,
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+            return
+
+        console.print(
+            "[green]Stale report repair plan:[/green] "
+            f"{payload['total_count']} stale latest report(s), "
+            f"{payload['sample_count']} command(s), "
+            f"{payload['omitted_count']} omitted"
+        )
+        console.print(f"  execution_policy={payload['execution_policy']}")
+        commands = payload.get("commands")
+        if isinstance(commands, list):
+            for command in commands[:5]:
+                if isinstance(command, list):
+                    console.print(f"  command={' '.join(str(part) for part in command)}")
+        follow_up_commands = payload.get("follow_up_commands")
+        if isinstance(follow_up_commands, list):
+            for command in follow_up_commands[:3]:
+                if isinstance(command, list):
+                    console.print(f"  follow_up={' '.join(str(part) for part in command)}")
         return
 
-    console.print(
-        "[green]Stale report repair plan:[/green] "
-        f"{payload['total_count']} stale latest report(s), "
-        f"{payload['sample_count']} command(s), "
-        f"{payload['omitted_count']} omitted"
-    )
-    console.print(f"  execution_policy={payload['execution_policy']}")
-    commands = payload.get("commands")
-    if isinstance(commands, list):
-        for command in commands[:5]:
-            if isinstance(command, list):
-                console.print(f"  command={' '.join(str(part) for part in command)}")
-    follow_up_commands = payload.get("follow_up_commands")
-    if isinstance(follow_up_commands, list):
-        for command in follow_up_commands[:3]:
-            if isinstance(command, list):
-                console.print(f"  follow_up={' '.join(str(part) for part in command)}")
+    if section == "long-run":
+        payload = collect_long_run_review_plan(
+            reports_dir=reports_dir,
+            long_run_seconds=long_run_seconds,
+            limit=limit,
+            redact_paths=redact_paths,
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+            return
+
+        console.print(
+            "[green]Long-run review plan:[/green] "
+            f"{payload['total_count']} long run(s), "
+            f"{payload['sample_count']} sample(s), "
+            f"{payload['omitted_count']} omitted"
+        )
+        console.print(f"  execution_policy={payload['execution_policy']}")
+        console.print(f"  threshold_seconds={payload['long_run_threshold_seconds']}")
+        samples = payload.get("samples")
+        if isinstance(samples, list):
+            for sample in samples[:5]:
+                if isinstance(sample, dict):
+                    console.print(
+                        "  sample="
+                        f"engagement={sample.get('id')} "
+                        f"status={sample.get('status')} "
+                        f"elapsed={sample.get('elapsed_seconds')} "
+                        f"seed={sample.get('seed')}"
+                    )
+        follow_up_commands = payload.get("follow_up_commands")
+        if isinstance(follow_up_commands, list):
+            for command in follow_up_commands[:3]:
+                if isinstance(command, list):
+                    console.print(f"  follow_up={' '.join(str(part) for part in command)}")
+        return
+
+    if section == "policy":
+        payload = collect_policy_flag_review_plan(
+            reports_dir=reports_dir,
+            limit=limit,
+            redact_paths=redact_paths,
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+            return
+
+        console.print(
+            "[green]Policy flag review plan:[/green] "
+            f"{payload['total_count']} aggregate flag count(s), "
+            f"{payload['sample_count']} sample(s), "
+            f"{payload['omitted_count']} omitted"
+        )
+        console.print(f"  execution_policy={payload['execution_policy']}")
+        if payload.get("counts"):
+            console.print(f"  counts={payload['counts']}")
+        samples = payload.get("samples")
+        if isinstance(samples, list):
+            for sample in samples[:5]:
+                if isinstance(sample, dict):
+                    flags = sample.get("flags") if isinstance(sample.get("flags"), list) else []
+                    console.print(
+                        "  sample="
+                        f"engagement={sample.get('id')} "
+                        f"status={sample.get('status')} "
+                        f"flags={','.join(str(flag) for flag in flags)} "
+                        f"seed={sample.get('seed')}"
+                    )
+        follow_up_commands = payload.get("follow_up_commands")
+        if isinstance(follow_up_commands, list):
+            for command in follow_up_commands[:3]:
+                if isinstance(command, list):
+                    console.print(f"  follow_up={' '.join(str(part) for part in command)}")
 
 
 @report_app.command("stale-run")
@@ -376,7 +441,100 @@ def report_stale_run(
         raise typer.Exit(code=1)
 
 
-@report_app.command("long-run-plan")
+@report_app.command("plan")
+def report_plan(
+    section: str = typer.Option(
+        ...,
+        "--section",
+        help="Plan section to show: stale, long-run, or policy.",
+    ),
+    reports_dir: Path = typer.Option(
+        Path("reports"),
+        "--reports-dir",
+        help="Reports directory containing dashboard/data/engagements.json.",
+    ),
+    limit: int = typer.Option(
+        DEFAULT_TOP_LIMIT,
+        "--limit",
+        help="Maximum plan samples or commands to include.",
+    ),
+    redact_paths: bool = typer.Option(
+        False,
+        "--redact-paths",
+        help="Hide local paths in JSON output.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable JSON.",
+    ),
+    long_run_seconds: Optional[float] = typer.Option(
+        None,
+        "--long-run-seconds",
+        help="Threshold for flagging long kill-chain/report runs (long-run section only).",
+    ),
+) -> None:
+    """Show one read-only report plan section without mutating reports."""
+    if section not in _PLAN_SECTIONS:
+        sections = ", ".join(_PLAN_SECTIONS)
+        raise typer.BadParameter(
+            f"must be one of: {sections}",
+            param_hint="--section",
+        )
+    if long_run_seconds is not None and section != "long-run":
+        raise typer.BadParameter(
+            "--long-run-seconds is only valid with --section long-run",
+            param_hint="--long-run-seconds",
+        )
+
+    _emit_plan(
+        section=section,
+        reports_dir=reports_dir,
+        limit=limit,
+        redact_paths=redact_paths,
+        json_output=json_output,
+        long_run_seconds=(
+            long_run_seconds
+            if long_run_seconds is not None
+            else DEFAULT_LONG_RUN_SECONDS
+        ),
+    )
+
+
+@report_app.command("stale-plan", hidden=True)
+def report_stale_plan(
+    reports_dir: Path = typer.Option(
+        Path("reports"),
+        "--reports-dir",
+        help="Reports directory containing dashboard/data/engagements.json.",
+    ),
+    limit: int = typer.Option(
+        DEFAULT_TOP_LIMIT,
+        "--limit",
+        help="Maximum stale-report repair commands to include.",
+    ),
+    redact_paths: bool = typer.Option(
+        False,
+        "--redact-paths",
+        help="Hide local paths in JSON output.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable JSON.",
+    ),
+) -> None:
+    """Plan stale latest-report regeneration without mutating reports."""
+    _emit_plan(
+        section="stale",
+        reports_dir=reports_dir,
+        limit=limit,
+        redact_paths=redact_paths,
+        json_output=json_output,
+    )
+
+
+@report_app.command("long-run-plan", hidden=True)
 def report_long_run_plan(
     reports_dir: Path = typer.Option(
         Path("reports"),
@@ -405,43 +563,17 @@ def report_long_run_plan(
     ),
 ) -> None:
     """Plan long-run review without resuming or mutating engagements."""
-    payload = collect_long_run_review_plan(
+    _emit_plan(
+        section="long-run",
         reports_dir=reports_dir,
-        long_run_seconds=long_run_seconds,
         limit=limit,
         redact_paths=redact_paths,
+        json_output=json_output,
+        long_run_seconds=long_run_seconds,
     )
-    if json_output:
-        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
-        return
-
-    console.print(
-        "[green]Long-run review plan:[/green] "
-        f"{payload['total_count']} long run(s), "
-        f"{payload['sample_count']} sample(s), "
-        f"{payload['omitted_count']} omitted"
-    )
-    console.print(f"  execution_policy={payload['execution_policy']}")
-    console.print(f"  threshold_seconds={payload['long_run_threshold_seconds']}")
-    samples = payload.get("samples")
-    if isinstance(samples, list):
-        for sample in samples[:5]:
-            if isinstance(sample, dict):
-                console.print(
-                    "  sample="
-                    f"engagement={sample.get('id')} "
-                    f"status={sample.get('status')} "
-                    f"elapsed={sample.get('elapsed_seconds')} "
-                    f"seed={sample.get('seed')}"
-                )
-    follow_up_commands = payload.get("follow_up_commands")
-    if isinstance(follow_up_commands, list):
-        for command in follow_up_commands[:3]:
-            if isinstance(command, list):
-                console.print(f"  follow_up={' '.join(str(part) for part in command)}")
 
 
-@report_app.command("policy-plan")
+@report_app.command("policy-plan", hidden=True)
 def report_policy_plan(
     reports_dir: Path = typer.Option(
         Path("reports"),
@@ -465,41 +597,13 @@ def report_policy_plan(
     ),
 ) -> None:
     """Explain latest-run policy flag counts without mutating engagements."""
-    payload = collect_policy_flag_review_plan(
+    _emit_plan(
+        section="policy",
         reports_dir=reports_dir,
         limit=limit,
         redact_paths=redact_paths,
+        json_output=json_output,
     )
-    if json_output:
-        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
-        return
-
-    console.print(
-        "[green]Policy flag review plan:[/green] "
-        f"{payload['total_count']} aggregate flag count(s), "
-        f"{payload['sample_count']} sample(s), "
-        f"{payload['omitted_count']} omitted"
-    )
-    console.print(f"  execution_policy={payload['execution_policy']}")
-    if payload.get("counts"):
-        console.print(f"  counts={payload['counts']}")
-    samples = payload.get("samples")
-    if isinstance(samples, list):
-        for sample in samples[:5]:
-            if isinstance(sample, dict):
-                flags = sample.get("flags") if isinstance(sample.get("flags"), list) else []
-                console.print(
-                    "  sample="
-                    f"engagement={sample.get('id')} "
-                    f"status={sample.get('status')} "
-                    f"flags={','.join(str(flag) for flag in flags)} "
-                    f"seed={sample.get('seed')}"
-                )
-    follow_up_commands = payload.get("follow_up_commands")
-    if isinstance(follow_up_commands, list):
-        for command in follow_up_commands[:3]:
-            if isinstance(command, list):
-                console.print(f"  follow_up={' '.join(str(part) for part in command)}")
 
 
 @report_app.command("quality-metrics")

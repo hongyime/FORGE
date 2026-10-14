@@ -143,7 +143,7 @@ Top-level verbs (public):
 - `forge kill-chain <seed> --engagement N` — the deterministic ASM pipeline
 - `forge menu` — TUI engagement browser
 - `forge kb {sync,status,fetch-breach}` — knowledge-base ETL
-- `forge report {generate,quality-audit,stale-plan,stale-run,long-run-plan,policy-plan}`
+- `forge report {generate,quality-audit,stale-run,plan,quality-metrics}`
 - `forge graph {build,sync-assets,ownership,attribution,cypher-export,tier-zero}`
 - `forge automation {cycle,status,policy,feed-build,defaults,limits,self-heal-plan,guarded-autostart}`
 - `forge monitoring {status,due-plan,exposure-metrics,run-due,deliver-alerts,worker}`

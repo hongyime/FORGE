@@ -315,10 +315,10 @@ forge menu                                  # Interactive TUI engagement browser
 forge kb {sync,status,fetch-breach}         # Phase 0 knowledge-base ETL
 forge report generate --engagement N [--provider auto|template|llama_cpp]  # Phase 6 defaults to `auto`; use `llama_cpp` for explicit local GGUF
 forge report quality-audit [--reports-dir reports] [--top N|--top-limit N] [--json]  # Read-only report health and operator action plan
-forge report stale-plan [--reports-dir reports] [--limit N] [--json]  # Read-only stale latest-report regeneration command plan
+forge report plan --section stale [--reports-dir reports] [--limit N] [--json]  # Read-only stale latest-report regeneration command plan
 forge report stale-run [--reports-dir reports] [--limit N] [--provider auto|template] [--dry-run] [--json]  # Bounded sequential stale-report regeneration
-forge report long-run-plan [--reports-dir reports] [--long-run-seconds N] [--limit N] [--json]  # Read-only long-run review plan
-forge report policy-plan [--reports-dir reports] [--limit N] [--json]  # Read-only latest-run policy flag explanation plan
+forge report plan --section long-run [--reports-dir reports] [--long-run-seconds N] [--limit N] [--json]  # Read-only long-run review plan
+forge report plan --section policy [--reports-dir reports] [--limit N] [--json]  # Read-only latest-run policy flag explanation plan
 forge graph build --engagement N            # Attack-path export; default --format json
 forge graph sync-assets --engagement N      # Rebuild canonical asset/ownership graph tables
 forge graph ownership list --engagement N   # List asset ownership claims
@@ -747,7 +747,7 @@ still required before any live launch. Generated target-import scope manifests
 also include an explicit policy block for destructive and post-exploitation
 permission metadata, so dashboard/report policy flags are sourced from the
 target-specific ROE manifest rather than a global process default.
-`forge report policy-plan` explains historical dashboard `*_no` policy counts
+`forge report plan --section policy` explains historical dashboard `*_no` policy counts
 as generated latest-run metadata. Its JSON includes the dashboard timestamp,
 source, meaning, and per-sample reasons so old/dry/non-live summaries are not
 confused with current operator defaults.

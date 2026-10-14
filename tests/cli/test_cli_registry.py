@@ -359,19 +359,33 @@ def test_readme_public_commands_document_operator_defaults_from_cli_help() -> No
         "[--top N|--top-limit N] [--json]"
     ) in public_block
     assert (
-        "forge report stale-plan [--reports-dir reports] [--limit N] [--json]"
-    ) in public_block
-    assert (
         "forge report stale-run [--reports-dir reports] [--limit N] "
         "[--provider auto|template] [--dry-run] [--json]"
     ) in public_block
     assert (
-        "forge report long-run-plan [--reports-dir reports] "
+        "forge report plan --section stale [--reports-dir reports] "
+        "[--limit N] [--json]"
+    ) in public_block
+    assert (
+        "forge report plan --section long-run [--reports-dir reports] "
         "[--long-run-seconds N] [--limit N] [--json]"
     ) in public_block
     assert (
-        "forge report policy-plan [--reports-dir reports] [--limit N] [--json]"
+        "forge report plan --section policy [--reports-dir reports] "
+        "[--limit N] [--json]"
     ) in public_block
+    report_group_help = runner.invoke(forge_app, ["report", "--help"])
+    assert report_group_help.exit_code == 0, report_group_help.output
+    for visible_command in (
+        "generate",
+        "quality-audit",
+        "stale-run",
+        "plan",
+        "quality-metrics",
+    ):
+        assert visible_command in report_group_help.output
+    for hidden_alias in ("stale-plan", "long-run-plan", "policy-plan"):
+        assert hidden_alias not in report_group_help.output
     assert (
         "forge connectors run-plan [--domain NAME] [--json]"
     ) in public_block

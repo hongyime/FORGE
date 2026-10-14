@@ -930,7 +930,16 @@ def test_automation_status_summarizes_report_review_without_mutating(
                     "id": "review_long_runs",
                     "total_count": 3,
                     "follow_up_commands": [
-                        ["forge", "report", "long-run-plan", "--json", "--limit", "3"]
+                        [
+                            "forge",
+                            "report",
+                            "plan",
+                            "--section",
+                            "long-run",
+                            "--json",
+                            "--limit",
+                            "3",
+                        ]
                     ],
                 },
             ],
