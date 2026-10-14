@@ -15,6 +15,14 @@ Use this gate before a full cycle: change code â†’ run the affected phase test â
 
 Single-phase runs default to dry-run, even though the full autopilot retains its existing apply default. Dry-run does not make network calls or start kill chains. For real target import, use `--apply` only with reviewed, authorized targets and the intended ROE:
 
+Phase 5 passes the per-target runtime budget (default 120 minutes) and bounded
+kill-chain fanout (default 6 workers, maximum 8) from autopilot through target
+import and resume planning to each child process. Cycle 5 showed two healthy,
+progressing targets hit return code 124 at 3720 seconds (engagement 3 email
+recon; engagement 49 gmail.com). The 120-minute budget doubles that runtime
+while keeping a hard bound. Host-surface work remains in batches of at most 20
+hosts per iteration; the worker pool controls concurrent processing.
+
 ```bash
 ./forge-autopilot.sh --only-phase import_targets --apply \
   --fixture-file /path/to/reviewed-import-targets.json

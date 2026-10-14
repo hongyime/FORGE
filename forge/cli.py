@@ -73,6 +73,10 @@ from forge.utils.kill_chain_runtime import (
     prime_kill_chain_attack_mode_env,
     scope_manifest_policy_flag,
 )
+from forge.utils.kill_chain_options import (
+    DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
+    DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+)
 from forge.orchestration.seed_promotion import (
     promote_cloud_asset_seed_refs as _promote_cloud_asset_seed_refs_for_engagement,
     promote_email_localpart_seed_refs as _promote_email_localpart_seed_refs_for_engagement,
@@ -267,7 +271,9 @@ def _run_kill_chain_exploitation_phase(
         skip_exploitation=skip_exploitation,
         scope_manifest_metadata=scope_manifest_metadata,
         roe_id=roe_id,
-        max_runtime_minutes=int(max_runtime_minutes or 25),
+        max_runtime_minutes=int(
+            max_runtime_minutes or DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES
+        ),
         audit_callback=audit_callback,
         log_callback=log_callback,
     )
@@ -438,7 +444,7 @@ def kill_chain(
         help="Skip GitHub keyscan (protects FORGE_GITHUB_TOKEN quota).",
     ),
     parallel_fanout: int = typer.Option(
-        4,
+        DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
         "--parallel-fanout",
         help="Maximum concurrent passive fan-out subprocesses per batch (default 4, max 8).",
     ),
@@ -467,7 +473,7 @@ def kill_chain(
         envvar="FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES",
         help=(
             "Soft wall-clock budget for the kill-chain loop before graceful "
-            "finalization starts (default 25, max 1440)."
+            f"finalization starts (default {DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES}, max 1440)."
         ),
     ),
     auto_run_detected: bool = typer.Option(
@@ -13691,7 +13697,9 @@ def kill_chain(
             skip_exploitation=skip_exploitation,
             scope_manifest_metadata=scope_manifest_metadata,
             roe_id=roe_id,
-            max_runtime_minutes=int(max_runtime_minutes or 25),
+            max_runtime_minutes=int(
+                max_runtime_minutes or DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES
+            ),
             audit_callback=_cli_audit,
             log_callback=_log,
         ),

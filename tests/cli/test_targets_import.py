@@ -1101,7 +1101,11 @@ def test_resume_plan_reports_sequential_ready_commands_without_execution(tmp_pat
         "5",
         "--max-runtime-minutes",
         "17",
+        "--parallel-fanout",
+        "4",
     ]
+    assert item["max_runtime_minutes"] == 17
+    assert item["parallel_fanout"] == 4
 
     redacted = collect_target_resume_plan(
         data_dir=data_dir,
@@ -1118,6 +1122,35 @@ def test_resume_plan_reports_sequential_ready_commands_without_execution(tmp_pat
     assert str(scope_path) not in json.dumps(redacted)
     assert str(data_dir) not in json.dumps(redacted)
     assert "<scope-manifest:scope.json>" in redacted_item["command"]
+    assert redacted_item["parallel_fanout"] == 4
+
+
+def test_planned_resume_command_replaces_runtime_and_fanout_options() -> None:
+    command = [
+        "forge",
+        "kill-chain",
+        "corp-target.io",
+        "--max-runtime-minutes",
+        "13",
+        "--parallel-fanout",
+        "2",
+    ]
+
+    planned = resume_candidates._planned_resume_command(
+        command,
+        max_iter=None,
+        max_runtime_minutes=25,
+        parallel_fanout=4,
+    )
+
+    assert planned[-4:] == [
+        "--max-runtime-minutes",
+        "25",
+        "--parallel-fanout",
+        "4",
+    ]
+    assert planned.count("--max-runtime-minutes") == 1
+    assert planned.count("--parallel-fanout") == 1
 
 
 def test_resume_plan_reports_total_and_omitted_counts_when_limited(
@@ -1219,7 +1252,13 @@ def test_targets_resume_plan_cli_outputs_json_without_running(tmp_path: Path) ->
     assert payload["execution_policy"] == "plan_only_no_commands_executed"
     assert payload["path_redaction"] == "local_paths_redacted"
     assert payload["planned_count"] == 1
-    assert payload["items"][0]["command"][-2:] == ["--max-runtime-minutes", "19"]
+    assert payload["items"][0]["command"][-4:] == [
+        "--max-runtime-minutes",
+        "19",
+        "--parallel-fanout",
+        "4",
+    ]
+    assert payload["items"][0]["parallel_fanout"] == 4
     assert str(scope_path) not in result.output
 
 
@@ -1270,6 +1309,15 @@ def test_targets_resume_run_cli_outputs_executor_payload(monkeypatch: pytest.Mon
     assert captured_kwargs["redact_paths"] is True
     assert captured_kwargs["break_stale_lock"] is True
     assert captured_kwargs["stale_lock_minutes"] == 7
+    assert captured_kwargs["parallel_fanout"] == 4
+
+    captured_kwargs.clear()
+    override_result = CliRunner().invoke(
+        app,
+        ["targets", "resume-run", "--parallel-fanout", "6", "--dry-run"],
+    )
+    assert override_result.exit_code == 0, override_result.output
+    assert captured_kwargs["parallel_fanout"] == 6
 
 
 def test_targets_resume_lock_status_cli_outputs_json(tmp_path: Path) -> None:
@@ -1326,6 +1374,7 @@ def test_resume_run_executes_sequentially_and_writes_ledger(tmp_path: Path) -> N
         data_dir=data_dir,
         batch_id="unit-test",
         max_runtime_minutes=13,
+        parallel_fanout=6,
         runner=fake_runner,
     )
 
@@ -1338,7 +1387,12 @@ def test_resume_run_executes_sequentially_and_writes_ledger(tmp_path: Path) -> N
     assert payload["total_resume_ready_count"] == 1
     assert payload["result_counts"] == {"completed": 1}
     assert len(calls) == 1
-    assert calls[0][0][-2:] == ["--max-runtime-minutes", "13"]
+    assert calls[0][0][-4:] == [
+        "--max-runtime-minutes",
+        "13",
+        "--parallel-fanout",
+        "6",
+    ]
     assert calls[0][1] == 13 * 60 + 120
     ledger_path = Path(payload["ledger_path"])
     lines = [json.loads(line) for line in ledger_path.read_text(encoding="utf-8").splitlines()]
@@ -1422,7 +1476,13 @@ def test_resume_run_dry_run_does_not_call_runner_or_write_ledger(tmp_path: Path)
     assert payload["result_counts"] == {"dry_run": 1}
     assert payload["items"][0]["status"] == "dry_run"
     assert payload["items"][0]["returncode"] is None
-    assert payload["items"][0]["command"][-2:] == ["--max-runtime-minutes", "13"]
+    assert payload["items"][0]["command"][-4:] == [
+        "--max-runtime-minutes",
+        "13",
+        "--parallel-fanout",
+        "4",
+    ]
+    assert payload["items"][0]["parallel_fanout"] == 4
     assert calls == []
     assert not (data_dir / "target_imports" / "resume_batches").exists()
 
@@ -2114,7 +2174,12 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
     assert "--roe-id" in command
     assert "--scope-manifest" in command
     assert "--max-iter" in command
-    assert command[-2:] == ["--max-runtime-minutes", "25"]
+    assert command[-4:] == [
+        "--max-runtime-minutes",
+        "25",
+        "--parallel-fanout",
+        "4",
+    ]
     assert "--no-attack-mode" not in command
     assert "--no-auto-run-detected" not in command
     assert "--attack-mode" not in command
@@ -2209,7 +2274,12 @@ def test_start_uses_configured_kill_chain_runtime_timeout(
     )
 
     assert results[0].started is True
-    assert calls[0][0][-2:] == ["--max-runtime-minutes", "13"]
+    assert calls[0][0][-4:] == [
+        "--max-runtime-minutes",
+        "13",
+        "--parallel-fanout",
+        "4",
+    ]
     assert calls[0][1] == 13 * 60 + 120
 
 
@@ -2489,6 +2559,12 @@ def test_start_limit_caps_scoped_kill_chain_launches(
     assert results[0].start_stop_reason == "start_limit_reached"
     assert results[1].start_skipped_reason == "start_limit_reached"
     assert len(calls) == 1
+    assert calls[0][-4:] == [
+        "--max-runtime-minutes",
+        "25",
+        "--parallel-fanout",
+        "4",
+    ]
 
 
 def test_start_min_source_count_skips_single_source_without_consuming_budget(
@@ -2595,9 +2671,11 @@ def test_monitoring_seed_failure_does_not_block_start(
     assert "target import monitoring seed skipped" in captured.err
 
 
+@pytest.mark.parametrize("status", ["running", "completed", "cancelled"])
 def test_start_skips_engagement_with_existing_kill_chain_run(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    status: str,
 ) -> None:
     feed_path = tmp_path / "feed.json"
     _write_feed(feed_path)
@@ -2620,21 +2698,96 @@ def test_start_skips_engagement_with_existing_kill_chain_run(
             """
             INSERT INTO engagement_runs
                 (engagement_id, run_kind, status, seed_value, seed_type)
-            VALUES (?, 'kill_chain', 'completed', ?, ?)
+            VALUES (?, 'kill_chain', ?, ?, ?)
             """,
-            (1, first[0].target_value, first[0].target_type),
+            (1, status, first[0].target_value, first[0].target_type),
         )
         conn.commit()
     finally:
         conn.close()
 
-    calls: list[list[str]] = []
+    calls: list[str] = []
     monkeypatch.setattr(
-        "forge.targets_import.run_contained_subprocess",
-        lambda command, **_kwargs: calls.append(command),
+        "forge.targets_import._start_kill_chain",
+        lambda **kwargs: calls.append(str(kwargs["seed"])),
     )
 
     second = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=2,
+        start_limit=1,
+        max_iter=3,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert second[0].created is False
+    assert second[0].started is False
+    assert second[1].started is True
+    assert calls == [second[1].target_value]
+
+
+def test_failed_target_is_resumed_with_reason_not_started_fresh(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+    initial = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=False,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert initial[0].engagement_id is not None
+    assert initial[0].scope_manifest is not None
+    db_path = cfg.engagement_db_path(str(initial[0].engagement_id))
+    conn = get_engagement_db(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO engagement_runs (
+                engagement_id, run_kind, status, seed_value, seed_type,
+                max_iterations, current_iteration, resume_enabled, dry_run,
+                attack_mode, error, metadata_json, started_at, completed_at, updated_at
+            )
+            VALUES (?, 'kill_chain', 'failed', ?, 'domain', 3, 3, 1, 0, 0,
+                    ?, ?, '2026-08-08T00:00:00Z', '2026-08-08T00:30:00Z',
+                    '2026-08-08T00:30:00Z')
+            """,
+            (
+                initial[0].engagement_id,
+                initial[0].target_value,
+                "max iterations exhausted with pending recursive work: 1",
+                json.dumps(
+                    {
+                        "roe_id": "ROE-ACME-2026-08",
+                        "scope_manifest": str(initial[0].scope_manifest),
+                    }
+                ),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    fresh_start_calls: list[str] = []
+
+    def fake_start(**kwargs: object) -> None:
+        fresh_start_calls.append(str(kwargs["seed"]))
+
+    monkeypatch.setattr("forge.targets_import._start_kill_chain", fake_start)
+    imported = import_targets(
         feed_url=None,
         feed_file=feed_path,
         auth_header_env=None,
@@ -2646,9 +2799,26 @@ def test_start_skips_engagement_with_existing_kill_chain_run(
         config=cfg,  # type: ignore[arg-type]
     )
 
-    assert second[0].created is False
-    assert second[0].started is False
-    assert calls == []
+    assert imported[0].engagement_id == initial[0].engagement_id
+    assert imported[0].started is False
+    assert fresh_start_calls == []
+
+    resume_calls: list[list[str]] = []
+
+    def fake_resume(command: list[str], timeout_seconds: int) -> subprocess.CompletedProcess[str]:
+        resume_calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="resumed", stderr="")
+
+    resumed = execute_target_resume_plan(
+        data_dir=cfg.data_dir,
+        batch_id="failed-target-retry",
+        runner=fake_resume,
+    )
+
+    assert resumed["result_counts"] == {"completed": 1}
+    assert resumed["items"][0]["engagement_id"] == initial[0].engagement_id
+    assert resumed["items"][0]["reason"] == "pending_recursive_work"
+    assert "--resume" in resume_calls[0]
 
 
 def test_start_requires_roe_before_engagement_write(tmp_path: Path) -> None:
@@ -2922,6 +3092,44 @@ def test_targets_import_cli_passes_max_runtime_minutes(
 
     assert result.exit_code == 0, result.output
     assert captured_kwargs["max_runtime_minutes"] == 13
+    assert captured_kwargs["parallel_fanout"] == 4
+
+
+def test_targets_import_cli_defaults_timeout_and_fanout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    captured_kwargs: dict[str, object] = {}
+
+    def fake_import_targets(**kwargs: object) -> list[object]:
+        captured_kwargs.update(kwargs)
+        return []
+
+    monkeypatch.setattr("forge.targets_import_cli.import_targets", fake_import_targets)
+
+    app = typer.Typer()
+    targets_app = typer.Typer()
+    register_target_import_commands(targets_app)
+    app.add_typer(targets_app, name="targets")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "targets",
+            "import",
+            "--feed-file",
+            str(feed_path),
+            "--start",
+            "--roe-id",
+            "ROE-ACME-2026-08",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured_kwargs["max_runtime_minutes"] == 25
+    assert captured_kwargs["parallel_fanout"] == 4
 
 
 def test_targets_import_cli_passes_min_start_source_count(

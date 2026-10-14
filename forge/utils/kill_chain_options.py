@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES = 25
+DEFAULT_KILL_CHAIN_PARALLEL_FANOUT = 4
+MAX_KILL_CHAIN_PARALLEL_FANOUT = 8
+
 
 def normalize_kill_chain_max_iter(value: object, *, default: int = 7) -> int:
     if value in (None, ""):
@@ -54,7 +58,9 @@ def normalize_kill_chain_validation_batch_limit(value: object, *, default: int =
     )
 
 
-def normalize_kill_chain_max_runtime_minutes(value: object, *, default: int = 25) -> int:
+def normalize_kill_chain_max_runtime_minutes(
+    value: object, *, default: int = DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES
+) -> int:
     return _normalize_bounded_int(
         value,
         default=default,
@@ -62,3 +68,17 @@ def normalize_kill_chain_max_runtime_minutes(value: object, *, default: int = 25
         maximum=1440,
         label="max_runtime_minutes",
     )
+
+
+def normalize_kill_chain_parallel_fanout(
+    value: object, *, default: int = DEFAULT_KILL_CHAIN_PARALLEL_FANOUT
+) -> int:
+    """Normalize worker fanout to the supported bounded range of 1 through 8."""
+    if value in (None, ""):
+        candidate = default
+    else:
+        try:
+            candidate = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("parallel_fanout must be an integer.") from exc
+    return max(1, min(MAX_KILL_CHAIN_PARALLEL_FANOUT, candidate))

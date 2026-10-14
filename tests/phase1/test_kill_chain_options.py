@@ -3,8 +3,11 @@ from __future__ import annotations
 import pytest
 
 from forge.utils.kill_chain_options import (
+    DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
+    DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
     normalize_kill_chain_max_iter,
     normalize_kill_chain_max_runtime_minutes,
+    normalize_kill_chain_parallel_fanout,
     normalize_kill_chain_synthesis_depth,
     normalize_kill_chain_validation_batch_limit,
 )
@@ -31,7 +34,7 @@ def _runtime_options(**overrides: object):
         "scope_manifest": None,
         "skip_cloud": False,
         "skip_keyscan": False,
-        "parallel_fanout": 4,
+        "parallel_fanout": DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
         "report_provider": None,
         "report_max_loops": None,
         "max_runtime_minutes": None,
@@ -75,6 +78,7 @@ def test_kill_chain_validation_batch_budget_is_bounded() -> None:
 
 
 def test_kill_chain_max_runtime_budget_is_bounded() -> None:
+    assert DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES == 25
     assert normalize_kill_chain_max_runtime_minutes(None) == 25
     assert normalize_kill_chain_max_runtime_minutes("") == 25
     assert normalize_kill_chain_max_runtime_minutes("1440") == 1440
@@ -82,6 +86,20 @@ def test_kill_chain_max_runtime_budget_is_bounded() -> None:
     for value in ("0", "1441", "not-int"):
         with pytest.raises(ValueError):
             normalize_kill_chain_max_runtime_minutes(value)
+
+
+def test_kill_chain_parallel_fanout_default_is_bounded() -> None:
+    assert DEFAULT_KILL_CHAIN_PARALLEL_FANOUT == 4
+    assert normalize_kill_chain_parallel_fanout(None) == 4
+    assert normalize_kill_chain_parallel_fanout("") == 4
+    assert normalize_kill_chain_parallel_fanout("100") == 8
+    assert normalize_kill_chain_parallel_fanout("0") == 1
+
+    options = _runtime_options()
+    assert options.max_runtime_minutes == 25
+    assert options.parallel_fanout == 4
+    assert options.parallel_workers == 4
+    assert 1 <= options.parallel_workers <= 8
 
 
 def test_kill_chain_runtime_reads_max_runtime_env() -> None:

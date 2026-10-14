@@ -11,6 +11,7 @@ from rich.console import Console
 
 from forge.autopilot.defaults import AutopilotDefaults
 from forge.autopilot.loop import ForgeAutopilot
+from forge.utils.kill_chain_options import normalize_kill_chain_parallel_fanout
 
 
 console = Console(stderr=True)
@@ -120,7 +121,12 @@ def register_autopilot_commands(app: typer.Typer) -> None:
         max_runtime_minutes: Optional[int] = typer.Option(
             None,
             "--max-runtime-minutes",
-            help="Soft kill-chain runtime budget per target.",
+            help="Soft kill-chain runtime budget per target (default: 120 minutes).",
+        ),
+        parallel_fanout: Optional[int] = typer.Option(
+            None,
+            "--parallel-fanout",
+            help="Kill-chain workers per target (default: 6, bounded to 1-8).",
         ),
         start_limit: Optional[int] = typer.Option(
             None,
@@ -288,6 +294,7 @@ def register_autopilot_commands(app: typer.Typer) -> None:
         defaults = _build_defaults(
             max_iter=max_iter,
             max_runtime_minutes=max_runtime_minutes,
+            parallel_fanout=parallel_fanout,
             start_limit=start_limit,
             import_limit=import_limit,
             resume_limit=resume_limit,
@@ -378,6 +385,7 @@ def _build_defaults(
     *,
     max_iter: Optional[int],
     max_runtime_minutes: Optional[int],
+    parallel_fanout: Optional[int],
     start_limit: Optional[int],
     import_limit: Optional[int],
     resume_limit: Optional[int],
@@ -405,6 +413,13 @@ def _build_defaults(
             max_runtime_minutes
             if max_runtime_minutes is not None
             else base.max_runtime_minutes
+        ),
+        parallel_fanout=(
+            normalize_kill_chain_parallel_fanout(
+                parallel_fanout
+                if parallel_fanout is not None
+                else base.parallel_fanout
+            )
         ),
         resume_limit=resume_limit if resume_limit is not None else base.resume_limit,
         max_parallel=max_parallel if max_parallel is not None else base.max_parallel,

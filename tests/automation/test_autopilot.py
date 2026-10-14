@@ -113,9 +113,11 @@ def test_autopilot_defaults_are_sensible_and_bounded() -> None:
     # Keep the default engagement capacity aligned in both representations.
     assert d.max_iter == 7
     assert d.start_limit == 20
-    assert d.max_runtime_minutes == 60
+    assert d.max_runtime_minutes == 120
+    assert d.parallel_fanout == 6
     assert AUTOPILOT_DEFAULTS["start_limit"] == 20
-    assert AUTOPILOT_DEFAULTS["max_runtime_minutes"] == 60
+    assert AUTOPILOT_DEFAULTS["max_runtime_minutes"] == 120
+    assert AUTOPILOT_DEFAULTS["parallel_fanout"] == 6
     assert d.cooldown_minutes == 30
     assert AUTOPILOT_DEFAULTS["cooldown_minutes"] == 30
     assert d.min_start_source_count == 1
@@ -420,6 +422,10 @@ def test_autopilot_apply_mode_writes_feed_and_dashboard(
     assert len(counters["import_targets_calls"]) == 1
     assert counters["import_targets_calls"][0]["start"] is True
     assert counters["import_targets_calls"][0]["dry_run"] is False
+    assert counters["import_targets_calls"][0]["max_runtime_minutes"] == 120
+    assert counters["import_targets_calls"][0]["parallel_fanout"] == 6
+    assert counters["execute_resume_calls"][0]["max_runtime_minutes"] == 120
+    assert counters["execute_resume_calls"][0]["parallel_fanout"] == 6
     # dashboard runs in apply mode
     assert len(counters["generate_dashboard_calls"]) == 1
 
@@ -683,7 +689,8 @@ def test_cli_describe_default_promotes_to_apply(
     assert payload["defaults"]["default_roe_id"] == "ROE-1"
     assert payload["defaults"]["import_limit"] == 25_000
     assert payload["defaults"]["start_limit"] == 20
-    assert payload["defaults"]["max_runtime_minutes"] == 60
+    assert payload["defaults"]["max_runtime_minutes"] == 120
+    assert payload["defaults"]["parallel_fanout"] == 6
 
 
 def test_cli_describe_accepts_start_and_runtime_overrides(tmp_path: Path) -> None:
@@ -699,6 +706,8 @@ def test_cli_describe_accepts_start_and_runtime_overrides(tmp_path: Path) -> Non
             "4",
             "--max-runtime-minutes",
             "13",
+            "--parallel-fanout",
+            "100",
             "--data-dir",
             str(tmp_path / "data"),
             "--imports-dir",
@@ -712,6 +721,7 @@ def test_cli_describe_accepts_start_and_runtime_overrides(tmp_path: Path) -> Non
     payload = json.loads(result.output)
     assert payload["defaults"]["start_limit"] == 4
     assert payload["defaults"]["max_runtime_minutes"] == 13
+    assert payload["defaults"]["parallel_fanout"] == 8
 
 
 def test_cli_describe_with_roe_promotes_to_apply(tmp_path: Path) -> None:

@@ -9,7 +9,7 @@ no-config, run-it-and-walk-away use case:
 - Resume parallelism is 2 to balance throughput against the SQLite lock
   contention that happens when more than a handful of kill-chain runs
   share a data dir.
-- Max runtime per started target is 60 minutes to match the requested
+- Max runtime per started target is 120 minutes to match the requested
   autopilot engagement budget.
 - Kill-chain max-iter 7 matches the ``forge kill-chain`` default.
 - Feed source selector is ``all`` so every available source — db,
@@ -31,6 +31,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+AUTOPILOT_MAX_RUNTIME_MINUTES = 120
+AUTOPILOT_PARALLEL_FANOUT = 6
+
+# Cycle 5 proof: two healthy, progressing targets hit return_code 124 at
+# 3720s (engagement 3 email recon; engagement 49 gmail.com). 120 minutes
+# doubles that budget while retaining a hard bound.
+
 
 @dataclass(frozen=True)
 class AutopilotDefaults:
@@ -51,7 +58,9 @@ class AutopilotDefaults:
     #: Kill-chain iteration budget passed through to each started run.
     max_iter: int = 7
     #: Soft runtime budget (minutes) per started kill-chain run.
-    max_runtime_minutes: int = 60
+    max_runtime_minutes: int = AUTOPILOT_MAX_RUNTIME_MINUTES
+    #: Bounded worker fanout for each started kill-chain.
+    parallel_fanout: int = AUTOPILOT_PARALLEL_FANOUT
     #: Maximum resume candidates processed per cycle.
     resume_limit: int = 10
     #: Resume parallelism cap. Keep low to avoid SQLite lock contention.
@@ -93,7 +102,8 @@ AUTOPILOT_DEFAULTS: dict[str, object] = {
     "start_limit": 20,
     "min_start_source_count": 1,
     "max_iter": 7,
-    "max_runtime_minutes": 60,
+    "max_runtime_minutes": AUTOPILOT_MAX_RUNTIME_MINUTES,
+    "parallel_fanout": AUTOPILOT_PARALLEL_FANOUT,
     "resume_limit": 10,
     "max_parallel": 2,
     "monitor_limit": 10,

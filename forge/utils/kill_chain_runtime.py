@@ -8,8 +8,12 @@ from typing import Any
 from typer.models import ArgumentInfo, OptionInfo
 
 from forge.utils.kill_chain_options import (
+    MAX_KILL_CHAIN_PARALLEL_FANOUT,
+    DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
+    DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
     normalize_kill_chain_max_iter,
     normalize_kill_chain_max_runtime_minutes,
+    normalize_kill_chain_parallel_fanout,
     normalize_kill_chain_synthesis_depth,
     normalize_kill_chain_validation_batch_limit,
 )
@@ -111,8 +115,9 @@ def normalize_kill_chain_runtime_options(
     normalized_scope_manifest = str(normalized_scope_manifest or "").strip()
     normalized_skip_cloud = False if is_typer_default(skip_cloud) else bool(skip_cloud)
     normalized_skip_keyscan = False if is_typer_default(skip_keyscan) else bool(skip_keyscan)
-    normalized_parallel_fanout = (
-        4 if is_typer_default(parallel_fanout) else int(parallel_fanout)
+    normalized_parallel_fanout = normalize_kill_chain_parallel_fanout(
+        None if is_typer_default(parallel_fanout) else parallel_fanout,
+        default=DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
     )
     normalized_report_provider = (
         None if is_typer_default(report_provider) else report_provider
@@ -147,7 +152,13 @@ def normalize_kill_chain_runtime_options(
 
     live_launch = not normalized_dry_run
     try:
-        parallel_workers = max(1, min(8, int(normalized_parallel_fanout or 4)))
+        parallel_workers = max(
+            1,
+            min(
+                MAX_KILL_CHAIN_PARALLEL_FANOUT,
+                int(normalized_parallel_fanout or DEFAULT_KILL_CHAIN_PARALLEL_FANOUT),
+            ),
+        )
     except (TypeError, ValueError):
         parallel_workers = 2
     synthesis_depth_limit = normalize_kill_chain_synthesis_depth(
@@ -162,7 +173,7 @@ def normalize_kill_chain_runtime_options(
         env_map.get("FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES")
         if is_typer_default(max_runtime_minutes) or max_runtime_minutes is None
         else max_runtime_minutes,
-        default=25,
+        default=DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
     )
 
     return KillChainRuntimeOptions(

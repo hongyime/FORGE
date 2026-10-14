@@ -19,6 +19,10 @@ from urllib.parse import urlsplit
 from forge.config import ForgeConfig
 from forge.engagement_ids import numeric_engagement_db_files
 from forge.subprocess_tree import run_contained_subprocess
+from forge.utils.kill_chain_options import (
+    DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+    normalize_kill_chain_parallel_fanout,
+)
 
 RESUME_CANDIDATE_SCHEMA_VERSION = "forge.targets.resume_candidates.v1"
 RESUME_PLAN_SCHEMA_VERSION = "forge.targets.resume_plan.v1"
@@ -189,6 +193,7 @@ def collect_target_resume_plan(
     include_legacy: bool | None = None,
     max_iter: int | None = None,
     max_runtime_minutes: int = DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
+    parallel_fanout: int = DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
     redact_paths: bool = False,
 ) -> dict[str, Any]:
     """Return a read-only sequential plan for resuming ready target-import runs."""
@@ -209,6 +214,7 @@ def collect_target_resume_plan(
         max_runtime_minutes,
         default=DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
     )
+    fanout = normalize_kill_chain_parallel_fanout(parallel_fanout)
     iter_override = _normalize_optional_positive_int(max_iter)
     planned_items: list[dict[str, Any]] = []
     skipped: Counter[str] = Counter()
@@ -222,6 +228,7 @@ def collect_target_resume_plan(
             [str(part) for part in item.get("resume_command", [])],
             max_iter=iter_override,
             max_runtime_minutes=runtime_minutes,
+            parallel_fanout=fanout,
         )
         if not command:
             skipped["resume_command_missing"] += 1
@@ -240,6 +247,7 @@ def collect_target_resume_plan(
                 "pending_work_total": _safe_int(item.get("pending_work_total")),
                 "command": _redact_resume_command_paths(command) if redact_paths else command,
                 "max_runtime_minutes": runtime_minutes,
+                "parallel_fanout": fanout,
                 "expected_execution": "manual_sequential",
             }
         )
@@ -311,6 +319,7 @@ def execute_target_resume_plan(
     include_legacy: bool | None = None,
     max_iter: int | None = None,
     max_runtime_minutes: int = DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
+    parallel_fanout: int = DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
     batch_id: str | None = None,
     stop_on_failure: bool = True,
     max_parallel: int = 1,
@@ -345,6 +354,7 @@ def execute_target_resume_plan(
         include_legacy=include_legacy,
         max_iter=max_iter,
         max_runtime_minutes=max_runtime_minutes,
+        parallel_fanout=parallel_fanout,
     )
     plan_count_fields = _resume_plan_count_fields(plan)
     batch = _safe_batch_id(batch_id)
@@ -1154,6 +1164,7 @@ def _planned_resume_command(
     *,
     max_iter: int | None,
     max_runtime_minutes: int,
+    parallel_fanout: int,
 ) -> list[str]:
     if not command:
         return []
@@ -1164,6 +1175,11 @@ def _planned_resume_command(
         planned,
         "--max-runtime-minutes",
         str(max_runtime_minutes),
+    )
+    planned = _replace_or_append_option(
+        planned,
+        "--parallel-fanout",
+        str(parallel_fanout),
     )
     return planned
 

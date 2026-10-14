@@ -7,7 +7,11 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from forge.targets_import import DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES, import_targets
+from forge.targets_import import (
+    DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES,
+    import_targets,
+)
+from forge.utils.kill_chain_options import DEFAULT_KILL_CHAIN_PARALLEL_FANOUT
 from forge.targets_resume_candidates import (
     DEFAULT_RESUME_CANDIDATE_LIMIT,
     DEFAULT_RESUME_LOCK_STALE_MINUTES,
@@ -73,8 +77,14 @@ def register_target_import_commands(app: typer.Typer) -> None:
             envvar="FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES",
             help=(
                 "Soft kill-chain runtime budget per started target. The import "
-                "parent also enforces this budget plus a short shutdown grace."
+                "parent also enforces this budget plus a short shutdown grace "
+                "(default: 25 minutes)."
             ),
+        ),
+        parallel_fanout: int = typer.Option(
+            DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+            "--parallel-fanout",
+            help="Kill-chain workers per started target (default: 4, max 8).",
         ),
         start_limit: Optional[int] = typer.Option(
             None,
@@ -107,6 +117,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
                 limit=limit,
                 max_iter=max_iter,
                 max_runtime_minutes=max_runtime_minutes,
+                parallel_fanout=parallel_fanout,
                 start_limit=start_limit,
                 min_start_source_count=min_start_source_count,
             )
@@ -420,6 +431,11 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "--max-runtime-minutes",
             help="Append this per-run soft runtime budget to every command.",
         ),
+        parallel_fanout: int = typer.Option(
+            DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+            "--parallel-fanout",
+            help="Kill-chain workers per resumed run (default: 4, max 8).",
+        ),
         batch_id: Optional[str] = typer.Option(
             None,
             "--batch-id",
@@ -469,6 +485,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
             reason=reason,
             max_iter=max_iter,
             max_runtime_minutes=max_runtime_minutes,
+            parallel_fanout=parallel_fanout,
             batch_id=batch_id,
             stop_on_failure=stop_on_failure,
             max_parallel=max_parallel,

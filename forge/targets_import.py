@@ -25,10 +25,15 @@ from forge.domain_validation import canonicalize_domain
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
 from forge.onboard.patterns import is_denied_target
 from forge.subprocess_tree import run_contained_subprocess
+from forge.utils.kill_chain_options import (
+    DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+    normalize_kill_chain_parallel_fanout,
+)
 
 TARGET_FEED_SCHEMA_VERSION = "target-feed.v1"
 TARGET_IMPORT_MONITORING_POLICY_NAME = "Target import seed exposure"
 TARGET_IMPORT_MONITORING_INTERVAL_MINUTES = 60
+# Manual/standalone import default; the autopilot loop passes 120 explicitly.
 DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES = 25
 TARGET_IMPORT_CHILD_TIMEOUT_GRACE_SECONDS = 120
 TARGET_FAILURE_STDERR_MAX_BYTES = 2048
@@ -184,6 +189,7 @@ def import_targets(
     limit: int | None,
     max_iter: int,
     max_runtime_minutes: int = DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES,
+    parallel_fanout: int = DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
     start_limit: int | None = None,
     min_start_source_count: int = 1,
     config: ForgeConfig | None = None,
@@ -268,6 +274,7 @@ def import_targets(
                     scope_manifest=manifest_path,
                     max_iter=max_iter,
                     max_runtime_minutes=max_runtime_minutes,
+                    parallel_fanout=parallel_fanout,
                     engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
                 )
             except Exception as exc:
@@ -1039,6 +1046,11 @@ def _write_scope_manifest(
 
 
 def _has_kill_chain_run(cfg: ForgeConfig, engagement_id: int, seed: str) -> bool:
+    """Return whether this seed has any kill-chain history in the engagement.
+
+    Failed and cancelled runs are considered by the resume phase when their
+    resume gates pass; starting them fresh here would hide the run and reason.
+    """
     db_path = cfg.engagement_db_path(str(engagement_id))
     if not db_path.exists():
         return False
@@ -1051,7 +1063,6 @@ def _has_kill_chain_run(cfg: ForgeConfig, engagement_id: int, seed: str) -> bool
             WHERE engagement_id=?
               AND run_kind='kill_chain'
               AND seed_value=?
-              AND status IN ('running', 'completed')
             LIMIT 1
             """,
             (engagement_id, seed),
@@ -1071,9 +1082,11 @@ def _start_kill_chain(
     scope_manifest: Path,
     max_iter: int,
     max_runtime_minutes: int,
+    parallel_fanout: int,
     engagement_db_path: Path,
 ) -> None:
     runtime_minutes = _normalize_max_runtime_minutes(max_runtime_minutes)
+    fanout = normalize_kill_chain_parallel_fanout(parallel_fanout)
     command = [
         sys.executable,
         "-m",
@@ -1090,6 +1103,8 @@ def _start_kill_chain(
         str(max(1, int(max_iter))),
         "--max-runtime-minutes",
         str(runtime_minutes),
+        "--parallel-fanout",
+        str(fanout),
     ]
     timeout_seconds = runtime_minutes * 60 + TARGET_IMPORT_CHILD_TIMEOUT_GRACE_SECONDS
     proc = run_contained_subprocess(
