@@ -182,3 +182,115 @@ def discover_gcp_projects(
         return accounts
     except Exception:
         return accounts
+
+
+def discover_azure_subscriptions(
+    *,
+    client: Any | None = None,
+    credentials: list[Any] | None = None,
+    subscription_id: str | None = None,
+    tenant_id: str | None = None,
+    client_id: str | None = None,
+    client_secret: str | None = None,
+) -> list[CloudAccount]:
+    """Discover Azure subscriptions from an explicit client or harvested credentials."""
+    accounts: list[CloudAccount] = []
+    guid_pattern = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    subscription_filter = (
+        subscription_id.lower()
+        if isinstance(subscription_id, str) and subscription_id
+        else None
+    )
+    try:
+        if client is None and client_id and client_secret and tenant_id:
+            from azure.identity import ClientSecretCredential
+            from azure.mgmt.resource import ResourceManagementClient
+
+            credential = ClientSecretCredential(
+                tenant_id=tenant_id, client_id=client_id, client_secret=client_secret
+            )
+            client = ResourceManagementClient(credential, "")
+
+        if client is not None:
+            try:
+                seen: set[str] = set()
+                for item in client.subscriptions.list():
+                    item_id = getattr(item, "subscription_id", None)
+                    if not isinstance(item_id, str) or not re.fullmatch(guid_pattern, item_id):
+                        continue
+                    normalized_id = item_id.lower()
+                    if subscription_filter and normalized_id != subscription_filter:
+                        continue
+                    if normalized_id in seen:
+                        continue
+                    display_name = getattr(item, "display_name", None)
+                    item_tenant = getattr(item, "tenant_id", None)
+                    accounts.append(
+                        CloudAccount(
+                            provider="azure",
+                            account_id=normalized_id,
+                            account_name=display_name if display_name else None,
+                            regions=[],
+                            services=[],
+                            discovery_source="azure_mgmt:subscriptions.list",
+                            first_seen_at=_now_iso(),
+                            engagement_points=[],
+                            extra={"tenant_id": item_tenant}
+                            if isinstance(item_tenant, str) and item_tenant
+                            else {},
+                        )
+                    )
+                    seen.add(normalized_id)
+                if accounts:
+                    return accounts
+            except Exception:
+                accounts = []
+
+        if credentials is not None:
+            if not credentials:
+                return []
+            harvested = credentials
+        else:
+            from forge.collection.cloud.azure_credentials import harvest_azure_credentials
+
+            harvested = harvest_azure_credentials()
+
+        seen = set()
+        for cred in harvested:
+            try:
+                item_id = getattr(cred, "subscription_id", None)
+                if not isinstance(item_id, str) or not re.fullmatch(guid_pattern, item_id):
+                    continue
+                normalized_id = item_id.lower()
+                if subscription_filter and normalized_id != subscription_filter:
+                    continue
+                if normalized_id in seen:
+                    continue
+                source = getattr(cred, "source", None)
+                account_name = getattr(cred, "account_name", None)
+                cred_tenant = getattr(cred, "tenant_id", None)
+                accounts.append(
+                    CloudAccount(
+                        provider="azure",
+                        account_id=normalized_id,
+                        account_name=account_name
+                        if isinstance(account_name, str) and account_name
+                        else None,
+                        regions=[],
+                        services=[],
+                        discovery_source=f"offline:{source}"
+                        if isinstance(source, str) and source
+                        else "offline:harvest",
+                        first_seen_at=_now_iso(),
+                        engagement_points=[],
+                        extra={"tenant_id": cred_tenant}
+                        if isinstance(cred_tenant, str) and cred_tenant
+                        else {},
+                    )
+                )
+                seen.add(normalized_id)
+            except Exception:
+                continue
+        return accounts
+    except Exception:
+        return accounts

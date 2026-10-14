@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,6 +12,7 @@ from forge.engagement_orchestrator import _canonical_cloud_ref_value
 from forge.onboard.cloud_discovery import (
     CloudAccount,
     discover_aws_accounts,
+    discover_azure_subscriptions,
     discover_gcp_projects,
 )
 
@@ -252,3 +254,115 @@ def test_discover_gcp_projects_never_raises_when_harvester_fails(
     monkeypatch.setattr(gcp_credentials, "harvest_gcp_credentials", failed_harvest)
 
     assert discover_gcp_projects(credentials=None) == []
+
+
+def _azure_fake_client():
+    return SimpleNamespace(
+        subscriptions=SimpleNamespace(
+            list=lambda: [
+                SimpleNamespace(
+                    subscription_id="A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+                    display_name="Production",
+                    tenant_id="tenant-1",
+                ),
+                SimpleNamespace(
+                    subscription_id="11111111-2222-3333-4444-555555555555",
+                    display_name="Dev",
+                    tenant_id="tenant-1",
+                ),
+            ]
+        )
+    )
+
+
+def test_discover_azure_subscriptions_mgmt_client_success() -> None:
+    accounts = discover_azure_subscriptions(client=_azure_fake_client())
+
+    assert len(accounts) == 2
+    assert [account.provider for account in accounts] == ["azure", "azure"]
+    assert [account.account_id for account in accounts] == [
+        "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "11111111-2222-3333-4444-555555555555",
+    ]
+    assert [account.account_name for account in accounts] == ["Production", "Dev"]
+    assert all(account.discovery_source == "azure_mgmt:subscriptions.list" for account in accounts)
+    assert all(account.extra["tenant_id"] == "tenant-1" for account in accounts)
+
+
+def test_discover_azure_subscriptions_mgmt_client_filter() -> None:
+    accounts = discover_azure_subscriptions(
+        client=_azure_fake_client(),
+        subscription_id="11111111-2222-3333-4444-555555555555",
+    )
+
+    assert len(accounts) == 1
+    assert accounts[0].account_name == "Dev"
+
+
+def test_discover_azure_subscriptions_offline_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    from forge.collection.cloud import azure_credentials
+    from forge.collection.cloud.azure_credentials import AzureCredential
+
+    monkeypatch.setattr(
+        azure_credentials,
+        "harvest_azure_credentials",
+        lambda: [
+            AzureCredential(
+                type="env",
+                source="env",
+                tenant_id="tenant-9",
+                subscription_id="99999999-8888-7777-6666-555555555555",
+                account_name="Harvested",
+            )
+        ],
+    )
+
+    accounts = discover_azure_subscriptions(client=None)
+
+    assert len(accounts) == 1
+    assert accounts[0].account_name == "Harvested"
+    assert accounts[0].extra["tenant_id"] == "tenant-9"
+    assert accounts[0].discovery_source.startswith("offline:")
+
+
+def test_discover_azure_subscriptions_invalid_guid_skipped() -> None:
+    from forge.collection.cloud.azure_credentials import AzureCredential
+
+    credentials = [
+        AzureCredential(type="env", source="env", subscription_id="not-a-guid")
+    ]
+
+    assert discover_azure_subscriptions(credentials=credentials) == []
+
+
+def test_discover_azure_subscriptions_graceful_skip_and_explicit_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge.collection.cloud import azure_credentials
+
+    monkeypatch.setattr(azure_credentials, "harvest_azure_credentials", lambda: [])
+    assert discover_azure_subscriptions(credentials=None) == []
+
+    def unexpected_harvest():
+        raise AssertionError("explicit empty credentials must skip harvesting")
+
+    monkeypatch.setattr(azure_credentials, "harvest_azure_credentials", unexpected_harvest)
+    assert discover_azure_subscriptions(credentials=[]) == []
+
+
+def test_discover_azure_subscriptions_never_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge.collection.cloud import azure_credentials
+
+    class RaisingSubscriptions:
+        def list(self):
+            raise Exception("unavailable")
+
+    def failed_harvest():
+        raise Exception("unavailable")
+
+    monkeypatch.setattr(azure_credentials, "harvest_azure_credentials", failed_harvest)
+    assert discover_azure_subscriptions(
+        client=SimpleNamespace(subscriptions=RaisingSubscriptions())
+    ) == []
