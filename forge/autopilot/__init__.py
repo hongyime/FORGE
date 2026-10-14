@@ -17,6 +17,13 @@ is the fail-closed default when either is missing or
 """
 
 from forge.autopilot.defaults import AUTOPILOT_DEFAULTS, AutopilotDefaults
+from forge.autopilot.jitter import (
+    DEFAULT_BURST_SIZE,
+    MAX_RETRY_AFTER_SECONDS,
+    burst_pause_seconds,
+    retry_after_delay,
+    start_delay_seconds,
+)
 from forge.autopilot.loop import (
     AUTOPILOT_SCHEMA_VERSION,
     AutopilotPhaseResult,
@@ -28,5 +35,10 @@ __all__ = [
     "AUTOPILOT_SCHEMA_VERSION",
     "AutopilotDefaults",
     "AutopilotPhaseResult",
+    "DEFAULT_BURST_SIZE",
     "ForgeAutopilot",
+    "MAX_RETRY_AFTER_SECONDS",
+    "burst_pause_seconds",
+    "retry_after_delay",
+    "start_delay_seconds",
 ]

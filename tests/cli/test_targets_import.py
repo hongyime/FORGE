@@ -35,6 +35,11 @@ from forge.targets_resume_candidates import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _noop_targets_import_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("forge.targets_import._DEFAULT_SLEEP", lambda _: None)
+
+
 class _FakeConfig:
     def __init__(self, data_dir: Path, roe_strictness: str | None = None) -> None:
         self.data_dir = data_dir
@@ -329,6 +334,7 @@ def test_import_start_never_launches_denylisted_placeholder_targets(
         max_iter=3,
         start_limit=20,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     assert [result.target_value for result in results] == ["portal.corp-target.io"]
@@ -2214,6 +2220,7 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
         limit=1,
         max_iter=3,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     assert results[0].started is True
@@ -2285,6 +2292,7 @@ def test_start_skips_non_global_ip_without_consuming_start_budget(
         max_iter=3,
         start_limit=1,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     assert [result.target_value for result in results] == ["shared.corp-target.io", "0.0.0.0"]
@@ -2321,6 +2329,7 @@ def test_start_uses_configured_kill_chain_runtime_timeout(
         max_iter=3,
         max_runtime_minutes=13,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     assert results[0].started is True
@@ -2361,6 +2370,7 @@ def test_start_treats_completed_kill_chain_exit_two_as_success(
         limit=1,
         max_iter=3,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     assert results[0].started is True
@@ -2410,6 +2420,7 @@ def test_start_treats_exit_two_with_completed_db_run_as_success(
         limit=1,
         max_iter=3,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     assert results[0].started is True
@@ -2456,6 +2467,7 @@ def test_start_treats_timeout_with_completed_db_run_as_success(
         limit=1,
         max_iter=3,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     assert results[0].started is True
@@ -2494,6 +2506,7 @@ def test_start_failure_records_and_continues_without_consuming_start_limit(
         start_limit=1,
         config=cfg,  # type: ignore[arg-type]
         progress_callback=_progress,
+        sleep_fn=lambda _: None,
     )
 
     assert len(attempts) == 2
@@ -2565,6 +2578,7 @@ def test_start_timeout_marks_running_kill_chain_failed_for_resume(
         max_iter=3,
         config=cfg,  # type: ignore[arg-type]
         progress_callback=lambda event, details: events.append((event, details)),
+        sleep_fn=lambda _: None,
     )
 
     db_path = cfg.engagement_db_path(str(results[0].engagement_id))
@@ -2634,6 +2648,7 @@ def test_consecutive_start_failures_stop_feed_early_and_report_reason(
         max_iter=3,
         start_limit=20,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     assert len(attempts) == 3
@@ -2679,6 +2694,7 @@ def test_start_limit_caps_scoped_kill_chain_launches(
         max_iter=3,
         start_limit=1,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     assert [result.started for result in results] == [True, False]
@@ -2743,6 +2759,7 @@ def test_start_min_source_count_skips_single_source_without_consuming_budget(
         start_limit=1,
         min_start_source_count=2,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     assert [result.target_value for result in results] == [
@@ -2789,6 +2806,7 @@ def test_monitoring_seed_failure_does_not_block_start(
         limit=1,
         max_iter=3,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     captured = capsys.readouterr()
@@ -2849,6 +2867,7 @@ def test_start_skips_engagement_with_existing_kill_chain_run(
         start_limit=1,
         max_iter=3,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     assert second[0].created is False
@@ -2923,6 +2942,7 @@ def test_failed_target_is_resumed_with_reason_not_started_fresh(
         limit=1,
         max_iter=3,
         config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
     )
 
     assert imported[0].engagement_id == initial[0].engagement_id

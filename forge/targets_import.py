@@ -10,6 +10,7 @@ import shlex
 import sqlite3
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,11 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
+from forge.autopilot.jitter import (
+    DEFAULT_BURST_SIZE,
+    burst_pause_seconds,
+    start_delay_seconds,
+)
 from forge.config import (
     ForgeConfig,
     normalize_roe_strictness,
@@ -36,6 +42,8 @@ from forge.utils.kill_chain_options import (
     DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
 )
 from forge.utils.kill_chain_fanout import cap_fanout
+
+_DEFAULT_SLEEP = time.sleep
 
 TARGET_FEED_SCHEMA_VERSION = "target-feed.v1"
 TARGET_IMPORT_MONITORING_POLICY_NAME = "Target import seed exposure"
@@ -203,6 +211,7 @@ def import_targets(
     progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
     roe_scope: str | None = None,
     roe_strictness: str | None = None,
+    sleep_fn: Callable[[float], None] | None = None,
 ) -> list[TargetImportResult]:
     """Import feed targets and optionally start scoped kill chains.
 
@@ -219,6 +228,7 @@ def import_targets(
     ).strip()
     resolved_roe_strictness = resolve_roe_strictness(roe_strictness, config=cfg)
     roe_wildcard = is_roe_wildcard({"roe_scope": resolved_roe_scope})
+    sleep = sleep_fn if sleep_fn is not None else _DEFAULT_SLEEP
     items = load_target_feed(
         feed_url=feed_url,
         feed_file=feed_file,
@@ -230,6 +240,7 @@ def import_targets(
     min_start_sources = _normalize_min_start_source_count(min_start_source_count)
     existing_targets = _external_target_engagement_index(cfg)
     consecutive_start_failures = 0
+    successful_starts = 0
     for item_index, item in enumerate(items):
         if dry_run:
             results.append(
@@ -305,6 +316,7 @@ def import_targets(
                     engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
                     roe_strictness=resolved_roe_strictness,
                     config=cfg,
+                    sleep_fn=sleep,
                 )
             except Exception as exc:
                 failure_details: dict[str, Any] = {
@@ -344,6 +356,9 @@ def import_targets(
                 _notify_progress(progress_callback, "target_completed", progress_details)
                 started = True
                 consecutive_start_failures = 0
+                successful_starts += 1
+                if successful_starts % DEFAULT_BURST_SIZE == 0:
+                    sleep(burst_pause_seconds())
                 if starts_remaining is not None:
                     starts_remaining -= 1
                     if starts_remaining == 0:
@@ -1207,9 +1222,15 @@ def _start_kill_chain(
     engagement_db_path: Path,
     roe_strictness: str | None = None,
     config: ForgeConfig | None = None,
+    sleep_fn: Callable[[float], None] | None = None,
 ) -> None:
     runtime_minutes = _normalize_max_runtime_minutes(max_runtime_minutes)
     resolved_strictness = resolve_roe_strictness(roe_strictness, config=config)
+    sleep = sleep_fn if sleep_fn is not None else _DEFAULT_SLEEP
+    # Start delay before the kill chain starts.
+    # NOTE: no Retry-After value is available at this call site; retry_after_delay
+    # is for the provider layer (a later item).
+    sleep(start_delay_seconds(resolved_strictness))
     fanout_decision = cap_fanout(
         parallel_fanout,
         seed=seed,
