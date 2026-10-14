@@ -127,3 +127,58 @@ def discover_aws_accounts(
         return accounts
     except Exception:
         return []
+
+
+def discover_gcp_projects(
+    *, credentials: list[Any] | None = None, include_metadata: bool = False
+) -> list[CloudAccount]:
+    """Discover GCP projects from locally harvested credentials."""
+    accounts: list[CloudAccount] = []
+    try:
+        if credentials is not None:
+            if not credentials:
+                return []
+            harvested = credentials
+        else:
+            from forge.collection.cloud.gcp_credentials import harvest_gcp_credentials
+
+            harvested = harvest_gcp_credentials(include_metadata=include_metadata)
+
+        seen: set[str] = set()
+        for cred in harvested:
+            try:
+                project_id = getattr(cred, "project_id", None)
+                if (
+                    not isinstance(project_id, str)
+                    or not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", project_id)
+                    or project_id in seen
+                ):
+                    continue
+
+                source = getattr(cred, "source", None)
+                client_email = getattr(cred, "client_email", None)
+                accounts.append(
+                    CloudAccount(
+                        provider="gcp",
+                        account_id=project_id,
+                        account_name=None,
+                        regions=[],
+                        services=[],
+                        discovery_source=f"offline:{source}" if source else "offline:harvest",
+                        first_seen_at=_now_iso(),
+                        engagement_points=[
+                            f"https://{project_id}.appspot.com",
+                            f"https://{project_id}.firebaseio.com",
+                            f"https://{project_id}.web.app",
+                        ],
+                        extra={"client_email": client_email}
+                        if isinstance(client_email, str) and client_email
+                        else {},
+                    )
+                )
+                seen.add(project_id)
+            except Exception:
+                continue
+        return accounts
+    except Exception:
+        return accounts

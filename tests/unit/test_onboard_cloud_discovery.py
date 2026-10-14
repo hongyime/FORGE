@@ -8,7 +8,11 @@ import pytest
 
 from forge.config import ForgeConfig
 from forge.engagement_orchestrator import _canonical_cloud_ref_value
-from forge.onboard.cloud_discovery import CloudAccount, discover_aws_accounts
+from forge.onboard.cloud_discovery import (
+    CloudAccount,
+    discover_aws_accounts,
+    discover_gcp_projects,
+)
 
 
 def test_cloud_account_required_fields_and_defaults() -> None:
@@ -156,3 +160,95 @@ def test_discover_aws_accounts_never_raises_for_client_failure() -> None:
             raise Exception("unavailable")
 
     assert discover_aws_accounts(session=RaisingSession()) == []
+
+
+def test_discover_gcp_projects_extracts_deduplicates_and_adds_engagement_points() -> None:
+    from forge.collection.cloud.gcp_credentials import GCPCredential
+
+    accounts = discover_gcp_projects(
+        credentials=[
+            GCPCredential(
+                type="service_account",
+                source="env",
+                project_id="mock-project-123",
+                client_email="svc@mock-project-123.iam.gserviceaccount.com",
+            ),
+            GCPCredential(
+                type="service_account", source="env", project_id="mock-project-123"
+            ),
+        ]
+    )
+
+    assert len(accounts) == 1
+    account = accounts[0]
+    assert account.provider == "gcp"
+    assert account.account_id == "mock-project-123"
+    assert {
+        "https://mock-project-123.appspot.com",
+        "https://mock-project-123.firebaseio.com",
+        "https://mock-project-123.web.app",
+    }.issubset(account.engagement_points)
+    assert account.extra["client_email"] == "svc@mock-project-123.iam.gserviceaccount.com"
+
+
+def test_discover_gcp_projects_harvest_path_passes_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge.collection.cloud import gcp_credentials
+    from forge.collection.cloud.gcp_credentials import GCPCredential
+
+    received: dict[str, bool] = {}
+
+    def fake_harvest(*, include_metadata: bool):
+        received["include_metadata"] = include_metadata
+        return [
+            GCPCredential(
+                type="service_account", source="gcloud_config", project_id="harvested-proj-1"
+            )
+        ]
+
+    monkeypatch.setattr(gcp_credentials, "harvest_gcp_credentials", fake_harvest)
+
+    accounts = discover_gcp_projects(credentials=None, include_metadata=True)
+
+    assert len(accounts) == 1
+    assert accounts[0].account_id == "harvested-proj-1"
+    assert received["include_metadata"] is True
+
+
+def test_discover_gcp_projects_skips_invalid_project_id() -> None:
+    from forge.collection.cloud.gcp_credentials import GCPCredential
+
+    credentials = [
+        GCPCredential(type="service_account", source="env", project_id="BAD PROJECT!!")
+    ]
+
+    assert discover_gcp_projects(credentials=credentials) == []
+
+
+def test_discover_gcp_projects_graceful_skip_and_explicit_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge.collection.cloud import gcp_credentials
+
+    monkeypatch.setattr(gcp_credentials, "harvest_gcp_credentials", lambda **kwargs: [])
+    assert discover_gcp_projects(credentials=None) == []
+
+    def unexpected_harvest(**kwargs):
+        raise AssertionError("explicit empty credentials must skip harvesting")
+
+    monkeypatch.setattr(gcp_credentials, "harvest_gcp_credentials", unexpected_harvest)
+    assert discover_gcp_projects(credentials=[]) == []
+
+
+def test_discover_gcp_projects_never_raises_when_harvester_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge.collection.cloud import gcp_credentials
+
+    def failed_harvest(**kwargs):
+        raise Exception("unavailable")
+
+    monkeypatch.setattr(gcp_credentials, "harvest_gcp_credentials", failed_harvest)
+
+    assert discover_gcp_projects(credentials=None) == []
