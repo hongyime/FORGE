@@ -12444,21 +12444,18 @@ class EngagementSynthesisEngine:
             return results
         bounded_workers = min(cls._effective_max_local_batch_workers(), len(items))
         ordered_results: list[Any | None] = [None] * len(items)
-        # Deterministic peak concurrency: force every spawned worker to arrive
-        # at a barrier before it starts real work. Without this, fast workers
-        # can finish before slower peers spawn on OSes with high thread-start
-        # overhead (Windows), causing tests that measure peak concurrency to
-        # race. Barrier is bounded by a short timeout so a stuck worker cannot
-        # hang the pool indefinitely — a broken barrier just degrades back to
-        # the previous race-dependent behavior instead of deadlocking.
+        # Deterministic peak concurrency: force each spawned worker to arrive
+        # at a barrier before starting real work. Only the initial worker cohort
+        # waits on it; later tasks skip the reusable barrier so a partial final
+        # cohort cannot waste the bounded timeout.
         warmup_barrier = (
             threading.Barrier(bounded_workers, timeout=5.0)
             if bounded_workers > 1
             else None
         )
 
-        def _run_with_warmup(item: Any) -> Any:
-            if warmup_barrier is not None:
+        def _run_with_warmup(item: Any, wait_for_warmup: bool) -> Any:
+            if warmup_barrier is not None and wait_for_warmup:
                 try:
                     warmup_barrier.wait()
                 except threading.BrokenBarrierError:
@@ -12468,7 +12465,7 @@ class EngagementSynthesisEngine:
 
         with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
             future_map = {
-                executor.submit(_run_with_warmup, item): index
+                executor.submit(_run_with_warmup, item, index < bounded_workers): index
                 for index, item in enumerate(items)
             }
             for future in as_completed(future_map):
