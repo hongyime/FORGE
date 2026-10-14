@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import sqlite3
+import statistics
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -521,6 +523,207 @@ def conversion_7d_for_data_dir(
         if candidates > 0:
             result["conversion_created"] = result["created"] / candidates
             result["conversion_started"] = result["started"] / candidates
+        result["available"] = True
+        return result
+    except Exception:
+        return result
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+
+
+def scoreboard_for_data_dir(
+    data_dir: Path | str,
+    *,
+    now: str | None = None,
+    window_days: int = 7,
+    max_active_targets: int | None = None,
+    total_slots: int | None = None,
+) -> dict[str, Any]:
+    """Summarize throughput, latency, resources, and scheduler limits.
+
+    Run durations are approximate: in-window outcomes pair with the latest
+    prior unmatched engagement sharing its engagement ID and target value.
+    Identifiers are used only internally and are never included in the result.
+    """
+    if window_days < 1:
+        window_days = 7
+    end: datetime | None = None
+    try:
+        end = _parse_timestamp(now) if now is not None else _parse_timestamp(_now_iso())
+        start = end - timedelta(days=window_days)
+        window_end = end.isoformat().replace("+00:00", "Z")
+        window_start = start.isoformat().replace("+00:00", "Z")
+    except Exception:
+        start = end = None
+        window_start = window_end = None
+
+    result: dict[str, Any] = {
+        "available": False,
+        "window_days": window_days,
+        "window_start": window_start,
+        "window_end": window_end,
+        "peak_active_targets": None,
+        "peak_leased_slots": None,
+        "completed_runs": 0,
+        "completed_runs_per_hour": 0.0,
+        "queue_seconds_p50": None,
+        "queue_seconds_p95": None,
+        "run_duration_seconds_p50": None,
+        "run_duration_seconds_p95": None,
+        "memory_peak_kb_p95": None,
+        "cpu_seconds_p95": None,
+        "invariant": {
+            "max_active_targets_limit": max_active_targets,
+            "total_slots_budget": total_slots,
+            "active_targets_violations": None,
+            "leased_slots_violations": None,
+        },
+        "events": {
+            "target_engaged": 0,
+            "target_completed": 0,
+            "target_failed": 0,
+            "phase_end": 0,
+        },
+        "samples": {"queue": 0, "run_duration": 0, "resource": 0},
+    }
+
+    def numeric(value: Any) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+    def percentile(values: list[float], p95: bool = False) -> float | None:
+        if not values:
+            return None
+        values.sort()
+        if p95:
+            return values[max(0, math.ceil(0.95 * len(values)) - 1)]
+        return statistics.median(values)
+
+    conn: sqlite3.Connection | None = None
+    try:
+        if start is None or end is None:
+            return result
+        db_path = _select_event_db(Path(data_dir))
+        conn = _read_only_connection(db_path)
+        if not _has_event_table(conn):
+            return result
+        result["invariant"]["active_targets_violations"] = (
+            0 if max_active_targets is not None else None
+        )
+        result["invariant"]["leased_slots_violations"] = (
+            0 if total_slots is not None else None
+        )
+        rows = conn.execute(
+            "SELECT event_type, phase_name, occurred_at, details_json "
+            "FROM autopilot_cycle_events WHERE event_type IN "
+            "('target_engaged', 'target_completed', 'target_failed', 'phase_end') "
+            "ORDER BY occurred_at, id"
+        ).fetchall()
+        active_samples: list[int | float] = []
+        leased_samples: list[int | float] = []
+        queue: list[float] = []
+        memory: list[float] = []
+        cpu: list[float] = []
+        durations: list[float] = []
+        unmatched: dict[tuple[str, str], list[datetime]] = {}
+        for event_type, phase_name, occurred_at, details_json in rows:
+            try:
+                occurred = _parse_timestamp(occurred_at)
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if not start <= occurred <= end:
+                continue
+            try:
+                decoded = json.loads(str(details_json or "{}"))
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(decoded, dict):
+                continue
+            details = _decode_details(details_json)
+            if event_type in result["events"]:
+                result["events"][event_type] += 1
+            if event_type == "target_engaged":
+                for field_name in ("active_targets", "leased_slots"):
+                    value = details.get(field_name)
+                    if numeric(value):
+                        samples = (
+                            active_samples
+                            if field_name == "active_targets"
+                            else leased_samples
+                        )
+                        samples.append(value)
+                        limit = max_active_targets if field_name == "active_targets" else total_slots
+                        violation_key = (
+                            "active_targets_violations"
+                            if field_name == "active_targets"
+                            else "leased_slots_violations"
+                        )
+                        if limit is not None and value > limit:
+                            result["invariant"][violation_key] += 1
+                value = details.get("queue_seconds")
+                if numeric(value):
+                    queue.append(float(value))
+                mem = details.get("memory_peak_kb")
+                if numeric(mem):
+                    memory.append(float(mem))
+                user, system = details.get("cpu_user_seconds"), details.get("cpu_sys_seconds")
+                if numeric(user) and numeric(system):
+                    cpu.append(float(user) + float(system))
+                eid, target = details.get("engagement_id"), details.get("target_value")
+                if eid is not None and target is not None:
+                    unmatched.setdefault((str(eid), str(target)), []).append(occurred)
+            elif event_type == "phase_end" and phase_name == "import_targets":
+                scheduler = details.get("scheduler")
+                if isinstance(scheduler, dict):
+                    for field_name, samples, limit, violation_key in (
+                        (
+                            "active_targets_count",
+                            active_samples,
+                            max_active_targets,
+                            "active_targets_violations",
+                        ),
+                        (
+                            "leased_slots",
+                            leased_samples,
+                            total_slots,
+                            "leased_slots_violations",
+                        ),
+                    ):
+                        value = scheduler.get(field_name)
+                        if numeric(value):
+                            samples.append(value)
+                            if limit is not None and value > limit:
+                                result["invariant"][violation_key] += 1
+            elif event_type in ("target_completed", "target_failed"):
+                if event_type == "target_completed":
+                    result["completed_runs"] += 1
+                eid, target = details.get("engagement_id"), details.get("target_value")
+                if eid is not None and target is not None:
+                    candidates = unmatched.get((str(eid), str(target)), [])
+                    prior = [stamp for stamp in candidates if stamp <= occurred]
+                    if prior:
+                        engaged_at = max(prior)
+                        candidates.remove(engaged_at)
+                        duration = (occurred - engaged_at).total_seconds()
+                        if duration >= 0:
+                            durations.append(duration)
+        result["peak_active_targets"] = max(active_samples) if active_samples else None
+        result["peak_leased_slots"] = max(leased_samples) if leased_samples else None
+        result["completed_runs_per_hour"] = result["completed_runs"] / (window_days * 24.0)
+        result["queue_seconds_p50"] = percentile(queue)
+        result["queue_seconds_p95"] = percentile(queue, True)
+        result["run_duration_seconds_p50"] = percentile(durations)
+        result["run_duration_seconds_p95"] = percentile(durations, True)
+        result["memory_peak_kb_p95"] = percentile(memory, True)
+        result["cpu_seconds_p95"] = percentile(cpu, True)
+        result["samples"] = {
+            "queue": len(queue),
+            "run_duration": len(durations),
+            "resource": len(memory),
+        }
         result["available"] = True
         return result
     except Exception:

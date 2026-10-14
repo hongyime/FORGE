@@ -33,7 +33,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 from forge.autopilot.defaults import AUTOPILOT_MAX_TIMEOUT_RETRIES, AutopilotDefaults
-from forge.autopilot.events import AutopilotEventWriter, conversion_7d_for_data_dir
+from forge.autopilot.events import (
+    AutopilotEventWriter,
+    conversion_7d_for_data_dir,
+    scoreboard_for_data_dir,
+)
 from forge.autopilot.scheduler import get_budget_snapshot, is_kill_switch_active
 from forge.config import ForgeConfig
 
@@ -298,6 +302,55 @@ class ForgeAutopilot:
                     "phase_end_events": 0,
                     "cycles": 0,
                 }
+            try:
+                max_active_targets = getattr(
+                    self._cfg, "autopilot_max_active_targets", None
+                )
+            except Exception:
+                max_active_targets = None
+            try:
+                total_slots = get_budget_snapshot(
+                    data_dir=self.data_dir, config=self._cfg
+                ).total_slots
+            except Exception:
+                total_slots = None
+            try:
+                scoreboard = scoreboard_for_data_dir(
+                    self.data_dir,
+                    now=finished_at,
+                    max_active_targets=max_active_targets,
+                    total_slots=total_slots,
+                )
+            except Exception:
+                scoreboard = {
+                    "available": False,
+                    "window_days": 7,
+                    "window_start": None,
+                    "window_end": finished_at,
+                    "peak_active_targets": None,
+                    "peak_leased_slots": None,
+                    "completed_runs": 0,
+                    "completed_runs_per_hour": 0.0,
+                    "queue_seconds_p50": None,
+                    "queue_seconds_p95": None,
+                    "run_duration_seconds_p50": None,
+                    "run_duration_seconds_p95": None,
+                    "memory_peak_kb_p95": None,
+                    "cpu_seconds_p95": None,
+                    "invariant": {
+                        "max_active_targets_limit": max_active_targets,
+                        "total_slots_budget": total_slots,
+                        "active_targets_violations": None,
+                        "leased_slots_violations": None,
+                    },
+                    "events": {
+                        "target_engaged": 0,
+                        "target_completed": 0,
+                        "target_failed": 0,
+                        "phase_end": 0,
+                    },
+                    "samples": {"queue": 0, "run_duration": 0, "resource": 0},
+                }
             self._event_writer.emit(
                 "cycle_end",
                 details={
@@ -306,6 +359,7 @@ class ForgeAutopilot:
                     "dry_run": is_dry_run,
                     "path": path,
                     "conversion_7d": conversion_7d,
+                    "scoreboard": scoreboard,
                 },
                 occurred_at=finished_at,
             )

@@ -17,6 +17,7 @@ from forge.autopilot.events import (
     AutopilotEventWriter,
     autopilot_status_for_data_dir,
     conversion_7d_for_data_dir,
+    scoreboard_for_data_dir,
 )
 from forge.autopilot.loop import AutopilotPhaseResult, ForgeAutopilot
 from forge.db.migrations import TARGET_VERSION, run_migrations
@@ -338,7 +339,10 @@ def test_autopilot_records_cycle_and_all_eight_phase_boundaries(tmp_path: Path) 
         ).fetchone()
     finally:
         conn.close()
-    assert "available" in json.loads(cycle_end[0])["conversion_7d"]
+    cycle_details = json.loads(cycle_end[0])
+    assert "available" in cycle_details["conversion_7d"]
+    assert isinstance(cycle_details["scoreboard"], dict)
+    assert "available" in cycle_details["scoreboard"]
 
 
 def test_conversion_7d_for_data_dir_counts_recent_phase_events(tmp_path: Path) -> None:
@@ -391,6 +395,94 @@ def test_conversion_7d_for_data_dir_without_database_is_unavailable(tmp_path: Pa
     result = conversion_7d_for_data_dir(tmp_path)
     assert result["available"] is False
     assert result["candidates"] == result["created"] == result["started"] == 0
+
+
+def test_scoreboard_for_data_dir_aggregates_recent_telemetry(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True)
+    now = datetime(2026, 10, 15, tzinfo=UTC)
+    recent = now - timedelta(days=1)
+    old = now - timedelta(days=8)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "CREATE TABLE autopilot_cycle_events (id INTEGER PRIMARY KEY, cycle_id TEXT, "
+            "cycle_number INTEGER, event_type TEXT, phase_name TEXT, phase_index INTEGER, "
+            "occurred_at TEXT, details_json TEXT)"
+        )
+        rows = []
+        for i, target in enumerate(("t1", "t2", "t3"), 1):
+            details = {
+                "engagement_id": 1, "target_value": target, "queue_seconds": float(i),
+                "active_targets": i, "leased_slots": i * 2,
+                "memory_peak_kb": i * 100, "cpu_user_seconds": float(i) / 2,
+                "cpu_sys_seconds": float(i) / 2,
+            }
+            rows.append(("target_engaged", None, recent.isoformat(), json.dumps(details)))
+        for target, seconds in (("t1", 10), ("t2", 20)):
+            rows.append(("target_completed", None, (recent + timedelta(seconds=seconds)).isoformat(),
+                         json.dumps({"engagement_id": 1, "target_value": target})))
+        rows.append(("phase_end", "import_targets", recent.isoformat(), json.dumps(
+            {"scheduler": {"active_targets_count": 5, "leased_slots": 8}}
+        )))
+        rows.append(("target_engaged", None, old.isoformat(), json.dumps({"queue_seconds": 99})))
+        rows.append(("target_engaged", None, recent.isoformat(), "not-json"))
+        conn.executemany(
+            "INSERT INTO autopilot_cycle_events (event_type, phase_name, occurred_at, details_json) "
+            "VALUES (?, ?, ?, ?)", rows
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    result = scoreboard_for_data_dir(
+        tmp_path, now=now.isoformat(), max_active_targets=2, total_slots=4
+    )
+    assert result["available"] is True
+    assert result["peak_active_targets"] == 5
+    assert result["peak_leased_slots"] == 8
+    assert result["completed_runs"] == 2
+    assert result["completed_runs_per_hour"] == pytest.approx(2 / 168.0)
+    assert result["queue_seconds_p50"] == 2.0
+    assert result["queue_seconds_p95"] == 3.0
+    assert result["run_duration_seconds_p50"] == 15.0
+    assert result["run_duration_seconds_p95"] == 20.0
+    assert result["memory_peak_kb_p95"] == 300.0
+    assert result["cpu_seconds_p95"] == 3.0
+    assert result["invariant"]["active_targets_violations"] == 2
+    assert result["invariant"]["leased_slots_violations"] == 2
+    assert "t1" not in json.dumps(result)
+
+
+def test_scoreboard_for_data_dir_without_database_is_unavailable(tmp_path: Path) -> None:
+    result = scoreboard_for_data_dir(tmp_path)
+    assert result["available"] is False
+    assert result["peak_active_targets"] is None
+    assert result["queue_seconds_p50"] is None
+    assert result["invariant"]["active_targets_violations"] is None
+    assert result["invariant"]["leased_slots_violations"] is None
+
+
+def test_scoreboard_for_data_dir_without_limits_has_no_violation_counts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "CREATE TABLE autopilot_cycle_events (id INTEGER PRIMARY KEY, event_type TEXT, "
+            "phase_name TEXT, occurred_at TEXT, details_json TEXT)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    result = scoreboard_for_data_dir(
+        tmp_path, now="2026-10-15T00:00:00Z", max_active_targets=None, total_slots=None
+    )
+    assert result["available"] is True
+    assert result["invariant"]["max_active_targets_limit"] is None
+    assert result["invariant"]["total_slots_budget"] is None
+    assert result["invariant"]["active_targets_violations"] is None
+    assert result["invariant"]["leased_slots_violations"] is None
 
 
 def test_autopilot_records_cooldown_before_next_iteration(
