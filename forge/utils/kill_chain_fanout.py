@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import weakref
 from dataclasses import dataclass
 from threading import Lock
 from typing import Literal
@@ -38,6 +39,8 @@ from forge.utils.kill_chain_options import (
 
 _LOG = logging.getLogger(__name__)
 CLEAN_SUCCESSES_TO_INCREASE_CAP = 20
+_ACTIVE_CONTROLLER_LOCK = Lock()
+_ACTIVE_CONTROLLER_REF: weakref.ReferenceType[AdaptiveFanoutCap] | None = None
 TargetType = Literal["domain", "email", "ip", "url", "other"]
 RoeStrictness = Literal["strict", "standard", "permissive"]
 _BASELINE_CAPS: dict[str, dict[str, int]] = {
@@ -223,6 +226,72 @@ class AdaptiveFanoutCap:
             return self._current_cap
 
 
+def register_active_fanout_controller(controller: AdaptiveFanoutCap) -> None:
+    """Publish the current run's controller to lower-level HTTP helpers.
+
+    The registry is process-wide because rate-limit events can originate in
+    worker threads. It holds only a weak reference; runtime options own the
+    controller for the duration of a run, and collection clears the registry.
+    """
+
+    global _ACTIVE_CONTROLLER_REF
+
+    def clear_collected(reference: weakref.ReferenceType[AdaptiveFanoutCap]) -> None:
+        global _ACTIVE_CONTROLLER_REF
+        with _ACTIVE_CONTROLLER_LOCK:
+            if _ACTIVE_CONTROLLER_REF is reference:
+                _ACTIVE_CONTROLLER_REF = None
+
+    with _ACTIVE_CONTROLLER_LOCK:
+        _ACTIVE_CONTROLLER_REF = weakref.ref(controller, clear_collected)
+
+
+def clear_active_fanout_controller(
+    controller: AdaptiveFanoutCap | None = None,
+) -> bool:
+    """Clear the active controller, optionally only when it matches ``controller``."""
+
+    global _ACTIVE_CONTROLLER_REF
+    with _ACTIVE_CONTROLLER_LOCK:
+        active = _ACTIVE_CONTROLLER_REF() if _ACTIVE_CONTROLLER_REF is not None else None
+        if active is None or (controller is not None and active is not controller):
+            return False
+        _ACTIVE_CONTROLLER_REF = None
+        return True
+
+
+def _active_fanout_controller() -> AdaptiveFanoutCap | None:
+    with _ACTIVE_CONTROLLER_LOCK:
+        return _ACTIVE_CONTROLLER_REF() if _ACTIVE_CONTROLLER_REF is not None else None
+
+
+def record_active_fanout_rate_limit() -> int | None:
+    """Report a detected 429 or already-identified quota signal, if active."""
+
+    controller = _active_fanout_controller()
+    return controller.record_rate_limit() if controller is not None else None
+
+
+def record_active_fanout_backoff() -> int | None:
+    """Report an applied bounded wait, if a kill-chain controller is active."""
+
+    controller = _active_fanout_controller()
+    return controller.record_backoff() if controller is not None else None
+
+
+def record_active_fanout_observation(
+    status_code: int,
+    *,
+    rate_limit_403: bool = False,
+) -> int | None:
+    """Forward an HTTP observation without treating ordinary 403s as quotas."""
+
+    controller = _active_fanout_controller()
+    if controller is None:
+        return None
+    return controller.record_observation(status_code, rate_limit_403=rate_limit_403)
+
+
 def cap_fanout(
     requested: object,
     *,
@@ -377,4 +446,9 @@ __all__ = [
     "FanoutCapDecision",
     "baseline_cap",
     "cap_fanout",
+    "clear_active_fanout_controller",
+    "record_active_fanout_backoff",
+    "record_active_fanout_observation",
+    "record_active_fanout_rate_limit",
+    "register_active_fanout_controller",
 ]

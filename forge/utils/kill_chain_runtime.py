@@ -21,6 +21,7 @@ from forge.utils.kill_chain_fanout import (
     FanoutCapDecision,
     baseline_cap,
     cap_fanout,
+    register_active_fanout_controller,
 )
 
 
@@ -196,6 +197,7 @@ def normalize_kill_chain_runtime_options(
         rate_limit_events=normalized_rate_limit_events,
         backoff_events=normalized_backoff_events,
     )
+    register_active_fanout_controller(controller)
     parallel_workers = normalized_parallel_fanout
     synthesis_depth_limit = normalize_kill_chain_synthesis_depth(
         env_map.get("FORGE_KILL_CHAIN_SYNTHESIS_DEPTH"),

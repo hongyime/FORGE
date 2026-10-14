@@ -13,6 +13,10 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from forge.opsec.resilience import _SHUTDOWN
+from forge.utils.kill_chain_fanout import (
+    record_active_fanout_backoff,
+    record_active_fanout_rate_limit,
+)
 
 
 def _interruptible_sleep_local(seconds: float, check_interval: float = 0.2) -> None:
@@ -45,6 +49,7 @@ class RateLimiter:
         self._tor_manager = tor_manager
         self._rotate_tor_on_rate_limit = rotate_tor_on_rate_limit
         self._domain_delays: dict[str, float] = {}
+        self._domain_backoff_until: dict[str, float] = {}
         self._domain_failures: dict[str, int] = {}
         self._lock = threading.RLock()
 
@@ -56,8 +61,12 @@ class RateLimiter:
             elapsed = now - last_request
             if elapsed < self.base_delay:
                 wait_time = self.base_delay - elapsed + random.uniform(0, self.jitter)
+                if self._domain_backoff_until.get(domain, 0.0) > now:
+                    record_active_fanout_backoff()
                 _interruptible_sleep_local(wait_time)
             self._domain_delays[domain] = time.time()
+            if self._domain_backoff_until.get(domain, 0.0) <= time.time():
+                self._domain_backoff_until.pop(domain, None)
 
     def record_success(self, url: str) -> None:
         domain = urlparse(url).netloc
@@ -72,7 +81,13 @@ class RateLimiter:
             self._domain_failures[domain] = self._domain_failures.get(domain, 0) + 1
             failures = self._domain_failures[domain]
             backoff = min(2**failures, self.max_delay)
-            self._domain_delays[domain] = time.time() + backoff
+            cooldown_until = time.time() + backoff
+            self._domain_delays[domain] = cooldown_until
+            self._domain_backoff_until[domain] = max(
+                self._domain_backoff_until.get(domain, 0.0), cooldown_until
+            )
+            if status_code == 429:
+                record_active_fanout_rate_limit()
             if status_code == 429 and self._rotate_tor_on_rate_limit and self._tor_manager:
                 self._tor_manager.rotate_circuit()
 
@@ -80,6 +95,7 @@ class RateLimiter:
         domain = urlparse(url).netloc
         with self._lock:
             self._domain_delays.pop(domain, None)
+            self._domain_backoff_until.pop(domain, None)
             self._domain_failures.pop(domain, None)
 
 

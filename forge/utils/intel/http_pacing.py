@@ -9,6 +9,11 @@ from email.utils import parsedate_to_datetime
 from typing import Any, Callable
 from urllib.parse import urlparse
 
+from forge.utils.kill_chain_fanout import (
+    record_active_fanout_backoff,
+    record_active_fanout_rate_limit,
+)
+
 _IDENTITY_DEFAULT_REQUEST_DELAY_SECONDS = 0.25
 _IDENTITY_DEFAULT_RATE_LIMIT_BACKOFF_SECONDS = 60.0
 _IDENTITY_DEFAULT_MAX_RETRY_AFTER_SECONDS = 300.0
@@ -263,6 +268,7 @@ def _sleep_active_cooldown(scope: str, url: str) -> None:
     with _RATE_LIMIT_COOLDOWN_LOCK:
         wait_seconds = _RATE_LIMIT_COOLDOWNS.get(key, 0.0) - time.monotonic()
     if wait_seconds > 0:
+        record_active_fanout_backoff()
         time.sleep(wait_seconds)
 
 
@@ -287,6 +293,8 @@ def sleep_rate_limit_cooldown(scope: str, url: str) -> None:
 
 def record_rate_limit_cooldown(scope: str, url: str, wait_seconds: float) -> None:
     """Remember provider pressure so the next same-host request slows down too."""
+
+    record_active_fanout_rate_limit()
     _record_rate_limit_cooldown(scope, url, wait_seconds)
 
 
@@ -315,10 +323,11 @@ def _request_with_pacing(
             return response
         wait_seconds = retry_after_seconds(response)
         if cooldown_scope:
-            _record_rate_limit_cooldown(cooldown_scope, url, wait_seconds)
+            record_rate_limit_cooldown(cooldown_scope, url, wait_seconds)
         if attempt >= attempts - 1:
             return response
         if wait_seconds > 0:
+            record_active_fanout_backoff()
             time.sleep(wait_seconds)
     return response
 
