@@ -190,7 +190,7 @@ def _print_next_steps_panel() -> None:
     )
     body.add_row(
         "2.",
-        "Connect services: [bold]forge connect github --token-env FORGE_GITHUB_TOKEN --org myorg[/bold].",
+        "Connect services: [bold]forge connect add github --token-env FORGE_GITHUB_TOKEN --org myorg[/bold].",
     )
     body.add_row(
         "3.",

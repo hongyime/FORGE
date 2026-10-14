@@ -10,6 +10,7 @@ arguments.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,60 @@ from forge.cli_registry import build_forge_cli_apps
 
 
 runner = CliRunner()
+
+CONNECT_SERVICES = (
+    "github",
+    "supabase",
+    "shodan",
+    "virustotal",
+    "replit",
+    "urlscan",
+    "censys",
+    "dehashed",
+)
+
+CONNECT_SERVICE_FLAGS = {
+    "github": {"--token-env", "--token-stdin", "--org", "--user"},
+    "supabase": {
+        "--key-env",
+        "--key-stdin",
+        "--pat-env",
+        "--pat-stdin",
+        "--project-ref",
+        "--url",
+    },
+    "shodan": {"--key-env", "--key-stdin"},
+    "virustotal": {"--key-env", "--key-stdin"},
+    "replit": {"--username", "--url"},
+    "urlscan": {"--key-env", "--key-stdin"},
+    "censys": {
+        "--api-id-env",
+        "--api-id-stdin",
+        "--secret-env",
+        "--secret-stdin",
+    },
+    "dehashed": {"--email", "--key-env", "--key-stdin"},
+}
+
+CONNECT_FOREIGN_HELP_FLAGS = {
+    "github": {"--key-env", "--project-ref", "--username"},
+    "supabase": {"--token-env", "--org", "--api-id-env"},
+    "shodan": {
+        "--org",
+        "--user",
+        "--project-ref",
+        "--url",
+        "--email",
+        "--username",
+        "--api-id-env",
+        "--secret-env",
+    },
+    "virustotal": {"--org", "--project-ref", "--username"},
+    "replit": {"--key-env", "--project-ref", "--email"},
+    "urlscan": {"--org", "--project-ref", "--username"},
+    "censys": {"--org", "--project-ref", "--email"},
+    "dehashed": {"--org", "--project-ref", "--api-id-env"},
+}
 
 
 def _invoke(args: list[str], *, env: dict[str, str] | None = None, input_text: str | None = None):
@@ -208,6 +263,215 @@ def test_forge_connect_stdin_credential(tmp_path: Path) -> None:
     stored = json.loads((tmp_path / "connections.json").read_text(encoding="utf-8"))
     assert stored["connections"][0]["config"]["key"] == "shodan-stdin-value"
     assert stored["connections"][0]["credential_sources"]["key"] == "stdin"
+
+
+@pytest.mark.parametrize(
+    (
+        "service",
+        "service_args",
+        "env",
+        "input_text",
+        "expected_config",
+        "expected_sources",
+    ),
+    [
+        pytest.param(
+            "github",
+            ["--token-env", "TEST_GITHUB_TOKEN", "--org", "myorg"],
+            {"TEST_GITHUB_TOKEN": "ghp_canonical_test"},
+            None,
+            {"token": "ghp_canonical_test", "orgs": ["myorg"]},
+            {"token": "env:TEST_GITHUB_TOKEN"},
+            id="github-env",
+        ),
+        pytest.param(
+            "github",
+            ["--token-stdin"],
+            None,
+            "ghp_canonical_stdin_test\n",
+            {"token": "ghp_canonical_stdin_test"},
+            {"token": "stdin"},
+            id="github-stdin",
+        ),
+        pytest.param(
+            "supabase",
+            ["--project-ref", "abc123", "--key-stdin"],
+            None,
+            "sb_anon_canonical_test\n",
+            {"project_ref": "abc123", "key": "sb_anon_canonical_test"},
+            {"key": "stdin"},
+            id="supabase-key-stdin",
+        ),
+        pytest.param(
+            "supabase",
+            ["--project-ref", "abc123", "--pat-stdin"],
+            None,
+            "sbp_canonical_test\n",
+            {"project_ref": "abc123", "management_pat": "sbp_canonical_test"},
+            {"management_pat": "stdin"},
+            id="supabase-stdin",
+        ),
+        pytest.param(
+            "shodan",
+            ["--key-stdin"],
+            None,
+            "shodan_canonical_test\n",
+            {"key": "shodan_canonical_test"},
+            {"key": "stdin"},
+            id="shodan-stdin",
+        ),
+        pytest.param(
+            "censys",
+            ["--api-id-env", "TEST_CENSYS_ID", "--secret-stdin"],
+            {"TEST_CENSYS_ID": "censys_id_test"},
+            "censys_secret_test\n",
+            {"api_id": "censys_id_test", "api_secret": "censys_secret_test"},
+            {"api_id": "env:TEST_CENSYS_ID", "api_secret": "stdin"},
+            id="censys-secret-stdin",
+        ),
+        pytest.param(
+            "censys",
+            ["--api-id-stdin", "--secret-env", "TEST_CENSYS_SECRET"],
+            {"TEST_CENSYS_SECRET": "censys_secret_test"},
+            "censys_id_test\n",
+            {"api_id": "censys_id_test", "api_secret": "censys_secret_test"},
+            {"api_id": "stdin", "api_secret": "env:TEST_CENSYS_SECRET"},
+            id="censys-api-id-stdin",
+        ),
+        pytest.param(
+            "dehashed",
+            ["--email", "operator@example.com", "--key-stdin"],
+            None,
+            "dehashed_canonical_test\n",
+            {"email": "operator@example.com", "key": "dehashed_canonical_test"},
+            {"key": "stdin"},
+            id="dehashed-stdin",
+        ),
+    ],
+)
+def test_forge_connect_add_stores_service_configuration(
+    service: str,
+    service_args: list[str],
+    env: dict[str, str] | None,
+    input_text: str | None,
+    expected_config: dict[str, str | list[str]],
+    expected_sources: dict[str, str],
+    tmp_path: Path,
+) -> None:
+    result = _invoke(
+        [
+            "connect",
+            "add",
+            service,
+            *service_args,
+            "--data-dir",
+            str(tmp_path),
+            "--json",
+        ],
+        env=env,
+        input_text=input_text,
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["service"] == service
+    stored = json.loads((tmp_path / "connections.json").read_text(encoding="utf-8"))
+    entry = stored["connections"][0]
+    assert entry["service"] == service
+    assert entry["config"] == expected_config
+    assert entry["credential_sources"] == expected_sources
+
+
+@pytest.mark.parametrize(
+    ("service", "service_args", "input_text"),
+    [
+        ("github", ["--token-env", "TEST_GITHUB_TOKEN"], None),
+        ("supabase", ["--project-ref", "abc123", "--pat-stdin"], "supabase-pat\n"),
+        ("shodan", ["--key-stdin"], "shodan-key\n"),
+        ("virustotal", ["--key-stdin"], "virustotal-key\n"),
+        ("replit", ["--username", "operator"], None),
+        ("urlscan", ["--key-stdin"], "urlscan-key\n"),
+        (
+            "censys",
+            ["--api-id-env", "TEST_CENSYS_ID", "--secret-stdin"],
+            "censys-secret\n",
+        ),
+        ("dehashed", ["--email", "operator@example.com", "--key-stdin"], "dehashed-key\n"),
+    ],
+)
+def test_forge_connect_service_aliases_still_work(
+    service: str,
+    service_args: list[str],
+    input_text: str | None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if service == "github":
+        monkeypatch.setenv("TEST_GITHUB_TOKEN", "ghp_alias_test")
+    elif service == "censys":
+        monkeypatch.setenv("TEST_CENSYS_ID", "censys-id")
+    result = _invoke(
+        [
+            "connect",
+            service,
+            *service_args,
+            "--data-dir",
+            str(tmp_path),
+            "--json",
+        ],
+        input_text=input_text,
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["service"] == service
+    stored = json.loads((tmp_path / "connections.json").read_text(encoding="utf-8"))
+    assert stored["connections"][0]["service"] == service
+
+
+@pytest.mark.parametrize("service", CONNECT_SERVICES)
+@pytest.mark.parametrize("route", ("add", "alias"))
+def test_forge_connect_service_help_is_service_specific(service: str, route: str) -> None:
+    args = ["connect", "add", service, "--help"]
+    if route == "alias":
+        args = ["connect", service, "--help"]
+    result = _invoke(args)
+    assert result.exit_code == 0, result.output
+    for flag in CONNECT_SERVICE_FLAGS[service]:
+        assert flag in result.output
+    for flag in CONNECT_FOREIGN_HELP_FLAGS[service]:
+        assert flag not in result.output
+    assert "--data-dir" in result.output
+    assert "--json" in result.output
+    assert "--help" in result.output
+
+
+def test_forge_connect_add_help_lists_services() -> None:
+    result = _invoke(["connect", "add", "--help"])
+    assert result.exit_code == 0, result.output
+    for service in CONNECT_SERVICES:
+        assert service in result.output
+
+
+def test_forge_connect_help_lists_only_add_list_remove() -> None:
+    result = _invoke(["connect", "--help"])
+    assert result.exit_code == 0, result.output
+    commands_section = result.output.split("Commands", maxsplit=1)[1]
+    visible_commands = re.findall(r"│\s+([a-z][a-z0-9-]*)\s{2,}", commands_section)
+    assert visible_commands == ["add", "list", "remove"]
+
+
+def test_forge_connect_add_rejects_foreign_flags_unknown_and_missing_services() -> None:
+    foreign_flag = _invoke(["connect", "add", "shodan", "--org", "x"])
+    assert foreign_flag.exit_code != 0
+    assert "No such option: --org" in foreign_flag.output
+
+    unknown_service = _invoke(["connect", "add", "unknown"])
+    assert unknown_service.exit_code != 0
+    assert "Valid services" in unknown_service.output
+    for service in CONNECT_SERVICES:
+        assert service in unknown_service.output
+
+    missing_service = _invoke(["connect", "add"])
+    assert missing_service.exit_code != 0
+    assert "Missing argument 'SERVICE'" in missing_service.output
 
 
 # ---------------------------------------------------------------------------

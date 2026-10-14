@@ -4,7 +4,7 @@
 These commands keep the operator in the shell. No JSON editing is
 required for the common onboarding flows:
 
-- ``forge connect github --token-env FORGE_GITHUB_TOKEN --org myorg``
+- ``forge connect add github --token-env FORGE_GITHUB_TOKEN --org myorg``
 - ``forge connect list --json``
 - ``forge connect remove github``
 - ``forge targets add example.com``
@@ -25,6 +25,7 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 
+import click
 import typer
 from rich import box
 from rich.console import Console
@@ -62,12 +63,67 @@ console = Console(stderr=True)
 def register_connect_commands(app: typer.Typer) -> None:
     """Register the ``forge connect`` sub-commands on ``app``.
 
-    Each service subcommand exposes only the flags relevant to that
-    service — GitHub-specific flags do not appear on ``shodan`` help,
-    Supabase-specific flags do not appear on ``github`` help, and so
-    on. See :func:`_register_service_add_command` for the per-service
-    registration.
+    The canonical ``add`` command dispatches to a service-specific
+    command so each service exposes only its own flags. The service
+    command names remain available as hidden aliases.
     """
+
+    supported_services = tuple(SUPPORTED_SERVICES)
+    supported_services_text = ", ".join(supported_services)
+
+    @app.command(
+        "add",
+        context_settings={
+            "allow_extra_args": True,
+            "ignore_unknown_options": True,
+            "help_option_names": [],
+        },
+    )
+    def connect_add(
+        ctx: typer.Context,
+        service: Optional[str] = typer.Argument(
+            None,
+            metavar="SERVICE",
+            help=f"Service to connect: {supported_services_text}.",
+        ),
+        help_requested: bool = typer.Option(
+            False,
+            "--help",
+            "-h",
+            is_eager=True,
+            help="Show this message and exit.",
+        ),
+    ) -> None:
+        """Add credentials or configuration for a supported service."""
+        if service is None:
+            if help_requested:
+                typer.echo(ctx.get_help())
+                raise typer.Exit()
+            raise click.UsageError("Missing argument 'SERVICE'.", ctx)
+
+        service = service.strip().lower()
+        if service not in SUPPORTED_SERVICES:
+            raise click.UsageError(
+                f"Unknown service {service!r}. Valid services: {supported_services_text}.",
+                ctx,
+            )
+
+        connect_group = ctx.parent.command if ctx.parent is not None else None
+        service_command = getattr(connect_group, "commands", {}).get(service)
+        if service_command is None:  # pragma: no cover - registration invariant
+            raise click.UsageError(
+                f"No connect command registered for service {service!r}.", ctx
+            )
+
+        service_args = ["--help"] if help_requested else list(ctx.args)
+        service_ctx = service_command.make_context(
+            f"add {service}",
+            service_args,
+            parent=ctx.parent,
+            help_option_names=["--help"],
+        )
+        with service_ctx:
+            service_command.invoke(service_ctx)
 
     @app.command("list")
     def connect_list(
@@ -126,13 +182,11 @@ def _register_service_add_command(
     service_id: str,
     descriptor: dict[str, Any],
 ) -> None:
-    """Create ``forge connect <service>`` with only the flags that service needs.
+    """Create hidden ``forge connect <service>`` compatibility aliases.
 
-    Flag bleeding (every service showing every flag) is a known UX
-    footgun — operators running ``forge connect shodan --help`` should
-    not see GitHub-only ``--org`` / ``--user`` or Supabase-only
-    ``--project-ref`` / ``--url``. This dispatches to a per-service
-    registration function so each ``--help`` lists only its own flags.
+    The canonical ``forge connect add <service>`` dispatcher parses
+    with these same per-service commands, preserving strict option
+    validation and service-specific help.
     """
     cred_fields = tuple(descriptor["credential_fields"])
     required_fields = tuple(descriptor["required_fields"])
@@ -174,9 +228,9 @@ def _register_github_connect(
     required_fields: tuple[str, ...],
     optional_fields: tuple[str, ...],
 ) -> None:
-    """``forge connect github --token-env VAR [--org ORG] [--user USER]``."""
+    """``forge connect add github --token-env VAR [--org ORG] [--user USER]``."""
 
-    @app.command(service_id, help=help_text)
+    @app.command(service_id, help=help_text, hidden=True)
     def _github_add(  # noqa: ANN202
         token_env: Optional[str] = typer.Option(
             None,
@@ -227,9 +281,9 @@ def _register_supabase_connect(
     required_fields: tuple[str, ...],
     optional_fields: tuple[str, ...],
 ) -> None:
-    """``forge connect supabase --project-ref REF [--key-env VAR] [--pat-env VAR] [--url URL]``."""
+    """``forge connect add supabase --project-ref REF [--key-env VAR] [--pat-env VAR] [--url URL]``."""
 
-    @app.command(service_id, help=help_text)
+    @app.command(service_id, help=help_text, hidden=True)
     def _supabase_add(  # noqa: ANN202
         key_env: Optional[str] = typer.Option(
             None,
@@ -286,9 +340,9 @@ def _register_single_key_connect(
     required_fields: tuple[str, ...],
     optional_fields: tuple[str, ...],
 ) -> None:
-    """``forge connect <shodan|virustotal|urlscan> --key-env VAR``."""
+    """``forge connect add <shodan|virustotal|urlscan> --key-env VAR``."""
 
-    @app.command(service_id, help=help_text)
+    @app.command(service_id, help=help_text, hidden=True)
     def _single_key_add(  # noqa: ANN202
         key_env: Optional[str] = typer.Option(
             None,
@@ -329,9 +383,9 @@ def _register_replit_connect(
     required_fields: tuple[str, ...],
     optional_fields: tuple[str, ...],
 ) -> None:
-    """``forge connect replit --username NAME [--url URL]``."""
+    """``forge connect add replit --username NAME [--url URL]``."""
 
-    @app.command(service_id, help=help_text)
+    @app.command(service_id, help=help_text, hidden=True)
     def _replit_add(  # noqa: ANN202
         username: Optional[str] = typer.Option(
             None, "--username", help="Replit username to spider."
@@ -368,9 +422,9 @@ def _register_censys_connect(
     required_fields: tuple[str, ...],
     optional_fields: tuple[str, ...],
 ) -> None:
-    """``forge connect censys --api-id-env VAR --secret-env VAR``."""
+    """``forge connect add censys --api-id-env VAR --secret-env VAR``."""
 
-    @app.command(service_id, help=help_text)
+    @app.command(service_id, help=help_text, hidden=True)
     def _censys_add(  # noqa: ANN202
         api_id_env: Optional[str] = typer.Option(
             None, "--api-id-env", help="Env var holding the Censys api_id.",
@@ -419,9 +473,9 @@ def _register_dehashed_connect(
     required_fields: tuple[str, ...],
     optional_fields: tuple[str, ...],
 ) -> None:
-    """``forge connect dehashed --email ADDR --key-env VAR``."""
+    """``forge connect add dehashed --email ADDR --key-env VAR``."""
 
-    @app.command(service_id, help=help_text)
+    @app.command(service_id, help=help_text, hidden=True)
     def _dehashed_add(  # noqa: ANN202
         email: Optional[str] = typer.Option(
             None, "--email", help="DeHashed account email."
@@ -465,7 +519,7 @@ def _apply_service_connection(
     data_dir: Optional[Path],
     json_output: bool,
 ) -> None:
-    """Shared tail-call for every ``forge connect <service>`` command."""
+    """Shared tail-call for canonical adds and hidden service aliases."""
     try:
         resolved, sources = _resolve_service_fields(
             service_id,
@@ -987,7 +1041,7 @@ def _handle_github_target(
     connection = manager.get_connection("github")
     if connection is None:
         _emit_error(
-            "no GitHub connection stored; run `forge connect github --token-env ...` first",
+            "no GitHub connection stored; run `forge connect add github --token-env ...` first",
             json_output=json_output,
         )
         raise typer.Exit(code=1)
@@ -1030,7 +1084,7 @@ def _handle_supabase_target(
         "connection_project_ref": stored_ref,
         "note": (
             "Supabase scanning is wired through `forge automation feed-build` "
-            "with imports/supabase-projects.local.json; `forge connect supabase` "
+            "with imports/supabase-projects.local.json; `forge connect add supabase` "
             "stores the credentials and this placeholder confirms the mapping."
         ),
     }

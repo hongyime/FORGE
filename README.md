@@ -407,7 +407,7 @@ forge feeds fetch [--source SOURCE] [--timeout N] [--max-age-days N] [--imports-
 forge doctor [--json] [--live-provider-probes] [--fix-safe]  # Operator setup, readiness checks, and safe local repairs
 forge operator-guide [--section loop|manual|profiles|rust] [--json]  # Complete workflow guide — every module linked together
 forge setup [--root PATH] [--data-dir PATH] [--skip-doctor] [--json]  # First-run bootstrap: seeds .env, data dirs, scope manifest, starter feed, runs doctor
-forge connect {github,supabase,shodan,virustotal,replit,urlscan,censys,dehashed} --token-env ENV|--token-stdin [options]  # Store a service connection (plaintext under <data_dir>/connections.json). Never pass credentials literally on the command line.
+forge connect add SERVICE [service options]  # SERVICE: github, supabase, shodan, virustotal, replit, urlscan, censys, dehashed; plaintext under <data_dir>/connections.json; credentials via env/stdin only.
 forge connect list [--json]                 # List stored service connections (credentials redacted in output)
 forge connect remove SERVICE [--json]       # Remove a stored service connection
 forge scope show [--manifest PATH] [--json]        # View current scope manifest without editing JSON
