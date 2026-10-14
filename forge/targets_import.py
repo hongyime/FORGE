@@ -29,6 +29,7 @@ from forge.domain_validation import canonicalize_domain
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
 from forge.governance.scope_gate import is_roe_wildcard
 from forge.onboard.patterns import is_denied_target
+from forge.onboard.mega_domain import mega_domain_decision
 from forge.subprocess_tree import run_contained_subprocess
 from forge.utils.kill_chain_options import (
     DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
@@ -555,7 +556,26 @@ def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
     )
     source_groups = _coerce_source_groups(raw_item.get("source_groups"), fallback=source_group)
     source_count = _coerce_source_count(raw_item.get("source_count"), source_groups)
-    scan_eligible, scan_reason = target_scan_eligible(target_type, canonical_value)
+    raw_age = raw_item.get("age_years")
+    raw_subdomains = raw_item.get("estimated_subdomains")
+    age_years: float | None = None
+    if raw_age is not None:
+        try:
+            age_years = float(raw_age)
+        except (ValueError, TypeError):
+            age_years = None
+    estimated_subdomains: int | None = None
+    if raw_subdomains is not None:
+        try:
+            estimated_subdomains = int(raw_subdomains)
+        except (ValueError, TypeError):
+            estimated_subdomains = None
+    scan_eligible, scan_reason = target_scan_eligible(
+        target_type,
+        canonical_value,
+        age_years=age_years,
+        estimated_subdomains=estimated_subdomains,
+    )
     if raw_item.get("scan_eligible") is False:
         scan_eligible = False
         scan_reason = _bounded_text(raw_item.get("scan_eligibility_reason"), 80) or "feed_marked_ineligible"
@@ -806,7 +826,13 @@ def _bounded_text(value: object, max_len: int) -> str:
     return " ".join(str(value or "").strip().split())[:max_len]
 
 
-def target_scan_eligible(target_type: str, canonical_value: str) -> tuple[bool, str]:
+def target_scan_eligible(
+    target_type: str,
+    canonical_value: str,
+    *,
+    age_years: float | int | None = None,
+    estimated_subdomains: int | None = None,
+) -> tuple[bool, str]:
     """Return whether an imported target should consume autonomous live scan budget."""
     if target_type in {"ipv4", "ipv6"}:
         try:
@@ -825,6 +851,26 @@ def target_scan_eligible(target_type: str, canonical_value: str) -> tuple[bool, 
             parsed_host_ip = None
         if parsed_host_ip is not None and not parsed_host_ip.is_global:
             return False, "non_global_url_host"
+
+    candidate_domain: str | None = None
+    if target_type in {"domain", "subdomain"}:
+        candidate_domain = canonical_value
+    elif target_type in {"url", "apk_url"}:
+        host = urlsplit(canonical_value).hostname or ""
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            candidate_domain = host
+
+    if candidate_domain:
+        skip, reason = mega_domain_decision(
+            candidate_domain,
+            age_years=age_years,
+            estimated_subdomains=estimated_subdomains,
+        )
+        if skip:
+            return False, f"mega_domain_{reason}"
+
     return True, "eligible"
 
 

@@ -1,0 +1,103 @@
+"""Mega-domain filter module.
+
+Provides decision logic to identify mega-domains that should be skipped as
+starting points for autonomous scanning unless qualified.
+
+Rules:
+- Never-start list: Curated apex domains (e.g. google.com, github.com) that
+  are never suitable starting points for broad scanning.
+- Combined rule: Skip ONLY when domain is OLD and LARGE.
+  - OLD + LARGE -> skip (e.g. established massive enterprise domains).
+  - OLD + SMALL -> engage (obscure older domains are interesting).
+  - YOUNG -> engage (new domains are high-interest).
+  - Unknown signals -> do NOT skip on absence of signal alone.
+
+Age and surface are injectable parameters, NOT live network lookups.
+Callers supply these signals from their own sources (e.g., CT logs, WHOIS
+creation date, passive DNS / attack surface enumerations).
+"""
+
+from __future__ import annotations
+
+from typing import Collection
+
+# Tunable thresholds for the combined rule.
+OLD_AGE_YEARS: int = 10
+LARGE_SUBDOMAIN_COUNT: int = 500
+
+_OLD_AGE_YEARS: int = OLD_AGE_YEARS
+_LARGE_SUBDOMAIN_COUNT: int = LARGE_SUBDOMAIN_COUNT
+
+# Curated apex domains that must never be used as starting points.
+# Kept to obvious mega apex domains: all lowercase, no subdomains.
+NEVER_START_APEXES: frozenset[str] = frozenset(
+    {
+        "amazon.com",
+        "apple.com",
+        "cloudflare.com",
+        "facebook.com",
+        "github.com",
+        "google.com",
+        "instagram.com",
+        "linkedin.com",
+        "microsoft.com",
+        "netflix.com",
+        "twitter.com",
+        "wikipedia.org",
+        "youtube.com",
+    }
+)
+
+
+def mega_domain_decision(
+    domain: str,
+    *,
+    age_years: float | int | None = None,
+    estimated_subdomains: int | None = None,
+    never_start: Collection[str] | None = None,
+) -> tuple[bool, str]:
+    """Evaluate whether a domain target should be skipped as a starting point.
+
+    Parameters:
+        domain: Domain or hostname candidate to evaluate.
+        age_years: Domain age in years from caller's data source (e.g. CT/WHOIS).
+            None if unknown.
+        estimated_subdomains: Estimated count of subdomains/hosts on this apex
+            from caller's data source. None if unknown.
+        never_start: Optional override collection of apex domains to treat as
+            never-start list. Defaults to NEVER_START_APEXES if omitted or None.
+
+    Returns:
+        (skip, reason) where skip is True if the target should be skipped, and
+        reason describes why ("never_start_list", "old_and_large", or "eligible").
+
+    Rules:
+        * If the domain (lowercased, stripped) is in NEVER_START_APEXES (exact match
+          on the apex) -> skip, reason "never_start_list".
+        * Else if age_years is not None AND estimated_subdomains is not None
+          AND age_years >= 10 AND estimated_subdomains >= 500 -> skip, reason "old_and_large".
+        * Otherwise -> do NOT skip. Unknown age (None) must not cause a skip on
+          age alone; unknown surface (None) must not cause a skip alone;
+          OLD + SMALL must not skip; YOUNG must not skip.
+    """
+    candidate = str(domain or "").strip().lower().rstrip(".")
+    if not candidate:
+        return False, "eligible"
+
+    if never_start is None:
+        never_start_set = NEVER_START_APEXES
+    else:
+        never_start_set = {str(item).strip().lower().rstrip(".") for item in never_start}
+
+    if candidate in never_start_set:
+        return True, "never_start_list"
+
+    if (
+        age_years is not None
+        and estimated_subdomains is not None
+        and age_years >= _OLD_AGE_YEARS
+        and estimated_subdomains >= _LARGE_SUBDOMAIN_COUNT
+    ):
+        return True, "old_and_large"
+
+    return False, "eligible"
