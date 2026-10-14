@@ -12,6 +12,7 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
+from forge.autopilot import AutopilotPhaseResult
 from forge.autopilot.cli import register_autopilot_commands
 from forge.autopilot.defaults import AutopilotDefaults
 from forge.autopilot.loop import ForgeAutopilot
@@ -354,3 +355,100 @@ def test_cli_single_phase_defaults_to_dry_run_and_requires_apply_for_live(
     assert explicit_apply.exit_code == 0, explicit_apply.output
     assert calls[-1]["dry_run"] is False
     assert calls[-1]["allow_live"] is True
+
+
+def test_feed_build_phase_end_details_include_discovery_metrics() -> None:
+    phase = AutopilotPhaseResult(
+        name="feed_build",
+        status="ok",
+        data={
+            "counts": {
+                "by_source": {"db": 2, "connectors": 3},
+                "by_source_group": {"x": 5},
+                "generated_candidate_total": 5,
+                "generated_unique_candidate_total": 4,
+                "omitted_duplicate": 1,
+                "omitted_by_limit": 0,
+            },
+            "source_errors": [
+                {"source": "db", "error": "boom"},
+                {"source": "db", "error": "boom2"},
+            ],
+            "source_scan_limits": {
+                "connectors": {"feed_class_dropped_count": 2, "scanned_count": 9},
+                "cti": {"scanned_count": 4},
+            },
+        },
+    )
+    details = ForgeAutopilot._phase_end_details(phase)
+
+    assert details["discovery_metrics"] == {
+        "candidates_by_source": {"db": 2, "connectors": 3},
+        "candidates_by_source_group": {"x": 5},
+        "generated_candidate_total": 5,
+        "generated_unique_candidate_total": 4,
+        "dropped": {
+            "duplicate": 1,
+            "by_limit": 0,
+            "feed_class_by_source": {"connectors": 2},
+        },
+        "source_error_counts": {"db": 2},
+    }
+    assert "boom" not in json.dumps(details)
+
+
+def test_feed_build_phase_end_details_handles_missing_data() -> None:
+    details = ForgeAutopilot._phase_end_details(
+        AutopilotPhaseResult(name="feed_build", status="error", data={})
+    )
+
+    assert details["discovery_metrics"] == {
+        "candidates_by_source": {},
+        "candidates_by_source_group": {},
+        "generated_candidate_total": 0,
+        "generated_unique_candidate_total": 0,
+        "dropped": {"duplicate": 0, "by_limit": 0, "feed_class_by_source": {}},
+        "source_error_counts": {},
+    }
+
+
+def test_phase_end_details_keep_other_phase_fields_unchanged() -> None:
+    imported = ForgeAutopilot._phase_end_details(
+        AutopilotPhaseResult(
+            name="import_targets", status="ok", data={"feed_sha256": "x"}
+        )
+    )
+    fetched = ForgeAutopilot._phase_end_details(
+        AutopilotPhaseResult(name="feed_fetch", status="ok", data={})
+    )
+
+    assert "feed_pin" in imported
+    assert "discovery_metrics" not in imported
+    assert "feed_pin" not in fetched
+    assert "discovery_metrics" not in fetched
+
+
+def test_feed_build_phase_forwards_source_scan_limits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    autopilot = _make_autopilot(tmp_path)
+    payload = {
+        "counts": {
+            "by_source": {"db": 2, "connectors": 3},
+            "generated_candidate_total": 5,
+            "generated_unique_candidate_total": 5,
+        },
+        "source_errors": [],
+        "source_scan_limits": {"db": {"scanned_count": 2}},
+    }
+    monkeypatch.setattr(
+        "forge.automation_target_feed.build_target_feed", lambda **_: payload
+    )
+    result = autopilot._phase_feed_build(dry_run=True)
+
+    assert result.data["source_scan_limits"] == payload["source_scan_limits"]
+    metrics = ForgeAutopilot._phase_end_details(result)["discovery_metrics"]
+    assert (
+        sum(metrics["candidates_by_source"].values())
+        == metrics["generated_candidate_total"]
+    )

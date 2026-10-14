@@ -532,6 +532,63 @@ class ForgeAutopilot:
     @staticmethod
     def _phase_end_details(phase: AutopilotPhaseResult) -> dict[str, Any]:
         details: dict[str, Any] = {"status": phase.status}
+        if phase.name == "feed_build":
+            counts = phase.data.get("counts")
+            counts = counts if isinstance(counts, dict) else {}
+            scan_limits = phase.data.get("source_scan_limits")
+            scan_limits = scan_limits if isinstance(scan_limits, dict) else {}
+            errors = phase.data.get("source_errors")
+            errors = errors if isinstance(errors, list) else []
+
+            def count_map(value: Any) -> dict[str, int]:
+                if not isinstance(value, dict):
+                    return {}
+                result: dict[str, int] = {}
+                for source, count in value.items():
+                    try:
+                        result[str(source)] = int(count)
+                    except (TypeError, ValueError, OverflowError):
+                        continue
+                return result
+
+            def count_value(value: Any) -> int:
+                try:
+                    return int(value)
+                except (TypeError, ValueError, OverflowError):
+                    return 0
+
+            source_error_counts: dict[str, int] = {}
+            for entry in errors:
+                if isinstance(entry, dict) and isinstance(entry.get("source"), str):
+                    source = str(entry["source"])
+                    source_error_counts[source] = source_error_counts.get(source, 0) + 1
+
+            feed_class_by_source: dict[str, int] = {}
+            for source, limits in scan_limits.items():
+                if not isinstance(limits, dict):
+                    continue
+                dropped = limits.get("feed_class_dropped_count")
+                if isinstance(dropped, int) and not isinstance(dropped, bool) and dropped > 0:
+                    feed_class_by_source[str(source)] = dropped
+
+            details["discovery_metrics"] = {
+                "candidates_by_source": count_map(counts.get("by_source")),
+                "candidates_by_source_group": count_map(
+                    counts.get("by_source_group")
+                ),
+                "generated_candidate_total": count_value(
+                    counts.get("generated_candidate_total")
+                ),
+                "generated_unique_candidate_total": count_value(
+                    counts.get("generated_unique_candidate_total")
+                ),
+                "dropped": {
+                    "duplicate": count_value(counts.get("omitted_duplicate")),
+                    "by_limit": count_value(counts.get("omitted_by_limit")),
+                    "feed_class_by_source": feed_class_by_source,
+                },
+                "source_error_counts": source_error_counts,
+            }
         if phase.name == "import_targets":
             details["feed_pin"] = {
                 key: phase.data.get(key)
@@ -1159,7 +1216,10 @@ class ForgeAutopilot:
                     name="feed_build",
                     status="error",
                     detail=f"write_error:{_bounded_text(exc)}",
-                    data={"counts": payload.get("counts", {})},
+                    data={
+                        "counts": payload.get("counts", {}),
+                        "source_scan_limits": payload.get("source_scan_limits", {}),
+                    },
                 )
 
         counts = payload.get("counts", {})
@@ -1176,6 +1236,7 @@ class ForgeAutopilot:
                 "feed_file": str(self.feed_file),
                 "counts": counts,
                 "source_errors": payload.get("source_errors", []),
+                "source_scan_limits": payload.get("source_scan_limits", {}),
             },
         )
 
