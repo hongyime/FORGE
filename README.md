@@ -367,7 +367,8 @@ forge autopilot                             # Self-running automation loop. Defa
 forge autopilot --dry-run                   # Explicit rehearsal — no writes, no live outbound work
 forge autopilot --apply --roe-id ROE-ID     # Explicit live loop — full feed-build / import / resume / monitor / dashboard
 forge autopilot --describe --json           # Resolved autopilot defaults and detected ROE/scope state (read-only)
-forge autopilot --loop [--iterations N] [--cooldown-minutes N]  # Continuous operation; one pass per iteration with a bounded cooldown
+forge autopilot --loop --cooldown-minutes 0  # Continuous cadence: start the next cycle immediately
+forge autopilot --loop [--iterations N] [--cooldown-minutes N]  # Nonzero cooldowns sleep that many minutes; CLI default is 30
 forge autopilot --only-phase import_targets --dry-run --fixture-file tests/automation/fixtures/autopilot/import_targets.json  # Validate one isolated phase
 forge feeds list [--imports-dir PATH] [--data-dir PATH] [--json]  # List registered free threat-intel feed fetchers (NVD, CISA KEV, EPSS, RSS, nuclei-templates, urlscan)
 forge feeds status [--imports-dir PATH] [--data-dir PATH] [--json]  # Last-fetch timestamps and item counts per source (read-only, no network)
@@ -1073,6 +1074,20 @@ directory, or copy those binaries into ignored `tools/bin/`, before expecting
 the Docker autostart gate to pass packaged-tool checks. In `/etc/forge/forge.env`
 for the systemd wrapper, set `COMPOSE_PROFILES=autostart` when Linux service
 startup should include that guarded loop profile.
+
+For a host-managed FORGE autopilot service, set its loop command to
+`forge-autopilot.sh --loop --cooldown-minutes 0` to start each new cycle as
+soon as the previous cycle completes. The documented host-service default is
+continuous (`0`); the generic CLI default remains 30 minutes. The systemd user
+unit and its launcher are installed locally and are not checked-in service
+files, so apply this argument in that local deployment configuration.
+Continuous cycles use GitHub API quota faster because they poll and process
+feeds more often. A nonzero `--cooldown-minutes` still waits that many minutes.
+The CLI's `--loop` run remains bounded to 24 iterations per process. An
+explicit systemd stop still stops the active process; an uncaught fatal error
+exits it and follows the service's existing restart delay, avoiding an
+unbounded in-process retry loop.
+
 For Linux hosts, `docker/systemd/forge-compose.service` wraps the same compose
 file with a preflight `config --quiet` check and an `/etc/forge/forge.env`
 environment file. Install it only after `/opt/forge/docker/docker-compose.yml`

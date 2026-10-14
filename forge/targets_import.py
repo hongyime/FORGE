@@ -290,6 +290,16 @@ def import_targets(
                             "stderr_tail": _bounded_failure_stderr(exc.stderr),
                         }
                     )
+                    if exc.returncode == 124:
+                        from forge.orchestration.run_tracking import (  # noqa: PLC0415
+                            mark_timed_out_kill_chain_run_failed,
+                        )
+
+                        mark_timed_out_kill_chain_run_failed(
+                            cfg.engagement_db_path(str(engagement_id)),
+                            engagement_id=engagement_id,
+                            seed_value=item.canonical_value,
+                        )
                 _notify_progress(
                     progress_callback,
                     "target_failed",

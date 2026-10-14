@@ -33,6 +33,7 @@ from dataclasses import dataclass
 
 AUTOPILOT_MAX_RUNTIME_MINUTES = 120
 AUTOPILOT_PARALLEL_FANOUT = 6
+AUTOPILOT_MAX_TIMEOUT_RETRIES = 2
 
 # Cycle 5 proof: two healthy, progressing targets hit return_code 124 at
 # 3720s (engagement 3 email recon; engagement 49 gmail.com). 120 minutes

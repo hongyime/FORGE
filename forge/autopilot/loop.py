@@ -31,7 +31,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from forge.autopilot.defaults import AutopilotDefaults
+from forge.autopilot.defaults import AUTOPILOT_MAX_TIMEOUT_RETRIES, AutopilotDefaults
 from forge.autopilot.events import AutopilotEventWriter
 from forge.config import ForgeConfig
 
@@ -80,7 +80,8 @@ class ForgeAutopilot:
 
     - :meth:`run_once` — a single pass through all phases.
     - :meth:`run` — ``run_once`` on a loop, sleeping ``cooldown_minutes``
-      between iterations.
+      between iterations. A cooldown of zero starts the next iteration
+      immediately and does not emit a ``cooldown_start`` event.
     - :meth:`describe` — read-only snapshot of resolved configuration
       without executing anything.
     """
@@ -439,7 +440,8 @@ class ForgeAutopilot:
         """Run the loop ``iterations`` times (default 1).
 
         When ``iterations`` > 1, the loop sleeps
-        ``defaults.cooldown_minutes * 60`` seconds between passes.
+        ``defaults.cooldown_minutes * 60`` seconds between passes. A zero
+        cooldown starts the next pass immediately without a cooldown event.
         Pass a custom ``sleep_fn`` (e.g. ``time.sleep``) for test
         injection; defaults to :func:`time.sleep`.
         """
@@ -1295,6 +1297,8 @@ class ForgeAutopilot:
                 max_runtime_minutes=self.defaults.max_runtime_minutes,
                 parallel_fanout=self.defaults.parallel_fanout,
                 max_parallel=self.defaults.max_parallel,
+                autopilot_cycle_number=self._event_writer.cycle_number,
+                timeout_retry_budget=AUTOPILOT_MAX_TIMEOUT_RETRIES,
                 dry_run=dry_run,
                 stop_on_failure=False,
                 break_stale_lock=True,
@@ -1323,6 +1327,12 @@ class ForgeAutopilot:
                 "status": payload.get("status"),
                 "planned_count": payload.get("planned_count", 0),
                 "result_counts": dict(counts),
+                "skipped_blocker_counts": dict(
+                    payload.get("skipped_blocker_counts", {})
+                ),
+                "timeout_retry_summary": dict(
+                    payload.get("timeout_retry_summary", {})
+                ),
             },
         )
 

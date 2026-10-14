@@ -693,6 +693,33 @@ def test_cli_describe_default_promotes_to_apply(
     assert payload["defaults"]["parallel_fanout"] == 6
 
 
+def test_cli_cooldown_zero_is_preserved_in_resolved_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+    monkeypatch.delenv("FORGE_SAFE_MODE", raising=False)
+    app = _build_cli_app()
+    result = CliRunner().invoke(
+        app,
+        [
+            "--describe",
+            "--json",
+            "--cooldown-minutes",
+            "0",
+            "--data-dir",
+            str(tmp_path / "data"),
+            "--imports-dir",
+            str(tmp_path / "imports"),
+            "--reports-dir",
+            str(tmp_path / "reports"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["defaults"]["cooldown_minutes"] == 0
+
+
 def test_cli_describe_accepts_start_and_runtime_overrides(tmp_path: Path) -> None:
     app = _build_cli_app()
     runner = CliRunner()

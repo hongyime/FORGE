@@ -172,6 +172,50 @@ def persisted_fanout_resume_reuse_log_message(count: int) -> str | None:
     return f"reusing persisted fan-out state for {normalized_count} seed/loop target(s)"
 
 
+def mark_timed_out_kill_chain_run_failed(
+    db_path: Path,
+    *,
+    engagement_id: int,
+    seed_value: str,
+) -> bool:
+    """Close a kill-chain row whose contained child was terminated at timeout.
+
+    The parent has already stopped the entire child process tree before this is
+    called. Persisting the terminal state makes the existing resume candidate
+    query see the run on a later cycle.
+    """
+
+    if not db_path.exists():
+        return False
+    completed_at = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    con = direct_connect(db_path)
+    try:
+        cur = con.execute(
+            """
+            UPDATE engagement_runs
+            SET status='failed',
+                error='watchdog timeout: kill-chain subprocess exceeded its runtime budget (return code 124)',
+                completed_at=COALESCE(completed_at, ?),
+                updated_at=?
+            WHERE id=(
+                SELECT id
+                FROM engagement_runs
+                WHERE engagement_id=?
+                  AND COALESCE(run_kind, 'kill_chain')='kill_chain'
+                  AND seed_value=?
+                  AND status='running'
+                ORDER BY id DESC
+                LIMIT 1
+            )
+            """,
+            (completed_at, completed_at, int(engagement_id), str(seed_value)),
+        )
+        con.commit()
+        return cur.rowcount > 0
+    finally:
+        con.close()
+
+
 def resume_completed_skip_log_entry(stage_label: str, target: str) -> tuple[str, str]:
     label = f"{str(stage_label or '').strip()} ({str(target or '').strip()})"
     return label, "[dim]resume skip \u2014 already completed for this engagement[/dim]"
@@ -1499,6 +1543,7 @@ __all__ = [
     "finalize_seed_run_batch",
     "infer_kill_chain_run_phase",
     "kill_chain_engagement_run_metadata",
+    "mark_timed_out_kill_chain_run_failed",
     "persisted_fanout_resume_reuse_log_message",
     "record_run_progress_queue_group",
     "read_run_control_marker_request",

@@ -42,6 +42,7 @@ Migration index
   0052  API-spec seed type
   0053  Autopilot loop progress events
   0054  Repair seed relation/run foreign-key targets
+  0055  Autopilot retry event types
 
 Design constraints:
   - All ALTER TABLE statements use `IF NOT EXISTS` workaround (SQLite
@@ -2820,6 +2821,8 @@ def _m0053_autopilot_loop_events(conn: sqlite3.Connection) -> None:
                                'cycle_start', 'cycle_end',
                                'phase_start', 'phase_end',
                                'target_engaged', 'target_completed', 'target_failed',
+                               'target_retry_queued', 'target_retry_attempted',
+                               'target_retry_budget_exhausted',
                                'error', 'cooldown_start'
                            )),
             phase_name     TEXT,
@@ -2907,6 +2910,55 @@ def _m0054_seed_fk_targets(conn: sqlite3.Connection) -> None:
         _rebuild_table(conn, table_name, create_sql, indexes)
 
 
+def _m0055_autopilot_retry_event_types(conn: sqlite3.Connection) -> None:
+    """Allow retry lifecycle events while preserving the existing event stream."""
+
+    if not _table_exists(conn, "autopilot_cycle_events"):
+        conn.commit()
+        return
+    if all(
+        _table_sql_contains(conn, "autopilot_cycle_events", f"'{event_type}'")
+        for event_type in (
+            "target_retry_queued",
+            "target_retry_attempted",
+            "target_retry_budget_exhausted",
+        )
+    ):
+        conn.commit()
+        return
+
+    _rebuild_table(
+        conn,
+        "autopilot_cycle_events",
+        """
+        CREATE TABLE autopilot_cycle_events (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            cycle_id       TEXT    NOT NULL,
+            cycle_number   INTEGER NOT NULL,
+            event_type     TEXT    NOT NULL CHECK (event_type IN (
+                               'cycle_start', 'cycle_end',
+                               'phase_start', 'phase_end',
+                               'target_engaged', 'target_completed', 'target_failed',
+                               'target_retry_queued', 'target_retry_attempted',
+                               'target_retry_budget_exhausted',
+                               'error', 'cooldown_start'
+                           )),
+            phase_name     TEXT,
+            phase_index    INTEGER CHECK (phase_index BETWEEN 1 AND 8),
+            occurred_at    TEXT    NOT NULL,
+            details_json   TEXT    NOT NULL DEFAULT '{}'
+        )
+        """,
+        [
+            "CREATE INDEX IF NOT EXISTS idx_autopilot_cycle_events_cycle "
+            "ON autopilot_cycle_events (cycle_id, id)",
+            "CREATE INDEX IF NOT EXISTS idx_autopilot_cycle_events_latest "
+            "ON autopilot_cycle_events (occurred_at DESC, id DESC)",
+        ],
+    )
+    conn.commit()
+
+
 def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
     return conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
@@ -2977,6 +3029,7 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (52, "api_spec_seed_type", _m0052_api_spec_seed_type),
     (53, "autopilot_loop_events", _m0053_autopilot_loop_events),
     (54, "seed_fk_targets", _m0054_seed_fk_targets),
+    (55, "autopilot_retry_event_types", _m0055_autopilot_retry_event_types),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)

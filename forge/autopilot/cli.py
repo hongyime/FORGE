@@ -160,7 +160,10 @@ def register_autopilot_commands(app: typer.Typer) -> None:
         cooldown_minutes: Optional[int] = typer.Option(
             None,
             "--cooldown-minutes",
-            help="Sleep interval between loop iterations.",
+            help=(
+                "Sleep interval between loop iterations in minutes; 0 starts "
+                "the next iteration immediately (default: 30)."
+            ),
         ),
         min_start_source_count: Optional[int] = typer.Option(
             None,

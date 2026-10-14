@@ -16,8 +16,10 @@ from threading import Lock
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
+from forge.autopilot.events import target_retry_state_for_target
 from forge.config import ForgeConfig
 from forge.engagement_ids import numeric_engagement_db_files
+from forge.orchestration.run_tracking import mark_timed_out_kill_chain_run_failed
 from forge.subprocess_tree import run_contained_subprocess
 from forge.utils.kill_chain_options import (
     DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
@@ -329,6 +331,8 @@ def execute_target_resume_plan(
     stale_lock_minutes: int = DEFAULT_RESUME_LOCK_STALE_MINUTES,
     runner: ResumeRunner | None = None,
     progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
+    autopilot_cycle_number: int | None = None,
+    timeout_retry_budget: int | None = None,
 ) -> dict[str, Any]:
     """Execute ready resume candidates with a durable batch lock and ledger."""
 
@@ -355,6 +359,14 @@ def execute_target_resume_plan(
         max_iter=max_iter,
         max_runtime_minutes=max_runtime_minutes,
         parallel_fanout=parallel_fanout,
+    )
+    retry_summary = _apply_timeout_retry_policy(
+        plan,
+        data_dir=Path(plan["data_dir"]),
+        cycle_number=autopilot_cycle_number,
+        retry_budget=timeout_retry_budget,
+        dry_run=dry_run,
+        progress_callback=progress_callback,
     )
     plan_count_fields = _resume_plan_count_fields(plan)
     batch = _safe_batch_id(batch_id)
@@ -409,6 +421,7 @@ def execute_target_resume_plan(
             "stop_on_failure": stop_on_failure,
             **plan_count_fields,
             "planned_count": plan["planned_count"],
+            "timeout_retry_summary": retry_summary,
             "result_counts": dict(sorted(counts.items())),
             "items": results,
         }
@@ -604,9 +617,92 @@ def execute_target_resume_plan(
         "stop_on_failure": stop_on_failure,
         **plan_count_fields,
         "planned_count": plan["planned_count"],
+        "timeout_retry_summary": retry_summary,
         "result_counts": dict(sorted(counts.items())),
         "items": results,
     }
+
+
+def _apply_timeout_retry_policy(
+    plan: dict[str, Any],
+    *,
+    data_dir: Path,
+    cycle_number: int | None,
+    retry_budget: int | None,
+    dry_run: bool,
+    progress_callback: Callable[[str, dict[str, Any]], None] | None,
+) -> dict[str, int]:
+    """Apply the autopilot-only timeout budget and one-cycle backoff.
+
+    The cycle number is the backoff clock: a failure recorded in cycle N may
+    first be queued in cycle N+1. Standalone/manual resume keeps its existing
+    behavior because it does not pass this policy.
+    """
+
+    summary = {"queued": 0, "backoff": 0, "budget_exhausted": 0}
+    if cycle_number is None or cycle_number < 1 or retry_budget is None:
+        return summary
+
+    budget = max(0, int(retry_budget))
+    retained: list[dict[str, Any]] = []
+    blockers = dict(plan.get("skipped_blocker_counts") or {})
+    for item in plan.get("items", []):
+        engagement_id = _safe_int(item.get("engagement_id"))
+        target_value = str(item.get("seed_value") or "")
+        history = target_retry_state_for_target(
+            data_dir,
+            engagement_id=engagement_id,
+            target_value=target_value,
+        )
+        if not history["timeout_seen"]:
+            retained.append(item)
+            continue
+
+        latest_failure_cycle = _safe_int(history.get("last_failure_cycle"))
+        if cycle_number <= latest_failure_cycle:
+            summary["backoff"] += 1
+            blockers["timeout_retry_later_cycle"] = (
+                _safe_int(blockers.get("timeout_retry_later_cycle")) + 1
+            )
+            continue
+
+        attempts = _safe_int(history.get("attempt_count"))
+        if attempts >= budget:
+            summary["budget_exhausted"] += 1
+            blockers["timeout_retry_budget_exhausted"] = (
+                _safe_int(blockers.get("timeout_retry_budget_exhausted")) + 1
+            )
+            if not dry_run and not history.get("budget_exhausted_recorded"):
+                _notify_progress(
+                    progress_callback,
+                    "target_retry_budget_exhausted",
+                    {
+                        "engagement_id": engagement_id,
+                        "target_value": target_value,
+                        "retry_attempts": attempts,
+                        "retry_budget": budget,
+                        "reason": "timeout_retry_budget_exhausted",
+                    },
+                )
+            continue
+
+        summary["queued"] += 1
+        retained.append(
+            {
+                **item,
+                "timeout_retry_attempt": attempts + 1,
+                "timeout_retry_budget": budget,
+            }
+        )
+
+    plan["items"] = retained
+    plan["planned_count"] = len(retained)
+    plan["skipped_count"] = max(
+        0,
+        _safe_int(plan.get("candidate_count")) - len(retained),
+    )
+    plan["skipped_blocker_counts"] = dict(sorted(blockers.items()))
+    return summary
 
 
 def _execute_resume_item(
@@ -630,6 +726,17 @@ def _execute_resume_item(
         "run_id": checked.get("run_id"),
         "target_value": checked.get("seed_value"),
     }
+    retry_attempt = _safe_int(checked.get("timeout_retry_attempt"))
+    retry_budget = _safe_int(checked.get("timeout_retry_budget"))
+    if retry_attempt > 0:
+        retry_details = {
+            **progress_details,
+            "retry_attempt": retry_attempt,
+            "retry_budget": retry_budget,
+            "reason": "watchdog_timeout",
+        }
+        _notify_progress(progress_callback, "target_retry_queued", retry_details)
+        _notify_progress(progress_callback, "target_retry_attempted", retry_details)
     _notify_progress(progress_callback, "target_engaged", progress_details)
     _append_resume_ledger_event(
         ledger_path,
@@ -658,6 +765,12 @@ def _execute_resume_item(
         )
         raise
     status = "completed" if completed.returncode == 0 else "failed"
+    if completed.returncode == 124:
+        mark_timed_out_kill_chain_run_failed(
+            Path(str(checked.get("db_path") or "")),
+            engagement_id=_safe_int(checked.get("engagement_id")),
+            seed_value=str(checked.get("seed_value") or ""),
+        )
     result = {
         **checked,
         "status": status,
@@ -670,7 +783,7 @@ def _execute_resume_item(
     _notify_progress(
         progress_callback,
         "target_completed" if status == "completed" else "target_failed",
-        progress_details,
+        {**progress_details, "return_code": completed.returncode},
     )
     _append_resume_ledger_event(ledger_path, ledger_lock, {"event": f"item_{status}", **result})
     return result

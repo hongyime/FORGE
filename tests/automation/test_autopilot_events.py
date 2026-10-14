@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import pytest
 import typer
 from typer.testing import CliRunner
 
@@ -52,11 +54,122 @@ def _make_autopilot(data_dir: Path, *, cooldown_minutes: int = 30) -> ForgeAutop
     )
 
 
-def test_m0053_and_m0054_apply_to_fresh_and_v52_databases(tmp_path: Path) -> None:
+def _write_timeout_resume_candidate(data_dir: Path) -> tuple[Path, Path]:
+    db_path = _make_data_db(data_dir)
+    scope_path = data_dir / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO engagement_runs (
+                engagement_id, run_kind, status, seed_value, seed_type,
+                max_iterations, current_iteration, resume_enabled, dry_run,
+                attack_mode, error, metadata_json, started_at, completed_at,
+                updated_at
+            )
+            VALUES (
+                1001, 'kill_chain', 'failed', 'timeout.example', 'domain',
+                3, 2, 1, 0, 0, ?, ?, '2026-10-13T00:00:00Z',
+                '2026-10-13T02:02:00Z', '2026-10-13T02:02:00Z'
+            )
+            """,
+            (
+                "watchdog timeout: kill-chain subprocess exceeded its runtime budget (return code 124)",
+                json.dumps(
+                    {
+                        "roe_id": "ROE-TEST",
+                        "scope_manifest": str(scope_path),
+                    }
+                ),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return db_path, scope_path
+
+
+def _record_timeout_cycle(writer: AutopilotEventWriter) -> int:
+    _cycle_id, cycle_number = writer.start_cycle(details={"mode": "apply"})
+    writer.emit(
+        "target_failed",
+        phase_name="import_targets",
+        phase_index=5,
+        details={
+            "engagement_id": 1001,
+            "target_value": "timeout.example",
+            "return_code": 124,
+        },
+    )
+    writer.emit("cycle_end", details={"status": "ok"})
+    return cycle_number
+
+
+def _record_retry_attempt_cycle(
+    writer: AutopilotEventWriter,
+    *,
+    retry_attempt: int,
+) -> int:
+    _cycle_id, cycle_number = writer.start_cycle(details={"mode": "apply"})
+    writer.emit(
+        "target_retry_attempted",
+        phase_name="resume_candidates",
+        phase_index=6,
+        details={
+            "engagement_id": 1001,
+            "target_value": "timeout.example",
+            "retry_attempt": retry_attempt,
+            "retry_budget": 2,
+        },
+    )
+    writer.emit(
+        "target_failed",
+        phase_name="resume_candidates",
+        phase_index=6,
+        details={
+            "engagement_id": 1001,
+            "target_value": "timeout.example",
+            "return_code": 124,
+        },
+    )
+    writer.emit("cycle_end", details={"status": "ok"})
+    return cycle_number
+
+
+def _run_resume_phase_next_cycle(
+    data_dir: Path,
+    monkeypatch: Any,
+    *,
+    returncode: int = 0,
+) -> tuple[dict[str, Any], list[list[str]]]:
+    commands: list[list[str]] = []
+
+    def fake_contained_runner(
+        command: list[str],
+        *,
+        timeout_seconds: int,
+        timeout_stderr: str,
+    ) -> subprocess.CompletedProcess[str]:
+        del timeout_seconds, timeout_stderr
+        commands.append(command)
+        return subprocess.CompletedProcess(command, returncode, "", "")
+
+    monkeypatch.setattr(
+        "forge.targets_resume_candidates.run_contained_subprocess",
+        fake_contained_runner,
+    )
+    autopilot = _make_autopilot(data_dir)
+    autopilot._event_writer.start_cycle(details={"mode": "apply"})
+    result = autopilot._phase_resume_candidates(dry_run=False)
+    return result.to_dict(), commands
+
+
+def test_m0053_to_m0055_apply_to_fresh_and_v52_databases(tmp_path: Path) -> None:
     fresh = sqlite3.connect(tmp_path / "fresh.db")
     try:
         run_migrations(fresh)
-        assert fresh.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 54
+        assert fresh.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 55
         assert fresh.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='autopilot_cycle_events'"
         ).fetchone()
@@ -70,7 +183,7 @@ def test_m0053_and_m0054_apply_to_fresh_and_v52_databases(tmp_path: Path) -> Non
             }
             assert all(seed_targets[column] == "engagement_seeds" for column in expected_columns)
         assert fresh.execute("PRAGMA foreign_key_check").fetchall() == []
-        assert TARGET_VERSION == 54
+        assert TARGET_VERSION == 55
     finally:
         fresh.close()
 
@@ -79,7 +192,7 @@ def test_m0053_and_m0054_apply_to_fresh_and_v52_databases(tmp_path: Path) -> Non
         from_v52.execute("CREATE TABLE _schema_version (version INTEGER NOT NULL)")
         from_v52.execute("INSERT INTO _schema_version (version) VALUES (52)")
         run_migrations(from_v52)
-        assert from_v52.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 54
+        assert from_v52.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 55
         columns = {row[1] for row in from_v52.execute("PRAGMA table_info(autopilot_cycle_events)")}
         assert columns == {
             "id",
@@ -93,6 +206,70 @@ def test_m0053_and_m0054_apply_to_fresh_and_v52_databases(tmp_path: Path) -> Non
         }
     finally:
         from_v52.close()
+
+
+def test_m0055_preserves_existing_events_and_allows_retry_event_types(
+    tmp_path: Path,
+) -> None:
+    conn = sqlite3.connect(tmp_path / "v54.db")
+    try:
+        conn.execute("CREATE TABLE _schema_version (version INTEGER NOT NULL)")
+        conn.execute("INSERT INTO _schema_version (version) VALUES (54)")
+        conn.execute(
+            """
+            CREATE TABLE autopilot_cycle_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cycle_id TEXT NOT NULL,
+                cycle_number INTEGER NOT NULL,
+                event_type TEXT NOT NULL CHECK (event_type IN (
+                    'cycle_start', 'cycle_end', 'phase_start', 'phase_end',
+                    'target_engaged', 'target_completed', 'target_failed',
+                    'error', 'cooldown_start'
+                )),
+                phase_name TEXT,
+                phase_index INTEGER CHECK (phase_index BETWEEN 1 AND 8),
+                occurred_at TEXT NOT NULL,
+                details_json TEXT NOT NULL DEFAULT '{}'
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO autopilot_cycle_events "
+            "(cycle_id, cycle_number, event_type, occurred_at) "
+            "VALUES ('legacy-cycle', 1, 'cycle_start', '2026-10-13T00:00:00Z')"
+        )
+        conn.commit()
+
+        run_migrations(conn)
+
+        assert conn.execute(
+            "SELECT event_type FROM autopilot_cycle_events WHERE cycle_id='legacy-cycle'"
+        ).fetchone() == ("cycle_start",)
+        conn.executemany(
+            "INSERT INTO autopilot_cycle_events "
+            "(cycle_id, cycle_number, event_type, occurred_at) VALUES (?, 2, ?, ?)",
+            [
+                (
+                    "retry-cycle",
+                    event_type,
+                    "2026-10-14T00:00:00Z",
+                )
+                for event_type in (
+                    "target_retry_queued",
+                    "target_retry_attempted",
+                    "target_retry_budget_exhausted",
+                )
+            ],
+        )
+        conn.commit()
+        assert conn.execute(
+            "SELECT COUNT(*) FROM autopilot_cycle_events"
+        ).fetchone()[0] == 4
+        assert conn.execute(
+            "SELECT MAX(version) FROM _schema_version"
+        ).fetchone()[0] == 55
+    finally:
+        conn.close()
 
 
 def test_event_writer_failure_is_logged_and_swallowed(
@@ -151,7 +328,9 @@ def test_autopilot_records_cycle_and_all_eight_phase_boundaries(tmp_path: Path) 
     assert [event[2] for event in events if event[0] == "phase_start"] == list(range(1, 9))
 
 
-def test_autopilot_records_cooldown_before_next_iteration(tmp_path: Path) -> None:
+def test_autopilot_records_cooldown_before_next_iteration(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
     data_dir = tmp_path / "data"
     db_path = _make_data_db(data_dir)
     autopilot = _make_autopilot(data_dir, cooldown_minutes=1)
@@ -161,7 +340,20 @@ def test_autopilot_records_cooldown_before_next_iteration(tmp_path: Path) -> Non
     )
     sleeps: list[float] = []
 
-    payload = autopilot.run(iterations=2, sleep_fn=sleeps.append)
+    class FakeClock:
+        current = datetime(2026, 1, 1, tzinfo=UTC)
+
+        @classmethod
+        def now(cls, _tz: Any = None) -> datetime:
+            return cls.current
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        FakeClock.current += timedelta(seconds=seconds)
+
+    monkeypatch.setattr("forge.autopilot.loop.datetime", FakeClock)
+
+    payload = autopilot.run(iterations=2, sleep_fn=fake_sleep)
 
     conn = sqlite3.connect(db_path)
     try:
@@ -174,9 +366,46 @@ def test_autopilot_records_cooldown_before_next_iteration(tmp_path: Path) -> Non
     assert payload["iterations_run"] == 2
     assert sleeps == [60]
     assert [row[0] for row in rows] == ["cycle_end", "cooldown_start", "cycle_end"]
+    assert [row[1] for row in rows] == [1, 1, 2]
     cooldown = json.loads(rows[1][2])
     assert cooldown["cooldown_seconds"] == 60
-    assert cooldown["next_cycle_at"].endswith("Z")
+    assert cooldown["next_cycle_at"] == "2026-01-01T00:01:00Z"
+
+
+def test_zero_cooldown_starts_next_cycle_without_sleep_or_cooldown_event(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path = _make_data_db(data_dir)
+    autopilot = _make_autopilot(data_dir, cooldown_minutes=0)
+    autopilot._maybe_phase = lambda name, _dry_run: AutopilotPhaseResult(  # type: ignore[method-assign]
+        name=name,
+        status="ok",
+    )
+
+    def forbidden_sleep(_seconds: float) -> None:
+        pytest.fail("zero cooldown must not sleep")
+
+    payload = autopilot.run(iterations=3, sleep_fn=forbidden_sleep)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT event_type, cycle_number FROM autopilot_cycle_events "
+            "WHERE event_type IN ('cycle_start', 'cycle_end', 'cooldown_start') "
+            "ORDER BY id"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert payload["iterations_run"] == 3
+    assert rows == [
+        ("cycle_start", 1),
+        ("cycle_end", 1),
+        ("cycle_start", 2),
+        ("cycle_end", 2),
+        ("cycle_start", 3),
+        ("cycle_end", 3),
+    ]
 
 
 def test_loop_threads_target_progress_callbacks_to_existing_phases(
@@ -228,6 +457,137 @@ def test_loop_threads_target_progress_callbacks_to_existing_phases(
         ("target_engaged", "resume_candidates", 6),
         ("target_failed", "resume_candidates", 6),
     ]
+
+
+def test_timed_out_target_is_resumed_in_a_later_cycle(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path, _scope_path = _write_timeout_resume_candidate(data_dir)
+    autopilot = _make_autopilot(data_dir)
+    commands: list[list[str]] = []
+
+    def fake_contained_runner(
+        command: list[str],
+        *,
+        timeout_seconds: int,
+        timeout_stderr: str,
+    ) -> subprocess.CompletedProcess[str]:
+        del timeout_seconds, timeout_stderr
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(
+        "forge.targets_resume_candidates.run_contained_subprocess",
+        fake_contained_runner,
+    )
+    _cycle_id, timeout_cycle = autopilot._event_writer.start_cycle(
+        details={"mode": "apply"}
+    )
+    autopilot._event_writer.emit(
+        "target_failed",
+        phase_name="import_targets",
+        phase_index=5,
+        details={
+            "engagement_id": 1001,
+            "target_value": "timeout.example",
+            "return_code": 124,
+        },
+    )
+
+    same_cycle_phase = autopilot._phase_resume_candidates(dry_run=False)
+    assert same_cycle_phase.data["planned_count"] == 0
+    assert commands == []
+
+    autopilot._event_writer.start_cycle(details={"mode": "apply"})
+    phase = autopilot._phase_resume_candidates(dry_run=False).to_dict()
+
+    conn = sqlite3.connect(db_path)
+    try:
+        retries = conn.execute(
+            "SELECT cycle_number, event_type, details_json "
+            "FROM autopilot_cycle_events "
+            "WHERE event_type LIKE 'target_retry_%' ORDER BY id"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert timeout_cycle == 1
+    assert phase["status"] == "ok"
+    assert phase["data"]["planned_count"] == 1
+    assert len(commands) == 1
+    assert "--resume" in commands[0]
+    assert [row[1] for row in retries] == [
+        "target_retry_queued",
+        "target_retry_attempted",
+    ]
+    assert all(row[0] == 2 for row in retries)
+    attempted = json.loads(retries[1][2])
+    assert attempted["retry_attempt"] == 1
+    assert attempted["retry_budget"] == 2
+
+
+def test_timeout_retry_budget_excludes_target_and_records_exhaustion(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path, _scope_path = _write_timeout_resume_candidate(data_dir)
+    writer = AutopilotEventWriter(data_dir)
+    _record_timeout_cycle(writer)
+    _record_retry_attempt_cycle(writer, retry_attempt=1)
+    _record_retry_attempt_cycle(writer, retry_attempt=2)
+
+    phase, commands = _run_resume_phase_next_cycle(data_dir, monkeypatch)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        exhausted = conn.execute(
+            "SELECT cycle_number, details_json FROM autopilot_cycle_events "
+            "WHERE event_type='target_retry_budget_exhausted' ORDER BY id"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert phase["data"]["planned_count"] == 0
+    assert phase["data"]["skipped_blocker_counts"][
+        "timeout_retry_budget_exhausted"
+    ] == 1
+    assert commands == []
+    assert len(exhausted) == 1
+    assert exhausted[0][0] == 4
+    assert json.loads(exhausted[0][1])["retry_attempts"] == 2
+
+
+def test_exhausted_timeout_retry_stays_excluded_in_a_further_cycle(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    data_dir = tmp_path / "data"
+    db_path, _scope_path = _write_timeout_resume_candidate(data_dir)
+    writer = AutopilotEventWriter(data_dir)
+    _record_timeout_cycle(writer)
+    _record_retry_attempt_cycle(writer, retry_attempt=1)
+    _record_retry_attempt_cycle(writer, retry_attempt=2)
+    _run_resume_phase_next_cycle(data_dir, monkeypatch)
+
+    phase, commands = _run_resume_phase_next_cycle(data_dir, monkeypatch)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        event_counts = dict(
+            conn.execute(
+                "SELECT event_type, COUNT(*) FROM autopilot_cycle_events "
+                "WHERE event_type LIKE 'target_retry_%' GROUP BY event_type"
+            ).fetchall()
+        )
+    finally:
+        conn.close()
+    assert phase["data"]["planned_count"] == 0
+    assert commands == []
+    assert event_counts == {
+        "target_retry_attempted": 2,
+        "target_retry_budget_exhausted": 1,
+    }
 
 
 def test_status_reports_cooldown_next_cycle_time(tmp_path: Path) -> None:

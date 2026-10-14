@@ -27,6 +27,9 @@ _EVENT_TYPES = frozenset(
         "target_engaged",
         "target_completed",
         "target_failed",
+        "target_retry_queued",
+        "target_retry_attempted",
+        "target_retry_budget_exhausted",
         "error",
         "cooldown_start",
     }
@@ -77,6 +80,70 @@ def _select_event_db(data_dir: Path) -> Path:
     if candidates:
         return max(candidates, key=lambda item: (item[0], item[1]))[2]
     return db_files[0]
+
+
+def target_retry_state_for_target(
+    data_dir: Path,
+    *,
+    engagement_id: int,
+    target_value: str,
+) -> dict[str, Any]:
+    """Read timeout-retry history from the durable autopilot event stream."""
+
+    state: dict[str, Any] = {
+        "timeout_seen": False,
+        "attempt_count": 0,
+        "last_failure_cycle": 0,
+        "budget_exhausted_recorded": False,
+    }
+    try:
+        db_path = _select_event_db(Path(data_dir))
+        conn = _read_only_connection(db_path)
+    except (OSError, sqlite3.Error):
+        return state
+    try:
+        if not _has_event_table(conn):
+            return state
+        rows = conn.execute(
+            """
+            SELECT cycle_number, event_type, details_json
+            FROM autopilot_cycle_events
+            WHERE event_type IN (
+                'target_failed', 'target_retry_attempted',
+                'target_retry_budget_exhausted'
+            )
+            ORDER BY cycle_number, id
+            """
+        ).fetchall()
+    except sqlite3.Error:
+        return state
+    finally:
+        conn.close()
+
+    wanted_engagement = int(engagement_id)
+    wanted_target = str(target_value)
+    for cycle_number, event_type, details_json in rows:
+        details = _decode_details(details_json)
+        try:
+            event_engagement = int(details.get("engagement_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if (
+            event_engagement != wanted_engagement
+            or str(details.get("target_value") or "") != wanted_target
+        ):
+            continue
+        event_name = str(event_type)
+        cycle = int(cycle_number or 0)
+        if event_name == "target_failed":
+            state["last_failure_cycle"] = max(state["last_failure_cycle"], cycle)
+            if str(details.get("return_code") or "") == "124":
+                state["timeout_seen"] = True
+        elif event_name == "target_retry_attempted":
+            state["attempt_count"] += 1
+        elif event_name == "target_retry_budget_exhausted":
+            state["budget_exhausted_recorded"] = True
+    return state
 
 
 class AutopilotEventWriter:
@@ -387,4 +454,8 @@ def _timestamp_plus_seconds(value: str, seconds: int) -> str | None:
         return None
 
 
-__all__ = ["AutopilotEventWriter", "autopilot_status_for_data_dir"]
+__all__ = [
+    "AutopilotEventWriter",
+    "autopilot_status_for_data_dir",
+    "target_retry_state_for_target",
+]

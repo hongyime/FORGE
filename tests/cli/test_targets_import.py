@@ -2459,6 +2459,82 @@ def test_start_failure_records_and_continues_without_consuming_start_limit(
     assert results[1].start_stop_reason == "start_limit_reached"
 
 
+def test_start_timeout_marks_running_kill_chain_failed_for_resume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+    events: list[tuple[str, dict[str, object]]] = []
+
+    def _fake_start(**kwargs: object) -> None:
+        db_path = Path(str(kwargs["engagement_db_path"]))
+        conn = get_engagement_db(db_path)
+        try:
+            conn.execute(
+                """
+                INSERT INTO engagement_runs (
+                    engagement_id, run_kind, status, seed_value, seed_type,
+                    max_iterations, current_iteration, resume_enabled, dry_run,
+                    attack_mode, metadata_json, started_at, updated_at
+                ) VALUES (?, 'kill_chain', 'running', ?, 'domain', 3, 1, 1, 0, 0, ?, ?, ?)
+                """,
+                (
+                    kwargs["engagement_id"],
+                    kwargs["seed"],
+                    json.dumps(
+                        {
+                            "roe_id": kwargs["roe_id"],
+                            "scope_manifest": str(kwargs["scope_manifest"]),
+                        }
+                    ),
+                    "2026-10-13T00:00:00Z",
+                    "2026-10-13T00:00:00Z",
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        raise subprocess.CalledProcessError(
+            124,
+            ["kill-chain", str(kwargs["seed"])],
+            stderr="target import child exceeded timeout_seconds=7320",
+        )
+
+    monkeypatch.setattr("forge.targets_import._start_kill_chain", _fake_start)
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        config=cfg,  # type: ignore[arg-type]
+        progress_callback=lambda event, details: events.append((event, details)),
+    )
+
+    db_path = cfg.engagement_db_path(str(results[0].engagement_id))
+    conn = sqlite3.connect(db_path)
+    try:
+        run = conn.execute(
+            "SELECT status, error, completed_at FROM engagement_runs "
+            "WHERE engagement_id=? AND seed_value=? ORDER BY id DESC LIMIT 1",
+            (results[0].engagement_id, results[0].target_value),
+        ).fetchone()
+    finally:
+        conn.close()
+    timeout_event = next(details for event, details in events if event == "target_failed")
+    assert results[0].start_failed is True
+    assert run[0] == "failed"
+    assert "watchdog timeout" in run[1]
+    assert run[2]
+    assert timeout_event["return_code"] == 124
+
+
 def test_consecutive_start_failures_stop_feed_early_and_report_reason(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
