@@ -10,10 +10,9 @@ Every fetcher in this package is:
   accidentally committing feed data.
 
 Each fetcher writes a ``_meta`` block (schema version, source url,
-fetched_at timestamp, item count) alongside parsed items. Where it is
-useful, fetchers also emit extracted ``urls``/``domains``/``ips`` lists
-in the same JSON so ``forge automation feed-build`` can harvest them
-into the target-feed without additional glue.
+fetched_at timestamp, item count) alongside parsed items. Extracted
+references and observations remain source-classified enrichment; they
+must not become live targets without a separate asset-linkage check.
 
 Top-level entry points:
 

@@ -92,6 +92,15 @@ def _make_factory(response: _FakeResponse) -> Any:
 # ----------------------------------------------------------------------
 
 
+def test_public_feed_fetchers_have_explicit_non_asset_classes() -> None:
+    assert NvdCveFetcher.feed_class == "threat_intel"
+    assert CisaKevFetcher.feed_class == "threat_intel"
+    assert EpssFetcher.feed_class == "threat_intel"
+    assert SecurityRssFetcher.feed_class == "threat_intel"
+    assert NucleiTemplateFetcher.feed_class == "template_metadata"
+    assert UrlscanPublicFetcher.feed_class == "observation"
+
+
 def _nvd_payload() -> dict[str, Any]:
     return {
         "totalResults": 2,
@@ -167,6 +176,7 @@ def test_nvd_cve_fetch_parses_and_writes(tmp_path: Path) -> None:
     assert out_path.is_file()
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["_meta"]["source_id"] == "nvd_cve"
+    assert payload["_meta"]["feed_class"] == "threat_intel"
     assert payload["_meta"]["item_count"] == 2
     assert payload["items"][0]["cve_id"] == "CVE-2026-9999"
     assert payload["items"][0]["cvss"]["base_score"] == 9.8
@@ -174,6 +184,91 @@ def test_nvd_cve_fetch_parses_and_writes(tmp_path: Path) -> None:
     assert "https://example.com/advisory/9999" in payload["urls"]
     assert "https://example.com/patch" in payload["urls"]
     assert "cpe:2.3:a:example:app:1.0:*:*:*:*:*:*:*" in payload["items"][0]["cpes"]
+
+
+def test_nvd_cve_fetches_all_pages_up_to_upstream_total(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fetcher = NvdCveFetcher(
+        tmp_path, page_size=1, max_pages=4, sleep_fn=_no_sleep
+    )
+    pages = [
+        {"totalResults": 2, "vulnerabilities": [_nvd_payload()["vulnerabilities"][0]]},
+        {"totalResults": 2, "vulnerabilities": [_nvd_payload()["vulnerabilities"][1]]},
+    ]
+    requests: list[dict[str, Any]] = []
+
+    def _page(_url: str, **kwargs: Any) -> dict[str, Any]:
+        requests.append(dict(kwargs["params"]))
+        return pages[len(requests) - 1]
+
+    monkeypatch.setattr(fetcher, "_http_get_json", _page)
+    result = fetcher.fetch(timeout=30)
+
+    assert result["status"] == "ok"
+    payload = json.loads((tmp_path / "nvd-cve-feed.local.json").read_text())
+    assert [item["cve_id"] for item in payload["items"]] == [
+        "CVE-2026-9999",
+        "CVE-2026-9998",
+    ]
+    assert [request["startIndex"] for request in requests] == [0, 1]
+    assert payload["_meta"]["pages_fetched"] == 2
+    assert payload["_meta"]["truncated"] is False
+
+
+def test_nvd_cve_page_limit_bounds_fetch_and_reports_truncation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fetcher = NvdCveFetcher(tmp_path, page_size=1, max_pages=2, sleep_fn=_no_sleep)
+    raw = _nvd_payload()["vulnerabilities"][0]
+    requests: list[dict[str, Any]] = []
+
+    def _page(_url: str, **kwargs: Any) -> dict[str, Any]:
+        requests.append(dict(kwargs["params"]))
+        return {"totalResults": 3, "vulnerabilities": [raw]}
+
+    monkeypatch.setattr(fetcher, "_http_get_json", _page)
+    result = fetcher.fetch(timeout=30)
+
+    assert result["status"] == "ok"
+    payload = json.loads((tmp_path / "nvd-cve-feed.local.json").read_text())
+    assert len(requests) == 2
+    assert [request["startIndex"] for request in requests] == [0, 1]
+    assert payload["_meta"]["pages_fetched"] == 2
+    assert payload["_meta"]["truncated"] is True
+
+
+def test_nvd_cve_page_settings_are_clamped(tmp_path: Path) -> None:
+    fetcher = NvdCveFetcher(
+        tmp_path, page_size=5000, max_pages=50, sleep_fn=_no_sleep
+    )
+
+    assert fetcher.page_size == 2000
+    assert fetcher.max_pages == 20
+
+
+def test_nvd_cve_truncation_uses_fetched_rows_not_parsed_items(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fetcher = NvdCveFetcher(tmp_path, page_size=2, max_pages=1, sleep_fn=_no_sleep)
+    valid = _nvd_payload()["vulnerabilities"][0]
+    requests: list[dict[str, Any]] = []
+
+    def _page(_url: str, **kwargs: Any) -> dict[str, Any]:
+        requests.append(dict(kwargs["params"]))
+        return {
+            "totalResults": 2,
+            "vulnerabilities": [valid, {"cve": {"id": ""}}],
+        }
+
+    monkeypatch.setattr(fetcher, "_http_get_json", _page)
+    result = fetcher.fetch(timeout=30)
+
+    assert result["status"] == "ok"
+    payload = json.loads((tmp_path / "nvd-cve-feed.local.json").read_text())
+    assert len(payload["items"]) == 1
+    assert payload["_meta"]["truncated"] is False
+    assert len(requests) == 1
 
 
 def test_nvd_cve_handles_http_error(tmp_path: Path) -> None:
@@ -891,11 +986,33 @@ def test_feeds_fetch_unknown_source_cli(tmp_path: Path) -> None:
             str(tmp_path),
             "--data-dir",
             str(tmp_path),
+            "--nvd-page-size",
+            "1500",
+            "--nvd-max-pages",
+            "3",
             "--json",
         ],
     )
     assert result.exit_code != 0
     assert "unknown feed source" in result.output
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [("--nvd-page-size", "2001"), ("--nvd-max-pages", "21")],
+)
+def test_feeds_fetch_rejects_unbounded_nvd_page_settings(
+    tmp_path: Path, option: str, value: str
+) -> None:
+    from forge.cli import app
+
+    result = CliRunner().invoke(
+        app,
+        ["feeds", "fetch", option, value, "--imports-dir", str(tmp_path)],
+    )
+
+    assert result.exit_code != 0
+    assert "Invalid value" in result.output
 
 
 # ----------------------------------------------------------------------

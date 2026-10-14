@@ -5,8 +5,9 @@ required; the public tier allows 5 requests per 30 seconds, so we pace
 one request every 6 seconds. Default window is the last 7 days.
 
 Output goes to ``imports/nvd-cve-feed.local.json`` with a ``_meta``
-block, parsed CVE records, and a bounded ``urls`` list of reference
-URLs that the ``forge automation feed-build`` harvester can consume.
+block, parsed CVE records, and a bounded ``urls`` list of informational
+reference URLs. CVE/advisory references are threat-intelligence enrichment,
+not live targets.
 """
 
 from __future__ import annotations
@@ -32,6 +33,9 @@ _MAX_WINDOW_DAYS = 30
 # Items per page the API returns. 2000 is the API maximum; keep it high
 # so most 7-day windows resolve in a single request.
 _NVD_RESULTS_PER_PAGE = 2000
+_NVD_MAX_RESULTS_PER_PAGE = 2000
+_NVD_DEFAULT_MAX_PAGES = 5
+_NVD_MAX_PAGES = 20
 
 # Hard cap on the URL list extracted into the harvester-friendly block.
 # Reference URLs are advisories/vendor pages, not scoped targets — the
@@ -43,6 +47,7 @@ class NvdCveFetcher(BaseFeedFetcher):
     """Fetch the last ``max_age_days`` of NVD CVE 2.0 records."""
 
     source_id = "nvd_cve"
+    feed_class = "threat_intel"
     source_url = _NVD_ENDPOINT
     output_filename = "nvd-cve-feed.local.json"
     schema_version = "forge.feeds.nvd_cve.v1"
@@ -53,61 +58,81 @@ class NvdCveFetcher(BaseFeedFetcher):
         imports_dir: Path | str,
         *,
         max_age_days: int = 7,
+        page_size: int = _NVD_RESULTS_PER_PAGE,
+        max_pages: int = _NVD_DEFAULT_MAX_PAGES,
         **kwargs: Any,
     ) -> None:
         super().__init__(imports_dir, **kwargs)
         self.max_age_days = max(1, min(int(max_age_days), _MAX_WINDOW_DAYS))
+        self.page_size = max(1, min(int(page_size), _NVD_MAX_RESULTS_PER_PAGE))
+        self.max_pages = max(1, min(int(max_pages), _NVD_MAX_PAGES))
 
     def _fetch(self, *, timeout: int) -> dict[str, Any]:
         """Query NVD for the configured window and normalize the response."""
         now = datetime.now(timezone.utc)
         start = now - timedelta(days=self.max_age_days)
-        params = {
+        base_params = {
             "pubStartDate": _nvd_date(start),
             "pubEndDate": _nvd_date(now),
-            "resultsPerPage": _NVD_RESULTS_PER_PAGE,
-            "startIndex": 0,
+            "resultsPerPage": self.page_size,
         }
-        payload = self._http_get_json(
-            self.source_url,
-            timeout=timeout,
-            params=params,
-            headers={"Accept": "application/json"},
-        )
-        if not isinstance(payload, dict):
-            raise ValueError("nvd_response_not_object")
-        vulnerabilities = payload.get("vulnerabilities")
-        if not isinstance(vulnerabilities, list):
-            vulnerabilities = []
-
         items: list[dict[str, Any]] = []
         urls: list[str] = []
         seen_urls: set[str] = set()
-        for raw in vulnerabilities:
-            parsed = _parse_vulnerability(raw)
-            if parsed is None:
-                continue
-            items.append(parsed)
-            for ref_url in parsed.get("references", []):
-                if (
-                    isinstance(ref_url, str)
-                    and ref_url not in seen_urls
-                    and len(urls) < _MAX_EXTRACTED_URLS
-                ):
-                    seen_urls.add(ref_url)
-                    urls.append(ref_url)
+        upstream_total = 0
+        upstream_rows_fetched = 0
+        pages_fetched = 0
+        for page_number in range(self.max_pages):
+            if page_number:
+                self._sleep_fn(self.rate_limit_seconds)
+            params = {**base_params, "startIndex": page_number * self.page_size}
+            payload = self._http_get_json(
+                self.source_url,
+                timeout=timeout,
+                params=params,
+                headers={"Accept": "application/json"},
+            )
+            if not isinstance(payload, dict):
+                raise ValueError("nvd_response_not_object")
+            if page_number == 0:
+                upstream_total = max(0, int(payload.get("totalResults") or 0))
+            vulnerabilities = payload.get("vulnerabilities")
+            if not isinstance(vulnerabilities, list):
+                vulnerabilities = []
+            pages_fetched += 1
+            upstream_rows_fetched += len(vulnerabilities)
+            for raw in vulnerabilities:
+                parsed = _parse_vulnerability(raw)
+                if parsed is None:
+                    continue
+                items.append(parsed)
+                for ref_url in parsed.get("references", []):
+                    if (
+                        isinstance(ref_url, str)
+                        and ref_url not in seen_urls
+                        and len(urls) < _MAX_EXTRACTED_URLS
+                    ):
+                        seen_urls.add(ref_url)
+                        urls.append(ref_url)
+            next_index = params["startIndex"] + len(vulnerabilities)
+            if not vulnerabilities or next_index >= upstream_total:
+                break
 
         return {
             "items": items,
             "urls": urls,
             "_meta_extra": {
+                "feed_class": "threat_intel",
                 "parameters": {
                     "pubStartDate": params["pubStartDate"],
                     "pubEndDate": params["pubEndDate"],
-                    "resultsPerPage": _NVD_RESULTS_PER_PAGE,
+                    "resultsPerPage": self.page_size,
                     "max_age_days": self.max_age_days,
+                    "max_pages": self.max_pages,
                 },
-                "upstream_total": int(payload.get("totalResults") or 0),
+                "upstream_total": upstream_total,
+                "pages_fetched": pages_fetched,
+                "truncated": upstream_rows_fetched < upstream_total,
             },
         }
 

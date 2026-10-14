@@ -49,6 +49,7 @@ _MAX_REPORT_FILES = 5000
 _MAX_ENGAGEMENT_DBS = 500
 _MAX_JSON_FILE_BYTES = 2 * 1024 * 1024
 _MAX_TEXT_FILE_BYTES = 2 * 1024 * 1024
+_NON_ASSET_FEED_CLASSES = {"threat_intel", "template_metadata", "observation"}
 _MAX_ZIP_MEMBERS = 25
 _MAX_WALK_DEPTH = 6
 _MAX_VALUES_PER_FILE = 5000
@@ -417,6 +418,15 @@ def _harvest_file_candidates(
         payload, error = _load_json_file(path)
         if error is not None:
             return [], error
+        if isinstance(payload, dict):
+            meta = payload.get("_meta")
+            feed_class = (
+                str(meta.get("feed_class") or "").strip().lower()
+                if isinstance(meta, dict)
+                else ""
+            )
+            if feed_class in _NON_ASSET_FEED_CLASSES:
+                return [], f"non_asset_feed_class:{feed_class}"
         return (
             _harvest_json_candidates(
                 payload,
@@ -622,6 +632,7 @@ def _extract_dir_source(
         "omitted_count": 0,
         "limit": _MAX_FILES_PER_DIR_SOURCE,
     }
+    feed_class_dropped_count = 0
     if not imports_dir.is_dir():
         return candidates, errors, summary
     scanned = 0
@@ -644,9 +655,14 @@ def _extract_dir_source(
             confidence=confidence,
         )
         if error is not None:
+            if error.startswith("non_asset_feed_class:"):
+                feed_class_dropped_count += 1
+                continue
             errors.append(f"{source_kind}_parse:{error}")
             continue
         candidates.extend(candidates_for_file)
+    if feed_class_dropped_count:
+        summary["feed_class_dropped_count"] = feed_class_dropped_count
     return candidates, errors, summary
 
 
@@ -2158,6 +2174,9 @@ def build_target_feed(
             for key in ("scanned_count", "matched_count", "omitted_count")
         }
         scan_summary["limit"] = _MAX_FILES_PER_DIR_SOURCE
+        class_drops = generic_scan_summary.get("feed_class_dropped_count", 0)
+        if class_drops:
+            scan_summary["feed_class_dropped_count"] = class_drops
         groups["connectors"] = found
         source_scan_limits["connectors"] = scan_summary
         for candidate in found:

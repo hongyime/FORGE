@@ -94,6 +94,7 @@ class BaseFeedFetcher:
     source_url: str = ""
     output_filename: str = ""
     schema_version: str = ""
+    feed_class: str = ""
 
     #: Minimum seconds to wait before the first HTTP request. Overridden
     #: per source so NVD stays below 5 reqs/30 sec and urlscan stays
@@ -164,6 +165,8 @@ class BaseFeedFetcher:
             "fetched_at": _iso_now(),
             "item_count": count,
         }
+        if self.feed_class:
+            meta["feed_class"] = self.feed_class
         extra_meta = payload.get("_meta_extra")
         if isinstance(extra_meta, Mapping):
             meta.update(extra_meta)

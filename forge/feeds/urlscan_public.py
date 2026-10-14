@@ -52,6 +52,7 @@ class UrlscanPublicFetcher(BaseFeedFetcher):
     """Fetch and normalize urlscan.io public search results."""
 
     source_id = "urlscan_public"
+    feed_class = "observation"
     source_url = _URLSCAN_ENDPOINT
     output_filename = "urlscan-public-feed.local.json"
     schema_version = "forge.feeds.urlscan_public.v1"

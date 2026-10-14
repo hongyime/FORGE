@@ -151,6 +151,79 @@ def test_feed_build_drops_placeholder_domains_from_database_seeds(
     ]
 
 
+def test_feed_build_does_not_promote_nvd_references_to_targets(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    feeds = {
+        "nvd-cve-feed.local.json": "threat_intel",
+        "cisa-kev-feed.local.json": "threat_intel",
+        "epss-scores.local.json": "threat_intel",
+        "security-rss-feed.local.json": "threat_intel",
+        "nuclei-templates-update.local.json": "template_metadata",
+        "urlscan-public-feed.local.json": "observation",
+    }
+    for filename, feed_class in feeds.items():
+        (imports_dir / filename).write_text(
+            json.dumps(
+                {
+                    "_meta": {"feed_class": feed_class},
+                    "items": [{"cve_id": "CVE-2026-9999"}],
+                    "urls": ["https://vendor.example/advisory/CVE-2026-9999"],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    payload = build_target_feed(
+        sources=["cti", "connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=None,
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert payload["items"] == []
+    assert payload["counts"]["generated_candidate_total"] == 0
+
+
+@pytest.mark.parametrize(
+    "feed_class", ["threat_intel", "template_metadata", "observation"]
+)
+def test_feed_build_honors_non_asset_feed_class_independent_of_filename(
+    tmp_path: Path, feed_class: str
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "renamed-export.json").write_text(
+        json.dumps(
+            {
+                "_meta": {"feed_class": feed_class},
+                "items": [{"target": "observed.example.org"}],
+                "urls": ["https://vendor.example/advisory/123"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_target_feed(
+        sources=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=None,
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert payload["items"] == []
+    assert payload["counts"]["generated_candidate_total"] == 0
+    assert payload["source_scan_limits"]["connectors"][
+        "feed_class_dropped_count"
+    ] == 1
+
+
 def test_feed_build_rejects_code_identifiers_harvested_as_hosts(
     tmp_path: Path,
 ) -> None:

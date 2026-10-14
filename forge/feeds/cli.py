@@ -122,6 +122,20 @@ def register_feeds_commands(app: typer.Typer) -> None:
             "--max-age-days",
             help="Window for NVD/nuclei-templates refresh. Default 7 days.",
         ),
+        nvd_page_size: int = typer.Option(
+            2000,
+            "--nvd-page-size",
+            min=1,
+            max=2000,
+            help="NVD results per page (1-2000). Default 2000.",
+        ),
+        nvd_max_pages: int = typer.Option(
+            5,
+            "--nvd-max-pages",
+            min=1,
+            max=20,
+            help="Maximum NVD pages to request (1-20). Default 5.",
+        ),
         imports_dir: Optional[Path] = typer.Option(
             None,
             "--imports-dir",
@@ -135,7 +149,13 @@ def register_feeds_commands(app: typer.Typer) -> None:
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
         """Fetch all configured free feeds, or a single ``--source``."""
-        fetcher = _build_fetcher(imports_dir, data_dir, max_age_days=max_age_days)
+        fetcher = _build_fetcher(
+            imports_dir,
+            data_dir,
+            max_age_days=max_age_days,
+            nvd_page_size=nvd_page_size,
+            nvd_max_pages=nvd_max_pages,
+        )
         if source:
             try:
                 payload = fetcher.fetch_one(source, timeout_per_source=timeout)
@@ -155,6 +175,8 @@ def _build_fetcher(
     data_dir: Path | None,
     *,
     max_age_days: int = 7,
+    nvd_page_size: int = 2000,
+    nvd_max_pages: int = 5,
 ) -> FeedFetcher:
     cfg = ForgeConfig.load()
     resolved_imports = Path(imports_dir) if imports_dir else Path("imports")
@@ -163,6 +185,8 @@ def _build_fetcher(
         imports_dir=resolved_imports,
         data_dir=resolved_data,
         max_age_days=max_age_days,
+        nvd_page_size=nvd_page_size,
+        nvd_max_pages=nvd_max_pages,
     )
 
 

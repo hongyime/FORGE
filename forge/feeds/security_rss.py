@@ -83,6 +83,7 @@ class SecurityRssFetcher(BaseFeedFetcher):
     """Aggregate recent CVE/exploit chatter from free RSS/Atom feeds."""
 
     source_id = "security_rss"
+    feed_class = "threat_intel"
     # Published source_url is the aggregator's logical URL — the real
     # list of sources is in the ``sources`` block of the output.
     source_url = "multi-source"

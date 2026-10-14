@@ -31,6 +31,7 @@ class CisaKevFetcher(BaseFeedFetcher):
     """Pull the full CISA KEV catalog as a single JSON document."""
 
     source_id = "cisa_kev"
+    feed_class = "threat_intel"
     source_url = _CISA_KEV_ENDPOINT
     output_filename = "cisa-kev-feed.local.json"
     schema_version = "forge.feeds.cisa_kev.v1"

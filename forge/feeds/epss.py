@@ -43,6 +43,7 @@ class EpssFetcher(BaseFeedFetcher):
     """Fetch and parse the daily EPSS score drop (gzipped CSV)."""
 
     source_id = "epss"
+    feed_class = "threat_intel"
     source_url = _EPSS_ENDPOINT
     output_filename = "epss-scores.local.json"
     schema_version = "forge.feeds.epss.v1"

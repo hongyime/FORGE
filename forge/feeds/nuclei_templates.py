@@ -52,6 +52,7 @@ class NucleiTemplateFetcher(BaseFeedFetcher):
     """Refresh and summarize recent nuclei templates."""
 
     source_id = "nuclei_templates"
+    feed_class = "template_metadata"
     source_url = _NUCLEI_TEMPLATES_REPO
     output_filename = "nuclei-templates-update.local.json"
     schema_version = "forge.feeds.nuclei_templates.v1"

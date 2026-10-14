@@ -42,6 +42,8 @@ class FeedFetcher:
         data_dir: Path | str,
         *,
         max_age_days: int = 7,
+        nvd_page_size: int = 2000,
+        nvd_max_pages: int = 5,
         fetchers: Iterable[BaseFeedFetcher] | None = None,
     ) -> None:
         self.imports_dir = Path(imports_dir)
@@ -51,7 +53,12 @@ class FeedFetcher:
             self.fetchers: list[BaseFeedFetcher] = list(fetchers)
         else:
             self.fetchers = [
-                NvdCveFetcher(self.imports_dir, max_age_days=self.max_age_days),
+                NvdCveFetcher(
+                    self.imports_dir,
+                    max_age_days=self.max_age_days,
+                    page_size=nvd_page_size,
+                    max_pages=nvd_max_pages,
+                ),
                 CisaKevFetcher(self.imports_dir),
                 EpssFetcher(self.imports_dir),
                 SecurityRssFetcher(self.imports_dir),
