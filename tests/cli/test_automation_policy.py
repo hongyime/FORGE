@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import typer
 from typer.testing import CliRunner
@@ -56,10 +57,19 @@ def test_operator_automation_policy_captures_requested_defaults() -> None:
 
 def test_approved_local_path_regex_allows_imports_and_denies_appdata() -> None:
     assert approved_local_path(
-        r"C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\imports\threatfox.json"
+        str(
+            Path.home()
+            / "OneDrive"
+            / "01 TOOLKITS"
+            / "forgetoolkit"
+            / "imports"
+            / "threatfox.json"
+        )
     )
     assert approved_local_path(r"X:\01 REPOSITORIES\client-a\exports\urlscan.json")
-    assert approved_local_path(r"C:\Users\bryan\Downloads\forge-imports\misp.json")
+    assert approved_local_path(
+        str(Path.home() / "Downloads" / "forge-imports" / "misp.json")
+    )
     assert not approved_local_path(r"C:\Users\bryan\AppData\Local\Temp\misp.json")
 
 
@@ -280,7 +290,9 @@ def test_automation_cli_json_commands() -> None:
     assert limits_result.exit_code == 0, limits_result.output
     limits_payload = json.loads(limits_result.output)
     assert limits_payload["schema_version"] == "forge.automation_limits_review.v1"
-    assert defaults_payload["autostart"]["config_path"] == "imports\\autostart.local.json"
+    assert defaults_payload["autostart"]["config_path"] == str(
+        Path("imports") / "autostart.local.json"
+    )
 
     status_result = runner.invoke(
         app,

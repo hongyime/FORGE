@@ -271,7 +271,7 @@ def test_forge_scope_add_ip_cidr(tmp_path: Path) -> None:
 def test_forge_scope_auto_expand_preview(tmp_path: Path) -> None:
     manifest = tmp_path / "default.json"
     manifest.write_text(
-        json.dumps({"domains": ["example.com"], "urls": [], "ip_ranges": [], "authorized_seeds": []}),
+        json.dumps({"domains": ["corp-target.io"], "urls": [], "ip_ranges": [], "authorized_seeds": []}),
         encoding="utf-8",
     )
     feed = tmp_path / "feed.json"
@@ -280,7 +280,7 @@ def test_forge_scope_auto_expand_preview(tmp_path: Path) -> None:
             {
                 "schema_version": "target-feed.v1",
                 "items": [
-                    {"target_type": "domain", "target_value": "api.example.com"},
+                    {"target_type": "domain", "target_value": "api.corp-target.io"},
                     {"target_type": "domain", "target_value": "unrelated.net"},
                 ],
             }
@@ -303,13 +303,13 @@ def test_forge_scope_auto_expand_preview(tmp_path: Path) -> None:
     assert payload["accepted"]
     assert payload["review_required"]
     # Preview — on-disk manifest unchanged.
-    assert "api.example.com" not in json.loads(manifest.read_text(encoding="utf-8"))["domains"]
+    assert "api.corp-target.io" not in json.loads(manifest.read_text(encoding="utf-8"))["domains"]
 
 
 def test_forge_scope_auto_expand_apply(tmp_path: Path) -> None:
     manifest = tmp_path / "default.json"
     manifest.write_text(
-        json.dumps({"domains": ["example.com"], "urls": [], "ip_ranges": [], "authorized_seeds": []}),
+        json.dumps({"domains": ["corp-target.io"], "urls": [], "ip_ranges": [], "authorized_seeds": []}),
         encoding="utf-8",
     )
     feed = tmp_path / "feed.json"
@@ -318,7 +318,7 @@ def test_forge_scope_auto_expand_apply(tmp_path: Path) -> None:
             {
                 "schema_version": "target-feed.v1",
                 "items": [
-                    {"target_type": "domain", "target_value": "api.example.com"},
+                    {"target_type": "domain", "target_value": "api.corp-target.io"},
                 ],
             }
         ),
@@ -338,7 +338,7 @@ def test_forge_scope_auto_expand_apply(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.output
     stored = json.loads(manifest.read_text(encoding="utf-8"))
-    assert "api.example.com" in stored["domains"]
+    assert "api.corp-target.io" in stored["domains"]
 
 
 # ---------------------------------------------------------------------------

@@ -296,6 +296,9 @@ def test_collect_doctor_checks_uses_connector_binary_search_paths(tmp_path) -> N
     subfinder.write_text("", encoding="utf-8")
     detect_secrets = tool_dir / ("detect-secrets.exe" if os.name == "nt" else "detect-secrets")
     detect_secrets.write_text("", encoding="utf-8")
+    if os.name != "nt":
+        subfinder.chmod(0o755)
+        detect_secrets.chmod(0o755)
 
     checks = collect_doctor_checks(
         config=_cfg(tmp_path),

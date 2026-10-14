@@ -136,6 +136,9 @@ def test_direct_keyscan_org_restriction_uses_scoped_domain(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # The manifest loader permits paths inside the engagement workspace/cwd
+    # or operator home. Use pytest's isolated workspace as cwd for this test.
+    monkeypatch.chdir(tmp_path)
     db_path = tmp_path / "engagement.db"
     manifest_path = tmp_path / "scope.json"
     manifest_path.write_text(

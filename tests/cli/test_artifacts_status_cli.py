@@ -123,23 +123,18 @@ def test_command_is_registered(app) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_empty_data_dir_shows_zero_total(
+def test_missing_engagement_db_reports_error(
     runner: CliRunner,
     app,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When FORGE_DATA_DIR has no engagement DB, command returns total=0 gracefully.
-
-    SQLite creates an empty DB on connect; the command degrades to zero counts
-    rather than erroring, so operators can run 'artifacts status' safely even
-    before any artifacts have been queued for the engagement.
-    """
+    """A missing engagement DB is an error; an empty queue needs an existing DB."""
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / "empty_data"))
     result = runner.invoke(app, ["artifacts", "status", "--engagement", "1", "--json"])
-    assert result.exit_code == 0, result.output
+    assert result.exit_code == 1, result.output
     payload = json.loads(result.output)
-    assert payload["counts"]["total"] == 0
+    assert payload["error"].startswith("Engagement DB not found:")
 
 
 # ---------------------------------------------------------------------------

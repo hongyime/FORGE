@@ -147,7 +147,7 @@ def test_non_dry_run_requires_roe_id(
         ],
     )
     assert result.exit_code == EXIT_VALIDATION, result.output
-    combined = (result.output + (result.stderr or "")).lower()
+    combined = result.output.lower()
     assert "roe" in combined
     db_root = tmp_path / "data" / "engagements"
     assert not db_root.exists() or not any(db_root.glob("*.db"))
@@ -173,7 +173,7 @@ def test_non_dry_run_requires_scope_manifest(
         ],
     )
     assert result.exit_code == EXIT_VALIDATION, result.output
-    combined = (result.output + (result.stderr or "")).lower()
+    combined = result.output.lower()
     assert "scope-manifest" in combined or "scope_manifest" in combined
 
 
