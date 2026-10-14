@@ -5,6 +5,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable
 from collections.abc import Sequence
@@ -21,7 +22,13 @@ def run_contained_subprocess(
     success_when: Callable[[], bool] | None = None,
     success_check_interval_seconds: float = 5.0,
 ) -> subprocess.CompletedProcess[str]:
-    """Run a command with captured text output and process-tree timeout cleanup."""
+    """Run a command with captured output, tree cleanup, and child peak RSS.
+
+    The returned ``CompletedProcess`` has a ``peak_rss_kb`` attribute containing
+    the direct child's Linux ``VmHWM`` peak in KB, or ``None`` when it cannot
+    be measured (including on non-Linux systems or for very short-lived
+    children). Grandchild memory is not included.
+    """
 
     args = [str(part) for part in command]
     timeout = max(1.0, float(timeout_seconds))
@@ -40,29 +47,82 @@ def run_contained_subprocess(
             **popen_kwargs,
         )
     except OSError as exc:
-        return subprocess.CompletedProcess(
+        result = subprocess.CompletedProcess(
             args,
             127,
             "",
             f"{type(exc).__name__}: {_coerce_stream_text(exc)}",
         )
-    if success_when is None:
-        return _communicate_with_timeout(
-            proc,
-            args,
-            timeout=timeout,
-            timeout_returncode=timeout_returncode,
-            timeout_stderr=timeout_stderr,
-        )
-    return _communicate_until_success_or_timeout(
-        proc,
-        args,
-        timeout=timeout,
-        timeout_returncode=timeout_returncode,
-        timeout_stderr=timeout_stderr,
-        success_when=success_when,
-        check_interval_seconds=success_check_interval_seconds,
-    )
+        result.peak_rss_kb = None  # type: ignore[attr-defined]
+        return result
+    sampler_thread, sampler_state = start_child_peak_rss_sampler(proc)
+    result: subprocess.CompletedProcess[str] | None = None
+    try:
+        if success_when is None:
+            result = _communicate_with_timeout(
+                proc,
+                args,
+                timeout=timeout,
+                timeout_returncode=timeout_returncode,
+                timeout_stderr=timeout_stderr,
+            )
+        else:
+            result = _communicate_until_success_or_timeout(
+                proc,
+                args,
+                timeout=timeout,
+                timeout_returncode=timeout_returncode,
+                timeout_stderr=timeout_stderr,
+                success_when=success_when,
+                check_interval_seconds=success_check_interval_seconds,
+            )
+        return result
+    finally:
+        sampler_thread.join(timeout=2.0)
+        if result is not None:
+            result.peak_rss_kb = sampler_state["peak_rss_kb"]  # type: ignore[attr-defined]
+
+
+def _read_proc_peak_rss_kb(pid: int) -> int | None:
+    """Read a direct child's Linux VmHWM; grandchildren are not attributed."""
+    if not sys.platform.startswith("linux") or pid < 0:
+        return None
+    try:
+        with Path(f"/proc/{pid}/status").open(encoding="ascii") as status_file:
+            for line in status_file:
+                if line.startswith("VmHWM:"):
+                    fields = line.split()
+                    return int(fields[1]) if len(fields) >= 2 else None
+    except Exception:
+        return None
+    return None
+
+
+def start_child_peak_rss_sampler(
+    proc: subprocess.Popen[str], *, interval_seconds: float = 0.05
+) -> tuple[threading.Thread, dict[str, int | None]]:
+    """Sample direct-child Linux VmHWM; memory used by grandchildren is excluded."""
+    state: dict[str, int | None] = {"peak_rss_kb": None}
+
+    def sample() -> None:
+        def update_peak() -> None:
+            peak = _read_proc_peak_rss_kb(proc.pid)
+            if peak is not None and (
+                state["peak_rss_kb"] is None or peak > state["peak_rss_kb"]
+            ):
+                state["peak_rss_kb"] = peak
+
+        try:
+            while proc.poll() is None:
+                update_peak()
+                time.sleep(interval_seconds)
+            update_peak()
+        except BaseException:
+            pass
+
+    thread = threading.Thread(target=sample, name="peak-rss-sampler", daemon=True)
+    thread.start()
+    return thread, state
 
 
 def _communicate_with_timeout(
