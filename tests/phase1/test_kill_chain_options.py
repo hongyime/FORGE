@@ -78,9 +78,9 @@ def test_kill_chain_validation_batch_budget_is_bounded() -> None:
 
 
 def test_kill_chain_max_runtime_budget_is_bounded() -> None:
-    assert DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES == 25
-    assert normalize_kill_chain_max_runtime_minutes(None) == 25
-    assert normalize_kill_chain_max_runtime_minutes("") == 25
+    assert DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES == 120
+    assert normalize_kill_chain_max_runtime_minutes(None) == 120
+    assert normalize_kill_chain_max_runtime_minutes("") == 120
     assert normalize_kill_chain_max_runtime_minutes("1440") == 1440
 
     for value in ("0", "1441", "not-int"):
@@ -89,16 +89,16 @@ def test_kill_chain_max_runtime_budget_is_bounded() -> None:
 
 
 def test_kill_chain_parallel_fanout_default_is_bounded() -> None:
-    assert DEFAULT_KILL_CHAIN_PARALLEL_FANOUT == 4
-    assert normalize_kill_chain_parallel_fanout(None) == 4
-    assert normalize_kill_chain_parallel_fanout("") == 4
+    assert DEFAULT_KILL_CHAIN_PARALLEL_FANOUT == 6
+    assert normalize_kill_chain_parallel_fanout(None) == 6
+    assert normalize_kill_chain_parallel_fanout("") == 6
     assert normalize_kill_chain_parallel_fanout("100") == 8
     assert normalize_kill_chain_parallel_fanout("0") == 1
 
     options = _runtime_options()
-    assert options.max_runtime_minutes == 25
-    assert options.parallel_fanout == 4
-    assert options.parallel_workers == 4
+    assert options.max_runtime_minutes == 120
+    assert options.parallel_fanout == 6
+    assert options.parallel_workers == 6
     assert 1 <= options.parallel_workers <= 8
 
 

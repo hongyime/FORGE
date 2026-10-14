@@ -122,6 +122,35 @@ forge-autopilot.bat --dry-run
 remain the enforcement path for live kill-chain execution. See
 [`forge autopilot --help`](#public-commands) for every flag.
 
+### Autopilot paths and feed handoff
+
+`forge autopilot --path discovery` runs phases 1–4 (feed fetch, connected
+service scan, feed build, and auto-scope). `--path engagement` runs phases 5–8
+(target import, resume, monitoring, and dashboard) using the last published
+feed; it does not wait for or depend on discovery. The default
+`--path full` runs all eight phases in order. Each path works with `--once`,
+`--loop`, and `--iterations`; `--describe` reports the selected path and phase
+set. `--path` cannot be combined with `--only-phase`.
+
+```bash
+forge autopilot --path discovery --once --apply --roe-id ROE-ID
+forge autopilot --path engagement --once --apply --roe-id ROE-ID
+forge autopilot --path full --once --apply --roe-id ROE-ID
+```
+
+Discovery publishes `target-feed.v1` to the configured feed path. Every
+publisher uses `write_target_feed`, which writes a sibling temporary file and
+renames it into place atomically. Engagement reads the published bytes once,
+then atomically pins them to a sibling snapshot named by inserting `.snapshot`
+before the extension: `target-feed.json` becomes
+`target-feed.snapshot.json`. The `import_targets` phase records the SHA-256 of
+the pinned bytes, the feed's `generated_at` value, and the snapshot path.
+Engagement with no feed skips target import as `feed_missing` and continues
+with resume, monitoring, and dashboard. If discovery is not running, an
+engagement run consumes the last published feed, even when that feed is stale.
+In dry-run, no snapshot is written; phase data reports the hash and the path
+that a live run would snapshot.
+
 For a first-run bootstrap that creates `.env`, enforces required
 autopilot env keys, scaffolds the data/imports/reports directories,
 and prints a readiness summary, run:
@@ -208,7 +237,7 @@ Every run produces a Markdown report + Maltego workspace/GraphML artifacts + evi
 |---|---|---|
 | `--engagement N` / `-e N` | kill-chain auto-derives when omitted; existing-engagement commands usually require it | Engagement ID (scopes findings + audit log) |
 | `--max-iter N` | `7` | Spider iterations. Loop breaks early on stable snapshot; capped at `10` |
-| `--max-runtime-minutes N` | `25` | Soft wall-clock budget before graceful finalization; also configurable with `FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES` |
+| `--max-runtime-minutes N` | `120` | Soft wall-clock budget before graceful finalization; also configurable with `FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES` |
 | `--tor` | off | Route supported subcommands through the vendored Tor bundle for transport privacy only; not for rate-limit bypass |
 | `--dry-run` | off | Log every intended action, execute nothing outbound |
 | `--attack-mode` / `--no-attack-mode` | on | **SCOPED ACTIVE ASSESSMENT**: bounded live checks plus read-only proof-bound credential/resource validation. Live execution requires `--roe-id`/`FORGE_ROE_ID` and `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; pass `--no-attack-mode` for passive-only |
@@ -221,7 +250,7 @@ Every run produces a Markdown report + Maltego workspace/GraphML artifacts + evi
 Useful advanced flags:
 - `--related-seed VALUE` can be repeated for multi-seed runs.
 - `--resume/--no-resume` defaults on and skips completed fan-outs for the engagement.
-- `--parallel-fanout N` defaults to `4` and is capped at `8`.
+- `--parallel-fanout N` defaults to `6` and is capped at `8`.
 - `--report-provider {auto,template,llama_cpp,...}` forces the Phase 6 backend; omitted uses `auto`.
 - `--report-max-loops N` defaults to Phase 6's `5`; set `0` to disable retries.
 - `--auto-run-detected/--no-auto-run-detected` defaults on; live execution still requires `--roe-id`/`FORGE_ROE_ID` and `--scope-manifest`/`FORGE_SCOPE_MANIFEST`.
@@ -367,6 +396,8 @@ forge autopilot                             # Self-running automation loop. Defa
 forge autopilot --dry-run                   # Explicit rehearsal — no writes, no live outbound work
 forge autopilot --apply --roe-id ROE-ID     # Explicit live loop — full feed-build / import / resume / monitor / dashboard
 forge autopilot --describe --json           # Resolved autopilot defaults and detected ROE/scope state (read-only)
+forge autopilot --describe --path discovery # Describe phases 1-4 without running them
+forge autopilot --path engagement --once    # Run phases 5-8 from the last published feed
 forge autopilot --loop --cooldown-minutes 0  # Continuous cadence: start the next cycle immediately
 forge autopilot --loop [--iterations N] [--cooldown-minutes N]  # Nonzero cooldowns sleep that many minutes; CLI default is 30
 forge autopilot --only-phase import_targets --dry-run --fixture-file tests/automation/fixtures/autopilot/import_targets.json  # Validate one isolated phase

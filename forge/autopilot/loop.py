@@ -22,6 +22,7 @@ Design constraints:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import tempfile
@@ -188,8 +189,13 @@ class ForgeAutopilot:
             "defaults": asdict(self.defaults),
         }
 
-    def run_once(self, *, dry_run: bool | None = None) -> dict[str, Any]:
-        """Single pass over every autopilot phase.
+    def run_once(
+        self,
+        *,
+        dry_run: bool | None = None,
+        path: str = "full",
+    ) -> dict[str, Any]:
+        """Run one pass over a selected pipeline path.
 
         Phases:
 
@@ -206,17 +212,23 @@ class ForgeAutopilot:
 
         Returns a schema-versioned summary payload.
         """
+        phase_names = self.phases_for_path(path)
         mode = self.resolve_execution_mode(dry_run=dry_run)
         is_dry_run = mode == "dry_run"
         started_at = _now_iso()
         self._event_writer.start_cycle(
-            details={"mode": mode, "dry_run": is_dry_run}
+            details={"mode": mode, "dry_run": is_dry_run, "path": path}
         )
         phases: list[AutopilotPhaseResult] = []
         cycle_status = "error"
         finished_at = ""
         try:
-            for phase_index, name in enumerate(self._PHASE_DISPATCH, start=1):
+            phase_indexes = {
+                phase_name: idx
+                for idx, phase_name in enumerate(self._PHASE_DISPATCH, start=1)
+            }
+            for name in phase_names:
+                phase_index = phase_indexes[name]
                 self._event_writer.emit(
                     "phase_start",
                     phase_name=name,
@@ -251,7 +263,7 @@ class ForgeAutopilot:
                     "phase_end",
                     phase_name=name,
                     phase_index=phase_index,
-                    details={"status": phase.status},
+                    details=self._phase_end_details(phase),
                 )
             finished_at = _now_iso()
             payload = self._summarize(
@@ -260,6 +272,7 @@ class ForgeAutopilot:
                 dry_run=is_dry_run,
                 started_at=started_at,
                 finished_at=finished_at,
+                path=path,
             )
             cycle_status = str(payload["status"])
             return payload
@@ -271,6 +284,7 @@ class ForgeAutopilot:
                     "status": cycle_status,
                     "phase_count": len(phases),
                     "dry_run": is_dry_run,
+                    "path": path,
                 },
                 occurred_at=finished_at,
             )
@@ -392,7 +406,7 @@ class ForgeAutopilot:
                 "phase_end",
                 phase_name=name,
                 phase_index=phase_index,
-                details={"status": phase.status},
+                details=self._phase_end_details(phase),
             )
             finished_at = _now_iso()
             # Describe the operator's configured paths, not the temporary
@@ -434,6 +448,7 @@ class ForgeAutopilot:
         self,
         *,
         dry_run: bool | None = None,
+        path: str = "full",
         iterations: int | None = None,
         sleep_fn: Any = None,
     ) -> dict[str, Any]:
@@ -445,13 +460,14 @@ class ForgeAutopilot:
         Pass a custom ``sleep_fn`` (e.g. ``time.sleep``) for test
         injection; defaults to :func:`time.sleep`.
         """
+        self.phases_for_path(path)
         if iterations is None or iterations <= 0:
             iterations = 1
         sleep = sleep_fn or time.sleep
         cooldown = max(0, int(self.defaults.cooldown_minutes)) * 60
         results: list[dict[str, Any]] = []
         for idx in range(iterations):
-            payload = self.run_once(dry_run=dry_run)
+            payload = self.run_once(dry_run=dry_run, path=path)
             payload["iteration"] = idx + 1
             payload["total_iterations"] = iterations
             results.append(payload)
@@ -486,6 +502,48 @@ class ForgeAutopilot:
         "monitoring": "_phase_monitoring",
         "dashboard": "_phase_dashboard",
     }
+
+    _PATH_PHASES = {
+        "discovery": (
+            "feed_fetch",
+            "connected_services_scan",
+            "feed_build",
+            "auto_scope",
+        ),
+        "engagement": (
+            "import_targets",
+            "resume_candidates",
+            "monitoring",
+            "dashboard",
+        ),
+        "full": tuple(_PHASE_DISPATCH),
+    }
+
+    @classmethod
+    def phases_for_path(cls, path: str) -> tuple[str, ...]:
+        """Return the ordered phase names selected by a pipeline path."""
+        try:
+            return cls._PATH_PHASES[path]
+        except KeyError as exc:
+            valid = ", ".join(cls._PATH_PHASES)
+            raise ValueError(f"Invalid path '{path}'. Valid paths: {valid}") from exc
+
+    @staticmethod
+    def _phase_end_details(phase: AutopilotPhaseResult) -> dict[str, Any]:
+        details: dict[str, Any] = {"status": phase.status}
+        if phase.name == "import_targets":
+            details["feed_pin"] = {
+                key: phase.data.get(key)
+                for key in (
+                    "feed_missing",
+                    "feed_sha256",
+                    "feed_generated_at",
+                    "snapshot_path",
+                    "snapshot_written",
+                    "snapshot_would_write",
+                )
+            }
+        return details
 
     def _maybe_phase(self, name: str, dry_run: bool) -> AutopilotPhaseResult:
         """Dispatch a phase or short-circuit when the operator skipped it."""
@@ -1160,12 +1218,76 @@ class ForgeAutopilot:
         authorization. In that case the autopilot drops to dry-run for
         this phase alone and keeps going.
         """
-        if not self.feed_file.is_file():
+        snapshot_path = _feed_snapshot_path(self.feed_file)
+        try:
+            feed_bytes = self.feed_file.read_bytes()
+        except FileNotFoundError:
             return AutopilotPhaseResult(
                 name="import_targets",
                 status="skipped",
                 detail=f"feed_missing:{self.feed_file}",
+                data={
+                    "feed_missing": True,
+                    "feed_sha256": None,
+                    "feed_generated_at": None,
+                    "snapshot_path": str(snapshot_path),
+                    "snapshot_written": False,
+                    "snapshot_would_write": False,
+                },
             )
+        except OSError as exc:
+            return AutopilotPhaseResult(
+                name="import_targets",
+                status="error",
+                detail=f"feed_read_error:{_bounded_text(exc)}",
+                data={
+                    "feed_missing": False,
+                    "feed_sha256": None,
+                    "feed_generated_at": None,
+                    "snapshot_path": str(snapshot_path),
+                    "snapshot_written": False,
+                    "snapshot_would_write": False,
+                },
+            )
+
+        feed_pin = {
+            "feed_missing": False,
+            "feed_sha256": hashlib.sha256(feed_bytes).hexdigest(),
+            "feed_generated_at": None,
+            "snapshot_path": str(snapshot_path),
+            "snapshot_written": False,
+            "snapshot_would_write": False,
+        }
+
+        start = not dry_run and self.has_roe
+        effective_dry_run = dry_run or not self.has_roe
+        import_feed_file = self.feed_file
+        if effective_dry_run:
+            # Dry-run consumes the current feed for preview only. No
+            # persistent snapshot is created; metadata reports where a
+            # live run would pin these bytes.
+            feed_pin["snapshot_would_write"] = True
+        else:
+            try:
+                _write_bytes_atomic(snapshot_path, feed_bytes)
+            except OSError as exc:
+                return AutopilotPhaseResult(
+                    name="import_targets",
+                    status="error",
+                    detail=f"snapshot_write_error:{_bounded_text(exc)}",
+                    data=feed_pin,
+                )
+            feed_pin["snapshot_written"] = True
+            import_feed_file = snapshot_path
+
+        try:
+            feed_payload = json.loads(feed_bytes)
+            if isinstance(feed_payload, dict):
+                feed_pin["feed_generated_at"] = feed_payload.get("generated_at")
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            # The importer reports malformed input after the live snapshot
+            # has been pinned (or from the original path during dry-run).
+            pass
 
         try:
             from forge.targets_import import import_targets  # noqa: PLC0415
@@ -1174,14 +1296,13 @@ class ForgeAutopilot:
                 name="import_targets",
                 status="error",
                 detail=f"import_error:{_bounded_text(exc)}",
+                data=feed_pin,
             )
 
-        start = not dry_run and self.has_roe
-        effective_dry_run = dry_run or not self.has_roe
         try:
             results = import_targets(
                 feed_url=None,
-                feed_file=self.feed_file,
+                feed_file=import_feed_file,
                 auth_header_env=None,
                 roe_id=self.roe_id,
                 start=start,
@@ -1202,6 +1323,7 @@ class ForgeAutopilot:
                 name="import_targets",
                 status="error",
                 detail=_bounded_text(exc),
+                data=feed_pin,
             )
 
         created = sum(1 for r in results if r.created)
@@ -1238,6 +1360,7 @@ class ForgeAutopilot:
                 f"unprocessed={unprocessed_count}"
             ),
             data={
+                **feed_pin,
                 "dry_run": effective_dry_run,
                 "start_requested": start,
                 "total": len(results) + unprocessed_count,
@@ -1498,6 +1621,7 @@ class ForgeAutopilot:
         started_at: str,
         finished_at: str,
         single_phase: str | None = None,
+        path: str = "full",
     ) -> dict[str, Any]:
         """Fold phase results into a schema-versioned summary payload."""
         status_counts: dict[str, int] = {}
@@ -1518,7 +1642,11 @@ class ForgeAutopilot:
                 else (
                     "apply_single_phase_only"
                     if single_phase
-                    else "apply_full_automation_pipeline"
+                    else (
+                        "apply_full_automation_pipeline"
+                        if path == "full"
+                        else f"apply_{path}_automation_path"
+                    )
                 )
             ),
             "mode": mode,
@@ -1536,6 +1664,42 @@ class ForgeAutopilot:
 # ----------------------------------------------------------------------
 # Module-level helpers
 # ----------------------------------------------------------------------
+
+
+def _feed_snapshot_path(feed_file: Path) -> Path:
+    """Return the stable sibling snapshot path for a target-feed file."""
+    feed_file = Path(feed_file)
+    return feed_file.with_name(
+        f"{feed_file.stem}.snapshot{feed_file.suffix}"
+    )
+
+
+def _write_bytes_atomic(output_path: Path, payload: bytes) -> None:
+    """Atomically replace a file with bytes written to a sibling temp file."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(output_path.parent),
+        prefix=f".{output_path.name}.",
+        suffix=".tmp",
+    )
+    fd_open = True
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            fd_open = False
+            handle.write(payload)
+        os.replace(tmp_name, output_path)
+    except BaseException:
+        if fd_open:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
 
 
 def _now_iso() -> str:

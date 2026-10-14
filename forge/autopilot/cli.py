@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -15,6 +16,12 @@ from forge.utils.kill_chain_options import normalize_kill_chain_parallel_fanout
 
 
 console = Console(stderr=True)
+
+
+class AutopilotPath(str, Enum):
+    DISCOVERY = "discovery"
+    ENGAGEMENT = "engagement"
+    FULL = "full"
 
 
 def register_autopilot_commands(app: typer.Typer) -> None:
@@ -102,6 +109,11 @@ def register_autopilot_commands(app: typer.Typer) -> None:
             None,
             "--only-phase",
             help="Run one phase once. Defaults to dry-run; --apply opts into execution.",
+        ),
+        path: AutopilotPath = typer.Option(
+            AutopilotPath.FULL,
+            "--path",
+            help="Pipeline path: discovery (phases 1-4), engagement (5-8), or full.",
         ),
         fixture_file: Optional[Path] = typer.Option(
             None,
@@ -266,6 +278,15 @@ def register_autopilot_commands(app: typer.Typer) -> None:
         if ctx.invoked_subcommand is not None:
             return
 
+        path_value = path.value
+        selected_phases = ForgeAutopilot.phases_for_path(path_value)
+        path_was_explicit = (
+            ctx.get_parameter_source("path").name == "COMMANDLINE"
+        )
+        if only_phase is not None and path_was_explicit:
+            raise typer.BadParameter(
+                "--path cannot be combined with --only-phase"
+            )
         if only_phase is not None and only_phase not in ForgeAutopilot._PHASE_DISPATCH:
             valid = ", ".join(ForgeAutopilot._PHASE_DISPATCH)
             raise typer.BadParameter(
@@ -339,6 +360,8 @@ def register_autopilot_commands(app: typer.Typer) -> None:
 
         if describe:
             snapshot = autopilot.describe()
+            snapshot["selected_path"] = path_value
+            snapshot["selected_phases"] = list(selected_phases)
             if only_phase is not None:
                 snapshot["selected_phase"] = only_phase
             if only_phase == "dashboard" and fixture_file is not None:
@@ -374,6 +397,7 @@ def register_autopilot_commands(app: typer.Typer) -> None:
         resolved_iterations = _resolve_iterations(once=once, iterations=iterations)
         payload = autopilot.run(
             dry_run=resolved_dry_run,
+            path=path_value,
             iterations=resolved_iterations,
         )
 
@@ -488,6 +512,10 @@ def _print_description(snapshot: dict[str, object]) -> None:
     console.print(f"scope_manifest={snapshot['scope_manifest']}")
     console.print(f"safe_mode={snapshot['safe_mode']}")
     console.print(f"default_execution_mode={snapshot['default_execution_mode']}")
+    if snapshot.get("selected_path"):
+        console.print(f"selected_path={snapshot['selected_path']}")
+        phases = snapshot.get("selected_phases") or []
+        console.print(f"selected_phases={','.join(str(name) for name in phases)}")
     if snapshot.get("selected_phase"):
         console.print(f"selected_phase={snapshot['selected_phase']}")
     if snapshot.get("fixture_note"):

@@ -1102,10 +1102,10 @@ def test_resume_plan_reports_sequential_ready_commands_without_execution(tmp_pat
         "--max-runtime-minutes",
         "17",
         "--parallel-fanout",
-        "4",
+        "6",
     ]
     assert item["max_runtime_minutes"] == 17
-    assert item["parallel_fanout"] == 4
+    assert item["parallel_fanout"] == 6
 
     redacted = collect_target_resume_plan(
         data_dir=data_dir,
@@ -1122,7 +1122,7 @@ def test_resume_plan_reports_sequential_ready_commands_without_execution(tmp_pat
     assert str(scope_path) not in json.dumps(redacted)
     assert str(data_dir) not in json.dumps(redacted)
     assert "<scope-manifest:scope.json>" in redacted_item["command"]
-    assert redacted_item["parallel_fanout"] == 4
+    assert redacted_item["parallel_fanout"] == 6
 
 
 def test_planned_resume_command_replaces_runtime_and_fanout_options() -> None:
@@ -1256,9 +1256,9 @@ def test_targets_resume_plan_cli_outputs_json_without_running(tmp_path: Path) ->
         "--max-runtime-minutes",
         "19",
         "--parallel-fanout",
-        "4",
+        "6",
     ]
-    assert payload["items"][0]["parallel_fanout"] == 4
+    assert payload["items"][0]["parallel_fanout"] == 6
     assert str(scope_path) not in result.output
 
 
@@ -1309,7 +1309,7 @@ def test_targets_resume_run_cli_outputs_executor_payload(monkeypatch: pytest.Mon
     assert captured_kwargs["redact_paths"] is True
     assert captured_kwargs["break_stale_lock"] is True
     assert captured_kwargs["stale_lock_minutes"] == 7
-    assert captured_kwargs["parallel_fanout"] == 4
+    assert captured_kwargs["parallel_fanout"] == 6
 
     captured_kwargs.clear()
     override_result = CliRunner().invoke(
@@ -1480,9 +1480,9 @@ def test_resume_run_dry_run_does_not_call_runner_or_write_ledger(tmp_path: Path)
         "--max-runtime-minutes",
         "13",
         "--parallel-fanout",
-        "4",
+        "6",
     ]
-    assert payload["items"][0]["parallel_fanout"] == 4
+    assert payload["items"][0]["parallel_fanout"] == 6
     assert calls == []
     assert not (data_dir / "target_imports" / "resume_batches").exists()
 
@@ -2149,8 +2149,8 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
         **_kwargs: object,
     ) -> object:
         calls.append(command)
-        assert timeout_seconds == 25 * 60 + 120
-        assert timeout_stderr == "target import child exceeded timeout_seconds=1620"
+        assert timeout_seconds == 120 * 60 + 120
+        assert timeout_stderr == "target import child exceeded timeout_seconds=7320"
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
@@ -2176,9 +2176,9 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
     assert "--max-iter" in command
     assert command[-4:] == [
         "--max-runtime-minutes",
-        "25",
+        "120",
         "--parallel-fanout",
-        "4",
+        "6",
     ]
     assert "--no-attack-mode" not in command
     assert "--no-auto-run-detected" not in command
@@ -2278,7 +2278,7 @@ def test_start_uses_configured_kill_chain_runtime_timeout(
         "--max-runtime-minutes",
         "13",
         "--parallel-fanout",
-        "4",
+        "6",
     ]
     assert calls[0][1] == 13 * 60 + 120
 
@@ -2612,8 +2612,8 @@ def test_start_limit_caps_scoped_kill_chain_launches(
         **_kwargs: object,
     ) -> object:
         calls.append(command)
-        assert timeout_seconds == 25 * 60 + 120
-        assert timeout_stderr == "target import child exceeded timeout_seconds=1620"
+        assert timeout_seconds == 120 * 60 + 120
+        assert timeout_stderr == "target import child exceeded timeout_seconds=7320"
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
@@ -2637,9 +2637,9 @@ def test_start_limit_caps_scoped_kill_chain_launches(
     assert len(calls) == 1
     assert calls[0][-4:] == [
         "--max-runtime-minutes",
-        "25",
+        "120",
         "--parallel-fanout",
-        "4",
+        "6",
     ]
 
 
@@ -3168,7 +3168,7 @@ def test_targets_import_cli_passes_max_runtime_minutes(
 
     assert result.exit_code == 0, result.output
     assert captured_kwargs["max_runtime_minutes"] == 13
-    assert captured_kwargs["parallel_fanout"] == 4
+    assert captured_kwargs["parallel_fanout"] == 6
 
 
 def test_targets_import_cli_defaults_timeout_and_fanout(
@@ -3204,8 +3204,8 @@ def test_targets_import_cli_defaults_timeout_and_fanout(
     )
 
     assert result.exit_code == 0, result.output
-    assert captured_kwargs["max_runtime_minutes"] == 25
-    assert captured_kwargs["parallel_fanout"] == 4
+    assert captured_kwargs["max_runtime_minutes"] == 120
+    assert captured_kwargs["parallel_fanout"] == 6
 
 
 def test_targets_import_cli_passes_min_start_source_count(

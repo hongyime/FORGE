@@ -78,13 +78,16 @@ def register_target_import_commands(app: typer.Typer) -> None:
             help=(
                 "Soft kill-chain runtime budget per started target. The import "
                 "parent also enforces this budget plus a short shutdown grace "
-                "(default: 25 minutes)."
+                f"(default: {DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES} minutes)."
             ),
         ),
         parallel_fanout: int = typer.Option(
             DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
             "--parallel-fanout",
-            help="Kill-chain workers per started target (default: 4, max 8).",
+            help=(
+                "Kill-chain workers per started target "
+                f"(default: {DEFAULT_KILL_CHAIN_PARALLEL_FANOUT}, max 8)."
+            ),
         ),
         start_limit: Optional[int] = typer.Option(
             None,
@@ -434,7 +437,10 @@ def register_target_import_commands(app: typer.Typer) -> None:
         parallel_fanout: int = typer.Option(
             DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
             "--parallel-fanout",
-            help="Kill-chain workers per resumed run (default: 4, max 8).",
+            help=(
+                "Kill-chain workers per resumed run "
+                f"(default: {DEFAULT_KILL_CHAIN_PARALLEL_FANOUT}, max 8)."
+            ),
         ),
         batch_id: Optional[str] = typer.Option(
             None,

@@ -446,7 +446,10 @@ def kill_chain(
     parallel_fanout: int = typer.Option(
         DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
         "--parallel-fanout",
-        help="Maximum concurrent passive fan-out subprocesses per batch (default 4, max 8).",
+        help=(
+            "Maximum concurrent passive fan-out subprocesses per batch "
+            f"(default {DEFAULT_KILL_CHAIN_PARALLEL_FANOUT}, max 8)."
+        ),
     ),
     report_provider: Optional[str] = typer.Option(
         None,

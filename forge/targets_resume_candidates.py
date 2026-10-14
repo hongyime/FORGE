@@ -22,6 +22,7 @@ from forge.engagement_ids import numeric_engagement_db_files
 from forge.orchestration.run_tracking import mark_timed_out_kill_chain_run_failed
 from forge.subprocess_tree import run_contained_subprocess
 from forge.utils.kill_chain_options import (
+    DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
     DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
     normalize_kill_chain_parallel_fanout,
 )
@@ -31,7 +32,7 @@ RESUME_PLAN_SCHEMA_VERSION = "forge.targets.resume_plan.v1"
 RESUME_RUN_SCHEMA_VERSION = "forge.targets.resume_run.v1"
 SCOPE_BACKFILL_SCHEMA_VERSION = "forge.targets.scope_manifest_backfill.v1"
 DEFAULT_RESUME_CANDIDATE_LIMIT = 100
-DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES = 25
+DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES = DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES
 DEFAULT_RESUME_LOCK_STALE_MINUTES = 120
 TERMINAL_NON_SUCCESS_STATUSES = {"failed", "cancelled"}
 ResumeRunner = Callable[[list[str], int], subprocess.CompletedProcess[str]]

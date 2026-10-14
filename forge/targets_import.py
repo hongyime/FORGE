@@ -26,6 +26,7 @@ from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_f
 from forge.onboard.patterns import is_denied_target
 from forge.subprocess_tree import run_contained_subprocess
 from forge.utils.kill_chain_options import (
+    DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
     DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
     normalize_kill_chain_parallel_fanout,
 )
@@ -33,8 +34,8 @@ from forge.utils.kill_chain_options import (
 TARGET_FEED_SCHEMA_VERSION = "target-feed.v1"
 TARGET_IMPORT_MONITORING_POLICY_NAME = "Target import seed exposure"
 TARGET_IMPORT_MONITORING_INTERVAL_MINUTES = 60
-# Manual/standalone import default; the autopilot loop passes 120 explicitly.
-DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES = 25
+# Keep target import aligned with the shared kill-chain runtime default.
+DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES = DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES
 TARGET_IMPORT_CHILD_TIMEOUT_GRACE_SECONDS = 120
 TARGET_FAILURE_STDERR_MAX_BYTES = 2048
 # Consecutive failed start attempts are bounded independently of the success limit.

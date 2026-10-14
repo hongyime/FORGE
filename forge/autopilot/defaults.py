@@ -31,8 +31,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-AUTOPILOT_MAX_RUNTIME_MINUTES = 120
-AUTOPILOT_PARALLEL_FANOUT = 6
+from forge.utils.kill_chain_options import (
+    DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
+    DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+)
+
+AUTOPILOT_MAX_RUNTIME_MINUTES = DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES
+AUTOPILOT_PARALLEL_FANOUT = DEFAULT_KILL_CHAIN_PARALLEL_FANOUT
 AUTOPILOT_MAX_TIMEOUT_RETRIES = 2
 
 # Cycle 5 proof: two healthy, progressing targets hit return_code 124 at
