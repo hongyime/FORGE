@@ -28,8 +28,8 @@ from forge.subprocess_tree import run_contained_subprocess
 from forge.utils.kill_chain_options import (
     DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
     DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
-    normalize_kill_chain_parallel_fanout,
 )
+from forge.utils.kill_chain_fanout import cap_fanout
 
 TARGET_FEED_SCHEMA_VERSION = "target-feed.v1"
 TARGET_IMPORT_MONITORING_POLICY_NAME = "Target import seed exposure"
@@ -271,6 +271,7 @@ def import_targets(
                 _start_kill_chain(
                     engagement_id=engagement_id,
                     seed=item.canonical_value,
+                    target_type=item.target_type,
                     roe_id=str(roe_id or "").strip(),
                     scope_manifest=manifest_path,
                     max_iter=max_iter,
@@ -1089,6 +1090,7 @@ def _start_kill_chain(
     *,
     engagement_id: int,
     seed: str,
+    target_type: str = "other",
     roe_id: str,
     scope_manifest: Path,
     max_iter: int,
@@ -1097,7 +1099,14 @@ def _start_kill_chain(
     engagement_db_path: Path,
 ) -> None:
     runtime_minutes = _normalize_max_runtime_minutes(max_runtime_minutes)
-    fanout = normalize_kill_chain_parallel_fanout(parallel_fanout)
+    fanout_decision = cap_fanout(
+        parallel_fanout,
+        seed=seed,
+        target_type=target_type,
+        roe_strictness="standard",
+        requested_by="targets-import",
+    )
+    fanout = fanout_decision.effective
     command = [
         sys.executable,
         "-m",
@@ -1110,6 +1119,8 @@ def _start_kill_chain(
         roe_id,
         "--scope-manifest",
         str(scope_manifest),
+        "--target-type",
+        target_type,
         "--max-iter",
         str(max(1, int(max_iter))),
         "--max-runtime-minutes",

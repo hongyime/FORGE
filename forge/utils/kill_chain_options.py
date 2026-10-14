@@ -2,6 +2,7 @@ from __future__ import annotations
 
 DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES = 120
 DEFAULT_KILL_CHAIN_PARALLEL_FANOUT = 6
+MIN_KILL_CHAIN_PARALLEL_FANOUT = 1
 MAX_KILL_CHAIN_PARALLEL_FANOUT = 8
 
 
@@ -71,9 +72,22 @@ def normalize_kill_chain_max_runtime_minutes(
 
 
 def normalize_kill_chain_parallel_fanout(
-    value: object, *, default: int = DEFAULT_KILL_CHAIN_PARALLEL_FANOUT
+    value: object,
+    *,
+    default: int = DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+    seed: object | None = None,
+    target_type: str | None = None,
+    estimated_surface: int | str | None = None,
+    roe_strictness: str = "standard",
+    requested_by: str | None = None,
+    rate_limit_events: int = 0,
+    backoff_events: int = 0,
 ) -> int:
-    """Normalize worker fanout to the supported bounded range of 1 through 8."""
+    """Return the effective fanout after applying the target's adaptive cap.
+
+    Calls that need the full reasoned decision should use
+    :func:`forge.utils.kill_chain_fanout.cap_fanout`.
+    """
     if value in (None, ""):
         candidate = default
     else:
@@ -81,4 +95,16 @@ def normalize_kill_chain_parallel_fanout(
             candidate = int(value)
         except (TypeError, ValueError) as exc:
             raise ValueError("parallel_fanout must be an integer.") from exc
-    return max(1, min(MAX_KILL_CHAIN_PARALLEL_FANOUT, candidate))
+    from forge.utils.kill_chain_fanout import cap_fanout  # noqa: PLC0415
+
+    decision = cap_fanout(
+        candidate,
+        seed=seed,
+        target_type=target_type,
+        estimated_surface=estimated_surface,
+        roe_strictness=roe_strictness,
+        requested_by=requested_by,
+        rate_limit_events=rate_limit_events,
+        backoff_events=backoff_events,
+    )
+    return decision.effective

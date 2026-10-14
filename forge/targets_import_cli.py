@@ -85,8 +85,8 @@ def register_target_import_commands(app: typer.Typer) -> None:
             DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
             "--parallel-fanout",
             help=(
-                "Kill-chain workers per started target "
-                f"(default: {DEFAULT_KILL_CHAIN_PARALLEL_FANOUT}, max 8)."
+                "Requested kill-chain workers per started target; the per-target cap "
+                f"varies with target surface and ROE (default: {DEFAULT_KILL_CHAIN_PARALLEL_FANOUT}, ceiling 8)."
             ),
         ),
         start_limit: Optional[int] = typer.Option(
@@ -438,9 +438,19 @@ def register_target_import_commands(app: typer.Typer) -> None:
             DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
             "--parallel-fanout",
             help=(
-                "Kill-chain workers per resumed run "
-                f"(default: {DEFAULT_KILL_CHAIN_PARALLEL_FANOUT}, max 8)."
+                "Requested kill-chain workers per resumed run; the per-target cap "
+                f"varies with target surface and ROE (default: {DEFAULT_KILL_CHAIN_PARALLEL_FANOUT}, ceiling 8)."
             ),
+        ),
+        rate_limit_events: Optional[int] = typer.Option(
+            None,
+            "--rate-limit-events",
+            help="Prior run's observed 429 or exhausted-quota 403 count; defaults to recorded metadata.",
+        ),
+        backoff_events: Optional[int] = typer.Option(
+            None,
+            "--backoff-events",
+            help="Prior run's bounded backoff count; defaults to recorded metadata.",
         ),
         batch_id: Optional[str] = typer.Option(
             None,
@@ -492,6 +502,8 @@ def register_target_import_commands(app: typer.Typer) -> None:
             max_iter=max_iter,
             max_runtime_minutes=max_runtime_minutes,
             parallel_fanout=parallel_fanout,
+            rate_limit_events=rate_limit_events,
+            backoff_events=backoff_events,
             batch_id=batch_id,
             stop_on_failure=stop_on_failure,
             max_parallel=max_parallel,

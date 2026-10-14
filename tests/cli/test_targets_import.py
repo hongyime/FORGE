@@ -1099,13 +1099,19 @@ def test_resume_plan_reports_sequential_ready_commands_without_execution(tmp_pat
         "--resume",
         "--max-iter",
         "5",
+        "--target-type",
+        "domain",
+        "--prior-rate-limit-events",
+        "0",
+        "--prior-backoff-events",
+        "0",
         "--max-runtime-minutes",
         "17",
         "--parallel-fanout",
-        "6",
+        "4",
     ]
     assert item["max_runtime_minutes"] == 17
-    assert item["parallel_fanout"] == 6
+    assert item["parallel_fanout"] == 4
 
     redacted = collect_target_resume_plan(
         data_dir=data_dir,
@@ -1122,7 +1128,7 @@ def test_resume_plan_reports_sequential_ready_commands_without_execution(tmp_pat
     assert str(scope_path) not in json.dumps(redacted)
     assert str(data_dir) not in json.dumps(redacted)
     assert "<scope-manifest:scope.json>" in redacted_item["command"]
-    assert redacted_item["parallel_fanout"] == 6
+    assert redacted_item["parallel_fanout"] == 4
 
 
 def test_planned_resume_command_replaces_runtime_and_fanout_options() -> None:
@@ -1151,6 +1157,45 @@ def test_planned_resume_command_replaces_runtime_and_fanout_options() -> None:
     ]
     assert planned.count("--max-runtime-minutes") == 1
     assert planned.count("--parallel-fanout") == 1
+
+
+def test_resume_plan_carries_forward_prior_fanout_signal_counts(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    scope_path = tmp_path / "scope.json"
+    scope_path.write_text("{}", encoding="utf-8")
+    _write_candidate_run(
+        data_dir / "engagements" / "1.db",
+        engagement_id=1,
+        status="failed",
+        error="max iterations exhausted with pending recursive work: 1",
+        metadata={
+            "roe_id": "ROE-ACME-2026",
+            "scope_manifest": str(scope_path),
+            "rate_limit_events": 1,
+            "backoff_events": 1,
+        },
+    )
+
+    plan = collect_target_resume_plan(data_dir=data_dir)
+    item = plan["items"][0]
+    assert item["rate_limit_events"] == 1
+    assert item["backoff_events"] == 1
+    assert item["parallel_fanout"] == 1
+    assert item["fanout_cap_decision"]["reason"] == (
+        "reduced by prior rate-limit/backoff signals"
+    )
+    command = item["command"]
+    assert command[command.index("--prior-rate-limit-events") + 1] == "1"
+    assert command[command.index("--prior-backoff-events") + 1] == "1"
+
+    overridden = collect_target_resume_plan(
+        data_dir=data_dir,
+        rate_limit_events=0,
+        backoff_events=0,
+    )["items"][0]
+    assert overridden["rate_limit_events"] == 0
+    assert overridden["backoff_events"] == 0
+    assert overridden["parallel_fanout"] == 4
 
 
 def test_resume_plan_reports_total_and_omitted_counts_when_limited(
@@ -1256,9 +1301,9 @@ def test_targets_resume_plan_cli_outputs_json_without_running(tmp_path: Path) ->
         "--max-runtime-minutes",
         "19",
         "--parallel-fanout",
-        "6",
+        "4",
     ]
-    assert payload["items"][0]["parallel_fanout"] == 6
+    assert payload["items"][0]["parallel_fanout"] == 4
     assert str(scope_path) not in result.output
 
 
@@ -1391,7 +1436,7 @@ def test_resume_run_executes_sequentially_and_writes_ledger(tmp_path: Path) -> N
         "--max-runtime-minutes",
         "13",
         "--parallel-fanout",
-        "6",
+        "4",
     ]
     assert calls[0][1] == 13 * 60 + 120
     ledger_path = Path(payload["ledger_path"])
@@ -1480,9 +1525,9 @@ def test_resume_run_dry_run_does_not_call_runner_or_write_ledger(tmp_path: Path)
         "--max-runtime-minutes",
         "13",
         "--parallel-fanout",
-        "6",
+        "4",
     ]
-    assert payload["items"][0]["parallel_fanout"] == 6
+    assert payload["items"][0]["parallel_fanout"] == 4
     assert calls == []
     assert not (data_dir / "target_imports" / "resume_batches").exists()
 
@@ -2178,8 +2223,9 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
         "--max-runtime-minutes",
         "120",
         "--parallel-fanout",
-        "6",
+        "4",
     ]
+    assert command[command.index("--target-type") + 1] == "domain"
     assert "--no-attack-mode" not in command
     assert "--no-auto-run-detected" not in command
     assert "--attack-mode" not in command
@@ -2278,7 +2324,7 @@ def test_start_uses_configured_kill_chain_runtime_timeout(
         "--max-runtime-minutes",
         "13",
         "--parallel-fanout",
-        "6",
+        "4",
     ]
     assert calls[0][1] == 13 * 60 + 120
 
@@ -2639,7 +2685,7 @@ def test_start_limit_caps_scoped_kill_chain_launches(
         "--max-runtime-minutes",
         "120",
         "--parallel-fanout",
-        "6",
+        "4",
     ]
 
 

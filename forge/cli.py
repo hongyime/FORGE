@@ -42,7 +42,7 @@ import sqlite3
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from urllib.parse import urljoin, urlparse, urlsplit, urlunsplit
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Sequence, cast
@@ -447,10 +447,17 @@ def kill_chain(
         DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
         "--parallel-fanout",
         help=(
-            "Maximum concurrent passive fan-out subprocesses per batch "
-            f"(default {DEFAULT_KILL_CHAIN_PARALLEL_FANOUT}, max 8)."
+            "Requested concurrent fan-out subprocesses per batch. The per-target "
+            f"cap varies by target surface and ROE (default {DEFAULT_KILL_CHAIN_PARALLEL_FANOUT}; global ceiling 8)."
         ),
     ),
+    target_type_override: Optional[str] = typer.Option(
+        None,
+        "--target-type",
+        hidden=True,
+    ),
+    prior_rate_limit_events: int = typer.Option(0, "--prior-rate-limit-events", hidden=True),
+    prior_backoff_events: int = typer.Option(0, "--prior-backoff-events", hidden=True),
     report_provider: Optional[str] = typer.Option(
         None,
         "--report-provider",
@@ -492,7 +499,8 @@ def kill_chain(
         False,
         "--go-hard",
         help=(
-            "Maximum aggression mode. Sets max-iter=20, parallel-fanout=8, "
+            "Maximum aggression mode. Sets max-iter=20 and requests fanout ceiling 8; "
+            "the per-target cap still applies. "
             "CommonCrawl indexes=5 (5000 URLs/index), identity workers=3, "
             "auto-run=True, enables keyscan validation, and activates the "
             "500-label deep subdomain wordlist. Use for thorough assessments "
@@ -548,6 +556,10 @@ def kill_chain(
             skip_cloud=skip_cloud,
             skip_keyscan=skip_keyscan,
             parallel_fanout=parallel_fanout,
+            seed=seed,
+            target_type=target_type_override,
+            rate_limit_events=prior_rate_limit_events,
+            backoff_events=prior_backoff_events,
             report_provider=report_provider,
             report_max_loops=report_max_loops,
             max_runtime_minutes=max_runtime_minutes,
@@ -573,6 +585,8 @@ def kill_chain(
     skip_cloud = runtime_options.skip_cloud
     skip_keyscan = runtime_options.skip_keyscan
     parallel_fanout = runtime_options.parallel_fanout
+    fanout_cap_decision = runtime_options.fanout_cap_decision
+    fanout_controller = runtime_options.fanout_controller
     report_provider = runtime_options.report_provider
     report_max_loops = runtime_options.report_max_loops
     max_runtime_minutes = runtime_options.max_runtime_minutes
@@ -593,6 +607,40 @@ def kill_chain(
     pending_validation_batch_limit = runtime_options.pending_validation_batch_limit
     live_launch = runtime_options.live_launch
     require_scope_manifest = runtime_options.require_scope_manifest
+
+    module_batch_runner = globals()["_run_module_batch"]
+
+    def _run_module_batch(
+        specs: list[ModuleDispatchSpec],
+        run_module: Callable[..., int],
+        *,
+        max_workers: int,
+        progress_label: str | None = None,
+        progress_callback: Callable[[str, dict[str, object]], None] | None = None,
+    ) -> list[int]:
+        """Apply the current cap at module-batch boundaries and record outcomes."""
+
+        nonlocal parallel_workers
+        batch_workers = min(max(1, int(max_workers)), fanout_controller.current_cap)
+        results = module_batch_runner(
+            specs,
+            run_module,
+            max_workers=batch_workers,
+            progress_label=progress_label,
+            progress_callback=progress_callback,
+        )
+        if not dry_run_all:
+            for result in results:
+                if int(result) == 0:
+                    fanout_controller.record_success()
+                else:
+                    fanout_controller.record_error()
+            parallel_workers = min(
+                fanout_cap_decision.requested,
+                fanout_controller.current_cap,
+            )
+        return results
+
     try:
         scope_manifest_metadata = load_kill_chain_scope_manifest_metadata(
             runtime_options,
@@ -897,6 +945,8 @@ def kill_chain(
             {
                 "max_iter": max_iterations,
                 "parallel_fanout": parallel_workers,
+                "fanout_cap_decision": asdict(fanout_cap_decision),
+                **fanout_controller.snapshot(),
                 "attack_mode": attack_mode,
                 "auto_run_detected": auto_run_detected,
                 "go_hard": go_hard,
@@ -1143,6 +1193,8 @@ def kill_chain(
             },
             runtime_metadata={
                 "parallel_fanout": parallel_workers,
+                "fanout_cap_decision": asdict(fanout_cap_decision),
+                **fanout_controller.snapshot(),
                 "artifact_processor_max_workers": artifact_processor_workers,
                 "artifact_processor_worker_cap": artifact_processor_worker_cap,
                 "synthesis_depth_limit": synthesis_depth_limit,

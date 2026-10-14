@@ -250,11 +250,11 @@ Every run produces a Markdown report + Maltego workspace/GraphML artifacts + evi
 Useful advanced flags:
 - `--related-seed VALUE` can be repeated for multi-seed runs.
 - `--resume/--no-resume` defaults on and skips completed fan-outs for the engagement.
-- `--parallel-fanout N` defaults to `6` and is capped at `8`.
+- `--parallel-fanout N` requests `6` workers by default; the per-target cap varies by target surface and ROE, within the global ceiling of `8`.
 - `--report-provider {auto,template,llama_cpp,...}` forces the Phase 6 backend; omitted uses `auto`.
 - `--report-max-loops N` defaults to Phase 6's `5`; set `0` to disable retries.
 - `--auto-run-detected/--no-auto-run-detected` defaults on; live execution still requires `--roe-id`/`FORGE_ROE_ID` and `--scope-manifest`/`FORGE_SCOPE_MANIFEST`.
-- `--go-hard` overrides normal launch budget with `max-iter=20`, `parallel-fanout=8`, larger Common Crawl limits, identity workers, and deep subdomain enumeration.
+- `--go-hard` overrides normal launch budget with `max-iter=20`, requests fanout ceiling `8` (the per-target cap still applies), larger Common Crawl limits, identity workers, and deep subdomain enumeration.
 - `--include-offensive` / `--include-offensive-prereqs` includes manual-only evasion/auth/post-exploitation follow-on hints.
 
 Minimal scope manifest for sensitive live runs:

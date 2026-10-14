@@ -13,9 +13,14 @@ from forge.utils.kill_chain_options import (
     DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
     normalize_kill_chain_max_iter,
     normalize_kill_chain_max_runtime_minutes,
-    normalize_kill_chain_parallel_fanout,
     normalize_kill_chain_synthesis_depth,
     normalize_kill_chain_validation_batch_limit,
+)
+from forge.utils.kill_chain_fanout import (
+    AdaptiveFanoutCap,
+    FanoutCapDecision,
+    baseline_cap,
+    cap_fanout,
 )
 
 
@@ -53,6 +58,8 @@ class KillChainRuntimeOptions:
     synthesis_depth_limit: int
     pending_validation_batch_limit: int
     max_runtime_minutes: int
+    fanout_cap_decision: FanoutCapDecision
+    fanout_controller: AdaptiveFanoutCap
 
 
 ScopeManifestLoader = Callable[[str], dict[str, Any]]
@@ -65,6 +72,15 @@ def is_typer_default(value: object) -> bool:
 
 def normalize_roe_id(value: object) -> str:
     return " ".join(str(value or "").strip().split())[:160]
+
+
+def _normalize_event_count(value: object) -> int:
+    if is_typer_default(value) or value in (None, ""):
+        return 0
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("fanout event counts must be non-negative integers.") from exc
 
 
 def normalize_kill_chain_runtime_options(
@@ -87,6 +103,13 @@ def normalize_kill_chain_runtime_options(
     go_hard: object,
     include_offensive_prereqs: object,
     max_runtime_minutes: object = None,
+    seed: object | None = None,
+    target_type: str | None = None,
+    estimated_surface: int | str | None = None,
+    roe_strictness: str = "standard",
+    requested_by: str = "manual-cli",
+    rate_limit_events: int = 0,
+    backoff_events: int = 0,
     env: MutableMapping[str, str] | None = None,
 ) -> KillChainRuntimeOptions:
     env_map = os.environ if env is None else env
@@ -115,9 +138,8 @@ def normalize_kill_chain_runtime_options(
     normalized_scope_manifest = str(normalized_scope_manifest or "").strip()
     normalized_skip_cloud = False if is_typer_default(skip_cloud) else bool(skip_cloud)
     normalized_skip_keyscan = False if is_typer_default(skip_keyscan) else bool(skip_keyscan)
-    normalized_parallel_fanout = normalize_kill_chain_parallel_fanout(
-        None if is_typer_default(parallel_fanout) else parallel_fanout,
-        default=DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+    requested_parallel_fanout = (
+        None if is_typer_default(parallel_fanout) else parallel_fanout
     )
     normalized_report_provider = (
         None if is_typer_default(report_provider) else report_provider
@@ -138,7 +160,7 @@ def normalize_kill_chain_runtime_options(
 
     if normalized_go_hard:
         normalized_max_iter = 20
-        normalized_parallel_fanout = 8
+        requested_parallel_fanout = MAX_KILL_CHAIN_PARALLEL_FANOUT
         normalized_auto_run_detected = True
         env_map.setdefault("FORGE_COMMONCRAWL_INDEX_LIMIT", "5")
         env_map.setdefault("FORGE_COMMONCRAWL_RESULTS_PER_INDEX", "5000")
@@ -151,16 +173,30 @@ def normalize_kill_chain_runtime_options(
         raise ValueError("--report-max-loops must be zero or greater.")
 
     live_launch = not normalized_dry_run
-    try:
-        parallel_workers = max(
-            1,
-            min(
-                MAX_KILL_CHAIN_PARALLEL_FANOUT,
-                int(normalized_parallel_fanout or DEFAULT_KILL_CHAIN_PARALLEL_FANOUT),
-            ),
-        )
-    except (TypeError, ValueError):
-        parallel_workers = 2
+    normalized_target_type = None if is_typer_default(target_type) else target_type
+    normalized_rate_limit_events = _normalize_event_count(rate_limit_events)
+    normalized_backoff_events = _normalize_event_count(backoff_events)
+    fanout_context = {
+        "seed": seed,
+        "target_type": normalized_target_type,
+        "estimated_surface": estimated_surface,
+        "roe_strictness": roe_strictness,
+    }
+    fanout_cap_decision = cap_fanout(
+        requested_parallel_fanout,
+        default=DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+        **fanout_context,
+        requested_by="--go-hard" if normalized_go_hard else requested_by,
+        rate_limit_events=normalized_rate_limit_events,
+        backoff_events=normalized_backoff_events,
+    )
+    normalized_parallel_fanout = fanout_cap_decision.effective
+    controller = AdaptiveFanoutCap(
+        per_target_cap=baseline_cap(**fanout_context),
+        rate_limit_events=normalized_rate_limit_events,
+        backoff_events=normalized_backoff_events,
+    )
+    parallel_workers = normalized_parallel_fanout
     synthesis_depth_limit = normalize_kill_chain_synthesis_depth(
         env_map.get("FORGE_KILL_CHAIN_SYNTHESIS_DEPTH"),
         default=3,
@@ -209,6 +245,8 @@ def normalize_kill_chain_runtime_options(
         synthesis_depth_limit=synthesis_depth_limit,
         pending_validation_batch_limit=pending_validation_batch_limit,
         max_runtime_minutes=normalized_max_runtime_minutes,
+        fanout_cap_decision=fanout_cap_decision,
+        fanout_controller=controller,
     )
 
 

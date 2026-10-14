@@ -24,8 +24,8 @@ from forge.subprocess_tree import run_contained_subprocess
 from forge.utils.kill_chain_options import (
     DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
     DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
-    normalize_kill_chain_parallel_fanout,
 )
+from forge.utils.kill_chain_fanout import cap_fanout
 
 RESUME_CANDIDATE_SCHEMA_VERSION = "forge.targets.resume_candidates.v1"
 RESUME_PLAN_SCHEMA_VERSION = "forge.targets.resume_plan.v1"
@@ -71,6 +71,9 @@ class TargetResumeCandidate:
     report_path: str
     report_path_exists: bool
     pending_work_total: int
+    rate_limit_events: int
+    backoff_events: int
+    fanout_cap_decision: dict[str, Any]
     error_summary: str
     resume_ready: bool
     resume_blockers: list[str]
@@ -197,6 +200,10 @@ def collect_target_resume_plan(
     max_iter: int | None = None,
     max_runtime_minutes: int = DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
     parallel_fanout: int = DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+    rate_limit_events: int | None = None,
+    backoff_events: int | None = None,
+    roe_strictness: str = "standard",
+    estimated_surface: int | str | None = None,
     redact_paths: bool = False,
 ) -> dict[str, Any]:
     """Return a read-only sequential plan for resuming ready target-import runs."""
@@ -217,7 +224,6 @@ def collect_target_resume_plan(
         max_runtime_minutes,
         default=DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
     )
-    fanout = normalize_kill_chain_parallel_fanout(parallel_fanout)
     iter_override = _normalize_optional_positive_int(max_iter)
     planned_items: list[dict[str, Any]] = []
     skipped: Counter[str] = Counter()
@@ -227,11 +233,35 @@ def collect_target_resume_plan(
             for blocker in blockers or ["not_resume_ready"]:
                 skipped[blocker] += 1
             continue
+        prior_rate_limit_events = (
+            _safe_int(item.get("rate_limit_events"))
+            if rate_limit_events is None
+            else max(0, _safe_int(rate_limit_events))
+        )
+        prior_backoff_events = (
+            _safe_int(item.get("backoff_events"))
+            if backoff_events is None
+            else max(0, _safe_int(backoff_events))
+        )
+        fanout_decision = cap_fanout(
+            parallel_fanout,
+            seed=item.get("seed_value"),
+            target_type=str(item.get("seed_type") or "other"),
+            estimated_surface=estimated_surface,
+            roe_strictness=roe_strictness,
+            requested_by="resume-plan",
+            rate_limit_events=prior_rate_limit_events,
+            backoff_events=prior_backoff_events,
+        )
+        fanout = fanout_decision.effective
         command = _planned_resume_command(
             [str(part) for part in item.get("resume_command", [])],
             max_iter=iter_override,
             max_runtime_minutes=runtime_minutes,
             parallel_fanout=fanout,
+            target_type=str(item.get("seed_type") or "other"),
+            rate_limit_events=prior_rate_limit_events,
+            backoff_events=prior_backoff_events,
         )
         if not command:
             skipped["resume_command_missing"] += 1
@@ -251,6 +281,9 @@ def collect_target_resume_plan(
                 "command": _redact_resume_command_paths(command) if redact_paths else command,
                 "max_runtime_minutes": runtime_minutes,
                 "parallel_fanout": fanout,
+                "fanout_cap_decision": asdict(fanout_decision),
+                "rate_limit_events": prior_rate_limit_events,
+                "backoff_events": prior_backoff_events,
                 "expected_execution": "manual_sequential",
             }
         )
@@ -323,6 +356,10 @@ def execute_target_resume_plan(
     max_iter: int | None = None,
     max_runtime_minutes: int = DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
     parallel_fanout: int = DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+    rate_limit_events: int | None = None,
+    backoff_events: int | None = None,
+    roe_strictness: str = "standard",
+    estimated_surface: int | str | None = None,
     batch_id: str | None = None,
     stop_on_failure: bool = True,
     max_parallel: int = 1,
@@ -360,6 +397,10 @@ def execute_target_resume_plan(
         max_iter=max_iter,
         max_runtime_minutes=max_runtime_minutes,
         parallel_fanout=parallel_fanout,
+        rate_limit_events=rate_limit_events,
+        backoff_events=backoff_events,
+        roe_strictness=roe_strictness,
+        estimated_surface=estimated_surface,
     )
     retry_summary = _apply_timeout_retry_policy(
         plan,
@@ -952,6 +993,9 @@ def _latest_run_candidate(
         report_path=_safe_path_string(metadata, "report_path"),
         report_path_exists=_path_exists(metadata.get("report_path")),
         pending_work_total=_pending_work_total(metadata),
+        rate_limit_events=_safe_int(metadata.get("rate_limit_events")),
+        backoff_events=_safe_int(metadata.get("backoff_events")),
+        fanout_cap_decision=_mapping(metadata.get("fanout_cap_decision")),
         error_summary=_summarize_error(str(row["error"] or "")),
         resume_ready=not blockers,
         resume_blockers=blockers,
@@ -1279,21 +1323,36 @@ def _planned_resume_command(
     max_iter: int | None,
     max_runtime_minutes: int,
     parallel_fanout: int,
+    target_type: str = "other",
+    rate_limit_events: int = 0,
+    backoff_events: int = 0,
 ) -> list[str]:
     if not command:
         return []
     planned = list(command)
     if max_iter is not None:
         planned = _replace_or_append_option(planned, "--max-iter", str(max_iter))
-    planned = _replace_or_append_option(
-        planned,
+    for option in (
+        "--target-type",
+        "--prior-rate-limit-events",
+        "--prior-backoff-events",
         "--max-runtime-minutes",
-        str(max_runtime_minutes),
-    )
-    planned = _replace_or_append_option(
-        planned,
         "--parallel-fanout",
-        str(parallel_fanout),
+    ):
+        planned = _remove_option(planned, option)
+    planned.extend(
+        [
+            "--target-type",
+            target_type,
+            "--prior-rate-limit-events",
+            str(max(0, rate_limit_events)),
+            "--prior-backoff-events",
+            str(max(0, backoff_events)),
+            "--max-runtime-minutes",
+            str(max_runtime_minutes),
+            "--parallel-fanout",
+            str(parallel_fanout),
+        ]
     )
     return planned
 
@@ -1654,6 +1713,14 @@ def _replace_or_append_option(command: list[str], option: str, value: str) -> li
         planned[index + 1] = value
     else:
         planned.append(value)
+    return planned
+
+
+def _remove_option(command: list[str], option: str) -> list[str]:
+    planned = list(command)
+    while option in planned:
+        index = planned.index(option)
+        del planned[index : min(index + 2, len(planned))]
     return planned
 
 
