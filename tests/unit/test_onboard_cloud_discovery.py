@@ -8,7 +8,7 @@ import pytest
 
 from forge.config import ForgeConfig
 from forge.engagement_orchestrator import _canonical_cloud_ref_value
-from forge.onboard.cloud_discovery import CloudAccount
+from forge.onboard.cloud_discovery import CloudAccount, discover_aws_accounts
 
 
 def test_cloud_account_required_fields_and_defaults() -> None:
@@ -73,3 +73,86 @@ def test_cloud_discovery_config_env_switches(monkeypatch: pytest.MonkeyPatch, tm
 
     assert config.cloud_discovery_enabled is False
     assert config.cloud_discovery_aws is False
+
+
+def test_discover_aws_accounts_sts_success() -> None:
+    class FakeSession:
+        def client(self, service: str):
+            class FakeClient:
+                def get_caller_identity(self):
+                    return {"Account": "112233445566", "Arn": "arn:aws:iam::112233445566:root"}
+
+                def list_account_aliases(self):
+                    return {"AccountAliases": ["my-alias"]}
+
+                def list_buckets(self):
+                    return {"Buckets": [{"Name": "my-bucket"}]}
+
+            return FakeClient()
+
+    accounts = discover_aws_accounts(session=FakeSession())
+
+    assert len(accounts) == 1
+    account = accounts[0]
+    assert account.provider == "aws"
+    assert account.account_id == "112233445566"
+    assert account.account_name == "my-alias"
+    assert account.discovery_source == "sts:get_caller_identity"
+    assert "https://my-bucket.s3.amazonaws.com" in account.engagement_points
+    assert account.extra["arn"] == "arn:aws:iam::112233445566:root"
+
+
+def test_discover_aws_accounts_offline_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    from forge.collection.cloud.aws_credentials import AWSCredential
+    from forge.collection.cloud import aws_credentials
+
+    class FakeSession:
+        def client(self, service: str):
+            class FakeClient:
+                def get_caller_identity(self):
+                    raise Exception("unavailable")
+
+            return FakeClient()
+
+    monkeypatch.setattr(
+        aws_credentials,
+        "harvest_aws_credentials",
+        lambda: [AWSCredential(type="env", source="env", account_id="998877665544")],
+    )
+
+    accounts = discover_aws_accounts(session=FakeSession())
+
+    assert len(accounts) == 1
+    assert accounts[0].account_id == "998877665544"
+    assert accounts[0].discovery_source.startswith("offline:")
+
+
+def test_discover_aws_accounts_graceful_skip_and_explicit_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge.collection.cloud import aws_credentials
+
+    class RaisingStsSession:
+        def client(self, service: str):
+            class FakeClient:
+                def get_caller_identity(self):
+                    raise Exception("unavailable")
+
+            return FakeClient()
+
+    monkeypatch.setattr(aws_credentials, "harvest_aws_credentials", lambda: [])
+    assert discover_aws_accounts(session=RaisingStsSession()) == []
+
+    def unexpected_harvest():
+        raise AssertionError("explicit empty credentials must skip harvesting")
+
+    monkeypatch.setattr(aws_credentials, "harvest_aws_credentials", unexpected_harvest)
+    assert discover_aws_accounts(session=RaisingStsSession(), credentials=[]) == []
+
+
+def test_discover_aws_accounts_never_raises_for_client_failure() -> None:
+    class RaisingSession:
+        def client(self, service: str):
+            raise Exception("unavailable")
+
+    assert discover_aws_accounts(session=RaisingSession()) == []
