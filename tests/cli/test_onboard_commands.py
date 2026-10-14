@@ -458,7 +458,9 @@ def test_forge_connect_help_lists_only_add_list_remove() -> None:
     assert visible_commands == ["add", "list", "remove"]
 
 
-def test_forge_connect_add_rejects_foreign_flags_unknown_and_missing_services() -> None:
+def test_forge_connect_add_rejects_foreign_flags_unknown_and_missing_services(
+    tmp_path: Path,
+) -> None:
     foreign_flag = _invoke(["connect", "add", "shodan", "--org", "x"])
     assert foreign_flag.exit_code != 0
     assert "No such option: --org" in foreign_flag.output
@@ -472,6 +474,12 @@ def test_forge_connect_add_rejects_foreign_flags_unknown_and_missing_services() 
     missing_service = _invoke(["connect", "add"])
     assert missing_service.exit_code != 0
     assert "Missing argument 'SERVICE'" in missing_service.output
+
+    flags_without_service = _invoke(
+        ["connect", "add", "--data-dir", str(tmp_path), "--json"]
+    )
+    assert flags_without_service.exit_code != 0
+    assert "Missing argument 'SERVICE'" in flags_without_service.output
 
 
 # ---------------------------------------------------------------------------
@@ -566,6 +574,7 @@ def test_forge_scope_add_cidr(tmp_path: Path) -> None:
     "value",
     [
         "https://example.com/path",
+        "example.com/path",
         "user@example.com",
         "garbage",
         "localhost",
@@ -582,8 +591,10 @@ def test_forge_scope_add_rejects_invalid_values(tmp_path: Path, value: str) -> N
     assert result.exit_code != 0
     error = json.loads(result.output)["error"]
     assert repr(value) in error
-    if "://" in value or "@" in value:
+    if "://" in value or "@" in value or value == "example.com/path":
         assert "targets add" in error
+    if value == "10.0.0.0/99":
+        assert "invalid IP/CIDR" in error
 
 
 def test_forge_scope_hidden_add_aliases_still_work(tmp_path: Path) -> None:

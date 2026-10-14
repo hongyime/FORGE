@@ -102,7 +102,7 @@ class SetupResult:
 #: Service connections auto-detected from environment variables. On
 #: ``forge setup``, if any of these env vars resolves to a non-empty
 #: value and no existing connection is stored, the setup wraps it in
-#: ``forge connect <service> --token-env <VAR>`` so the autopilot's
+#: ``forge connect add <service> --token-env <VAR>`` so the autopilot's
 #: connected-services phase can pick it up immediately.
 #:
 #: Each entry declares the service id, the credential field name, the

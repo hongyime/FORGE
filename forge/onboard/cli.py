@@ -95,7 +95,7 @@ def register_connect_commands(app: typer.Typer) -> None:
         ),
     ) -> None:
         """Add credentials or configuration for a supported service."""
-        if service is None:
+        if service is None or not service.strip() or service.strip().startswith("-"):
             if help_requested:
                 typer.echo(ctx.get_help())
                 raise typer.Exit()
@@ -967,9 +967,18 @@ def _add_scope_value(
             ipaddress.ip_network(value, strict=False)
         except ValueError:
             if "/" in value:
-                # Retain the established IP/CIDR validation message and exit.
-                _append_scope_entry(manifest_path, "ip", value, json_output=json_output)
-                return
+                # Keep the IP/CIDR diagnostic only when the prefix looks like
+                # an address; URL-like paths should point to targets add.
+                try:
+                    ipaddress.ip_address(value.split("/", maxsplit=1)[0])
+                except ValueError:
+                    _emit_error(invalid_message, json_output=json_output)
+                    raise typer.Exit(code=1)
+                else:
+                    _append_scope_entry(
+                        manifest_path, "ip", value, json_output=json_output
+                    )
+                    return
             kind = "domain"
         else:
             kind = "ip"
