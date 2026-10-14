@@ -28,7 +28,9 @@ from forge.autopilot.scheduler import (
     acquire_lease,
     get_budget_snapshot,
     is_kill_switch_active,
+    provider_inflight_count,
     release_lease,
+    sample_process_resources,
 )
 from forge.config import (
     ForgeConfig,
@@ -364,6 +366,44 @@ def import_targets(
                                 "total_slots": snapshot.total_slots,
                             }
                         )
+                    progress_details.update(sample_process_resources())
+                    try:
+                        first_seen = item.first_seen_at
+                        parsed = datetime.fromisoformat(str(first_seen).replace("Z", "+00:00"))
+                        if parsed.tzinfo is None:
+                            parsed = parsed.replace(tzinfo=timezone.utc)
+                        delay = max(
+                            0.0, (datetime.now(timezone.utc) - parsed).total_seconds()
+                        )
+                        progress_details["scheduling_delay_seconds"] = round(delay, 3)
+                    except Exception:
+                        pass
+                    try:
+                        from forge.autopilot.breaker import (  # noqa: PLC0415
+                            canonical_provider,
+                            is_global_paused,
+                            is_provider_paused,
+                        )
+
+                        provider = canonical_provider(item.canonical_value)
+                        progress_details["provider"] = provider
+                        progress_details["provider_paused"] = bool(
+                            is_provider_paused(provider, data_dir=cfg.data_dir)
+                        )
+                        progress_details["global_paused"] = bool(
+                            is_global_paused(data_dir=cfg.data_dir)
+                        )
+                        progress_details["provider_inflight"] = provider_inflight_count(
+                            provider, data_dir=cfg.data_dir
+                        )
+                    except Exception:
+                        for key in (
+                            "provider",
+                            "provider_paused",
+                            "global_paused",
+                            "provider_inflight",
+                        ):
+                            progress_details.pop(key, None)
                     _notify_progress(progress_callback, "target_engaged", progress_details)
                     try:
                         _start_kill_chain(
@@ -384,6 +424,7 @@ def import_targets(
                         failure_details: dict[str, Any] = {
                             **progress_details,
                             "error_type": type(exc).__name__,
+                            "exit_status": "failed",
                         }
                         if isinstance(exc, subprocess.CalledProcessError):
                             failure_details.update(
@@ -415,7 +456,11 @@ def import_targets(
                             start_stop_reason = "consecutive_failure_budget_exhausted"
                             unprocessed_count = len(items) - item_index - 1
                     else:
-                        _notify_progress(progress_callback, "target_completed", progress_details)
+                        _notify_progress(
+                            progress_callback,
+                            "target_completed",
+                            {**progress_details, "exit_status": "completed"},
+                        )
                         started = True
                         consecutive_start_failures = 0
                         successful_starts += 1

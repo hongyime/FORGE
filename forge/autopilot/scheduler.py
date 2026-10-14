@@ -284,6 +284,40 @@ def get_budget_snapshot(
         con.close()
 
 
+def sample_process_resources() -> dict[str, float | int]:
+    """Sample this process at call time; ru_maxrss units are platform-dependent (KB on Linux)."""
+    try:
+        import resource
+
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        return {
+            "memory_peak_kb": int(usage.ru_maxrss),
+            "cpu_user_seconds": float(usage.ru_utime),
+            "cpu_sys_seconds": float(usage.ru_stime),
+        }
+    except Exception:
+        return {}
+
+
+def provider_inflight_count(
+    provider: str, *, data_dir: Path | str | None = None
+) -> int:
+    """Return the active lease count for a provider, or zero if unavailable."""
+    try:
+        con = direct_connect(scheduler_db_path(data_dir))
+        try:
+            ensure_scheduler_schema(con)
+            row = con.execute(
+                "SELECT COUNT(*) FROM leases WHERE provider = ? AND status = 'active'",
+                (provider,),
+            ).fetchone()
+            return int(row[0]) if row else 0
+        finally:
+            con.close()
+    except Exception:
+        return 0
+
+
 def reap_stale_leases(
     *,
     data_dir: Path | str | None = None,

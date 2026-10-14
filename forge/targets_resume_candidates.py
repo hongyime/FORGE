@@ -22,7 +22,9 @@ from forge.autopilot.scheduler import (
     acquire_lease,
     get_budget_snapshot,
     is_kill_switch_active,
+    provider_inflight_count,
     release_lease,
+    sample_process_resources,
 )
 from forge.config import ForgeConfig
 from forge.engagement_ids import numeric_engagement_db_files
@@ -852,6 +854,29 @@ def _execute_resume_item(
                 "total_slots": snapshot.total_slots,
             }
         )
+    progress_details.update(sample_process_resources())
+    # Resume plan items have no eligibility timestamp, so scheduling delay is omitted.
+    try:
+        from forge.autopilot.breaker import (  # noqa: PLC0415
+            canonical_provider,
+            is_global_paused,
+            is_provider_paused,
+        )
+
+        provider = canonical_provider(target_value)
+        progress_details["provider"] = provider
+        progress_details["provider_paused"] = bool(
+            is_provider_paused(provider, data_dir=target_data_dir)
+        )
+        progress_details["global_paused"] = bool(
+            is_global_paused(data_dir=target_data_dir)
+        )
+        progress_details["provider_inflight"] = provider_inflight_count(
+            provider, data_dir=target_data_dir
+        )
+    except Exception:
+        for key in ("provider", "provider_paused", "global_paused", "provider_inflight"):
+            progress_details.pop(key, None)
     retry_attempt = _safe_int(checked.get("timeout_retry_attempt"))
     retry_budget = _safe_int(checked.get("timeout_retry_budget"))
     if retry_attempt > 0:
@@ -888,7 +913,11 @@ def _execute_resume_item(
         _notify_progress(
             progress_callback,
             "target_failed",
-            {**progress_details, "error_type": type(exc).__name__},
+            {
+                **progress_details,
+                "error_type": type(exc).__name__,
+                "exit_status": "failed",
+            },
         )
         raise
     finally:
@@ -922,7 +951,7 @@ def _execute_resume_item(
     _notify_progress(
         progress_callback,
         "target_completed" if status == "completed" else "target_failed",
-        {**progress_details, "return_code": returncode},
+        {**progress_details, "return_code": returncode, "exit_status": status},
     )
     _append_resume_ledger_event(ledger_path, ledger_lock, {"event": f"item_{status}", **result})
     return result

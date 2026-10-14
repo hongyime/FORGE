@@ -34,8 +34,10 @@ from forge.autopilot.scheduler import (
     heartbeat,
     is_kill_switch_active,
     list_active_leases,
+    provider_inflight_count,
     reap_stale_leases,
     release_lease,
+    sample_process_resources,
     scheduler_db_path,
 )
 from forge.targets_import import import_targets
@@ -795,6 +797,9 @@ def test_import_targets_engaged_progress_includes_scheduler_telemetry(
     cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_max_active_targets=2)
     feed = tmp_path / "telemetry-feed.json"
     _write_simple_feed(feed)
+    feed_data = json.loads(feed.read_text(encoding="utf-8"))
+    feed_data["items"][0]["first_seen_at"] = "2026-01-01T00:00:00+00:00"
+    feed.write_text(json.dumps(feed_data), encoding="utf-8")
     events: list[tuple[str, dict[str, object]]] = []
     monkeypatch.setattr("forge.targets_import._start_kill_chain", lambda **_kwargs: None)
 
@@ -816,6 +821,41 @@ def test_import_targets_engaged_progress_includes_scheduler_telemetry(
     assert isinstance(details["queue_seconds"], float) and details["queue_seconds"] >= 0
     for key in ("requested_slots", "effective_slots", "active_targets", "leased_slots", "total_slots"):
         assert isinstance(details[key], int)
+    assert isinstance(details["memory_peak_kb"], int) and details["memory_peak_kb"] >= 0
+    for key in ("cpu_user_seconds", "cpu_sys_seconds"):
+        assert isinstance(details[key], float) and details[key] >= 0
+    assert isinstance(details["provider"], str) and details["provider"]
+    assert isinstance(details["provider_paused"], bool)
+    assert isinstance(details["global_paused"], bool)
+    assert isinstance(details["provider_inflight"], int) and details["provider_inflight"] >= 1
+    assert isinstance(details["scheduling_delay_seconds"], float)
+    assert details["scheduling_delay_seconds"] > 0
+    completed = next(details for event, details in events if event == "target_completed")
+    assert completed["exit_status"] == "completed"
+
+
+def test_import_targets_failed_progress_includes_exit_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_max_active_targets=2)
+    feed = tmp_path / "failed-telemetry-feed.json"
+    _write_simple_feed(feed)
+    events: list[tuple[str, dict[str, object]]] = []
+
+    def fail_start(**_kwargs: object) -> None:
+        raise RuntimeError("stubbed failure")
+
+    monkeypatch.setattr("forge.targets_import._start_kill_chain", fail_start)
+    import_targets(
+        feed_url=None, feed_file=feed, auth_header_env=None, roe_id="ROE-TEST",
+        roe_scope="target-alpha.corp-target.io", start=True, dry_run=False,
+        limit=1, max_iter=1, config=cfg,  # type: ignore[arg-type]
+        progress_callback=lambda event, details: events.append((event, details)),
+        sleep_fn=lambda _seconds: None,
+    )
+    failed = next(details for event, details in events if event == "target_failed")
+    assert failed["exit_status"] == "failed"
+    assert failed["error_type"] == "RuntimeError"
 
 
 def test_resume_item_progress_carries_scheduler_telemetry(
@@ -865,6 +905,38 @@ def test_resume_item_progress_carries_scheduler_telemetry(
     assert engaged["leased_slots"] >= 2
     assert engaged["total_slots"] >= engaged["leased_slots"]
     assert engaged["total_slots"] > 0
+    assert isinstance(engaged["memory_peak_kb"], int) and engaged["memory_peak_kb"] >= 0
+    for key in ("cpu_user_seconds", "cpu_sys_seconds"):
+        assert isinstance(engaged[key], float) and engaged[key] >= 0
+    assert isinstance(engaged["provider"], str) and engaged["provider"]
+    assert isinstance(engaged["provider_paused"], bool)
+    assert isinstance(engaged["global_paused"], bool)
+    assert isinstance(engaged["provider_inflight"], int) and engaged["provider_inflight"] >= 1
+    assert "scheduling_delay_seconds" not in engaged
+    completed = next(details for event, details in captured if event == "target_completed")
+    assert completed["exit_status"] == "completed"
+    assert completed["return_code"] == 0
+
+
+def test_process_resource_and_provider_lease_helpers(tmp_path: Path) -> None:
+    resources = sample_process_resources()
+    assert isinstance(resources["memory_peak_kb"], int) and resources["memory_peak_kb"] >= 0
+    for key in ("cpu_user_seconds", "cpu_sys_seconds"):
+        assert isinstance(resources[key], float) and resources[key] >= 0
+
+    lease_result = acquire_lease(
+        target_key="domain:provider-count.example.com",
+        target_value="provider-count.example.com",
+        target_type="domain",
+        engagement_id=1,
+        data_dir=tmp_path,
+    )
+    assert lease_result.lease is not None
+    provider = lease_result.lease.provider
+    assert provider_inflight_count(provider, data_dir=tmp_path) == 1
+    assert release_lease(lease_result.lease.lease_id, data_dir=tmp_path) is True
+    assert provider_inflight_count(provider, data_dir=tmp_path) == 0
+    assert provider_inflight_count("unknown-provider", data_dir=tmp_path) == 0
 
 
 # ---------------------------------------------------------------------------
