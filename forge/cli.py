@@ -4825,8 +4825,10 @@ def kill_chain(
             return {"allowed": False, "reason": "invalid_url"}
         if _excluded_host_for_seed_routing(hostname):
             return {"allowed": False, "reason": "excluded_host", "hostname": hostname}
-        if not any(hostname == root or hostname.endswith("." + root) for root in root_domains):
-            return {"allowed": False, "reason": "outside_root_domains", "hostname": hostname}
+        hostname_in_root_domains = any(
+            hostname == root or hostname.endswith("." + root) for root in root_domains
+        )
+        explicitly_authorized = False
         if _classify_remote_artifact_url(raw_value, "url") is not None:
             return {"allowed": False, "reason": "artifact_url", "hostname": hostname}
         leaf_name = Path(parsed.path or "").name.lower()
@@ -4840,12 +4842,21 @@ def kill_chain(
                 [{"value": raw_value, "seed_type": "url"}],
             )
             if recursive_scope.get("denied"):
+                if not hostname_in_root_domains:
+                    return {
+                        "allowed": False,
+                        "reason": "outside_root_domains",
+                        "hostname": hostname,
+                    }
                 return {
                     "allowed": False,
                     "reason": "scope_manifest_denied",
                     "hostname": hostname,
                     "scope_manifest_source": str(scope_manifest_metadata.get("source") or ""),
                 }
+            explicitly_authorized = True
+        if not hostname_in_root_domains and not explicitly_authorized:
+            return {"allowed": False, "reason": "outside_root_domains", "hostname": hostname}
         return {"allowed": True, "reason": "allowed", "hostname": hostname}
 
     def _url_seed_is_in_scope(value: str) -> bool:
