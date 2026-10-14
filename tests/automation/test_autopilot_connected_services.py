@@ -108,6 +108,82 @@ def test_phase_skipped_without_connections(tmp_path: Path) -> None:
     assert "no_service_connections_stored" in result.detail
 
 
+def test_cloud_discovery_dry_run_has_no_seed_drop(tmp_path: Path) -> None:
+    auto = _mk_autopilot(tmp_path)
+    result = auto._phase_connected_services_scan(dry_run=True)
+
+    assert not (auto.imports_dir / "connected-services-cloud-seeds.local.json").exists()
+    cloud_entry = next(
+        service
+        for service in result.data["services"]
+        if service["service"] == "cloud_discovery"
+    )
+    assert cloud_entry["detail"] == "dry_run_skips_network_scan"
+
+
+def test_cloud_discovery_writes_seed_without_stored_connections(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from forge.onboard.cloud_discovery import CloudAccount
+
+    monkeypatch.setattr(
+        "forge.onboard.cloud_discovery.discover_all_cloud_accounts",
+        lambda *, cfg: (
+            [
+                CloudAccount(
+                    provider="aws",
+                    account_id="112233445566",
+                    discovery_source="sts:get_caller_identity",
+                )
+            ],
+            {
+                "aws": "ok",
+                "gcp": "no_accounts_found",
+                "azure": "no_accounts_found",
+            },
+        ),
+    )
+    auto = _mk_autopilot(tmp_path)
+
+    result = auto._phase_connected_services_scan(dry_run=False)
+
+    assert result.detail == "no_service_connections_stored"
+    drop_path = auto.imports_dir / "connected-services-cloud-seeds.local.json"
+    assert drop_path.exists()
+    drop = json.loads(drop_path.read_text(encoding="utf-8"))
+    assert any(seed["target_value"] == "aws:112233445566" for seed in drop["seeds"])
+    cloud_entry = next(
+        service
+        for service in result.data["services"]
+        if service["service"] == "cloud_discovery"
+    )
+    assert cloud_entry["status"] == "ok"
+    assert cloud_entry["seeds"] >= 1
+
+
+def test_cloud_discovery_failure_isolated_without_stored_connections(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _fail(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("discovery unavailable")
+
+    monkeypatch.setattr(
+        "forge.onboard.cloud_discovery.discover_all_cloud_accounts", _fail
+    )
+    auto = _mk_autopilot(tmp_path)
+
+    result = auto._phase_connected_services_scan(dry_run=False)
+
+    assert result.status == "error"
+    assert result.detail == "no_service_connections_stored"
+    cloud_entry = next(
+        service
+        for service in result.data["services"]
+        if service["service"] == "cloud_discovery"
+    )
+    assert cloud_entry["status"] == "error"
+
+
 # ---------------------------------------------------------------------------
 # Dry-run never spiders
 # ---------------------------------------------------------------------------

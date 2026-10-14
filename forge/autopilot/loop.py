@@ -655,6 +655,9 @@ class ForgeAutopilot:
           against the stored project ref using the stored anon/service
           key. Output goes to
           ``imports/connected-services-supabase-seeds.local.json``.
+        - ``cloud_discovery`` runs host-local discovery via
+          ``discover_all_cloud_accounts`` and writes
+          ``imports/connected-services-cloud-seeds.local.json``.
 
         Dry-run never hits the network and never writes files; it only
         reports what *would* run. Apply fails per-service rather than
@@ -719,6 +722,7 @@ class ForgeAutopilot:
                 detail="single_phase_mock_connectors_no_fixture",
                 data={"dry_run": dry_run, "fixture": False},
             )
+        cloud_outcome = self._scan_cloud_discovery(dry_run=dry_run)
         try:
             from forge.onboard.service_connections import (  # noqa: PLC0415
                 ServiceConnectionManager,
@@ -741,16 +745,25 @@ class ForgeAutopilot:
             )
 
         if not connections:
+            cloud_error = cloud_outcome.get("status") == "error"
             return AutopilotPhaseResult(
                 name="connected_services_scan",
-                status="skipped",
+                status="error" if cloud_error else "skipped",
                 detail="no_service_connections_stored",
+                data={
+                    "dry_run": dry_run,
+                    "service_count": 1,
+                    "seeds_total": int(cloud_outcome.get("seeds") or 0),
+                    "secret_hits_total": int(cloud_outcome.get("secret_hits") or 0),
+                    "errors": 1 if cloud_error else 0,
+                    "services": [cloud_outcome],
+                },
             )
 
-        services_summary: list[dict[str, Any]] = []
-        total_seeds = 0
-        total_secret_hits = 0
-        errors = 0
+        services_summary: list[dict[str, Any]] = [cloud_outcome]
+        total_seeds = int(cloud_outcome.get("seeds") or 0)
+        total_secret_hits = int(cloud_outcome.get("secret_hits") or 0)
+        errors = 1 if cloud_outcome.get("status") == "error" else 0
         for connection in connections:
             service = connection.service
             if service == "github":
@@ -776,14 +789,12 @@ class ForgeAutopilot:
             name="connected_services_scan",
             status=status,
             detail=(
-                f"services={len(connections)} "
-                f"seeds={total_seeds} "
-                f"secrets={total_secret_hits} "
-                f"errors={errors}"
+                f"services={len(connections) + 1} seeds={total_seeds} "
+                f"secrets={total_secret_hits} errors={errors}"
             ),
             data={
                 "dry_run": dry_run,
-                "service_count": len(connections),
+                "service_count": len(connections) + 1,
                 "seeds_total": total_seeds,
                 "secret_hits_total": total_secret_hits,
                 "errors": errors,
@@ -983,6 +994,61 @@ class ForgeAutopilot:
             "rows_scanned": result.rows_scanned,
             "seeds": len(result.seeds),
             "secret_hits": len(result.secret_hits),
+            "output_path": str(output_path),
+        }
+
+    def _scan_cloud_discovery(self, *, dry_run: bool) -> dict[str, Any]:
+        """Discover host-local cloud accounts and write their seed drop."""
+        if dry_run:
+            return {
+                "service": "cloud_discovery",
+                "status": "skipped",
+                "detail": "dry_run_skips_network_scan",
+                "seeds": 0,
+                "secret_hits": 0,
+            }
+        try:
+            from forge.onboard.cloud_discovery import (  # noqa: PLC0415
+                CLOUD_SEED_DROP_FILENAME,
+                cloud_accounts_to_seed_drop_payload,
+                discover_all_cloud_accounts,
+            )
+
+            accounts, skip_reasons = discover_all_cloud_accounts(cfg=self._cfg)
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "service": "cloud_discovery",
+                "status": "error",
+                "detail": _bounded_text(exc),
+                "seeds": 0,
+                "secret_hits": 0,
+            }
+        payload = cloud_accounts_to_seed_drop_payload(accounts)
+        output_path = self.imports_dir / CLOUD_SEED_DROP_FILENAME
+        try:
+            self._write_seed_drop(
+                output_path,
+                connector_id="cloud_discovery",
+                input_kind="connected_services",
+                seeds=payload["seeds"],
+                secret_hits=[],
+                extra={"accounts_found": len(accounts), "skip_reasons": skip_reasons},
+            )
+        except OSError as exc:
+            return {
+                "service": "cloud_discovery",
+                "status": "error",
+                "detail": f"write_error:{_bounded_text(exc)}",
+                "seeds": len(payload["seeds"]),
+                "secret_hits": 0,
+            }
+        return {
+            "service": "cloud_discovery",
+            "status": "ok",
+            "accounts_found": len(accounts),
+            "skip_reasons": skip_reasons,
+            "seeds": len(payload["seeds"]),
+            "secret_hits": 0,
             "output_path": str(output_path),
         }
 
