@@ -9,7 +9,6 @@ from email.utils import parsedate_to_datetime
 from typing import Any, Callable, Mapping
 
 from forge.utils.kill_chain_fanout import (
-    record_active_fanout_backoff,
     record_active_fanout_observation,
 )
 
@@ -69,10 +68,6 @@ def request_with_rate_limit_backoff(
         exhausted_403 = status == 403 and _as_int(remaining) == 0
         if status != 429 and not exhausted_403:
             return result
-        record_active_fanout_observation(
-            status,
-            rate_limit_403=exhausted_403,
-        )
 
         delay = _retry_delay(headers, retry_count=retry_count, now=now())
         event: dict[str, Any] = {
@@ -83,6 +78,10 @@ def request_with_rate_limit_backoff(
             "wait_seconds": round(delay, 3),
         }
         if retry_count >= retry_cap:
+            record_active_fanout_observation(
+                status,
+                rate_limit_403=exhausted_403,
+            )
             result.skipped = True
             result.skip_reason = "retry_limit"
             event.update(
@@ -96,6 +95,10 @@ def request_with_rate_limit_backoff(
             return result
 
         if result.total_wait_seconds + delay > wait_cap:
+            record_active_fanout_observation(
+                status,
+                rate_limit_403=exhausted_403,
+            )
             result.skipped = True
             result.skip_reason = "total_wait_cap"
             event.update(
@@ -116,8 +119,12 @@ def request_with_rate_limit_backoff(
             }
         )
         result.events.append(event)
+        record_active_fanout_observation(
+            status,
+            rate_limit_403=exhausted_403,
+            applied_backoff=delay > 0,
+        )
         if delay > 0:
-            record_active_fanout_backoff()
             sleeper(delay)
         result.total_wait_seconds += delay
         retry_count += 1

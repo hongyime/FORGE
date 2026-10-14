@@ -29,7 +29,6 @@ from urllib.parse import unquote, unquote_to_bytes, urljoin, urlparse
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
-from forge.utils.kill_chain_fanout import record_active_fanout_backoff
 
 try:
     import zstandard
@@ -1729,7 +1728,6 @@ def download_remote_artifact_request(
                     wait_seconds = web_fetch_retry_after_seconds(exc)
                     record_rate_limit_cooldown("web_fetch", source_url, wait_seconds)
                     if wait_seconds > 0:
-                        record_active_fanout_backoff()
                         sleep(wait_seconds)
                     if attempt < attempts - 1:
                         continue

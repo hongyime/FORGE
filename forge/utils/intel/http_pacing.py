@@ -268,7 +268,7 @@ def _sleep_active_cooldown(scope: str, url: str) -> None:
     with _RATE_LIMIT_COOLDOWN_LOCK:
         wait_seconds = _RATE_LIMIT_COOLDOWNS.get(key, 0.0) - time.monotonic()
     if wait_seconds > 0:
-        record_active_fanout_backoff()
+        record_active_fanout_backoff(paired_rate_limit_event=True)
         time.sleep(wait_seconds)
 
 
@@ -291,10 +291,18 @@ def sleep_rate_limit_cooldown(scope: str, url: str) -> None:
     _sleep_active_cooldown(scope, url)
 
 
-def record_rate_limit_cooldown(scope: str, url: str, wait_seconds: float) -> None:
+def record_rate_limit_cooldown(
+    scope: str,
+    url: str,
+    wait_seconds: float,
+    *,
+    applied_backoff: bool | None = None,
+) -> None:
     """Remember provider pressure so the next same-host request slows down too."""
 
-    record_active_fanout_rate_limit()
+    record_active_fanout_rate_limit(
+        applied_backoff=(wait_seconds > 0 if applied_backoff is None else applied_backoff),
+    )
     _record_rate_limit_cooldown(scope, url, wait_seconds)
 
 
@@ -322,12 +330,19 @@ def _request_with_pacing(
         if getattr(response, "status_code", None) != 429:
             return response
         wait_seconds = retry_after_seconds(response)
+        will_wait = attempt < attempts - 1 and wait_seconds > 0
         if cooldown_scope:
-            record_rate_limit_cooldown(cooldown_scope, url, wait_seconds)
+            record_rate_limit_cooldown(
+                cooldown_scope,
+                url,
+                wait_seconds,
+                applied_backoff=will_wait,
+            )
         if attempt >= attempts - 1:
             return response
         if wait_seconds > 0:
-            record_active_fanout_backoff()
+            if not cooldown_scope:
+                record_active_fanout_backoff()
             time.sleep(wait_seconds)
     return response
 

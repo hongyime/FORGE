@@ -18,7 +18,9 @@ Large (11+ hosts)     3         6           8
 The global safety floor and ceiling are single-sourced in
 ``kill_chain_options``. A target's adaptive cap can only move up to its
 baseline cap. Twenty consecutive clean observations raise the cap by one;
-rate-limit and backoff signals halve it, while other errors lower it by one.
+rate-limit events and standalone backoffs halve it, while other errors lower
+it by one. A wait paired with a rate-limit event is folded into that single
+reduction.
 """
 
 from __future__ import annotations
@@ -142,15 +144,24 @@ class AdaptiveFanoutCap:
                     )
             return self._current_cap
 
-    def record_rate_limit(self) -> int:
-        """Record a 429 or known exhausted-quota 403 signal."""
+    def record_rate_limit(self, *, applied_backoff: bool = False) -> int:
+        """Record a 429/quota signal and its applied wait as one event."""
 
-        return self._step_down("rate_limit")
+        return self._step_down("rate_limit", applied_backoff=applied_backoff)
 
-    def record_backoff(self) -> int:
-        """Record a bounded retry/backoff event."""
+    def record_backoff(self, *, paired_rate_limit_event: bool = False) -> int:
+        """Record a bounded wait, optionally paired with an already-counted 429.
 
-        return self._step_down("backoff")
+        Callers set ``paired_rate_limit_event`` only when this wait belongs to
+        the same rate-limit event already recorded on this controller. The
+        wait is folded into that event, so it does not add a second event or cap
+        reduction. Standalone backoffs retain their own counter and reduction.
+        """
+
+        return self._step_down(
+            "backoff",
+            paired_rate_limit_event=paired_rate_limit_event,
+        )
 
     def record_error(self) -> int:
         """Record a non-rate-limit 4xx/5xx or other failed observation."""
@@ -175,6 +186,7 @@ class AdaptiveFanoutCap:
         status_code: int,
         *,
         rate_limit_403: bool = False,
+        applied_backoff: bool = False,
     ) -> int:
         """Map HTTP observations to controller signals.
 
@@ -185,7 +197,7 @@ class AdaptiveFanoutCap:
 
         status = int(status_code)
         if status == 429 or (status == 403 and rate_limit_403):
-            return self.record_rate_limit()
+            return self.record_rate_limit(applied_backoff=applied_backoff)
         if 200 <= status < 400:
             return self.record_success()
         if 400 <= status < 600:
@@ -205,11 +217,20 @@ class AdaptiveFanoutCap:
                 "clean_successes": self.clean_successes,
             }
 
-    def _step_down(self, signal: str) -> int:
+    def _step_down(
+        self,
+        signal: str,
+        *,
+        paired_rate_limit_event: bool = False,
+        applied_backoff: bool = False,
+    ) -> int:
         with self._lock:
             if signal == "rate_limit":
                 self.rate_limit_events += 1
             else:
+                if paired_rate_limit_event:
+                    self.clean_successes = 0
+                    return self._current_cap
                 self.backoff_events += 1
             self.clean_successes = 0
             old_cap = self._current_cap
@@ -217,11 +238,16 @@ class AdaptiveFanoutCap:
                 MIN_KILL_CHAIN_PARALLEL_FANOUT,
                 old_cap // 2,
             )
+            signal_description = (
+                "rate_limit with applied backoff"
+                if signal == "rate_limit" and applied_backoff
+                else signal
+            )
             _LOG.warning(
                 "kill-chain fanout cap reduced from %d to %d after %s signal",
                 old_cap,
                 self._current_cap,
-                signal,
+                signal_description,
             )
             return self._current_cap
 
@@ -265,31 +291,49 @@ def _active_fanout_controller() -> AdaptiveFanoutCap | None:
         return _ACTIVE_CONTROLLER_REF() if _ACTIVE_CONTROLLER_REF is not None else None
 
 
-def record_active_fanout_rate_limit() -> int | None:
-    """Report a detected 429 or already-identified quota signal, if active."""
+def record_active_fanout_rate_limit(*, applied_backoff: bool = False) -> int | None:
+    """Report a rate-limit event and optional applied wait, if active."""
 
     controller = _active_fanout_controller()
-    return controller.record_rate_limit() if controller is not None else None
+    return (
+        controller.record_rate_limit(applied_backoff=applied_backoff)
+        if controller is not None
+        else None
+    )
 
 
-def record_active_fanout_backoff() -> int | None:
-    """Report an applied bounded wait, if a kill-chain controller is active."""
+def record_active_fanout_backoff(
+    *,
+    paired_rate_limit_event: bool = False,
+) -> int | None:
+    """Report a standalone wait or associate it with a rate-limit event."""
 
     controller = _active_fanout_controller()
-    return controller.record_backoff() if controller is not None else None
+    return (
+        controller.record_backoff(
+            paired_rate_limit_event=paired_rate_limit_event,
+        )
+        if controller is not None
+        else None
+    )
 
 
 def record_active_fanout_observation(
     status_code: int,
     *,
     rate_limit_403: bool = False,
+    applied_backoff: bool = False,
 ) -> int | None:
     """Forward an HTTP observation without treating ordinary 403s as quotas."""
 
     controller = _active_fanout_controller()
     if controller is None:
         return None
-    return controller.record_observation(status_code, rate_limit_403=rate_limit_403)
+    return controller.record_observation(
+        status_code,
+        rate_limit_403=rate_limit_403,
+        applied_backoff=applied_backoff,
+    )
 
 
 def cap_fanout(

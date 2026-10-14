@@ -51,6 +51,7 @@ class RateLimiter:
         self._domain_delays: dict[str, float] = {}
         self._domain_backoff_until: dict[str, float] = {}
         self._domain_failures: dict[str, int] = {}
+        self._domain_rate_limit_wait_pending: set[str] = set()
         self._lock = threading.RLock()
 
     def wait(self, url: str) -> None:
@@ -62,7 +63,11 @@ class RateLimiter:
             if elapsed < self.base_delay:
                 wait_time = self.base_delay - elapsed + random.uniform(0, self.jitter)
                 if self._domain_backoff_until.get(domain, 0.0) > now:
-                    record_active_fanout_backoff()
+                    paired_rate_limit_event = domain in self._domain_rate_limit_wait_pending
+                    self._domain_rate_limit_wait_pending.discard(domain)
+                    record_active_fanout_backoff(
+                        paired_rate_limit_event=paired_rate_limit_event,
+                    )
                 _interruptible_sleep_local(wait_time)
             self._domain_delays[domain] = time.time()
             if self._domain_backoff_until.get(domain, 0.0) <= time.time():
@@ -74,6 +79,7 @@ class RateLimiter:
             failures = self._domain_failures.get(domain, 0)
             if failures > 0:
                 self._domain_failures[domain] = max(0, failures - 1)
+            self._domain_rate_limit_wait_pending.discard(domain)
 
     def record_failure(self, url: str, status_code: int = 0) -> None:
         domain = urlparse(url).netloc
@@ -87,7 +93,12 @@ class RateLimiter:
                 self._domain_backoff_until.get(domain, 0.0), cooldown_until
             )
             if status_code == 429:
-                record_active_fanout_rate_limit()
+                if record_active_fanout_rate_limit() is not None:
+                    self._domain_rate_limit_wait_pending.add(domain)
+                else:
+                    self._domain_rate_limit_wait_pending.discard(domain)
+            else:
+                self._domain_rate_limit_wait_pending.discard(domain)
             if status_code == 429 and self._rotate_tor_on_rate_limit and self._tor_manager:
                 self._tor_manager.rotate_circuit()
 
@@ -97,6 +108,7 @@ class RateLimiter:
             self._domain_delays.pop(domain, None)
             self._domain_backoff_until.pop(domain, None)
             self._domain_failures.pop(domain, None)
+            self._domain_rate_limit_wait_pending.discard(domain)
 
 
 class AdaptiveRateLimiter(RateLimiter):
