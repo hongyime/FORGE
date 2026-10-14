@@ -689,6 +689,18 @@ class ForgeAutopilot:
                         continue
             if scheduler_details:
                 details["scheduler"] = scheduler_details
+            raw_skip_counts = phase.data.get("skip_reason_counts")
+            if isinstance(raw_skip_counts, dict):
+                skip_reason_counts: dict[str, int] = {}
+                for key, value in raw_skip_counts.items():
+                    try:
+                        count = int(value)
+                    except (TypeError, ValueError, OverflowError):
+                        continue
+                    if count >= 0:
+                        skip_reason_counts[str(key)] = count
+                if skip_reason_counts:
+                    details["skip_reason_counts"] = skip_reason_counts
             details["feed_pin"] = {
                 key: phase.data.get(key)
                 for key in (
@@ -1604,6 +1616,12 @@ class ForgeAutopilot:
             status_label = "blocked"
         elif start and attempted > 0 and failed == attempted:
             status_label = "error"
+        skip_reason_counts: dict[str, int] = {}
+        if start:
+            for item in results:
+                reason = getattr(item, "scan_eligibility_reason", "")
+                if not getattr(item, "started", False) and reason and reason != "eligible":
+                    skip_reason_counts[reason] = skip_reason_counts.get(reason, 0) + 1
         return AutopilotPhaseResult(
             name="import_targets",
             status=status_label,
@@ -1627,6 +1645,7 @@ class ForgeAutopilot:
                 "attempted": attempted,
                 "start_stop_reason": start_stop_reason or None,
                 "unprocessed_count": unprocessed_count,
+                "skip_reason_counts": skip_reason_counts,
                 **self._scheduler_snapshot_data(),
             },
         )

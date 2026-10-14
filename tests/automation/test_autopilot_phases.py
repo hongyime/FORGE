@@ -444,6 +444,7 @@ def test_import_targets_phase_end_details_include_engagement_counts() -> None:
                 "started": 2,
                 "attempted": 2,
                 "failed": 0,
+                "skip_reason_counts": {"non_global_ip": 1},
             },
         )
     )
@@ -455,6 +456,15 @@ def test_import_targets_phase_end_details_include_engagement_counts() -> None:
     }
     assert "feed_pin" in details
     assert "scheduler" not in details
+    assert details["skip_reason_counts"] == {"non_global_ip": 1}
+
+
+def test_import_targets_phase_end_details_omits_empty_skip_counts() -> None:
+    details = ForgeAutopilot._phase_end_details(
+        AutopilotPhaseResult(name="import_targets", status="ok", data={})
+    )
+    assert "skip_reason_counts" not in details
+    assert "engagement_counts" in details
 
 
 def test_import_targets_phase_end_details_include_scheduler_counts() -> None:

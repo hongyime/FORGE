@@ -543,11 +543,18 @@ def scoreboard_for_data_dir(
     max_active_targets: int | None = None,
     total_slots: int | None = None,
 ) -> dict[str, Any]:
-    """Summarize throughput, latency, resources, and scheduler limits.
+    """Summarize throughput, failures, provider pressure, and scheduler limits.
 
     Run durations are approximate: in-window outcomes pair with the latest
     prior unmatched engagement sharing its engagement ID and target value.
     Identifiers are used only internally and are never included in the result.
+    SIGKILL (return code 137) is an OOM heuristic and may include other kills.
+    OperationalError includes every sqlite3 OperationalError, not only lock
+    timeouts; lock-specific text is not retained. Provider events are pruned
+    after 24 hours, so counts cover retained rows (at most 24h), not the full
+    scoreboard window. Backoffs are held only in the in-memory fanout
+    controller and are not persisted as events, so no source exists and their
+    provider map is always empty.
     """
     if window_days < 1:
         window_days = 7
@@ -589,6 +596,15 @@ def scoreboard_for_data_dir(
             "phase_end": 0,
         },
         "samples": {"queue": 0, "run_duration": 0, "resource": 0},
+        "failures": {
+            "timeouts": 0,
+            "ooms": 0,
+            "sqlite_errors": 0,
+            "scope_rejects": 0,
+            "scope_rejects_by_reason": {},
+            "rate_limit_by_provider": {},
+            "backoff_by_provider": {},
+        },
     }
 
     def numeric(value: Any) -> bool:
@@ -676,6 +692,21 @@ def scoreboard_for_data_dir(
                 if eid is not None and target is not None:
                     unmatched.setdefault((str(eid), str(target)), []).append(occurred)
             elif event_type == "phase_end" and phase_name == "import_targets":
+                skip_counts = details.get("skip_reason_counts")
+                if isinstance(skip_counts, dict):
+                    failures = result["failures"]
+                    by_reason = failures["scope_rejects_by_reason"]
+                    for reason, raw_count in skip_counts.items():
+                        try:
+                            count = int(raw_count)
+                        except (TypeError, ValueError, OverflowError):
+                            continue
+                        reason = str(reason)
+                        if count >= 0 and reason.startswith(
+                            ("non_global_", "mega_domain_")
+                        ):
+                            failures["scope_rejects"] += count
+                            by_reason[reason] = by_reason.get(reason, 0) + count
                 scheduler = details.get("scheduler")
                 if isinstance(scheduler, dict):
                     for field_name, samples, limit, violation_key in (
@@ -698,6 +729,15 @@ def scoreboard_for_data_dir(
                             if limit is not None and value > limit:
                                 result["invariant"][violation_key] += 1
             elif event_type in ("target_completed", "target_failed"):
+                if event_type == "target_failed":
+                    failures = result["failures"]
+                    return_code = details.get("return_code")
+                    if return_code == 124:
+                        failures["timeouts"] += 1
+                    elif return_code == 137:
+                        failures["ooms"] += 1
+                    if details.get("error_type") == "OperationalError":
+                        failures["sqlite_errors"] += 1
                 if event_type == "target_completed":
                     result["completed_runs"] += 1
                 eid, target = details.get("engagement_id"), details.get("target_value")
@@ -724,6 +764,24 @@ def scoreboard_for_data_dir(
             "run_duration": len(durations),
             "resource": len(memory),
         }
+        try:
+            from forge.autopilot.scheduler import scheduler_db_path
+
+            scheduler_uri = scheduler_db_path(data_dir).resolve().as_uri() + "?mode=ro"
+            scheduler_conn = direct_connect(scheduler_uri, uri=True)
+            try:
+                rate_rows = scheduler_conn.execute(
+                    "SELECT provider, COUNT(*) FROM provider_events "
+                    "WHERE event_type='rate_limit' AND recorded_at >= ? GROUP BY provider",
+                    ((end - timedelta(hours=24)).isoformat(),),
+                ).fetchall()
+                result["failures"]["rate_limit_by_provider"] = {
+                    str(provider): int(count) for provider, count in rate_rows
+                }
+            finally:
+                scheduler_conn.close()
+        except Exception:
+            result["failures"]["rate_limit_by_provider"] = {}
         result["available"] = True
         return result
     except Exception:

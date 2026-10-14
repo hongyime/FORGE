@@ -547,6 +547,33 @@ def test_autopilot_import_phase_aggregates_target_start_failures(
     assert f"failed={expected_failed}" in phase.detail
 
 
+@pytest.mark.parametrize(
+    ("dry_run", "expected"),
+    [(False, {"non_global_ip": 1, "invalid_ip": 1}), (True, {})],
+)
+def test_autopilot_import_phase_counts_unstarted_scan_reasons(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    dry_run: bool,
+    expected: dict[str, int],
+) -> None:
+    _write_feed(tmp_path / "imports" / "target-feed.json")
+    auto = _mk_autopilot(tmp_path, roe_id="ROE-SKIP-COUNTS")
+
+    def _fake_import_targets(**kwargs: Any) -> list[SimpleNamespace]:
+        assert kwargs["start"] is (not dry_run)
+        return [
+            SimpleNamespace(created=True, started=True, scan_eligibility_reason="eligible"),
+            SimpleNamespace(created=True, started=False, scan_eligibility_reason="non_global_ip"),
+            SimpleNamespace(created=True, started=False, scan_eligibility_reason="eligible"),
+            SimpleNamespace(created=True, started=False, scan_eligibility_reason="invalid_ip"),
+        ]
+
+    monkeypatch.setattr("forge.targets_import.import_targets", _fake_import_targets)
+    phase = auto._phase_import_targets(dry_run=dry_run)
+    assert phase.data["skip_reason_counts"] == expected
+
+
 def test_autopilot_import_phase_surfaces_failure_budget_stop_reason(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

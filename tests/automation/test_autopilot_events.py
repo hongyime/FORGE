@@ -461,6 +461,73 @@ def test_scoreboard_for_data_dir_without_database_is_unavailable(tmp_path: Path)
     assert result["queue_seconds_p50"] is None
     assert result["invariant"]["active_targets_violations"] is None
     assert result["invariant"]["leased_slots_violations"] is None
+    assert result["failures"] == {
+        "timeouts": 0, "ooms": 0, "sqlite_errors": 0, "scope_rejects": 0,
+        "scope_rejects_by_reason": {}, "rate_limit_by_provider": {},
+        "backoff_by_provider": {},
+    }
+
+
+def test_scoreboard_for_data_dir_aggregates_failures_and_provider_pressure(
+    tmp_path: Path,
+) -> None:
+    now = datetime(2026, 10, 15, tzinfo=UTC)
+    event_db = tmp_path / "engagements" / "1001.db"
+    event_db.parent.mkdir(parents=True)
+    conn = sqlite3.connect(event_db)
+    rows = [
+        ("target_failed", None, now.isoformat(), json.dumps({"return_code": 124}))
+        for _ in range(2)
+    ]
+    rows += [
+        ("target_failed", None, now.isoformat(), json.dumps({"return_code": 137})),
+        ("target_failed", None, now.isoformat(), json.dumps({"error_type": "OperationalError", "return_code": 1})),
+        ("target_failed", None, now.isoformat(), json.dumps({"error_type": "RuntimeError", "return_code": 1})),
+        ("phase_end", "import_targets", now.isoformat(), json.dumps({
+            "skip_reason_counts": {"non_global_ip": 2, "mega_domain_old_and_large": 1,
+                                   "invalid_ip": 5, "eligible": 3}
+        })),
+    ]
+    try:
+        conn.execute(
+            "CREATE TABLE autopilot_cycle_events (id INTEGER PRIMARY KEY, event_type TEXT, "
+            "phase_name TEXT, occurred_at TEXT, details_json TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO autopilot_cycle_events (event_type, phase_name, occurred_at, details_json) "
+            "VALUES (?, ?, ?, ?)", rows,
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    scheduler_db = tmp_path / "scheduler.db"
+    conn = sqlite3.connect(scheduler_db)
+    try:
+        conn.execute(
+            "CREATE TABLE provider_events (provider TEXT, event_type TEXT, recorded_at TEXT, details TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO provider_events VALUES (?, ?, ?, ?)",
+            [("github", "rate_limit", (now - timedelta(hours=1)).isoformat(), "{}") for _ in range(2)]
+            + [("shodan", "rate_limit", (now - timedelta(hours=1)).isoformat(), "{}"),
+               ("github", "other", (now - timedelta(hours=1)).isoformat(), "{}"),
+               ("old", "rate_limit", (now - timedelta(hours=25)).isoformat(), "{}")],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    failures = scoreboard_for_data_dir(tmp_path, now=now.isoformat())["failures"]
+    assert failures["timeouts"] == 2
+    assert failures["ooms"] == 1
+    assert failures["sqlite_errors"] == 1
+    assert failures["scope_rejects"] == 3
+    assert failures["scope_rejects_by_reason"] == {
+        "non_global_ip": 2, "mega_domain_old_and_large": 1
+    }
+    assert failures["rate_limit_by_provider"] == {"github": 2, "shodan": 1}
+    assert failures["backoff_by_provider"] == {}
 
 
 def test_scoreboard_for_data_dir_without_limits_has_no_violation_counts(tmp_path: Path) -> None:
