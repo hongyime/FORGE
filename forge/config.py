@@ -233,6 +233,11 @@ class ForgeConfig:
     cloud_azure_tenant_id: str | None
     cloud_azure_client_id: str | None
     cloud_azure_services: list[str]
+    cloud_discovery_enabled: bool = True
+    cloud_discovery_aws: bool = True
+    cloud_discovery_gcp: bool = True
+    cloud_discovery_azure: bool = True
+    cloud_discovery_timeout_seconds: int = 30
     roe_strictness: str = "strict"
     autopilot_global_slots: int = 4
     autopilot_max_active_targets: int = 2
@@ -449,6 +454,19 @@ class ForgeConfig:
             item.strip().lower() for item in cloud_azure_services_raw.split(",") if item.strip()
         ]
 
+        cloud_discovery_enabled = _env_bool("FORGE_CLOUD_DISCOVERY_ENABLED", True)
+        cloud_discovery_aws = _env_bool("FORGE_CLOUD_DISCOVERY_AWS", True)
+        cloud_discovery_gcp = _env_bool("FORGE_CLOUD_DISCOVERY_GCP", True)
+        cloud_discovery_azure = _env_bool("FORGE_CLOUD_DISCOVERY_AZURE", True)
+        cloud_discovery_timeout_seconds_raw = os.environ.get(
+            "FORGE_CLOUD_DISCOVERY_TIMEOUT_SECONDS", "30"
+        ).strip()
+        cloud_discovery_timeout_seconds = (
+            int(cloud_discovery_timeout_seconds_raw)
+            if cloud_discovery_timeout_seconds_raw.isdigit()
+            else 30
+        )
+
         kb_path = _env_path("FORGE_KB_PATH") or (data_dir / "knowledge.db")
         nvd_path = _env_path("FORGE_NVD_PATH") or (data_dir / "knowledge.db")
         exploitdb_path = _env_path("FORGE_EXPLOITDB_PATH") or (data_dir / "knowledge.db")
@@ -561,6 +579,11 @@ class ForgeConfig:
             cloud_azure_tenant_id=cloud_azure_tenant_id,
             cloud_azure_client_id=cloud_azure_client_id,
             cloud_azure_services=cloud_azure_services,
+            cloud_discovery_enabled=cloud_discovery_enabled,
+            cloud_discovery_aws=cloud_discovery_aws,
+            cloud_discovery_gcp=cloud_discovery_gcp,
+            cloud_discovery_azure=cloud_discovery_azure,
+            cloud_discovery_timeout_seconds=cloud_discovery_timeout_seconds,
             roe_strictness=roe_strictness,
             autopilot_global_slots=autopilot_global_slots,
             autopilot_max_active_targets=autopilot_max_active_targets,
@@ -771,6 +794,15 @@ def _env_int(
         return val
     except ValueError:
         return default
+
+
+def _env_bool(var_name: str, default: bool) -> bool:
+    raw = os.environ.get(var_name, "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 def _is_dev_profile() -> bool:

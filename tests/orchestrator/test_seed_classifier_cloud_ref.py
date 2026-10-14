@@ -115,7 +115,7 @@ class TestClassifySeedValue:
             ("cloud_ref:aws_s3:Acme-Public", "aws_s3:acme-public"),
             ("s3://Acme-Public/config.json", "aws_s3:acme-public"),
             ("gs://Acme-Data/path/to/blob", "gcs:acme-data"),
-            ("azure://AcctName/container", "azure_blob:acctname/container"),
+            ("azure://AcctName/container", "azure:acctname/container"),
             ("arn:aws:s3:::Acme-Archive/private/file.txt", "aws_s3:acme-archive"),
             ("netlify:Echo-Site", "netlify:echo-site"),
         ],

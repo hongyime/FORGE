@@ -875,8 +875,9 @@ _CLOUD_REF_HOSTNAME_REGEXES: tuple[re.Pattern[str], ...] = (
 _CLOUD_REF_LITERAL_SERVICE_ALIASES: dict[str, str] = {
     "amplify": "amplify",
     "appspot": "gcp_appspot",
+    "aws": "aws",
     "aws_s3": "aws_s3",
-    "azure": "azure_blob",
+    "azure": "azure",
     "azure_blob": "azure_blob",
     "azblob": "azure_blob",
     "cf_pages": "cloudflare_pages",
@@ -888,6 +889,7 @@ _CLOUD_REF_LITERAL_SERVICE_ALIASES: dict[str, str] = {
     "do_spaces": "do_spaces",
     "digitalocean_spaces": "do_spaces",
     "firebase": "firebase",
+    "gcp": "gcp",
     "gcp_appspot": "gcp_appspot",
     "gcp_cloudfunctions": "gcp_cloudfunctions",
     "gcs": "gcs",
