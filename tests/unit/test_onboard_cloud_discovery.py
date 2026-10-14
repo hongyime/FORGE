@@ -499,3 +499,32 @@ def test_cloud_account_to_all_candidates_includes_valid_engagement_point() -> No
     assert "my-bucket.s3.amazonaws.com" in candidates[1].canonical_value
     assert candidates[2].target_type == "url"
     assert "portal.acme-corp-test-12345.com/health" in candidates[2].canonical_value
+
+
+def test_cloud_accounts_to_seed_drop_payload() -> None:
+    from forge.onboard.cloud_discovery import cloud_accounts_to_seed_drop_payload
+
+    payload = cloud_accounts_to_seed_drop_payload(
+        [
+            CloudAccount(
+                provider="aws",
+                account_id="112233445566",
+                discovery_source="sts:get_caller_identity",
+                engagement_points=["https://my-bucket.s3.amazonaws.com"],
+            )
+        ]
+    )
+
+    assert payload["schema_version"] == "forge.connected_services_scan.v1"
+    assert payload["connector_id"] == "cloud_discovery"
+    assert payload["input_kind"] == "connected_services"
+    assert payload["secret_hits"] == []
+    assert any(
+        seed["target_value"] == "aws:112233445566"
+        and seed["target_type"] == "cloud_ref"
+        for seed in payload["seeds"]
+    )
+    assert any(
+        seed["target_value"] == "https://my-bucket.s3.amazonaws.com"
+        for seed in payload["seeds"]
+    )

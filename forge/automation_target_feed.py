@@ -43,8 +43,23 @@ from forge.targets_import import (
     target_scan_eligible,
 )
 
-SUPPORTED_SOURCES = ("db", "reports", "cti", "connectors", "supabase", "secrets_auto_feed")
-_OFFLINE_SOURCES = ("db", "reports", "cti", "connectors", "secrets_auto_feed")
+SUPPORTED_SOURCES = (
+    "db",
+    "reports",
+    "cti",
+    "connectors",
+    "supabase",
+    "secrets_auto_feed",
+    "cloud_discovery",
+)
+_OFFLINE_SOURCES = (
+    "db",
+    "reports",
+    "cti",
+    "connectors",
+    "secrets_auto_feed",
+    "cloud_discovery",
+)
 
 _MAX_FILES_PER_DIR_SOURCE = 200
 _MAX_REPORT_FILES = 5000
@@ -2334,6 +2349,101 @@ def build_target_feed(
             )
         source_errors.extend({"source": "connectors", "error": err} for err in errors)
 
+    if "cloud_discovery" in active_offline:
+        from forge.onboard.cloud_discovery import (
+            CLOUD_SEED_DROP_FILENAME,
+            cloud_account_to_all_candidates,
+            discover_all_cloud_accounts,
+        )
+
+        drop_path = (connectors_dir or Path("imports")) / CLOUD_SEED_DROP_FILENAME
+        candidates: list[FeedCandidate] = []
+        errors: list[dict[str, str]] = []
+        if drop_path.is_file():
+            try:
+                with drop_path.open("r", encoding="utf-8") as handle:
+                    seed_payload = json.load(handle)
+            except (OSError, ValueError) as exc:
+                errors.append({
+                    "source": "cloud_discovery",
+                    "error": f"{type(exc).__name__}:{drop_path.name}",
+                })
+            else:
+                if (
+                    not isinstance(seed_payload, dict)
+                    or seed_payload.get("schema_version")
+                    != "forge.connected_services_scan.v1"
+                ):
+                    errors.append({
+                        "source": "cloud_discovery",
+                        "error": f"invalid_schema:{drop_path.name}",
+                    })
+                elif not isinstance(seed_payload.get("seeds"), list):
+                    errors.append({
+                        "source": "cloud_discovery",
+                        "error": f"invalid_seeds:{drop_path.name}",
+                    })
+                else:
+                    for seed in seed_payload["seeds"]:
+                        if not isinstance(seed, dict):
+                            continue
+                        raw_value = seed.get("target_value")
+                        raw_type = seed.get("target_type")
+                        if not isinstance(raw_value, str) or not isinstance(
+                            raw_type, str
+                        ):
+                            continue
+                        source_kind = str(seed.get("source_kind") or "connector_output")
+                        source_group = str(
+                            seed.get("source_group") or f"connector_file:{drop_path.name}"
+                        )
+                        provenance = str(seed.get("provenance") or source_group)
+                        seed_first_seen_at = str(
+                            seed.get("first_seen_at")
+                            or seed_payload.get("generated_at")
+                            or generated_at
+                        )
+                        try:
+                            seed_confidence = float(seed.get("confidence", 0.5))
+                        except (TypeError, ValueError):
+                            seed_confidence = 0.5
+                        if not 0 <= seed_confidence <= 1:
+                            seed_confidence = 0.5
+                        candidate = _candidate(
+                            raw_value,
+                            source_kind=source_kind,
+                            source_group=source_group,
+                            provenance=provenance,
+                            confidence=seed_confidence,
+                            first_seen_at=seed_first_seen_at,
+                            target_type_hint=raw_type,
+                        )
+                        if candidate is not None:
+                            candidates.append(candidate)
+        else:
+            try:
+                # Feed building has no config parameter, so discovery uses cfg=None.
+                accounts, _skip = discover_all_cloud_accounts()
+                candidates = [
+                    candidate
+                    for account in accounts
+                    for candidate in cloud_account_to_all_candidates(account)
+                ]
+            except Exception as exc:
+                errors.append(
+                    {"source": "cloud_discovery", "error": f"{type(exc).__name__}"}
+                )
+
+        # With connectors active, the drop's accounts appear in both groups;
+        # _merge_candidates dedupes them at output.
+        groups["cloud_discovery"] = candidates
+        source_scan_limits["cloud_discovery"] = {"candidates": len(candidates)}
+        for candidate in candidates:
+            source_group_counts[candidate.source_group] = (
+                source_group_counts.get(candidate.source_group, 0) + 1
+            )
+        source_errors.extend(errors)
+
     if wants_supabase:
         found, errors, supabase_group_counts, supabase_table_discovery = _extract_supabase_source(
             supabase_config_path,
@@ -2530,6 +2640,7 @@ def build_target_feed(
             "cti": len(groups["cti"]),
             "connectors": len(groups["connectors"]),
             "supabase": len(groups["supabase"]),
+            "cloud_discovery": len(groups["cloud_discovery"]),
         },
         "by_source_group": dict(sorted(source_group_counts.items())),
         "per_group": dict(sorted(per_group.items())),

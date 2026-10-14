@@ -2365,6 +2365,99 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
     ]
 
 
+def _cloud_seed_payload() -> dict:
+    from forge.onboard.cloud_discovery import (
+        CloudAccount,
+        cloud_accounts_to_seed_drop_payload,
+    )
+
+    return cloud_accounts_to_seed_drop_payload(
+        [CloudAccount(provider="aws", account_id="112233445566")]
+    )
+
+
+def test_cloud_seed_drop_ingests_through_connectors(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "connected-services-cloud-seeds.local.json").write_text(
+        json.dumps(_cloud_seed_payload()), encoding="utf-8"
+    )
+
+    payload = build_target_feed(
+        sources=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=None,
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert any(
+        item["target_type"] == "cloud_ref"
+        and item["canonical_value"] == "aws:112233445566"
+        for item in payload["items"]
+    )
+
+
+def test_cloud_discovery_source_reads_seed_drop(tmp_path: Path) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "connected-services-cloud-seeds.local.json").write_text(
+        json.dumps(_cloud_seed_payload()), encoding="utf-8"
+    )
+
+    payload = build_target_feed(
+        sources=["cloud_discovery"],
+        data_dir=tmp_path / "data",
+        reports_dir=None,
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert any(
+        item["target_type"] == "cloud_ref"
+        and item["canonical_value"] == "aws:112233445566"
+        for item in payload["items"]
+    )
+
+
+def test_cloud_discovery_source_runs_live_discovery_without_drop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from forge.onboard.cloud_discovery import CloudAccount
+
+    monkeypatch.setattr(
+        "forge.onboard.cloud_discovery.discover_all_cloud_accounts",
+        lambda: (
+            [
+                CloudAccount(
+                    provider="gcp",
+                    account_id="live-proj-1",
+                    discovery_source="offline:test",
+                    engagement_points=[
+                        "https://portal.acme-corp-test-12345.com/health"
+                    ],
+                )
+            ],
+            {"gcp": "ok", "aws": "disabled", "azure": "disabled"},
+        ),
+    )
+
+    payload = build_target_feed(
+        sources=["cloud_discovery"],
+        data_dir=tmp_path / "data",
+        reports_dir=None,
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    values = {item["canonical_value"] for item in payload["items"]}
+    assert "gcp:live-proj-1" in values
+    assert "https://portal.acme-corp-test-12345.com/health" in values
+
+
 def test_feed_build_supabase_all_tables_reports_blocked_discovery(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

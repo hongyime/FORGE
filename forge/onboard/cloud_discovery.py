@@ -8,6 +8,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 
+CLOUD_SEED_DROP_FILENAME = "connected-services-cloud-seeds.local.json"
+
+
 @dataclass(frozen=True)
 class CloudAccount:
     provider: str
@@ -389,3 +392,30 @@ def cloud_account_to_all_candidates(
         if candidate is not None:
             candidates.append(candidate)
     return candidates
+
+
+def cloud_accounts_to_seed_drop_payload(
+    accounts: list[CloudAccount], *, generated_at: str | None = None
+) -> dict[str, Any]:
+    """Serialize cloud discovery results using the connected-services seed format."""
+    seeds = [
+        {
+            "target_value": candidate.target_value,
+            "target_type": candidate.target_type,
+            "source_kind": candidate.source_kind,
+            "source_group": candidate.source_group,
+            "provenance": candidate.provenance,
+            "confidence": candidate.confidence,
+            "first_seen_at": candidate.first_seen_at,
+        }
+        for account in accounts
+        for candidate in cloud_account_to_all_candidates(account)
+    ]
+    return {
+        "schema_version": "forge.connected_services_scan.v1",
+        "connector_id": "cloud_discovery",
+        "input_kind": "connected_services",
+        "generated_at": generated_at or _now_iso(),
+        "seeds": seeds,
+        "secret_hits": [],
+    }
