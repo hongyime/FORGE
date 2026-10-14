@@ -294,3 +294,98 @@ def discover_azure_subscriptions(
         return accounts
     except Exception:
         return accounts
+
+
+def discover_all_cloud_accounts(
+    *,
+    cfg: Any | None = None,
+    enable_aws: bool = True,
+    enable_gcp: bool = True,
+    enable_azure: bool = True,
+) -> tuple[list[CloudAccount], dict[str, str]]:
+    """Run enabled cloud providers independently and combine their accounts."""
+    providers = ("aws", "gcp", "azure")
+    try:
+        if cfg is not None and not getattr(cfg, "cloud_discovery_enabled", True):
+            return [], {provider: "disabled" for provider in providers}
+
+        enabled = {
+            "aws": enable_aws and (cfg is None or getattr(cfg, "cloud_discovery_aws", True)),
+            "gcp": enable_gcp and (cfg is None or getattr(cfg, "cloud_discovery_gcp", True)),
+            "azure": enable_azure and (cfg is None or getattr(cfg, "cloud_discovery_azure", True)),
+        }
+        timeout_value = (
+            getattr(cfg, "cloud_discovery_timeout_seconds", 5.0) if cfg is not None else 5.0
+        )
+        timeout = timeout_value if isinstance(timeout_value, (int, float)) else 5.0
+        functions = {
+            "aws": lambda: discover_aws_accounts(timeout=timeout),
+            "gcp": discover_gcp_projects,
+            "azure": discover_azure_subscriptions,
+        }
+        accounts: list[CloudAccount] = []
+        skip_reasons: dict[str, str] = {}
+        seen: set[tuple[str, str]] = set()
+        for provider in providers:
+            if not enabled[provider]:
+                skip_reasons[provider] = "disabled"
+                continue
+            try:
+                found = functions[provider]()
+                skip_reasons[provider] = "ok" if found else "no_accounts_found"
+                for account in found:
+                    key = (account.provider, account.account_id)
+                    if key not in seen:
+                        accounts.append(account)
+                        seen.add(key)
+            except Exception:
+                skip_reasons[provider] = "error"
+        return accounts, skip_reasons
+    except Exception:
+        return [], {provider: "error" for provider in providers}
+
+
+def cloud_account_to_feed_candidate(
+    account: CloudAccount,
+    *,
+    confidence: float = 0.95,
+    first_seen_at: str | None = None,
+) -> Any:
+    """Convert a cloud account into its primary feed candidate."""
+    from forge.automation_target_feed import FeedCandidate
+
+    canonical_val = f"{account.provider}:{account.account_id}"
+    return FeedCandidate(
+        target_type="cloud_ref",
+        target_value=canonical_val,
+        canonical_value=canonical_val,
+        source_kind="cloud_discovery",
+        source_group=f"cloud_discovery:{account.provider}",
+        confidence=confidence,
+        first_seen_at=first_seen_at or account.first_seen_at or _now_iso(),
+        provenance=f"cloud_discovery:{account.provider}:{account.discovery_source}",
+    )
+
+
+def cloud_account_to_all_candidates(
+    account: CloudAccount, *, confidence: float = 0.95
+) -> list[Any]:
+    """Convert a cloud account and its engagement points into feed candidates."""
+    from forge.automation_target_feed import _candidate
+
+    candidates = [cloud_account_to_feed_candidate(account, confidence=confidence)]
+    for engagement_point in account.engagement_points:
+        candidate = _candidate(
+            engagement_point,
+            source_kind="cloud_discovery",
+            source_group=f"cloud_discovery:{account.provider}",
+            provenance=(
+                f"cloud_discovery:{account.provider}:{account.account_id}:engagement_point"
+            ),
+            confidence=0.90,
+            first_seen_at=account.first_seen_at or _now_iso(),
+            target_type_hint="auto",
+        )
+        if candidate is not None:
+            candidates.append(candidate)
+    return candidates

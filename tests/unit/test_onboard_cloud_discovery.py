@@ -366,3 +366,136 @@ def test_discover_azure_subscriptions_never_raises(
     assert discover_azure_subscriptions(
         client=SimpleNamespace(subscriptions=RaisingSubscriptions())
     ) == []
+
+
+def test_discover_all_cloud_accounts_global_disable(monkeypatch: pytest.MonkeyPatch) -> None:
+    from forge.onboard import cloud_discovery
+
+    def unexpected_call(*args, **kwargs):
+        raise AssertionError("disabled provider was called")
+
+    monkeypatch.setattr(cloud_discovery, "discover_aws_accounts", unexpected_call)
+    monkeypatch.setattr(cloud_discovery, "discover_gcp_projects", unexpected_call)
+    monkeypatch.setattr(cloud_discovery, "discover_azure_subscriptions", unexpected_call)
+    cfg = SimpleNamespace(
+        cloud_discovery_enabled=False,
+        cloud_discovery_aws=True,
+        cloud_discovery_gcp=True,
+        cloud_discovery_azure=True,
+    )
+
+    assert cloud_discovery.discover_all_cloud_accounts(cfg=cfg) == (
+        [],
+        {"aws": "disabled", "gcp": "disabled", "azure": "disabled"},
+    )
+
+
+def test_discover_all_cloud_accounts_provider_disable_and_skip_reasons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge.onboard import cloud_discovery
+
+    aws_account = CloudAccount(provider="aws", account_id="112233445566")
+    monkeypatch.setattr(cloud_discovery, "discover_aws_accounts", lambda **kwargs: [aws_account])
+    monkeypatch.setattr(
+        cloud_discovery,
+        "discover_gcp_projects",
+        lambda: pytest.fail("disabled GCP provider was called"),
+    )
+    monkeypatch.setattr(cloud_discovery, "discover_azure_subscriptions", lambda: [])
+    cfg = SimpleNamespace(
+        cloud_discovery_enabled=True,
+        cloud_discovery_aws=True,
+        cloud_discovery_gcp=False,
+        cloud_discovery_azure=True,
+    )
+
+    accounts, skip_reasons = cloud_discovery.discover_all_cloud_accounts(cfg=cfg)
+
+    assert accounts == [aws_account]
+    assert skip_reasons == {
+        "aws": "ok",
+        "gcp": "disabled",
+        "azure": "no_accounts_found",
+    }
+
+
+def test_discover_all_cloud_accounts_deduplicates_and_isolates_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge.onboard import cloud_discovery
+
+    first = CloudAccount(provider="aws", account_id="112233445566", account_name="first")
+    duplicate = CloudAccount(provider="aws", account_id="112233445566", account_name="second")
+    second = CloudAccount(provider="aws", account_id="223344556677")
+    monkeypatch.setattr(
+        cloud_discovery,
+        "discover_aws_accounts",
+        lambda **kwargs: [first, duplicate, second],
+    )
+
+    def fail_gcp():
+        raise Exception("provider failure")
+
+    monkeypatch.setattr(cloud_discovery, "discover_gcp_projects", fail_gcp)
+    monkeypatch.setattr(cloud_discovery, "discover_azure_subscriptions", lambda: [])
+
+    accounts, skip_reasons = cloud_discovery.discover_all_cloud_accounts()
+
+    assert accounts == [first, second]
+    assert skip_reasons == {
+        "aws": "ok",
+        "gcp": "error",
+        "azure": "no_accounts_found",
+    }
+
+
+def test_cloud_account_to_feed_candidate_and_overrides() -> None:
+    from forge.onboard.cloud_discovery import cloud_account_to_feed_candidate
+
+    account = CloudAccount(
+        provider="aws",
+        account_id="112233445566",
+        discovery_source="sts:get_caller_identity",
+        first_seen_at="2026-10-15T00:00:00+00:00",
+    )
+    candidate = cloud_account_to_feed_candidate(account)
+
+    assert candidate.target_type == "cloud_ref"
+    assert candidate.target_value == candidate.canonical_value == "aws:112233445566"
+    assert candidate.source_kind == "cloud_discovery"
+    assert candidate.source_group == "cloud_discovery:aws"
+    assert candidate.confidence == 0.95
+    assert candidate.first_seen_at == "2026-10-15T00:00:00+00:00"
+    assert candidate.provenance.startswith("cloud_discovery:aws:sts:get_caller_identity")
+
+    override = cloud_account_to_feed_candidate(
+        account, confidence=0.5, first_seen_at="2026-10-15T01:00:00+00:00"
+    )
+    assert override.confidence == 0.5
+    assert override.first_seen_at == "2026-10-15T01:00:00+00:00"
+
+
+def test_cloud_account_to_all_candidates_includes_valid_engagement_point() -> None:
+    from forge.onboard.cloud_discovery import cloud_account_to_all_candidates
+
+    account = CloudAccount(
+        provider="aws",
+        account_id="112233445566",
+        engagement_points=[
+            "https://my-bucket.s3.amazonaws.com",
+            "https://portal.acme-corp-test-12345.com/health",
+            "",
+        ],
+    )
+
+    candidates = cloud_account_to_all_candidates(account)
+
+    assert len(candidates) == 3
+    assert candidates[0].target_type == "cloud_ref"
+    assert candidates[0].canonical_value == "aws:112233445566"
+    # S3 hostnames classify as cloud_ref in the feed, not url.
+    assert candidates[1].target_type == "cloud_ref"
+    assert "my-bucket.s3.amazonaws.com" in candidates[1].canonical_value
+    assert candidates[2].target_type == "url"
+    assert "portal.acme-corp-test-12345.com/health" in candidates[2].canonical_value
