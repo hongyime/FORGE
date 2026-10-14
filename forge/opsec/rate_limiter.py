@@ -93,6 +93,19 @@ class RateLimiter:
                 self._domain_backoff_until.get(domain, 0.0), cooldown_until
             )
             if status_code == 429:
+                try:
+                    from forge.autopilot.breaker import (
+                        canonical_provider,
+                        record_rate_limit,
+                        set_retry_after,
+                    )
+
+                    prov = canonical_provider(url)
+                    record_rate_limit(prov)
+                    if backoff > 0:
+                        set_retry_after(prov, backoff)
+                except Exception:
+                    pass
                 if record_active_fanout_rate_limit() is not None:
                     self._domain_rate_limit_wait_pending.add(domain)
                 else:

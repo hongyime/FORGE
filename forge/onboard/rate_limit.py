@@ -70,6 +70,19 @@ def request_with_rate_limit_backoff(
             return result
 
         delay = _retry_delay(headers, retry_count=retry_count, now=now())
+        try:
+            from forge.autopilot.breaker import (
+                canonical_provider,
+                record_rate_limit,
+                set_retry_after,
+            )
+
+            prov = canonical_provider(context or "")
+            record_rate_limit(prov)
+            if delay > 0:
+                set_retry_after(prov, delay)
+        except Exception:
+            pass
         event: dict[str, Any] = {
             "event": "rate_limit_backoff",
             "context": context,

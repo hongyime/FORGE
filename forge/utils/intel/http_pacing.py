@@ -303,6 +303,19 @@ def record_rate_limit_cooldown(
     record_active_fanout_rate_limit(
         applied_backoff=(wait_seconds > 0 if applied_backoff is None else applied_backoff),
     )
+    try:
+        from forge.autopilot.breaker import (
+            canonical_provider,
+            record_rate_limit,
+            set_retry_after,
+        )
+
+        prov = canonical_provider(scope, url)
+        record_rate_limit(prov)
+        if wait_seconds > 0:
+            set_retry_after(prov, wait_seconds)
+    except Exception:
+        pass
     _record_rate_limit_cooldown(scope, url, wait_seconds)
 
 

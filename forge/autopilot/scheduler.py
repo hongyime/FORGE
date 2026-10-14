@@ -19,6 +19,7 @@ from typing import Any, Optional
 
 from forge.config import ForgeConfig
 from forge.db.direct_connect import direct_connect
+from forge.autopilot.breaker import can_start_provider
 
 _LOG = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ class Lease:
     status: str  # "active" | "released" | "reaped"
     released_at: Optional[str] = None
     release_reason: Optional[str] = None
+    provider: str = ""
 
 
 @dataclass(frozen=True)
@@ -125,15 +127,33 @@ def ensure_scheduler_schema(con: sqlite3.Connection) -> None:
             expires_at      TEXT NOT NULL,
             status          TEXT NOT NULL DEFAULT 'active',
             released_at     TEXT,
-            release_reason  TEXT
+            release_reason  TEXT,
+            provider        TEXT NOT NULL DEFAULT ''
         );
 
         CREATE INDEX IF NOT EXISTS idx_leases_status ON leases(status);
         CREATE INDEX IF NOT EXISTS idx_leases_target_key_status ON leases(target_key, status);
         CREATE INDEX IF NOT EXISTS idx_leases_engagement_status ON leases(engagement_id, status);
         CREATE INDEX IF NOT EXISTS idx_leases_expires ON leases(expires_at) WHERE status = 'active';
+        CREATE INDEX IF NOT EXISTS idx_leases_provider_status ON leases(provider, status);
         """
     )
+    cur = con.execute("PRAGMA table_info(leases)")
+    cols = {row[1] for row in cur.fetchall()}
+    if "provider" not in cols:
+        try:
+            con.execute("ALTER TABLE leases ADD COLUMN provider TEXT NOT NULL DEFAULT ''")
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS idx_leases_provider_status ON leases(provider, status)"
+            )
+        except sqlite3.OperationalError:
+            pass
+    try:
+        from forge.autopilot.breaker import ensure_breaker_schema
+
+        ensure_breaker_schema(con)
+    except Exception:
+        pass
 
 
 def compute_worker_budget(
@@ -348,6 +368,7 @@ def acquire_lease(
     owner_token: str | None = None,
     data_dir: Path | str | None = None,
     config: ForgeConfig | None = None,
+    provider: str | None = None,
 ) -> LeaseAcquireResult:
     """Atomically acquire a lease inside a SQLite transaction."""
     if is_kill_switch_active(data_dir=data_dir):
@@ -355,6 +376,29 @@ def acquire_lease(
             acquired=False,
             lease=None,
             reason="kill_switch_active",
+            allocated_slots=0,
+        )
+
+    from forge.autopilot.breaker import (
+        canonical_provider,
+        is_global_paused,
+        is_provider_paused,
+    )
+
+    if is_global_paused(data_dir=data_dir):
+        return LeaseAcquireResult(
+            acquired=False,
+            lease=None,
+            reason="global_circuit_breaker_active",
+            allocated_slots=0,
+        )
+
+    resolved_provider = canonical_provider(provider or target_value or target_key)
+    if is_provider_paused(resolved_provider, data_dir=data_dir):
+        return LeaseAcquireResult(
+            acquired=False,
+            lease=None,
+            reason="provider_circuit_breaker_active",
             allocated_slots=0,
         )
 
@@ -391,6 +435,11 @@ def acquire_lease(
         if config
         else DEFAULT_MAX_ACTIVE_TARGETS
     )
+    provider_max_inflight = (
+        getattr(config, "provider_max_inflight", 2)
+        if config
+        else int(os.environ.get("FORGE_PROVIDER_MAX_INFLIGHT", 2))
+    )
 
     db_path = scheduler_db_path(data_dir)
     con = direct_connect(db_path)
@@ -398,7 +447,23 @@ def acquire_lease(
         ensure_scheduler_schema(con)
         with con:
             cur = con.cursor()
-            # 1. Target already active
+            # 1. Inflight leases per provider
+            if resolved_provider and resolved_provider != "unknown":
+                cur.execute(
+                    "SELECT COUNT(*) FROM leases WHERE provider = ? AND status = 'active'",
+                    (resolved_provider,),
+                )
+                row = cur.fetchone()
+                provider_active = int(row[0]) if row else 0
+                if provider_active >= provider_max_inflight:
+                    return LeaseAcquireResult(
+                        acquired=False,
+                        lease=None,
+                        reason="provider_inflight_limit",
+                        allocated_slots=0,
+                    )
+
+            # 2. Target already active
             cur.execute(
                 "SELECT 1 FROM leases WHERE target_key = ? AND status = 'active' LIMIT 1",
                 (target_key,),
@@ -411,7 +476,7 @@ def acquire_lease(
                     allocated_slots=0,
                 )
 
-            # 2. Max active targets reached
+            # 3. Max active targets reached
             cur.execute(
                 "SELECT COUNT(DISTINCT target_key) FROM leases WHERE status = 'active'"
             )
@@ -425,7 +490,7 @@ def acquire_lease(
                     allocated_slots=0,
                 )
 
-            # 3. Slots exhausted
+            # 4. Slots exhausted
             cur.execute(
                 "SELECT COALESCE(SUM(slot_count), 0) FROM leases WHERE status = 'active'"
             )
@@ -440,7 +505,7 @@ def acquire_lease(
                     allocated_slots=0,
                 )
 
-            # 4. Slot allocation (partial allocation if available < requested)
+            # 5. Slot allocation (partial allocation if available < requested)
             req = requested_slots if requested_slots > 0 else 1
             granted = min(req, available_slots)
 
@@ -457,8 +522,8 @@ def acquire_lease(
                 INSERT INTO leases (
                     lease_id, target_key, target_value, target_type, engagement_id,
                     slot_count, owner_pid, owner_token, kind,
-                    acquired_at, heartbeat_at, expires_at, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+                    acquired_at, heartbeat_at, expires_at, status, provider
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
                 """,
                 (
                     lease_id,
@@ -473,6 +538,7 @@ def acquire_lease(
                     acquired_at,
                     heartbeat_at,
                     expires_at,
+                    resolved_provider,
                 ),
             )
             lease = Lease(
@@ -489,6 +555,7 @@ def acquire_lease(
                 heartbeat_at=heartbeat_at,
                 expires_at=expires_at,
                 status="active",
+                provider=resolved_provider,
             )
             return LeaseAcquireResult(
                 acquired=True,
@@ -573,6 +640,7 @@ def list_active_leases(
         rows = cur.fetchall()
         leases: list[Lease] = []
         for r in rows:
+            prov = str(r["provider"]) if "provider" in r.keys() and r["provider"] else ""
             leases.append(
                 Lease(
                     lease_id=str(r["lease_id"]),
@@ -590,6 +658,7 @@ def list_active_leases(
                     status=str(r["status"]),
                     released_at=str(r["released_at"]) if r["released_at"] else None,
                     release_reason=str(r["release_reason"]) if r["release_reason"] else None,
+                    provider=prov,
                 )
             )
         return leases

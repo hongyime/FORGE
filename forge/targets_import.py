@@ -333,6 +333,7 @@ def import_targets(
                         "slots_exhausted",
                         "max_active_targets_reached",
                         "kill_switch_active",
+                        "global_circuit_breaker_active",
                     ):
                         start_stop_reason = lease_result.reason
                         unprocessed_count = len(items) - item_index - 1
@@ -455,6 +456,7 @@ def import_targets(
             "slots_exhausted",
             "max_active_targets_reached",
             "kill_switch_active",
+            "global_circuit_breaker_active",
         ):
             break
     return results

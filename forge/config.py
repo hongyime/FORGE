@@ -240,6 +240,12 @@ class ForgeConfig:
     autopilot_memory_reserve_mb: int = 4096
     autopilot_p95_worker_memory_mb: int = 0
     autopilot_kill_switch_file: Path | None = None
+    breaker_rate_limit_window_s: int = 600
+    breaker_rate_limit_threshold: int = 3
+    breaker_pause_s: int = 900
+    breaker_global_provider_threshold: int = 3
+    breaker_global_event_threshold: int = 10
+    provider_max_inflight: int = 2
     # Engagement key is never stored in the config object — resolved at
     # DB-open time via forge.opsec.crypto to avoid lingering in memory.
 
@@ -487,6 +493,22 @@ class ForgeConfig:
         )
         kill_switch_env = os.environ.get("FORGE_AUTOPILOT_KILL_SWITCH_FILE", "").strip()
         autopilot_kill_switch_file = Path(kill_switch_env) if kill_switch_env else None
+        breaker_rate_limit_window_s = _env_int(
+            "FORGE_BREAKER_RATE_LIMIT_WINDOW_S", 600, minimum=10, maximum=86400
+        )
+        breaker_rate_limit_threshold = _env_int(
+            "FORGE_BREAKER_RATE_LIMIT_THRESHOLD", 3, minimum=1, maximum=100
+        )
+        breaker_pause_s = _env_int("FORGE_BREAKER_PAUSE_S", 900, minimum=10, maximum=86400)
+        breaker_global_provider_threshold = _env_int(
+            "FORGE_BREAKER_GLOBAL_PROVIDER_THRESHOLD", 3, minimum=1, maximum=50
+        )
+        breaker_global_event_threshold = _env_int(
+            "FORGE_BREAKER_GLOBAL_EVENT_THRESHOLD", 10, minimum=1, maximum=500
+        )
+        provider_max_inflight = _env_int(
+            "FORGE_PROVIDER_MAX_INFLIGHT", 2, minimum=1, maximum=16
+        )
 
         return cls(
             data_dir=data_dir,
@@ -546,6 +568,12 @@ class ForgeConfig:
             autopilot_memory_reserve_mb=autopilot_memory_reserve_mb,
             autopilot_p95_worker_memory_mb=autopilot_p95_worker_memory_mb,
             autopilot_kill_switch_file=autopilot_kill_switch_file,
+            breaker_rate_limit_window_s=breaker_rate_limit_window_s,
+            breaker_rate_limit_threshold=breaker_rate_limit_threshold,
+            breaker_pause_s=breaker_pause_s,
+            breaker_global_provider_threshold=breaker_global_provider_threshold,
+            breaker_global_event_threshold=breaker_global_event_threshold,
+            provider_max_inflight=provider_max_inflight,
         )
 
     # ------------------------------------------------------------------
@@ -723,6 +751,26 @@ def _env_path(var_name: str) -> Path | None:
     if not cleaned:
         return None
     return Path(cleaned).expanduser()
+
+
+def _env_int(
+    var_name: str,
+    default: int,
+    minimum: int | None = None,
+    maximum: int | None = None,
+) -> int:
+    raw = os.environ.get(var_name, "").strip()
+    if not raw:
+        return default
+    try:
+        val = int(raw)
+        if minimum is not None and val < minimum:
+            return minimum
+        if maximum is not None and val > maximum:
+            return maximum
+        return val
+    except ValueError:
+        return default
 
 
 def _is_dev_profile() -> bool:

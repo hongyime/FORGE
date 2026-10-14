@@ -1281,6 +1281,15 @@ class ForgeAutopilot:
                 detail="kill_switch_active",
                 data={**feed_pin, "dry_run": effective_dry_run, **self._scheduler_snapshot_data()},
             )
+        from forge.autopilot.breaker import is_global_paused
+
+        if is_global_paused(data_dir=self.data_dir):
+            return AutopilotPhaseResult(
+                name="import_targets",
+                status="skipped",
+                detail="global_circuit_breaker_active",
+                data={**feed_pin, "dry_run": effective_dry_run, **self._scheduler_snapshot_data()},
+            )
         import_feed_file = self.feed_file
         if effective_dry_run:
             # Dry-run consumes the current feed for preview only. No
@@ -1429,6 +1438,15 @@ class ForgeAutopilot:
                 name="resume_candidates",
                 status="skipped",
                 detail="kill_switch_active",
+                data={"dry_run": dry_run, **self._scheduler_snapshot_data()},
+            )
+        from forge.autopilot.breaker import is_global_paused
+
+        if is_global_paused(data_dir=self.data_dir):
+            return AutopilotPhaseResult(
+                name="resume_candidates",
+                status="skipped",
+                detail="global_circuit_breaker_active",
                 data={"dry_run": dry_run, **self._scheduler_snapshot_data()},
             )
 

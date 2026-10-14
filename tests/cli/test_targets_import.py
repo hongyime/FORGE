@@ -1579,6 +1579,7 @@ def test_resume_run_can_execute_in_parallel_with_threadsafe_ledger(tmp_path: Pat
     data_dir = tmp_path / "data"
     scope_path = tmp_path / "scope.json"
     scope_path.write_text("{}", encoding="utf-8")
+    suffixes = {1: "a", 2: "b", 3: "c"}
     for engagement_id in range(1, 4):
         _write_candidate_run(
             data_dir / "engagements" / f"{engagement_id}.db",
@@ -1586,7 +1587,7 @@ def test_resume_run_can_execute_in_parallel_with_threadsafe_ledger(tmp_path: Pat
             status="failed",
             error="max iterations exhausted with pending recursive work: 1",
             metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
-            seed_value=f"target-{engagement_id}.acme-targets.net",
+            seed_value=f"target-{engagement_id}.acme-{suffixes[engagement_id]}.net",
         )
     active = 0
     max_seen = 0
@@ -1604,7 +1605,7 @@ def test_resume_run_can_execute_in_parallel_with_threadsafe_ledger(tmp_path: Pat
 
     resume_cfg = _FakeConfig(data_dir)
     resume_cfg.autopilot_max_active_targets = 3
-    resume_cfg.autopilot_global_slots = 8
+    resume_cfg.autopilot_global_slots = 16
     payload = execute_target_resume_plan(
         data_dir=data_dir,
         batch_id="parallel-test",
@@ -1635,6 +1636,7 @@ def test_resume_run_parallel_stops_scheduling_after_failure(tmp_path: Path) -> N
     data_dir = tmp_path / "data"
     scope_path = tmp_path / "scope.json"
     scope_path.write_text("{}", encoding="utf-8")
+    suffixes = {1: "a", 2: "b", 3: "c", 4: "d"}
     for engagement_id in range(1, 5):
         _write_candidate_run(
             data_dir / "engagements" / f"{engagement_id}.db",
@@ -1642,7 +1644,7 @@ def test_resume_run_parallel_stops_scheduling_after_failure(tmp_path: Path) -> N
             status="failed",
             error="max iterations exhausted with pending recursive work: 1",
             metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
-            seed_value=f"target-{engagement_id}.acme-targets.net",
+            seed_value=f"target-{engagement_id}.acme-{suffixes[engagement_id]}.net",
         )
     calls: list[list[str]] = []
 
@@ -1652,7 +1654,7 @@ def test_resume_run_parallel_stops_scheduling_after_failure(tmp_path: Path) -> N
 
     resume_cfg = _FakeConfig(data_dir)
     resume_cfg.autopilot_max_active_targets = 3
-    resume_cfg.autopilot_global_slots = 8
+    resume_cfg.autopilot_global_slots = 16
     payload = execute_target_resume_plan(
         data_dir=data_dir,
         batch_id="parallel-stop-test",

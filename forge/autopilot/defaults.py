@@ -110,6 +110,18 @@ class AutopilotDefaults:
     memory_reserve_mb: int = 4096
     #: Measured p95 child process memory; 0 retains configured slot cap.
     p95_worker_memory_mb: int = 0
+    #: Sliding window duration (seconds) for counting rate-limit events.
+    breaker_rate_limit_window_s: int = 600
+    #: Number of rate-limit events in window required to trip provider breaker.
+    breaker_rate_limit_threshold: int = 3
+    #: Pause duration (seconds) when provider or global breaker trips.
+    breaker_pause_s: int = 900
+    #: Number of distinct tripped providers required to trip global breaker.
+    breaker_global_provider_threshold: int = 3
+    #: Total rate-limit events across all providers required to trip global breaker.
+    breaker_global_event_threshold: int = 10
+    #: Maximum concurrent active leases per provider.
+    provider_max_inflight: int = 2
 
 
 #: Dict-form of :data:`AutopilotDefaults`, convenient for serialization.
@@ -140,6 +152,12 @@ AUTOPILOT_DEFAULTS: dict[str, object] = {
     "lease_ttl_seconds": 600,
     "memory_reserve_mb": 4096,
     "p95_worker_memory_mb": 0,
+    "breaker_rate_limit_window_s": 600,
+    "breaker_rate_limit_threshold": 3,
+    "breaker_pause_s": 900,
+    "breaker_global_provider_threshold": 3,
+    "breaker_global_event_threshold": 10,
+    "provider_max_inflight": 2,
 }
 
 
