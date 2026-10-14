@@ -34,6 +34,7 @@ from typing import Any, Callable
 
 from forge.autopilot.defaults import AUTOPILOT_MAX_TIMEOUT_RETRIES, AutopilotDefaults
 from forge.autopilot.events import AutopilotEventWriter
+from forge.autopilot.scheduler import get_budget_snapshot, is_kill_switch_active
 from forge.config import ForgeConfig
 
 
@@ -1210,6 +1211,18 @@ class ForgeAutopilot:
             },
         )
 
+    def _scheduler_snapshot_data(self) -> dict[str, Any]:
+        try:
+            snapshot = get_budget_snapshot(data_dir=self.data_dir, config=self.config)
+            return {
+                "scheduler_total_slots": snapshot.total_slots,
+                "scheduler_leased_slots": snapshot.leased_slots,
+                "scheduler_available_slots": snapshot.available_slots,
+                "scheduler_active_targets_count": snapshot.active_targets_count,
+            }
+        except Exception:
+            return {}
+
     def _phase_import_targets(self, *, dry_run: bool) -> AutopilotPhaseResult:
         """Import the local target feed, auto-starting kill-chain runs.
 
@@ -1261,6 +1274,13 @@ class ForgeAutopilot:
 
         start = not dry_run and self.has_roe
         effective_dry_run = dry_run or not self.has_roe
+        if is_kill_switch_active(self.data_dir):
+            return AutopilotPhaseResult(
+                name="import_targets",
+                status="skipped",
+                detail="kill_switch_active",
+                data={**feed_pin, "dry_run": effective_dry_run, **self._scheduler_snapshot_data()},
+            )
         import_feed_file = self.feed_file
         if effective_dry_run:
             # Dry-run consumes the current feed for preview only. No
@@ -1372,6 +1392,7 @@ class ForgeAutopilot:
                 "attempted": attempted,
                 "start_stop_reason": start_stop_reason or None,
                 "unprocessed_count": unprocessed_count,
+                **self._scheduler_snapshot_data(),
             },
         )
 
@@ -1403,6 +1424,14 @@ class ForgeAutopilot:
                     "skipped_count": skipped,
                 },
             )
+        if is_kill_switch_active(self.data_dir):
+            return AutopilotPhaseResult(
+                name="resume_candidates",
+                status="skipped",
+                detail="kill_switch_active",
+                data={"dry_run": dry_run, **self._scheduler_snapshot_data()},
+            )
+
         try:
             from forge.targets_resume_candidates import (  # noqa: PLC0415
                 execute_target_resume_plan,
@@ -1457,6 +1486,7 @@ class ForgeAutopilot:
                 "timeout_retry_summary": dict(
                     payload.get("timeout_retry_summary", {})
                 ),
+                **self._scheduler_snapshot_data(),
             },
         )
 

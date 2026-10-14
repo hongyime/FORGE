@@ -1586,6 +1586,7 @@ def test_resume_run_can_execute_in_parallel_with_threadsafe_ledger(tmp_path: Pat
             status="failed",
             error="max iterations exhausted with pending recursive work: 1",
             metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+            seed_value=f"target-{engagement_id}.acme-targets.net",
         )
     active = 0
     max_seen = 0
@@ -1601,11 +1602,15 @@ def test_resume_run_can_execute_in_parallel_with_threadsafe_ledger(tmp_path: Pat
             active -= 1
         return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
 
+    resume_cfg = _FakeConfig(data_dir)
+    resume_cfg.autopilot_max_active_targets = 3
+    resume_cfg.autopilot_global_slots = 8
     payload = execute_target_resume_plan(
         data_dir=data_dir,
         batch_id="parallel-test",
         max_parallel=3,
         runner=fake_runner,
+        config=resume_cfg,  # type: ignore[arg-type]
     )
 
     assert payload["execution_policy"] == "executes_child_processes_in_parallel"
@@ -1637,6 +1642,7 @@ def test_resume_run_parallel_stops_scheduling_after_failure(tmp_path: Path) -> N
             status="failed",
             error="max iterations exhausted with pending recursive work: 1",
             metadata={"roe_id": "ROE-ACME-2026", "scope_manifest": str(scope_path)},
+            seed_value=f"target-{engagement_id}.acme-targets.net",
         )
     calls: list[list[str]] = []
 
@@ -1644,12 +1650,16 @@ def test_resume_run_parallel_stops_scheduling_after_failure(tmp_path: Path) -> N
         calls.append(command)
         return subprocess.CompletedProcess(command, 1, stdout="", stderr="failed")
 
+    resume_cfg = _FakeConfig(data_dir)
+    resume_cfg.autopilot_max_active_targets = 3
+    resume_cfg.autopilot_global_slots = 8
     payload = execute_target_resume_plan(
         data_dir=data_dir,
         batch_id="parallel-stop-test",
         max_parallel=2,
         stop_on_failure=True,
         runner=fake_runner,
+        config=resume_cfg,  # type: ignore[arg-type]
     )
 
     assert payload["status"] == "failed"
@@ -3579,6 +3589,8 @@ def test_import_targets_standard_and_permissive_behave_as_before(
     _write_feed(feed_path)
     cfg_standard = _FakeConfig(tmp_path / "data", roe_strictness="standard")
     cfg_permissive = _FakeConfig(tmp_path / "data", roe_strictness="permissive")
+    cfg_standard.autopilot_global_slots = 8
+    cfg_permissive.autopilot_global_slots = 8
     calls: list[list[str]] = []
 
     def _fake_run(command: list[str], **_: object) -> object:

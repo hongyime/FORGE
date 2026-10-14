@@ -234,6 +234,12 @@ class ForgeConfig:
     cloud_azure_client_id: str | None
     cloud_azure_services: list[str]
     roe_strictness: str = "strict"
+    autopilot_global_slots: int = 4
+    autopilot_max_active_targets: int = 2
+    autopilot_lease_ttl_seconds: int = 600
+    autopilot_memory_reserve_mb: int = 4096
+    autopilot_p95_worker_memory_mb: int = 0
+    autopilot_kill_switch_file: Path | None = None
     # Engagement key is never stored in the config object — resolved at
     # DB-open time via forge.opsec.crypto to avoid lingering in memory.
 
@@ -443,6 +449,44 @@ class ForgeConfig:
         exploitdb_csv_path = _env_path("FORGE_EXPLOITDB_CSV")
         roe_strictness_raw = os.environ.get("FORGE_ROE_STRICTNESS")
         roe_strictness = normalize_roe_strictness(roe_strictness_raw)
+        autopilot_global_slots_raw = os.environ.get("FORGE_AUTOPILOT_GLOBAL_SLOTS", "4").strip()
+        autopilot_global_slots = (
+            int(autopilot_global_slots_raw) if autopilot_global_slots_raw.isdigit() else 4
+        )
+        autopilot_max_active_targets_raw = os.environ.get(
+            "FORGE_AUTOPILOT_MAX_ACTIVE_TARGETS", "2"
+        ).strip()
+        autopilot_max_active_targets = (
+            int(autopilot_max_active_targets_raw)
+            if autopilot_max_active_targets_raw.isdigit()
+            else 2
+        )
+        autopilot_lease_ttl_seconds_raw = os.environ.get(
+            "FORGE_AUTOPILOT_LEASE_TTL_SECONDS", "600"
+        ).strip()
+        autopilot_lease_ttl_seconds = (
+            int(autopilot_lease_ttl_seconds_raw)
+            if autopilot_lease_ttl_seconds_raw.isdigit()
+            else 600
+        )
+        autopilot_memory_reserve_mb_raw = os.environ.get(
+            "FORGE_AUTOPILOT_MEMORY_RESERVE_MB", "4096"
+        ).strip()
+        autopilot_memory_reserve_mb = (
+            int(autopilot_memory_reserve_mb_raw)
+            if autopilot_memory_reserve_mb_raw.isdigit()
+            else 4096
+        )
+        autopilot_p95_worker_memory_mb_raw = os.environ.get(
+            "FORGE_AUTOPILOT_P95_WORKER_MEMORY_MB", "0"
+        ).strip()
+        autopilot_p95_worker_memory_mb = (
+            int(autopilot_p95_worker_memory_mb_raw)
+            if autopilot_p95_worker_memory_mb_raw.isdigit()
+            else 0
+        )
+        kill_switch_env = os.environ.get("FORGE_AUTOPILOT_KILL_SWITCH_FILE", "").strip()
+        autopilot_kill_switch_file = Path(kill_switch_env) if kill_switch_env else None
 
         return cls(
             data_dir=data_dir,
@@ -496,6 +540,12 @@ class ForgeConfig:
             cloud_azure_client_id=cloud_azure_client_id,
             cloud_azure_services=cloud_azure_services,
             roe_strictness=roe_strictness,
+            autopilot_global_slots=autopilot_global_slots,
+            autopilot_max_active_targets=autopilot_max_active_targets,
+            autopilot_lease_ttl_seconds=autopilot_lease_ttl_seconds,
+            autopilot_memory_reserve_mb=autopilot_memory_reserve_mb,
+            autopilot_p95_worker_memory_mb=autopilot_p95_worker_memory_mb,
+            autopilot_kill_switch_file=autopilot_kill_switch_file,
         )
 
     # ------------------------------------------------------------------

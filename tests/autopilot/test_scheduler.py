@@ -1,0 +1,891 @@
+"""tests/autopilot/test_scheduler.py — Unit and integration tests for Autopilot Scheduler.
+
+Covers the 12 design tests specified in Iteration 5a (Plan 2.2):
+1. test_lease_acquire_and_release: acquire returns acquired=True + lease; release marks it released; frees slots/target.
+2. test_stale_lease_reaping_expired_ttl: lease past expires_at is reaped; slots/target freed.
+3. test_stale_lease_reaping_dead_pid: lease with dead owner_pid reaped even before TTL expiry.
+4. test_lease_heartbeat_extends_ttl: heartbeat advances heartbeat_at and extends expires_at.
+5. test_budget_gating_slots_exhausted: acquire rejected with slots_exhausted when total_slots leased.
+6. test_active_target_limit_enforced: acquire rejected with max_active_targets_reached when target limit hit.
+7. test_duplicate_target_acquire_rejected: acquire rejected with target_already_active for active target.
+8. test_partial_slot_allocation: partial grant when available slots < requested slots.
+9. test_resume_shares_budget_with_import: kind="resume" and kind="start" share unified slot pool and target limits.
+10. test_kill_switch_sentinel_blocks_acquisition: sentinel file autopilot.stop halts acquisitions until removed.
+11. test_import_targets_skips_when_budget_exhausted_without_error: import_targets handles budget exhaustion cleanly.
+12. test_budget_formula_edge_cases: zero/negative slots, unmeasured p95, MemAvailable below reserve threshold.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+
+from forge.autopilot.scheduler import (
+    acquire_lease,
+    compute_worker_budget,
+    get_budget_snapshot,
+    heartbeat,
+    is_kill_switch_active,
+    list_active_leases,
+    reap_stale_leases,
+    release_lease,
+    scheduler_db_path,
+)
+from forge.targets_import import import_targets
+
+
+@pytest.fixture(autouse=True)
+def _noop_targets_import_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("forge.targets_import._DEFAULT_SLEEP", lambda _: None)
+
+
+class _FakeConfig:
+    def __init__(
+        self,
+        data_dir: Path,
+        roe_strictness: str | None = None,
+        autopilot_global_slots: int = 4,
+        autopilot_max_active_targets: int = 2,
+        autopilot_lease_ttl_seconds: int = 600,
+        autopilot_memory_reserve_mb: int = 4096,
+        autopilot_p95_worker_memory_mb: int = 0,
+        autopilot_kill_switch_file: Path | None = None,
+    ) -> None:
+        self.data_dir = data_dir
+        self.operator = "tester"
+        self.roe_strictness = roe_strictness or "strict"
+        self.autopilot_global_slots = autopilot_global_slots
+        self.autopilot_max_active_targets = autopilot_max_active_targets
+        self.autopilot_lease_ttl_seconds = autopilot_lease_ttl_seconds
+        self.autopilot_memory_reserve_mb = autopilot_memory_reserve_mb
+        self.autopilot_p95_worker_memory_mb = autopilot_p95_worker_memory_mb
+        self.autopilot_kill_switch_file = autopilot_kill_switch_file
+
+    def engagement_db_path(self, engagement_id: str) -> Path:
+        p = self.data_dir / "engagements" / f"{engagement_id}.db"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+
+
+def _write_simple_feed(path: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "generated_at": "2026-10-15T00:00:00Z",
+                "items": [
+                    {
+                        "target_type": "domain",
+                        "target_value": "target-alpha.corp-target.io",
+                        "source_kind": "telemetry",
+                        "confidence": 0.9,
+                        "source_count": 2,
+                        "first_seen_at": "2026-10-14T00:00:00Z",
+                        "provenance": "network_domain",
+                    },
+                    {
+                        "target_type": "domain",
+                        "target_value": "target-beta.corp-target.io",
+                        "source_kind": "telemetry",
+                        "confidence": 0.9,
+                        "source_count": 2,
+                        "first_seen_at": "2026-10-14T00:00:00Z",
+                        "provenance": "network_domain",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+# ---------------------------------------------------------------------------
+# 1. Lease acquire and release
+# ---------------------------------------------------------------------------
+
+
+def test_lease_acquire_and_release(tmp_path: Path) -> None:
+    """acquire returns acquired=True + lease; release marks it released; a released lease frees its slots/target."""
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_max_active_targets=2)
+
+    res = acquire_lease(
+        target_key="domain:example.com",
+        target_value="example.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=2,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert res.acquired is True
+    assert res.reason == "ok"
+    assert res.allocated_slots == 2
+    assert res.lease is not None
+    lease = res.lease
+    assert lease.target_key == "domain:example.com"
+    assert lease.target_value == "example.com"
+    assert lease.target_type == "domain"
+    assert lease.engagement_id == 1
+    assert lease.slot_count == 2
+    assert lease.status == "active"
+    assert lease.released_at is None
+    assert lease.release_reason is None
+
+    # Verify utilization reflected in snapshot
+    snap1 = get_budget_snapshot(data_dir=tmp_path, config=cfg)  # type: ignore[arg-type]
+    assert snap1.leased_slots == 2
+    assert snap1.available_slots == 2
+    assert snap1.active_targets_count == 1
+    assert snap1.active_leases_count == 1
+
+    active_leases = list_active_leases(data_dir=tmp_path)
+    assert len(active_leases) == 1
+    assert active_leases[0].lease_id == lease.lease_id
+
+    # Release lease
+    released = release_lease(lease.lease_id, reason="completed", data_dir=tmp_path)
+    assert released is True
+
+    # Re-releasing returns False (already released)
+    assert release_lease(lease.lease_id, reason="completed", data_dir=tmp_path) is False
+
+    # Snapshot shows slots and target freed
+    snap2 = get_budget_snapshot(data_dir=tmp_path, config=cfg)  # type: ignore[arg-type]
+    assert snap2.leased_slots == 0
+    assert snap2.available_slots == 4
+    assert snap2.active_targets_count == 0
+    assert snap2.active_leases_count == 0
+
+    assert list_active_leases(data_dir=tmp_path) == []
+
+    # Verify SQLite row fields
+    db_path = scheduler_db_path(tmp_path)
+    with sqlite3.connect(db_path) as con:
+        row = con.execute(
+            "SELECT status, release_reason, released_at FROM leases WHERE lease_id = ?",
+            (lease.lease_id,),
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "released"
+        assert row[1] == "completed"
+        assert row[2] is not None
+
+
+# ---------------------------------------------------------------------------
+# 2. Stale-lease reaping via TTL
+# ---------------------------------------------------------------------------
+
+
+def test_stale_lease_reaping_expired_ttl(tmp_path: Path) -> None:
+    """A lease past expires_at is reaped; its slots/target freed."""
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_max_active_targets=2)
+
+    res = acquire_lease(
+        target_key="domain:ttl-stale.com",
+        target_value="ttl-stale.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=2,
+        ttl_seconds=10,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert res.acquired is True
+    assert res.lease is not None
+    lease_id = res.lease.lease_id
+
+    # Simulate time advancing beyond expires_at
+    future_now = datetime.now(timezone.utc) + timedelta(seconds=60)
+    reaped = reap_stale_leases(data_dir=tmp_path, now=future_now)
+    assert lease_id in reaped
+
+    # Direct database check
+    db_path = scheduler_db_path(tmp_path)
+    with sqlite3.connect(db_path) as con:
+        row = con.execute(
+            "SELECT status, release_reason FROM leases WHERE lease_id = ?",
+            (lease_id,),
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "reaped"
+        assert row[1] == "expired_no_heartbeat"
+
+    # Slots and target freed in snapshot
+    snap = get_budget_snapshot(data_dir=tmp_path, config=cfg)  # type: ignore[arg-type]
+    assert snap.leased_slots == 0
+    assert snap.available_slots == 4
+    assert snap.active_targets_count == 0
+
+    # Acquiring the same target again succeeds now that the stale lease is reaped
+    reacquire = acquire_lease(
+        target_key="domain:ttl-stale.com",
+        target_value="ttl-stale.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=2,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert reacquire.acquired is True
+    assert reacquire.reason == "ok"
+
+
+# ---------------------------------------------------------------------------
+# 3. Stale-lease reaping via dead PID
+# ---------------------------------------------------------------------------
+
+
+def test_stale_lease_reaping_dead_pid(tmp_path: Path) -> None:
+    """A lease whose owner_pid does not exist is reaped even if TTL not expired."""
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_max_active_targets=2)
+
+    res = acquire_lease(
+        target_key="domain:dead-pid.com",
+        target_value="dead-pid.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=2,
+        ttl_seconds=3600,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert res.acquired is True
+    assert res.lease is not None
+    lease_id = res.lease.lease_id
+
+    # Find a PID guaranteed not to exist without killing any real process
+    dead_pid = 4194300
+    for _ in range(500):
+        try:
+            os.kill(dead_pid, 0)
+            dead_pid += 1
+        except ProcessLookupError:
+            break
+        except Exception:
+            dead_pid += 1
+
+    # Overwrite owner_pid in scheduler DB to the verified dead PID
+    db_path = scheduler_db_path(tmp_path)
+    with sqlite3.connect(db_path) as con:
+        con.execute(
+            "UPDATE leases SET owner_pid = ? WHERE lease_id = ?",
+            (dead_pid, lease_id),
+        )
+
+    # Reaping with current timestamp reaps the dead-PID lease even though TTL is 3600s in the future
+    reaped = reap_stale_leases(data_dir=tmp_path)
+    assert lease_id in reaped
+
+    with sqlite3.connect(db_path) as con:
+        row = con.execute(
+            "SELECT status, release_reason FROM leases WHERE lease_id = ?",
+            (lease_id,),
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "reaped"
+        assert row[1] == "owner_pid_dead"
+
+    snap = get_budget_snapshot(data_dir=tmp_path, config=cfg)  # type: ignore[arg-type]
+    assert snap.leased_slots == 0
+    assert snap.active_targets_count == 0
+
+
+# ---------------------------------------------------------------------------
+# 4. Heartbeat extends TTL
+# ---------------------------------------------------------------------------
+
+
+def test_lease_heartbeat_extends_ttl(tmp_path: Path) -> None:
+    """Heartbeat advances heartbeat_at and pushes expires_at forward."""
+    res = acquire_lease(
+        target_key="domain:heartbeat.com",
+        target_value="heartbeat.com",
+        target_type="domain",
+        engagement_id=1,
+        ttl_seconds=100,
+        data_dir=tmp_path,
+    )
+    assert res.acquired is True
+    assert res.lease is not None
+    initial_lease = res.lease
+    initial_exp = initial_lease.expires_at
+
+    # Call heartbeat with larger TTL
+    ok = heartbeat(initial_lease.lease_id, ttl_seconds=1200, data_dir=tmp_path)
+    assert ok is True
+
+    active = list_active_leases(data_dir=tmp_path)
+    assert len(active) == 1
+    updated_lease = active[0]
+    assert updated_lease.lease_id == initial_lease.lease_id
+    assert updated_lease.heartbeat_at >= initial_lease.heartbeat_at
+    assert updated_lease.expires_at > initial_exp
+
+    # Heartbeat on unknown lease returns False
+    assert heartbeat("non-existent-lease-uuid", data_dir=tmp_path) is False
+
+    # Heartbeat on released lease returns False
+    assert release_lease(initial_lease.lease_id, data_dir=tmp_path) is True
+    assert heartbeat(initial_lease.lease_id, data_dir=tmp_path) is False
+
+
+# ---------------------------------------------------------------------------
+# 5. Budget gating — slots exhausted
+# ---------------------------------------------------------------------------
+
+
+def test_budget_gating_slots_exhausted(tmp_path: Path) -> None:
+    """With total_slots=4, after leasing 4 slots, a further acquire returns acquired=False, reason='slots_exhausted'."""
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_max_active_targets=5)
+
+    # Target 1 takes 2 slots
+    r1 = acquire_lease(
+        target_key="domain:slot1.com",
+        target_value="slot1.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=2,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r1.acquired is True
+    assert r1.allocated_slots == 2
+
+    # Target 2 takes 2 slots (total = 4 slots leased)
+    r2 = acquire_lease(
+        target_key="domain:slot2.com",
+        target_value="slot2.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=2,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r2.acquired is True
+    assert r2.allocated_slots == 2
+
+    # Target 3 requests 1 slot -> rejected due to slots_exhausted
+    r3 = acquire_lease(
+        target_key="domain:slot3.com",
+        target_value="slot3.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=1,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r3.acquired is False
+    assert r3.reason == "slots_exhausted"
+    assert r3.lease is None
+    assert r3.allocated_slots == 0
+
+    # Free 2 slots
+    assert r1.lease is not None
+    assert release_lease(r1.lease.lease_id, data_dir=tmp_path) is True
+
+    # Now target 3 can acquire
+    r3_retry = acquire_lease(
+        target_key="domain:slot3.com",
+        target_value="slot3.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=1,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r3_retry.acquired is True
+    assert r3_retry.reason == "ok"
+    assert r3_retry.allocated_slots == 1
+
+
+# ---------------------------------------------------------------------------
+# 6. Active-target limit
+# ---------------------------------------------------------------------------
+
+
+def test_active_target_limit_enforced(tmp_path: Path) -> None:
+    """With max_active_targets=2 and total_slots=4, 2 distinct targets holding slots, a 3rd distinct target acquire returns acquired=False, reason='max_active_targets_reached'."""
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_max_active_targets=2)
+
+    # Target 1 takes 1 slot
+    r1 = acquire_lease(
+        target_key="domain:target1.com",
+        target_value="target1.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=1,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r1.acquired is True
+
+    # Target 2 takes 1 slot
+    r2 = acquire_lease(
+        target_key="domain:target2.com",
+        target_value="target2.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=1,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r2.acquired is True
+
+    # 2 of 4 slots used, but active_targets limit (2) is reached
+    snap = get_budget_snapshot(data_dir=tmp_path, config=cfg)  # type: ignore[arg-type]
+    assert snap.active_targets_count == 2
+    assert snap.available_slots == 2
+
+    # Target 3 rejected with max_active_targets_reached
+    r3 = acquire_lease(
+        target_key="domain:target3.com",
+        target_value="target3.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=1,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r3.acquired is False
+    assert r3.reason == "max_active_targets_reached"
+    assert r3.lease is None
+
+    # Release target 1
+    assert r1.lease is not None
+    assert release_lease(r1.lease.lease_id, data_dir=tmp_path) is True
+
+    # Target 3 now succeeds
+    r3_retry = acquire_lease(
+        target_key="domain:target3.com",
+        target_value="target3.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=1,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r3_retry.acquired is True
+    assert r3_retry.reason == "ok"
+
+
+# ---------------------------------------------------------------------------
+# 7. Duplicate target acquire rejected
+# ---------------------------------------------------------------------------
+
+
+def test_duplicate_target_acquire_rejected(tmp_path: Path) -> None:
+    """A target that already has an active lease returns acquired=False, reason='target_already_active'."""
+    r1 = acquire_lease(
+        target_key="domain:duplicate.com",
+        target_value="duplicate.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=1,
+        data_dir=tmp_path,
+    )
+    assert r1.acquired is True
+    assert r1.lease is not None
+
+    # Second acquisition on the same target_key while active fails
+    r2 = acquire_lease(
+        target_key="domain:duplicate.com",
+        target_value="duplicate.com",
+        target_type="domain",
+        engagement_id=2,
+        requested_slots=1,
+        data_dir=tmp_path,
+    )
+    assert r2.acquired is False
+    assert r2.reason == "target_already_active"
+    assert r2.lease is None
+
+    # Once released, the target can be acquired again
+    assert release_lease(r1.lease.lease_id, data_dir=tmp_path) is True
+
+    r3 = acquire_lease(
+        target_key="domain:duplicate.com",
+        target_value="duplicate.com",
+        target_type="domain",
+        engagement_id=3,
+        requested_slots=1,
+        data_dir=tmp_path,
+    )
+    assert r3.acquired is True
+    assert r3.reason == "ok"
+
+
+# ---------------------------------------------------------------------------
+# 8. Partial slot allocation
+# ---------------------------------------------------------------------------
+
+
+def test_partial_slot_allocation(tmp_path: Path) -> None:
+    """If 1 slot remains and a candidate requests 4, the scheduler grants slot_count=1."""
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_max_active_targets=4)
+
+    # First target occupies 3 slots
+    r1 = acquire_lease(
+        target_key="domain:partial1.com",
+        target_value="partial1.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=3,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r1.acquired is True
+    assert r1.allocated_slots == 3
+
+    # Second candidate requests 4 slots, but available_slots == 1
+    r2 = acquire_lease(
+        target_key="domain:partial2.com",
+        target_value="partial2.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=4,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r2.acquired is True
+    assert r2.reason == "ok"
+    assert r2.allocated_slots == 1
+    assert r2.lease is not None
+    assert r2.lease.slot_count == 1
+
+    snap = get_budget_snapshot(data_dir=tmp_path, config=cfg)  # type: ignore[arg-type]
+    assert snap.leased_slots == 4
+    assert snap.available_slots == 0
+
+
+# ---------------------------------------------------------------------------
+# 9. Resume shares budget
+# ---------------------------------------------------------------------------
+
+
+def test_resume_shares_budget_with_import(tmp_path: Path) -> None:
+    """A lease with kind='resume' consumes from the same slot pool and target limit as kind='start'."""
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_max_active_targets=2)
+
+    # Resume lease 1 consumes 2 slots
+    r_resume1 = acquire_lease(
+        target_key="target:resume_alpha",
+        target_value="resume_alpha",
+        target_type="domain",
+        engagement_id=10,
+        requested_slots=2,
+        kind="resume",
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r_resume1.acquired is True
+    assert r_resume1.lease is not None
+    assert r_resume1.lease.kind == "resume"
+
+    # Resume lease 2 consumes 2 slots
+    r_resume2 = acquire_lease(
+        target_key="target:resume_beta",
+        target_value="resume_beta",
+        target_type="domain",
+        engagement_id=11,
+        requested_slots=2,
+        kind="resume",
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r_resume2.acquired is True
+    assert r_resume2.lease is not None
+    assert r_resume2.lease.kind == "resume"
+
+    # Total 4 slots and 2 targets consumed by resumes
+    snap = get_budget_snapshot(data_dir=tmp_path, config=cfg)  # type: ignore[arg-type]
+    assert snap.leased_slots == 4
+    assert snap.active_targets_count == 2
+    assert snap.available_slots == 0
+
+    # Fresh start attempt is gated
+    r_start = acquire_lease(
+        target_key="target:start_gamma",
+        target_value="start_gamma",
+        target_type="domain",
+        engagement_id=12,
+        requested_slots=1,
+        kind="start",
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r_start.acquired is False
+    assert r_start.reason in ("max_active_targets_reached", "slots_exhausted")
+
+    # Release one resume lease -> frees 2 slots and 1 target slot
+    assert release_lease(r_resume1.lease.lease_id, data_dir=tmp_path) is True
+
+    # Now start acquire succeeds from the released pool
+    r_start2 = acquire_lease(
+        target_key="target:start_gamma",
+        target_value="start_gamma",
+        target_type="domain",
+        engagement_id=12,
+        requested_slots=2,
+        kind="start",
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert r_start2.acquired is True
+    assert r_start2.lease is not None
+    assert r_start2.lease.kind == "start"
+    assert r_start2.allocated_slots == 2
+
+
+# ---------------------------------------------------------------------------
+# 10. Kill switch sentinel blocks acquisition
+# ---------------------------------------------------------------------------
+
+
+def test_kill_switch_sentinel_blocks_acquisition(tmp_path: Path) -> None:
+    """When autopilot.stop exists in data_dir, is_kill_switch_active returns True and acquire_lease returns acquired=False, reason='kill_switch_active'; removing allows acquisition."""
+    assert is_kill_switch_active(data_dir=tmp_path) is False
+
+    sentinel = tmp_path / "autopilot.stop"
+    sentinel.write_text('{"reason": "operator_hold"}', encoding="utf-8")
+
+    assert is_kill_switch_active(data_dir=tmp_path) is True
+
+    res = acquire_lease(
+        target_key="domain:blocked.com",
+        target_value="blocked.com",
+        target_type="domain",
+        engagement_id=1,
+        data_dir=tmp_path,
+    )
+    assert res.acquired is False
+    assert res.reason == "kill_switch_active"
+    assert res.lease is None
+    assert res.allocated_slots == 0
+
+    # Remove sentinel file
+    sentinel.unlink()
+    assert is_kill_switch_active(data_dir=tmp_path) is False
+
+    res_resumed = acquire_lease(
+        target_key="domain:blocked.com",
+        target_value="blocked.com",
+        target_type="domain",
+        engagement_id=1,
+        data_dir=tmp_path,
+    )
+    assert res_resumed.acquired is True
+    assert res_resumed.reason == "ok"
+
+
+# ---------------------------------------------------------------------------
+# 11. import_targets skips when budget exhausted without error
+# ---------------------------------------------------------------------------
+
+
+def test_import_targets_skips_when_budget_exhausted_without_error(
+    tmp_path: Path,
+) -> None:
+    """When scheduler returns slots_exhausted or max_active_targets_reached, import_targets records start_skipped_reason and returns ok results."""
+    # Sub-case A: slots_exhausted gating
+    data_dir_a = tmp_path / "data_slots"
+    cfg_a = _FakeConfig(
+        data_dir_a,
+        autopilot_global_slots=4,
+        autopilot_max_active_targets=4,
+    )
+
+    # Pre-fill scheduler DB to consume all 4 slots
+    pre_lease_a = acquire_lease(
+        target_key="seed:prefilled_slots",
+        target_value="prefilled-slots.com",
+        target_type="domain",
+        engagement_id=901,
+        requested_slots=4,
+        data_dir=data_dir_a,
+        config=cfg_a,  # type: ignore[arg-type]
+    )
+    assert pre_lease_a.acquired is True
+
+    feed_a = tmp_path / "feed_a.json"
+    _write_simple_feed(feed_a)
+
+    results_a = import_targets(
+        feed_url=None,
+        feed_file=feed_a,
+        auth_header_env=None,
+        roe_id="ROE-TEST-2026",
+        start=True,
+        dry_run=False,
+        limit=2,
+        max_iter=3,
+        config=cfg_a,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
+    )
+
+    assert len(results_a) >= 1
+    assert results_a[0].started is False
+    assert results_a[0].start_skipped_reason == "slots_exhausted"
+    assert results_a[0].start_stop_reason == "slots_exhausted"
+
+    # Sub-case B: max_active_targets_reached gating
+    data_dir_b = tmp_path / "data_targets"
+    cfg_b = _FakeConfig(
+        data_dir_b,
+        autopilot_global_slots=4,
+        autopilot_max_active_targets=2,
+    )
+
+    # Pre-fill 2 distinct targets (consuming max_active_targets limit)
+    pre_lease_b1 = acquire_lease(
+        target_key="seed:prefilled_target_1",
+        target_value="prefilled-target-1.com",
+        target_type="domain",
+        engagement_id=902,
+        requested_slots=1,
+        data_dir=data_dir_b,
+        config=cfg_b,  # type: ignore[arg-type]
+    )
+    assert pre_lease_b1.acquired is True
+
+    pre_lease_b2 = acquire_lease(
+        target_key="seed:prefilled_target_2",
+        target_value="prefilled-target-2.com",
+        target_type="domain",
+        engagement_id=903,
+        requested_slots=1,
+        data_dir=data_dir_b,
+        config=cfg_b,  # type: ignore[arg-type]
+    )
+    assert pre_lease_b2.acquired is True
+
+    feed_b = tmp_path / "feed_b.json"
+    _write_simple_feed(feed_b)
+
+    results_b = import_targets(
+        feed_url=None,
+        feed_file=feed_b,
+        auth_header_env=None,
+        roe_id="ROE-TEST-2026",
+        start=True,
+        dry_run=False,
+        limit=2,
+        max_iter=3,
+        config=cfg_b,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
+    )
+
+    assert len(results_b) >= 1
+    assert results_b[0].started is False
+    assert results_b[0].start_skipped_reason == "max_active_targets_reached"
+    assert results_b[0].start_stop_reason == "max_active_targets_reached"
+
+
+# ---------------------------------------------------------------------------
+# 12. Budget formula edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_budget_formula_edge_cases(tmp_path: Path) -> None:
+    """Validate zero/negative slots, unmeasured p95 fallback, and MemAvailable below reserve threshold."""
+    # 1. Zero configured slots
+    assert compute_worker_budget(0) == 0
+    assert (
+        compute_worker_budget(
+            0,
+            p95_worker_memory_mb=512,
+            mem_available_mb=16384,
+            effective_cpu_count=8,
+        )
+        == 0
+    )
+
+    # 2. Negative configured slots
+    assert compute_worker_budget(-1) == 0
+    assert (
+        compute_worker_budget(
+            -8,
+            p95_worker_memory_mb=512,
+            mem_available_mb=16384,
+            effective_cpu_count=8,
+        )
+        == 0
+    )
+
+    # 3. Unmeasured p95 worker memory fallback to configured slots
+    assert compute_worker_budget(4, p95_worker_memory_mb=0) == 4
+    assert compute_worker_budget(6, p95_worker_memory_mb=-100) == 6
+
+    # 4. Host MemAvailable below or equal to reserve threshold
+    assert (
+        compute_worker_budget(
+            4,
+            p95_worker_memory_mb=512,
+            memory_reserve_mb=4096,
+            mem_available_mb=2048,
+            effective_cpu_count=8,
+        )
+        == 0
+    )
+    assert (
+        compute_worker_budget(
+            4,
+            p95_worker_memory_mb=512,
+            memory_reserve_mb=4096,
+            mem_available_mb=4096,
+            effective_cpu_count=8,
+        )
+        == 0
+    )
+
+    # 5. Host MemAvailable above reserve allows memory-based slot count
+    assert (
+        compute_worker_budget(
+            10,
+            p95_worker_memory_mb=512,
+            memory_reserve_mb=4096,
+            mem_available_mb=4096 + (3 * 512),
+            effective_cpu_count=8,
+        )
+        == 3
+    )
+
+    # 6. CPU limiting factor: effective_cpu_count * 0.75
+    assert (
+        compute_worker_budget(
+            10,
+            p95_worker_memory_mb=100,
+            memory_reserve_mb=1000,
+            mem_available_mb=50000,
+            effective_cpu_count=4,  # 4 * 0.75 = 3
+        )
+        == 3
+    )
+
+    # 7. acquire_lease fallback to 1 slot when requested_slots <= 0
+    res_zero = acquire_lease(
+        target_key="domain:zero-req.com",
+        target_value="zero-req.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=0,
+        data_dir=tmp_path,
+    )
+    assert res_zero.acquired is True
+    assert res_zero.allocated_slots == 1
+
+    res_neg = acquire_lease(
+        target_key="domain:neg-req.com",
+        target_value="neg-req.com",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=-5,
+        data_dir=tmp_path,
+    )
+    assert res_neg.acquired is True
+    assert res_neg.allocated_slots == 1

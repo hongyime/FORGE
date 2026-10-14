@@ -100,6 +100,16 @@ class AutopilotDefaults:
         "autonomous_exploit",
         "goal_targets",
     )
+    #: Total concurrent worker fanout slots across all targets.
+    global_slots: int = 4
+    #: Maximum concurrent active targets (kill-chain runs).
+    max_active_targets: int = 2
+    #: Lease heartbeat timeout before being declared stale.
+    lease_ttl_seconds: int = 600
+    #: Minimum memory headroom reserved for the host OS.
+    memory_reserve_mb: int = 4096
+    #: Measured p95 child process memory; 0 retains configured slot cap.
+    p95_worker_memory_mb: int = 0
 
 
 #: Dict-form of :data:`AutopilotDefaults`, convenient for serialization.
@@ -125,6 +135,11 @@ AUTOPILOT_DEFAULTS: dict[str, object] = {
         "autonomous_exploit",
         "goal_targets",
     ],
+    "global_slots": 4,
+    "max_active_targets": 2,
+    "lease_ttl_seconds": 600,
+    "memory_reserve_mb": 4096,
+    "p95_worker_memory_mb": 0,
 }
 
 

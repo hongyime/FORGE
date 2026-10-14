@@ -17,6 +17,11 @@ from typing import Any, Callable
 from urllib.parse import urlsplit
 
 from forge.autopilot.events import target_retry_state_for_target
+from forge.autopilot.scheduler import (
+    acquire_lease,
+    is_kill_switch_active,
+    release_lease,
+)
 from forge.config import ForgeConfig
 from forge.engagement_ids import numeric_engagement_db_files
 from forge.governance.scope_gate import is_roe_wildcard
@@ -372,6 +377,7 @@ def execute_target_resume_plan(
     progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
     autopilot_cycle_number: int | None = None,
     timeout_retry_budget: int | None = None,
+    config: ForgeConfig | None = None,
 ) -> dict[str, Any]:
     """Execute ready resume candidates with a durable batch lock and ledger."""
 
@@ -390,8 +396,13 @@ def execute_target_resume_plan(
             "operator_note": "--redact-paths is only supported with --dry-run.",
         }
 
+    resolved_data_dir = (
+        data_dir
+        if data_dir is not None
+        else (Path(config.data_dir) if config is not None and getattr(config, "data_dir", None) else None)
+    )
     plan = collect_target_resume_plan(
-        data_dir=data_dir,
+        data_dir=resolved_data_dir,
         limit=limit,
         reason=reason,
         include_legacy=include_legacy,
@@ -558,6 +569,8 @@ def execute_target_resume_plan(
                     ledger_lock=ledger_lock,
                     runner=runner,
                     progress_callback=progress_callback,
+                    data_dir=Path(plan["data_dir"]),
+                    config=config,
                 )
                 counts[str(result["status"])] += 1
                 results.append(result)
@@ -581,6 +594,8 @@ def execute_target_resume_plan(
                             ledger_lock=ledger_lock,
                             runner=runner,
                             progress_callback=progress_callback,
+                            data_dir=Path(plan["data_dir"]),
+                            config=config,
                         )
                     ] = item
                 stop_scheduling = False
@@ -607,6 +622,8 @@ def execute_target_resume_plan(
                             ledger_lock=ledger_lock,
                             runner=runner,
                             progress_callback=progress_callback,
+                            data_dir=Path(plan["data_dir"]),
+                            config=config,
                         )
                     ] = item
         _append_ledger_event(
@@ -756,11 +773,56 @@ def _execute_resume_item(
     ledger_lock: Lock,
     runner: ResumeRunner | None,
     progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
+    data_dir: Path | None = None,
+    config: ForgeConfig | None = None,
 ) -> dict[str, Any]:
     checked = _refresh_plan_item(item)
     if checked["status"] == "skipped":
         _append_resume_ledger_event(ledger_path, ledger_lock, {"event": "item_skipped", **checked})
         return checked
+
+    target_data_dir = (
+        data_dir
+        or (Path(checked["db_path"]).parents[1] if checked.get("db_path") else None)
+        or ledger_path.parents[2]
+    )
+
+    # 1. Kill Switch Check
+    if is_kill_switch_active(data_dir=target_data_dir):
+        checked["status"] = "skipped"
+        checked["skip_reason"] = "kill_switch_active"
+        _append_resume_ledger_event(ledger_path, ledger_lock, {"event": "item_skipped", **checked})
+        return checked
+
+    # 2. Acquire Lease via Shared Scheduler
+    target_key = str(
+        checked.get("target_key")
+        or f"{checked.get('seed_type') or 'target'}:{checked.get('seed_value') or ''}"
+    )
+    target_value = str(checked.get("seed_value") or "")
+    target_type = str(checked.get("seed_type") or "other")
+    engagement_id = _safe_int(checked.get("engagement_id"))
+    requested_slots = _safe_int(checked.get("parallel_fanout") or 1)
+
+    lease_result = acquire_lease(
+        target_key=target_key,
+        target_value=target_value,
+        target_type=target_type,
+        engagement_id=engagement_id,
+        requested_slots=requested_slots,
+        kind="resume",
+        data_dir=target_data_dir,
+        config=config,
+    )
+
+    if not lease_result.acquired:
+        checked["status"] = "skipped"
+        checked["skip_reason"] = lease_result.reason
+        _append_resume_ledger_event(ledger_path, ledger_lock, {"event": "item_skipped", **checked})
+        return checked
+
+    lease = lease_result.lease
+
     command = [str(part) for part in checked["command"]]
     timeout_seconds = _child_timeout_seconds(_safe_int(checked.get("max_runtime_minutes")))
     started_at = _utc_now()
@@ -794,6 +856,7 @@ def _execute_resume_item(
             "command": command,
         },
     )
+    completed = None
     try:
         completed = _run_resume_child(
             command,
@@ -807,8 +870,20 @@ def _execute_resume_item(
             {**progress_details, "error_type": type(exc).__name__},
         )
         raise
-    status = "completed" if completed.returncode == 0 else "failed"
-    if completed.returncode == 124:
+    finally:
+        if lease is not None:
+            release_lease(
+                lease.lease_id,
+                reason=(
+                    "completed"
+                    if (completed is not None and completed.returncode == 0)
+                    else "failed"
+                ),
+                data_dir=target_data_dir,
+            )
+    status = "completed" if (completed is not None and completed.returncode == 0) else "failed"
+    returncode = completed.returncode if completed is not None else 1
+    if returncode == 124:
         mark_timed_out_kill_chain_run_failed(
             Path(str(checked.get("db_path") or "")),
             engagement_id=_safe_int(checked.get("engagement_id")),
@@ -817,16 +892,16 @@ def _execute_resume_item(
     result = {
         **checked,
         "status": status,
-        "returncode": completed.returncode,
+        "returncode": returncode,
         "started_at": started_at,
         "completed_at": _utc_now(),
-        "stdout_tail": _tail_text(completed.stdout),
-        "stderr_tail": _tail_text(completed.stderr),
+        "stdout_tail": _tail_text(completed.stdout if completed is not None else ""),
+        "stderr_tail": _tail_text(completed.stderr if completed is not None else ""),
     }
     _notify_progress(
         progress_callback,
         "target_completed" if status == "completed" else "target_failed",
-        {**progress_details, "return_code": completed.returncode},
+        {**progress_details, "return_code": returncode},
     )
     _append_resume_ledger_event(ledger_path, ledger_lock, {"event": f"item_{status}", **result})
     return result
