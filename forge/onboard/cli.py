@@ -9,7 +9,7 @@ required for the common onboarding flows:
 - ``forge connect remove github``
 - ``forge targets add example.com``
 - ``forge scope show --json``
-- ``forge scope add-domain example.com``
+- ``forge scope add example.com``
 - ``forge scope auto-expand --json`` / ``forge scope auto-expand --apply``
 
 Credential values never travel on the command line — the only accepted
@@ -539,7 +539,20 @@ def register_scope_commands(app: typer.Typer) -> None:
             return
         _print_scope_table(manifest, payload)
 
-    @app.command("add-domain")
+    @app.command("add")
+    def scope_add(
+        value: str = typer.Argument(..., help="Domain, IP, or CIDR to add."),
+        manifest: Path = typer.Option(
+            Path("manifests") / "default.json",
+            "--manifest",
+            envvar="FORGE_SCOPE_MANIFEST",
+        ),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Append a domain, IP, or CIDR to the scope manifest."""
+        _add_scope_value(manifest, value, json_output=json_output)
+
+    @app.command("add-domain", hidden=True)
     def scope_add_domain(
         value: str = typer.Argument(..., help="Domain to add (e.g. example.com)."),
         manifest: Path = typer.Option(
@@ -549,10 +562,10 @@ def register_scope_commands(app: typer.Typer) -> None:
         ),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
-        """Append a domain to the scope manifest."""
-        _append_scope_entry(manifest, "domain", value, json_output=json_output)
+        """Append a domain to the scope manifest (compatibility alias)."""
+        _add_scope_value(manifest, value, json_output=json_output, kind="domain")
 
-    @app.command("add-ip")
+    @app.command("add-ip", hidden=True)
     def scope_add_ip(
         value: str = typer.Argument(..., help="IP or CIDR range (e.g. 10.0.0.0/24)."),
         manifest: Path = typer.Option(
@@ -562,8 +575,8 @@ def register_scope_commands(app: typer.Typer) -> None:
         ),
         json_output: bool = typer.Option(False, "--json"),
     ) -> None:
-        """Append an IP or IP range to the scope manifest."""
-        _append_scope_entry(manifest, "ip", value, json_output=json_output)
+        """Append an IP or IP range (compatibility alias)."""
+        _add_scope_value(manifest, value, json_output=json_output, kind="ip")
 
     @app.command("auto-expand")
     def scope_auto_expand(
@@ -871,6 +884,65 @@ def _append_scope_entry(
         return
     verb = "Added" if added else "Already present"
     console.print(f"[green]{verb}[/green] {value} in {manifest_path}")
+
+
+def _add_scope_value(
+    manifest_path: Path,
+    value: str,
+    *,
+    json_output: bool,
+    kind: Optional[str] = None,
+) -> None:
+    """Validate and append a canonical or compatibility scope value."""
+    invalid_message = (
+        f"invalid scope value {value!r}; URLs and emails belong in `forge targets add`."
+    )
+    if (
+        not value.strip()
+        or any(character.isspace() for character in value)
+        or "://" in value
+        or "@" in value
+    ):
+        _emit_error(invalid_message, json_output=json_output)
+        raise typer.Exit(code=1)
+
+    if kind is None:
+        import ipaddress  # noqa: PLC0415
+
+        try:
+            ipaddress.ip_network(value, strict=False)
+        except ValueError:
+            if "/" in value:
+                # Retain the established IP/CIDR validation message and exit.
+                _append_scope_entry(manifest_path, "ip", value, json_output=json_output)
+                return
+            kind = "domain"
+        else:
+            kind = "ip"
+
+    if kind == "domain":
+        normalized = value.strip().lower().lstrip("*.").strip(".")
+        labels = normalized.split(".")
+        valid_domain = (
+            len(normalized) <= 253
+            and len(labels) >= 2
+            and all(
+                label
+                and len(label) <= 63
+                and label[0].isalnum()
+                and label[-1].isalnum()
+                and all(
+                    character in "abcdefghijklmnopqrstuvwxyz0123456789-"
+                    for character in label
+                )
+                for label in labels
+            )
+        )
+        if not valid_domain:
+            _emit_error(invalid_message, json_output=json_output)
+            raise typer.Exit(code=1)
+
+    _append_scope_entry(manifest_path, kind, value, json_output=json_output)
 
 
 def _load_feed_candidates(feed_path: Path) -> list[dict[str, Any]]:

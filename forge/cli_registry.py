@@ -250,7 +250,7 @@ def build_forge_cli_apps(*, root_help: str) -> ForgeCliApps:
             "scope",
             (
                 "View and manage target scope without hand-editing JSON. "
-                "Supports show, add-domain, add-ip, auto-expand."
+                "Supports show, add, auto-expand."
             ),
         ),
     )

@@ -411,8 +411,8 @@ forge connect {github,supabase,shodan,virustotal,replit,urlscan,censys,dehashed}
 forge connect list [--json]                 # List stored service connections (credentials redacted in output)
 forge connect remove SERVICE [--json]       # Remove a stored service connection
 forge scope show [--manifest PATH] [--json]        # View current scope manifest without editing JSON
-forge scope add-domain DOMAIN [--manifest PATH]    # Append a domain to the scope manifest
-forge scope add-ip IP_OR_CIDR [--manifest PATH]    # Append an IP or CIDR range to the scope manifest
+forge scope add DOMAIN [--manifest PATH]           # Append a domain to the scope manifest
+forge scope add IP_OR_CIDR [--manifest PATH]      # Append an IP or CIDR range to the scope manifest
 forge scope auto-expand [--feed PATH] [--apply] [--json]  # Expand scope with safe discoveries (subdomains, IPs reverse-DNS'd to scope); default is preview-only
 forge targets add VALUE [--engagement N] [--manifest PATH] [--no-scope] [--json]  # Add a seed target; auto-detects type and updates the scope manifest
 forge scaffold                              # Emit obfuscated directory tree

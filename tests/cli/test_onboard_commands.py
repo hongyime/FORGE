@@ -230,13 +230,13 @@ def test_forge_scope_show_blank_when_missing(tmp_path: Path) -> None:
     assert payload["domains"] == []
 
 
-def test_forge_scope_add_domain(tmp_path: Path) -> None:
+def test_forge_scope_add_domain_and_duplicate(tmp_path: Path) -> None:
     manifest = tmp_path / "default.json"
     manifest.write_text(json.dumps({"domains": []}), encoding="utf-8")
     result = _invoke(
         [
             "scope",
-            "add-domain",
+            "add",
             "Example.COM",
             "--manifest",
             str(manifest),
@@ -246,17 +246,47 @@ def test_forge_scope_add_domain(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["added"] is True
+    original_content = manifest.read_text(encoding="utf-8")
     stored = json.loads(manifest.read_text(encoding="utf-8"))
     assert "example.com" in stored["domains"]
 
+    duplicate = _invoke(
+        [
+            "scope",
+            "add",
+            "example.com",
+            "--manifest",
+            str(manifest),
+            "--json",
+        ],
+    )
+    assert duplicate.exit_code == 0, duplicate.output
+    assert json.loads(duplicate.output) == {
+        "added": False,
+        "manifest_path": str(manifest),
+        "value": "example.com",
+    }
+    assert manifest.read_text(encoding="utf-8") == original_content
 
-def test_forge_scope_add_ip_cidr(tmp_path: Path) -> None:
+
+def test_forge_scope_add_plain_ip(tmp_path: Path) -> None:
+    manifest = tmp_path / "default.json"
+    manifest.write_text(json.dumps({"ip_ranges": []}), encoding="utf-8")
+    result = _invoke(
+        ["scope", "add", "192.0.2.7", "--manifest", str(manifest), "--json"],
+    )
+    assert result.exit_code == 0, result.output
+    stored = json.loads(manifest.read_text(encoding="utf-8"))
+    assert "192.0.2.7/32" in stored["ip_ranges"]
+
+
+def test_forge_scope_add_cidr(tmp_path: Path) -> None:
     manifest = tmp_path / "default.json"
     manifest.write_text(json.dumps({"ip_ranges": []}), encoding="utf-8")
     result = _invoke(
         [
             "scope",
-            "add-ip",
+            "add",
             "10.0.0.0/24",
             "--manifest",
             str(manifest),
@@ -266,6 +296,74 @@ def test_forge_scope_add_ip_cidr(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     stored = json.loads(manifest.read_text(encoding="utf-8"))
     assert "10.0.0.0/24" in stored["ip_ranges"]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://example.com/path",
+        "user@example.com",
+        "garbage",
+        "localhost",
+        "10.0.0.0/99",
+        "example .com",
+        "",
+        "   ",
+    ],
+)
+def test_forge_scope_add_rejects_invalid_values(tmp_path: Path, value: str) -> None:
+    result = _invoke(
+        ["scope", "add", value, "--manifest", str(tmp_path / "scope.json"), "--json"],
+    )
+    assert result.exit_code != 0
+    error = json.loads(result.output)["error"]
+    assert repr(value) in error
+    if "://" in value or "@" in value:
+        assert "targets add" in error
+
+
+def test_forge_scope_hidden_add_aliases_still_work(tmp_path: Path) -> None:
+    manifest = tmp_path / "default.json"
+    manifest.write_text(json.dumps({"domains": [], "ip_ranges": []}), encoding="utf-8")
+
+    domain_result = _invoke(
+        [
+            "scope",
+            "add-domain",
+            "Alias.Example",
+            "--manifest",
+            str(manifest),
+            "--json",
+        ],
+    )
+    assert domain_result.exit_code == 0, domain_result.output
+    assert json.loads(domain_result.output)["added"] is True
+
+    ip_result = _invoke(
+        [
+            "scope",
+            "add-ip",
+            "198.51.100.0/24",
+            "--manifest",
+            str(manifest),
+            "--json",
+        ],
+    )
+    assert ip_result.exit_code == 0, ip_result.output
+    assert json.loads(ip_result.output)["added"] is True
+    stored = json.loads(manifest.read_text(encoding="utf-8"))
+    assert "alias.example" in stored["domains"]
+    assert "198.51.100.0/24" in stored["ip_ranges"]
+
+
+def test_forge_scope_help_hides_compatibility_aliases() -> None:
+    result = _invoke(["scope", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "show" in result.output
+    assert "add" in result.output
+    assert "auto-expand" in result.output
+    assert "add-domain" not in result.output
+    assert "add-ip" not in result.output
 
 
 def test_forge_scope_auto_expand_preview(tmp_path: Path) -> None:
