@@ -224,6 +224,166 @@ def test_feed_build_honors_non_asset_feed_class_independent_of_filename(
     ] == 1
 
 
+def test_feed_build_promotes_urlscan_observation_with_validatable_asset(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "urlscan-observation.json").write_text(
+        json.dumps(
+            {
+                "_meta": {"feed_class": "observation", "source_id": "urlscan"},
+                "items": [{"domain": "target-service.com"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_target_feed(
+        sources=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=None,
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert [item["canonical_value"] for item in payload["items"]] == [
+        "target-service.com"
+    ]
+    assert payload["items"][0]["target_type"] == "domain"
+    assert payload["items"][0]["source_kind"] == "urlscan_observation"
+    assert "urlscan_observation" in payload["items"][0]["provenance"]
+
+
+def test_feed_build_drops_urlscan_observation_with_no_asset_identifier(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "urlscan-no-asset.json").write_text(
+        json.dumps(
+            {
+                "_meta": {"feed_class": "observation", "source_id": "urlscan"},
+                "scan_id": "scan-12345",
+                "status": "completed",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_target_feed(
+        sources=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=None,
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert payload["items"] == []
+    assert payload["counts"]["generated_candidate_total"] == 0
+    assert payload["source_scan_limits"]["connectors"][
+        "feed_class_dropped_count"
+    ] == 1
+
+
+def test_feed_build_does_not_promote_urlscan_observation_with_mega_domain_apex(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "urlscan-megadomain.json").write_text(
+        json.dumps(
+            {
+                "_meta": {"feed_class": "observation", "source_id": "urlscan"},
+                "items": [{"domain": "google.com"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_target_feed(
+        sources=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=None,
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert payload["items"] == []
+    assert payload["counts"]["generated_candidate_total"] == 0
+    assert payload["source_scan_limits"]["connectors"][
+        "feed_class_dropped_count"
+    ] == 1
+
+
+def test_feed_build_drops_urlscan_observation_with_invalid_asset(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "urlscan-invalid.json").write_text(
+        json.dumps(
+            {
+                "_meta": {"feed_class": "observation", "source_id": "urlscan"},
+                "items": [{"domain": "garbage@@string..invalid"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_target_feed(
+        sources=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=None,
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert payload["items"] == []
+    assert payload["counts"]["generated_candidate_total"] == 0
+    assert payload["source_scan_limits"]["connectors"][
+        "feed_class_dropped_count"
+    ] == 1
+
+
+def test_feed_build_drops_non_urlscan_observation(
+    tmp_path: Path,
+) -> None:
+    imports_dir = tmp_path / "imports"
+    imports_dir.mkdir()
+    (imports_dir / "generic-observation.json").write_text(
+        json.dumps(
+            {
+                "_meta": {
+                    "feed_class": "observation",
+                    "source_id": "generic_sensor",
+                },
+                "items": [{"domain": "target-service.com"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_target_feed(
+        sources=["connectors"],
+        data_dir=tmp_path / "data",
+        reports_dir=None,
+        imports_dir=imports_dir,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    assert payload["items"] == []
+    assert payload["counts"]["generated_candidate_total"] == 0
+    assert payload["source_scan_limits"]["connectors"][
+        "feed_class_dropped_count"
+    ] == 1
+
+
 def test_feed_build_rejects_code_identifiers_harvested_as_hosts(
     tmp_path: Path,
 ) -> None:

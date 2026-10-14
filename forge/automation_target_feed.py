@@ -12,6 +12,7 @@ existing feed entries.
 from __future__ import annotations
 
 import gzip
+import ipaddress
 import json
 import os
 import re
@@ -23,7 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import httpx
 
@@ -31,6 +32,7 @@ from forge.automation_secret_auto_feed import auto_feed_secrets_to_target_feed
 from forge.connectors.secrets import resolve_connector_secret_value
 from forge.db.session import get_engagement_db
 from forge.engagement_ids import numeric_engagement_db_files
+from forge.onboard.mega_domain import mega_domain_decision
 from forge.onboard.patterns import is_denied_target
 from forge.targets_import import (
     MAX_TARGET_FEED_IMPORT_ITEMS,
@@ -404,6 +406,144 @@ def _harvest_text_candidates(
     return candidates
 
 
+def _is_urlscan_observation(meta: dict[str, Any], path: Path) -> bool:
+    source_id = str(
+        meta.get("source_id")
+        or meta.get("source")
+        or meta.get("fetcher")
+        or ""
+    ).strip().lower()
+    if source_id:
+        return "urlscan" in source_id
+    schema_version = str(meta.get("schema_version") or "").strip().lower()
+    if schema_version:
+        return "urlscan" in schema_version
+    return "urlscan" in path.name.lower()
+
+
+def _extract_urlscan_raw_targets(payload: dict[str, Any]) -> list[tuple[str, str]]:
+    raw_targets: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    def _add(val: Any, hint: str) -> None:
+        if isinstance(val, str):
+            text = val.strip()
+            if text and text not in seen:
+                seen.add(text)
+                raw_targets.append((text, hint))
+
+    # Top-level compact lists
+    for key, hint in (("domains", "domain"), ("ips", "auto"), ("urls", "url")):
+        vals = payload.get(key)
+        if isinstance(vals, list):
+            for v in vals:
+                _add(v, hint)
+
+    # Top-level scalar fields
+    _add(payload.get("domain"), "domain")
+    _add(payload.get("ip"), "auto")
+    _add(payload.get("url"), "url")
+    _add(payload.get("cloud_ref"), "cloud_ref")
+
+    # Items from UrlscanPublicFetcher
+    items = payload.get("items")
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, dict):
+                _add(item.get("domain"), "domain")
+                _add(item.get("ip"), "auto")
+                _add(item.get("url"), "url")
+                _add(item.get("cloud_ref"), "cloud_ref")
+
+    # Flagged from UrlscanPublicFetcher
+    flagged = payload.get("flagged")
+    if isinstance(flagged, list):
+        for item in flagged:
+            if isinstance(item, dict):
+                _add(item.get("domain"), "domain")
+                _add(item.get("url"), "url")
+
+    # For any URL gathered, extract hostname as domain or IP candidate as well
+    for val, hint in list(raw_targets):
+        if hint == "url":
+            try:
+                parsed = urlsplit(val if "://" in val else f"//{val}")
+                host = (parsed.hostname or "").strip().lower()
+                if host:
+                    try:
+                        ipaddress.ip_address(host)
+                        _add(host, "auto")
+                    except ValueError:
+                        _add(host, "domain")
+            except Exception:
+                pass
+
+    return raw_targets
+
+
+def _link_urlscan_observation_candidates(
+    payload: dict[str, Any],
+    *,
+    source_group: str,
+    provenance: str,
+    first_seen_at: str,
+    confidence: float,
+) -> list[FeedCandidate]:
+    raw_targets = _extract_urlscan_raw_targets(payload)
+    if not raw_targets:
+        return []
+
+    provenance_str = f"{provenance}:urlscan_observation"
+    promoted: list[FeedCandidate] = []
+    seen_canonical: set[tuple[str, str]] = set()
+
+    for raw_val, hint in raw_targets:
+        candidate = _candidate(
+            raw_val,
+            source_kind="urlscan_observation",
+            source_group=source_group,
+            provenance=provenance_str,
+            confidence=confidence,
+            first_seen_at=first_seen_at,
+            target_type_hint=hint,
+        )
+        if candidate is None:
+            continue
+        if not _candidate_is_valid(candidate):
+            continue
+
+        # Mega-domain apex check
+        candidate_domain: str | None = None
+        if candidate.target_type in {"domain", "subdomain"}:
+            candidate_domain = candidate.canonical_value
+        elif candidate.target_type in {"url", "apk_url"}:
+            host = urlsplit(candidate.canonical_value).hostname or ""
+            try:
+                ipaddress.ip_address(host)
+            except ValueError:
+                candidate_domain = host
+
+        if candidate_domain:
+            skip, _ = mega_domain_decision(candidate_domain)
+            if skip:
+                continue
+
+        # Domain/IP validation and scan eligibility (e.g. global IP check)
+        eligible, _ = target_scan_eligible(
+            candidate.target_type, candidate.canonical_value
+        )
+        if not eligible:
+            continue
+
+        pair = (candidate.target_type, candidate.canonical_value)
+        if pair in seen_canonical:
+            continue
+        seen_canonical.add(pair)
+        promoted.append(candidate)
+
+    return promoted
+
+
 def _harvest_file_candidates(
     path: Path,
     *,
@@ -420,12 +560,21 @@ def _harvest_file_candidates(
             return [], error
         if isinstance(payload, dict):
             meta = payload.get("_meta")
-            feed_class = (
-                str(meta.get("feed_class") or "").strip().lower()
-                if isinstance(meta, dict)
-                else ""
-            )
+            meta_dict = meta if isinstance(meta, dict) else {}
+            feed_class = str(meta_dict.get("feed_class") or "").strip().lower()
             if feed_class in _NON_ASSET_FEED_CLASSES:
+                if feed_class == "observation" and _is_urlscan_observation(
+                    meta_dict, path
+                ):
+                    linked = _link_urlscan_observation_candidates(
+                        payload,
+                        source_group=source_group,
+                        provenance=provenance,
+                        first_seen_at=first_seen_at,
+                        confidence=confidence,
+                    )
+                    if linked:
+                        return linked, None
                 return [], f"non_asset_feed_class:{feed_class}"
         return (
             _harvest_json_candidates(
