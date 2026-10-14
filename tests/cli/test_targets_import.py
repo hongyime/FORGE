@@ -13,11 +13,13 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
+from forge.config import normalize_roe_strictness, resolve_roe_strictness
 from forge.db.session import get_engagement_db
 import forge.targets_resume_candidates as resume_candidates
 from forge.targets_import import (
     _canonical_domain_value,
     _normalize_target_value,
+    _start_kill_chain,
     import_targets,
     load_target_feed,
 )
@@ -34,9 +36,11 @@ from forge.targets_resume_candidates import (
 
 
 class _FakeConfig:
-    def __init__(self, data_dir: Path) -> None:
+    def __init__(self, data_dir: Path, roe_strictness: str | None = None) -> None:
         self.data_dir = data_dir
         self.operator = "tester"
+        if roe_strictness is not None:
+            self.roe_strictness = roe_strictness
 
     def engagement_db_path(self, engagement_id: str) -> Path:
         return self.data_dir / "engagements" / f"{engagement_id}.db"
@@ -2223,7 +2227,7 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
         "--max-runtime-minutes",
         "120",
         "--parallel-fanout",
-        "4",
+        "2",
     ]
     assert command[command.index("--target-type") + 1] == "domain"
     assert "--no-attack-mode" not in command
@@ -2324,7 +2328,7 @@ def test_start_uses_configured_kill_chain_runtime_timeout(
         "--max-runtime-minutes",
         "13",
         "--parallel-fanout",
-        "4",
+        "2",
     ]
     assert calls[0][1] == 13 * 60 + 120
 
@@ -2685,7 +2689,7 @@ def test_start_limit_caps_scoped_kill_chain_launches(
         "--max-runtime-minutes",
         "120",
         "--parallel-fanout",
-        "4",
+        "2",
     ]
 
 
@@ -3392,3 +3396,270 @@ def test_targets_resume_candidates_cli_accepts_json_flag(tmp_path: Path) -> None
     payload = json.loads(result.output)
     assert payload["candidate_count"] == 1
     assert payload["items"][0]["reason"] == "pending_recursive_work"
+
+
+def test_normalize_roe_strictness_fail_closed_to_strict() -> None:
+    # Known valid values
+    assert normalize_roe_strictness("strict") == "strict"
+    assert normalize_roe_strictness("STRICT") == "strict"
+    assert normalize_roe_strictness(" standard ") == "standard"
+    assert normalize_roe_strictness("Permissive") == "permissive"
+
+    # Missing / empty / unknown values fail-closed to "strict"
+    assert normalize_roe_strictness(None) == "strict"
+    assert normalize_roe_strictness("") == "strict"
+    assert normalize_roe_strictness("   ") == "strict"
+    assert normalize_roe_strictness("unknown") == "strict"
+    assert normalize_roe_strictness("BOGUS") == "strict"
+    assert normalize_roe_strictness(12345) == "strict"
+
+
+def test_resolve_roe_strictness_precedence(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    cfg_strict = _FakeConfig(tmp_path, roe_strictness="strict")
+    cfg_standard = _FakeConfig(tmp_path, roe_strictness="standard")
+    cfg_permissive = _FakeConfig(tmp_path, roe_strictness="permissive")
+    cfg_missing = _FakeConfig(tmp_path)
+
+    # 1. Explicit parameter takes precedence over config and env
+    monkeypatch.setenv("FORGE_ROE_STRICTNESS", "permissive")
+    assert resolve_roe_strictness("standard", config=cfg_strict) == "standard"
+    assert resolve_roe_strictness("permissive", config=cfg_strict) == "permissive"
+    assert resolve_roe_strictness("strict", config=cfg_permissive) == "strict"
+    assert resolve_roe_strictness("invalid_val", config=cfg_standard) == "strict"
+
+    # 2. Config takes precedence over env when parameter is None
+    assert resolve_roe_strictness(None, config=cfg_standard) == "standard"
+    assert resolve_roe_strictness(None, config=cfg_permissive) == "permissive"
+    cfg_invalid = _FakeConfig(tmp_path, roe_strictness="bad")
+    assert resolve_roe_strictness(None, config=cfg_invalid) == "strict"
+
+    # 3. Environment variable used when config is None or has no roe_strictness attribute
+    assert resolve_roe_strictness(None, config=cfg_missing) == "permissive"
+    assert resolve_roe_strictness(None, config=None) == "permissive"
+    monkeypatch.setenv("FORGE_ROE_STRICTNESS", "standard")
+    assert resolve_roe_strictness(None, config=cfg_missing) == "standard"
+    assert resolve_roe_strictness(None, config=None) == "standard"
+    monkeypatch.setenv("FORGE_ROE_STRICTNESS", "not_a_valid_mode")
+    assert resolve_roe_strictness(None, config=cfg_missing) == "strict"
+    assert resolve_roe_strictness(None, config=None) == "strict"
+
+    # 4. Defaults to strict when env is unset
+    monkeypatch.delenv("FORGE_ROE_STRICTNESS", raising=False)
+    assert resolve_roe_strictness(None, config=cfg_missing) == "strict"
+    assert resolve_roe_strictness(None, config=None) == "strict"
+
+
+def test_import_targets_strict_roe_gives_strict_caps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Proves (a) strict ROE gives strict caps (effective fanout 2 for domain)."""
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data", roe_strictness="strict")
+    calls: list[list[str]] = []
+
+    def _fake_run(command: list[str], **_: object) -> object:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
+
+    # Via explicit parameter
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-TEST",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        parallel_fanout=8,
+        roe_strictness="strict",
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert results[0].started is True
+    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "2"]
+
+
+def test_import_targets_unknown_missing_strictness_fail_closed_to_strict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Proves (b) unknown/missing strictness fails-closed to strict (fanout 2)."""
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg_no_attr = _FakeConfig(tmp_path / "data")
+    calls: list[list[str]] = []
+
+    def _fake_run(command: list[str], **_: object) -> object:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
+
+    # Case 1: missing parameter, config without roe_strictness, env unset
+    monkeypatch.delenv("FORGE_ROE_STRICTNESS", raising=False)
+    import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-TEST",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        parallel_fanout=8,
+        config=cfg_no_attr,  # type: ignore[arg-type]
+    )
+    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "2"]
+
+    # Case 2: unknown/garbage parameter
+    calls.clear()
+    import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-TEST",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        parallel_fanout=8,
+        roe_strictness="bogus_mode",
+        config=cfg_no_attr,  # type: ignore[arg-type]
+    )
+    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "2"]
+
+    # Case 3: invalid env var fails closed
+    calls.clear()
+    monkeypatch.setenv("FORGE_ROE_STRICTNESS", "unsupported_level")
+    import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-TEST",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        parallel_fanout=8,
+        config=cfg_no_attr,  # type: ignore[arg-type]
+    )
+    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "2"]
+
+
+def test_import_targets_standard_and_permissive_behave_as_before(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Proves (c) standard and permissive explicit configurations behave as before (caps 4 and 6 for domain)."""
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg_standard = _FakeConfig(tmp_path / "data", roe_strictness="standard")
+    cfg_permissive = _FakeConfig(tmp_path / "data", roe_strictness="permissive")
+    calls: list[list[str]] = []
+
+    def _fake_run(command: list[str], **_: object) -> object:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
+
+    # 1. Explicit standard config -> cap 4
+    import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-TEST",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        parallel_fanout=8,
+        config=cfg_standard,  # type: ignore[arg-type]
+    )
+    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "4"]
+
+    # 2. Explicit permissive config -> cap 6 for medium surface domain
+    calls.clear()
+    import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-TEST",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        parallel_fanout=8,
+        config=cfg_permissive,  # type: ignore[arg-type]
+    )
+    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "6"]
+
+    # 3. Explicit standard via parameter overriding config
+    calls.clear()
+    import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-TEST",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        parallel_fanout=8,
+        roe_strictness="standard",
+        config=cfg_permissive,  # type: ignore[arg-type]
+    )
+    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "4"]
+
+    # 4. Standard via FORGE_ROE_STRICTNESS environment variable
+    calls.clear()
+    cfg_plain = _FakeConfig(tmp_path / "data")
+    monkeypatch.setenv("FORGE_ROE_STRICTNESS", "standard")
+    import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-TEST",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        parallel_fanout=8,
+        config=cfg_plain,  # type: ignore[arg-type]
+    )
+    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "4"]
+
+
+def test_targets_import_cli_roe_strictness_option(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_import_targets(**kwargs: object) -> list[object]:
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("forge.targets_import_cli.import_targets", _fake_import_targets)
+    app = typer.Typer()
+    targets_app = typer.Typer()
+    register_target_import_commands(targets_app)
+    app.add_typer(targets_app, name="targets")
+
+    feed_file = tmp_path / "feed.json"
+    feed_file.write_text("{}", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "targets",
+            "import",
+            "--feed-file",
+            str(feed_file),
+            "--roe-strictness",
+            "standard",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["roe_strictness"] == "standard"

@@ -87,6 +87,44 @@ _VALID_CURL_PROFILES: frozenset[str] = frozenset(
         "safari15_5",
     }
 )
+_VALID_ROE_STRICTNESS: frozenset[str] = frozenset({"strict", "standard", "permissive"})
+VALID_ROE_STRICTNESS_VALUES: frozenset[str] = _VALID_ROE_STRICTNESS
+
+
+def normalize_roe_strictness(value: object | None) -> str:
+    """Normalize ROE strictness to a valid value, failing closed to 'strict'.
+
+    Valid values: 'strict', 'standard', 'permissive'.
+    Unknown, empty, or missing values map to 'strict' (fail closed).
+    """
+    if value is None:
+        return "strict"
+    candidate = str(value).strip().lower()
+    if candidate in _VALID_ROE_STRICTNESS:
+        return candidate
+    return "strict"
+
+
+def resolve_roe_strictness(
+    roe_strictness: str | None = None,
+    config: ForgeConfig | None = None,
+) -> str:
+    """Resolve ROE strictness from parameter, ForgeConfig, or FORGE_ROE_STRICTNESS.
+
+    Precedence:
+    1. Explicit parameter if provided (not None)
+    2. ForgeConfig.roe_strictness if config is provided and set
+    3. FORGE_ROE_STRICTNESS environment variable
+    4. Default 'strict' (fail closed)
+    """
+    if roe_strictness is not None:
+        return normalize_roe_strictness(roe_strictness)
+    if config is not None:
+        cfg_strictness = getattr(config, "roe_strictness", None)
+        if cfg_strictness is not None:
+            return normalize_roe_strictness(cfg_strictness)
+    return normalize_roe_strictness(os.environ.get("FORGE_ROE_STRICTNESS"))
+
 
 # Canonical → obfuscated directory mapping (PRD v7.2 §12.6).
 # Used by scaffold generator and check_filenames CI script.
@@ -195,8 +233,16 @@ class ForgeConfig:
     cloud_azure_tenant_id: str | None
     cloud_azure_client_id: str | None
     cloud_azure_services: list[str]
+    roe_strictness: str = "strict"
     # Engagement key is never stored in the config object — resolved at
     # DB-open time via forge.opsec.crypto to avoid lingering in memory.
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "roe_strictness",
+            normalize_roe_strictness(self.roe_strictness),
+        )
 
     @property
     def is_tor_requested(self) -> bool:
@@ -395,6 +441,8 @@ class ForgeConfig:
         nvd_path = _env_path("FORGE_NVD_PATH") or (data_dir / "knowledge.db")
         exploitdb_path = _env_path("FORGE_EXPLOITDB_PATH") or (data_dir / "knowledge.db")
         exploitdb_csv_path = _env_path("FORGE_EXPLOITDB_CSV")
+        roe_strictness_raw = os.environ.get("FORGE_ROE_STRICTNESS")
+        roe_strictness = normalize_roe_strictness(roe_strictness_raw)
 
         return cls(
             data_dir=data_dir,
@@ -447,6 +495,7 @@ class ForgeConfig:
             cloud_azure_tenant_id=cloud_azure_tenant_id,
             cloud_azure_client_id=cloud_azure_client_id,
             cloud_azure_services=cloud_azure_services,
+            roe_strictness=roe_strictness,
         )
 
     # ------------------------------------------------------------------

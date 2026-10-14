@@ -18,7 +18,11 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
-from forge.config import ForgeConfig
+from forge.config import (
+    ForgeConfig,
+    normalize_roe_strictness,
+    resolve_roe_strictness,
+)
 from forge.db.control import index_engagement_db_file
 from forge.db.session import get_engagement_db
 from forge.domain_validation import canonicalize_domain
@@ -197,6 +201,7 @@ def import_targets(
     config: ForgeConfig | None = None,
     progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
     roe_scope: str | None = None,
+    roe_strictness: str | None = None,
 ) -> list[TargetImportResult]:
     """Import feed targets and optionally start scoped kill chains.
 
@@ -211,6 +216,7 @@ def import_targets(
     resolved_roe_scope = str(
         os.environ.get("FORGE_ROE_SCOPE", "") if roe_scope is None else roe_scope
     ).strip()
+    resolved_roe_strictness = resolve_roe_strictness(roe_strictness, config=cfg)
     roe_wildcard = is_roe_wildcard({"roe_scope": resolved_roe_scope})
     items = load_target_feed(
         feed_url=feed_url,
@@ -296,6 +302,8 @@ def import_targets(
                     max_runtime_minutes=max_runtime_minutes,
                     parallel_fanout=parallel_fanout,
                     engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
+                    roe_strictness=resolved_roe_strictness,
+                    config=cfg,
                 )
             except Exception as exc:
                 failure_details: dict[str, Any] = {
@@ -1151,13 +1159,16 @@ def _start_kill_chain(
     max_runtime_minutes: int,
     parallel_fanout: int,
     engagement_db_path: Path,
+    roe_strictness: str | None = None,
+    config: ForgeConfig | None = None,
 ) -> None:
     runtime_minutes = _normalize_max_runtime_minutes(max_runtime_minutes)
+    resolved_strictness = resolve_roe_strictness(roe_strictness, config=config)
     fanout_decision = cap_fanout(
         parallel_fanout,
         seed=seed,
         target_type=target_type,
-        roe_strictness="standard",
+        roe_strictness=resolved_strictness,
         requested_by="targets-import",
     )
     fanout = fanout_decision.effective

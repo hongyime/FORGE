@@ -57,6 +57,12 @@ def register_target_import_commands(app: typer.Typer) -> None:
             envvar="FORGE_ROE_SCOPE",
             help="ROE scope value; '*' explicitly disables the scope gate.",
         ),
+        roe_strictness: Optional[str] = typer.Option(
+            None,
+            "--roe-strictness",
+            envvar="FORGE_ROE_STRICTNESS",
+            help="ROE strictness: strict (default, fail closed), standard, or permissive.",
+        ),
         start: bool = typer.Option(
             False,
             "--start",
@@ -130,6 +136,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
                 start_limit=start_limit,
                 min_start_source_count=min_start_source_count,
                 roe_scope=roe_scope,
+                roe_strictness=roe_strictness,
             )
         except Exception as exc:
             raise typer.BadParameter(str(exc)) from exc
