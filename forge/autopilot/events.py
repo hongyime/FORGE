@@ -435,6 +435,104 @@ def _parse_timestamp(value: str) -> datetime:
     return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
 
 
+def conversion_7d_for_data_dir(
+    data_dir: Path | str, *, now: str | None = None
+) -> dict[str, Any]:
+    """Summarize discovery-to-engagement conversion over the prior seven days."""
+    end: datetime | None = None
+    try:
+        end = _parse_timestamp(now) if now is not None else _parse_timestamp(_now_iso())
+        start = end - timedelta(days=7)
+        window_end = end.isoformat().replace("+00:00", "Z")
+        window_start = start.isoformat().replace("+00:00", "Z")
+    except Exception:
+        window_end = window_start = None
+        start = end = None
+
+    result: dict[str, Any] = {
+        "available": False,
+        "window_days": 7,
+        "window_start": window_start,
+        "window_end": window_end,
+        "candidates": 0,
+        "created": 0,
+        "started": 0,
+        "conversion_created": 0.0,
+        "conversion_started": 0.0,
+        "candidates_by_source": {},
+        "phase_end_events": 0,
+        "cycles": 0,
+    }
+
+    def count(value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError, OverflowError):
+            return 0
+
+    conn: sqlite3.Connection | None = None
+    try:
+        if start is None or end is None:
+            return result
+        db_path = _select_event_db(Path(data_dir))
+        conn = _read_only_connection(db_path)
+        if not _has_event_table(conn):
+            return result
+        rows = conn.execute(
+            "SELECT cycle_id, phase_name, occurred_at, details_json "
+            "FROM autopilot_cycle_events WHERE event_type='phase_end' "
+            "AND phase_name IN ('feed_build', 'import_targets')"
+        ).fetchall()
+        cycles: set[str] = set()
+        for cycle_id, phase_name, occurred_at, details_json in rows:
+            try:
+                occurred = _parse_timestamp(occurred_at)
+            except (TypeError, ValueError):
+                continue
+            if not start <= occurred <= end:
+                continue
+            try:
+                decoded = json.loads(str(details_json or "{}"))
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(decoded, dict):
+                continue
+            details = _decode_details(details_json)
+            result["phase_end_events"] += 1
+            cycles.add(str(cycle_id))
+            if phase_name == "feed_build":
+                metrics = details.get("discovery_metrics")
+                metrics = metrics if isinstance(metrics, dict) else {}
+                result["candidates"] += count(metrics.get("generated_candidate_total"))
+                by_source = metrics.get("candidates_by_source")
+                if isinstance(by_source, dict):
+                    for source, value in by_source.items():
+                        key = str(source)
+                        result["candidates_by_source"][key] = (
+                            result["candidates_by_source"].get(key, 0) + count(value)
+                        )
+            elif phase_name == "import_targets":
+                counts = details.get("engagement_counts")
+                counts = counts if isinstance(counts, dict) else {}
+                result["created"] += count(counts.get("created"))
+                result["started"] += count(counts.get("started"))
+        result["cycles"] = len(cycles)
+        candidates = result["candidates"]
+        if candidates > 0:
+            result["conversion_created"] = result["created"] / candidates
+            result["conversion_started"] = result["started"] / candidates
+        result["available"] = True
+        return result
+    except Exception:
+        return result
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+
+
 def _elapsed_seconds(started_at: str, now: datetime) -> int:
     try:
         return max(0, int((now - _parse_timestamp(started_at)).total_seconds()))

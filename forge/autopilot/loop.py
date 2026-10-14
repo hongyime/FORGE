@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from forge.autopilot.defaults import AUTOPILOT_MAX_TIMEOUT_RETRIES, AutopilotDefaults
-from forge.autopilot.events import AutopilotEventWriter
+from forge.autopilot.events import AutopilotEventWriter, conversion_7d_for_data_dir
 from forge.autopilot.scheduler import get_budget_snapshot, is_kill_switch_active
 from forge.config import ForgeConfig
 
@@ -279,6 +279,25 @@ class ForgeAutopilot:
             return payload
         finally:
             finished_at = finished_at or _now_iso()
+            try:
+                conversion_7d = conversion_7d_for_data_dir(
+                    self.data_dir, now=finished_at
+                )
+            except Exception:
+                conversion_7d = {
+                    "available": False,
+                    "window_days": 7,
+                    "window_start": None,
+                    "window_end": finished_at,
+                    "candidates": 0,
+                    "created": 0,
+                    "started": 0,
+                    "conversion_created": 0.0,
+                    "conversion_started": 0.0,
+                    "candidates_by_source": {},
+                    "phase_end_events": 0,
+                    "cycles": 0,
+                }
             self._event_writer.emit(
                 "cycle_end",
                 details={
@@ -286,6 +305,7 @@ class ForgeAutopilot:
                     "phase_count": len(phases),
                     "dry_run": is_dry_run,
                     "path": path,
+                    "conversion_7d": conversion_7d,
                 },
                 occurred_at=finished_at,
             )
@@ -590,6 +610,16 @@ class ForgeAutopilot:
                 "source_error_counts": source_error_counts,
             }
         if phase.name == "import_targets":
+            def count_value(value: Any) -> int:
+                try:
+                    return int(value)
+                except (TypeError, ValueError, OverflowError):
+                    return 0
+
+            details["engagement_counts"] = {
+                key: count_value(phase.data.get(key))
+                for key in ("created", "started", "attempted", "failed")
+            }
             details["feed_pin"] = {
                 key: phase.data.get(key)
                 for key in (

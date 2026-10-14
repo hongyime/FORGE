@@ -13,7 +13,11 @@ import typer
 from typer.testing import CliRunner
 
 from forge.autopilot.defaults import AutopilotDefaults
-from forge.autopilot.events import AutopilotEventWriter, autopilot_status_for_data_dir
+from forge.autopilot.events import (
+    AutopilotEventWriter,
+    autopilot_status_for_data_dir,
+    conversion_7d_for_data_dir,
+)
 from forge.autopilot.loop import AutopilotPhaseResult, ForgeAutopilot
 from forge.db.migrations import TARGET_VERSION, run_migrations
 from forge.monitoring.cli import register_monitoring_commands
@@ -326,6 +330,67 @@ def test_autopilot_records_cycle_and_all_eight_phase_boundaries(tmp_path: Path) 
     assert [event[1] for event in events if event[0] == "phase_start"] == phase_names
     assert [event[1] for event in events if event[0] == "phase_end"] == phase_names
     assert [event[2] for event in events if event[0] == "phase_start"] == list(range(1, 9))
+    conn = sqlite3.connect(db_path)
+    try:
+        cycle_end = conn.execute(
+            "SELECT details_json FROM autopilot_cycle_events "
+            "WHERE event_type='cycle_end' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
+    assert "available" in json.loads(cycle_end[0])["conversion_7d"]
+
+
+def test_conversion_7d_for_data_dir_counts_recent_phase_events(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True)
+    now = datetime(2026, 10, 15, tzinfo=UTC)
+    recent = (now - timedelta(days=1)).isoformat().replace("+00:00", "Z")
+    old = (now - timedelta(days=8)).isoformat().replace("+00:00", "Z")
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "CREATE TABLE autopilot_cycle_events ("
+            "id INTEGER PRIMARY KEY, cycle_id TEXT, cycle_number INTEGER, "
+            "event_type TEXT, phase_name TEXT, phase_index INTEGER, "
+            "occurred_at TEXT, details_json TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO autopilot_cycle_events "
+            "(cycle_id, cycle_number, event_type, phase_name, phase_index, "
+            "occurred_at, details_json) VALUES (?, 1, 'phase_end', ?, 1, ?, ?)",
+            [
+                ("cycle-a", "feed_build", recent, json.dumps({"discovery_metrics": {
+                    "generated_candidate_total": 10,
+                    "candidates_by_source": {"connectors": 6, "db": 4},
+                }})),
+                ("cycle-a", "import_targets", recent, json.dumps({"engagement_counts": {
+                    "created": 2, "started": 1,
+                }})),
+                ("cycle-old", "feed_build", old, json.dumps({"discovery_metrics": {
+                    "generated_candidate_total": 100,
+                }})),
+                ("cycle-bad", "feed_build", recent, "not-json"),
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    result = conversion_7d_for_data_dir(tmp_path, now=now.isoformat())
+    assert result["available"] is True
+    assert result["candidates"] == 10
+    assert result["created"] == 2
+    assert result["started"] == 1
+    assert result["conversion_created"] == 0.2
+    assert result["conversion_started"] == 0.1
+    assert result["candidates_by_source"] == {"connectors": 6, "db": 4}
+
+
+def test_conversion_7d_for_data_dir_without_database_is_unavailable(tmp_path: Path) -> None:
+    result = conversion_7d_for_data_dir(tmp_path)
+    assert result["available"] is False
+    assert result["candidates"] == result["created"] == result["started"] == 0
 
 
 def test_autopilot_records_cooldown_before_next_iteration(

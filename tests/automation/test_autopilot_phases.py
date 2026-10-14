@@ -428,6 +428,34 @@ def test_phase_end_details_keep_other_phase_fields_unchanged() -> None:
     assert "discovery_metrics" not in fetched
 
 
+def test_import_targets_phase_end_details_include_engagement_counts() -> None:
+    details = ForgeAutopilot._phase_end_details(
+        AutopilotPhaseResult(
+            name="import_targets",
+            status="ok",
+            data={
+                "feed_missing": False,
+                "feed_sha256": "abc",
+                "feed_generated_at": "x",
+                "snapshot_path": "p",
+                "snapshot_written": True,
+                "snapshot_would_write": False,
+                "created": 3,
+                "started": 2,
+                "attempted": 2,
+                "failed": 0,
+            },
+        )
+    )
+    assert details["engagement_counts"] == {
+        "created": 3,
+        "started": 2,
+        "attempted": 2,
+        "failed": 0,
+    }
+    assert "feed_pin" in details
+
+
 def test_feed_build_phase_forwards_source_scan_limits(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
