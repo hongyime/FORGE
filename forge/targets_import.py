@@ -26,6 +26,7 @@ from forge.autopilot.jitter import (
 )
 from forge.autopilot.scheduler import (
     acquire_lease,
+    get_budget_snapshot,
     is_kill_switch_active,
     release_lease,
 )
@@ -316,6 +317,7 @@ def import_targets(
                 )
                 requested_slots = fanout_decision.effective
 
+                queue_start = time.monotonic()
                 lease_result = acquire_lease(
                     target_key=item.target_key,
                     target_value=item.canonical_value,
@@ -326,6 +328,8 @@ def import_targets(
                     data_dir=cfg.data_dir,
                     config=cfg,
                 )
+                # acquire_lease is fail-fast, so queue_seconds measures contention inside the call.
+                queue_seconds = time.monotonic() - queue_start
 
                 if not lease_result.acquired:
                     start_skipped_reason = lease_result.reason
@@ -340,11 +344,26 @@ def import_targets(
                 else:
                     lease = lease_result.lease
                     effective_fanout = lease.slot_count if lease else requested_slots
+                    try:
+                        snapshot = get_budget_snapshot(data_dir=cfg.data_dir, config=cfg)
+                    except Exception:
+                        snapshot = None
                     progress_details = {
                         "engagement_id": engagement_id,
                         "target_type": item.target_type,
                         "target_value": item.canonical_value,
+                        "queue_seconds": round(queue_seconds, 6),
+                        "requested_slots": requested_slots,
+                        "effective_slots": effective_fanout,
                     }
+                    if snapshot is not None:
+                        progress_details.update(
+                            {
+                                "active_targets": snapshot.active_targets_count,
+                                "leased_slots": snapshot.leased_slots,
+                                "total_slots": snapshot.total_slots,
+                            }
+                        )
                     _notify_progress(progress_callback, "target_engaged", progress_details)
                     try:
                         _start_kill_chain(

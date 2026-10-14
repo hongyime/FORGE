@@ -6,6 +6,7 @@ import os
 import secrets
 import sqlite3
 import subprocess
+import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
@@ -19,6 +20,7 @@ from urllib.parse import urlsplit
 from forge.autopilot.events import target_retry_state_for_target
 from forge.autopilot.scheduler import (
     acquire_lease,
+    get_budget_snapshot,
     is_kill_switch_active,
     release_lease,
 )
@@ -804,6 +806,7 @@ def _execute_resume_item(
     engagement_id = _safe_int(checked.get("engagement_id"))
     requested_slots = _safe_int(checked.get("parallel_fanout") or 1)
 
+    queue_start = time.monotonic()
     lease_result = acquire_lease(
         target_key=target_key,
         target_value=target_value,
@@ -814,6 +817,8 @@ def _execute_resume_item(
         data_dir=target_data_dir,
         config=config,
     )
+    # acquire_lease is fail-fast, so queue_seconds measures contention inside the call.
+    queue_seconds = time.monotonic() - queue_start
 
     if not lease_result.acquired:
         checked["status"] = "skipped"
@@ -822,6 +827,10 @@ def _execute_resume_item(
         return checked
 
     lease = lease_result.lease
+    try:
+        snapshot = get_budget_snapshot(data_dir=target_data_dir, config=config)
+    except Exception:
+        snapshot = None
 
     command = [str(part) for part in checked["command"]]
     timeout_seconds = _child_timeout_seconds(_safe_int(checked.get("max_runtime_minutes")))
@@ -830,7 +839,19 @@ def _execute_resume_item(
         "engagement_id": checked.get("engagement_id"),
         "run_id": checked.get("run_id"),
         "target_value": checked.get("seed_value"),
+        "target_type": target_type,
+        "queue_seconds": round(queue_seconds, 6),
+        "requested_slots": requested_slots,
+        "effective_slots": lease.slot_count if lease is not None else requested_slots,
     }
+    if snapshot is not None:
+        progress_details.update(
+            {
+                "active_targets": snapshot.active_targets_count,
+                "leased_slots": snapshot.leased_slots,
+                "total_slots": snapshot.total_slots,
+            }
+        )
     retry_attempt = _safe_int(checked.get("timeout_retry_attempt"))
     retry_budget = _safe_int(checked.get("timeout_retry_budget"))
     if retry_attempt > 0:

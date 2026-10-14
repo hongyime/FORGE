@@ -20,6 +20,8 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import subprocess
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -37,6 +39,7 @@ from forge.autopilot.scheduler import (
     scheduler_db_path,
 )
 from forge.targets_import import import_targets
+from forge.targets_resume_candidates import _execute_resume_item
 
 
 @pytest.fixture(autouse=True)
@@ -784,6 +787,84 @@ def test_import_targets_skips_when_budget_exhausted_without_error(
     assert results_b[0].started is False
     assert results_b[0].start_skipped_reason == "max_active_targets_reached"
     assert results_b[0].start_stop_reason == "max_active_targets_reached"
+
+
+def test_import_targets_engaged_progress_includes_scheduler_telemetry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_max_active_targets=2)
+    feed = tmp_path / "telemetry-feed.json"
+    _write_simple_feed(feed)
+    events: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr("forge.targets_import._start_kill_chain", lambda **_kwargs: None)
+
+    import_targets(
+        feed_url=None,
+        feed_file=feed,
+        auth_header_env=None,
+        roe_id="ROE-TEST",
+        roe_scope="target-alpha.corp-target.io",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=1,
+        config=cfg,  # type: ignore[arg-type]
+        progress_callback=lambda event, details: events.append((event, details)),
+        sleep_fn=lambda _seconds: None,
+    )
+    details = next(details for event, details in events if event == "target_engaged")
+    assert isinstance(details["queue_seconds"], float) and details["queue_seconds"] >= 0
+    for key in ("requested_slots", "effective_slots", "active_targets", "leased_slots", "total_slots"):
+        assert isinstance(details[key], int)
+
+
+def test_resume_item_progress_carries_scheduler_telemetry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "forge.targets_resume_candidates._refresh_plan_item",
+        lambda item: {**item, "status": "ready"},
+    )
+    item = {
+        "db_path": str(tmp_path / "data" / "engagement-1.db"),
+        "seed_value": "resume-target.example.com",
+        "seed_type": "domain",
+        "engagement_id": 7,
+        "run_id": 3,
+        "parallel_fanout": 2,
+        "command": ["true"],
+        "max_runtime_minutes": 1,
+        "sequence": 1,
+        "timeout_retry_attempt": 0,
+        "timeout_retry_budget": 0,
+    }
+    captured: list[tuple[str, dict]] = []
+    callback = lambda event, details: captured.append((event, details))
+    runner = lambda command, timeout_seconds: subprocess.CompletedProcess(
+        args=command, returncode=0, stdout="", stderr=""
+    )
+
+    _execute_resume_item(
+        item,
+        batch="batch-1",
+        ledger_path=tmp_path / "ledger.jsonl",
+        ledger_lock=threading.Lock(),
+        runner=runner,
+        progress_callback=callback,
+        data_dir=tmp_path / "data",
+        config=None,
+    )
+
+    engaged = next(details for event, details in captured if event == "target_engaged")
+    assert engaged["target_value"] == "resume-target.example.com"
+    assert engaged["target_type"] == "domain"
+    assert isinstance(engaged["queue_seconds"], float) and engaged["queue_seconds"] >= 0
+    assert engaged["requested_slots"] == 2
+    assert engaged["effective_slots"] == 2
+    assert engaged["active_targets"] >= 1
+    assert engaged["leased_slots"] >= 2
+    assert engaged["total_slots"] >= engaged["leased_slots"]
+    assert engaged["total_slots"] > 0
 
 
 # ---------------------------------------------------------------------------

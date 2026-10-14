@@ -454,6 +454,39 @@ def test_import_targets_phase_end_details_include_engagement_counts() -> None:
         "failed": 0,
     }
     assert "feed_pin" in details
+    assert "scheduler" not in details
+
+
+def test_import_targets_phase_end_details_include_scheduler_counts() -> None:
+    data = {
+        "scheduler_total_slots": "8",
+        "scheduler_leased_slots": 3,
+        "scheduler_available_slots": 5,
+        "scheduler_active_targets_count": 2,
+        "created": 1,
+    }
+    details = ForgeAutopilot._phase_end_details(
+        AutopilotPhaseResult(name="import_targets", status="ok", data=data)
+    )
+    assert details["scheduler"] == {
+        "total_slots": 8,
+        "leased_slots": 3,
+        "available_slots": 5,
+        "active_targets_count": 2,
+    }
+    assert "engagement_counts" in details
+
+
+def test_scheduler_snapshot_data_returns_budget(tmp_path: Path) -> None:
+    autopilot = _make_autopilot(tmp_path)
+    snapshot = autopilot._scheduler_snapshot_data()
+    assert snapshot
+    assert {
+        "scheduler_total_slots",
+        "scheduler_leased_slots",
+        "scheduler_available_slots",
+        "scheduler_active_targets_count",
+    } <= snapshot.keys()
 
 
 def test_feed_build_phase_forwards_source_scan_limits(

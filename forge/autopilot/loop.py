@@ -620,6 +620,21 @@ class ForgeAutopilot:
                 key: count_value(phase.data.get(key))
                 for key in ("created", "started", "attempted", "failed")
             }
+            scheduler_fields = {
+                "total_slots": "scheduler_total_slots",
+                "leased_slots": "scheduler_leased_slots",
+                "available_slots": "scheduler_available_slots",
+                "active_targets_count": "scheduler_active_targets_count",
+            }
+            scheduler_details: dict[str, int] = {}
+            for output_key, data_key in scheduler_fields.items():
+                if data_key in phase.data:
+                    try:
+                        scheduler_details[output_key] = int(phase.data[data_key])
+                    except (TypeError, ValueError, OverflowError):
+                        continue
+            if scheduler_details:
+                details["scheduler"] = scheduler_details
             details["feed_pin"] = {
                 key: phase.data.get(key)
                 for key in (
@@ -1370,7 +1385,7 @@ class ForgeAutopilot:
 
     def _scheduler_snapshot_data(self) -> dict[str, Any]:
         try:
-            snapshot = get_budget_snapshot(data_dir=self.data_dir, config=self.config)
+            snapshot = get_budget_snapshot(data_dir=self.data_dir, config=self._cfg)
             return {
                 "scheduler_total_slots": snapshot.total_slots,
                 "scheduler_leased_slots": snapshot.leased_slots,
