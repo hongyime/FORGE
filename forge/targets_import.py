@@ -22,9 +22,9 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 
 from forge.autopilot.jitter import (
-    DEFAULT_BURST_SIZE,
+    burst_size,
     burst_pause_seconds,
-    start_delay_seconds,
+    effective_start_delay,
 )
 from forge.autopilot.scheduler import (
     acquire_lease,
@@ -232,6 +232,8 @@ def import_targets(
     progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
     roe_scope: str | None = None,
     roe_strictness: str | None = None,
+    retry_after_seconds: float | None = None,
+    roe_minimum_delay_seconds: float | None = None,
     sleep_fn: Callable[[float], None] | None = None,
     mega_domain_signal_provider: Callable[[str], tuple[float | None, int | None]] | None = None,
     max_active_targets: int = 2,
@@ -271,6 +273,7 @@ def import_targets(
     stopped = False
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_active_targets)
     pending: dict[concurrent.futures.Future[TargetImportResult], tuple[int, TargetFeedItem]] = {}
+    burst_starts_by_strictness: dict[str, int] = {}
 
     def submit_next() -> bool:
         nonlocal stopped
@@ -318,12 +321,19 @@ def import_targets(
             parallel_fanout=parallel_fanout,
             progress_callback=progress_callback,
             sleep=sleep,
+            retry_after_seconds=retry_after_seconds,
+            roe_minimum_delay_seconds=roe_minimum_delay_seconds,
         )
         pending[future] = (item_index, item)
         return True
 
     try:
-        for _ in range(max_active_targets):
+        initial_admission_limit = max_active_targets
+        if start and not dry_run:
+            initial_admission_limit = min(
+                max_active_targets, burst_size(resolved_roe_strictness)
+            )
+        for _ in range(initial_admission_limit):
             if not submit_next():
                 break
         while pending:
@@ -349,6 +359,23 @@ def import_targets(
                     start_error_type=type(exc).__name__,
                 )
             indexed_results.append((item_index, result))
+            admit_replacement = True
+            if result.started:
+                with counters.lock:
+                    burst_starts_by_strictness[resolved_roe_strictness] = (
+                        burst_starts_by_strictness.get(resolved_roe_strictness, 0) + 1
+                    )
+                    burst_count = burst_starts_by_strictness[resolved_roe_strictness]
+                burst_limit = burst_size(resolved_roe_strictness)
+                if (
+                    burst_count % burst_limit == 0
+                    and item_index < len(items) - 1
+                ):
+                    sleep(burst_pause_seconds(resolved_roe_strictness))
+                elif pending:
+                    # Let the already-admitted candidates finish this burst
+                    # before admitting candidates from the next one.
+                    admit_replacement = False
             if result.start_stop_reason in (
                 "consecutive_failure_budget_exhausted",
                 "slots_exhausted",
@@ -359,7 +386,7 @@ def import_targets(
                 stopped = True
                 with counters.lock:
                     counters.stop_admission = True
-            if not stopped:
+            if not stopped and admit_replacement:
                 submit_next()
     finally:
         executor.shutdown(wait=True)
@@ -388,6 +415,8 @@ def _run_one_import_target(
     parallel_fanout: int,
     progress_callback: Callable[[str, dict[str, Any]], None] | None,
     sleep: Callable[[float], None],
+    retry_after_seconds: float | None,
+    roe_minimum_delay_seconds: float | None,
 ) -> TargetImportResult:
     """Process one feed candidate, preserving import_targets' sequential behavior."""
     cfg = config
@@ -519,6 +548,8 @@ def _run_one_import_target(
                         parallel_fanout=effective_fanout,
                         engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
                         roe_strictness=roe_strictness, config=cfg, sleep_fn=sleep,
+                        retry_after_seconds=retry_after_seconds,
+                        roe_minimum_delay_seconds=roe_minimum_delay_seconds,
                     )
                 except Exception as exc:
                     try:
@@ -568,8 +599,6 @@ def _run_one_import_target(
                         if counters.starts_remaining is not None:
                             counters.starts_remaining -= 1
                         starts_remaining_after = counters.starts_remaining
-                    if successful_starts % DEFAULT_BURST_SIZE == 0:
-                        sleep(burst_pause_seconds())
                     if starts_remaining_after == 0:
                         start_stop_reason = "start_limit_reached"
                 finally:
@@ -1439,14 +1468,18 @@ def _start_kill_chain(
     roe_strictness: str | None = None,
     config: ForgeConfig | None = None,
     sleep_fn: Callable[[float], None] | None = None,
+    retry_after_seconds: float | None = None,
+    roe_minimum_delay_seconds: float | None = None,
 ) -> None:
     runtime_minutes = _normalize_max_runtime_minutes(max_runtime_minutes)
     resolved_strictness = resolve_roe_strictness(roe_strictness, config=config)
     sleep = sleep_fn if sleep_fn is not None else _DEFAULT_SLEEP
     # Start delay before the kill chain starts.
-    # NOTE: no Retry-After value is available at this call site; retry_after_delay
-    # is for the provider layer (a later item).
-    sleep(start_delay_seconds(resolved_strictness))
+    sleep(effective_start_delay(
+        resolved_strictness,
+        retry_after_seconds=retry_after_seconds,
+        roe_minimum_delay_seconds=roe_minimum_delay_seconds,
+    ))
     fanout_decision = cap_fanout(
         parallel_fanout,
         seed=seed,

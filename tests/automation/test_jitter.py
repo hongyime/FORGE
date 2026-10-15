@@ -20,9 +20,10 @@ from pathlib import Path
 import pytest
 
 from forge.autopilot.jitter import (
-    DEFAULT_BURST_SIZE,
     MAX_RETRY_AFTER_SECONDS,
+    burst_size,
     burst_pause_seconds,
+    effective_start_delay,
     retry_after_delay,
     start_delay_seconds,
 )
@@ -174,17 +175,27 @@ def test_retry_after_delay_absent_and_garbage_returns_none() -> None:
 
 
 def test_burst_pause_seconds_range() -> None:
-    """Test burst_pause_seconds returns values in [60.0, 180.0]."""
+    """Test strictness specific pause ranges."""
     rng = random.Random(9999)
-    samples = [burst_pause_seconds(rng=rng) for _ in range(200)]
-    assert all(60.0 <= val <= 180.0 for val in samples)
-    assert min(samples) >= 60.0
-    assert max(samples) <= 180.0
-    assert len(set(samples)) > 1
+    for level, bounds in (("strict", (300, 600)), ("standard", (120, 300)), ("permissive", (60, 180))):
+        values = [burst_pause_seconds(level, rng=rng) for _ in range(40)]
+        assert all(bounds[0] <= val <= bounds[1] for val in values)
+        assert burst_size(level) == {"strict": 1, "standard": 2, "permissive": 4}[level]
 
-    # Default rng
-    val = burst_pause_seconds()
-    assert 60.0 <= val <= 180.0
+
+def test_delay_overrides_and_environment_ranges(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("forge.autopilot.jitter.start_delay_seconds", lambda *_args, **_kwargs: 5.0)
+    assert effective_start_delay("strict", retry_after_seconds=120) == 120
+    monkeypatch.setattr("forge.autopilot.jitter.start_delay_seconds", lambda *_args, **_kwargs: 200.0)
+    assert effective_start_delay("strict", retry_after_seconds=60) == 200
+    monkeypatch.setattr("forge.autopilot.jitter.start_delay_seconds", lambda *_args, **_kwargs: 10.0)
+    assert effective_start_delay("strict", roe_minimum_delay_seconds=300) == 300
+    monkeypatch.setenv("FORGE_AUTOPILOT_START_DELAY_STANDARD_SECONDS", "41-42")
+    assert 41 <= start_delay_seconds("standard") <= 42
+    monkeypatch.setenv("FORGE_AUTOPILOT_BURST_SIZE_STANDARD", "3")
+    monkeypatch.setenv("FORGE_AUTOPILOT_BURST_PAUSE_SECONDS_STANDARD", "71-72")
+    assert burst_size("standard") == 3
+    assert 71 <= burst_pause_seconds("standard") <= 72
 
 
 # ---------------------------------------------------------------------------
@@ -307,67 +318,26 @@ def test_start_kill_chain_respects_different_strictness_levels(
 # ---------------------------------------------------------------------------
 
 
-def test_import_targets_applies_burst_pause_after_five_starts(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("strictness", "burst", "pause_low", "pause_high"),
+    [("strict", 1, 300.0, 600.0), ("standard", 2, 120.0, 300.0), ("permissive", 4, 60.0, 180.0)],
+)
+def test_import_targets_applies_strictness_burst_pacing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    strictness: str, burst: int, pause_low: float, pause_high: float,
 ) -> None:
-    """Test import_targets applies a burst pause after DEFAULT_BURST_SIZE starts."""
     feed_path = tmp_path / "feed.json"
-    feed_path.write_text(
-        json.dumps(
-            {
-                "schema_version": "target-feed.v1",
-                "generated_at": "2026-08-08T00:00:00Z",
-                "items": [
-                    {
-                        "target_type": "domain",
-                        "target_value": f"target-{i}.acme-targets.net",
-                        "confidence": 0.9,
-                        "source_kind": "telemetry",
-                    }
-                    for i in range(5)
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    cfg = _FakeConfig(tmp_path / "data")
+    feed_path.write_text(json.dumps({"schema_version": "target-feed.v1", "generated_at": "2026-08-08T00:00:00Z", "items": [
+        {"target_type": "domain", "target_value": f"target-{i}.acme-targets.net", "confidence": 0.9, "source_kind": "telemetry"} for i in range(burst * 2 + 1)
+    ]}), encoding="utf-8")
+    cfg = _FakeConfig(tmp_path / "data", strictness)
     sleep_calls: list[float] = []
-
-    def fake_sleep(duration: float) -> None:
-        sleep_calls.append(duration)
-
-    monkeypatch.setattr(
-        "forge.targets_import.run_contained_subprocess",
-        lambda command, **_: subprocess.CompletedProcess(command, 0, stdout="", stderr=""),
-    )
-
-    results = import_targets(
-        feed_url=None,
-        feed_file=feed_path,
-        auth_header_env=None,
-        roe_id="ROE-ACME-2026-08",
-        start=True,
-        dry_run=False,
-        limit=None,
-        max_iter=3,
-        config=cfg,  # type: ignore[arg-type]
-        sleep_fn=fake_sleep,
-    )
-
-    assert len(results) == 5
-    assert all(r.started is True for r in results)
-
-    # 5 starts: each start has a start delay (in [30, 60] for strict default),
-    # plus 1 burst pause after the 5th start (in [60, 180]). Total 6 sleep calls.
-    assert len(sleep_calls) == 5 + 1
-    # First 5 are start delays
-    for i in range(5):
-        assert 30.0 <= sleep_calls[i] <= 60.0
-    # 6th call is the burst pause
-    burst_pause = sleep_calls[5]
-    assert 60.0 <= burst_pause <= 180.0
-    assert any(60.0 <= val <= 180.0 for val in sleep_calls)
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", lambda command, **_: subprocess.CompletedProcess(command, 0, stdout="", stderr=""))
+    results = import_targets(feed_url=None, feed_file=feed_path, auth_header_env=None, roe_id="ROE-ACME-2026-08", start=True, dry_run=False, limit=None, max_iter=3, config=cfg, sleep_fn=sleep_calls.append)
+    assert len(results) == burst * 2 + 1
+    pauses = [value for value in sleep_calls if pause_low <= value <= pause_high]
+    assert len(pauses) == 2
+    assert len(sleep_calls) == len(results) + 2
 
 
 def test_import_targets_burst_pause_counter_only_increments_on_successful_starts(
@@ -430,10 +400,9 @@ def test_import_targets_burst_pause_counter_only_increments_on_successful_starts
     assert results[0].start_failed is True
     assert all(r.started is True for r in results[1:])
 
-    # 5 start attempts: 5 start delays called, but only 4 successful starts,
-    # so NO burst pause (which requires 5 successful starts) was triggered.
-    assert len(sleep_calls) == 5
-    assert not any(60.0 <= val <= 180.0 for val in sleep_calls)
+    # Three strict bursts complete before another item remains to start.
+    assert len(sleep_calls) == 8
+    assert sum(300.0 <= val <= 600.0 for val in sleep_calls) == 3
 
 
 def test_import_targets_burst_counter_is_local_to_invocation(
@@ -485,7 +454,7 @@ def test_import_targets_burst_counter_is_local_to_invocation(
         sleep_fn=fake_sleep,
     )
     assert len(results1) == 3
-    assert len(sleep_calls) == 3  # 3 start delays, no burst pause
+    assert len(sleep_calls) == 5  # 3 start delays and 2 strict burst pauses
 
     # Second invocation with a new feed of 3 items (different targets)
     feed_path2 = tmp_path / "feed2.json"
@@ -520,6 +489,6 @@ def test_import_targets_burst_counter_is_local_to_invocation(
         sleep_fn=fake_sleep,
     )
     assert len(results2) == 3
-    # Total calls: 3 + 3 = 6 start delays, no burst pause because neither run reached 5
-    assert len(sleep_calls) == 6
-    assert not any(60.0 <= val <= 180.0 for val in sleep_calls)
+    # Each invocation resets its strictness bucket; each three-start run pauses twice.
+    assert len(sleep_calls) == 10
+    assert sum(300.0 <= val <= 600.0 for val in sleep_calls) == 4

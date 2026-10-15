@@ -131,7 +131,7 @@ def test_import_dispatcher_runs_two_targets_concurrently(tmp_path: Path, monkeyp
     feed = tmp_path / "feed.json"
     _write_dispatch_feed(feed, 2)
     barrier = threading.Barrier(2, timeout=3)
-    cfg = _FakeConfig(tmp_path / "data")
+    cfg = _FakeConfig(tmp_path / "data", roe_strictness="standard")
 
     def run(**kwargs: object) -> TargetImportResult:
         barrier.wait()
@@ -141,6 +141,7 @@ def test_import_dispatcher_runs_two_targets_concurrently(tmp_path: Path, monkeyp
     monkeypatch.setattr("forge.targets_import._run_one_import_target", run)
     results = _dispatch_import(feed, cfg)
     assert len(results) == 2
+    assert all(result.started for result in results)
 
 
 def test_import_dispatcher_respects_active_target_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -161,7 +162,11 @@ def test_import_dispatcher_respects_active_target_limit(tmp_path: Path, monkeypa
 
     monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
     monkeypatch.setattr("forge.targets_import._run_one_import_target", run)
-    _dispatch_import(feed, _FakeConfig(tmp_path / "data"), max_active_targets=2)
+    _dispatch_import(
+        feed,
+        _FakeConfig(tmp_path / "data", roe_strictness="standard"),
+        max_active_targets=2,
+    )
     assert peak == 2
 
 
@@ -169,7 +174,7 @@ def test_import_dispatcher_serializes_with_single_slot(tmp_path: Path, monkeypat
     feed = tmp_path / "feed.json"
     values = _write_dispatch_feed(feed, 2)
     first_finished = threading.Event()
-    cfg = _FakeConfig(tmp_path / "data")
+    cfg = _FakeConfig(tmp_path / "data", roe_strictness="strict")
 
     def run(**kwargs: object) -> TargetImportResult:
         item = kwargs["item"]
@@ -183,6 +188,55 @@ def test_import_dispatcher_serializes_with_single_slot(tmp_path: Path, monkeypat
     monkeypatch.setattr("forge.targets_import._run_one_import_target", run)
     results = _dispatch_import(feed, cfg, max_active_targets=1)
     assert len(results) == 2
+
+
+def test_import_dispatcher_strict_burst_is_serial_and_pauses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed = tmp_path / "feed.json"
+    values = _write_dispatch_feed(feed, 3)
+    lock = threading.Lock()
+    active = peak = 0
+    starts: list[str] = []
+    pause_count = 0
+    events: list[tuple[str, str | None]] = []
+
+    def sleep(_: float) -> None:
+        nonlocal pause_count
+        with lock:
+            pause_count += 1
+            events.append(("pause", None))
+
+    def run(**kwargs: object) -> TargetImportResult:
+        nonlocal active, peak
+        item = kwargs["item"]
+        with lock:
+            starts.append(item.canonical_value)
+            events.append(("start", item.canonical_value))
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.02)
+        with lock:
+            active -= 1
+        return _dispatch_result(kwargs)
+
+    monkeypatch.setattr("forge.targets_import._DEFAULT_SLEEP", sleep)
+    monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
+    monkeypatch.setattr("forge.targets_import._run_one_import_target", run)
+    results = _dispatch_import(
+        feed, _FakeConfig(tmp_path / "data", roe_strictness="strict"),
+        max_active_targets=2,
+    )
+
+    assert all(result.started for result in results)
+    assert peak == 1
+    assert starts == values
+    assert pause_count == 2
+    assert events == [
+        ("start", values[0]), ("pause", None),
+        ("start", values[1]), ("pause", None),
+        ("start", values[2]),
+    ]
 
 
 def test_import_dispatcher_releases_scheduler_leases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -220,7 +274,7 @@ def test_import_dispatcher_preserves_input_result_order(tmp_path: Path, monkeypa
 
     monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
     monkeypatch.setattr("forge.targets_import._run_one_import_target", run)
-    results = _dispatch_import(feed, _FakeConfig(tmp_path / "data"))
+    results = _dispatch_import(feed, _FakeConfig(tmp_path / "data", roe_strictness="standard"))
     assert [result.target_value for result in results] == values
 
 
@@ -231,7 +285,7 @@ def test_import_dispatcher_kill_switch_stops_admission(tmp_path: Path, monkeypat
         feed_url=None, feed_file=feed, auth_header_env=None, limit=None,
     )
     assert len(loaded_items) == 2
-    cfg = _FakeConfig(tmp_path / "data")
+    cfg = _FakeConfig(tmp_path / "data", roe_strictness="strict")
     launched: list[str] = []
     monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
     monkeypatch.setattr("forge.targets_import.is_kill_switch_active", lambda **_: True)
