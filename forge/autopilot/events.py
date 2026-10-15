@@ -16,6 +16,7 @@ from typing import Any
 from forge.db.direct_connect import direct_connect
 from forge.db.migrations import run_migrations
 from forge.engagement_ids import numeric_engagement_db_files
+from forge.targets_import import external_target_key
 
 _LOG = logging.getLogger(__name__)
 _EVENT_TABLE = "autopilot_cycle_events"
@@ -132,7 +133,13 @@ def target_retry_state_for_target(
             continue
         if (
             event_engagement != wanted_engagement
-            or str(details.get("target_value") or "") != wanted_target
+            or (
+                str(details.get("target_key") or "")
+                != external_target_key(
+                    str(details.get("target_type") or "other"), wanted_target
+                )
+                and str(details.get("target_value") or "") != wanted_target
+            )
         ):
             continue
         event_name = str(event_type)
@@ -440,99 +447,102 @@ def _parse_timestamp(value: str) -> datetime:
 def conversion_7d_for_data_dir(
     data_dir: Path | str, *, now: str | None = None
 ) -> dict[str, Any]:
-    """Summarize discovery-to-engagement conversion over the prior seven days."""
-    end: datetime | None = None
+    """Measure distinct feed cohort keys completed within seven days of discovery."""
+
+    def unavailable() -> dict[str, Any]:
+        return {
+            "available": False,
+            "window_days": 7,
+            "window_start": None,
+            "window_end": None,
+            "cohort_keys": 0,
+            "completed_keys": 0,
+            "conversion_7d": None,
+            "candidates": 0,
+            "created": 0,
+            "started": 0,
+            "conversion_created": 0.0,
+            "conversion_started": 0.0,
+            "candidates_by_source": {},
+            "phase_end_events": 0,
+            "cycles": 0,
+        }
+
     try:
         end = _parse_timestamp(now) if now is not None else _parse_timestamp(_now_iso())
         start = end - timedelta(days=7)
-        window_end = end.isoformat().replace("+00:00", "Z")
-        window_start = start.isoformat().replace("+00:00", "Z")
-    except Exception:
-        window_end = window_start = None
-        start = end = None
-
-    result: dict[str, Any] = {
-        "available": False,
-        "window_days": 7,
-        "window_start": window_start,
-        "window_end": window_end,
-        "candidates": 0,
-        "created": 0,
-        "started": 0,
-        "conversion_created": 0.0,
-        "conversion_started": 0.0,
-        "candidates_by_source": {},
-        "phase_end_events": 0,
-        "cycles": 0,
-    }
-
-    def count(value: Any) -> int:
-        try:
-            return int(value)
-        except (TypeError, ValueError, OverflowError):
-            return 0
-
-    conn: sqlite3.Connection | None = None
+        conn = _read_only_connection(_select_event_db(Path(data_dir)))
+    except (OSError, sqlite3.Error, TypeError, ValueError):
+        return unavailable()
     try:
-        if start is None or end is None:
-            return result
-        db_path = _select_event_db(Path(data_dir))
-        conn = _read_only_connection(db_path)
         if not _has_event_table(conn):
-            return result
-        rows = conn.execute(
-            "SELECT cycle_id, phase_name, occurred_at, details_json "
-            "FROM autopilot_cycle_events WHERE event_type='phase_end' "
-            "AND phase_name IN ('feed_build', 'import_targets')"
-        ).fetchall()
-        cycles: set[str] = set()
-        for cycle_id, phase_name, occurred_at, details_json in rows:
+            return unavailable()
+        rows = conn.execute("SELECT event_type, occurred_at, details_json FROM autopilot_cycle_events WHERE event_type IN ('phase_end','target_completed')").fetchall()
+        cohorts: dict[str, datetime] = {}
+        completed: dict[str, list[datetime]] = {}
+        for event_type, timestamp, raw_details in rows:
             try:
-                occurred = _parse_timestamp(occurred_at)
+                stamp = _parse_timestamp(timestamp)
             except (TypeError, ValueError):
                 continue
-            if not start <= occurred <= end:
-                continue
-            try:
-                decoded = json.loads(str(details_json or "{}"))
-            except (TypeError, json.JSONDecodeError):
-                continue
-            if not isinstance(decoded, dict):
-                continue
-            details = _decode_details(details_json)
-            result["phase_end_events"] += 1
-            cycles.add(str(cycle_id))
-            if phase_name == "feed_build":
-                metrics = details.get("discovery_metrics")
-                metrics = metrics if isinstance(metrics, dict) else {}
-                result["candidates"] += count(metrics.get("generated_candidate_total"))
-                by_source = metrics.get("candidates_by_source")
-                if isinstance(by_source, dict):
-                    for source, value in by_source.items():
-                        key = str(source)
-                        result["candidates_by_source"][key] = (
-                            result["candidates_by_source"].get(key, 0) + count(value)
-                        )
-            elif phase_name == "import_targets":
-                counts = details.get("engagement_counts")
-                counts = counts if isinstance(counts, dict) else {}
-                result["created"] += count(counts.get("created"))
-                result["started"] += count(counts.get("started"))
-        result["cycles"] = len(cycles)
-        candidates = result["candidates"]
-        if candidates > 0:
-            result["conversion_created"] = result["created"] / candidates
-            result["conversion_started"] = result["started"] / candidates
-        result["available"] = True
-        return result
-    except Exception:
-        return result
+            details = _decode_details(raw_details)
+            if event_type == "phase_end" and details.get("status") in ("ok", "partial"):
+                for item in details.get("cohort_keys", []):
+                    if isinstance(item, dict) and item.get("target_key") and start <= stamp <= end:
+                        cohorts.setdefault(str(item["target_key"]), stamp)
+            elif event_type == "target_completed" and details.get("target_key"):
+                completed.setdefault(str(details["target_key"]), []).append(stamp)
+        converted = {key for key, cohort_at in cohorts.items() if any(cohort_at <= done <= cohort_at + timedelta(days=7) and done <= end for done in completed.get(key, []))}
+        denominator = len(cohorts)
+        ratio = len(converted) / denominator if denominator else None
+        return {"available": True, "window_days": 7, "window_start": start.isoformat().replace("+00:00", "Z"), "window_end": end.isoformat().replace("+00:00", "Z"), "cohort_keys": denominator, "completed_keys": len(converted), "conversion_7d": ratio, "candidates": denominator, "created": 0, "started": len(converted), "conversion_created": 0.0, "conversion_started": ratio if ratio is not None else 0.0, "candidates_by_source": {}, "phase_end_events": 0, "cycles": 0}
+    except sqlite3.Error:
+        return unavailable()
     finally:
-        if conn is not None:
-            try:
-                conn.close()
-            except sqlite3.Error:
-                pass
+        conn.close()
+
+
+def record_feed_review(
+    data_dir: Path | str, *, target_key: str, source_family: str,
+    target_type: str, confirmed_owned: bool, in_scope: bool,
+) -> None:
+    """Persist an explicit review outcome using only a hashed target key."""
+    path = Path(data_dir) / "autopilot_reviewed_samples.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        samples = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(samples, list):
+            samples = []
+    except (OSError, json.JSONDecodeError):
+        samples = []
+    samples = [sample for sample in samples if sample.get("target_key") != target_key]
+    samples.append({"target_key": str(target_key), "source_family": str(source_family),
+                    "target_type": str(target_type), "confirmed_owned": bool(confirmed_owned),
+                    "in_scope": bool(in_scope), "reviewed_at": _now_iso()})
+    path.write_text(json.dumps(samples, sort_keys=True), encoding="utf-8")
+
+
+def feed_precision_for_data_dir(data_dir: Path | str) -> dict[str, Any]:
+    """Return reviewed-sample precision by source family and target type."""
+    path = Path(data_dir) / "autopilot_reviewed_samples.json"
+    try:
+        samples = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"available": False, "precision": None, "by_source_family_target_type": {}}
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    if isinstance(samples, list):
+        for sample in samples:
+            if isinstance(sample, dict) and sample.get("target_key"):
+                key = f"{sample.get('source_family', 'unknown')}:{sample.get('target_type', 'other')}"
+                grouped.setdefault(key, []).append(sample)
+    metrics = {key: {"reviewed": len(rows), "confirmed_in_scope": sum(bool(r.get("confirmed_owned") and r.get("in_scope")) for r in rows),
+                      "precision": sum(bool(r.get("confirmed_owned") and r.get("in_scope")) for r in rows) / len(rows)}
+               for key, rows in grouped.items() if rows}
+    reviewed = sum(len(rows) for rows in grouped.values())
+    successes = sum(metric["confirmed_in_scope"] for metric in metrics.values())
+    return {"available": bool(reviewed), "precision": successes / reviewed if reviewed else None,
+            "reviewed": reviewed, "confirmed_in_scope": successes,
+            "by_source_family_target_type": metrics}
 
 
 def scoreboard_for_data_dir(
@@ -688,7 +698,7 @@ def scoreboard_for_data_dir(
                 user, system = details.get("cpu_user_seconds"), details.get("cpu_sys_seconds")
                 if numeric(user) and numeric(system):
                     cpu.append(float(user) + float(system))
-                eid, target = details.get("engagement_id"), details.get("target_value")
+                eid, target = details.get("engagement_id"), details.get("target_key")
                 if eid is not None and target is not None:
                     unmatched.setdefault((str(eid), str(target)), []).append(occurred)
             elif event_type == "phase_end" and phase_name == "import_targets":
@@ -740,7 +750,7 @@ def scoreboard_for_data_dir(
                         failures["sqlite_errors"] += 1
                 if event_type == "target_completed":
                     result["completed_runs"] += 1
-                eid, target = details.get("engagement_id"), details.get("target_value")
+                eid, target = details.get("engagement_id"), details.get("target_key")
                 if eid is not None and target is not None:
                     candidates = unmatched.get((str(eid), str(target)), [])
                     prior = [stamp for stamp in candidates if stamp <= occurred]

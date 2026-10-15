@@ -17,6 +17,8 @@ from forge.autopilot.events import (
     AutopilotEventWriter,
     autopilot_status_for_data_dir,
     conversion_7d_for_data_dir,
+    feed_precision_for_data_dir,
+    record_feed_review,
     scoreboard_for_data_dir,
 )
 from forge.autopilot.loop import AutopilotPhaseResult, ForgeAutopilot
@@ -96,6 +98,7 @@ def _write_timeout_resume_candidate(data_dir: Path) -> tuple[Path, Path]:
 
 
 def _record_timeout_cycle(writer: AutopilotEventWriter) -> int:
+    from forge.targets_import import external_target_key
     _cycle_id, cycle_number = writer.start_cycle(details={"mode": "apply"})
     writer.emit(
         "target_failed",
@@ -103,7 +106,8 @@ def _record_timeout_cycle(writer: AutopilotEventWriter) -> int:
         phase_index=5,
         details={
             "engagement_id": 1001,
-            "target_value": "timeout.example",
+            "target_key": external_target_key("domain", "timeout.example"),
+            "target_type": "domain",
             "return_code": 124,
         },
     )
@@ -116,6 +120,7 @@ def _record_retry_attempt_cycle(
     *,
     retry_attempt: int,
 ) -> int:
+    from forge.targets_import import external_target_key
     _cycle_id, cycle_number = writer.start_cycle(details={"mode": "apply"})
     writer.emit(
         "target_retry_attempted",
@@ -123,7 +128,8 @@ def _record_retry_attempt_cycle(
         phase_index=6,
         details={
             "engagement_id": 1001,
-            "target_value": "timeout.example",
+            "target_key": external_target_key("domain", "timeout.example"),
+            "target_type": "domain",
             "retry_attempt": retry_attempt,
             "retry_budget": 2,
         },
@@ -134,7 +140,8 @@ def _record_retry_attempt_cycle(
         phase_index=6,
         details={
             "engagement_id": 1001,
-            "target_value": "timeout.example",
+            "target_key": external_target_key("domain", "timeout.example"),
+            "target_type": "domain",
             "return_code": 124,
         },
     )
@@ -346,50 +353,27 @@ def test_autopilot_records_cycle_and_all_eight_phase_boundaries(tmp_path: Path) 
     assert "worker_memory_p95" in cycle_details
 
 
-def test_conversion_7d_for_data_dir_counts_recent_phase_events(tmp_path: Path) -> None:
+def test_conversion_7d_uses_distinct_cohort_keys_and_completion_deadline(tmp_path: Path) -> None:
     db_path = tmp_path / "engagements" / "1001.db"
     db_path.parent.mkdir(parents=True)
     now = datetime(2026, 10, 15, tzinfo=UTC)
-    recent = (now - timedelta(days=1)).isoformat().replace("+00:00", "Z")
-    old = (now - timedelta(days=8)).isoformat().replace("+00:00", "Z")
+    cohort = (now - timedelta(days=6)).isoformat().replace("+00:00", "Z")
+    in_window = (now - timedelta(days=2)).isoformat().replace("+00:00", "Z")
+    too_late = (now + timedelta(days=2)).isoformat().replace("+00:00", "Z")
     conn = sqlite3.connect(db_path)
     try:
-        conn.execute(
-            "CREATE TABLE autopilot_cycle_events ("
-            "id INTEGER PRIMARY KEY, cycle_id TEXT, cycle_number INTEGER, "
-            "event_type TEXT, phase_name TEXT, phase_index INTEGER, "
-            "occurred_at TEXT, details_json TEXT)"
-        )
-        conn.executemany(
-            "INSERT INTO autopilot_cycle_events "
-            "(cycle_id, cycle_number, event_type, phase_name, phase_index, "
-            "occurred_at, details_json) VALUES (?, 1, 'phase_end', ?, 1, ?, ?)",
-            [
-                ("cycle-a", "feed_build", recent, json.dumps({"discovery_metrics": {
-                    "generated_candidate_total": 10,
-                    "candidates_by_source": {"connectors": 6, "db": 4},
-                }})),
-                ("cycle-a", "import_targets", recent, json.dumps({"engagement_counts": {
-                    "created": 2, "started": 1,
-                }})),
-                ("cycle-old", "feed_build", old, json.dumps({"discovery_metrics": {
-                    "generated_candidate_total": 100,
-                }})),
-                ("cycle-bad", "feed_build", recent, "not-json"),
-            ],
-        )
+        conn.execute("CREATE TABLE autopilot_cycle_events (id INTEGER PRIMARY KEY, cycle_id TEXT, cycle_number INTEGER, event_type TEXT, phase_name TEXT, phase_index INTEGER, occurred_at TEXT, details_json TEXT)")
+        rows = [("phase_end", "feed_build", cohort, {"status": "ok", "cohort_keys": [{"target_key": key} for key in ("a", "b", "c")]})]
+        rows.extend(("target_completed", None, in_window, {"target_key": key}) for key in ("a", "b"))
+        rows.append(("target_completed", None, too_late, {"target_key": "c"}))
+        conn.executemany("INSERT INTO autopilot_cycle_events (cycle_id, cycle_number, event_type, phase_name, phase_index, occurred_at, details_json) VALUES ('c', 1, ?, ?, 1, ?, ?)", [(e, p, t, json.dumps(d)) for e, p, t, d in rows])
         conn.commit()
     finally:
         conn.close()
-
     result = conversion_7d_for_data_dir(tmp_path, now=now.isoformat())
-    assert result["available"] is True
-    assert result["candidates"] == 10
-    assert result["created"] == 2
-    assert result["started"] == 1
-    assert result["conversion_created"] == 0.2
-    assert result["conversion_started"] == 0.1
-    assert result["candidates_by_source"] == {"connectors": 6, "db": 4}
+    assert result["cohort_keys"] == 3
+    assert result["completed_keys"] == 2
+    assert result["conversion_7d"] == 2 / 3
 
 
 def test_conversion_7d_for_data_dir_without_database_is_unavailable(tmp_path: Path) -> None:
@@ -398,7 +382,17 @@ def test_conversion_7d_for_data_dir_without_database_is_unavailable(tmp_path: Pa
     assert result["candidates"] == result["created"] == result["started"] == 0
 
 
+def test_feed_precision_is_unknown_until_reviewed_and_uses_reviewed_sample(tmp_path: Path) -> None:
+    assert feed_precision_for_data_dir(tmp_path)["precision"] is None
+    record_feed_review(tmp_path, target_key="hash-a", source_family="cloud", target_type="domain", confirmed_owned=True, in_scope=True)
+    record_feed_review(tmp_path, target_key="hash-b", source_family="cloud", target_type="domain", confirmed_owned=False, in_scope=False)
+    result = feed_precision_for_data_dir(tmp_path)
+    assert result["precision"] == 0.5
+    assert result["by_source_family_target_type"]["cloud:domain"]["reviewed"] == 2
+
+
 def test_scoreboard_for_data_dir_aggregates_recent_telemetry(tmp_path: Path) -> None:
+    from forge.targets_import import external_target_key
     db_path = tmp_path / "engagements" / "1001.db"
     db_path.parent.mkdir(parents=True)
     now = datetime(2026, 10, 15, tzinfo=UTC)
@@ -414,7 +408,7 @@ def test_scoreboard_for_data_dir_aggregates_recent_telemetry(tmp_path: Path) -> 
         rows = []
         for i, target in enumerate(("t1", "t2", "t3"), 1):
             details = {
-                "engagement_id": 1, "target_value": target, "queue_seconds": float(i),
+                "engagement_id": 1, "target_type": "domain", "target_key": external_target_key("domain", target), "queue_seconds": float(i),
                 "active_targets": i, "leased_slots": i * 2,
                 "memory_peak_kb": i * 100, "cpu_user_seconds": float(i) / 2,
                 "cpu_sys_seconds": float(i) / 2,
@@ -422,7 +416,7 @@ def test_scoreboard_for_data_dir_aggregates_recent_telemetry(tmp_path: Path) -> 
             rows.append(("target_engaged", None, recent.isoformat(), json.dumps(details)))
         for target, seconds in (("t1", 10), ("t2", 20)):
             rows.append(("target_completed", None, (recent + timedelta(seconds=seconds)).isoformat(),
-                         json.dumps({"engagement_id": 1, "target_value": target})))
+                         json.dumps({"engagement_id": 1, "target_type": "domain", "target_key": external_target_key("domain", target)})))
         rows.append(("phase_end", "import_targets", recent.isoformat(), json.dumps(
             {"scheduler": {"active_targets_count": 5, "leased_slots": 8}}
         )))
@@ -651,13 +645,13 @@ def test_loop_threads_target_progress_callbacks_to_existing_phases(
 
     def fake_import_targets(**kwargs: Any) -> list[object]:
         callback = kwargs["progress_callback"]
-        callback("target_engaged", {"engagement_id": 1001})
-        callback("target_completed", {"engagement_id": 1001})
+        callback("target_engaged", {"engagement_id": 1001, "target_type": "domain", "target_value": "private.example.test"})
+        callback("target_completed", {"engagement_id": 1001, "target_type": "domain", "target_value": "private.example.test"})
         return []
 
     def fake_resume(**kwargs: Any) -> dict[str, Any]:
         callback = kwargs["progress_callback"]
-        callback("target_engaged", {"engagement_id": 1001})
+        callback("target_engaged", {"engagement_id": 1001, "target_type": "domain", "target_value": "private.example.test"})
         callback("target_failed", {"engagement_id": 1001})
         return {"status": "completed", "planned_count": 1, "skipped_count": 0}
 
@@ -671,17 +665,22 @@ def test_loop_threads_target_progress_callbacks_to_existing_phases(
     conn = sqlite3.connect(db_path)
     try:
         target_events = conn.execute(
-            "SELECT event_type, phase_name, phase_index FROM autopilot_cycle_events "
+            "SELECT event_type, phase_name, phase_index, details_json FROM autopilot_cycle_events "
             "WHERE event_type LIKE 'target_%' ORDER BY id"
         ).fetchall()
     finally:
         conn.close()
-    assert target_events == [
+    assert [row[:3] for row in target_events] == [
         ("target_engaged", "import_targets", 5),
         ("target_completed", "import_targets", 5),
         ("target_engaged", "resume_candidates", 6),
         ("target_failed", "resume_candidates", 6),
     ]
+    from forge.targets_import import external_target_key
+    expected_hash = external_target_key("domain", "private.example.test")
+    assert any(expected_hash in row[3] for row in target_events)
+    for _event, _phase, _index, details_json in target_events:
+        assert "private.example.test" not in details_json
 
 
 def test_timed_out_target_is_resumed_in_a_later_cycle(

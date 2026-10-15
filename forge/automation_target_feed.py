@@ -12,6 +12,7 @@ existing feed entries.
 from __future__ import annotations
 
 import gzip
+import hashlib
 import ipaddress
 import json
 import os
@@ -2671,6 +2672,14 @@ def build_target_feed(
         "sources": selected_sources,
         "generated_at": generated_at,
         "counts": counts,
+        "new_target_keys": [
+            hashlib.sha256(
+                f"{item.get('target_type') or 'other'}:{item.get('canonical_value') or ''}".encode("utf-8")
+            ).hexdigest()
+            for item in items
+            if str(item.get("target_key") or "") in candidate_keys
+            and str(item.get("target_key") or "") not in existing_keys
+        ],
         "source_errors": source_errors,
         "source_scan_limits": source_scan_limits,
         "supabase_table_discovery": supabase_table_discovery,

@@ -254,6 +254,7 @@ def import_targets(
     consecutive_start_failures = 0
     successful_starts = 0
     for item_index, item in enumerate(items):
+        queue_start = time.monotonic()  # target enters the start queue here
         if dry_run:
             results.append(
                 TargetImportResult(
@@ -323,7 +324,6 @@ def import_targets(
                 )
                 requested_slots = fanout_decision.effective
 
-                queue_start = time.monotonic()
                 lease_result = acquire_lease(
                     target_key=item.target_key,
                     target_value=item.canonical_value,
@@ -334,7 +334,7 @@ def import_targets(
                     data_dir=cfg.data_dir,
                     config=cfg,
                 )
-                # acquire_lease is fail-fast, so queue_seconds measures contention inside the call.
+                # Includes time spent in the import queue before lease acquisition.
                 queue_seconds = time.monotonic() - queue_start
 
                 if not lease_result.acquired:
@@ -357,7 +357,7 @@ def import_targets(
                     progress_details = {
                         "engagement_id": engagement_id,
                         "target_type": item.target_type,
-                        "target_value": item.canonical_value,
+                        "target_key": external_target_key(item.target_type, item.canonical_value),
                         "queue_seconds": round(queue_seconds, 6),
                         "requested_slots": requested_slots,
                         "effective_slots": effective_fanout,

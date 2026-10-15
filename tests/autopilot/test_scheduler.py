@@ -22,6 +22,7 @@ import os
 import sqlite3
 import subprocess
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -808,6 +809,13 @@ def test_import_targets_engaged_progress_includes_scheduler_telemetry(
     feed.write_text(json.dumps(feed_data), encoding="utf-8")
     events: list[tuple[str, dict[str, object]]] = []
     monkeypatch.setattr("forge.targets_import._start_kill_chain", lambda **_kwargs: None)
+    from forge.targets_import import _create_or_reuse_engagement as create_or_reuse
+
+    def delayed_queued_target(*args: object, **kwargs: object):
+        time.sleep(0.05)
+        return create_or_reuse(*args, **kwargs)
+
+    monkeypatch.setattr("forge.targets_import._create_or_reuse_engagement", delayed_queued_target)
 
     import_targets(
         feed_url=None,
@@ -824,7 +832,7 @@ def test_import_targets_engaged_progress_includes_scheduler_telemetry(
         sleep_fn=lambda _seconds: None,
     )
     details = next(details for event, details in events if event == "target_engaged")
-    assert isinstance(details["queue_seconds"], float) and details["queue_seconds"] >= 0
+    assert isinstance(details["queue_seconds"], float) and details["queue_seconds"] >= 0.05
     for key in ("requested_slots", "effective_slots", "active_targets", "leased_slots", "total_slots"):
         assert isinstance(details[key], int)
     assert isinstance(details["memory_peak_kb"], int) and details["memory_peak_kb"] >= 0
@@ -902,7 +910,8 @@ def test_resume_item_progress_carries_scheduler_telemetry(
     )
 
     engaged = next(details for event, details in captured if event == "target_engaged")
-    assert engaged["target_value"] == "resume-target.example.com"
+    from forge.targets_import import external_target_key
+    assert engaged["target_key"] == external_target_key("domain", "resume-target.example.com")
     assert engaged["target_type"] == "domain"
     assert isinstance(engaged["queue_seconds"], float) and engaged["queue_seconds"] >= 0
     assert engaged["requested_slots"] == 2

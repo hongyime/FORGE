@@ -32,6 +32,7 @@ from forge.engagement_ids import numeric_engagement_db_files
 from forge.governance.scope_gate import is_roe_wildcard
 from forge.orchestration.run_tracking import mark_timed_out_kill_chain_run_failed
 from forge.subprocess_tree import run_contained_subprocess
+from forge.targets_import import external_target_key as _external_target_key
 from forge.utils.kill_chain_options import (
     DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
     DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
@@ -792,6 +793,7 @@ def _execute_resume_item(
         or ledger_path.parents[2]
     )
 
+    queue_start = time.monotonic()  # first point this resume target is considered
     # 1. Kill Switch Check
     if is_kill_switch_active(data_dir=target_data_dir):
         checked["status"] = "skipped"
@@ -809,7 +811,6 @@ def _execute_resume_item(
     engagement_id = _safe_int(checked.get("engagement_id"))
     requested_slots = _safe_int(checked.get("parallel_fanout") or 1)
 
-    queue_start = time.monotonic()
     lease_result = acquire_lease(
         target_key=target_key,
         target_value=target_value,
@@ -820,7 +821,7 @@ def _execute_resume_item(
         data_dir=target_data_dir,
         config=config,
     )
-    # acquire_lease is fail-fast, so queue_seconds measures contention inside the call.
+    # Includes time from entering the resume queue through lease acquisition.
     queue_seconds = time.monotonic() - queue_start
 
     if not lease_result.acquired:
@@ -841,7 +842,7 @@ def _execute_resume_item(
     progress_details = {
         "engagement_id": checked.get("engagement_id"),
         "run_id": checked.get("run_id"),
-        "target_value": checked.get("seed_value"),
+        "target_key": _external_target_key(target_type, target_value),
         "target_type": target_type,
         "queue_seconds": round(queue_seconds, 6),
         "requested_slots": requested_slots,

@@ -36,6 +36,7 @@ from forge.autopilot.defaults import AUTOPILOT_MAX_TIMEOUT_RETRIES, AutopilotDef
 from forge.autopilot.events import (
     AutopilotEventWriter,
     conversion_7d_for_data_dir,
+    feed_precision_for_data_dir,
     scoreboard_for_data_dir,
 )
 from forge.autopilot.scheduler import (
@@ -367,6 +368,7 @@ class ForgeAutopilot:
                     "dry_run": is_dry_run,
                     "path": path,
                     "conversion_7d": conversion_7d,
+                    "feed_precision": feed_precision_for_data_dir(self.data_dir),
                     "scoreboard": scoreboard,
                     "worker_memory_p95": worker_memory_p95,
                 },
@@ -672,6 +674,7 @@ class ForgeAutopilot:
                 },
                 "source_error_counts": source_error_counts,
             }
+            details["cohort_keys"] = phase.data.get("cohort_keys", [])
         if phase.name == "import_targets":
             def count_value(value: Any) -> int:
                 try:
@@ -1264,6 +1267,7 @@ class ForgeAutopilot:
 
     def _phase_feed_build(self, *, dry_run: bool) -> AutopilotPhaseResult:
         """Build and (when applying) write the local target feed."""
+        from forge.targets_import import external_target_key
         fixture = self._single_phase_fixture if self._single_phase_active else None
         if fixture is not None:
             items = fixture.get("items", [])
@@ -1357,6 +1361,22 @@ class ForgeAutopilot:
                 "counts": counts,
                 "source_errors": payload.get("source_errors", []),
                 "source_scan_limits": payload.get("source_scan_limits", {}),
+                "cohort_keys": [
+                    {
+                        "target_key": external_target_key(
+                            str(item.get("target_type") or "other"),
+                            str(item.get("canonical_value") or item.get("target_value") or ""),
+                        ),
+                        "source_family": str(item.get("source_kind") or "unknown"),
+                        "target_type": str(item.get("target_type") or "other"),
+                    }
+                    for item in (payload.get("items", []) if isinstance(payload.get("items"), list) else [])
+                    if isinstance(item, dict)
+                    and external_target_key(
+                        str(item.get("target_type") or "other"),
+                        str(item.get("canonical_value") or item.get("target_value") or ""),
+                    ) in set(payload.get("new_target_keys", []))
+                ],
             },
         )
 
@@ -1895,6 +1915,14 @@ class ForgeAutopilot:
         """Bind per-target execution callbacks to the active cycle event stream."""
 
         def record(event_type: str, details: dict[str, Any]) -> None:
+            from forge.targets_import import external_target_key
+
+            details = dict(details)
+            raw_target = details.pop("target_value", None)
+            if raw_target is not None:
+                details["target_key"] = external_target_key(
+                    str(details.get("target_type") or "other"), str(raw_target)
+                )
             self._event_writer.emit(
                 event_type,
                 phase_name=phase_name,
