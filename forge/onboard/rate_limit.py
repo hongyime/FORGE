@@ -98,7 +98,10 @@ def request_with_rate_limit_backoff(
             )
 
             prov = canonical_provider(context or "")
-            record_rate_limit(prov, data_dir=data_dir, phase="discovery", retry_after_seconds=delay)
+            # Count one breaker event per request sequence, while retaining
+            # the first rate-limit response's telemetry even if retries recover.
+            if retry_count == 0:
+                record_rate_limit(prov, data_dir=data_dir, phase="discovery", retry_after_seconds=delay)
             if delay > 0:
                 set_retry_after(prov, delay, data_dir=data_dir, phase="discovery")
         except Exception:
