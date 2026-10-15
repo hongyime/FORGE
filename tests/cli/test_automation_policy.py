@@ -250,7 +250,7 @@ def test_automation_limits_review_exposes_effective_limits(tmp_path) -> None:
         "--env-file",
         "docker/low-memory.env.example",
         "-f",
-        "docker/docker-compose.yml",
+        "docker/docker-compose.prod.yml",
         "--profile",
         "autostart",
         "config",

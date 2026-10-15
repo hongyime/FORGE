@@ -155,7 +155,7 @@ check_env_contract() {
 }
 
 compose_file() {
-    printf '%s/docker/docker-compose.yml' "$repo_root"
+    printf '%s/docker/docker-compose.prod.yml' "$repo_root"
 }
 
 helm_chart_dir() {

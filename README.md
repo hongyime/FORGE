@@ -639,13 +639,13 @@ bounded defaults on small machines.
 Docker-started autopilot is available as an opt-in Compose profile:
 
 ```bash
-docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.yml --profile autostart up -d
+docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.prod.yml --profile autostart up -d
 ```
 
 Small hosts can review the bounded low-memory profile before starting it with:
 
 ```bash
-docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.yml --profile autostart config
+docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.prod.yml --profile autostart config
 ```
 
 `docker/low-memory.env.example` caps API, web UI, worker, Postgres, Redis, and
@@ -1088,8 +1088,8 @@ platform DB URLs, and Redis when distributed mode is enabled. It reads exported
 environment variable names only, does not load `.env`, and never prints secret
 values.
 Production Docker Compose is the self-host baseline. Export the required
-secret/env values, run `docker compose -f docker/docker-compose.yml config` to
-validate interpolation, then start with `docker compose -f docker/docker-compose.yml up -d`.
+secret/env values, run `docker compose -f docker/docker-compose.prod.yml config` to
+validate interpolation, then start with `docker compose -f docker/docker-compose.prod.yml up -d`.
 The stack builds the repo-root `docker/Dockerfile` runtime target, runs API,
 web UI, and worker containers as the non-root image user, uses Postgres and
 Redis, binds app ports to loopback for reverse-proxy/TLS exposure, and stores
@@ -1121,7 +1121,7 @@ unbounded in-process retry loop.
 
 For Linux hosts, `docker/systemd/forge-compose.service` wraps the same compose
 file with a preflight `config --quiet` check and an `/etc/forge/forge.env`
-environment file. Install it only after `/opt/forge/docker/docker-compose.yml`
+environment file. Install it only after `/opt/forge/docker/docker-compose.prod.yml`
 and `/etc/forge/forge.env` reflect the same production values that `forge
 doctor` expects. Reverse-proxy examples live in `docker/reverse-proxy/`: the
 Caddyfile uses `FORGE_PUBLIC_HOST`, `FORGE_API_PORT`, `FORGE_WEB_PORT`, and
@@ -1425,7 +1425,7 @@ the root CLI entry point focused on command handlers while preserving
 | `FORGE_TPH_TARGET_IMPORT_API_URL` | Target feed URL for the theprawnhunter bridge; default `http://127.0.0.1:8011/monitor/targets/export` |
 | `FORGE_TPH_ENV_PATH` / `FORGE_TPH_COMPOSE_PATH` | Paths doctor checks for theprawnhunter monitor key source and Docker Compose app; values are not read for secrets |
 | `FORGE_TPH_TARGET_IMPORT_TASK_NAME` | Windows scheduled-task name for the TPH target import bridge |
-| `FORGE_POSTGRES_PASSWORD` | Required by `docker/docker-compose.yml`; used for the production Postgres state/audit database |
+| `FORGE_POSTGRES_PASSWORD` | Required by `docker/docker-compose.prod.yml`; used for the production Postgres state/audit database |
 | `FORGE_WEB_ENABLED` | `1` enables the web UI/API service; keep local-only unless production hardening is green |
 | `FORGE_WEB_HOST` / `FORGE_WEB_PORT` | Web service bind address and port; default local bind is `127.0.0.1:8080` |
 | `FORGE_WEB_AUTH` | Supported authenticated web mode is `jwt`; `none` is reported as unsafe by doctor |

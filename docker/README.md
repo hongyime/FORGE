@@ -11,7 +11,7 @@ Two Compose stacks: `forge-dev` for local development and testing, `forge-prod` 
 | Dev | `docker/docker-compose.dev.yml` | `.env.dev` | `forge-dev` | 5 (Python only) | +2 with `--profile rust-shadow` |
 | Prod | `docker/docker-compose.prod.yml` | `.env.prod` | `forge-prod` | 5 core | +2 with `--profile rust-shadow`; +1 with `--profile autostart` |
 
-The old `docker/docker-compose.yml` remains as a reference but is superseded by these two files.
+The previous production stack is preserved in `docker/docker-compose.legacy.yml`; use the dev or prod stack above for new deployments.
 
 ---
 
@@ -128,9 +128,9 @@ FORGE_POSTGRES_MEM_LIMIT=512m
 
 ---
 
-## What's different from the old `docker-compose.yml`
+## What's different from the previous production stack
 
-| Aspect | Old `docker-compose.yml` | New dev stack | New prod stack |
+| Aspect | Previous production stack | New dev stack | New prod stack |
 |--------|--------------------------|---------------|----------------|
 | Project name | `forge` | `forge-dev` | `forge-prod` |
 | `FORGE_ENV` | `production` | `development` | `production` |
@@ -160,7 +160,7 @@ FORGE_POSTGRES_MEM_LIMIT=512m
 
 ---
 
-## Migration from `docker-compose.yml` + `low-memory.env.example`
+## Migration from the previous production stack + `low-memory.env.example`
 
 ### Step 1 — Create your dev env file
 
@@ -185,7 +185,7 @@ Expected output from `--services` (default, no profile): `forge-api`, `forge-web
 
 ```powershell
 # If the old stack was running, stop it first
-docker compose -f docker/docker-compose.yml down
+docker compose -f docker/docker-compose.prod.yml down
 
 # Or remove all stopped containers
 docker container prune -f

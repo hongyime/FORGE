@@ -69,9 +69,9 @@ def test_runtime_dockerfile_matches_project_packaging() -> None:
 
 
 def test_production_compose_uses_repo_root_runtime_build_and_hardened_services() -> None:
-    compose = _read("docker/docker-compose.yml")
+    compose = _read("docker/docker-compose.prod.yml")
 
-    assert "name: forge" in compose
+    assert "name: forge-prod" in compose
     assert "container_name:" not in compose
     assert "context: .." in compose
     assert "dockerfile: docker/Dockerfile" in compose
@@ -79,21 +79,20 @@ def test_production_compose_uses_repo_root_runtime_build_and_hardened_services()
     assert "forge-api:" in compose
     assert "forge-webui:" in compose
     assert "forge-worker:" in compose
-    assert "forge-guarded-autostart:" in compose
     assert "postgres:" in compose
     assert "redis:" in compose
     assert "read_only: true" in compose
     assert 'user: "10001:10001"' in compose
-    assert 'cpus: "${FORGE_CONTAINER_CPUS:-0.75}"' in compose
-    assert 'mem_limit: "${FORGE_CONTAINER_MEM_LIMIT:-768m}"' in compose
-    assert 'cpus: "${FORGE_POSTGRES_CPUS:-0.50}"' in compose
-    assert 'mem_limit: "${FORGE_POSTGRES_MEM_LIMIT:-512m}"' in compose
-    assert 'cpus: "${FORGE_REDIS_CPUS:-0.25}"' in compose
+    assert 'cpus: "${FORGE_CONTAINER_CPUS:-0.50}"' in compose
+    assert 'mem_limit: "${FORGE_CONTAINER_MEM_LIMIT:-512m}"' in compose
+    assert 'cpus: "${FORGE_POSTGRES_CPUS:-0.25}"' in compose
+    assert 'mem_limit: "${FORGE_POSTGRES_MEM_LIMIT:-256m}"' in compose
+    assert 'cpus: "${FORGE_REDIS_CPUS:-0.15}"' in compose
     assert 'mem_limit: "${FORGE_REDIS_MEM_LIMIT:-128m}"' in compose
     assert "cap_drop:" in compose
     assert "no-new-privileges:true" in compose
-    assert "127.0.0.1:${FORGE_WEB_PORT:-8080}:8080" in compose
-    assert "127.0.0.1:${FORGE_API_PORT:-8000}:8000" in compose
+    assert "${FORGE_BIND_HOST:-127.0.0.1}:${FORGE_WEB_PORT:-8080}:8080" in compose
+    assert "${FORGE_BIND_HOST:-127.0.0.1}:${FORGE_API_PORT:-8000}:8000" in compose
     assert "http://localhost:8000/health'', timeout=15" in compose
     assert "http://localhost:8080/health'', timeout=15" in compose
     assert "timeout: 20s" in compose
@@ -101,8 +100,10 @@ def test_production_compose_uses_repo_root_runtime_build_and_hardened_services()
 
 
 def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
-    compose = _read("docker/docker-compose.yml")
+    compose = _read("docker/docker-compose.prod.yml")
 
+    # The production profile was removed; keep these assertions as a visible
+    # failure until the guarded-autostart feature is restored in a separate task.
     assert "forge-guarded-autostart:" in compose
     assert 'profiles: ["autostart"]' in compose
     assert "restart: unless-stopped" in compose
@@ -162,7 +163,7 @@ def test_low_memory_env_profile_keeps_autostart_stack_bounded() -> None:
 
 
 def test_production_compose_matches_doctor_hardening_contract() -> None:
-    compose = _read("docker/docker-compose.yml")
+    compose = _read("docker/docker-compose.prod.yml")
 
     assert "sqlite:" not in compose
     assert "forge_dev_only" not in compose
@@ -237,9 +238,9 @@ def test_systemd_unit_wraps_existing_hardened_compose_stack() -> None:
     assert "Requires=docker.service" in unit
     assert "WorkingDirectory=/opt/forge" in unit
     assert "EnvironmentFile=/etc/forge/forge.env" in unit
-    assert "docker compose -f /opt/forge/docker/docker-compose.yml config --quiet" in unit
-    assert "docker compose -f /opt/forge/docker/docker-compose.yml up -d --remove-orphans" in unit
-    assert "docker compose -f /opt/forge/docker/docker-compose.yml down" in unit
+    assert "docker compose -f /opt/forge/docker/docker-compose.prod.yml config --quiet" in unit
+    assert "docker compose -f /opt/forge/docker/docker-compose.prod.yml up -d --remove-orphans" in unit
+    assert "docker compose -f /opt/forge/docker/docker-compose.prod.yml down" in unit
     assert "COMPOSE_PROFILES=autostart" in unit
 
 
@@ -248,7 +249,7 @@ def test_readme_autostart_sample_matches_1024_mb_memory_gate() -> None:
 
     assert '"min_free_memory_mb": 1024' in readme
     assert '"min_free_memory_mb": 2048' not in readme
-    assert "docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.yml --profile autostart up -d" in readme
+    assert "docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.prod.yml --profile autostart up -d" in readme
     assert "FORGE_AUTOSTART_MEM_LIMIT=1536m" in readme
 
 

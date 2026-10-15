@@ -475,7 +475,7 @@ def automation_limits_review(
                 "--env-file",
                 DOCKER_LOW_MEMORY_ENV_PATH,
                 "-f",
-                "docker/docker-compose.yml",
+                "docker/docker-compose.prod.yml",
                 "--profile",
                 "autostart",
                 "config",

@@ -52,7 +52,7 @@ Attack Surface Management (ASM) engagement pipeline.
 git clone <repo> forge
 cd forge
 cp docker/low-memory.env.example .env   # edit FORGE_WEB_SECRET_KEY etc.
-docker compose -f docker/docker-compose.yml up -d
+docker compose -f docker/docker-compose.prod.yml up -d
 # API: http://localhost:8000   Web UI: http://localhost:8080
 forge doctor
 ```

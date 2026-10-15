@@ -242,7 +242,6 @@ services:
   # --------------------------------------------------------------------------
   forge-rust-api:
     image: forge-toolkit-rust:local
-    container_name: forge-prod-forge-rust-api-1
     profiles: [rust-shadow]
     restart: on-failure:3
     mem_limit: "${FORGE_RUST_API_MEM:-256m}"
@@ -285,7 +284,6 @@ services:
   # --------------------------------------------------------------------------
   forge-rust-webui:
     image: forge-toolkit-rust:local
-    container_name: forge-prod-forge-rust-webui-1
     profiles: [rust-shadow]
     restart: on-failure:3
     mem_limit: "${FORGE_RUST_WEBUI_MEM:-256m}"

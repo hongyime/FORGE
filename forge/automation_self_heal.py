@@ -232,7 +232,7 @@ def automation_self_heal_plan(
             "docker",
             "compose",
             "-f",
-            str(root / "docker" / "docker-compose.yml"),
+            str(root / "docker" / "docker-compose.prod.yml"),
             "--profile",
             "autostart",
             "up",

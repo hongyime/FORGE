@@ -178,13 +178,13 @@ state/health and block unhealthy startup.
 Docker startup can invoke the same guard by opting into the autostart profile:
 
 ```bash
-docker compose -f docker/docker-compose.yml --profile autostart up -d
+docker compose -f docker/docker-compose.prod.yml --profile autostart up -d
 ```
 
 For hosts that need the 1024 MB profile, review the generated config with:
 
 ```bash
-docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.yml --profile autostart config
+docker compose --env-file docker/low-memory.env.example -f docker/docker-compose.prod.yml --profile autostart config
 ```
 
 That example caps API, web UI, worker, Postgres, Redis, and guarded autostart at
