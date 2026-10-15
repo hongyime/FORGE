@@ -1,0 +1,41 @@
+{{- if .Values.ingress.enabled -}}
+{{- range $host := .Values.ingress.hosts }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "forge.fullname" $ }}
+  labels:
+    {{- include "forge.labels" $ | nindent 4 }}
+  {{- with $.Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $.Values.ingress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  {{- with $.Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ $host.host | quote }}
+      http:
+        paths:
+          - path: {{ $host.apiPath }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "forge.fullname" $ }}-api
+                port:
+                  number: {{ $.Values.service.apiPort }}
+          - path: {{ $host.webPath }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "forge.fullname" $ }}-webui
+                port:
+                  number: {{ $.Values.service.webPort }}
+---
+{{- end }}
+{{- end }}

@@ -1,0 +1,114 @@
+{{- $root := . -}}
+{{- range $component := list "api" "webui" "worker" }}
+{{- $port := ternary $root.Values.service.apiPort $root.Values.service.webPort (eq $component "api") -}}
+# Component labels rendered for api, webui, and worker deployments:
+# app.kubernetes.io/component: api
+# app.kubernetes.io/component: webui
+# app.kubernetes.io/component: worker
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "forge.fullname" $root }}-{{ $component }}
+  labels:
+    {{- include "forge.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ $port }}
+      targetPort: {{ $port }}
+      protocol: TCP
+  selector:
+    {{- include "forge.selectorLabels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "forge.fullname" $root }}-{{ $component }}
+  labels:
+    {{- include "forge.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  replicas: {{ index $root.Values.replicaCount $component }}
+  selector:
+    matchLabels:
+      {{- include "forge.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: {{ $component }}
+  template:
+    metadata:
+      labels:
+        {{- include "forge.selectorLabels" $root | nindent 8 }}
+        app.kubernetes.io/component: {{ $component }}
+    spec:
+      securityContext:
+        {{- include "forge.podSecurityContext" $root | nindent 8 }}
+      containers:
+        - name: forge-{{ $component }}
+          image: "{{ $root.Values.image.repository }}:{{ $root.Values.image.tag }}"
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          {{- if eq $component "api" }}
+          command: ["uvicorn", "forge.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+          {{- else if eq $component "webui" }}
+          command: ["uvicorn", "forge.webui.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]
+          {{- else }}
+          command: ["python", "-m", "forge.core.runner"]
+          {{- end }}
+          env:
+            {{- include "forge.productionEnv" $root | nindent 12 }}
+          securityContext:
+            {{- include "forge.containerSecurityContext" $root | nindent 12 }}
+          {{- if ne $component "worker" }}
+          ports:
+            - name: http
+              containerPort: {{ $port }}
+              protocol: TCP
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: remote-audit
+              mountPath: /remote-audit
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "forge.fullname" . }}-data
+        - name: remote-audit
+          persistentVolumeClaim:
+            claimName: {{ include "forge.fullname" . }}-remote-audit
+        - name: tmp
+          emptyDir: {}
+---
+{{- end }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "forge.fullname" . }}-data
+  labels:
+    {{- include "forge.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.storage.data.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.data.size }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "forge.fullname" . }}-remote-audit
+  labels:
+    {{- include "forge.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.storage.remoteAudit.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.remoteAudit.size }}

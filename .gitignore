@@ -94,6 +94,8 @@ vendor/tor/
 Thumbs.db
 
 templates/
+!docker/helm/forge/templates/
+!docker/helm/forge/templates/**
 .env.*
 .next/
 
