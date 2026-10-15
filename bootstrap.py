@@ -715,7 +715,9 @@ def install_trufflehog_release(root: Path, vpy: Path, timeout_seconds: int) -> N
         return
     target_dir = Path(connector_binary_search_paths()[0])
     target_dir.mkdir(parents=True, exist_ok=True)
-    target_exe = target_dir / ("trufflehog.exe" if os.name == "nt" else "trufflehog")
+    target_exe = target_dir / (
+        "trufflehog.exe" if platform.system() == "Windows" else "trufflehog"
+    )
     print(f"[FORGE Setup] Installing TruffleHog {TRUFFLEHOG_VERSION} binary...")
     try:
         archive_bytes = _download_url_bytes(url, timeout_seconds=timeout_seconds)
