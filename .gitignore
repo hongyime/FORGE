@@ -142,3 +142,6 @@ docs/
 
 # Local nuclei private-key payloads are required on disk but must not be committed.
 nuclei-templates/helpers/payloads/cve-2023-34039-keys/
+
+# CVE-2024-47575 key payload (public test key, not a real secret)
+nuclei-templates/helpers/payloads/cve-2024-47575-keys/w00t_key.bin
