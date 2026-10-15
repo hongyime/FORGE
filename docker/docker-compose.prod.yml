@@ -16,7 +16,7 @@
 #   # Bring up core services:
 #   docker compose --env-file .env.prod -f docker/docker-compose.prod.yml up -d
 #
-# (guarded autostart profile removed)
+# Optional guarded autostart profile: add --profile autostart to enable.
 #
 # See docker/README.md for full usage guide and migration notes.
 
@@ -233,6 +233,58 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # forge-guarded-autostart — opt-in guarded automation cycle
+  # --------------------------------------------------------------------------
+  forge-guarded-autostart:
+    <<: *forge-service
+    profiles: ["autostart"]
+    restart: unless-stopped
+    cpus: "${FORGE_AUTOSTART_CPUS:-0.25}"
+    mem_limit: "${FORGE_AUTOSTART_MEM_LIMIT:-1536m}"
+    env_file:
+      - ../.env
+    environment:
+      <<: *forge-env
+      FORGE_ROE_ID: "${FORGE_ROE_ID:-}"
+      FORGE_AUTOSTART_STARTUP_DELAY_SECONDS: "${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
+      FORGE_AUTOSTART_TIMEOUT_SECONDS: "${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}"
+      FORGE_AUTOSTART_EVERY_SECONDS: "${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
+      FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS: "${FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS:-1800}"
+      FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES: "${FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES:-3}"
+      FORGE_AUTOSTART_MIN_FREE_MEMORY_MB: "${FORGE_AUTOSTART_MIN_FREE_MEMORY_MB:-1024}"
+    volumes:
+      - ../imports:/app/imports:rw
+      - ../reports:/app/reports:rw
+      - ${FORGE_HOST_CONNECTOR_BIN_DIR:-../tools/bin}:/app/tools/bin:ro
+    command:
+      - /bin/sh
+      - -c
+      - |
+        failures=0
+        sleep "$${FORGE_AUTOSTART_STARTUP_DELAY_SECONDS:-300}"
+        while true; do
+          timeout --preserve-status "$${FORGE_AUTOSTART_TIMEOUT_SECONDS:-9000}" python -m forge.cli automation cycle --autostart-config /app/imports/autostart.local.json --apply --live --json --docker-probe-mode compose-dependency
+          rc=$$?
+          if [ "$$rc" -eq 0 ]; then
+            failures=0
+            sleep "$${FORGE_AUTOSTART_EVERY_SECONDS:-9300}"
+          else
+            failures=$$((failures + 1))
+            if [ "$$failures" -ge "$${FORGE_AUTOSTART_MAX_CONSECUTIVE_FAILURES:-3}" ]; then
+              exit "$$rc"
+            fi
+            sleep "$${FORGE_AUTOSTART_FAILURE_BACKOFF_SECONDS:-1800}"
+          fi
+        done
+    depends_on:
+      forge-api:
+        condition: service_started
+      forge-webui:
+        condition: service_started
+      forge-worker:
+        condition: service_started
 
 
   # --------------------------------------------------------------------------

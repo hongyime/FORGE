@@ -102,8 +102,6 @@ def test_production_compose_uses_repo_root_runtime_build_and_hardened_services()
 def test_production_compose_has_opt_in_guarded_autostart_profile() -> None:
     compose = _read("docker/docker-compose.prod.yml")
 
-    # The production profile was removed; keep these assertions as a visible
-    # failure until the guarded-autostart feature is restored in a separate task.
     assert "forge-guarded-autostart:" in compose
     assert 'profiles: ["autostart"]' in compose
     assert "restart: unless-stopped" in compose
