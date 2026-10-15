@@ -1495,6 +1495,21 @@ def test_resume_child_uses_contained_subprocess_by_default(
     ]
 
 
+def test_resume_command_fanout_is_clamped_to_granted_lease() -> None:
+    command = resume_candidates._command_with_granted_fanout(
+        ["forge", "kill-chain", "corp-target.io", "--parallel-fanout", "6"],
+        2,
+    )
+    calls: list[list[str]] = []
+
+    def runner(argv: list[str], _timeout: int) -> subprocess.CompletedProcess[str]:
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    _run_resume_child(command, timeout_seconds=10, runner=runner)
+    assert calls[0][-2:] == ["--parallel-fanout", "2"]
+
+
 def test_resume_run_dry_run_does_not_call_runner_or_write_ledger(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     scope_path = tmp_path / "scope.json"

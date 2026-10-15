@@ -836,7 +836,10 @@ def _execute_resume_item(
     except Exception:
         snapshot = None
 
-    command = [str(part) for part in checked["command"]]
+    command = _command_with_granted_fanout(
+        [str(part) for part in checked["command"]],
+        min(requested_slots, max(0, int(lease.slot_count if lease else 0))),
+    )
     timeout_seconds = _child_timeout_seconds(_safe_int(checked.get("max_runtime_minutes")))
     started_at = _utc_now()
     progress_details = {
@@ -1611,6 +1614,23 @@ def _run_resume_child(
         timeout_seconds=timeout_seconds,
         timeout_stderr=f"resume child exceeded timeout_seconds={timeout_seconds}",
     )
+
+
+def _command_with_granted_fanout(command: list[str], granted: int) -> list[str]:
+    """Clamp the child's real worker count to the scheduler lease."""
+    if granted <= 0:
+        raise ValueError("resume child requires a positive scheduler lease")
+    result = list(command)
+    indexes = [i for i, token in enumerate(result) if token == "--parallel-fanout"]
+    if indexes:
+        index = indexes[-1]
+        if index + 1 < len(result):
+            result[index + 1] = str(granted)
+        else:
+            result.append(str(granted))
+    else:
+        result.extend(["--parallel-fanout", str(granted)])
+    return result
 
 
 def _append_ledger_event(path: Path, event: dict[str, Any]) -> None:
