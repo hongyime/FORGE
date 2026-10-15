@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import concurrent.futures
 import ipaddress
 import json
 import logging
@@ -167,6 +168,13 @@ class TargetImportResult:
     unprocessed_count: int = 0
 
 
+@dataclass
+class _TargetImportCounters:
+    starts_remaining: int | None
+    consecutive_start_failures: int = 0
+    successful_starts: int = 0
+
+
 def load_target_feed(
     *,
     feed_url: str | None,
@@ -223,6 +231,7 @@ def import_targets(
     roe_strictness: str | None = None,
     sleep_fn: Callable[[float], None] | None = None,
     mega_domain_signal_provider: Callable[[str], tuple[float | None, int | None]] | None = None,
+    max_active_targets: int = 2,
 ) -> list[TargetImportResult]:
     """Import feed targets and optionally start scoped kill chains.
 
@@ -233,6 +242,7 @@ def import_targets(
     """
     if start and not dry_run and not str(roe_id or "").strip():
         raise ValueError("--start requires --roe-id so live execution is authorized")
+    max_active_targets = max(1, int(max_active_targets))
     cfg = config or ForgeConfig.load()
     resolved_roe_scope = str(
         os.environ.get("FORGE_ROE_SCOPE", "") if roe_scope is None else roe_scope
@@ -248,278 +258,34 @@ def import_targets(
         mega_domain_signal_provider=mega_domain_signal_provider or mega_domain_signals,
     )
     results: list[TargetImportResult] = []
-    starts_remaining = _normalize_start_limit(start_limit)
+    counters = _TargetImportCounters(
+        starts_remaining=_normalize_start_limit(start_limit)
+    )
     min_start_sources = _normalize_min_start_source_count(min_start_source_count)
     existing_targets = _external_target_engagement_index(cfg)
-    consecutive_start_failures = 0
-    successful_starts = 0
     for item_index, item in enumerate(items):
-        queue_start = time.monotonic()  # target enters the start queue here
-        if dry_run:
-            results.append(
-                TargetImportResult(
-                    engagement_id=None,
-                    target_type=item.target_type,
-                    target_value=item.canonical_value,
-                    target_key=item.target_key,
-                    scope_manifest=None,
-                    created=False,
-                    started=False,
-                    dry_run=True,
-                    source_count=item.source_count,
-                    priority=item.priority,
-                    scan_eligible=item.scan_eligible,
-                    scan_eligibility_reason=item.scan_eligibility_reason,
-                    start_skipped_reason="dry_run",
-                )
-            )
-            continue
-
-        engagement_id, created = _create_or_reuse_engagement(cfg, item, existing_targets)
-        if roe_wildcard:
-            _write_engagement_scope_json(
-                cfg,
-                engagement_id=engagement_id,
-                scope=_scope_json_for_item(item, roe_scope=resolved_roe_scope),
-            )
-        try:
-            _ensure_target_import_monitoring(cfg, engagement_id=engagement_id, item=item)
-        except Exception as exc:  # noqa: BLE001
-            print(
-                "warning: target import monitoring seed skipped "
-                f"engagement={engagement_id} error={_bounded_text(exc, 180)}",
-                file=sys.stderr,
-            )
-        manifest_path = _write_scope_manifest(
-            cfg,
-            engagement_id,
-            item,
-            roe_id,
-            resolved_roe_scope,
+        result = _run_one_import_target(
+            item=item,
+            item_index=item_index,
+            items=items,
+            config=cfg,
+            existing_targets=existing_targets,
+            counters=counters,
+            min_start_sources=min_start_sources,
+            start=start,
+            dry_run=dry_run,
+            roe_id=roe_id,
+            roe_wildcard=roe_wildcard,
+            roe_scope=resolved_roe_scope,
+            roe_strictness=resolved_roe_strictness,
+            max_iter=max_iter,
+            max_runtime_minutes=max_runtime_minutes,
+            parallel_fanout=parallel_fanout,
+            progress_callback=progress_callback,
+            sleep=sleep,
         )
-        started = False
-        start_failed = False
-        start_error_type = ""
-        start_skipped_reason = ""
-        start_stop_reason = ""
-        unprocessed_count = 0
-        if (
-            start
-            and starts_remaining != 0
-            and item.scan_eligible
-            and item.source_count >= min_start_sources
-            and not _has_kill_chain_run(cfg, engagement_id, item.canonical_value)
-        ):
-            if is_kill_switch_active(data_dir=cfg.data_dir):
-                start_skipped_reason = "kill_switch_active"
-                start_stop_reason = "kill_switch_active"
-                unprocessed_count = len(items) - item_index - 1
-            else:
-                fanout_decision = cap_fanout(
-                    parallel_fanout,
-                    seed=item.canonical_value,
-                    target_type=item.target_type,
-                    roe_strictness=resolved_roe_strictness,
-                    requested_by="targets-import",
-                )
-                requested_slots = fanout_decision.effective
-
-                lease_result = acquire_lease(
-                    target_key=item.target_key,
-                    target_value=item.canonical_value,
-                    target_type=item.target_type,
-                    engagement_id=engagement_id,
-                    requested_slots=requested_slots,
-                    kind="start",
-                    data_dir=cfg.data_dir,
-                    config=cfg,
-                )
-                # Includes time spent in the import queue before lease acquisition.
-                queue_seconds = time.monotonic() - queue_start
-
-                if not lease_result.acquired:
-                    start_skipped_reason = lease_result.reason
-                    if lease_result.reason in (
-                        "slots_exhausted",
-                        "max_active_targets_reached",
-                        "kill_switch_active",
-                        "global_circuit_breaker_active",
-                    ):
-                        start_stop_reason = lease_result.reason
-                        unprocessed_count = len(items) - item_index - 1
-                else:
-                    lease = lease_result.lease
-                    effective_fanout = lease.slot_count if lease else requested_slots
-                    try:
-                        snapshot = get_budget_snapshot(data_dir=cfg.data_dir, config=cfg)
-                    except Exception:
-                        snapshot = None
-                    progress_details = {
-                        "engagement_id": engagement_id,
-                        "target_type": item.target_type,
-                        "target_key": external_target_key(item.target_type, item.canonical_value),
-                        "queue_seconds": round(queue_seconds, 6),
-                        "requested_slots": requested_slots,
-                        "effective_slots": effective_fanout,
-                    }
-                    if snapshot is not None:
-                        progress_details.update(
-                            {
-                                "active_targets": snapshot.active_targets_count,
-                                "leased_slots": snapshot.leased_slots,
-                                "total_slots": snapshot.total_slots,
-                            }
-                        )
-                    progress_details.update(sample_process_resources())
-                    try:
-                        first_seen = item.first_seen_at
-                        parsed = datetime.fromisoformat(str(first_seen).replace("Z", "+00:00"))
-                        if parsed.tzinfo is None:
-                            parsed = parsed.replace(tzinfo=timezone.utc)
-                        delay = max(
-                            0.0, (datetime.now(timezone.utc) - parsed).total_seconds()
-                        )
-                        progress_details["scheduling_delay_seconds"] = round(delay, 3)
-                    except Exception:
-                        pass
-                    try:
-                        from forge.autopilot.breaker import (  # noqa: PLC0415
-                            canonical_provider,
-                            is_global_paused,
-                            is_provider_paused,
-                        )
-
-                        provider = canonical_provider(item.canonical_value)
-                        progress_details["provider"] = provider
-                        progress_details["provider_paused"] = bool(
-                            is_provider_paused(provider, data_dir=cfg.data_dir)
-                        )
-                        progress_details["global_paused"] = bool(
-                            is_global_paused(data_dir=cfg.data_dir)
-                        )
-                        progress_details["provider_inflight"] = provider_inflight_count(
-                            provider, data_dir=cfg.data_dir
-                        )
-                    except Exception:
-                        for key in (
-                            "provider",
-                            "provider_paused",
-                            "global_paused",
-                            "provider_inflight",
-                        ):
-                            progress_details.pop(key, None)
-                    _notify_progress(progress_callback, "target_engaged", progress_details)
-                    try:
-                        _start_kill_chain(
-                            engagement_id=engagement_id,
-                            seed=item.canonical_value,
-                            target_type=item.target_type,
-                            roe_id=str(roe_id or "").strip(),
-                            scope_manifest=manifest_path,
-                            max_iter=max_iter,
-                            max_runtime_minutes=max_runtime_minutes,
-                            parallel_fanout=effective_fanout,
-                            engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
-                            roe_strictness=resolved_roe_strictness,
-                            config=cfg,
-                            sleep_fn=sleep,
-                        )
-                    except Exception as exc:
-                        failure_details: dict[str, Any] = {
-                            **progress_details,
-                            "error_type": type(exc).__name__,
-                            "exit_status": "failed",
-                        }
-                        if isinstance(exc, subprocess.CalledProcessError):
-                            failure_details.update(
-                                {
-                                    "return_code": exc.returncode,
-                                    "argv": _sanitize_failure_argv(exc.cmd),
-                                    "stderr_tail": _bounded_failure_stderr(exc.stderr),
-                                }
-                            )
-                            if exc.returncode == 124:
-                                from forge.orchestration.run_tracking import (  # noqa: PLC0415
-                                    mark_timed_out_kill_chain_run_failed,
-                                )
-
-                                mark_timed_out_kill_chain_run_failed(
-                                    cfg.engagement_db_path(str(engagement_id)),
-                                    engagement_id=engagement_id,
-                                    seed_value=item.canonical_value,
-                                )
-                        _notify_progress(
-                            progress_callback,
-                            "target_failed",
-                            failure_details,
-                        )
-                        start_failed = True
-                        start_error_type = type(exc).__name__
-                        consecutive_start_failures += 1
-                        if consecutive_start_failures >= MAX_CONSECUTIVE_START_FAILURES:
-                            start_stop_reason = "consecutive_failure_budget_exhausted"
-                            unprocessed_count = len(items) - item_index - 1
-                    else:
-                        _notify_progress(
-                            progress_callback,
-                            "target_completed",
-                            {**progress_details, "exit_status": "completed"},
-                        )
-                        started = True
-                        consecutive_start_failures = 0
-                        successful_starts += 1
-                        if successful_starts % DEFAULT_BURST_SIZE == 0:
-                            sleep(burst_pause_seconds())
-                        if starts_remaining is not None:
-                            starts_remaining -= 1
-                            if starts_remaining == 0:
-                                start_stop_reason = "start_limit_reached"
-                    finally:
-                        if lease is not None:
-                            release_lease(
-                                lease.lease_id,
-                                reason="failed" if start_failed else "completed",
-                                data_dir=cfg.data_dir,
-                            )
-        elif start and not item.scan_eligible:
-            start_skipped_reason = item.scan_eligibility_reason
-        elif start and item.source_count < min_start_sources:
-            start_skipped_reason = (
-                f"source_count_below_min_start_threshold:"
-                f"{item.source_count}<{min_start_sources}"
-            )
-        elif start and starts_remaining == 0:
-            start_skipped_reason = "start_limit_reached"
-        if (
-            start
-            and not dry_run
-            and not start_stop_reason
-            and starts_remaining != 0
-            and item_index == len(items) - 1
-        ):
-            start_stop_reason = "no_more_candidates"
-        results.append(
-            TargetImportResult(
-                engagement_id=engagement_id,
-                target_type=item.target_type,
-                target_value=item.canonical_value,
-                target_key=item.target_key,
-                scope_manifest=manifest_path,
-                created=created,
-                started=started,
-                dry_run=False,
-                source_count=item.source_count,
-                priority=item.priority,
-                scan_eligible=item.scan_eligible,
-                scan_eligibility_reason=item.scan_eligibility_reason,
-                start_skipped_reason=start_skipped_reason,
-                start_failed=start_failed,
-                start_error_type=start_error_type,
-                start_stop_reason=start_stop_reason,
-                unprocessed_count=unprocessed_count,
-            )
-        )
-        if start_stop_reason in (
+        results.append(result)
+        if result.start_stop_reason in (
             "consecutive_failure_budget_exhausted",
             "slots_exhausted",
             "max_active_targets_reached",
@@ -528,6 +294,219 @@ def import_targets(
         ):
             break
     return results
+
+
+def _run_one_import_target(
+    *,
+    item: TargetFeedItem,
+    item_index: int,
+    items: list[TargetFeedItem],
+    config: ForgeConfig,
+    existing_targets: dict[str, int],
+    counters: _TargetImportCounters,
+    min_start_sources: int,
+    start: bool,
+    dry_run: bool,
+    roe_id: str | None,
+    roe_wildcard: bool,
+    roe_scope: str,
+    roe_strictness: str,
+    max_iter: int,
+    max_runtime_minutes: int,
+    parallel_fanout: int,
+    progress_callback: Callable[[str, dict[str, Any]], None] | None,
+    sleep: Callable[[float], None],
+) -> TargetImportResult:
+    """Process one feed candidate, preserving import_targets' sequential behavior."""
+    cfg = config
+    starts_remaining = counters.starts_remaining
+    queue_start = time.monotonic()  # target enters the start queue here
+    if dry_run:
+        return TargetImportResult(
+            engagement_id=None,
+            target_type=item.target_type,
+            target_value=item.canonical_value,
+            target_key=item.target_key,
+            scope_manifest=None,
+            created=False,
+            started=False,
+            dry_run=True,
+            source_count=item.source_count,
+            priority=item.priority,
+            scan_eligible=item.scan_eligible,
+            scan_eligibility_reason=item.scan_eligibility_reason,
+            start_skipped_reason="dry_run",
+        )
+
+    engagement_id, created = _create_or_reuse_engagement(cfg, item, existing_targets)
+    if roe_wildcard:
+        _write_engagement_scope_json(
+            cfg, engagement_id=engagement_id,
+            scope=_scope_json_for_item(item, roe_scope=roe_scope),
+        )
+    try:
+        _ensure_target_import_monitoring(cfg, engagement_id=engagement_id, item=item)
+    except Exception as exc:  # noqa: BLE001
+        print(
+            "warning: target import monitoring seed skipped "
+            f"engagement={engagement_id} error={_bounded_text(exc, 180)}",
+            file=sys.stderr,
+        )
+    manifest_path = _write_scope_manifest(cfg, engagement_id, item, roe_id, roe_scope)
+    started = False
+    start_failed = False
+    start_error_type = ""
+    start_skipped_reason = ""
+    start_stop_reason = ""
+    unprocessed_count = 0
+    # The remainder of the original per-item path is kept in its original order.
+    if (
+        start
+        and starts_remaining != 0
+        and item.scan_eligible
+        and item.source_count >= min_start_sources
+        and not _has_kill_chain_run(cfg, engagement_id, item.canonical_value)
+    ):
+        if is_kill_switch_active(data_dir=cfg.data_dir):
+            start_skipped_reason = "kill_switch_active"
+            start_stop_reason = "kill_switch_active"
+            unprocessed_count = len(items) - item_index - 1
+        else:
+            fanout_decision = cap_fanout(
+                parallel_fanout, seed=item.canonical_value,
+                target_type=item.target_type, roe_strictness=roe_strictness,
+                requested_by="targets-import",
+            )
+            requested_slots = fanout_decision.effective
+            lease_result = acquire_lease(
+                target_key=item.target_key, target_value=item.canonical_value,
+                target_type=item.target_type, engagement_id=engagement_id,
+                requested_slots=requested_slots, kind="start", data_dir=cfg.data_dir,
+                config=cfg,
+            )
+            queue_seconds = time.monotonic() - queue_start
+            if not lease_result.acquired:
+                start_skipped_reason = lease_result.reason
+                if lease_result.reason in (
+                    "slots_exhausted", "max_active_targets_reached",
+                    "kill_switch_active", "global_circuit_breaker_active",
+                ):
+                    start_stop_reason = lease_result.reason
+                    unprocessed_count = len(items) - item_index - 1
+            else:
+                lease = lease_result.lease
+                effective_fanout = lease.slot_count if lease else requested_slots
+                try:
+                    snapshot = get_budget_snapshot(data_dir=cfg.data_dir, config=cfg)
+                except Exception:
+                    snapshot = None
+                progress_details = {
+                    "engagement_id": engagement_id,
+                    "target_type": item.target_type,
+                    "target_key": external_target_key(item.target_type, item.canonical_value),
+                    "queue_seconds": round(queue_seconds, 6),
+                    "requested_slots": requested_slots,
+                    "effective_slots": effective_fanout,
+                }
+                if snapshot is not None:
+                    progress_details.update({
+                        "active_targets": snapshot.active_targets_count,
+                        "leased_slots": snapshot.leased_slots,
+                        "total_slots": snapshot.total_slots,
+                    })
+                progress_details.update(sample_process_resources())
+                try:
+                    parsed = datetime.fromisoformat(str(item.first_seen_at).replace("Z", "+00:00"))
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=timezone.utc)
+                    delay = max(0.0, (datetime.now(timezone.utc) - parsed).total_seconds())
+                    progress_details["scheduling_delay_seconds"] = round(delay, 3)
+                except Exception:
+                    pass
+                try:
+                    from forge.autopilot.breaker import (
+                        canonical_provider, is_global_paused, is_provider_paused,
+                    )
+                    provider = canonical_provider(item.canonical_value)
+                    progress_details["provider"] = provider
+                    progress_details["provider_paused"] = bool(is_provider_paused(provider, data_dir=cfg.data_dir))
+                    progress_details["global_paused"] = bool(is_global_paused(data_dir=cfg.data_dir))
+                    progress_details["provider_inflight"] = provider_inflight_count(provider, data_dir=cfg.data_dir)
+                except Exception:
+                    for key in ("provider", "provider_paused", "global_paused", "provider_inflight"):
+                        progress_details.pop(key, None)
+                _notify_progress(progress_callback, "target_engaged", progress_details)
+                try:
+                    _start_kill_chain(
+                        engagement_id=engagement_id, seed=item.canonical_value,
+                        target_type=item.target_type, roe_id=str(roe_id or "").strip(),
+                        scope_manifest=manifest_path, max_iter=max_iter,
+                        max_runtime_minutes=max_runtime_minutes,
+                        parallel_fanout=effective_fanout,
+                        engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
+                        roe_strictness=roe_strictness, config=cfg, sleep_fn=sleep,
+                    )
+                except Exception as exc:
+                    failure_details: dict[str, Any] = {
+                        **progress_details, "error_type": type(exc).__name__,
+                        "exit_status": "failed",
+                    }
+                    if isinstance(exc, subprocess.CalledProcessError):
+                        failure_details.update({
+                            "return_code": exc.returncode,
+                            "argv": _sanitize_failure_argv(exc.cmd),
+                            "stderr_tail": _bounded_failure_stderr(exc.stderr),
+                        })
+                        if exc.returncode == 124:
+                            from forge.orchestration.run_tracking import mark_timed_out_kill_chain_run_failed
+                            mark_timed_out_kill_chain_run_failed(
+                                cfg.engagement_db_path(str(engagement_id)),
+                                engagement_id=engagement_id, seed_value=item.canonical_value,
+                            )
+                    _notify_progress(progress_callback, "target_failed", failure_details)
+                    start_failed = True
+                    start_error_type = type(exc).__name__
+                    counters.consecutive_start_failures += 1
+                    if counters.consecutive_start_failures >= MAX_CONSECUTIVE_START_FAILURES:
+                        start_stop_reason = "consecutive_failure_budget_exhausted"
+                        unprocessed_count = len(items) - item_index - 1
+                else:
+                    _notify_progress(progress_callback, "target_completed", {**progress_details, "exit_status": "completed"})
+                    started = True
+                    counters.consecutive_start_failures = 0
+                    counters.successful_starts += 1
+                    if counters.successful_starts % DEFAULT_BURST_SIZE == 0:
+                        sleep(burst_pause_seconds())
+                    if counters.starts_remaining is not None:
+                        counters.starts_remaining -= 1
+                        if counters.starts_remaining == 0:
+                            start_stop_reason = "start_limit_reached"
+                finally:
+                    if lease is not None:
+                        release_lease(
+                            lease.lease_id,
+                            reason="failed" if start_failed else "completed",
+                            data_dir=cfg.data_dir,
+                        )
+    elif start and not item.scan_eligible:
+        start_skipped_reason = item.scan_eligibility_reason
+    elif start and item.source_count < min_start_sources:
+        start_skipped_reason = f"source_count_below_min_start_threshold:{item.source_count}<{min_start_sources}"
+    elif start and starts_remaining == 0:
+        start_skipped_reason = "start_limit_reached"
+    if start and not dry_run and not start_stop_reason and counters.starts_remaining != 0 and item_index == len(items) - 1:
+        start_stop_reason = "no_more_candidates"
+    return TargetImportResult(
+        engagement_id=engagement_id, target_type=item.target_type,
+        target_value=item.canonical_value, target_key=item.target_key,
+        scope_manifest=manifest_path, created=created, started=started, dry_run=False,
+        source_count=item.source_count, priority=item.priority,
+        scan_eligible=item.scan_eligible,
+        scan_eligibility_reason=item.scan_eligibility_reason,
+        start_skipped_reason=start_skipped_reason, start_failed=start_failed,
+        start_error_type=start_error_type, start_stop_reason=start_stop_reason,
+        unprocessed_count=unprocessed_count,
+    )
 
 
 def _notify_progress(
