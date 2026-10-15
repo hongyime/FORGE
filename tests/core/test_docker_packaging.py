@@ -54,13 +54,14 @@ def _bash_binary() -> str | None:
 def test_runtime_dockerfile_matches_project_packaging() -> None:
     dockerfile = _read("docker/Dockerfile")
 
-    assert "requirements.txt" not in dockerfile
+    assert "/tmp/runtime-requirements.txt" in dockerfile
+    assert "python -m pip install -r /tmp/runtime-requirements.txt" in dockerfile
     assert "requirements.lock" not in dockerfile
     assert "COPY pyproject.toml README.md ./" in dockerfile
     assert "COPY forge ./forge" in dockerfile
     assert "COPY forge-autopilot.sh forge-autopilot.bat ./" in dockerfile
     assert "chmod +x forge-autopilot.sh" in dockerfile
-    assert 'python -m pip install ".[artifacts,graph]"' in dockerfile
+    assert 'ENTRYPOINT ["/usr/bin/tini", "--"]' in dockerfile
     assert "USER forge" in dockerfile
     assert 'CMD ["forge", "--help"]' in dockerfile
     assert 'ENTRYPOINT ["forge"]' not in dockerfile

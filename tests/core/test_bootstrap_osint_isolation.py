@@ -135,8 +135,6 @@ def test_trufflehog_release_installer_extracts_checksum_verified_binary(
     monkeypatch.setattr(bootstrap, "connector_binary_search_paths", lambda: [str(tool_dir)])
     monkeypatch.setattr(bootstrap, "resolve_setup_binary", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(bootstrap, "_download_url_bytes", fake_download)
-    monkeypatch.setattr(bootstrap.os, "name", "nt")
-
     bootstrap.install_trufflehog_release(
         root=tmp_path,
         vpy=tmp_path / ".venv" / "Scripts" / "python.exe",
