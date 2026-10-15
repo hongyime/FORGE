@@ -38,7 +38,11 @@ from forge.autopilot.events import (
     conversion_7d_for_data_dir,
     scoreboard_for_data_dir,
 )
-from forge.autopilot.scheduler import get_budget_snapshot, is_kill_switch_active
+from forge.autopilot.scheduler import (
+    get_budget_snapshot,
+    is_kill_switch_active,
+    record_worker_memory_p95,
+)
 from forge.config import ForgeConfig
 
 
@@ -351,6 +355,10 @@ class ForgeAutopilot:
                     },
                     "samples": {"queue": 0, "run_duration": 0, "resource": 0},
                 }
+            try:
+                worker_memory_p95 = record_worker_memory_p95(data_dir=self.data_dir)
+            except Exception:
+                worker_memory_p95 = None
             self._event_writer.emit(
                 "cycle_end",
                 details={
@@ -360,6 +368,7 @@ class ForgeAutopilot:
                     "path": path,
                     "conversion_7d": conversion_7d,
                     "scoreboard": scoreboard,
+                    "worker_memory_p95": worker_memory_p95,
                 },
                 occurred_at=finished_at,
             )

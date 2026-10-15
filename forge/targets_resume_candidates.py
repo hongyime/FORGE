@@ -23,6 +23,7 @@ from forge.autopilot.scheduler import (
     get_budget_snapshot,
     is_kill_switch_active,
     provider_inflight_count,
+    record_child_memory_sample,
     release_lease,
     sample_process_resources,
 )
@@ -931,6 +932,13 @@ def _execute_resume_item(
                 ),
                 data_dir=target_data_dir,
             )
+    if completed is not None:
+        peak = getattr(completed, "peak_rss_kb", None)
+        if isinstance(peak, int) and not isinstance(peak, bool) and peak > 0:
+            try:
+                record_child_memory_sample(peak, data_dir=target_data_dir)
+            except Exception:
+                pass
     status = "completed" if (completed is not None and completed.returncode == 0) else "failed"
     returncode = completed.returncode if completed is not None else 1
     if returncode == 124:

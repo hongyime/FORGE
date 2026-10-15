@@ -29,12 +29,17 @@ import pytest
 
 from forge.autopilot.scheduler import (
     acquire_lease,
+    compute_child_memory_p95,
     compute_worker_budget,
+    ensure_child_memory_schema,
     get_budget_snapshot,
     heartbeat,
     is_kill_switch_active,
     list_active_leases,
     provider_inflight_count,
+    read_recorded_worker_memory_p95,
+    record_child_memory_sample,
+    record_worker_memory_p95,
     reap_stale_leases,
     release_lease,
     sample_process_resources,
@@ -1042,3 +1047,101 @@ def test_budget_formula_edge_cases(tmp_path: Path) -> None:
     )
     assert res_neg.acquired is True
     assert res_neg.allocated_slots == 1
+
+
+def test_child_memory_p95_record_read_and_empty_state(tmp_path: Path) -> None:
+    for value in range(100, 2001, 100):
+        assert record_child_memory_sample(value, data_dir=tmp_path)
+    computed = compute_child_memory_p95(data_dir=tmp_path)
+    assert computed is not None
+    assert computed["p95_worker_memory_kb"] == 1900
+    assert computed["p95_worker_memory_mb"] == pytest.approx(1900 / 1024.0)
+    assert computed["samples"] == 20
+    stored = record_worker_memory_p95(data_dir=tmp_path)
+    assert stored is not None
+    read = read_recorded_worker_memory_p95(data_dir=tmp_path)
+    assert read is not None
+    assert read["p95_worker_memory_mb"] == stored["p95_worker_memory_mb"]
+    assert read["samples"] == stored["samples"] == 20
+
+    empty_dir = tmp_path / "empty"
+    assert compute_child_memory_p95(data_dir=empty_dir) is None
+    assert record_worker_memory_p95(data_dir=empty_dir) is None
+    assert read_recorded_worker_memory_p95(data_dir=empty_dir) is None
+    with sqlite3.connect(scheduler_db_path(empty_dir)) as con:
+        assert con.execute("SELECT COUNT(*) FROM worker_memory_stats").fetchone()[0] == 0
+
+
+def test_child_memory_invalid_samples_and_pruning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    for peak in (None, 0, -5, "x", True):
+        assert record_child_memory_sample(peak, data_dir=tmp_path) is False
+    db_path = scheduler_db_path(tmp_path)
+    with sqlite3.connect(db_path) as con:
+        ensure_child_memory_schema(con)
+        assert con.execute("SELECT COUNT(*) FROM child_memory_samples").fetchone()[0] == 0
+
+    monkeypatch.setattr("forge.autopilot.scheduler._MAX_CHILD_MEMORY_SAMPLES", 5)
+    for peak in range(1, 8):
+        assert record_child_memory_sample(peak, data_dir=tmp_path)
+    with sqlite3.connect(db_path) as con:
+        rows = con.execute("SELECT peak_rss_kb FROM child_memory_samples ORDER BY id").fetchall()
+    assert rows == [(3,), (4,), (5,), (6,), (7,)]
+
+
+def test_start_kill_chain_records_child_memory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from forge.config import ForgeConfig
+    from forge.targets_import import _start_kill_chain
+
+    data_dir = tmp_path / "data"
+    monkeypatch.setenv("FORGE_DATA_DIR", str(data_dir))
+    config = ForgeConfig.load()
+    proc = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+    proc.peak_rss_kb = 123456  # type: ignore[attr-defined]
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", lambda *_a, **_k: proc)
+    _start_kill_chain(
+        engagement_id=1,
+        seed="wiring-test.example.com",
+        roe_id="ROE-TEST",
+        scope_manifest=tmp_path / "manifest.json",
+        max_iter=1,
+        max_runtime_minutes=1,
+        parallel_fanout=1,
+        engagement_db_path=tmp_path / "e.db",
+        config=config,
+        sleep_fn=lambda _seconds: None,
+    )
+    with sqlite3.connect(data_dir / "scheduler.db") as con:
+        assert con.execute("SELECT peak_rss_kb FROM child_memory_samples").fetchall() == [(123456,)]
+
+
+def test_resume_child_records_memory_sample(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    monkeypatch.setattr(
+        "forge.targets_resume_candidates._refresh_plan_item",
+        lambda item: {**item, "status": "ready"},
+    )
+    item = {
+        "db_path": str(tmp_path / "engagements" / "1.db"),
+        "seed_value": "resume-memory.example.com",
+        "seed_type": "domain",
+        "engagement_id": 1,
+        "run_id": 1,
+        "parallel_fanout": 1,
+        "command": [sys.executable, "-c", "import time; time.sleep(0.3)"],
+        "max_runtime_minutes": 1,
+        "sequence": 1,
+        "timeout_retry_attempt": 0,
+        "timeout_retry_budget": 0,
+    }
+    _execute_resume_item(
+        item,
+        batch="memory-test",
+        ledger_path=tmp_path / "state" / "resume" / "ledger.jsonl",
+        ledger_lock=threading.Lock(),
+        runner=None,
+        data_dir=tmp_path / "data",
+        config=None,
+    )
+    with sqlite3.connect(tmp_path / "data" / "scheduler.db") as con:
+        assert con.execute("SELECT COUNT(*) FROM child_memory_samples").fetchone()[0] >= 1

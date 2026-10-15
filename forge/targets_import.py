@@ -29,6 +29,7 @@ from forge.autopilot.scheduler import (
     get_budget_snapshot,
     is_kill_switch_active,
     provider_inflight_count,
+    record_child_memory_sample,
     release_lease,
     sample_process_resources,
 )
@@ -1391,6 +1392,14 @@ def _start_kill_chain(
             seed=seed,
         ),
     )
+    peak = getattr(proc, "peak_rss_kb", None)
+    if isinstance(peak, int) and not isinstance(peak, bool) and peak > 0:
+        try:
+            record_child_memory_sample(
+                peak, data_dir=config.data_dir if config is not None else None
+            )
+        except Exception:
+            pass
     if proc.stdout:
         sys.stdout.write(proc.stdout)
         sys.stdout.flush()

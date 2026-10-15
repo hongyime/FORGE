@@ -8,6 +8,7 @@ staleness reaping, budget calculation, and file-based kill switch sentinel.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import secrets
 import sqlite3
@@ -28,6 +29,7 @@ DEFAULT_GLOBAL_SLOTS = 4
 DEFAULT_MAX_ACTIVE_TARGETS = 2
 DEFAULT_LEASE_TTL_SECONDS = 600
 DEFAULT_MEMORY_RESERVE_MB = 4096
+_MAX_CHILD_MEMORY_SAMPLES = 10000
 
 
 @dataclass(frozen=True)
@@ -154,6 +156,172 @@ def ensure_scheduler_schema(con: sqlite3.Connection) -> None:
         ensure_breaker_schema(con)
     except Exception:
         pass
+
+
+def ensure_child_memory_schema(con: sqlite3.Connection) -> None:
+    """Idempotently create aggregate child memory sample and p95 tables."""
+    con.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS child_memory_samples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            peak_rss_kb INTEGER NOT NULL,
+            recorded_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS worker_memory_stats (
+            key TEXT PRIMARY KEY,
+            value_mb REAL NOT NULL,
+            samples INTEGER NOT NULL,
+            measured_at TEXT,
+            updated_at TEXT NOT NULL
+        );
+        """
+    )
+
+
+def record_child_memory_sample(
+    peak_rss_kb: Any, *, data_dir: Path | str | None = None
+) -> bool:
+    """Persist an aggregate child RSS sample; telemetry failures never raise."""
+    con = None
+    try:
+        if (
+            not isinstance(peak_rss_kb, int)
+            or isinstance(peak_rss_kb, bool)
+            or peak_rss_kb <= 0
+        ):
+            return False
+        con = direct_connect(scheduler_db_path(data_dir))
+        ensure_child_memory_schema(con)
+        con.execute(
+            "INSERT INTO child_memory_samples (peak_rss_kb, recorded_at) VALUES (?, ?)",
+            (peak_rss_kb, datetime.now(timezone.utc).isoformat()),
+        )
+        con.execute(
+            "DELETE FROM child_memory_samples WHERE id NOT IN "
+            "(SELECT id FROM child_memory_samples ORDER BY id DESC LIMIT ?)",
+            (_MAX_CHILD_MEMORY_SAMPLES,),
+        )
+        con.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        if con is not None:
+            try:
+                con.close()
+            except Exception:
+                pass
+
+
+def compute_child_memory_p95(
+    *, data_dir: Path | str | None = None
+) -> dict[str, Any] | None:
+    """Compute measured p95 RSS for the operator.
+
+    After a live run, read it with :func:`read_recorded_worker_memory_p95` or
+    from cycle_end details ``worker_memory_p95``. Until T2.1c lands, apply the
+    recorded ``p95_worker_memory_mb`` manually via
+    ``FORGE_AUTOPILOT_P95_WORKER_MEMORY_MB``.
+    """
+    con = None
+    try:
+        con = direct_connect(scheduler_db_path(data_dir))
+        ensure_child_memory_schema(con)
+        rows = con.execute(
+            "SELECT peak_rss_kb, recorded_at FROM child_memory_samples "
+            "ORDER BY recorded_at, id"
+        ).fetchall()
+        if not rows:
+            return None
+        values = sorted(int(row[0]) for row in rows)
+        p95_kb = values[max(0, math.ceil(0.95 * len(values)) - 1)]
+        return {
+            "p95_worker_memory_mb": p95_kb / 1024.0,
+            "p95_worker_memory_kb": int(p95_kb),
+            "samples": len(values),
+            "measured_at": max(str(row[1]) for row in rows),
+        }
+    except Exception:
+        return None
+    finally:
+        if con is not None:
+            try:
+                con.close()
+            except Exception:
+                pass
+
+
+def record_worker_memory_p95(
+    *, data_dir: Path | str | None = None
+) -> dict[str, Any] | None:
+    """Store aggregate p95 and return the operator-readable value.
+
+    After a live run, read it with :func:`read_recorded_worker_memory_p95` or
+    from cycle_end details ``worker_memory_p95``. Until T2.1c lands, apply the
+    recorded ``p95_worker_memory_mb`` manually via
+    ``FORGE_AUTOPILOT_P95_WORKER_MEMORY_MB``.
+    """
+    computed = compute_child_memory_p95(data_dir=data_dir)
+    if computed is None:
+        return read_recorded_worker_memory_p95(data_dir=data_dir)
+    con = None
+    try:
+        con = direct_connect(scheduler_db_path(data_dir))
+        ensure_child_memory_schema(con)
+        now = datetime.now(timezone.utc).isoformat()
+        con.execute(
+            "INSERT INTO worker_memory_stats (key, value_mb, samples, measured_at, updated_at) "
+            "VALUES ('p95_worker_memory_mb', ?, ?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value_mb=excluded.value_mb, "
+            "samples=excluded.samples, measured_at=excluded.measured_at, updated_at=excluded.updated_at",
+            (computed["p95_worker_memory_mb"], computed["samples"], computed["measured_at"], now),
+        )
+        con.commit()
+        return {**computed, "updated_at": now}
+    except Exception:
+        return None
+    finally:
+        if con is not None:
+            try:
+                con.close()
+            except Exception:
+                pass
+
+
+def read_recorded_worker_memory_p95(
+    *, data_dir: Path | str | None = None
+) -> dict[str, Any] | None:
+    """Read the stored p95 for the operator.
+
+    After a live run, this value is also available in cycle_end details
+    ``worker_memory_p95``. Until T2.1c lands, apply its
+    ``p95_worker_memory_mb`` manually via
+    ``FORGE_AUTOPILOT_P95_WORKER_MEMORY_MB``.
+    """
+    con = None
+    try:
+        con = direct_connect(scheduler_db_path(data_dir))
+        ensure_child_memory_schema(con)
+        row = con.execute(
+            "SELECT value_mb, samples, measured_at, updated_at FROM worker_memory_stats "
+            "WHERE key='p95_worker_memory_mb'"
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "p95_worker_memory_mb": float(row[0]),
+            "samples": int(row[1]),
+            "measured_at": row[2],
+            "updated_at": row[3],
+        }
+    except Exception:
+        return None
+    finally:
+        if con is not None:
+            try:
+                con.close()
+            except Exception:
+                pass
 
 
 def compute_worker_budget(

@@ -343,6 +343,7 @@ def test_autopilot_records_cycle_and_all_eight_phase_boundaries(tmp_path: Path) 
     assert "available" in cycle_details["conversion_7d"]
     assert isinstance(cycle_details["scoreboard"], dict)
     assert "available" in cycle_details["scoreboard"]
+    assert "worker_memory_p95" in cycle_details
 
 
 def test_conversion_7d_for_data_dir_counts_recent_phase_events(tmp_path: Path) -> None:
