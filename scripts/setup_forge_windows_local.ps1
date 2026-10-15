@@ -1,3 +1,4 @@
+# Functional Windows counterpart to scripts/setup_forge_posix_local.sh.
 param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
     [string]$HydrationRoot = (Join-Path $env:USERPROFILE '_forge_hydration_full'),

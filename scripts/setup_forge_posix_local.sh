@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Functional POSIX counterpart to scripts/setup_forge_windows_local.ps1.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
