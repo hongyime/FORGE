@@ -24,10 +24,12 @@ import pytest
 
 from forge.autopilot.breaker import (
     canonical_provider,
+    check_resource_pressure,
     is_global_paused,
     is_provider_paused,
     record_global_rate_limit,
     record_rate_limit,
+    record_child_failure,
     remaining_global_pause,
     remaining_pause,
     set_retry_after,
@@ -177,8 +179,11 @@ def test_fifteen_minute_pause_enforced_and_expires(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_global_breaker_trips_on_multi_provider_rate_limits(tmp_path: Path) -> None:
+def test_global_breaker_trips_on_multi_provider_rate_limits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Global breaker trips when >=3 distinct providers rate-limit in 10 minutes."""
+    monkeypatch.setattr("forge.autopilot.breaker.check_resource_pressure", lambda: (False, ""))
     t0 = datetime(2026, 10, 15, 10, 0, 0, tzinfo=timezone.utc)
 
     # Provider 1
@@ -194,9 +199,39 @@ def test_global_breaker_trips_on_multi_provider_rate_limits(tmp_path: Path) -> N
     t2 = t0 + timedelta(seconds=20)
     record_rate_limit("target.com", data_dir=tmp_path, now=t2)
     assert is_global_paused(data_dir=tmp_path, now=t2) is True
-
     rem = remaining_global_pause(data_dir=tmp_path, now=t2)
     assert 880.0 <= rem <= 900.0
+
+
+def test_global_breaker_trips_after_five_child_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("forge.autopilot.breaker.check_resource_pressure", lambda: (False, ""))
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for index in range(4):
+        assert record_child_failure("provider-a", "exit_1", data_dir=tmp_path, now=now + timedelta(seconds=index)) is False
+    assert is_global_paused(data_dir=tmp_path, now=now + timedelta(seconds=4)) is False
+    assert record_child_failure("provider-b", "timeout", data_dir=tmp_path, now=now + timedelta(seconds=5)) is True
+    assert is_global_paused(data_dir=tmp_path, now=now + timedelta(seconds=5)) is True
+
+
+def test_resource_pressure_checks_memory_and_cpu() -> None:
+    assert check_resource_pressure(mem_available_mb=500, load1=0.1, cpu_count=4) == (True, "memory_pressure")
+    assert check_resource_pressure(mem_available_mb=8000, load1=13, cpu_count=4) == (True, "cpu_pressure")
+    assert check_resource_pressure(mem_available_mb=8000, load1=12, cpu_count=4) == (False, "")
+
+
+def test_resource_pressure_blocks_admission_with_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("forge.autopilot.breaker.check_resource_pressure", lambda: (True, "memory_pressure"))
+    result = acquire_lease(
+        target_key="pressure-test",
+        target_value="pressure-test.example",
+        target_type="domain",
+        engagement_id=1,
+        data_dir=tmp_path,
+    )
+    assert result.acquired is False
+    assert result.reason == "memory_pressure"
 
 
 # ---------------------------------------------------------------------------
@@ -326,8 +361,11 @@ def test_breaker_state_survives_restart(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_acquire_lease_respects_circuit_breaker(tmp_path: Path) -> None:
+def test_acquire_lease_respects_circuit_breaker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """acquire_lease checks global and provider circuit breakers before granting leases."""
+    monkeypatch.setattr("forge.autopilot.breaker.check_resource_pressure", lambda: (False, ""))
     cfg = _FakeConfig(
         tmp_path,
         autopilot_global_slots=10,

@@ -606,10 +606,19 @@ def acquire_lease(
 
     from forge.autopilot.breaker import (
         canonical_provider,
+        check_resource_pressure,
         is_global_paused,
         is_provider_paused,
     )
 
+    pressured, pressure_reason = check_resource_pressure()
+    if pressured:
+        return LeaseAcquireResult(
+            acquired=False,
+            lease=None,
+            reason=pressure_reason,
+            allocated_slots=0,
+        )
     if is_global_paused(data_dir=data_dir):
         return LeaseAcquireResult(
             acquired=False,

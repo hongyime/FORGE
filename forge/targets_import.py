@@ -521,6 +521,16 @@ def _run_one_import_target(
                         roe_strictness=roe_strictness, config=cfg, sleep_fn=sleep,
                     )
                 except Exception as exc:
+                    try:
+                        from forge.autopilot.breaker import record_child_failure
+
+                        record_child_failure(
+                            provider=item.canonical_value,
+                            reason=("timeout" if isinstance(exc, subprocess.CalledProcessError) and exc.returncode == 124 else type(exc).__name__),
+                            data_dir=cfg.data_dir,
+                        )
+                    except Exception:
+                        pass
                     failure_details: dict[str, Any] = {
                         **progress_details, "error_type": type(exc).__name__,
                         "exit_status": "failed",

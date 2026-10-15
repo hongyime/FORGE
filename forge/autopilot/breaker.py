@@ -10,6 +10,7 @@ State is stored alongside scheduler leases in <data_dir>/scheduler.db.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -28,6 +29,12 @@ DEFAULT_PROVIDER_THRESHOLD = 3
 DEFAULT_PAUSE_SECONDS = 900
 DEFAULT_GLOBAL_PROVIDER_THRESHOLD = 3
 DEFAULT_GLOBAL_EVENT_THRESHOLD = 10
+# Pause after five failed children in the same ten-minute admission window.
+DEFAULT_CHILD_FAILURE_THRESHOLD = 5
+DEFAULT_CHILD_FAILURE_WINDOW_SECONDS = DEFAULT_WINDOW_SECONDS
+# Pause for less than 1 GiB available memory, or sustained load above 3x CPUs.
+DEFAULT_MEMORY_PRESSURE_BYTES = 1024**3
+DEFAULT_CPU_LOAD_PER_CORE = 3.0
 DEFAULT_PROVIDER_MAX_INFLIGHT = 2
 
 
@@ -121,6 +128,62 @@ def ensure_breaker_schema(con: sqlite3.Connection) -> None:
             ON provider_breakers(paused_until);
         """
     )
+
+
+def record_child_failure(
+    provider: str | None = None, reason: str | None = None, *,
+    data_dir: Path | str | None = None, now: datetime | None = None,
+) -> bool:
+    """Persist a child failure and reevaluate the global breaker."""
+    ref_time = _ensure_utc(now)
+    prov = canonical_provider(provider) if provider else GLOBAL_PROVIDER_KEY
+    from forge.autopilot.scheduler import scheduler_db_path
+
+    con = direct_connect(scheduler_db_path(data_dir))
+    try:
+        ensure_breaker_schema(con)
+        with con:
+            con.execute(
+                "INSERT INTO provider_events (provider, event_type, recorded_at, details) VALUES (?, 'child_failure', ?, ?)",
+                (prov, ref_time.isoformat(), json.dumps({"reason": reason}) if reason else None),
+            )
+            con.execute(
+                "DELETE FROM provider_events WHERE recorded_at < ?",
+                ((ref_time - timedelta(days=7)).isoformat(),),
+            )
+    finally:
+        con.close()
+    return check_and_update_global_breaker(data_dir=data_dir, now=ref_time)
+
+
+def check_resource_pressure(
+    *, mem_available_mb: float | None = None,
+    load1: float | None = None,
+    cpu_count: int | None = None,
+) -> tuple[bool, str]:
+    """Return a pressure signal; overrides make checks deterministic, missing metrics fail open."""
+    try:
+        available = int(mem_available_mb * 1024**2) if mem_available_mb is not None else None
+        if available is None:
+            try:
+                for line in Path("/proc/meminfo").read_text(encoding="ascii").splitlines():
+                    if line.startswith("MemAvailable:"):
+                        available = int(line.split()[1]) * 1024
+                        break
+            except (OSError, ValueError, IndexError):
+                pass
+        if available is not None and available < DEFAULT_MEMORY_PRESSURE_BYTES:
+            return True, "memory_pressure"
+        try:
+            effective_cpu_count = cpu_count or getattr(os, "process_cpu_count", lambda: None)() or os.cpu_count() or 1
+            effective_load1 = load1 if load1 is not None else os.getloadavg()[0]
+            if effective_load1 > effective_cpu_count * DEFAULT_CPU_LOAD_PER_CORE:
+                return True, "cpu_pressure"
+        except (OSError, AttributeError, ValueError):
+            pass
+    except Exception:
+        return False, ""
+    return False, ""
 
 
 def record_rate_limit(
@@ -449,6 +512,15 @@ def check_and_update_global_breaker(
                 should_trip = True
                 trip_reason = "global_event_threshold"
 
+            child_cutoff = (ref_time - timedelta(seconds=DEFAULT_CHILD_FAILURE_WINDOW_SECONDS)).isoformat()
+            cur = con.execute(
+                "SELECT COUNT(*) FROM provider_events WHERE event_type = 'child_failure' AND recorded_at >= ?",
+                (child_cutoff,),
+            )
+            if cur.fetchone()[0] >= DEFAULT_CHILD_FAILURE_THRESHOLD:
+                should_trip = True
+                trip_reason = "child_failure_threshold"
+
             if should_trip:
                 new_pause_until = (ref_time + timedelta(seconds=pause_s)).isoformat()
                 con.execute(
@@ -529,7 +601,8 @@ def is_global_paused(
     now: datetime | None = None,
 ) -> bool:
     """Return True if the global circuit breaker is active (all starts paused)."""
-    return is_provider_paused(GLOBAL_PROVIDER_KEY, data_dir=data_dir, now=now)
+    pressured, _reason = check_resource_pressure()
+    return pressured or is_provider_paused(GLOBAL_PROVIDER_KEY, data_dir=data_dir, now=now)
 
 
 def remaining_global_pause(

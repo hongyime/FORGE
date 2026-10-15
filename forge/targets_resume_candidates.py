@@ -915,6 +915,16 @@ def _execute_resume_item(
             runner=runner,
         )
     except Exception as exc:
+        try:
+            from forge.autopilot.breaker import record_child_failure
+
+            record_child_failure(
+                provider=target_value,
+                reason="timeout" if isinstance(exc, subprocess.TimeoutExpired) else type(exc).__name__,
+                data_dir=target_data_dir,
+            )
+        except Exception:
+            pass
         _notify_progress(
             progress_callback,
             "target_failed",
@@ -945,6 +955,17 @@ def _execute_resume_item(
                 pass
     status = "completed" if (completed is not None and completed.returncode == 0) else "failed"
     returncode = completed.returncode if completed is not None else 1
+    if status == "failed":
+        try:
+            from forge.autopilot.breaker import record_child_failure
+
+            record_child_failure(
+                provider=target_value,
+                reason="timeout" if returncode == 124 else f"exit_{returncode}",
+                data_dir=target_data_dir,
+            )
+        except Exception:
+            pass
     if returncode == 124:
         mark_timed_out_kill_chain_run_failed(
             Path(str(checked.get("db_path") or "")),
