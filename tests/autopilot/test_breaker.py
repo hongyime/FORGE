@@ -371,12 +371,14 @@ def test_acquire_lease_respects_circuit_breaker(
         autopilot_global_slots=10,
         autopilot_max_active_targets=10,
     )
-    t0 = datetime(2026, 10, 15, 10, 0, 0, tzinfo=timezone.utc)
+    # acquire_lease evaluates pauses against the real clock, so create a fresh
+    # pause and use the same explicit config when recording its trigger events.
+    t0 = datetime.now(timezone.utc)
 
     # 1. Provider circuit breaker check
-    record_rate_limit("shodan", data_dir=tmp_path, now=t0)
-    record_rate_limit("shodan", data_dir=tmp_path, now=t0)
-    record_rate_limit("shodan", data_dir=tmp_path, now=t0)
+    record_rate_limit("shodan", data_dir=tmp_path, now=t0, config=cfg)  # type: ignore[arg-type]
+    record_rate_limit("shodan", data_dir=tmp_path, now=t0, config=cfg)  # type: ignore[arg-type]
+    record_rate_limit("shodan", data_dir=tmp_path, now=t0, config=cfg)  # type: ignore[arg-type]
 
     res_prov = acquire_lease(
         target_key="seed:shodan1",
