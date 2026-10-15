@@ -25,9 +25,9 @@ def run_contained_subprocess(
     """Run a command with captured output, tree cleanup, and child peak RSS.
 
     The returned ``CompletedProcess`` has a ``peak_rss_kb`` attribute containing
-    the direct child's Linux ``VmHWM`` peak in KB, or ``None`` when it cannot
-    be measured (including on non-Linux systems or for very short-lived
-    children). Grandchild memory is not included.
+    the sampled sum of Linux ``VmHWM`` peaks for the child process tree in KB,
+    or ``None`` when it cannot be measured (including on non-Linux systems or
+    for very short-lived children).
     """
 
     args = [str(part) for part in command]
@@ -84,36 +84,70 @@ def run_contained_subprocess(
 
 
 def _read_proc_peak_rss_kb(pid: int) -> int | None:
-    """Read a direct child's Linux VmHWM; grandchildren are not attributed."""
+    """Sum Linux VmHWM for a process and all descendants, or return ``None``."""
     if not sys.platform.startswith("linux") or pid < 0:
         return None
-    try:
-        with Path(f"/proc/{pid}/status").open(encoding="ascii") as status_file:
-            for line in status_file:
-                if line.startswith("VmHWM:"):
-                    fields = line.split()
-                    return int(fields[1]) if len(fields) >= 2 else None
-    except Exception:
-        return None
-    return None
+    total = 0
+    found = False
+    for process_pid in _proc_descendant_pids(pid):
+        try:
+            with Path(f"/proc/{process_pid}/status").open(encoding="ascii") as status_file:
+                for line in status_file:
+                    if line.startswith("VmHWM:"):
+                        fields = line.split()
+                        if len(fields) >= 2:
+                            total += int(fields[1])
+                            found = True
+                        break
+        except (OSError, ValueError):
+            continue
+    return total if found else None
+
+
+def _proc_descendant_pids(root_pid: int) -> set[int]:
+    """Return root and visible descendants, tolerating /proc races/errors."""
+    pending = [root_pid]
+    found: set[int] = set()
+    while pending:
+        pid = pending.pop()
+        if pid in found:
+            continue
+        found.add(pid)
+        try:
+            children_path = Path(f"/proc/{pid}/task/{pid}/children")
+            children = children_path.read_text(encoding="ascii").split()
+        except OSError:
+            continue
+        for child in children:
+            try:
+                child_pid = int(child)
+            except ValueError:
+                continue
+            if child_pid not in found:
+                pending.append(child_pid)
+    return found
 
 
 def start_child_peak_rss_sampler(
     proc: subprocess.Popen[str], *, interval_seconds: float = 0.05
 ) -> tuple[threading.Thread, dict[str, int | None]]:
-    """Sample direct-child Linux VmHWM; memory used by grandchildren is excluded."""
+    """Poll summed Linux VmHWM for the child and all visible descendants."""
     state: dict[str, int | None] = {"peak_rss_kb": None}
 
     def sample() -> None:
-        def update_peak() -> None:
+        observed_pids = {proc.pid}
+
+        def update_peak() -> bool:
+            observed_pids.update(_proc_descendant_pids(proc.pid))
             peak = _read_proc_peak_rss_kb(proc.pid)
             if peak is not None and (
                 state["peak_rss_kb"] is None or peak > state["peak_rss_kb"]
             ):
                 state["peak_rss_kb"] = peak
+            return any(Path(f"/proc/{pid}").exists() for pid in observed_pids)
 
         try:
-            while proc.poll() is None:
+            while proc.poll() is None or update_peak():
                 update_peak()
                 time.sleep(interval_seconds)
             update_peak()

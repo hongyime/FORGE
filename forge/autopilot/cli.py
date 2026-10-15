@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -12,6 +13,8 @@ from rich.console import Console
 
 from forge.autopilot.defaults import AutopilotDefaults
 from forge.autopilot.loop import ForgeAutopilot
+from forge.autopilot.scheduler import record_child_memory_sample, record_worker_memory_p95
+from forge.subprocess_tree import run_contained_subprocess
 from forge.utils.kill_chain_options import normalize_kill_chain_parallel_fanout
 
 
@@ -37,6 +40,38 @@ def register_autopilot_commands(app: typer.Typer) -> None:
     - ``FORGE_SAFE_MODE=1`` still forces dry-run as an operator safety
       override.
     """
+
+    @app.command("measure-worker-memory")
+    def measure_worker_memory(
+        data_dir: Optional[Path] = typer.Option(
+            None, "--data-dir", envvar="FORGE_DATA_DIR",
+            help="Forge data directory. Defaults to ForgeConfig.",
+        ),
+    ) -> None:
+        """Measure a synthetic fanout worker tree and record its RSS sample."""
+        if not sys.platform.startswith("linux"):
+            raise typer.BadParameter("worker tree RSS measurement requires Linux /proc")
+        # Parent mimics a fanout coordinator; the grandchild holds 48 MiB so
+        # the tree sampler measures worker memory without running any scan.
+        parent_code = (
+            "import subprocess,sys; "
+            "p=subprocess.Popen([sys.executable,'-c',"
+            "'import time; x=bytearray(48*1024*1024); "
+            "[x.__setitem__(i,1) for i in range(0,len(x),4096)]; time.sleep(1.5)']); "
+            "p.wait()"
+        )
+        result = run_contained_subprocess(
+            [sys.executable, "-c", parent_code], timeout_seconds=15
+        )
+        peak_kb = getattr(result, "peak_rss_kb", None)
+        if result.returncode != 0 or not isinstance(peak_kb, int) or peak_kb <= 0:
+            raise typer.BadParameter("could not measure synthetic worker process tree")
+        if not record_child_memory_sample(peak_kb, data_dir=data_dir):
+            raise typer.BadParameter("could not persist worker memory sample")
+        p95 = record_worker_memory_p95(data_dir=data_dir)
+        if p95 is None:
+            raise typer.BadParameter("could not compute and persist worker memory p95")
+        typer.echo(json.dumps({"tree_peak_rss_kb": peak_kb, **p95}, sort_keys=True))
 
     @app.callback(invoke_without_command=True)
     def _default(

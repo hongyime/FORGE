@@ -683,6 +683,27 @@ def _build_cli_app() -> typer.Typer:
     return app
 
 
+def test_measure_worker_memory_command_records_synthetic_tree_sample(
+    tmp_path: Path,
+) -> None:
+    import json
+    import sys
+
+    if not sys.platform.startswith("linux"):
+        pytest.skip("requires Linux /proc process tree sampling")
+    data_dir = tmp_path / "data"
+    result = CliRunner().invoke(
+        _build_cli_app(),
+        ["measure-worker-memory", "--data-dir", str(data_dir)],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["tree_peak_rss_kb"] >= 40 * 1024
+    assert payload["p95_worker_memory_kb"] >= 40 * 1024
+    assert payload["samples"] >= 1
+
+
 def test_cli_describe_default_promotes_to_apply(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

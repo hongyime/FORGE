@@ -173,6 +173,27 @@ def test_run_contained_subprocess_measures_allocator_peak_rss() -> None:
     assert 20000 <= result.peak_rss_kb <= 1000000
 
 
+def test_run_contained_subprocess_includes_grandchild_peak_rss() -> None:
+    if not sys.platform.startswith("linux"):
+        return
+    parent_code = (
+        "import subprocess,sys; "
+        "p=subprocess.Popen([sys.executable,'-c',"
+        "'import time; x=bytearray(48*1024*1024); "
+        "[x.__setitem__(i,1) for i in range(0,len(x),4096)]; time.sleep(1)']); "
+        "p.wait()"
+    )
+    result = subprocess_tree.run_contained_subprocess(
+        [sys.executable, "-c", parent_code], timeout_seconds=10
+    )
+
+    assert result.returncode == 0
+    # The parent's Python runtime is far below this; the lower bound confirms
+    # that the grandchild's touched allocation contributes to the tree sum.
+    assert result.peak_rss_kb is not None
+    assert result.peak_rss_kb >= 40 * 1024
+
+
 def test_run_contained_subprocess_short_lived_child_peak_shape() -> None:
     result = subprocess_tree.run_contained_subprocess(["true"], timeout_seconds=5)
 
