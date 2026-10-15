@@ -139,3 +139,6 @@ skills/
 skills-lock.json
 docs/
 # End AI / editor dot directories (managed via sourcerepo)
+
+# Local nuclei private-key payloads are required on disk but must not be committed.
+nuclei-templates/helpers/payloads/cve-2023-34039-keys/
