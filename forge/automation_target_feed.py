@@ -32,7 +32,7 @@ from forge.automation_secret_auto_feed import auto_feed_secrets_to_target_feed
 from forge.connectors.secrets import resolve_connector_secret_value
 from forge.db.session import get_engagement_db
 from forge.engagement_ids import numeric_engagement_db_files
-from forge.onboard.mega_domain import mega_domain_decision
+from forge.onboard.mega_domain import mega_domain_decision, mega_domain_signals
 from forge.onboard.patterns import is_denied_target
 from forge.targets_import import (
     MAX_TARGET_FEED_IMPORT_ITEMS,
@@ -503,6 +503,7 @@ def _link_urlscan_observation_candidates(
     provenance: str,
     first_seen_at: str,
     confidence: float,
+    signal_provider: Any = None,
 ) -> list[FeedCandidate]:
     raw_targets = _extract_urlscan_raw_targets(payload)
     if not raw_targets:
@@ -539,7 +540,11 @@ def _link_urlscan_observation_candidates(
                 candidate_domain = host
 
         if candidate_domain:
-            skip, _ = mega_domain_decision(candidate_domain)
+            try:
+                age, surface = (signal_provider or mega_domain_signals)(candidate_domain)
+            except Exception:  # noqa: BLE001
+                age, surface = None, None
+            skip, _ = mega_domain_decision(candidate_domain, age_years=age, estimated_subdomains=surface)
             if skip:
                 continue
 
@@ -567,6 +572,7 @@ def _harvest_file_candidates(
     provenance: str,
     first_seen_at: str,
     confidence: float,
+    signal_provider: Any = None,
 ) -> tuple[list[FeedCandidate], str | None]:
     suffix = path.suffix.lower()
     if suffix == ".json":
@@ -587,6 +593,7 @@ def _harvest_file_candidates(
                         provenance=provenance,
                         first_seen_at=first_seen_at,
                         confidence=confidence,
+                        signal_provider=signal_provider,
                     )
                     if linked:
                         return linked, None
@@ -787,6 +794,7 @@ def _extract_dir_source(
     provenance_prefix: str,
     first_seen_at: str,
     confidence: float,
+    signal_provider: Any = None,
 ) -> tuple[list[FeedCandidate], list[str], dict[str, int]]:
     candidates: list[FeedCandidate] = []
     errors: list[str] = []
@@ -817,6 +825,7 @@ def _extract_dir_source(
             provenance=source_group,
             first_seen_at=first_seen_at,
             confidence=confidence,
+            signal_provider=signal_provider,
         )
         if error is not None:
             if error.startswith("non_asset_feed_class:"):
@@ -2259,6 +2268,7 @@ def build_target_feed(
     apply: bool = False,
     supabase_config_path: Path | None = None,
     cloud_discovery_accounts: list[Any] | None = None,
+    mega_domain_signal_provider: Any = None,
 ) -> dict[str, object]:
     selected_sources = [s.strip().lower() for s in sources if s.strip()]
     if not selected_sources:
@@ -2304,6 +2314,7 @@ def build_target_feed(
             provenance_prefix="cti_file:",
             first_seen_at=generated_at,
             confidence=0.5,
+            signal_provider=mega_domain_signal_provider,
         )
         groups["cti"] = found
         source_scan_limits["cti"] = scan_summary
@@ -2331,6 +2342,7 @@ def build_target_feed(
             provenance_prefix="connector_file:",
             first_seen_at=generated_at,
             confidence=0.5,
+            signal_provider=mega_domain_signal_provider,
         )
         found = [*seed_found, *generic_found]
         errors = [*seed_errors, *generic_errors]

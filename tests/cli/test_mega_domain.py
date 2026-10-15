@@ -8,9 +8,44 @@ from forge.onboard.mega_domain import (
     OLD_AGE_YEARS,
     _LARGE_SUBDOMAIN_COUNT,
     _OLD_AGE_YEARS,
+    crtsh_first_seen_age_years,
+    domain_age_years,
+    estimate_subdomain_count,
     mega_domain_decision,
 )
 from forge.targets_import import _coerce_feed_item, target_scan_eligible
+
+
+def test_rdap_and_crtsh_signal_producers_parse_mock_payloads() -> None:
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    registration = (now.replace(year=now.year - 15)).isoformat()
+    cert_old = (now.replace(year=now.year - 8)).isoformat()
+    cert_new = (now.replace(year=now.year - 2)).isoformat()
+    responses = {
+        "rdap.org": {"events": [{"eventAction": "registration", "eventDate": registration}]},
+        "crt.sh": [
+            {"not_before": cert_new, "name_value": "www.example.test\n*.api.example.test"},
+            {"not_before": cert_old, "name_value": "www.example.test\nmail.example.test"},
+        ],
+    }
+
+    def mocked_fetch(url: str, timeout: float):
+        assert timeout > 0
+        return responses["rdap.org"] if "rdap.org" in url else responses["crt.sh"]
+
+    assert domain_age_years("example.test", fetch_json=mocked_fetch) == pytest.approx(15, abs=0.02)
+    assert crtsh_first_seen_age_years("example.test", fetch_json=mocked_fetch) == pytest.approx(8, abs=0.02)
+    assert estimate_subdomain_count("example.test", fetch_json=mocked_fetch) == 3
+
+
+@pytest.mark.parametrize(
+    ("age", "surface", "expected"),
+    [(15, 600, True), (15, 20, False), (2, 600, False), (None, None, False)],
+)
+def test_mega_domain_combined_signal_decision(age, surface, expected) -> None:
+    assert mega_domain_decision("ordinary.example", age_years=age, estimated_subdomains=surface)[0] is expected
 
 
 def test_never_start_apex_skipped() -> None:

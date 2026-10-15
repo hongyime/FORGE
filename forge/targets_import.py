@@ -44,7 +44,7 @@ from forge.domain_validation import canonicalize_domain
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
 from forge.governance.scope_gate import is_roe_wildcard
 from forge.onboard.patterns import is_denied_target
-from forge.onboard.mega_domain import mega_domain_decision
+from forge.onboard.mega_domain import mega_domain_decision, mega_domain_signals
 from forge.subprocess_tree import run_contained_subprocess
 from forge.utils.kill_chain_options import (
     DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
@@ -173,6 +173,7 @@ def load_target_feed(
     feed_file: Path | None,
     auth_header_env: str | None,
     limit: int | None,
+    mega_domain_signal_provider: Callable[[str], tuple[float | None, int | None]] | None = None,
 ) -> list[TargetFeedItem]:
     if bool(feed_url) == bool(feed_file):
         raise ValueError("specify exactly one of --feed-url or --feed-file")
@@ -193,7 +194,7 @@ def load_target_feed(
     ranked_items: list[tuple[int, TargetFeedItem]] = []
     seen: set[str] = set()
     for index, raw_item in enumerate(raw_items):
-        item = _coerce_feed_item(raw_item)
+        item = _coerce_feed_item(raw_item, signal_provider=mega_domain_signal_provider)
         if item is None or item.target_key in seen:
             continue
         seen.add(item.target_key)
@@ -221,6 +222,7 @@ def import_targets(
     roe_scope: str | None = None,
     roe_strictness: str | None = None,
     sleep_fn: Callable[[float], None] | None = None,
+    mega_domain_signal_provider: Callable[[str], tuple[float | None, int | None]] | None = None,
 ) -> list[TargetImportResult]:
     """Import feed targets and optionally start scoped kill chains.
 
@@ -243,6 +245,7 @@ def import_targets(
         feed_file=feed_file,
         auth_header_env=auth_header_env,
         limit=limit,
+        mega_domain_signal_provider=mega_domain_signal_provider or mega_domain_signals,
     )
     results: list[TargetImportResult] = []
     starts_remaining = _normalize_start_limit(start_limit)
@@ -667,7 +670,11 @@ def _normalize_min_start_source_count(value: int | None) -> int:
     return min(normalized, 100)
 
 
-def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
+def _coerce_feed_item(
+    raw_item: object,
+    *,
+    signal_provider: Callable[[str], tuple[float | None, int | None]] | None = None,
+) -> TargetFeedItem | None:
     if not isinstance(raw_item, dict):
         return None
     raw_target_type = str(raw_item.get("target_type") or "").strip().lower()
@@ -687,6 +694,15 @@ def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
     if is_denied_target(canonical_value):
         return None
     target_key = external_target_key(target_type, canonical_value)
+    candidate_domain: str | None = None
+    if target_type in {"domain", "subdomain"}:
+        candidate_domain = canonical_value
+    elif target_type in {"url", "apk_url"}:
+        host = urlsplit(canonical_value).hostname or ""
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            candidate_domain = host
     source_group = _bounded_text(
         raw_item.get("source_group") or raw_item.get("source_kind"), 120
     )
@@ -706,6 +722,15 @@ def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
             estimated_subdomains = int(raw_subdomains)
         except (ValueError, TypeError):
             estimated_subdomains = None
+    if candidate_domain and signal_provider is not None and (age_years is None or estimated_subdomains is None):
+        try:
+            produced_age, produced_surface = signal_provider(candidate_domain)
+            age_years = age_years if age_years is not None else produced_age
+            estimated_subdomains = (
+                estimated_subdomains if estimated_subdomains is not None else produced_surface
+            )
+        except Exception:  # noqa: BLE001
+            pass
     scan_eligible, scan_reason = target_scan_eligible(
         target_type,
         canonical_value,

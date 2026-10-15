@@ -19,7 +19,11 @@ creation date, passive DNS / attack surface enumerations).
 
 from __future__ import annotations
 
-from typing import Collection
+import json
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+from typing import Callable, Collection
 
 # Tunable thresholds for the combined rule.
 OLD_AGE_YEARS: int = 10
@@ -47,6 +51,100 @@ NEVER_START_APEXES: frozenset[str] = frozenset(
         "youtube.com",
     }
 )
+
+
+def _fetch_json(url: str, timeout: float) -> object | None:
+    """Fetch JSON from a public domain intelligence endpoint, failing closed."""
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "FORGE-Recon/1.0"})
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            if getattr(response, "status", 200) != 200:
+                return None
+            return json.loads(response.read())
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _age_since(value: object, *, now: datetime | None = None) -> float | None:
+    try:
+        text = str(value).strip().replace("Z", "+00:00")
+        created = datetime.fromisoformat(text)
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        current = now or datetime.now(timezone.utc)
+        return max(0.0, (current - created.astimezone(timezone.utc)).total_seconds() / 31557600)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def domain_age_years(
+    domain: str, *, timeout: float = 3.0,
+    fetch_json: Callable[[str, float], object | None] = _fetch_json,
+) -> float | None:
+    """Return RDAP registration age in years, or None when unavailable."""
+    try:
+        payload = fetch_json(f"https://rdap.org/domain/{urllib.parse.quote(domain, safe='.')}", timeout)
+        events = payload.get("events") if isinstance(payload, dict) else None
+        if not isinstance(events, list):
+            return None
+        for event in events:
+            if not isinstance(event, dict) or str(event.get("eventAction", "")).lower() not in {"registration", "creation"}:
+                continue
+            age = _age_since(event.get("eventDate"))
+            if age is not None:
+                return age
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _crtsh_rows(domain: str, timeout: float, fetch_json: Callable[[str, float], object | None]) -> list[dict[str, object]] | None:
+    try:
+        query = urllib.parse.urlencode({"q": f"%.{domain}", "output": "json"})
+        payload = fetch_json(f"https://crt.sh/?{query}", timeout)
+        return [row for row in payload if isinstance(row, dict)] if isinstance(payload, list) else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def crtsh_first_seen_age_years(
+    domain: str, *, timeout: float = 3.0,
+    fetch_json: Callable[[str, float], object | None] = _fetch_json,
+) -> float | None:
+    """Return age of the earliest CT certificate observation, or None."""
+    rows = _crtsh_rows(domain, timeout, fetch_json)
+    if rows is None:
+        return None
+    dates = [age for row in rows if (age := _age_since(row.get("not_before"))) is not None]
+    # The largest age corresponds to the earliest not_before date.
+    return max(dates) if dates else None
+
+
+def estimate_subdomain_count(
+    domain: str, *, timeout: float = 3.0,
+    fetch_json: Callable[[str, float], object | None] = _fetch_json,
+) -> int | None:
+    """Count distinct in-scope names in crt.sh results, capped defensively."""
+    rows = _crtsh_rows(domain, timeout, fetch_json)
+    if rows is None:
+        return None
+    apex = domain.strip().lower().rstrip(".")
+    names: set[str] = set()
+    for row in rows:
+        for raw in str(row.get("name_value", "")).splitlines():
+            name = raw.strip().lower().lstrip("*.").rstrip(".")
+            if name.endswith("." + apex):
+                names.add(name)
+                if len(names) >= 10000:
+                    return len(names)
+    return len(names)
+
+
+def mega_domain_signals(domain: str) -> tuple[float | None, int | None]:
+    """Resolve age and surface independently; either failed lookup stays unknown."""
+    rdap_age = domain_age_years(domain)
+    ct_age = crtsh_first_seen_age_years(domain) if rdap_age is None else None
+    return rdap_age if rdap_age is not None else ct_age, estimate_subdomain_count(domain)
 
 
 def mega_domain_decision(
