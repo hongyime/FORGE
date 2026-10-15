@@ -40,6 +40,7 @@ from forge.autopilot.scheduler import (
     read_recorded_worker_memory_p95,
     record_child_memory_sample,
     record_worker_memory_p95,
+    resolve_p95_worker_memory_mb,
     reap_stale_leases,
     release_lease,
     sample_process_resources,
@@ -1086,6 +1087,89 @@ def test_child_memory_invalid_samples_and_pruning(tmp_path: Path, monkeypatch: p
     with sqlite3.connect(db_path) as con:
         rows = con.execute("SELECT peak_rss_kb FROM child_memory_samples ORDER BY id").fetchall()
     assert rows == [(3,), (4,), (5,), (6,), (7,)]
+
+
+def test_resolve_p95_worker_memory_precedence(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    for value in range(102_400, 102_501):
+        assert record_child_memory_sample(value, data_dir=tmp_path)
+    recorded = record_worker_memory_p95(data_dir=tmp_path)
+    assert recorded is not None
+    assert recorded["p95_worker_memory_mb"] == pytest.approx(102_495 / 1024.0)
+
+    assert resolve_p95_worker_memory_mb(
+        SimpleNamespace(autopilot_p95_worker_memory_mb=512), data_dir=tmp_path
+    ) == 512
+    assert resolve_p95_worker_memory_mb(
+        SimpleNamespace(autopilot_p95_worker_memory_mb=0), data_dir=tmp_path
+    ) == 100
+
+    empty_dir = tmp_path / "empty"
+    assert resolve_p95_worker_memory_mb(
+        SimpleNamespace(autopilot_p95_worker_memory_mb=0), data_dir=empty_dir
+    ) == 0
+    assert resolve_p95_worker_memory_mb(None, data_dir=tmp_path) == 100
+    assert resolve_p95_worker_memory_mb(
+        SimpleNamespace(autopilot_p95_worker_memory_mb=-5), data_dir=tmp_path
+    ) == 100
+    assert resolve_p95_worker_memory_mb(
+        SimpleNamespace(autopilot_p95_worker_memory_mb="abc"), data_dir=tmp_path
+    ) == 100
+
+
+def test_recorded_p95_tightens_budget_snapshot(tmp_path: Path) -> None:
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_p95_worker_memory_mb=0)
+    without_recorded = get_budget_snapshot(data_dir=tmp_path, config=cfg).total_slots  # type: ignore[arg-type]
+    assert without_recorded == min(4, max(1, int((os.cpu_count() or 1) * 0.75)))
+
+    for _ in range(20):
+        assert record_child_memory_sample(1_000_000_000, data_dir=tmp_path)
+    assert record_worker_memory_p95(data_dir=tmp_path) is not None
+    with_recorded = get_budget_snapshot(data_dir=tmp_path, config=cfg).total_slots  # type: ignore[arg-type]
+    assert with_recorded == 0
+    assert with_recorded < without_recorded
+
+
+def test_small_recorded_p95_does_not_tighten_budget_snapshot(tmp_path: Path) -> None:
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_p95_worker_memory_mb=0)
+    without_recorded = get_budget_snapshot(data_dir=tmp_path, config=cfg).total_slots  # type: ignore[arg-type]
+    for _ in range(20):
+        assert record_child_memory_sample(1024, data_dir=tmp_path)
+    assert record_worker_memory_p95(data_dir=tmp_path) is not None
+    with_recorded = get_budget_snapshot(data_dir=tmp_path, config=cfg).total_slots  # type: ignore[arg-type]
+    assert with_recorded == without_recorded
+
+
+def test_acquire_lease_uses_recorded_p95_budget(tmp_path: Path) -> None:
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_p95_worker_memory_mb=0)
+    without_recorded = acquire_lease(
+        target_key="domain:unmeasured.test",
+        target_value="unmeasured.test",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=1,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert without_recorded.acquired is True
+    assert without_recorded.lease is not None
+    assert release_lease(without_recorded.lease.lease_id, data_dir=tmp_path)
+
+    for _ in range(20):
+        assert record_child_memory_sample(1_000_000_000, data_dir=tmp_path)
+    assert record_worker_memory_p95(data_dir=tmp_path) is not None
+    with_recorded = acquire_lease(
+        target_key="domain:measured.test",
+        target_value="measured.test",
+        target_type="domain",
+        engagement_id=2,
+        requested_slots=1,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert with_recorded.acquired is False
+    assert with_recorded.reason == "slots_exhausted"
 
 
 def test_start_kill_chain_records_child_memory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

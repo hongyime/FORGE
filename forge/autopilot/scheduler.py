@@ -324,6 +324,32 @@ def read_recorded_worker_memory_p95(
                 pass
 
 
+def resolve_p95_worker_memory_mb(
+    config: ForgeConfig | None, *, data_dir: Path | str | None = None
+) -> int:
+    """Resolve p95 memory: config/env, then recorded measurement, then 0.
+
+    The recorded value is the measured p95 from T2.1b. A value of 0 means
+    unmeasured, so the worker budget falls back to configured slots.
+    """
+    try:
+        cfg = (
+            getattr(config, "autopilot_p95_worker_memory_mb", 0)
+            if config is not None
+            else 0
+        )
+        if isinstance(cfg, (int, float)) and not isinstance(cfg, bool) and cfg > 0:
+            return int(cfg)
+        recorded = read_recorded_worker_memory_p95(data_dir=data_dir)
+        if recorded is not None:
+            val = recorded.get("p95_worker_memory_mb")
+            if isinstance(val, (int, float)) and not isinstance(val, bool) and val > 0:
+                return int(val)
+    except Exception:
+        return 0
+    return 0
+
+
 def compute_worker_budget(
     configured_slots: int = DEFAULT_GLOBAL_SLOTS,
     *,
@@ -340,8 +366,9 @@ def compute_worker_budget(
         floor(effective_cpu_count * 0.75)
     )
 
-    Baseline rule: Until measured_p95_mb_per_worker > 0, W defaults strictly
-    to configured_slots.
+    Callers resolve p95 via :func:`resolve_p95_worker_memory_mb`: explicit
+    config/env first, recorded measurement second, and 0 when unmeasured, which
+    makes W default strictly to configured_slots.
     """
     configured = max(0, int(configured_slots))
     if p95_worker_memory_mb <= 0:
@@ -394,11 +421,7 @@ def get_budget_snapshot(
             if config
             else DEFAULT_GLOBAL_SLOTS
         )
-        p95_mem = (
-            getattr(config, "autopilot_p95_worker_memory_mb", 0)
-            if config
-            else 0
-        )
+        p95_mem = resolve_p95_worker_memory_mb(config, data_dir=data_dir)
         reserve_mb = (
             getattr(config, "autopilot_memory_reserve_mb", DEFAULT_MEMORY_RESERVE_MB)
             if config
@@ -617,11 +640,7 @@ def acquire_lease(
         if config
         else DEFAULT_GLOBAL_SLOTS
     )
-    p95_mem = (
-        getattr(config, "autopilot_p95_worker_memory_mb", 0)
-        if config
-        else 0
-    )
+    p95_mem = resolve_p95_worker_memory_mb(config, data_dir=data_dir)
     reserve_mb = (
         getattr(config, "autopilot_memory_reserve_mb", DEFAULT_MEMORY_RESERVE_MB)
         if config
