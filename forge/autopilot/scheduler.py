@@ -178,17 +178,11 @@ def ensure_child_memory_schema(con: sqlite3.Connection) -> None:
     )
 
 
-def record_child_memory_sample(
-    peak_rss_kb: Any, *, data_dir: Path | str | None = None
-) -> bool:
+def record_child_memory_sample(peak_rss_kb: Any, *, data_dir: Path | str | None = None) -> bool:
     """Persist an aggregate child RSS sample; telemetry failures never raise."""
     con = None
     try:
-        if (
-            not isinstance(peak_rss_kb, int)
-            or isinstance(peak_rss_kb, bool)
-            or peak_rss_kb <= 0
-        ):
+        if not isinstance(peak_rss_kb, int) or isinstance(peak_rss_kb, bool) or peak_rss_kb <= 0:
             return False
         con = direct_connect(scheduler_db_path(data_dir))
         ensure_child_memory_schema(con)
@@ -213,9 +207,7 @@ def record_child_memory_sample(
                 pass
 
 
-def compute_child_memory_p95(
-    *, data_dir: Path | str | None = None
-) -> dict[str, Any] | None:
+def compute_child_memory_p95(*, data_dir: Path | str | None = None) -> dict[str, Any] | None:
     """Compute measured p95 RSS for the operator.
 
     After a live run, read it with :func:`read_recorded_worker_memory_p95` or
@@ -228,8 +220,7 @@ def compute_child_memory_p95(
         con = direct_connect(scheduler_db_path(data_dir))
         ensure_child_memory_schema(con)
         rows = con.execute(
-            "SELECT peak_rss_kb, recorded_at FROM child_memory_samples "
-            "ORDER BY recorded_at, id"
+            "SELECT peak_rss_kb, recorded_at FROM child_memory_samples ORDER BY recorded_at, id"
         ).fetchall()
         if not rows:
             return None
@@ -251,9 +242,7 @@ def compute_child_memory_p95(
                 pass
 
 
-def record_worker_memory_p95(
-    *, data_dir: Path | str | None = None
-) -> dict[str, Any] | None:
+def record_worker_memory_p95(*, data_dir: Path | str | None = None) -> dict[str, Any] | None:
     """Store aggregate p95 and return the operator-readable value.
 
     After a live run, read it with :func:`read_recorded_worker_memory_p95` or
@@ -288,9 +277,7 @@ def record_worker_memory_p95(
                 pass
 
 
-def read_recorded_worker_memory_p95(
-    *, data_dir: Path | str | None = None
-) -> dict[str, Any] | None:
+def read_recorded_worker_memory_p95(*, data_dir: Path | str | None = None) -> dict[str, Any] | None:
     """Read the stored p95 for the operator.
 
     After a live run, this value is also available in cycle_end details
@@ -333,11 +320,7 @@ def resolve_p95_worker_memory_mb(
     unmeasured, so the worker budget falls back to configured slots.
     """
     try:
-        cfg = (
-            getattr(config, "autopilot_p95_worker_memory_mb", 0)
-            if config is not None
-            else 0
-        )
+        cfg = getattr(config, "autopilot_p95_worker_memory_mb", 0) if config is not None else 0
         if isinstance(cfg, (int, float)) and not isinstance(cfg, bool) and cfg > 0:
             return int(cfg)
         recorded = read_recorded_worker_memory_p95(data_dir=data_dir)
@@ -375,16 +358,7 @@ def compute_worker_budget(
         return configured
 
     if mem_available_mb is None:
-        try:
-            meminfo_path = Path("/proc/meminfo")
-            if meminfo_path.is_file():
-                for line in meminfo_path.read_text(encoding="utf-8").splitlines():
-                    if line.startswith("MemAvailable:"):
-                        parts = line.split()
-                        mem_available_mb = int(parts[1]) // 1024
-                        break
-        except Exception:
-            pass
+        mem_available_mb = read_mem_available_mb()
     if mem_available_mb is None:
         mem_available_mb = memory_reserve_mb + (configured * p95_worker_memory_mb)
 
@@ -399,6 +373,19 @@ def compute_worker_budget(
         mem_slots = available_mem // p95_worker_memory_mb
 
     return max(0, min(configured, mem_slots, cpu_slots))
+
+
+def read_mem_available_mb() -> int | None:
+    """Read Linux MemAvailable in MiB, returning None when unavailable."""
+    try:
+        meminfo_path = Path("/proc/meminfo")
+        if meminfo_path.is_file():
+            for line in meminfo_path.read_text(encoding="utf-8").splitlines():
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) // 1024
+    except Exception:
+        pass
+    return None
 
 
 def get_budget_snapshot(
@@ -490,9 +477,7 @@ def sample_process_resources() -> dict[str, float | int]:
         return {}
 
 
-def provider_inflight_count(
-    provider: str, *, data_dir: Path | str | None = None
-) -> int:
+def provider_inflight_count(provider: str, *, data_dir: Path | str | None = None) -> int:
     """Return the active lease count for a provider, or zero if unavailable."""
     try:
         con = direct_connect(scheduler_db_path(data_dir))
@@ -707,9 +692,7 @@ def acquire_lease(
                 )
 
             # 3. Max active targets reached
-            cur.execute(
-                "SELECT COUNT(DISTINCT target_key) FROM leases WHERE status = 'active'"
-            )
+            cur.execute("SELECT COUNT(DISTINCT target_key) FROM leases WHERE status = 'active'")
             row = cur.fetchone()
             active_targets_count = int(row[0]) if row else 0
             if active_targets_count >= max_active_targets:
@@ -721,9 +704,7 @@ def acquire_lease(
                 )
 
             # 4. Slots exhausted
-            cur.execute(
-                "SELECT COALESCE(SUM(slot_count), 0) FROM leases WHERE status = 'active'"
-            )
+            cur.execute("SELECT COALESCE(SUM(slot_count), 0) FROM leases WHERE status = 'active'")
             row = cur.fetchone()
             leased_slots = int(row[0]) if row else 0
             available_slots = total_slots - leased_slots
@@ -864,9 +845,7 @@ def list_active_leases(
     try:
         ensure_scheduler_schema(con)
         con.row_factory = sqlite3.Row
-        cur = con.execute(
-            "SELECT * FROM leases WHERE status = 'active' ORDER BY acquired_at ASC"
-        )
+        cur = con.execute("SELECT * FROM leases WHERE status = 'active' ORDER BY acquired_at ASC")
         rows = cur.fetchall()
         leases: list[Lease] = []
         for r in rows:

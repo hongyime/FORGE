@@ -53,6 +53,36 @@ def _parse_iso(iso_str: str) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def count_breaker_trips_7d(
+    data_dir: Path | str | None = None, *, now: datetime | None = None
+) -> int:
+    """Count provider breakers tripped in the last seven days.
+
+    A provider that re-trips within seven days counts once because
+    ``provider_breakers`` stores one row per provider. Exact per-trip counting
+    would require a separate trip-events table. Telemetry is best-effort and
+    returns zero if the database cannot be read.
+    """
+    try:
+        from forge.autopilot.scheduler import scheduler_db_path
+
+        end = _ensure_utc(now)
+        start = (end - timedelta(days=7)).isoformat()
+        db_path = scheduler_db_path(data_dir).resolve()
+        conn = direct_connect(db_path.as_uri() + "?mode=ro", uri=True)
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM provider_breakers "
+                "WHERE last_tripped_at IS NOT NULL AND last_tripped_at >= ? AND last_tripped_at <= ?",
+                (start, end.isoformat()),
+            ).fetchone()
+            return int(row[0]) if row else 0
+        finally:
+            conn.close()
+    except Exception:
+        return 0
+
+
 def canonical_provider(scope_or_url: str | None, url: str | None = None) -> str:
     """Normalize a scope, service name, URL, or domain to a canonical provider key."""
     raw = str(scope_or_url or "").strip().lower()
@@ -131,8 +161,11 @@ def ensure_breaker_schema(con: sqlite3.Connection) -> None:
 
 
 def record_child_failure(
-    provider: str | None = None, reason: str | None = None, *,
-    data_dir: Path | str | None = None, now: datetime | None = None,
+    provider: str | None = None,
+    reason: str | None = None,
+    *,
+    data_dir: Path | str | None = None,
+    now: datetime | None = None,
 ) -> bool:
     """Persist a child failure and reevaluate the global breaker."""
     ref_time = _ensure_utc(now)
@@ -157,7 +190,8 @@ def record_child_failure(
 
 
 def check_resource_pressure(
-    *, mem_available_mb: float | None = None,
+    *,
+    mem_available_mb: float | None = None,
     load1: float | None = None,
     cpu_count: int | None = None,
 ) -> tuple[bool, str]:
@@ -175,7 +209,9 @@ def check_resource_pressure(
         if available is not None and available < DEFAULT_MEMORY_PRESSURE_BYTES:
             return True, "memory_pressure"
         try:
-            effective_cpu_count = cpu_count or getattr(os, "process_cpu_count", lambda: None)() or os.cpu_count() or 1
+            effective_cpu_count = (
+                cpu_count or getattr(os, "process_cpu_count", lambda: None)() or os.cpu_count() or 1
+            )
             effective_load1 = load1 if load1 is not None else os.getloadavg()[0]
             if effective_load1 > effective_cpu_count * DEFAULT_CPU_LOAD_PER_CORE:
                 return True, "cpu_pressure"
@@ -298,8 +334,9 @@ def record_rate_limit(
     return tripped
 
 
-def record_provider_backoff(provider: str, *, data_dir: Path | str | None = None,
-                            now: datetime | None = None) -> None:
+def record_provider_backoff(
+    provider: str, *, data_dir: Path | str | None = None, now: datetime | None = None
+) -> None:
     """Persist a provider backoff in the scheduler event stream."""
     from forge.autopilot.scheduler import scheduler_db_path
 
@@ -312,8 +349,10 @@ def record_provider_backoff(provider: str, *, data_dir: Path | str | None = None
                 "INSERT INTO provider_events (provider, event_type, recorded_at, details) VALUES (?, 'backoff', ?, NULL)",
                 (canonical_provider(provider), at),
             )
-            con.execute("DELETE FROM provider_events WHERE recorded_at < ?",
-                        (( _ensure_utc(now) - timedelta(days=7)).isoformat(),))
+            con.execute(
+                "DELETE FROM provider_events WHERE recorded_at < ?",
+                ((_ensure_utc(now) - timedelta(days=7)).isoformat(),),
+            )
     finally:
         con.close()
 
@@ -512,7 +551,9 @@ def check_and_update_global_breaker(
                 should_trip = True
                 trip_reason = "global_event_threshold"
 
-            child_cutoff = (ref_time - timedelta(seconds=DEFAULT_CHILD_FAILURE_WINDOW_SECONDS)).isoformat()
+            child_cutoff = (
+                ref_time - timedelta(seconds=DEFAULT_CHILD_FAILURE_WINDOW_SECONDS)
+            ).isoformat()
             cur = con.execute(
                 "SELECT COUNT(*) FROM provider_events WHERE event_type = 'child_failure' AND recorded_at >= ?",
                 (child_cutoff,),

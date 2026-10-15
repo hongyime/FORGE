@@ -174,7 +174,7 @@ def test_m0054_repairs_v53_ghost_fks_preserving_rows_and_accepting_inserts(
 ) -> None:
     conn = _build_v53_fixture(tmp_path / "ghost-v53.db", ghost_fks=True)
     try:
-        assert TARGET_VERSION == 55
+        assert TARGET_VERSION == 56
         assert _fk_targets(conn, "seed_relations")["source_seed_id"] == _GHOST_PARENT
         assert _fk_targets(conn, "seed_runs")["seed_id"] == _GHOST_PARENT
         before = {
@@ -185,7 +185,7 @@ def test_m0054_repairs_v53_ghost_fks_preserving_rows_and_accepting_inserts(
         run_migrations(conn)
         run_migrations(conn)
 
-        assert conn.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 55
+        assert conn.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 56
         for table in ("seed_relations", "seed_runs"):
             targets = _fk_targets(conn, table)
             assert "engagement_seeds" in targets.values()

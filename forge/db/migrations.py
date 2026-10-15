@@ -1828,8 +1828,7 @@ def _m0046_remediation_risk_acceptance_expiry(conn: sqlite3.Connection) -> None:
         return
     _safe_alter(conn, "ALTER TABLE remediation_items ADD COLUMN risk_acceptance_expires_at TEXT")
     columns = {
-        str(row[1])
-        for row in conn.execute("PRAGMA table_info(remediation_items)").fetchall()
+        str(row[1]) for row in conn.execute("PRAGMA table_info(remediation_items)").fetchall()
     }
     if {"engagement_id", "status", "risk_acceptance_expires_at"} <= columns:
         conn.execute(
@@ -2316,7 +2315,9 @@ def _m0040_asset_graph_evidence_nodes(conn: sqlite3.Connection) -> None:
             )
         violations = conn.execute("PRAGMA foreign_key_check").fetchall()
         if violations:
-            raise RuntimeError(f"asset graph evidence migration left foreign key violations: {violations[:5]}")
+            raise RuntimeError(
+                f"asset graph evidence migration left foreign key violations: {violations[:5]}"
+            )
         conn.commit()
     except Exception:
         conn.rollback()
@@ -2332,23 +2333,40 @@ def _m0041_vulnerability_standards_metadata(conn: sqlite3.Connection) -> None:
         conn.commit()
         return
     _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cve_id TEXT")
-    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cvss_version TEXT NOT NULL DEFAULT ''")
-    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cvss_vector TEXT NOT NULL DEFAULT ''")
-    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cwe_ids TEXT NOT NULL DEFAULT '[]'")
-    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cpe_matches TEXT NOT NULL DEFAULT '[]'")
+    _safe_alter(
+        conn, "ALTER TABLE vulnerability_findings ADD COLUMN cvss_version TEXT NOT NULL DEFAULT ''"
+    )
+    _safe_alter(
+        conn, "ALTER TABLE vulnerability_findings ADD COLUMN cvss_vector TEXT NOT NULL DEFAULT ''"
+    )
+    _safe_alter(
+        conn, "ALTER TABLE vulnerability_findings ADD COLUMN cwe_ids TEXT NOT NULL DEFAULT '[]'"
+    )
+    _safe_alter(
+        conn, "ALTER TABLE vulnerability_findings ADD COLUMN cpe_matches TEXT NOT NULL DEFAULT '[]'"
+    )
     _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN epss_score REAL")
     _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN epss_percentile REAL")
     _safe_alter(
         conn,
         "ALTER TABLE vulnerability_findings ADD COLUMN cisa_kev INTEGER NOT NULL DEFAULT 0 CHECK (cisa_kev IN (0, 1))",
     )
-    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cisa_kev_due_date TEXT NOT NULL DEFAULT ''")
-    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN attack_techniques TEXT NOT NULL DEFAULT '[]'")
+    _safe_alter(
+        conn,
+        "ALTER TABLE vulnerability_findings ADD COLUMN cisa_kev_due_date TEXT NOT NULL DEFAULT ''",
+    )
+    _safe_alter(
+        conn,
+        "ALTER TABLE vulnerability_findings ADD COLUMN attack_techniques TEXT NOT NULL DEFAULT '[]'",
+    )
     _safe_alter(
         conn,
         "ALTER TABLE vulnerability_findings ADD COLUMN stix_external_refs_json TEXT NOT NULL DEFAULT '[]'",
     )
-    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN standards_json TEXT NOT NULL DEFAULT '{}'")
+    _safe_alter(
+        conn,
+        "ALTER TABLE vulnerability_findings ADD COLUMN standards_json TEXT NOT NULL DEFAULT '{}'",
+    )
     conn.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_vuln_findings_cve
@@ -2599,6 +2617,7 @@ def _m0044_retention_policies(conn: sqlite3.Connection) -> None:
     )
     conn.commit()
 
+
 def _m0050_active_session_relationship_check(conn: sqlite3.Connection) -> None:
     """Rebuild asset_relationships CHECK to include 'active_session'.
 
@@ -2823,6 +2842,7 @@ def _m0053_autopilot_loop_events(conn: sqlite3.Connection) -> None:
                                'target_engaged', 'target_completed', 'target_failed',
                                'target_retry_queued', 'target_retry_attempted',
                                'target_retry_budget_exhausted',
+                               'tuning_decision',
                                'error', 'cooldown_start'
                            )),
             phase_name     TEXT,
@@ -2959,11 +2979,57 @@ def _m0055_autopilot_retry_event_types(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _m0056_tuning_decision_event_type(conn: sqlite3.Connection) -> None:
+    """Allow tuning decision events while preserving the existing event stream."""
+
+    if not _table_exists(conn, "autopilot_cycle_events"):
+        conn.commit()
+        return
+    if _table_sql_contains(conn, "autopilot_cycle_events", "'tuning_decision'"):
+        conn.commit()
+        return
+
+    _rebuild_table(
+        conn,
+        "autopilot_cycle_events",
+        """
+        CREATE TABLE autopilot_cycle_events (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            cycle_id       TEXT    NOT NULL,
+            cycle_number   INTEGER NOT NULL,
+            event_type     TEXT    NOT NULL CHECK (event_type IN (
+                               'cycle_start', 'cycle_end',
+                               'phase_start', 'phase_end',
+                               'target_engaged', 'target_completed', 'target_failed',
+                               'target_retry_queued', 'target_retry_attempted',
+                               'target_retry_budget_exhausted',
+                               'tuning_decision',
+                               'error', 'cooldown_start'
+                           )),
+            phase_name     TEXT,
+            phase_index    INTEGER CHECK (phase_index BETWEEN 1 AND 8),
+            occurred_at    TEXT    NOT NULL,
+            details_json   TEXT    NOT NULL DEFAULT '{}'
+        )
+        """,
+        [
+            "CREATE INDEX IF NOT EXISTS idx_autopilot_cycle_events_cycle "
+            "ON autopilot_cycle_events (cycle_id, id)",
+            "CREATE INDEX IF NOT EXISTS idx_autopilot_cycle_events_latest "
+            "ON autopilot_cycle_events (occurred_at DESC, id DESC)",
+        ],
+    )
+    conn.commit()
+
+
 def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
-    return conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
-        (table_name,),
-    ).fetchone() is not None
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (table_name,),
+        ).fetchone()
+        is not None
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -3030,6 +3096,7 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (53, "autopilot_loop_events", _m0053_autopilot_loop_events),
     (54, "seed_fk_targets", _m0054_seed_fk_targets),
     (55, "autopilot_retry_event_types", _m0055_autopilot_retry_event_types),
+    (56, "tuning_decision_event_type", _m0056_tuning_decision_event_type),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)
@@ -3096,8 +3163,7 @@ def _repair_current_schema_drift(conn: sqlite3.Connection, *, current_version: i
     if not _table_sql_contains(conn, "remediation_items", "remediation_items"):
         return
     remediation_columns = {
-        str(row[1])
-        for row in conn.execute("PRAGMA table_info(remediation_items)").fetchall()
+        str(row[1]) for row in conn.execute("PRAGMA table_info(remediation_items)").fetchall()
     }
     if "risk_acceptance_expires_at" in remediation_columns:
         return
@@ -3191,11 +3257,9 @@ def _rebuild_table(
     )
     if create_match is None:
         raise ValueError(f"cannot identify CREATE TABLE name for {table_name!r}")
-    create_name = create_match.group(2).strip("\"`[]")
+    create_name = create_match.group(2).strip('"`[]')
     if create_name.lower() != table_name.lower():
-        raise ValueError(
-            f"CREATE TABLE name {create_name!r} does not match {table_name!r}"
-        )
+        raise ValueError(f"CREATE TABLE name {create_name!r} does not match {table_name!r}")
     replacement_sql = (
         create_table_sql[: create_match.start(2)]
         + _quoted_identifier(temp_table)

@@ -33,17 +33,22 @@ from pathlib import Path
 from typing import Any, Callable
 
 from forge.autopilot.defaults import AUTOPILOT_MAX_TIMEOUT_RETRIES, AutopilotDefaults
+from forge.autopilot.breaker import count_breaker_trips_7d
 from forge.autopilot.events import (
     AutopilotEventWriter,
     conversion_7d_for_data_dir,
     feed_precision_for_data_dir,
+    record_tuning_decision,
     scoreboard_for_data_dir,
+    tuning_decisions_for_data_dir,
 )
 from forge.autopilot.scheduler import (
     get_budget_snapshot,
     is_kill_switch_active,
+    read_mem_available_mb,
     record_worker_memory_p95,
 )
+from forge.autopilot.tuning import decide_tuning
 from forge.config import ForgeConfig
 
 
@@ -140,9 +145,7 @@ class ForgeAutopilot:
         if safe_mode is None:
             safe_mode = bool(self._cfg.safe_mode)
         self.safe_mode = bool(safe_mode)
-        self.skip_phases: set[str] = {
-            p.lower().strip() for p in (skip_phases or set())
-        }
+        self.skip_phases: set[str] = {p.lower().strip() for p in (skip_phases or set())}
         self._event_writer = AutopilotEventWriter(self.data_dir)
         self._single_phase_active = False
         self._single_phase_fixture: dict[str, Any] | None = None
@@ -191,9 +194,7 @@ class ForgeAutopilot:
             "reports_dir": str(self.reports_dir),
             "feed_file": str(self.feed_file),
             "roe_id_present": self.has_roe,
-            "scope_manifest": (
-                str(self.scope_manifest) if self.scope_manifest else None
-            ),
+            "scope_manifest": (str(self.scope_manifest) if self.scope_manifest else None),
             "safe_mode": self.safe_mode,
             "default_execution_mode": self.resolve_execution_mode(dry_run=None),
             "defaults": asdict(self.defaults),
@@ -226,16 +227,13 @@ class ForgeAutopilot:
         mode = self.resolve_execution_mode(dry_run=dry_run)
         is_dry_run = mode == "dry_run"
         started_at = _now_iso()
-        self._event_writer.start_cycle(
-            details={"mode": mode, "dry_run": is_dry_run, "path": path}
-        )
+        self._event_writer.start_cycle(details={"mode": mode, "dry_run": is_dry_run, "path": path})
         phases: list[AutopilotPhaseResult] = []
         cycle_status = "error"
         finished_at = ""
         try:
             phase_indexes = {
-                phase_name: idx
-                for idx, phase_name in enumerate(self._PHASE_DISPATCH, start=1)
+                phase_name: idx for idx, phase_name in enumerate(self._PHASE_DISPATCH, start=1)
             }
             for name in phase_names:
                 phase_index = phase_indexes[name]
@@ -289,9 +287,7 @@ class ForgeAutopilot:
         finally:
             finished_at = finished_at or _now_iso()
             try:
-                conversion_7d = conversion_7d_for_data_dir(
-                    self.data_dir, now=finished_at
-                )
+                conversion_7d = conversion_7d_for_data_dir(self.data_dir, now=finished_at)
             except Exception:
                 conversion_7d = {
                     "available": False,
@@ -308,9 +304,7 @@ class ForgeAutopilot:
                     "cycles": 0,
                 }
             try:
-                max_active_targets = getattr(
-                    self._cfg, "autopilot_max_active_targets", None
-                )
+                max_active_targets = getattr(self._cfg, "autopilot_max_active_targets", None)
             except Exception:
                 max_active_targets = None
             try:
@@ -360,6 +354,74 @@ class ForgeAutopilot:
                 worker_memory_p95 = record_worker_memory_p95(data_dir=self.data_dir)
             except Exception:
                 worker_memory_p95 = None
+            try:
+                budget = get_budget_snapshot(data_dir=self.data_dir, config=self._cfg)
+                cpu_count = os.cpu_count() or 1
+                failures = scoreboard.get("failures", {})
+                events = scoreboard.get("events", {})
+                rate_limits = failures.get("rate_limit_by_provider", {})
+                rate_limit_count = (
+                    sum(
+                        value
+                        for value in rate_limits.values()
+                        if isinstance(value, (int, float)) and not isinstance(value, bool)
+                    )
+                    if isinstance(rate_limits, dict)
+                    else 0
+                )
+                try:
+                    from forge.autopilot.breaker import check_resource_pressure
+
+                    resource_pressure = bool(check_resource_pressure()[0])
+                except Exception:
+                    resource_pressure = False
+                telemetry = {
+                    "measured_p95_worker_memory_mb": (
+                        worker_memory_p95.get("p95_worker_memory_mb")
+                        if isinstance(worker_memory_p95, dict)
+                        else None
+                    ),
+                    "mem_available_mb": read_mem_available_mb(),
+                    "effective_cpu_count": cpu_count,
+                    "memory_reserve_mb": getattr(self._cfg, "autopilot_memory_reserve_mb", 4096),
+                    "active_targets": budget.active_targets_count,
+                    "leased_slots": budget.leased_slots,
+                    "rate_limit_429s": rate_limit_count,
+                    "timeouts": (failures.get("timeouts", 0) if isinstance(failures, dict) else 0),
+                    "breaker_trips": count_breaker_trips_7d(self.data_dir),
+                    "child_failures": events.get("target_failed", 0)
+                    if isinstance(events, dict)
+                    else 0,
+                    "resource_pressure": resource_pressure,
+                    "queue_p50_seconds": scoreboard.get("queue_seconds_p50"),
+                    "queue_p95_seconds": scoreboard.get("queue_seconds_p95"),
+                    "completed_runs_per_hour": scoreboard.get("completed_runs_per_hour", 0),
+                    "current_slots": budget.total_slots,
+                    "current_active_targets": budget.active_targets_count,
+                }
+                decisions = tuning_decisions_for_data_dir(self.data_dir)
+                if decisions:
+                    previous = decisions[0].get("telemetry_snapshot", {})
+                    if isinstance(previous, dict):
+                        telemetry["prior_window"] = {
+                            key: previous.get(key, 0)
+                            for key in (
+                                "rate_limit_429s",
+                                "timeouts",
+                                "breaker_trips",
+                                "child_failures",
+                            )
+                        }
+                decision = decide_tuning(telemetry, budget.total_slots, budget.active_targets_count)
+                record_tuning_decision(
+                    decision,
+                    data_dir=self.data_dir,
+                    occurred_at=finished_at,
+                    _writer=self._event_writer,
+                )
+            except Exception:
+                # Tuning is advisory telemetry; it must never interrupt a cycle.
+                pass
             self._event_writer.emit(
                 "cycle_end",
                 details={
@@ -438,13 +500,9 @@ class ForgeAutopilot:
                             scope_payload = None
                     if scope_payload is not None:
                         if not isinstance(scope_payload, dict):
-                            raise ValueError(
-                                "Fixture field 'scope_manifest' must be a JSON object"
-                            )
+                            raise ValueError("Fixture field 'scope_manifest' must be a JSON object")
                         self.scope_manifest = fixture_root / "scope-manifest.json"
-                        self.scope_manifest.write_text(
-                            json.dumps(scope_payload), encoding="utf-8"
-                        )
+                        self.scope_manifest.write_text(json.dumps(scope_payload), encoding="utf-8")
 
             self._event_writer.start_cycle(
                 details={
@@ -564,9 +622,7 @@ class ForgeAutopilot:
                     details={
                         "cooldown_minutes": int(self.defaults.cooldown_minutes),
                         "cooldown_seconds": cooldown,
-                        "next_cycle_at": (
-                            next_cycle_at.isoformat().replace("+00:00", "Z")
-                        ),
+                        "next_cycle_at": (next_cycle_at.isoformat().replace("+00:00", "Z")),
                     },
                 )
                 sleep(cooldown)
@@ -658,12 +714,8 @@ class ForgeAutopilot:
 
             details["discovery_metrics"] = {
                 "candidates_by_source": count_map(counts.get("by_source")),
-                "candidates_by_source_group": count_map(
-                    counts.get("by_source_group")
-                ),
-                "generated_candidate_total": count_value(
-                    counts.get("generated_candidate_total")
-                ),
+                "candidates_by_source_group": count_map(counts.get("by_source_group")),
+                "generated_candidate_total": count_value(counts.get("generated_candidate_total")),
                 "generated_unique_candidate_total": count_value(
                     counts.get("generated_unique_candidate_total")
                 ),
@@ -676,6 +728,7 @@ class ForgeAutopilot:
             }
             details["cohort_keys"] = phase.data.get("cohort_keys", [])
         if phase.name == "import_targets":
+
             def count_value(value: Any) -> int:
                 try:
                     return int(value)
@@ -818,9 +871,7 @@ class ForgeAutopilot:
             },
         )
 
-    def _phase_connected_services_scan(
-        self, *, dry_run: bool
-    ) -> AutopilotPhaseResult:
+    def _phase_connected_services_scan(self, *, dry_run: bool) -> AutopilotPhaseResult:
         """Spider every stored service connection into local seeds.
 
         Reads ``<data_dir>/connections.json`` and runs the deep scanner
@@ -860,9 +911,7 @@ class ForgeAutopilot:
                 service = str(entry.get("service") or "fixture")[:80]
                 seeds_value = entry.get("seeds", 0)
                 secret_hits_value = entry.get("secret_hits", 0)
-                seeds = (
-                    len(seeds_value) if isinstance(seeds_value, list) else int(seeds_value or 0)
-                )
+                seeds = len(seeds_value) if isinstance(seeds_value, list) else int(seeds_value or 0)
                 secret_hits = (
                     len(secret_hits_value)
                     if isinstance(secret_hits_value, list)
@@ -982,9 +1031,7 @@ class ForgeAutopilot:
             },
         )
 
-    def _scan_github_connection(
-        self, connection: Any, *, dry_run: bool
-    ) -> dict[str, Any]:
+    def _scan_github_connection(self, connection: Any, *, dry_run: bool) -> dict[str, Any]:
         """Deep-scan a single GitHub connection."""
         config = connection.config or {}
         token = str(config.get("token") or "").strip()
@@ -1073,9 +1120,7 @@ class ForgeAutopilot:
             "output_path": str(output_path),
         }
 
-    def _scan_supabase_connection(
-        self, connection: Any, *, dry_run: bool
-    ) -> dict[str, Any]:
+    def _scan_supabase_connection(self, connection: Any, *, dry_run: bool) -> dict[str, Any]:
         """Deep-scan a single Supabase connection."""
         config = connection.config or {}
         project_ref = str(config.get("project_ref") or "").strip()
@@ -1138,9 +1183,7 @@ class ForgeAutopilot:
                 "seeds": 0,
                 "secret_hits": 0,
             }
-        output_path = (
-            self.imports_dir / "connected-services-supabase-seeds.local.json"
-        )
+        output_path = self.imports_dir / "connected-services-supabase-seeds.local.json"
         try:
             self._write_seed_drop(
                 output_path,
@@ -1153,9 +1196,7 @@ class ForgeAutopilot:
                     "tables_total": result.tables_total,
                     "tables_scanned": result.tables_scanned,
                     "rows_scanned": result.rows_scanned,
-                    "transport": (
-                        "management_api" if management_pat else "postgrest"
-                    ),
+                    "transport": ("management_api" if management_pat else "postgrest"),
                     "source_errors": result.source_errors[-20:],
                 },
             )
@@ -1268,6 +1309,7 @@ class ForgeAutopilot:
     def _phase_feed_build(self, *, dry_run: bool) -> AutopilotPhaseResult:
         """Build and (when applying) write the local target feed."""
         from forge.targets_import import external_target_key
+
         fixture = self._single_phase_fixture if self._single_phase_active else None
         if fixture is not None:
             items = fixture.get("items", [])
@@ -1319,9 +1361,7 @@ class ForgeAutopilot:
                 limit=self.defaults.import_limit,
                 existing_feed_path=self.feed_file,
                 apply=not dry_run,
-                supabase_config_path=(
-                    self.imports_dir / "supabase-projects.local.json"
-                ),
+                supabase_config_path=(self.imports_dir / "supabase-projects.local.json"),
             )
         except Exception as exc:  # noqa: BLE001
             return AutopilotPhaseResult(
@@ -1370,12 +1410,15 @@ class ForgeAutopilot:
                         "source_family": str(item.get("source_kind") or "unknown"),
                         "target_type": str(item.get("target_type") or "other"),
                     }
-                    for item in (payload.get("items", []) if isinstance(payload.get("items"), list) else [])
+                    for item in (
+                        payload.get("items", []) if isinstance(payload.get("items"), list) else []
+                    )
                     if isinstance(item, dict)
                     and external_target_key(
                         str(item.get("target_type") or "other"),
                         str(item.get("canonical_value") or item.get("target_value") or ""),
-                    ) in set(payload.get("new_target_keys", []))
+                    )
+                    in set(payload.get("new_target_keys", []))
                 ],
             },
         )
@@ -1431,7 +1474,7 @@ class ForgeAutopilot:
                 status="error",
                 detail=f"feed_parse_error:{_bounded_text(exc)}",
             )
-        for item in (feed_payload.get("items") or []):
+        for item in feed_payload.get("items") or []:
             if not isinstance(item, dict):
                 continue
             try:
@@ -1611,9 +1654,7 @@ class ForgeAutopilot:
                 start_limit=self.defaults.start_limit,
                 min_start_source_count=self.defaults.min_start_source_count,
                 config=self._cfg,
-                progress_callback=self._target_progress_callback(
-                    "import_targets", 5
-                ),
+                progress_callback=self._target_progress_callback("import_targets", 5),
             )
         except Exception as exc:  # noqa: BLE001
             return AutopilotPhaseResult(
@@ -1637,9 +1678,7 @@ class ForgeAutopilot:
         )
         if start and not effective_dry_run and not start_stop_reason:
             start_stop_reason = "no_more_candidates"
-        unprocessed_count = sum(
-            int(getattr(r, "unprocessed_count", 0) or 0) for r in results
-        )
+        unprocessed_count = sum(int(getattr(r, "unprocessed_count", 0) or 0) for r in results)
         status_label = "ok"
         if effective_dry_run and not dry_run:
             status_label = "blocked"
@@ -1747,9 +1786,7 @@ class ForgeAutopilot:
                 dry_run=dry_run,
                 stop_on_failure=False,
                 break_stale_lock=True,
-                progress_callback=self._target_progress_callback(
-                    "resume_candidates", 6
-                ),
+                progress_callback=self._target_progress_callback("resume_candidates", 6),
             )
         except Exception as exc:  # noqa: BLE001
             return AutopilotPhaseResult(
@@ -1772,12 +1809,8 @@ class ForgeAutopilot:
                 "status": payload.get("status"),
                 "planned_count": payload.get("planned_count", 0),
                 "result_counts": dict(counts),
-                "skipped_blocker_counts": dict(
-                    payload.get("skipped_blocker_counts", {})
-                ),
-                "timeout_retry_summary": dict(
-                    payload.get("timeout_retry_summary", {})
-                ),
+                "skipped_blocker_counts": dict(payload.get("skipped_blocker_counts", {})),
+                "timeout_retry_summary": dict(payload.get("timeout_retry_summary", {})),
                 **self._scheduler_snapshot_data(),
             },
         )
@@ -2000,9 +2033,7 @@ class ForgeAutopilot:
 def _feed_snapshot_path(feed_file: Path) -> Path:
     """Return the stable sibling snapshot path for a target-feed file."""
     feed_file = Path(feed_file)
-    return feed_file.with_name(
-        f"{feed_file.stem}.snapshot{feed_file.suffix}"
-    )
+    return feed_file.with_name(f"{feed_file.stem}.snapshot{feed_file.suffix}")
 
 
 def _write_bytes_atomic(output_path: Path, payload: bytes) -> None:

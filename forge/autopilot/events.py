@@ -35,8 +35,89 @@ _EVENT_TYPES = frozenset(
         "target_retry_budget_exhausted",
         "error",
         "cooldown_start",
+        "tuning_decision",
     }
 )
+
+TUNING_TELEMETRY_ALLOWLIST = frozenset(
+    {
+        "measured_p95_worker_memory_mb",
+        "mem_available_mb",
+        "effective_cpu_count",
+        "memory_reserve_mb",
+        "active_targets",
+        "leased_slots",
+        "rate_limit_429s",
+        "timeouts",
+        "breaker_trips",
+        "child_failures",
+        "resource_pressure",
+        "queue_p50_seconds",
+        "queue_p95_seconds",
+        "completed_runs_per_hour",
+        "current_slots",
+        "current_active_targets",
+        "prior_window",
+    }
+)
+
+
+def _sanitize_tuning_snapshot(snapshot: Any) -> dict[str, Any]:
+    if not isinstance(snapshot, dict):
+        return {}
+    clean: dict[str, Any] = {}
+    for key, value in snapshot.items():
+        if key not in TUNING_TELEMETRY_ALLOWLIST:
+            continue
+        if key == "prior_window":
+            clean[key] = _sanitize_tuning_snapshot(value)
+        elif value is None or isinstance(value, (str, int, float, bool)):
+            clean[key] = value
+    return clean
+
+
+def record_tuning_decision(
+    decision: Any,
+    *,
+    data_dir: Path | str,
+    occurred_at: str | None = None,
+    _writer: AutopilotEventWriter | None = None,
+) -> None:
+    """Record one advisory tuning decision with an allowlisted snapshot."""
+    writer = _writer or AutopilotEventWriter(Path(data_dir))
+    writer.emit(
+        "tuning_decision",
+        details={
+            "action": decision.action,
+            "slot_delta": decision.slot_delta,
+            "target_delta": decision.target_delta,
+            "justification": decision.justification,
+            "telemetry_snapshot": _sanitize_tuning_snapshot(decision.telemetry_snapshot),
+        },
+        occurred_at=occurred_at,
+    )
+
+
+def tuning_decisions_for_data_dir(data_dir: Path | str) -> list[dict[str, Any]]:
+    """Return tuning decisions newest-first across engagement event databases."""
+    rows: list[tuple[str, int, dict[str, Any]]] = []
+    for db_path in numeric_engagement_db_files(Path(data_dir)):
+        try:
+            conn = _read_only_connection(db_path)
+            try:
+                if not _has_event_table(conn):
+                    continue
+                for row in conn.execute(
+                    "SELECT occurred_at, id, details_json FROM autopilot_cycle_events "
+                    "WHERE event_type='tuning_decision'"
+                ):
+                    rows.append((str(row[0] or ""), int(row[1]), _decode_details(row[2])))
+            finally:
+                conn.close()
+        except (OSError, sqlite3.Error):
+            continue
+    rows.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return [details for _, _, details in rows]
 
 
 def _now_iso() -> str:
@@ -131,15 +212,10 @@ def target_retry_state_for_target(
             event_engagement = int(details.get("engagement_id") or 0)
         except (TypeError, ValueError):
             continue
-        if (
-            event_engagement != wanted_engagement
-            or (
-                str(details.get("target_key") or "")
-                != external_target_key(
-                    str(details.get("target_type") or "other"), wanted_target
-                )
-                and str(details.get("target_value") or "") != wanted_target
-            )
+        if event_engagement != wanted_engagement or (
+            str(details.get("target_key") or "")
+            != external_target_key(str(details.get("target_type") or "other"), wanted_target)
+            and str(details.get("target_value") or "") != wanted_target
         ):
             continue
         event_name = str(event_type)
@@ -444,9 +520,7 @@ def _parse_timestamp(value: str) -> datetime:
     return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
 
 
-def conversion_7d_for_data_dir(
-    data_dir: Path | str, *, now: str | None = None
-) -> dict[str, Any]:
+def conversion_7d_for_data_dir(data_dir: Path | str, *, now: str | None = None) -> dict[str, Any]:
     """Measure distinct feed cohort keys completed within seven days of discovery."""
 
     def unavailable() -> dict[str, Any]:
@@ -477,7 +551,9 @@ def conversion_7d_for_data_dir(
     try:
         if not _has_event_table(conn):
             return unavailable()
-        rows = conn.execute("SELECT event_type, occurred_at, details_json FROM autopilot_cycle_events WHERE event_type IN ('phase_end','target_completed')").fetchall()
+        rows = conn.execute(
+            "SELECT event_type, occurred_at, details_json FROM autopilot_cycle_events WHERE event_type IN ('phase_end','target_completed')"
+        ).fetchall()
         cohorts: dict[str, datetime] = {}
         completed: dict[str, list[datetime]] = {}
         for event_type, timestamp, raw_details in rows:
@@ -492,10 +568,33 @@ def conversion_7d_for_data_dir(
                         cohorts.setdefault(str(item["target_key"]), stamp)
             elif event_type == "target_completed" and details.get("target_key"):
                 completed.setdefault(str(details["target_key"]), []).append(stamp)
-        converted = {key for key, cohort_at in cohorts.items() if any(cohort_at <= done <= cohort_at + timedelta(days=7) and done <= end for done in completed.get(key, []))}
+        converted = {
+            key
+            for key, cohort_at in cohorts.items()
+            if any(
+                cohort_at <= done <= cohort_at + timedelta(days=7) and done <= end
+                for done in completed.get(key, [])
+            )
+        }
         denominator = len(cohorts)
         ratio = len(converted) / denominator if denominator else None
-        return {"available": True, "window_days": 7, "window_start": start.isoformat().replace("+00:00", "Z"), "window_end": end.isoformat().replace("+00:00", "Z"), "cohort_keys": denominator, "completed_keys": len(converted), "conversion_7d": ratio, "candidates": denominator, "created": 0, "started": len(converted), "conversion_created": 0.0, "conversion_started": ratio if ratio is not None else 0.0, "candidates_by_source": {}, "phase_end_events": 0, "cycles": 0}
+        return {
+            "available": True,
+            "window_days": 7,
+            "window_start": start.isoformat().replace("+00:00", "Z"),
+            "window_end": end.isoformat().replace("+00:00", "Z"),
+            "cohort_keys": denominator,
+            "completed_keys": len(converted),
+            "conversion_7d": ratio,
+            "candidates": denominator,
+            "created": 0,
+            "started": len(converted),
+            "conversion_created": 0.0,
+            "conversion_started": ratio if ratio is not None else 0.0,
+            "candidates_by_source": {},
+            "phase_end_events": 0,
+            "cycles": 0,
+        }
     except sqlite3.Error:
         return unavailable()
     finally:
@@ -503,8 +602,13 @@ def conversion_7d_for_data_dir(
 
 
 def record_feed_review(
-    data_dir: Path | str, *, target_key: str, source_family: str,
-    target_type: str, confirmed_owned: bool, in_scope: bool,
+    data_dir: Path | str,
+    *,
+    target_key: str,
+    source_family: str,
+    target_type: str,
+    confirmed_owned: bool,
+    in_scope: bool,
 ) -> None:
     """Persist an explicit review outcome using only a hashed target key."""
     path = Path(data_dir) / "autopilot_reviewed_samples.json"
@@ -516,9 +620,16 @@ def record_feed_review(
     except (OSError, json.JSONDecodeError):
         samples = []
     samples = [sample for sample in samples if sample.get("target_key") != target_key]
-    samples.append({"target_key": str(target_key), "source_family": str(source_family),
-                    "target_type": str(target_type), "confirmed_owned": bool(confirmed_owned),
-                    "in_scope": bool(in_scope), "reviewed_at": _now_iso()})
+    samples.append(
+        {
+            "target_key": str(target_key),
+            "source_family": str(source_family),
+            "target_type": str(target_type),
+            "confirmed_owned": bool(confirmed_owned),
+            "in_scope": bool(in_scope),
+            "reviewed_at": _now_iso(),
+        }
+    )
     path.write_text(json.dumps(samples, sort_keys=True), encoding="utf-8")
 
 
@@ -533,16 +644,31 @@ def feed_precision_for_data_dir(data_dir: Path | str) -> dict[str, Any]:
     if isinstance(samples, list):
         for sample in samples:
             if isinstance(sample, dict) and sample.get("target_key"):
-                key = f"{sample.get('source_family', 'unknown')}:{sample.get('target_type', 'other')}"
+                key = (
+                    f"{sample.get('source_family', 'unknown')}:{sample.get('target_type', 'other')}"
+                )
                 grouped.setdefault(key, []).append(sample)
-    metrics = {key: {"reviewed": len(rows), "confirmed_in_scope": sum(bool(r.get("confirmed_owned") and r.get("in_scope")) for r in rows),
-                      "precision": sum(bool(r.get("confirmed_owned") and r.get("in_scope")) for r in rows) / len(rows)}
-               for key, rows in grouped.items() if rows}
+    metrics = {
+        key: {
+            "reviewed": len(rows),
+            "confirmed_in_scope": sum(
+                bool(r.get("confirmed_owned") and r.get("in_scope")) for r in rows
+            ),
+            "precision": sum(bool(r.get("confirmed_owned") and r.get("in_scope")) for r in rows)
+            / len(rows),
+        }
+        for key, rows in grouped.items()
+        if rows
+    }
     reviewed = sum(len(rows) for rows in grouped.values())
     successes = sum(metric["confirmed_in_scope"] for metric in metrics.values())
-    return {"available": bool(reviewed), "precision": successes / reviewed if reviewed else None,
-            "reviewed": reviewed, "confirmed_in_scope": successes,
-            "by_source_family_target_type": metrics}
+    return {
+        "available": bool(reviewed),
+        "precision": successes / reviewed if reviewed else None,
+        "reviewed": reviewed,
+        "confirmed_in_scope": successes,
+        "by_source_family_target_type": metrics,
+    }
 
 
 def scoreboard_for_data_dir(
@@ -626,14 +752,20 @@ def scoreboard_for_data_dir(
             return values[max(0, math.ceil(0.95 * len(values)) - 1)]
         return statistics.median(values)
 
-    def classify_oom(return_code: Any, output_text: Any, peak_memory_kb: Any,
-                     memory_limit_kb: Any) -> str:
+    def classify_oom(
+        return_code: Any, output_text: Any, peak_memory_kb: Any, memory_limit_kb: Any
+    ) -> str:
         """Classify OOM from explicit output or measured memory pressure."""
         text = str(output_text or "").lower()
-        evidence = any(marker in text for marker in
-                       ("out of memory", "memoryerror", "oom", "oom-killer"))
-        near_limit = (numeric(peak_memory_kb) and numeric(memory_limit_kb)
-                      and memory_limit_kb > 0 and peak_memory_kb >= memory_limit_kb * 0.9)
+        evidence = any(
+            marker in text for marker in ("out of memory", "memoryerror", "oom", "oom-killer")
+        )
+        near_limit = (
+            numeric(peak_memory_kb)
+            and numeric(memory_limit_kb)
+            and memory_limit_kb > 0
+            and peak_memory_kb >= memory_limit_kb * 0.9
+        )
         if evidence or near_limit:
             return "oom"
         try:
@@ -653,9 +785,7 @@ def scoreboard_for_data_dir(
         result["invariant"]["active_targets_violations"] = (
             0 if max_active_targets is not None else None
         )
-        result["invariant"]["leased_slots_violations"] = (
-            0 if total_slots is not None else None
-        )
+        result["invariant"]["leased_slots_violations"] = 0 if total_slots is not None else None
         rows = conn.execute(
             "SELECT event_type, phase_name, occurred_at, details_json "
             "FROM autopilot_cycle_events WHERE event_type IN "
@@ -690,12 +820,12 @@ def scoreboard_for_data_dir(
                     value = details.get(field_name)
                     if numeric(value):
                         samples = (
-                            active_samples
-                            if field_name == "active_targets"
-                            else leased_samples
+                            active_samples if field_name == "active_targets" else leased_samples
                         )
                         samples.append(value)
-                        limit = max_active_targets if field_name == "active_targets" else total_slots
+                        limit = (
+                            max_active_targets if field_name == "active_targets" else total_slots
+                        )
                         violation_key = (
                             "active_targets_violations"
                             if field_name == "active_targets"
@@ -726,9 +856,7 @@ def scoreboard_for_data_dir(
                         except (TypeError, ValueError, OverflowError):
                             continue
                         reason = str(reason)
-                        if count >= 0 and reason.startswith(
-                            ("non_global_", "mega_domain_")
-                        ):
+                        if count >= 0 and reason.startswith(("non_global_", "mega_domain_")):
                             failures["scope_rejects"] += count
                             by_reason[reason] = by_reason.get(reason, 0) + count
                 scheduler = details.get("scheduler")
@@ -758,12 +886,15 @@ def scoreboard_for_data_dir(
                     return_code = details.get("return_code")
                     if return_code == 124:
                         failures["timeouts"] += 1
-                    elif classify_oom(
-                        return_code,
-                        details.get("stderr_tail", ""),
-                        details.get("memory_peak_kb"),
-                        details.get("memory_limit_kb"),
-                    ) == "oom":
+                    elif (
+                        classify_oom(
+                            return_code,
+                            details.get("stderr_tail", ""),
+                            details.get("memory_peak_kb"),
+                            details.get("memory_limit_kb"),
+                        )
+                        == "oom"
+                    ):
                         failures["ooms"] += 1
                     if details.get("error_type") == "OperationalError":
                         failures["sqlite_errors"] += 1
