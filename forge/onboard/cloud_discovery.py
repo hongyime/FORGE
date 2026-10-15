@@ -22,6 +22,7 @@ class CloudAccount:
     first_seen_at: str = ""
     engagement_points: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
+    quarantined: bool = False
 
 
 def _now_iso() -> str:
@@ -122,6 +123,7 @@ def discover_aws_accounts(
                         first_seen_at=_now_iso(),
                         engagement_points=[],
                         extra={},
+                        quarantined=True,
                     )
                 )
                 seen.add(account_id)
@@ -132,10 +134,29 @@ def discover_aws_accounts(
         return []
 
 
+def _verify_gcp_project(project_id: str) -> bool:
+    """Verify project visibility with the authenticated Cloud Resource Manager API."""
+    try:
+        import google.auth
+        from google.auth.transport.requests import AuthorizedSession
+
+        credential, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        response = AuthorizedSession(credential).get(
+            f"https://cloudresourcemanager.googleapis.com/v1/projects/{project_id}",
+            timeout=5,
+        )
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
 def discover_gcp_projects(
-    *, credentials: list[Any] | None = None, include_metadata: bool = False
+    *, credentials: list[Any] | None = None, include_metadata: bool = False,
+    verifier: Any | None = None,
 ) -> list[CloudAccount]:
-    """Discover GCP projects from locally harvested credentials."""
+    """Discover projects and verify visibility when usable Google credentials exist."""
     accounts: list[CloudAccount] = []
     try:
         if credentials is not None:
@@ -148,6 +169,7 @@ def discover_gcp_projects(
             harvested = harvest_gcp_credentials(include_metadata=include_metadata)
 
         seen: set[str] = set()
+        verify = verifier or _verify_gcp_project
         for cred in harvested:
             try:
                 project_id = getattr(cred, "project_id", None)
@@ -160,6 +182,7 @@ def discover_gcp_projects(
 
                 source = getattr(cred, "source", None)
                 client_email = getattr(cred, "client_email", None)
+                verified = bool(verify(project_id))
                 accounts.append(
                     CloudAccount(
                         provider="gcp",
@@ -167,16 +190,13 @@ def discover_gcp_projects(
                         account_name=None,
                         regions=[],
                         services=[],
-                        discovery_source=f"offline:{source}" if source else "offline:harvest",
+                        discovery_source="cloudresourcemanager:projects.get" if verified else (f"offline:{source}" if source else "offline:harvest"),
                         first_seen_at=_now_iso(),
-                        engagement_points=[
-                            f"https://{project_id}.appspot.com",
-                            f"https://{project_id}.firebaseio.com",
-                            f"https://{project_id}.web.app",
-                        ],
+                        engagement_points=[],
                         extra={"client_email": client_email}
                         if isinstance(client_email, str) and client_email
                         else {},
+                        quarantined=not verified,
                     )
                 )
                 seen.add(project_id)
@@ -289,6 +309,7 @@ def discover_azure_subscriptions(
                         extra={"tenant_id": cred_tenant}
                         if isinstance(cred_tenant, str) and cred_tenant
                         else {},
+                        quarantined=True,
                     )
                 )
                 seen.add(normalized_id)
@@ -305,6 +326,10 @@ def discover_all_cloud_accounts(
     enable_aws: bool = True,
     enable_gcp: bool = True,
     enable_azure: bool = True,
+    aws_session: Any | None = None,
+    azure_client: Any | None = None,
+    gcp_verifier: Any | None = None,
+    gcp_credentials: list[Any] | None = None,
 ) -> tuple[list[CloudAccount], dict[str, str]]:
     """Run enabled cloud providers independently and combine their accounts."""
     providers = ("aws", "gcp", "azure")
@@ -322,9 +347,13 @@ def discover_all_cloud_accounts(
         )
         timeout = timeout_value if isinstance(timeout_value, (int, float)) else 5.0
         functions = {
-            "aws": lambda: discover_aws_accounts(timeout=timeout),
-            "gcp": discover_gcp_projects,
-            "azure": discover_azure_subscriptions,
+            "aws": lambda: discover_aws_accounts(session=aws_session, timeout=timeout),
+            "gcp": lambda: discover_gcp_projects(credentials=gcp_credentials, verifier=gcp_verifier),
+            "azure": lambda: (
+                discover_azure_subscriptions()
+                if azure_client is None
+                else discover_azure_subscriptions(client=azure_client)
+            ),
         }
         accounts: list[CloudAccount] = []
         skip_reasons: dict[str, str] = {}
@@ -351,27 +380,28 @@ def discover_all_cloud_accounts(
 def cloud_account_to_feed_candidate(
     account: CloudAccount,
     *,
-    confidence: float = 0.95,
+    confidence: float | None = None,
     first_seen_at: str | None = None,
 ) -> Any:
     """Convert a cloud account into its primary feed candidate."""
     from forge.automation_target_feed import FeedCandidate
 
     canonical_val = f"{account.provider}:{account.account_id}"
+    effective_confidence = confidence if confidence is not None else (0.4 if account.quarantined else 0.95)
     return FeedCandidate(
         target_type="cloud_ref",
         target_value=canonical_val,
         canonical_value=canonical_val,
         source_kind="cloud_discovery",
         source_group=f"cloud_discovery:{account.provider}",
-        confidence=confidence,
+        confidence=effective_confidence,
         first_seen_at=first_seen_at or account.first_seen_at or _now_iso(),
         provenance=f"cloud_discovery:{account.provider}:{account.discovery_source}",
     )
 
 
 def cloud_account_to_all_candidates(
-    account: CloudAccount, *, confidence: float = 0.95
+    account: CloudAccount, *, confidence: float | None = None
 ) -> list[Any]:
     """Convert a cloud account and its engagement points into feed candidates."""
     from forge.automation_target_feed import _candidate

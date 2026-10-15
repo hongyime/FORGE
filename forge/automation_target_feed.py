@@ -2258,6 +2258,7 @@ def build_target_feed(
     existing_feed_path: Path | None,
     apply: bool = False,
     supabase_config_path: Path | None = None,
+    cloud_discovery_accounts: list[Any] | None = None,
 ) -> dict[str, object]:
     selected_sources = [s.strip().lower() for s in sources if s.strip()]
     if not selected_sources:
@@ -2423,7 +2424,9 @@ def build_target_feed(
         else:
             try:
                 # Feed building has no config parameter, so discovery uses cfg=None.
-                accounts, _skip = discover_all_cloud_accounts()
+                accounts = cloud_discovery_accounts
+                if accounts is None:
+                    accounts, _skip = discover_all_cloud_accounts()
                 candidates = [
                     candidate
                     for account in accounts

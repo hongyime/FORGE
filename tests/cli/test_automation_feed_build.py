@@ -5,6 +5,7 @@ import json
 import sqlite3
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import typer
 import pytest
@@ -2833,6 +2834,51 @@ def test_feed_build_supabase_project_budgets_stop_extra_tables(
     assert discovery["scanned_table_rows"] == {"assets": 1}
     assert discovery["omitted_table_count"] == 2
     assert discovery["omitted_reason"] == "project_row_limit_reached"
+
+
+def test_mocked_cloud_provider_apis_flow_through_discovery_into_feed(tmp_path: Path) -> None:
+    from forge.onboard.cloud_discovery import discover_all_cloud_accounts
+
+    class AwsSession:
+        def client(self, name):
+            if name == "sts":
+                return SimpleNamespace(get_caller_identity=lambda: {"Account": "112233445566"})
+            return SimpleNamespace(list_account_aliases=lambda: {}, list_buckets=lambda: {})
+
+    class AzureSubscriptions:
+        def list(self):
+            return [SimpleNamespace(
+                subscription_id="a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                display_name="test subscription",
+                tenant_id="tenant",
+            )]
+
+    accounts, skips = discover_all_cloud_accounts(
+        aws_session=AwsSession(),
+        azure_client=SimpleNamespace(subscriptions=AzureSubscriptions()),
+        gcp_credentials=[SimpleNamespace(project_id="sample-project", source="mock-api")],
+        gcp_verifier=lambda project_id: project_id == "sample-project",
+    )
+    assert skips == {"aws": "ok", "gcp": "ok", "azure": "ok"}
+
+    payload = build_target_feed(
+        sources=["cloud_discovery"],
+        data_dir=tmp_path / "data",
+        reports_dir=None,
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=None,
+        cloud_discovery_accounts=accounts,
+    )
+    expected = {
+        "aws:112233445566": "cloud_discovery:aws:sts:get_caller_identity",
+        "gcp:sample-project": "cloud_discovery:gcp:cloudresourcemanager:projects.get",
+        "azure:a1b2c3d4-e5f6-7890-abcd-ef1234567890": "cloud_discovery:azure:azure_mgmt:subscriptions.list",
+    }
+    for canonical, provenance in expected.items():
+        item = next(row for row in payload["items"] if row["canonical_value"] == canonical)
+        assert item["provenance"] == provenance
+    assert payload["source_errors"] == []
 
 
 def test_feed_build_supabase_uses_greedy_default_limit_for_minimal_project(

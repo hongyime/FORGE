@@ -29,6 +29,7 @@ def test_cloud_account_required_fields_and_defaults() -> None:
     assert account.first_seen_at == ""
     assert account.engagement_points == []
     assert account.extra == {}
+    assert account.quarantined is False
     with pytest.raises(FrozenInstanceError):
         account.provider = "gcp"  # type: ignore[misc]
 
@@ -164,7 +165,7 @@ def test_discover_aws_accounts_never_raises_for_client_failure() -> None:
     assert discover_aws_accounts(session=RaisingSession()) == []
 
 
-def test_discover_gcp_projects_extracts_deduplicates_and_adds_engagement_points() -> None:
+def test_discover_gcp_projects_extracts_deduplicates_without_synthetic_engagement_points() -> None:
     from forge.collection.cloud.gcp_credentials import GCPCredential
 
     accounts = discover_gcp_projects(
@@ -185,11 +186,7 @@ def test_discover_gcp_projects_extracts_deduplicates_and_adds_engagement_points(
     account = accounts[0]
     assert account.provider == "gcp"
     assert account.account_id == "mock-project-123"
-    assert {
-        "https://mock-project-123.appspot.com",
-        "https://mock-project-123.firebaseio.com",
-        "https://mock-project-123.web.app",
-    }.issubset(account.engagement_points)
+    assert account.engagement_points == []
     assert account.extra["client_email"] == "svc@mock-project-123.iam.gserviceaccount.com"
 
 
@@ -474,6 +471,56 @@ def test_cloud_account_to_feed_candidate_and_overrides() -> None:
     )
     assert override.confidence == 0.5
     assert override.first_seen_at == "2026-10-15T01:00:00+00:00"
+
+
+def test_offline_aws_account_is_low_confidence_and_quarantined() -> None:
+    from forge.onboard.cloud_discovery import cloud_account_to_feed_candidate
+
+    account = discover_aws_accounts(credentials=[SimpleNamespace(account_id="112233445566")])[0]
+    candidate = cloud_account_to_feed_candidate(account)
+    assert account.quarantined is True
+    assert candidate.confidence <= 0.5
+
+
+def test_sts_verified_aws_account_is_high_confidence_and_not_quarantined() -> None:
+    from forge.onboard.cloud_discovery import cloud_account_to_feed_candidate
+
+    class Session:
+        def client(self, name):
+            if name == "sts":
+                return SimpleNamespace(get_caller_identity=lambda: {"Account": "112233445566"})
+            return SimpleNamespace(list_account_aliases=lambda: {}, list_buckets=lambda: {})
+
+    account = discover_aws_accounts(session=Session())[0]
+    candidate = cloud_account_to_feed_candidate(account)
+    assert candidate.confidence == 0.95
+    assert account.quarantined is False
+
+
+def test_gcp_live_verification_and_unverifiable_quarantine() -> None:
+    from forge.onboard.cloud_discovery import cloud_account_to_feed_candidate
+
+    credentials = [SimpleNamespace(project_id="sample-project", source="test")]
+    verified = discover_gcp_projects(credentials=credentials, verifier=lambda _: True)[0]
+    offline = discover_gcp_projects(credentials=credentials, verifier=lambda _: False)[0]
+    assert cloud_account_to_feed_candidate(verified).confidence == 0.95
+    assert verified.quarantined is False
+    assert cloud_account_to_feed_candidate(offline).confidence <= 0.5
+    assert offline.quarantined is True
+    assert offline.engagement_points == []
+
+
+def test_gcp_synthetic_urls_never_become_feed_candidates() -> None:
+    from forge.onboard.cloud_discovery import cloud_account_to_all_candidates
+
+    account = discover_gcp_projects(
+        credentials=[SimpleNamespace(project_id="sample-project", source="test")],
+        verifier=lambda _: False,
+    )[0]
+    candidates = cloud_account_to_all_candidates(account)
+    assert all("appspot.com" not in c.target_value for c in candidates)
+    assert all("firebaseio.com" not in c.target_value for c in candidates)
+    assert all("web.app" not in c.target_value for c in candidates)
 
 
 def test_cloud_account_to_all_candidates_includes_valid_engagement_point() -> None:
