@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from forge.utils.kill_chain_fanout import (
@@ -37,6 +38,7 @@ def request_with_rate_limit_backoff(
     max_total_wait_seconds: float = DEFAULT_MAX_TOTAL_WAIT_SECONDS,
     sleep_fn: Callable[[float], None] | None = None,
     now_fn: Callable[[], float] | None = None,
+    data_dir: Path | str | None = None,
 ) -> RateLimitRetryResult:
     """Retry 429s and exhausted GitHub-style 403s with bounded waits.
 
@@ -51,6 +53,17 @@ def request_with_rate_limit_backoff(
     wait_cap = max(0.0, float(max_total_wait_seconds))
     result = RateLimitRetryResult(response=None)
     retry_count = 0
+
+    if data_dir is not None:
+        try:
+            from forge.autopilot.breaker import is_provider_paused
+
+            if is_provider_paused(context, data_dir=data_dir, phase="discovery"):
+                result.skipped = True
+                result.skip_reason = "provider_paused"
+                return result
+        except Exception:
+            pass
 
     while True:
         response = request()
@@ -78,9 +91,9 @@ def request_with_rate_limit_backoff(
             )
 
             prov = canonical_provider(context or "")
-            record_rate_limit(prov)
+            record_rate_limit(prov, data_dir=data_dir, phase="discovery")
             if delay > 0:
-                set_retry_after(prov, delay)
+                set_retry_after(prov, delay, data_dir=data_dir, phase="discovery")
         except Exception:
             pass
         event: dict[str, Any] = {

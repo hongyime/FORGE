@@ -138,7 +138,8 @@ def ensure_breaker_schema(con: sqlite3.Connection) -> None:
             provider        TEXT NOT NULL,
             event_type      TEXT NOT NULL,
             recorded_at     TEXT NOT NULL,
-            details         TEXT
+            details         TEXT,
+            phase           TEXT NOT NULL DEFAULT 'engagement'
         );
 
         CREATE INDEX IF NOT EXISTS idx_provider_events_provider_time 
@@ -158,6 +159,11 @@ def ensure_breaker_schema(con: sqlite3.Connection) -> None:
             ON provider_breakers(paused_until);
         """
     )
+    columns = {row[1] for row in con.execute("PRAGMA table_info(provider_events)")}
+    if "phase" not in columns:
+        # Historical rows have no trustworthy phase metadata; exclude them from
+        # engagement thresholds instead of guessing that they were engagement.
+        con.execute("ALTER TABLE provider_events ADD COLUMN phase TEXT NOT NULL DEFAULT 'discovery'")
 
 
 def record_child_failure(
@@ -229,12 +235,16 @@ def record_rate_limit(
     now: datetime | None = None,
     config: ForgeConfig | None = None,
     details: dict[str, Any] | None = None,
+    phase: str = "engagement",
 ) -> bool:
     """Record a rate-limit event for provider in SQLite; trips breaker if threshold exceeded.
 
     Returns True if the breaker was tripped by this call, False otherwise.
     """
-    prov = canonical_provider(provider)
+    if phase not in {"discovery", "engagement"}:
+        raise ValueError("phase must be 'discovery' or 'engagement'")
+    canonical = canonical_provider(provider)
+    prov = f"discovery:{canonical}" if phase == "discovery" else canonical
     ref_time = _ensure_utc(now)
     now_iso = ref_time.isoformat()
 
@@ -279,10 +289,10 @@ def record_rate_limit(
 
             con.execute(
                 """
-                INSERT INTO provider_events (provider, event_type, recorded_at, details)
-                VALUES (?, 'rate_limit', ?, ?)
+                INSERT INTO provider_events (provider, event_type, recorded_at, details, phase)
+                VALUES (?, 'rate_limit', ?, ?, ?)
                 """,
-                (prov, now_iso, json.dumps(details) if details else None),
+                (canonical, now_iso, json.dumps(details) if details else None, phase),
             )
 
             # Keep the full scoreboard window, including rate-limit history.
@@ -296,9 +306,9 @@ def record_rate_limit(
             cur = con.execute(
                 """
                 SELECT COUNT(*) FROM provider_events
-                WHERE provider = ? AND event_type = 'rate_limit' AND recorded_at >= ?
+                WHERE provider = ? AND event_type = 'rate_limit' AND phase = ? AND recorded_at >= ?
                 """,
-                (prov, window_cutoff),
+                (canonical, phase, window_cutoff),
             )
             count = cur.fetchone()[0]
 
@@ -362,10 +372,14 @@ def is_provider_paused(
     *,
     data_dir: Path | str | None = None,
     now: datetime | None = None,
+    phase: str = "engagement",
 ) -> bool:
     """Return True if the provider is currently paused due to breaker trip or Retry-After."""
     ref_time = _ensure_utc(now)
-    prov = canonical_provider(provider)
+    if phase not in {"discovery", "engagement"}:
+        raise ValueError("phase must be 'discovery' or 'engagement'")
+    canonical = canonical_provider(provider)
+    prov = f"discovery:{canonical}" if phase == "discovery" else canonical
     from forge.autopilot.scheduler import scheduler_db_path
 
     db_path = scheduler_db_path(data_dir)
@@ -419,6 +433,7 @@ def set_retry_after(
     data_dir: Path | str | None = None,
     now: datetime | None = None,
     max_delay: float = 3600.0,
+    phase: str = "engagement",
 ) -> float | None:
     """Parse Retry-After and pause provider admission for parsed seconds if positive.
 
@@ -430,7 +445,10 @@ def set_retry_after(
     if delay is None or delay <= 0.0:
         return None
 
-    prov = canonical_provider(provider)
+    if phase not in {"discovery", "engagement"}:
+        raise ValueError("phase must be 'discovery' or 'engagement'")
+    canonical = canonical_provider(provider)
+    prov = f"discovery:{canonical}" if phase == "discovery" else canonical
     new_pause_until = (ref_time + timedelta(seconds=delay)).isoformat()
     now_iso = ref_time.isoformat()
 
@@ -525,6 +543,7 @@ def check_and_update_global_breaker(
                 """
                 SELECT COUNT(DISTINCT provider) FROM provider_events
                 WHERE event_type = 'rate_limit'
+                  AND phase = 'engagement'
                   AND provider != ?
                   AND recorded_at >= ?
                 """,
@@ -536,6 +555,7 @@ def check_and_update_global_breaker(
                 """
                 SELECT COUNT(*) FROM provider_events
                 WHERE event_type = 'rate_limit'
+                  AND phase = 'engagement'
                   AND recorded_at >= ?
                 """,
                 (window_cutoff,),

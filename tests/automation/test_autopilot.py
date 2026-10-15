@@ -608,6 +608,34 @@ def test_autopilot_import_phase_surfaces_failure_budget_stop_reason(
     assert "start_stop_reason=consecutive_failure_budget_exhausted" in phase.detail
 
 
+def test_discovery_rate_limit_storm_does_not_skip_phase5(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import datetime, timezone
+
+    from forge.autopilot.breaker import record_rate_limit
+
+    _write_feed(tmp_path / "imports" / "target-feed.json")
+    auto = _mk_autopilot(tmp_path, roe_id="ROE-DISCOVERY-429")
+    now = datetime(2026, 10, 15, tzinfo=timezone.utc)
+    for provider in ("github", "shodan", "urlscan"):
+        for _ in range(4):
+            record_rate_limit(provider, data_dir=tmp_path, now=now, phase="discovery")
+
+    called = False
+
+    def _fake_import_targets(**kwargs: Any) -> list[SimpleNamespace]:
+        nonlocal called
+        called = True
+        assert kwargs["start"] is True
+        return []
+
+    monkeypatch.setattr("forge.targets_import.import_targets", _fake_import_targets)
+    phase = auto._phase_import_targets(dry_run=False)
+    assert phase.status == "ok"
+    assert called is True
+
+
 def test_autopilot_import_phase_skipped_when_feed_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

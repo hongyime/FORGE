@@ -102,9 +102,9 @@ class RateLimiter:
                     )
 
                     prov = canonical_provider(url)
-                    record_rate_limit(prov)
+                    record_rate_limit(prov, phase="discovery")
                     if backoff > 0:
-                        set_retry_after(prov, backoff)
+                        set_retry_after(prov, backoff, phase="discovery")
                 except Exception:
                     pass
                 if record_active_fanout_rate_limit() is not None:

@@ -259,13 +259,48 @@ def test_spider_github_records_http_errors_without_raising(
     assert any(err["detail"] == "HTTP 403" for err in result.source_errors)
 
 
-def test_spider_github_handles_getter_exception() -> None:
+def test_spider_github_handles_getter_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A standalone scanner has not opted into breaker state, even if the live
+    # scheduler database would report this provider as paused.
+    monkeypatch.setattr(
+        "forge.autopilot.breaker.is_provider_paused",
+        lambda *_args, **_kwargs: True,
+    )
+
     def _boom(url: str, *, headers: dict[str, str]) -> dict[str, Any]:
         raise RuntimeError("network outage")
 
     result = spider_github("ghp_token", orgs=["myorg"], http_get=_boom)
     assert result.repos_scanned == 0
     assert any("network outage" in err["detail"] for err in result.source_errors)
+
+
+def test_github_scanner_skips_when_explicit_data_dir_breaker_is_paused(
+    tmp_path: Any,
+) -> None:
+    from forge.autopilot.breaker import is_provider_paused, set_retry_after
+
+    set_retry_after("github", 300, data_dir=tmp_path, phase="discovery")
+    assert is_provider_paused("github", data_dir=tmp_path, phase="discovery")
+    calls = 0
+
+    def _getter(_url: str, *, headers: dict[str, str]) -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        return {"status": 200, "json": []}
+
+    scanner = GitHubDeepScanner("token", http_get=_getter, data_dir=tmp_path)
+    result = GitHubSpiderResult()
+
+    response = scanner._call(
+        "https://api.github.test/repos", result=result, context="github"
+    )
+
+    assert response is None
+    assert calls == 0
+    assert any(err.get("reason") == "provider_paused" for err in result.source_errors)
 
 
 def test_github_http_layer_retries_429_and_records_backoff(

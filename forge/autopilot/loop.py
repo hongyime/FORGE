@@ -1068,7 +1068,9 @@ class ForgeAutopilot:
                 "secret_hits": 0,
             }
         try:
-            scanner = GitHubDeepScanner(token=token, max_repos=100)
+            scanner = GitHubDeepScanner(
+                token=token, max_repos=100, data_dir=self.data_dir
+            )
             result = scanner.scan_all(orgs=orgs or None, users=users or None)
         except GitHubSpiderError as exc:
             return {

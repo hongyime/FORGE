@@ -203,6 +203,40 @@ def test_global_breaker_trips_on_multi_provider_rate_limits(
     assert 880.0 <= rem <= 900.0
 
 
+def test_discovery_rate_limit_storm_does_not_trip_global_or_pause_engagement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("forge.autopilot.breaker.check_resource_pressure", lambda: (False, ""))
+    now = datetime(2026, 10, 15, 10, 0, 0, tzinfo=timezone.utc)
+    for provider in ("github", "shodan", "urlscan"):
+        for attempt in range(4):
+            record_rate_limit(
+                provider, data_dir=tmp_path, now=now + timedelta(seconds=attempt), phase="discovery"
+            )
+    assert is_global_paused(data_dir=tmp_path, now=now + timedelta(seconds=5)) is False
+    assert is_provider_paused("github", data_dir=tmp_path, now=now, phase="discovery") is True
+    assert is_provider_paused("github", data_dir=tmp_path, now=now, phase="engagement") is False
+    con = direct_connect(scheduler_db_path(tmp_path))
+    try:
+        phases = {row[0] for row in con.execute("SELECT DISTINCT phase FROM provider_events")}
+        assert phases == {"discovery"}
+    finally:
+        con.close()
+
+
+def test_global_breaker_counts_engagement_rate_limits_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("forge.autopilot.breaker.check_resource_pressure", lambda: (False, ""))
+    now = datetime(2026, 10, 15, 10, 0, 0, tzinfo=timezone.utc)
+    for provider in ("github", "shodan", "urlscan"):
+        record_rate_limit(provider, data_dir=tmp_path, now=now, phase="discovery")
+    assert is_global_paused(data_dir=tmp_path, now=now) is False
+    for provider in ("github", "shodan", "urlscan"):
+        record_rate_limit(provider, data_dir=tmp_path, now=now, phase="engagement")
+    assert is_global_paused(data_dir=tmp_path, now=now) is True
+
+
 def test_global_breaker_trips_after_five_child_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("forge.autopilot.breaker.check_resource_pressure", lambda: (False, ""))
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)

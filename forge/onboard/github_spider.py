@@ -38,6 +38,7 @@ import json
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from forge.onboard.patterns import (
@@ -257,6 +258,7 @@ def spider_github(
     include_readmes: bool = True,
     include_workflows: bool = True,
     base_url: str = "https://api.github.com",
+    data_dir: Path | str | None = None,
 ) -> GitHubSpiderResult:
     """Spider GitHub for seed-shaped values across org/user repos.
 
@@ -277,6 +279,7 @@ def spider_github(
         http_get=http_get,
         max_repos=max_repos,
         base_url=base_url,
+        data_dir=data_dir,
         include_readmes=include_readmes,
         include_workflows=include_workflows,
         # Narrow scanner — keep legacy behavior bounded.
@@ -359,6 +362,7 @@ class GitHubDeepScanner:
         include_workflows: bool = True,
         key_files: Sequence[str] | None = None,
         config_files: Sequence[str] | None = None,
+        data_dir: Path | str | None = None,
     ) -> None:
         token_value = str(token or "").strip()
         if not token_value:
@@ -366,6 +370,7 @@ class GitHubDeepScanner:
                 "GitHub deep scanner requires a non-empty PAT token"
             )
         self._token = token_value
+        self.data_dir = data_dir
         self._http = http_get or _default_http_get
         self.base_url = base_url.rstrip("/")
         self.headers = {
@@ -1248,6 +1253,7 @@ class GitHubDeepScanner:
             backoff = request_with_rate_limit_backoff(
                 lambda: self._http(url, headers=dict(self.headers)),
                 context=context,
+                data_dir=self.data_dir,
                 on_response=lambda item: _record_response_rate_limit(result, item),
             )
             response = backoff.response

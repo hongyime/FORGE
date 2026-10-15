@@ -297,6 +297,7 @@ def record_rate_limit_cooldown(
     wait_seconds: float,
     *,
     applied_backoff: bool | None = None,
+    phase: str = "discovery",
 ) -> None:
     """Remember provider pressure so the next same-host request slows down too."""
 
@@ -311,9 +312,9 @@ def record_rate_limit_cooldown(
         )
 
         prov = canonical_provider(scope, url)
-        record_rate_limit(prov)
+        record_rate_limit(prov, phase=phase)
         if wait_seconds > 0:
-            set_retry_after(prov, wait_seconds)
+            set_retry_after(prov, wait_seconds, phase=phase)
     except Exception:
         pass
     _record_rate_limit_cooldown(scope, url, wait_seconds)

@@ -1726,7 +1726,9 @@ def download_remote_artifact_request(
             except http_error_type as exc:
                 if getattr(exc, "code", None) == 429:
                     wait_seconds = web_fetch_retry_after_seconds(exc)
-                    record_rate_limit_cooldown("web_fetch", source_url, wait_seconds)
+                    record_rate_limit_cooldown(
+                        "web_fetch", source_url, wait_seconds, phase="engagement"
+                    )
                     if wait_seconds > 0:
                         sleep(wait_seconds)
                     if attempt < attempts - 1:
