@@ -11,8 +11,9 @@ import shlex
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -173,6 +174,8 @@ class _TargetImportCounters:
     starts_remaining: int | None
     consecutive_start_failures: int = 0
     successful_starts: int = 0
+    lock: threading.RLock = dataclass_field(default_factory=threading.RLock, repr=False)
+    stop_admission: bool = False
 
 
 def load_target_feed(
@@ -257,19 +260,51 @@ def import_targets(
         limit=limit,
         mega_domain_signal_provider=mega_domain_signal_provider or mega_domain_signals,
     )
-    results: list[TargetImportResult] = []
+    indexed_results: list[tuple[int, TargetImportResult]] = []
     counters = _TargetImportCounters(
         starts_remaining=_normalize_start_limit(start_limit)
     )
     min_start_sources = _normalize_min_start_source_count(min_start_source_count)
     existing_targets = _external_target_engagement_index(cfg)
-    for item_index, item in enumerate(items):
-        result = _run_one_import_target(
+    existing_targets_lock = threading.RLock()
+    candidates = iter(enumerate(items))
+    stopped = False
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_active_targets)
+    pending: dict[concurrent.futures.Future[TargetImportResult], tuple[int, TargetFeedItem]] = {}
+
+    def submit_next() -> bool:
+        nonlocal stopped
+        with counters.lock:
+            if counters.stop_admission:
+                stopped = True
+        if stopped or (start and not dry_run and is_kill_switch_active(data_dir=cfg.data_dir)):
+            stopped = True
+            return False
+        if start and not dry_run:
+            with counters.lock:
+                remaining = counters.starts_remaining
+            if remaining is not None and remaining > 0 and sum(
+                1 for _, candidate in pending.values() if candidate.scan_eligible
+            ) >= remaining:
+                return False
+            with counters.lock:
+                failed = counters.consecutive_start_failures
+            if failed + sum(
+                1 for _, candidate in pending.values() if candidate.scan_eligible
+            ) >= MAX_CONSECUTIVE_START_FAILURES:
+                return False
+        try:
+            item_index, item = next(candidates)
+        except StopIteration:
+            return False
+        future = executor.submit(
+            _run_one_import_target,
             item=item,
             item_index=item_index,
             items=items,
             config=cfg,
             existing_targets=existing_targets,
+            existing_targets_lock=existing_targets_lock,
             counters=counters,
             min_start_sources=min_start_sources,
             start=start,
@@ -284,16 +319,52 @@ def import_targets(
             progress_callback=progress_callback,
             sleep=sleep,
         )
-        results.append(result)
-        if result.start_stop_reason in (
-            "consecutive_failure_budget_exhausted",
-            "slots_exhausted",
-            "max_active_targets_reached",
-            "kill_switch_active",
-            "global_circuit_breaker_active",
-        ):
-            break
-    return results
+        pending[future] = (item_index, item)
+        return True
+
+    try:
+        for _ in range(max_active_targets):
+            if not submit_next():
+                break
+        while pending:
+            future = next(concurrent.futures.as_completed(tuple(pending)))
+            item_index, item = pending.pop(future)
+            try:
+                result = future.result()
+            except Exception as exc:  # noqa: BLE001 - isolate failures to one candidate
+                result = TargetImportResult(
+                    engagement_id=None,
+                    target_type=item.target_type,
+                    target_value=item.canonical_value,
+                    target_key=item.target_key,
+                    scope_manifest=None,
+                    created=False,
+                    started=False,
+                    dry_run=dry_run,
+                    source_count=item.source_count,
+                    priority=item.priority,
+                    scan_eligible=item.scan_eligible,
+                    scan_eligibility_reason=item.scan_eligibility_reason,
+                    start_failed=bool(start and not dry_run),
+                    start_error_type=type(exc).__name__,
+                )
+            indexed_results.append((item_index, result))
+            if result.start_stop_reason in (
+                "consecutive_failure_budget_exhausted",
+                "slots_exhausted",
+                "max_active_targets_reached",
+                "kill_switch_active",
+                "global_circuit_breaker_active",
+            ):
+                stopped = True
+                with counters.lock:
+                    counters.stop_admission = True
+            if not stopped:
+                submit_next()
+    finally:
+        executor.shutdown(wait=True)
+    indexed_results.sort(key=lambda indexed: indexed[0])
+    return [result for _, result in indexed_results]
 
 
 def _run_one_import_target(
@@ -303,6 +374,7 @@ def _run_one_import_target(
     items: list[TargetFeedItem],
     config: ForgeConfig,
     existing_targets: dict[str, int],
+    existing_targets_lock: threading.RLock,
     counters: _TargetImportCounters,
     min_start_sources: int,
     start: bool,
@@ -319,7 +391,8 @@ def _run_one_import_target(
 ) -> TargetImportResult:
     """Process one feed candidate, preserving import_targets' sequential behavior."""
     cfg = config
-    starts_remaining = counters.starts_remaining
+    with counters.lock:
+        starts_remaining = counters.starts_remaining
     queue_start = time.monotonic()  # target enters the start queue here
     if dry_run:
         return TargetImportResult(
@@ -338,7 +411,8 @@ def _run_one_import_target(
             start_skipped_reason="dry_run",
         )
 
-    engagement_id, created = _create_or_reuse_engagement(cfg, item, existing_targets)
+    with existing_targets_lock:
+        engagement_id, created = _create_or_reuse_engagement(cfg, item, existing_targets)
     if roe_wildcard:
         _write_engagement_scope_json(
             cfg, engagement_id=engagement_id,
@@ -466,21 +540,28 @@ def _run_one_import_target(
                     _notify_progress(progress_callback, "target_failed", failure_details)
                     start_failed = True
                     start_error_type = type(exc).__name__
-                    counters.consecutive_start_failures += 1
-                    if counters.consecutive_start_failures >= MAX_CONSECUTIVE_START_FAILURES:
+                    with counters.lock:
+                        counters.consecutive_start_failures += 1
+                        exhausted = counters.consecutive_start_failures >= MAX_CONSECUTIVE_START_FAILURES
+                        if exhausted:
+                            counters.stop_admission = True
+                    if exhausted:
                         start_stop_reason = "consecutive_failure_budget_exhausted"
                         unprocessed_count = len(items) - item_index - 1
                 else:
                     _notify_progress(progress_callback, "target_completed", {**progress_details, "exit_status": "completed"})
                     started = True
-                    counters.consecutive_start_failures = 0
-                    counters.successful_starts += 1
-                    if counters.successful_starts % DEFAULT_BURST_SIZE == 0:
+                    with counters.lock:
+                        counters.consecutive_start_failures = 0
+                        counters.successful_starts += 1
+                        successful_starts = counters.successful_starts
+                        if counters.starts_remaining is not None:
+                            counters.starts_remaining -= 1
+                        starts_remaining_after = counters.starts_remaining
+                    if successful_starts % DEFAULT_BURST_SIZE == 0:
                         sleep(burst_pause_seconds())
-                    if counters.starts_remaining is not None:
-                        counters.starts_remaining -= 1
-                        if counters.starts_remaining == 0:
-                            start_stop_reason = "start_limit_reached"
+                    if starts_remaining_after == 0:
+                        start_stop_reason = "start_limit_reached"
                 finally:
                     if lease is not None:
                         release_lease(

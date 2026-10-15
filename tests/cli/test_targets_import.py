@@ -17,6 +17,7 @@ from forge.config import normalize_roe_strictness, resolve_roe_strictness
 from forge.db.session import get_engagement_db
 import forge.targets_resume_candidates as resume_candidates
 from forge.targets_import import (
+    TargetImportResult,
     _canonical_domain_value,
     _normalize_target_value,
     _start_kill_chain,
@@ -88,6 +89,155 @@ def _write_feed(path: Path) -> None:
         ),
         encoding="utf-8",
     )
+
+
+def _write_dispatch_feed(path: Path, count: int = 3) -> list[str]:
+    values = [f"target-{index}.corp-target.io" for index in range(count)]
+    path.write_text(json.dumps({
+        "schema_version": "target-feed.v1",
+        "generated_at": "2026-10-15T00:00:00Z",
+        "items": [
+            {
+                "target_type": "domain",
+                "target_value": value,
+                "source_kind": "dispatcher_test",
+                "confidence": 0.9,
+                "first_seen_at": "2026-10-14T00:00:00Z",
+                "provenance": "dispatcher_test_fixture",
+            }
+            for value in values
+        ],
+    }), encoding="utf-8")
+    return values
+
+
+def _dispatch_result(kwargs: dict[str, object]) -> TargetImportResult:
+    item = kwargs["item"]
+    return TargetImportResult(
+        engagement_id=None, target_type=item.target_type, target_value=item.canonical_value,
+        target_key=item.target_key, scope_manifest=None, created=False, started=True,
+        dry_run=False,
+    )
+
+
+def _dispatch_import(feed_path: Path, cfg: _FakeConfig, *, max_active_targets: int = 2) -> list[TargetImportResult]:
+    return import_targets(
+        feed_url=None, feed_file=feed_path, auth_header_env=None, roe_id="ROE-TEST",
+        start=True, dry_run=False, limit=None, max_iter=1, config=cfg, max_active_targets=max_active_targets,
+    )
+
+
+def test_import_dispatcher_runs_two_targets_concurrently(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    feed = tmp_path / "feed.json"
+    _write_dispatch_feed(feed, 2)
+    barrier = threading.Barrier(2, timeout=3)
+    cfg = _FakeConfig(tmp_path / "data")
+
+    def run(**kwargs: object) -> TargetImportResult:
+        barrier.wait()
+        return _dispatch_result(kwargs)
+
+    monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
+    monkeypatch.setattr("forge.targets_import._run_one_import_target", run)
+    results = _dispatch_import(feed, cfg)
+    assert len(results) == 2
+
+
+def test_import_dispatcher_respects_active_target_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    feed = tmp_path / "feed.json"
+    _write_dispatch_feed(feed, 4)
+    lock = threading.Lock()
+    active = peak = 0
+
+    def run(**kwargs: object) -> TargetImportResult:
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.03)
+        with lock:
+            active -= 1
+        return _dispatch_result(kwargs)
+
+    monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
+    monkeypatch.setattr("forge.targets_import._run_one_import_target", run)
+    _dispatch_import(feed, _FakeConfig(tmp_path / "data"), max_active_targets=2)
+    assert peak == 2
+
+
+def test_import_dispatcher_serializes_with_single_slot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    feed = tmp_path / "feed.json"
+    values = _write_dispatch_feed(feed, 2)
+    first_finished = threading.Event()
+    cfg = _FakeConfig(tmp_path / "data")
+
+    def run(**kwargs: object) -> TargetImportResult:
+        item = kwargs["item"]
+        if item.canonical_value == values[0]:
+            first_finished.set()
+        else:
+            assert first_finished.wait(timeout=3), "second target started before the first finished"
+        return _dispatch_result(kwargs)
+
+    monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
+    monkeypatch.setattr("forge.targets_import._run_one_import_target", run)
+    results = _dispatch_import(feed, cfg, max_active_targets=1)
+    assert len(results) == 2
+
+
+def test_import_dispatcher_releases_scheduler_leases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from forge.autopilot import scheduler
+
+    feed = tmp_path / "feed.json"
+    _write_dispatch_feed(feed, 2)
+    cfg = _FakeConfig(tmp_path / "data")
+    cfg.autopilot_global_slots = 2
+    cfg.autopilot_max_active_targets = 2
+    monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
+    monkeypatch.setattr("forge.targets_import._create_or_reuse_engagement", lambda *_: (1, False))
+    monkeypatch.setattr("forge.targets_import._ensure_target_import_monitoring", lambda **_: None)
+    monkeypatch.setattr("forge.targets_import._write_scope_manifest", lambda *_: tmp_path / "scope.json")
+    monkeypatch.setattr("forge.targets_import._has_kill_chain_run", lambda *_: False)
+    monkeypatch.setattr("forge.targets_import._start_kill_chain", lambda **_: None)
+
+    results = _dispatch_import(feed, cfg, max_active_targets=2)
+
+    assert len(results) == 2
+    with sqlite3.connect(scheduler.scheduler_db_path(cfg.data_dir)) as con:
+        active_leases = con.execute("SELECT lease_id FROM leases WHERE status = 'active'").fetchall()
+    assert active_leases == []
+
+
+def test_import_dispatcher_preserves_input_result_order(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    feed = tmp_path / "feed.json"
+    values = _write_dispatch_feed(feed, 3)
+
+    def run(**kwargs: object) -> TargetImportResult:
+        item = kwargs["item"]
+        if item.canonical_value == values[0]:
+            time.sleep(0.05)
+        return _dispatch_result(kwargs)
+
+    monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
+    monkeypatch.setattr("forge.targets_import._run_one_import_target", run)
+    results = _dispatch_import(feed, _FakeConfig(tmp_path / "data"))
+    assert [result.target_value for result in results] == values
+
+
+def test_import_dispatcher_kill_switch_stops_admission(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    feed = tmp_path / "feed.json"
+    _write_dispatch_feed(feed, 2)
+    loaded_items = load_target_feed(
+        feed_url=None, feed_file=feed, auth_header_env=None, limit=None,
+    )
+    assert len(loaded_items) == 2
+    cfg = _FakeConfig(tmp_path / "data")
+    launched: list[str] = []
+    monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
+    monkeypatch.setattr("forge.targets_import.is_kill_switch_active", lambda **_: True)
+    monkeypatch.setattr("forge.targets_import._run_one_import_target", lambda **kw: launched.append(kw["item"].canonical_value))
+    assert _dispatch_import(feed, cfg) == []
+    assert launched == []
 
 
 def _write_multi_seed_feed(path: Path) -> None:
