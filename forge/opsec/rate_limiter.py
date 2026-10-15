@@ -67,6 +67,7 @@ class RateLimiter:
                     self._domain_rate_limit_wait_pending.discard(domain)
                     record_active_fanout_backoff(
                         paired_rate_limit_event=paired_rate_limit_event,
+                        provider=domain,
                     )
                 _interruptible_sleep_local(wait_time)
             self._domain_delays[domain] = time.time()

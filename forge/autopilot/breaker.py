@@ -186,8 +186,8 @@ def record_rate_limit(
                 (prov, now_iso, json.dumps(details) if details else None),
             )
 
-            # Prune events older than 24 hours
-            stale_cutoff = (ref_time - timedelta(hours=24)).isoformat()
+            # Keep the full scoreboard window, including rate-limit history.
+            stale_cutoff = (ref_time - timedelta(days=7)).isoformat()
             con.execute(
                 "DELETE FROM provider_events WHERE recorded_at < ?",
                 (stale_cutoff,),
@@ -233,6 +233,26 @@ def record_rate_limit(
     # Trigger global breaker evaluation
     check_and_update_global_breaker(data_dir=data_dir, now=ref_time, config=config)
     return tripped
+
+
+def record_provider_backoff(provider: str, *, data_dir: Path | str | None = None,
+                            now: datetime | None = None) -> None:
+    """Persist a provider backoff in the scheduler event stream."""
+    from forge.autopilot.scheduler import scheduler_db_path
+
+    con = direct_connect(scheduler_db_path(data_dir))
+    try:
+        ensure_breaker_schema(con)
+        with con:
+            at = _ensure_utc(now).isoformat()
+            con.execute(
+                "INSERT INTO provider_events (provider, event_type, recorded_at, details) VALUES (?, 'backoff', ?, NULL)",
+                (canonical_provider(provider), at),
+            )
+            con.execute("DELETE FROM provider_events WHERE recorded_at < ?",
+                        (( _ensure_utc(now) - timedelta(days=7)).isoformat(),))
+    finally:
+        con.close()
 
 
 def is_provider_paused(

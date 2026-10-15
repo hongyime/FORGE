@@ -558,13 +558,11 @@ def scoreboard_for_data_dir(
     Run durations are approximate: in-window outcomes pair with the latest
     prior unmatched engagement sharing its engagement ID and target value.
     Identifiers are used only internally and are never included in the result.
-    SIGKILL (return code 137) is an OOM heuristic and may include other kills.
+    OOM classification uses output evidence and memory pressure; bare SIGKILLs
+    are treated as killed, not OOM. Output evidence is bounded stderr_tail.
     OperationalError includes every sqlite3 OperationalError, not only lock
-    timeouts; lock-specific text is not retained. Provider events are pruned
-    after 24 hours, so counts cover retained rows (at most 24h), not the full
-    scoreboard window. Backoffs are held only in the in-memory fanout
-    controller and are not persisted as events, so no source exists and their
-    provider map is always empty.
+    timeouts; lock-specific text is not retained. Provider events are retained
+    for seven days to match this scoreboard window.
     """
     if window_days < 1:
         window_days = 7
@@ -627,6 +625,22 @@ def scoreboard_for_data_dir(
         if p95:
             return values[max(0, math.ceil(0.95 * len(values)) - 1)]
         return statistics.median(values)
+
+    def classify_oom(return_code: Any, output_text: Any, peak_memory_kb: Any,
+                     memory_limit_kb: Any) -> str:
+        """Classify OOM from explicit output or measured memory pressure."""
+        text = str(output_text or "").lower()
+        evidence = any(marker in text for marker in
+                       ("out of memory", "memoryerror", "oom", "oom-killer"))
+        near_limit = (numeric(peak_memory_kb) and numeric(memory_limit_kb)
+                      and memory_limit_kb > 0 and peak_memory_kb >= memory_limit_kb * 0.9)
+        if evidence or near_limit:
+            return "oom"
+        try:
+            killed = int(return_code) in (137, -9)
+        except (TypeError, ValueError):
+            killed = False
+        return "killed" if killed else "not_oom"
 
     conn: sqlite3.Connection | None = None
     try:
@@ -744,7 +758,12 @@ def scoreboard_for_data_dir(
                     return_code = details.get("return_code")
                     if return_code == 124:
                         failures["timeouts"] += 1
-                    elif return_code == 137:
+                    elif classify_oom(
+                        return_code,
+                        details.get("stderr_tail", ""),
+                        details.get("memory_peak_kb"),
+                        details.get("memory_limit_kb"),
+                    ) == "oom":
                         failures["ooms"] += 1
                     if details.get("error_type") == "OperationalError":
                         failures["sqlite_errors"] += 1
@@ -783,15 +802,24 @@ def scoreboard_for_data_dir(
                 rate_rows = scheduler_conn.execute(
                     "SELECT provider, COUNT(*) FROM provider_events "
                     "WHERE event_type='rate_limit' AND recorded_at >= ? GROUP BY provider",
-                    ((end - timedelta(hours=24)).isoformat(),),
+                    ((end - timedelta(days=window_days)).isoformat(),),
                 ).fetchall()
                 result["failures"]["rate_limit_by_provider"] = {
                     str(provider): int(count) for provider, count in rate_rows
+                }
+                backoff_rows = scheduler_conn.execute(
+                    "SELECT provider, COUNT(*) FROM provider_events "
+                    "WHERE event_type='backoff' AND recorded_at >= ? GROUP BY provider",
+                    ((end - timedelta(days=window_days)).isoformat(),),
+                ).fetchall()
+                result["failures"]["backoff_by_provider"] = {
+                    str(provider): int(count) for provider, count in backoff_rows
                 }
             finally:
                 scheduler_conn.close()
         except Exception:
             result["failures"]["rate_limit_by_provider"] = {}
+            result["failures"]["backoff_by_provider"] = {}
         result["available"] = True
         return result
     except Exception:

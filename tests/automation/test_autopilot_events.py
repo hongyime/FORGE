@@ -475,7 +475,10 @@ def test_scoreboard_for_data_dir_aggregates_failures_and_provider_pressure(
         for _ in range(2)
     ]
     rows += [
-        ("target_failed", None, now.isoformat(), json.dumps({"return_code": 137})),
+        ("target_failed", None, now.isoformat(), json.dumps({"return_code": 137, "stderr_tail": "Out of memory: Killed process"})),
+        ("target_failed", None, now.isoformat(), json.dumps({"return_code": 137, "stderr_tail": "manual kill"})),
+        ("target_failed", None, now.isoformat(), json.dumps({"return_code": 1, "stderr_tail": "MemoryError: allocation failed"})),
+        ("target_failed", None, now.isoformat(), json.dumps({"return_code": 0})),
         ("target_failed", None, now.isoformat(), json.dumps({"error_type": "OperationalError", "return_code": 1})),
         ("target_failed", None, now.isoformat(), json.dumps({"error_type": "RuntimeError", "return_code": 1})),
         ("phase_end", "import_targets", now.isoformat(), json.dumps({
@@ -507,7 +510,11 @@ def test_scoreboard_for_data_dir_aggregates_failures_and_provider_pressure(
             [("github", "rate_limit", (now - timedelta(hours=1)).isoformat(), "{}") for _ in range(2)]
             + [("shodan", "rate_limit", (now - timedelta(hours=1)).isoformat(), "{}"),
                ("github", "other", (now - timedelta(hours=1)).isoformat(), "{}"),
-               ("old", "rate_limit", (now - timedelta(hours=25)).isoformat(), "{}")],
+               ("three-day", "rate_limit", (now - timedelta(days=3)).isoformat(), "{}"),
+               ("old", "rate_limit", (now - timedelta(days=8)).isoformat(), "{}"),
+               ("provider-a", "backoff", (now - timedelta(hours=1)).isoformat(), "{}"),
+               ("provider-a", "backoff", (now - timedelta(hours=1)).isoformat(), "{}"),
+               ("provider-b", "backoff", (now - timedelta(hours=1)).isoformat(), "{}")],
         )
         conn.commit()
     finally:
@@ -515,14 +522,14 @@ def test_scoreboard_for_data_dir_aggregates_failures_and_provider_pressure(
 
     failures = scoreboard_for_data_dir(tmp_path, now=now.isoformat())["failures"]
     assert failures["timeouts"] == 2
-    assert failures["ooms"] == 1
+    assert failures["ooms"] == 2
     assert failures["sqlite_errors"] == 1
     assert failures["scope_rejects"] == 3
     assert failures["scope_rejects_by_reason"] == {
         "non_global_ip": 2, "mega_domain_old_and_large": 1
     }
-    assert failures["rate_limit_by_provider"] == {"github": 2, "shodan": 1}
-    assert failures["backoff_by_provider"] == {}
+    assert failures["rate_limit_by_provider"] == {"github": 2, "shodan": 1, "three-day": 1}
+    assert failures["backoff_by_provider"] == {"provider-a": 2, "provider-b": 1}
 
 
 def test_scoreboard_for_data_dir_without_limits_has_no_violation_counts(tmp_path: Path) -> None:

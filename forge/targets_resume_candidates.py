@@ -960,7 +960,12 @@ def _execute_resume_item(
     _notify_progress(
         progress_callback,
         "target_completed" if status == "completed" else "target_failed",
-        {**progress_details, "return_code": returncode, "exit_status": status},
+        {
+            **progress_details,
+            "return_code": returncode,
+            "exit_status": status,
+            "stderr_tail": result["stderr_tail"],
+        },
     )
     _append_resume_ledger_event(ledger_path, ledger_lock, {"event": f"item_{status}", **result})
     return result

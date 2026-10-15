@@ -305,16 +305,21 @@ def record_active_fanout_rate_limit(*, applied_backoff: bool = False) -> int | N
 def record_active_fanout_backoff(
     *,
     paired_rate_limit_event: bool = False,
+    provider: str = "unknown",
 ) -> int | None:
     """Report a standalone wait or associate it with a rate-limit event."""
 
     controller = _active_fanout_controller()
-    return (
-        controller.record_backoff(
-            paired_rate_limit_event=paired_rate_limit_event,
-        )
-        if controller is not None
-        else None
+    if controller is None:
+        return None
+    try:
+        from forge.autopilot.breaker import record_provider_backoff
+
+        record_provider_backoff(provider)
+    except Exception:  # telemetry must not interrupt request pacing
+        _LOG.debug("provider backoff persistence failed", exc_info=True)
+    return controller.record_backoff(
+        paired_rate_limit_event=paired_rate_limit_event,
     )
 
 

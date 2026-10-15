@@ -268,7 +268,7 @@ def _sleep_active_cooldown(scope: str, url: str) -> None:
     with _RATE_LIMIT_COOLDOWN_LOCK:
         wait_seconds = _RATE_LIMIT_COOLDOWNS.get(key, 0.0) - time.monotonic()
     if wait_seconds > 0:
-        record_active_fanout_backoff(paired_rate_limit_event=True)
+        record_active_fanout_backoff(paired_rate_limit_event=True, provider=url)
         time.sleep(wait_seconds)
 
 
@@ -355,7 +355,7 @@ def _request_with_pacing(
             return response
         if wait_seconds > 0:
             if not cooldown_scope:
-                record_active_fanout_backoff()
+                record_active_fanout_backoff(provider=url)
             time.sleep(wait_seconds)
     return response
 
