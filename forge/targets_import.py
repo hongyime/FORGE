@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import concurrent.futures
 import ipaddress
 import json
@@ -53,6 +52,7 @@ from forge.utils.kill_chain_options import (
     DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
 )
 from forge.utils.kill_chain_fanout import cap_fanout
+from forge.utils.target_keys import external_target_key
 
 _DEFAULT_SLEEP = time.sleep
 
@@ -1037,11 +1037,6 @@ def _normalize_phone_target_value(value: str) -> str:
             candidate = f"+{candidate[2:]}"
         return candidate if re.match(r"^\+\d{6,15}$", candidate) else ""
     return str(_normalize_phone_seed_value(value) or "")
-
-
-def external_target_key(target_type: str, canonical_target_value: str) -> str:
-    raw = f"{target_type}:{canonical_target_value}".encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
 
 
 def _coerce_confidence(value: object) -> float:

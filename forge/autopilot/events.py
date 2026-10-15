@@ -16,7 +16,7 @@ from typing import Any
 from forge.db.direct_connect import direct_connect
 from forge.db.migrations import run_migrations
 from forge.engagement_ids import numeric_engagement_db_files
-from forge.targets_import import external_target_key
+from forge.utils.target_keys import external_target_key
 
 _LOG = logging.getLogger(__name__)
 _EVENT_TABLE = "autopilot_cycle_events"
