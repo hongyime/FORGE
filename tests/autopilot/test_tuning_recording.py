@@ -12,7 +12,7 @@ from forge.autopilot.events import (
     tuning_decisions_for_data_dir,
 )
 from forge.autopilot.loop import ForgeAutopilot
-from forge.autopilot.tuning import TuningDecision
+from forge.autopilot.tuning import TuningDecision, decide_tuning
 from forge.db.migrations import run_migrations
 
 
@@ -117,6 +117,95 @@ def test_cycle_end_records_once_and_survives_tuning_failure(tmp_path: Path, monk
         ).fetchone()[0]
     assert count == 2
     assert len(tuning_decisions_for_data_dir(tmp_path)) == 1
+
+
+def test_cycle_end_tuning_is_advisory_and_does_not_modify_config(tmp_path: Path) -> None:
+    _data_db(tmp_path)
+    config = _Config(tmp_path)
+    before = (
+        config.autopilot_global_slots,
+        config.autopilot_max_active_targets,
+        config.autopilot_memory_reserve_mb,
+    )
+    loop = ForgeAutopilot(
+        data_dir=tmp_path,
+        imports_dir=tmp_path / "imports",
+        reports_dir=tmp_path / "reports",
+        feed_file=tmp_path / "imports" / "target-feed.json",
+        safe_mode=True,
+        defaults=AutopilotDefaults(cooldown_minutes=0),
+        config=config,  # type: ignore[arg-type]
+    )
+    loop._maybe_phase = lambda name, _dry_run: __import__(
+        "forge.autopilot.loop", fromlist=["AutopilotPhaseResult"]
+    ).AutopilotPhaseResult(name=name, status="ok")  # type: ignore[method-assign]
+    loop.run_once(dry_run=True)
+
+    assert len(tuning_decisions_for_data_dir(tmp_path)) == 1
+    assert (
+        config.autopilot_global_slots,
+        config.autopilot_max_active_targets,
+        config.autopilot_memory_reserve_mb,
+    ) == before
+    # This harness uses an in-memory config stub; no live-config file is written.
+
+
+def test_tuning_history_appends_across_two_loop_runs(tmp_path: Path) -> None:
+    _data_db(tmp_path)
+    loop = ForgeAutopilot(
+        data_dir=tmp_path,
+        imports_dir=tmp_path / "imports",
+        reports_dir=tmp_path / "reports",
+        feed_file=tmp_path / "imports" / "target-feed.json",
+        safe_mode=True,
+        defaults=AutopilotDefaults(cooldown_minutes=0),
+        config=_Config(tmp_path),  # type: ignore[arg-type]
+    )
+    loop._maybe_phase = lambda name, _dry_run: __import__(
+        "forge.autopilot.loop", fromlist=["AutopilotPhaseResult"]
+    ).AutopilotPhaseResult(name=name, status="ok")  # type: ignore[method-assign]
+    loop.run_once(dry_run=True)
+    first = tuning_decisions_for_data_dir(tmp_path)[0]
+    loop.run_once(dry_run=True)
+
+    history = tuning_decisions_for_data_dir(tmp_path)
+    assert len(history) == 2
+    assert history[1] == first
+    with sqlite3.connect(tmp_path / "engagements" / "1001.db") as conn:
+        stamps = conn.execute(
+            "SELECT occurred_at FROM autopilot_cycle_events "
+            "WHERE event_type='tuning_decision' ORDER BY occurred_at"
+        ).fetchall()
+    assert len(stamps) == 2
+    assert stamps[0][0] != stamps[1][0]
+
+
+def test_deciding_and_recording_tuning_does_not_touch_scheduler_leases(tmp_path: Path) -> None:
+    from forge.autopilot.scheduler import ensure_scheduler_schema
+
+    _data_db(tmp_path)
+    scheduler_db = tmp_path / "scheduler.db"
+    with sqlite3.connect(scheduler_db) as conn:
+        ensure_scheduler_schema(conn)
+        before = conn.execute("SELECT COUNT(*) FROM leases").fetchone()[0]
+
+    decision = decide_tuning(
+        {"measured_p95_worker_memory_mb": 512, "mem_available_mb": 8192, "effective_cpu_count": 4},
+        2,
+        2,
+    )
+    record_tuning_decision(decision, data_dir=tmp_path)
+
+    with sqlite3.connect(scheduler_db) as conn:
+        after = conn.execute("SELECT COUNT(*) FROM leases").fetchone()[0]
+    assert after == before
+
+
+def test_tuning_module_declares_advisory_only_guarantee() -> None:
+    import forge.autopilot.tuning as tuning_module
+
+    assert "ADVISORY ONLY" in (tuning_module.__doc__ or "")
+    assert "NEVER auto-applied" in (tuning_module.__doc__ or "")
 
 
 def test_recorded_tuning_events_never_include_raw_target_values(tmp_path: Path) -> None:
