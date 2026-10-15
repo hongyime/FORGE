@@ -27,6 +27,8 @@ from forge.autopilot.breaker import (
     check_resource_pressure,
     is_global_paused,
     is_provider_paused,
+    provider_admission_status,
+    record_probe_success,
     record_global_rate_limit,
     record_rate_limit,
     record_child_failure,
@@ -222,6 +224,93 @@ def test_discovery_rate_limit_storm_does_not_trip_global_or_pause_engagement(
         assert phases == {"discovery"}
     finally:
         con.close()
+
+
+def test_dynamic_breaker_scales_caps_and_resets_after_clean_window(tmp_path: Path) -> None:
+    now = datetime(2026, 10, 15, 10, tzinfo=timezone.utc)
+    for offset in range(3):
+        record_rate_limit("scale", data_dir=tmp_path, now=now + timedelta(seconds=offset))
+    first_trip = now + timedelta(seconds=2)
+    durations = [remaining_pause("scale", data_dir=tmp_path, now=first_trip)]
+    for trip in range(1, 3):
+        at = first_trip + timedelta(seconds=sum((900, 1800)[:trip]))
+        assert provider_admission_status("scale", data_dir=tmp_path, now=at) == "PROBE"
+        record_rate_limit("scale", data_dir=tmp_path, now=at)
+        durations.append(remaining_pause("scale", data_dir=tmp_path, now=at))
+    assert durations == [900.0, 1800.0, 3600.0]
+
+    now += timedelta(seconds=3601)
+    for n in range(3):
+        record_rate_limit("clean", data_dir=tmp_path, now=now + timedelta(seconds=n))
+    first_clean_trip = remaining_pause("clean", data_dir=tmp_path, now=now + timedelta(seconds=2))
+    assert first_clean_trip == 900.0
+    next_clean_window = now + timedelta(seconds=3603)
+    for n in range(3):
+        record_rate_limit("clean", data_dir=tmp_path, now=next_clean_window + timedelta(seconds=n))
+    assert remaining_pause("clean", data_dir=tmp_path, now=next_clean_window + timedelta(seconds=2)) == 900.0
+
+    # Repeated expired probes exercise the hard cap while preserving consecutive trips.
+    provider = "capped"
+    at = now + timedelta(seconds=100_000)
+    for n in range(3):
+        record_rate_limit(provider, data_dir=tmp_path, now=at + timedelta(seconds=n))
+    first_trip_at = at + timedelta(seconds=2)
+    for trip in range(10):
+        at = first_trip_at + timedelta(seconds=900 if trip == 0 else 900 + (trip - 1) * 900)
+        con = direct_connect(scheduler_db_path(tmp_path))
+        try:
+            with con:
+                con.execute("UPDATE provider_breakers SET paused_until=? WHERE provider=?", ((at - timedelta(seconds=1)).isoformat(), provider))
+        finally:
+            con.close()
+        assert provider_admission_status(provider, data_dir=tmp_path, now=at) == "PROBE"
+        record_rate_limit(provider, data_dir=tmp_path, now=at)
+    assert remaining_pause(provider, data_dir=tmp_path, now=at) == 7200
+
+
+def test_dynamic_breaker_retry_after_and_probe_recovery(tmp_path: Path) -> None:
+    now = datetime(2026, 10, 15, 10, tzinfo=timezone.utc)
+    for n in range(3):
+        record_rate_limit("probe", data_dir=tmp_path, now=now + timedelta(seconds=n), retry_after_seconds=1800)
+    trip_at = now + timedelta(seconds=2)
+    assert remaining_pause("probe", data_dir=tmp_path, now=trip_at) == 1800
+    assert remaining_pause("probe", data_dir=tmp_path, now=now) == 1802
+    expired = now + timedelta(seconds=1805)
+    assert provider_admission_status("probe", data_dir=tmp_path, now=expired) == "PROBE"
+    assert provider_admission_status("probe", data_dir=tmp_path, now=expired) == "BLOCKED"
+    record_probe_success("probe", data_dir=tmp_path, now=expired)
+    assert provider_admission_status("probe", data_dir=tmp_path, now=expired) == "ADMIT"
+
+    # An unresolved probe 429 immediately re-pauses with the next multiplier.
+    for n in range(3):
+        record_rate_limit("again", data_dir=tmp_path, now=now + timedelta(seconds=n))
+    later = now + timedelta(seconds=902)
+    assert provider_admission_status("again", data_dir=tmp_path, now=later) == "PROBE"
+    assert record_rate_limit("again", data_dir=tmp_path, now=later, retry_after_seconds=1) is True
+    assert remaining_pause("again", data_dir=tmp_path, now=later) == 1800
+
+
+def test_per_provider_threshold_adapts_and_engagement_scope_remains(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("forge.autopilot.breaker.check_resource_pressure", lambda: (False, ""))
+    now = datetime(2026, 10, 15, 10, tzinfo=timezone.utc)
+    for n in range(2):
+        assert record_rate_limit("clean-base", data_dir=tmp_path, now=now + timedelta(seconds=n), phase="discovery") is False
+    assert record_rate_limit("clean-base", data_dir=tmp_path, now=now + timedelta(seconds=2), phase="discovery") is True
+    assert is_global_paused(data_dir=tmp_path, now=now + timedelta(seconds=10)) is False
+
+    con = direct_connect(scheduler_db_path(tmp_path))
+    try:
+        from forge.autopilot.breaker import ensure_breaker_schema
+        ensure_breaker_schema(con)
+        with con:
+            for n in range(10):
+                con.execute("INSERT INTO provider_events(provider,event_type,recorded_at,phase) VALUES('frequent','rate_limit',?,'engagement')", ((now + timedelta(seconds=n)).isoformat(),))
+    finally:
+        con.close()
+    assert record_rate_limit("frequent", data_dir=tmp_path, now=now + timedelta(seconds=10)) is True
+    for n in range(3):
+        record_rate_limit("engagement-only", data_dir=tmp_path, now=now + timedelta(seconds=n))
+    assert is_provider_paused("engagement-only", data_dir=tmp_path, now=now) is True
 
 
 def test_global_breaker_counts_engagement_rate_limits_only(

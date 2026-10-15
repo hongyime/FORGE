@@ -56,9 +56,9 @@ def request_with_rate_limit_backoff(
 
     if data_dir is not None:
         try:
-            from forge.autopilot.breaker import is_provider_paused
+            from forge.autopilot.breaker import provider_admission_status
 
-            if is_provider_paused(context, data_dir=data_dir, phase="discovery"):
+            if provider_admission_status(context, data_dir=data_dir, phase="discovery") == "BLOCKED":
                 result.skipped = True
                 result.skip_reason = "provider_paused"
                 return result
@@ -74,6 +74,13 @@ def request_with_rate_limit_backoff(
             on_response(response)
 
         status = _status(response)
+        if 200 <= status < 300 and data_dir is not None:
+            try:
+                from forge.autopilot.breaker import record_probe_success
+
+                record_probe_success(context, data_dir=data_dir, phase="discovery")
+            except Exception:
+                pass
         headers = response.get("headers")
         if not isinstance(headers, Mapping):
             headers = {}
@@ -91,7 +98,7 @@ def request_with_rate_limit_backoff(
             )
 
             prov = canonical_provider(context or "")
-            record_rate_limit(prov, data_dir=data_dir, phase="discovery")
+            record_rate_limit(prov, data_dir=data_dir, phase="discovery", retry_after_seconds=delay)
             if delay > 0:
                 set_retry_after(prov, delay, data_dir=data_dir, phase="discovery")
         except Exception:

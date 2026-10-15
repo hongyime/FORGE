@@ -181,7 +181,7 @@ def test_m0053_to_m0055_apply_to_fresh_and_v52_databases(tmp_path: Path) -> None
     fresh = sqlite3.connect(tmp_path / "fresh.db")
     try:
         run_migrations(fresh)
-        assert fresh.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 55
+        assert fresh.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 57
         assert fresh.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='autopilot_cycle_events'"
         ).fetchone()
@@ -195,7 +195,7 @@ def test_m0053_to_m0055_apply_to_fresh_and_v52_databases(tmp_path: Path) -> None
             }
             assert all(seed_targets[column] == "engagement_seeds" for column in expected_columns)
         assert fresh.execute("PRAGMA foreign_key_check").fetchall() == []
-        assert TARGET_VERSION == 55
+        assert TARGET_VERSION == 57
     finally:
         fresh.close()
 
@@ -204,7 +204,7 @@ def test_m0053_to_m0055_apply_to_fresh_and_v52_databases(tmp_path: Path) -> None
         from_v52.execute("CREATE TABLE _schema_version (version INTEGER NOT NULL)")
         from_v52.execute("INSERT INTO _schema_version (version) VALUES (52)")
         run_migrations(from_v52)
-        assert from_v52.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 55
+        assert from_v52.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == 57
         columns = {row[1] for row in from_v52.execute("PRAGMA table_info(autopilot_cycle_events)")}
         assert columns == {
             "id",
@@ -279,7 +279,7 @@ def test_m0055_preserves_existing_events_and_allows_retry_event_types(
         ).fetchone()[0] == 4
         assert conn.execute(
             "SELECT MAX(version) FROM _schema_version"
-        ).fetchone()[0] == 55
+        ).fetchone()[0] == 57
     finally:
         conn.close()
 

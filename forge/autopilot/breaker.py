@@ -27,6 +27,8 @@ GLOBAL_PROVIDER_KEY = "__global__"
 DEFAULT_WINDOW_SECONDS = 600
 DEFAULT_PROVIDER_THRESHOLD = 3
 DEFAULT_PAUSE_SECONDS = 900
+MAX_PAUSE_SECONDS = 7200
+CLEAN_WINDOW_SECONDS = 3600
 DEFAULT_GLOBAL_PROVIDER_THRESHOLD = 3
 DEFAULT_GLOBAL_EVENT_THRESHOLD = 10
 # Pause after five failed children in the same ten-minute admission window.
@@ -152,7 +154,11 @@ def ensure_breaker_schema(con: sqlite3.Connection) -> None:
             paused_until    TEXT,
             trip_reason     TEXT,
             last_tripped_at TEXT,
-            updated_at      TEXT NOT NULL
+            updated_at      TEXT NOT NULL,
+            consecutive_trips INTEGER NOT NULL DEFAULT 0,
+            recent_429_count INTEGER NOT NULL DEFAULT 0,
+            last_429_at TEXT,
+            probe_pending INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE INDEX IF NOT EXISTS idx_provider_breakers_paused 
@@ -164,6 +170,10 @@ def ensure_breaker_schema(con: sqlite3.Connection) -> None:
         # Historical rows have no trustworthy phase metadata; exclude them from
         # engagement thresholds instead of guessing that they were engagement.
         con.execute("ALTER TABLE provider_events ADD COLUMN phase TEXT NOT NULL DEFAULT 'discovery'")
+    breaker_columns = {row[1] for row in con.execute("PRAGMA table_info(provider_breakers)")}
+    for name, declaration in (("consecutive_trips", "INTEGER NOT NULL DEFAULT 0"), ("recent_429_count", "INTEGER NOT NULL DEFAULT 0"), ("last_429_at", "TEXT"), ("probe_pending", "INTEGER NOT NULL DEFAULT 0")):
+        if name not in breaker_columns:
+            con.execute(f"ALTER TABLE provider_breakers ADD COLUMN {name} {declaration}")
 
 
 def record_child_failure(
@@ -228,121 +238,107 @@ def check_resource_pressure(
     return False, ""
 
 
-def record_rate_limit(
-    provider: str,
-    *,
-    data_dir: Path | str | None = None,
-    now: datetime | None = None,
-    config: ForgeConfig | None = None,
-    details: dict[str, Any] | None = None,
-    phase: str = "engagement",
-) -> bool:
-    """Record a rate-limit event for provider in SQLite; trips breaker if threshold exceeded.
-
-    Returns True if the breaker was tripped by this call, False otherwise.
-    """
+def record_rate_limit(provider: str, *, data_dir: Path | str | None = None, now: datetime | None = None, config: ForgeConfig | None = None, details: dict[str, Any] | None = None, phase: str = "engagement", retry_after_seconds: float | None = None) -> bool:
+    """Record a 429 and adapt provider admission pauses from persisted history."""
     if phase not in {"discovery", "engagement"}:
         raise ValueError("phase must be 'discovery' or 'engagement'")
     canonical = canonical_provider(provider)
     prov = f"discovery:{canonical}" if phase == "discovery" else canonical
     ref_time = _ensure_utc(now)
     now_iso = ref_time.isoformat()
-
-    window_s = DEFAULT_WINDOW_SECONDS
-    threshold = DEFAULT_PROVIDER_THRESHOLD
-    pause_s = DEFAULT_PAUSE_SECONDS
-
+    base_pause = DEFAULT_PAUSE_SECONDS
     if config is not None:
-        window_s = getattr(config, "breaker_rate_limit_window_s", DEFAULT_WINDOW_SECONDS)
-        threshold = getattr(config, "breaker_rate_limit_threshold", DEFAULT_PROVIDER_THRESHOLD)
-        pause_s = getattr(config, "breaker_pause_s", DEFAULT_PAUSE_SECONDS)
+        base_pause = int(getattr(config, "breaker_pause_s", DEFAULT_PAUSE_SECONDS))
     else:
         try:
             from forge.config import ForgeConfig
 
-            cfg = ForgeConfig.load()
-            window_s = getattr(cfg, "breaker_rate_limit_window_s", DEFAULT_WINDOW_SECONDS)
-            threshold = getattr(cfg, "breaker_rate_limit_threshold", DEFAULT_PROVIDER_THRESHOLD)
-            pause_s = getattr(cfg, "breaker_pause_s", DEFAULT_PAUSE_SECONDS)
+            base_pause = int(getattr(ForgeConfig.load(), "breaker_pause_s", DEFAULT_PAUSE_SECONDS))
         except Exception:
             pass
-
     from forge.autopilot.scheduler import scheduler_db_path
-
-    db_path = scheduler_db_path(data_dir)
-    con = direct_connect(db_path)
+    con = direct_connect(scheduler_db_path(data_dir))
     tripped = False
     try:
         ensure_breaker_schema(con)
         with con:
-            cur = con.execute(
-                "SELECT paused_until FROM provider_breakers WHERE provider = ?",
-                (prov,),
-            )
-            row = cur.fetchone()
-            was_paused = False
-            if row and row[0]:
-                try:
-                    was_paused = _parse_iso(row[0]) > ref_time
-                except Exception:
-                    was_paused = False
-
-            con.execute(
-                """
-                INSERT INTO provider_events (provider, event_type, recorded_at, details, phase)
-                VALUES (?, 'rate_limit', ?, ?, ?)
-                """,
-                (canonical, now_iso, json.dumps(details) if details else None, phase),
-            )
-
-            # Keep the full scoreboard window, including rate-limit history.
-            stale_cutoff = (ref_time - timedelta(days=7)).isoformat()
+            con.execute("INSERT INTO provider_events (provider,event_type,recorded_at,details,phase) VALUES (?, 'rate_limit', ?, ?, ?)", (canonical, now_iso, json.dumps(details) if details else None, phase))
             con.execute(
                 "DELETE FROM provider_events WHERE recorded_at < ?",
-                (stale_cutoff,),
+                ((ref_time - timedelta(days=7)).isoformat(),),
             )
+            cutoff = (ref_time - timedelta(seconds=DEFAULT_WINDOW_SECONDS)).isoformat()
+            count = int(con.execute("SELECT COUNT(*) FROM provider_events WHERE provider=? AND event_type='rate_limit' AND phase=? AND recorded_at>=?", (canonical, phase, cutoff)).fetchone()[0])
+            row = con.execute("SELECT paused_until,consecutive_trips,last_429_at,probe_pending FROM provider_breakers WHERE provider=?", (prov,)).fetchone()
+            paused_until = _parse_iso(row[0]) if row and row[0] else None
+            was_paused = paused_until is not None and paused_until > ref_time
+            consecutive = int(row[1] or 0) if row else 0
+            last_429 = _parse_iso(row[2]) if row and row[2] else None
+            probe_pending = bool(row[3]) if row else False
+            if last_429 is None or (ref_time-last_429).total_seconds() >= CLEAN_WINDOW_SECONDS:
+                consecutive = 0
+            recent_before = max(0, count - 1)
+            threshold = 1 if recent_before >= 10 else 2 if recent_before >= 5 else DEFAULT_PROVIDER_THRESHOLD
+            should_trip = probe_pending or (recent_before < threshold <= count) or recent_before >= 10
+            if should_trip:
+                consecutive += 1
+                # BASE * 2**(trip_number-1), preserving the original 900s first pause.
+                pause_s = min(MAX_PAUSE_SECONDS, base_pause * (2 ** min(consecutive-1, 20)))
+                pause_s = min(MAX_PAUSE_SECONDS, max(pause_s, max(0.0, retry_after_seconds or 0.0)))
+                paused_until = max(paused_until or ref_time, ref_time + timedelta(seconds=pause_s))
+                tripped = not was_paused or probe_pending
+            con.execute("""INSERT INTO provider_breakers (provider,paused_until,trip_reason,last_tripped_at,updated_at,consecutive_trips,recent_429_count,last_429_at,probe_pending)
+                VALUES (?,?,?,?,?,?,?,?,0) ON CONFLICT(provider) DO UPDATE SET
+                paused_until=COALESCE(excluded.paused_until,provider_breakers.paused_until),
+                trip_reason=CASE WHEN excluded.paused_until IS NOT NULL THEN excluded.trip_reason ELSE provider_breakers.trip_reason END,
+                last_tripped_at=CASE WHEN excluded.paused_until IS NOT NULL THEN excluded.last_tripped_at ELSE provider_breakers.last_tripped_at END,
+                updated_at=excluded.updated_at,consecutive_trips=excluded.consecutive_trips,
+                recent_429_count=excluded.recent_429_count,last_429_at=excluded.last_429_at,probe_pending=0""",
+                (prov, paused_until.isoformat() if should_trip else None, "probe_rate_limit" if probe_pending else "threshold_exceeded", now_iso, now_iso, consecutive, count, now_iso))
+    finally:
+        con.close()
+    if phase == "engagement":
+        check_and_update_global_breaker(data_dir=data_dir, now=ref_time, config=config)
+    return tripped
 
-            window_cutoff = (ref_time - timedelta(seconds=window_s)).isoformat()
-            cur = con.execute(
-                """
-                SELECT COUNT(*) FROM provider_events
-                WHERE provider = ? AND event_type = 'rate_limit' AND phase = ? AND recorded_at >= ?
-                """,
-                (canonical, phase, window_cutoff),
-            )
-            count = cur.fetchone()[0]
 
-            if count >= threshold:
-                new_pause_until = (ref_time + timedelta(seconds=pause_s)).isoformat()
-                con.execute(
-                    """
-                    INSERT INTO provider_breakers (provider, paused_until, trip_reason, last_tripped_at, updated_at)
-                    VALUES (?, ?, 'threshold_exceeded', ?, ?)
-                    ON CONFLICT(provider) DO UPDATE SET
-                        paused_until = CASE
-                            WHEN provider_breakers.paused_until IS NULL OR provider_breakers.paused_until < excluded.paused_until
-                            THEN excluded.paused_until
-                            ELSE provider_breakers.paused_until
-                        END,
-                        trip_reason = CASE
-                            WHEN provider_breakers.paused_until IS NULL OR provider_breakers.paused_until < excluded.paused_until
-                            THEN excluded.trip_reason
-                            ELSE provider_breakers.trip_reason
-                        END,
-                        last_tripped_at = excluded.last_tripped_at,
-                        updated_at = excluded.updated_at
-                    """,
-                    (prov, new_pause_until, now_iso, now_iso),
-                )
-                if not was_paused:
-                    tripped = True
+def provider_admission_status(provider: str, *, data_dir: Path | str | None = None, now: datetime | None = None, phase: str = "engagement") -> str:
+    """Return ADMIT, PROBE, or BLOCKED; only one unresolved probe is admitted."""
+    if phase not in {"discovery", "engagement"}:
+        raise ValueError("phase must be 'discovery' or 'engagement'")
+    canonical = canonical_provider(provider)
+    key = f"discovery:{canonical}" if phase == "discovery" else canonical
+    ref = _ensure_utc(now)
+    from forge.autopilot.scheduler import scheduler_db_path
+    con = direct_connect(scheduler_db_path(data_dir))
+    try:
+        ensure_breaker_schema(con)
+        with con:
+            row = con.execute("SELECT paused_until,probe_pending FROM provider_breakers WHERE provider=?", (key,)).fetchone()
+            if not row or not row[0]:
+                return "BLOCKED" if row and row[1] else "ADMIT"
+            if _parse_iso(row[0]) > ref or row[1]:
+                return "BLOCKED"
+            con.execute("UPDATE provider_breakers SET probe_pending=1,updated_at=? WHERE provider=?", (ref.isoformat(), key))
+            return "PROBE"
     finally:
         con.close()
 
-    # Trigger global breaker evaluation
-    check_and_update_global_breaker(data_dir=data_dir, now=ref_time, config=config)
-    return tripped
 
+def record_probe_success(provider: str, *, data_dir: Path | str | None = None, now: datetime | None = None, phase: str = "engagement") -> None:
+    """Resolve a provider probe and clear its consecutive-trip history."""
+    if phase not in {"discovery", "engagement"}:
+        raise ValueError("phase must be 'discovery' or 'engagement'")
+    canonical = canonical_provider(provider)
+    key = f"discovery:{canonical}" if phase == "discovery" else canonical
+    from forge.autopilot.scheduler import scheduler_db_path
+    con = direct_connect(scheduler_db_path(data_dir))
+    try:
+        ensure_breaker_schema(con)
+        with con:
+                con.execute("UPDATE provider_breakers SET probe_pending=0,consecutive_trips=0,paused_until=NULL,trip_reason=NULL,updated_at=? WHERE provider=? AND probe_pending=1", (_ensure_utc(now).isoformat(), key))
+    finally:
+        con.close()
 
 def record_provider_backoff(
     provider: str, *, data_dir: Path | str | None = None, now: datetime | None = None

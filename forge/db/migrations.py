@@ -3022,6 +3022,23 @@ def _m0056_tuning_decision_event_type(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _m0057_provider_breaker_adaptation(conn: sqlite3.Connection) -> None:
+    """Add auditable adaptive state to scheduler breaker rows when colocated."""
+    if not _table_exists(conn, "provider_breakers"):
+        conn.commit()
+        return
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(provider_breakers)")}
+    for name, declaration in (
+        ("consecutive_trips", "INTEGER NOT NULL DEFAULT 0"),
+        ("recent_429_count", "INTEGER NOT NULL DEFAULT 0"),
+        ("last_429_at", "TEXT"),
+        ("probe_pending", "INTEGER NOT NULL DEFAULT 0"),
+    ):
+        if name not in columns:
+            conn.execute(f"ALTER TABLE provider_breakers ADD COLUMN {name} {declaration}")
+    conn.commit()
+
+
 def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
     return (
         conn.execute(
@@ -3097,6 +3114,7 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (54, "seed_fk_targets", _m0054_seed_fk_targets),
     (55, "autopilot_retry_event_types", _m0055_autopilot_retry_event_types),
     (56, "tuning_decision_event_type", _m0056_tuning_decision_event_type),
+    (57, "provider_breaker_adaptation", _m0057_provider_breaker_adaptation),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)
