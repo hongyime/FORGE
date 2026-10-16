@@ -520,10 +520,36 @@ def _run_one_import_target(
                 requested_slots=requested_slots, kind="start", data_dir=cfg.data_dir,
                 config=cfg,
             )
+            provider_admission_blocked = False
+            if lease_result.acquired and lease_result.lease is not None:
+                from forge.autopilot.breaker import provider_admission_status
+
+                try:
+                    provider_admission_blocked = (
+                        provider_admission_status(
+                            item.canonical_value, data_dir=cfg.data_dir, phase="engagement"
+                        ) == "BLOCKED"
+                    )
+                except Exception:
+                    release_lease(
+                        lease_result.lease.lease_id,
+                        reason="provider_admission_check_failed",
+                        data_dir=cfg.data_dir,
+                    )
+                    raise
+                if provider_admission_blocked:
+                    release_lease(
+                        lease_result.lease.lease_id,
+                        reason="provider_circuit_breaker_active",
+                        data_dir=cfg.data_dir,
+                    )
             queue_seconds = time.monotonic() - queue_start
-            if not lease_result.acquired:
-                start_skipped_reason = lease_result.reason
-                if lease_result.reason in (
+            if provider_admission_blocked or not lease_result.acquired:
+                start_skipped_reason = (
+                    "provider_circuit_breaker_active"
+                    if provider_admission_blocked else lease_result.reason
+                )
+                if not provider_admission_blocked and lease_result.reason in (
                     "slots_exhausted", "max_active_targets_reached",
                     "kill_switch_active", "global_circuit_breaker_active",
                 ):
@@ -623,6 +649,14 @@ def _run_one_import_target(
                         start_stop_reason = "consecutive_failure_budget_exhausted"
                         unprocessed_count = len(items) - item_index - 1
                 else:
+                    try:
+                        from forge.autopilot.breaker import record_probe_success
+
+                        record_probe_success(
+                            item.canonical_value, data_dir=cfg.data_dir, phase="engagement"
+                        )
+                    except Exception:
+                        pass
                     _notify_progress(progress_callback, "target_completed", {**progress_details, "exit_status": "completed"})
                     started = True
                     with counters.lock:

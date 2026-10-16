@@ -617,3 +617,91 @@ def test_import_targets_skips_paused_provider_continues_others(
     assert results[1].started is True
     assert results[1].start_skipped_reason == ""
     assert "target-beta.corp-target.io" in started_targets
+
+
+@pytest.mark.parametrize(
+    ("provider_state", "expected_admission"),
+    [("probe", "PROBE"), ("paused", None), ("open", "ADMIT")],
+)
+def test_import_targets_uses_engagement_probe_admission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    provider_state: str,
+    expected_admission: str | None,
+) -> None:
+    """Phase 5 starts one probe, blocks active pauses, and admits open providers."""
+    from forge.autopilot import breaker
+
+    monkeypatch.setattr(breaker, "check_resource_pressure", lambda: (False, ""))
+    target = "probe-target.corp-target.io"
+    now = datetime.now(timezone.utc)
+    if provider_state != "open":
+        trip_at = now - timedelta(minutes=20 if provider_state == "probe" else 1)
+        for offset in range(3):
+            record_rate_limit(
+                target, data_dir=tmp_path, now=trip_at + timedelta(seconds=offset),
+                phase="engagement",
+            )
+
+    actual_admission_status = breaker.provider_admission_status
+    admissions: list[str] = []
+
+    def track_admission(provider: str, **kwargs: Any) -> str:
+        status = actual_admission_status(provider, **kwargs)
+        admissions.append(status)
+        return status
+
+    monkeypatch.setattr(breaker, "provider_admission_status", track_admission)
+    feed_file = tmp_path / "feed.json"
+    feed_file.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "generated_at": now.isoformat(),
+                "items": [
+                    {
+                        "target_type": "domain",
+                        "target_value": target,
+                        "source_kind": "telemetry",
+                        "confidence": 0.9,
+                        "source_count": 2,
+                        "first_seen_at": now.isoformat(),
+                        "provenance": "test_fixture",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    started_targets: list[str] = []
+    monkeypatch.setattr(
+        "forge.targets_import._start_kill_chain",
+        lambda **kwargs: started_targets.append(kwargs["seed"]),
+    )
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_file,
+        auth_header_env=None,
+        roe_id="ROE-TEST-2026",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=1,
+        config=_FakeConfig(tmp_path),  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
+    )
+
+    assert len(results) == 1
+    if provider_state == "paused":
+        assert results[0].started is False
+        assert results[0].start_skipped_reason == "provider_circuit_breaker_active"
+        assert started_targets == []
+        assert admissions == []
+        assert actual_admission_status(target, data_dir=tmp_path, phase="engagement") == "BLOCKED"
+    else:
+        assert results[0].started is True
+        assert started_targets == [target]
+        assert admissions == [expected_admission]
+        if provider_state == "probe":
+            assert actual_admission_status(target, data_dir=tmp_path, phase="engagement") == "ADMIT"
