@@ -62,6 +62,8 @@ TARGET_IMPORT_MONITORING_INTERVAL_MINUTES = 60
 # Keep target import aligned with the shared kill-chain runtime default.
 DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES = DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES
 TARGET_IMPORT_CHILD_TIMEOUT_GRACE_SECONDS = 120
+TARGET_IMPORT_PROGRESS_EVENT_CANDIDATES = 250
+TARGET_IMPORT_PROGRESS_EVENT_SECONDS = 60.0
 TARGET_FAILURE_STDERR_MAX_BYTES = 2048
 # Consecutive failed start attempts are bounded independently of the success limit.
 # A successful start resets this counter; skipped candidates do not affect it.
@@ -237,6 +239,7 @@ def import_targets(
     sleep_fn: Callable[[float], None] | None = None,
     mega_domain_signal_provider: Callable[[str], tuple[float | None, int | None]] | None = None,
     max_active_targets: int = 2,
+    _monotonic: Callable[[], float] = time.monotonic,
 ) -> list[TargetImportResult]:
     """Import feed targets and optionally start scoped kill chains.
 
@@ -271,6 +274,35 @@ def import_targets(
     existing_targets_lock = threading.RLock()
     candidates = iter(enumerate(items))
     stopped = False
+    evaluated = 0
+    progress_reason_counts: dict[str, int] = {}
+    last_progress_event_at = _monotonic()
+
+    def emit_candidate_progress(result: TargetImportResult) -> None:
+        """Emit bounded summaries: every 250 completions or 60 seconds.
+
+        Batched events keep thousands of skipped feed items visible without
+        creating a per-candidate event flood; the time threshold bounds silent
+        stretches even when candidate processing is slow.
+        """
+        nonlocal evaluated, last_progress_event_at
+        evaluated += 1
+        reason = str(result.scan_eligibility_reason or "eligible")
+        progress_reason_counts[reason] = progress_reason_counts.get(reason, 0) + 1
+        now = _monotonic()
+        if (
+            progress_callback is not None
+            and (evaluated % TARGET_IMPORT_PROGRESS_EVENT_CANDIDATES == 0
+                 or now - last_progress_event_at >= TARGET_IMPORT_PROGRESS_EVENT_SECONDS)
+        ):
+            progress_callback("candidate_evaluation_progress", {
+                "evaluated": evaluated,
+                "skip_reason_counts": dict(progress_reason_counts),
+                "top_skip_reasons": sorted(
+                    progress_reason_counts.items(), key=lambda pair: (-pair[1], pair[0])
+                )[:5],
+            })
+            last_progress_event_at = now
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_active_targets)
     pending: dict[concurrent.futures.Future[TargetImportResult], tuple[int, TargetFeedItem]] = {}
     burst_starts_by_strictness: dict[str, int] = {}
@@ -359,6 +391,7 @@ def import_targets(
                     start_error_type=type(exc).__name__,
                 )
             indexed_results.append((item_index, result))
+            emit_candidate_progress(result)
             admit_replacement = True
             if result.started:
                 with counters.lock:

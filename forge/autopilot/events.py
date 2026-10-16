@@ -36,6 +36,8 @@ _EVENT_TYPES = frozenset(
         "error",
         "cooldown_start",
         "tuning_decision",
+        "tuning_apply",
+        "candidate_evaluation_progress",
     }
 )
 

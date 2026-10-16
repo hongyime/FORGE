@@ -2435,8 +2435,8 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
         **_kwargs: object,
     ) -> object:
         calls.append(command)
-        assert timeout_seconds == 120 * 60 + 120
-        assert timeout_stderr == "target import child exceeded timeout_seconds=7320"
+        assert timeout_seconds == 480 * 60 + 120
+        assert timeout_stderr == "target import child exceeded timeout_seconds=28920"
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
@@ -2463,7 +2463,7 @@ def test_start_launches_scoped_kill_chain_with_scope_and_roe(
     assert "--max-iter" in command
     assert command[-4:] == [
         "--max-runtime-minutes",
-        "120",
+        "480",
         "--parallel-fanout",
         "2",
     ]
@@ -2753,6 +2753,51 @@ def test_start_failure_records_and_continues_without_consuming_start_limit(
     assert results[1].start_stop_reason == "start_limit_reached"
 
 
+def test_candidate_evaluation_progress_is_batched_with_skip_counts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+    events: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr("forge.targets_import.TARGET_IMPORT_PROGRESS_EVENT_CANDIDATES", 2)
+    monkeypatch.setattr("forge.targets_import.TARGET_IMPORT_PROGRESS_EVENT_SECONDS", 60.0)
+    results = import_targets(
+        feed_url=None, feed_file=feed_path, auth_header_env=None,
+        roe_id=None, start=False, dry_run=True, limit=None, max_iter=3,
+        config=cfg, progress_callback=lambda event, details: events.append((event, details)),
+        _monotonic=lambda: 0.0,
+    )
+    progress = [details for event, details in events if event == "candidate_evaluation_progress"]
+    assert len(results) == 2
+    assert len(progress) == 1
+    assert progress[0]["evaluated"] == 2
+    reasons = progress[0]["skip_reason_counts"]
+    assert isinstance(reasons, dict)
+    assert sum(reasons.values()) == 2
+
+
+def test_candidate_evaluation_time_threshold_surfaces_long_skip_stretch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_dispatch_feed(feed_path, count=5)
+    cfg = _FakeConfig(tmp_path / "data")
+    events: list[tuple[str, dict[str, object]]] = []
+    ticks = iter([0.0, 61.0, 122.0, 183.0, 244.0, 305.0])
+    monkeypatch.setattr("forge.targets_import.TARGET_IMPORT_PROGRESS_EVENT_CANDIDATES", 100)
+    results = import_targets(
+        feed_url=None, feed_file=feed_path, auth_header_env=None,
+        roe_id=None, start=False, dry_run=True, limit=None, max_iter=3,
+        config=cfg, progress_callback=lambda event, details: events.append((event, details)),
+        _monotonic=lambda: next(ticks),
+    )
+    progress = [details for event, details in events if event == "candidate_evaluation_progress"]
+    assert len(results) == 5
+    assert progress
+    assert [item["evaluated"] for item in progress] == [1, 2, 3, 4, 5]
+
+
 def test_start_timeout_marks_running_kill_chain_failed_for_resume(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2793,7 +2838,7 @@ def test_start_timeout_marks_running_kill_chain_failed_for_resume(
         raise subprocess.CalledProcessError(
             124,
             ["kill-chain", str(kwargs["seed"])],
-            stderr="target import child exceeded timeout_seconds=7320",
+            stderr="target import child exceeded timeout_seconds=28920",
         )
 
     monkeypatch.setattr("forge.targets_import._start_kill_chain", _fake_start)
@@ -2908,8 +2953,8 @@ def test_start_limit_caps_scoped_kill_chain_launches(
         **_kwargs: object,
     ) -> object:
         calls.append(command)
-        assert timeout_seconds == 120 * 60 + 120
-        assert timeout_stderr == "target import child exceeded timeout_seconds=7320"
+        assert timeout_seconds == 480 * 60 + 120
+        assert timeout_stderr == "target import child exceeded timeout_seconds=28920"
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
@@ -2934,7 +2979,7 @@ def test_start_limit_caps_scoped_kill_chain_launches(
     assert len(calls) == 1
     assert calls[0][-4:] == [
         "--max-runtime-minutes",
-        "120",
+        "480",
         "--parallel-fanout",
         "2",
     ]
@@ -3505,7 +3550,7 @@ def test_targets_import_cli_defaults_timeout_and_fanout(
     )
 
     assert result.exit_code == 0, result.output
-    assert captured_kwargs["max_runtime_minutes"] == 120
+    assert captured_kwargs["max_runtime_minutes"] == 480
     assert captured_kwargs["parallel_fanout"] == 6
 
 
@@ -3731,7 +3776,7 @@ def test_import_targets_strict_roe_gives_strict_caps(
         config=cfg,  # type: ignore[arg-type]
     )
     assert results[0].started is True
-    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "2"]
+    assert calls[0][-4:] == ["--max-runtime-minutes", "480", "--parallel-fanout", "2"]
 
 
 def test_import_targets_unknown_missing_strictness_fail_closed_to_strict(
@@ -3764,7 +3809,7 @@ def test_import_targets_unknown_missing_strictness_fail_closed_to_strict(
         parallel_fanout=8,
         config=cfg_no_attr,  # type: ignore[arg-type]
     )
-    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "2"]
+    assert calls[0][-4:] == ["--max-runtime-minutes", "480", "--parallel-fanout", "2"]
 
     # Case 2: unknown/garbage parameter
     calls.clear()
@@ -3781,7 +3826,7 @@ def test_import_targets_unknown_missing_strictness_fail_closed_to_strict(
         roe_strictness="bogus_mode",
         config=cfg_no_attr,  # type: ignore[arg-type]
     )
-    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "2"]
+    assert calls[0][-4:] == ["--max-runtime-minutes", "480", "--parallel-fanout", "2"]
 
     # Case 3: invalid env var fails closed
     calls.clear()
@@ -3798,7 +3843,7 @@ def test_import_targets_unknown_missing_strictness_fail_closed_to_strict(
         parallel_fanout=8,
         config=cfg_no_attr,  # type: ignore[arg-type]
     )
-    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "2"]
+    assert calls[0][-4:] == ["--max-runtime-minutes", "480", "--parallel-fanout", "2"]
 
 
 def test_import_targets_standard_and_permissive_behave_as_before(
@@ -3833,7 +3878,7 @@ def test_import_targets_standard_and_permissive_behave_as_before(
         parallel_fanout=8,
         config=cfg_standard,  # type: ignore[arg-type]
     )
-    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "4"]
+    assert calls[0][-4:] == ["--max-runtime-minutes", "480", "--parallel-fanout", "4"]
 
     # 2. Explicit permissive config -> cap 6 for medium surface domain
     calls.clear()
@@ -3849,7 +3894,7 @@ def test_import_targets_standard_and_permissive_behave_as_before(
         parallel_fanout=8,
         config=cfg_permissive,  # type: ignore[arg-type]
     )
-    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "6"]
+    assert calls[0][-4:] == ["--max-runtime-minutes", "480", "--parallel-fanout", "6"]
 
     # 3. Explicit standard via parameter overriding config
     calls.clear()
@@ -3866,7 +3911,7 @@ def test_import_targets_standard_and_permissive_behave_as_before(
         roe_strictness="standard",
         config=cfg_permissive,  # type: ignore[arg-type]
     )
-    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "4"]
+    assert calls[0][-4:] == ["--max-runtime-minutes", "480", "--parallel-fanout", "4"]
 
     # 4. Standard via FORGE_ROE_STRICTNESS environment variable
     calls.clear()
@@ -3884,7 +3929,7 @@ def test_import_targets_standard_and_permissive_behave_as_before(
         parallel_fanout=8,
         config=cfg_plain,  # type: ignore[arg-type]
     )
-    assert calls[0][-4:] == ["--max-runtime-minutes", "120", "--parallel-fanout", "4"]
+    assert calls[0][-4:] == ["--max-runtime-minutes", "480", "--parallel-fanout", "4"]
 
 
 def test_targets_import_cli_roe_strictness_option(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

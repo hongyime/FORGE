@@ -2843,6 +2843,7 @@ def _m0053_autopilot_loop_events(conn: sqlite3.Connection) -> None:
                                'target_retry_queued', 'target_retry_attempted',
                                'target_retry_budget_exhausted',
                                'tuning_decision',
+                               'tuning_apply',
                                'error', 'cooldown_start'
                            )),
             phase_name     TEXT,
@@ -3039,6 +3040,80 @@ def _m0057_provider_breaker_adaptation(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _m0058_candidate_evaluation_event_type(conn: sqlite3.Connection) -> None:
+    """Allow batched candidate evaluation summaries in the cycle event stream."""
+    if not _table_exists(conn, "autopilot_cycle_events"):
+        conn.commit()
+        return
+    if _table_sql_contains(conn, "autopilot_cycle_events", "'candidate_evaluation_progress'"):
+        conn.commit()
+        return
+    _rebuild_table(
+        conn,
+        "autopilot_cycle_events",
+        """
+        CREATE TABLE autopilot_cycle_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cycle_id TEXT NOT NULL,
+            cycle_number INTEGER NOT NULL,
+            event_type TEXT NOT NULL CHECK (event_type IN (
+                'cycle_start','cycle_end','phase_start','phase_end',
+                'target_engaged','target_completed','target_failed',
+                'target_retry_queued','target_retry_attempted',
+                'target_retry_budget_exhausted','tuning_decision',
+                'candidate_evaluation_progress','error','cooldown_start'
+            )),
+            phase_name TEXT,
+            phase_index INTEGER CHECK (phase_index BETWEEN 1 AND 8),
+            occurred_at TEXT NOT NULL,
+            details_json TEXT NOT NULL DEFAULT '{}'
+        )
+        """,
+        [
+            "CREATE INDEX IF NOT EXISTS idx_autopilot_cycle_events_cycle ON autopilot_cycle_events (cycle_id, id)",
+            "CREATE INDEX IF NOT EXISTS idx_autopilot_cycle_events_latest ON autopilot_cycle_events (occurred_at DESC, id DESC)",
+        ],
+    )
+    conn.commit()
+
+
+def _m0059_tuning_apply_event_type(conn: sqlite3.Connection) -> None:
+    """Allow tuning apply audit events while preserving existing progress rows."""
+    if not _table_exists(conn, "autopilot_cycle_events"):
+        conn.commit()
+        return
+    if _table_sql_contains(conn, "autopilot_cycle_events", "'tuning_apply'"):
+        conn.commit()
+        return
+    _rebuild_table(
+        conn,
+        "autopilot_cycle_events",
+        """
+        CREATE TABLE autopilot_cycle_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cycle_id TEXT NOT NULL,
+            cycle_number INTEGER NOT NULL,
+            event_type TEXT NOT NULL CHECK (event_type IN (
+                'cycle_start','cycle_end','phase_start','phase_end',
+                'target_engaged','target_completed','target_failed',
+                'target_retry_queued','target_retry_attempted',
+                'target_retry_budget_exhausted','tuning_decision',
+                'candidate_evaluation_progress','tuning_apply','error','cooldown_start'
+            )),
+            phase_name TEXT,
+            phase_index INTEGER CHECK (phase_index BETWEEN 1 AND 8),
+            occurred_at TEXT NOT NULL,
+            details_json TEXT NOT NULL DEFAULT '{}'
+        )
+        """,
+        [
+            "CREATE INDEX IF NOT EXISTS idx_autopilot_cycle_events_cycle ON autopilot_cycle_events (cycle_id, id)",
+            "CREATE INDEX IF NOT EXISTS idx_autopilot_cycle_events_latest ON autopilot_cycle_events (occurred_at DESC, id DESC)",
+        ],
+    )
+    conn.commit()
+
+
 def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
     return (
         conn.execute(
@@ -3115,6 +3190,8 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (55, "autopilot_retry_event_types", _m0055_autopilot_retry_event_types),
     (56, "tuning_decision_event_type", _m0056_tuning_decision_event_type),
     (57, "provider_breaker_adaptation", _m0057_provider_breaker_adaptation),
+    (58, "candidate_evaluation_event_type", _m0058_candidate_evaluation_event_type),
+    (59, "tuning_apply_event_type", _m0059_tuning_apply_event_type),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)
