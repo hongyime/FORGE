@@ -9,8 +9,7 @@ no-config, run-it-and-walk-away use case:
 - Resume parallelism is 2 to balance throughput against the SQLite lock
   contention that happens when more than a handful of kill-chain runs
   share a data dir.
-- Max runtime per started target is 120 minutes to match the requested
-  autopilot engagement budget.
+- Max runtime per started target is an eight-hour absolute safety cap.
 - Kill-chain max-iter 7 matches the ``forge kill-chain`` default.
 - Feed source selector is ``all`` so every available source — db,
   reports, cti, connectors, supabase — contributes to the daily feed.
@@ -40,9 +39,8 @@ AUTOPILOT_MAX_RUNTIME_MINUTES = DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES
 AUTOPILOT_PARALLEL_FANOUT = DEFAULT_KILL_CHAIN_PARALLEL_FANOUT
 AUTOPILOT_MAX_TIMEOUT_RETRIES = 2
 
-# Cycle 5 proof: two healthy, progressing targets hit return_code 124 at
-# 3720s (engagement 3 email recon; engagement 49 gmail.com). 120 minutes
-# doubles that budget while retaining a hard bound.
+# Child timeout is the eight-hour absolute cap plus the importer's 120s grace;
+# the kill-chain itself uses a 30-minute no-progress stall window.
 
 
 @dataclass(frozen=True)

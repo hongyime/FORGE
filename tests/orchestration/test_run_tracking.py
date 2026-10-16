@@ -45,6 +45,23 @@ from forge.orchestration.run_tracking import (
 )
 
 
+def test_stalled_runtime_is_failed_even_when_report_is_ready_and_queue_empty() -> None:
+    entry = engagement_run_terminal_entry(
+        base_metadata={"runtime_budget_exhausted": True, "runtime_budget_reason": "stalled"},
+        elapsed_seconds=1800,
+        planned_report_path="report.md",
+        report_path="report.md",
+        report_ready=True,
+        report_provider="test",
+        report_max_loops=1,
+        finalization_failed=0,
+        pending_counts={},
+        report_finalization_metadata={},
+    )
+    assert entry["status"] == "failed"
+    assert entry["error"] == "runtime stalled after no progress with pending recursive work: 0"
+
+
 def _bootstrap(db_path: Path) -> None:
     con = sqlite3.connect(db_path)
     try:
@@ -409,7 +426,7 @@ def test_engagement_run_terminal_entry_reports_runtime_budget_pending_work() -> 
 
     assert entry["status"] == "failed"
     assert entry["pending_total"] == 5
-    assert entry["error"] == "runtime budget exhausted with pending recursive work: 5"
+    assert entry["error"] == "absolute runtime cap reached with pending recursive work: 5"
     assert entry["metadata"]["runtime_budget_exhausted"] is True
 
 

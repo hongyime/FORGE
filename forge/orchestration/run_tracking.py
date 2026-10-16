@@ -124,7 +124,8 @@ def engagement_run_terminal_entry(
     prereq_metadata: dict[str, object] | None = None,
 ) -> dict[str, object]:
     pending_total = sum(int(count or 0) for count in pending_counts.values())
-    run_succeeded = bool(report_ready) and pending_total == 0
+    runtime_stopped = bool(base_metadata.get("runtime_budget_exhausted"))
+    run_succeeded = bool(report_ready) and pending_total == 0 and not runtime_stopped
     run_status = "completed" if run_succeeded else "failed"
     run_phase = "completed" if run_succeeded else "failed"
     final_metadata: dict[str, object] = {
@@ -142,8 +143,13 @@ def engagement_run_terminal_entry(
         final_metadata.update(prereq_metadata)
     if run_succeeded:
         error = None
-    elif report_ready and bool(base_metadata.get("runtime_budget_exhausted")):
-        error = f"runtime budget exhausted with pending recursive work: {pending_total}"
+    elif runtime_stopped:
+        reason = str(base_metadata.get("runtime_budget_reason") or "absolute_cap")
+        error = (
+            "runtime stalled after no progress"
+            if reason == "stalled"
+            else "absolute runtime cap reached"
+        ) + f" with pending recursive work: {pending_total}"
     elif report_ready:
         error = f"max iterations exhausted with pending recursive work: {pending_total}"
     else:

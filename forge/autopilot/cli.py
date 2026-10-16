@@ -168,7 +168,7 @@ def register_autopilot_commands(app: typer.Typer) -> None:
         max_runtime_minutes: Optional[int] = typer.Option(
             None,
             "--max-runtime-minutes",
-            help="Soft kill-chain runtime budget per target (default: 120 minutes).",
+            help="Absolute kill-chain safety cap per target (default: 480 minutes).",
         ),
         parallel_fanout: Optional[int] = typer.Option(
             None,

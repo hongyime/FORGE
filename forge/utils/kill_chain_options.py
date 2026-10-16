@@ -1,9 +1,29 @@
 from __future__ import annotations
 
-DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES = 120
+# Absolute child-process safety cap. Progress is monitored by kill-chain runtime
+# logic; this is only the final backstop, not the normal stopping condition.
+DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES = 480
 DEFAULT_KILL_CHAIN_PARALLEL_FANOUT = 6
 MIN_KILL_CHAIN_PARALLEL_FANOUT = 1
 MAX_KILL_CHAIN_PARALLEL_FANOUT = 8
+
+
+def kill_chain_runtime_stop_reason(
+    *, elapsed_seconds: float, last_progress_age_seconds: float,
+    max_runtime_minutes: int, stall_window_seconds: float = 30 * 60,
+) -> str | None:
+    """Return ``stalled`` after 30m without progress, else ``absolute_cap`` at 8h.
+
+    Progress is a positive per-iteration delta in existing seed/relation/host/email
+    counters, a stable-snapshot transition, or an activity timestamp from existing
+    batch/artifact/validation/finalization/report work. Pending work alone is not
+    progress; it remains eligible to run while one of those signals is recent.
+    """
+    if elapsed_seconds >= max_runtime_minutes * 60:
+        return "absolute_cap"
+    if last_progress_age_seconds >= stall_window_seconds:
+        return "stalled"
+    return None
 
 
 def normalize_kill_chain_max_iter(value: object, *, default: int = 7) -> int:

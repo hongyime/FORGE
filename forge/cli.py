@@ -76,6 +76,7 @@ from forge.utils.kill_chain_runtime import (
 from forge.utils.kill_chain_options import (
     DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
     DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+    kill_chain_runtime_stop_reason,
 )
 from forge.orchestration.seed_promotion import (
     promote_cloud_asset_seed_refs as _promote_cloud_asset_seed_refs_for_engagement,
@@ -327,6 +328,12 @@ def _root_callback(
         raise typer.Exit(code=1) from exc
 
 
+from forge.autopilot.tuning_cli import register_tuning_commands as _register_tuning_commands
+_tuning_app = typer.Typer(name="tuning", help="Safety gated autopilot tuning approvals", no_args_is_help=True)
+_register_tuning_commands(_tuning_app)
+_cli_apps.app.add_typer(_tuning_app, name="tuning")
+
+
 register_extracted_cli_commands(
     _cli_apps,
     console=console,
@@ -482,8 +489,8 @@ def kill_chain(
         "--max-runtime-minutes",
         envvar="FORGE_KILL_CHAIN_MAX_RUNTIME_MINUTES",
         help=(
-            "Soft wall-clock budget for the kill-chain loop before graceful "
-            f"finalization starts (default {DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES}, max 1440)."
+            "Stop after 30 minutes without progress; hard absolute safety cap "
+            f"is {DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES} minutes (max 1440)."
         ),
     ),
     auto_run_detected: bool = typer.Option(
@@ -1222,6 +1229,9 @@ def kill_chain(
                 "runtime_budget_phase": str(
                     run_progress_state.get("runtime_budget_phase") or ""
                 ),
+                "runtime_budget_reason": str(
+                    run_progress_state.get("runtime_budget_reason") or ""
+                ),
                 "runtime_budget_elapsed_seconds": round(
                     float(run_progress_state.get("runtime_budget_elapsed_seconds") or 0.0),
                     3,
@@ -1266,6 +1276,7 @@ def kill_chain(
             pass
 
     def _record_batch_progress(label: str, metrics: dict[str, object]) -> None:
+        run_progress_state["last_progress_unix"] = _time.time()
         if record_run_progress_queue_group(
             run_progress_state,
             queue_group="fanout_batch",
@@ -1277,6 +1288,7 @@ def kill_chain(
             _flush_run_progress_state()
 
     def _record_artifact_progress(label: str, metrics: dict[str, object]) -> None:
+        run_progress_state["last_progress_unix"] = _time.time()
         if record_run_progress_queue_group(
             run_progress_state,
             queue_group="artifact_processor",
@@ -1300,6 +1312,7 @@ def kill_chain(
             _flush_run_progress_state()
 
     def _record_validation_progress(label: str, metrics: dict[str, object]) -> None:
+        run_progress_state["last_progress_unix"] = _time.time()
         if record_run_progress_queue_group(
             run_progress_state,
             queue_group="validation_batch",
@@ -1311,6 +1324,7 @@ def kill_chain(
             _flush_run_progress_state()
 
     def _record_finalization_progress(label: str, metrics: dict[str, object]) -> None:
+        run_progress_state["last_progress_unix"] = _time.time()
         if record_run_progress_queue_group(
             run_progress_state,
             queue_group="finalization_batch",
@@ -3573,6 +3587,8 @@ def kill_chain(
         if iteration_delta is not None:
             run_progress_state["last_iteration_delta"] = dict(iteration_delta)
         if stable is not None:
+            if run_progress_state.get("last_iteration_stable") != stable:
+                run_progress_state["last_progress_unix"] = _time.time()
             run_progress_state["last_iteration_stable"] = stable
 
     def _prepare_known_seed_hostname(item: tuple[Any, Any]) -> str:
@@ -8796,18 +8812,33 @@ def kill_chain(
             run_progress_state["last_iteration_stable"] = False
         return counts
 
-    max_runtime_seconds = max(60.0, float(max_runtime_minutes) * 60.0)
+    # Positive iteration deltas and active batch/artifact/validation/report
+    # updates are progress. Thirty minutes without one marks a stall; this
+    # allows ordinary provider backoff while the runtime budget is the 8h cap.
+    last_progress_at = step_start
+    stall_window_seconds = 30 * 60
 
     def _runtime_budget_exhausted(phase: str) -> bool:
         if bool(run_progress_state.get("runtime_budget_exhausted")):
             return True
         elapsed = _time.time() - step_start
-        if elapsed < max_runtime_seconds:
+        latest_progress = max(
+            last_progress_at,
+            float(run_progress_state.get("last_progress_unix") or last_progress_at),
+        )
+        stop_reason = kill_chain_runtime_stop_reason(
+            elapsed_seconds=elapsed,
+            last_progress_age_seconds=_time.time() - latest_progress,
+            max_runtime_minutes=max_runtime_minutes,
+            stall_window_seconds=stall_window_seconds,
+        )
+        if stop_reason is None:
             return False
         pending_counts = _refresh_pending_work_state()
         pending_total = sum(int(count or 0) for count in pending_counts.values())
         run_progress_state["runtime_budget_exhausted"] = True
         run_progress_state["runtime_budget_phase"] = str(phase)
+        run_progress_state["runtime_budget_reason"] = stop_reason
         run_progress_state["runtime_budget_elapsed_seconds"] = round(float(elapsed), 3)
         run_progress_state["phase"] = "runtime_budget_exhausted"
         _cli_audit(
@@ -8815,17 +8846,17 @@ def kill_chain(
             engagement_id,
             "orchestrator",
             "kill_chain",
-            "runtime_budget_exhausted",
+            "runtime_stalled" if stop_reason == "stalled" else "runtime_absolute_cap",
             target=domain or seed,
             result=(
-                f"phase={phase} elapsed_seconds={elapsed:.3f} "
+                f"reason={stop_reason} phase={phase} elapsed_seconds={elapsed:.3f} "
                 f"max_runtime_minutes={max_runtime_minutes} pending={pending_total}"
             ),
         )
         _log(
             "runtime budget",
             (
-                f"[yellow]soft budget reached at {elapsed:.1f}s "
+                f"[yellow]runtime stop at {elapsed:.1f}s "
                 f"(max_runtime_minutes={max_runtime_minutes}); "
                 "starting graceful finalization[/yellow]"
             ),
@@ -13624,6 +13655,9 @@ def kill_chain(
             label: int(after[index] - before[index])
             for index, label in enumerate(_SNAPSHOT_LABELS)
         }
+        if any(value > 0 for value in iteration_delta.values()):
+            last_progress_at = _time.time()
+            run_progress_state["last_progress_unix"] = last_progress_at
         counts_stable = after == before
         pending_work_counts = _pending_work_counts() if counts_stable else {}
         pending_work_total = sum(pending_work_counts.values())

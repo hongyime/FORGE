@@ -10,6 +10,7 @@ from forge.utils.kill_chain_options import (
     normalize_kill_chain_parallel_fanout,
     normalize_kill_chain_synthesis_depth,
     normalize_kill_chain_validation_batch_limit,
+    kill_chain_runtime_stop_reason,
 )
 from forge.utils.kill_chain_runtime import (
     load_kill_chain_scope_manifest_metadata,
@@ -78,14 +79,36 @@ def test_kill_chain_validation_batch_budget_is_bounded() -> None:
 
 
 def test_kill_chain_max_runtime_budget_is_bounded() -> None:
-    assert DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES == 120
-    assert normalize_kill_chain_max_runtime_minutes(None) == 120
-    assert normalize_kill_chain_max_runtime_minutes("") == 120
+    assert DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES == 480
+    assert normalize_kill_chain_max_runtime_minutes(None) == 480
+    assert normalize_kill_chain_max_runtime_minutes("") == 480
     assert normalize_kill_chain_max_runtime_minutes("1440") == 1440
 
     for value in ("0", "1441", "not-int"):
         with pytest.raises(ValueError):
             normalize_kill_chain_max_runtime_minutes(value)
+
+
+def test_progress_timeout_policy_is_deterministic_and_progress_based() -> None:
+    cap = 480 * 60
+    # A productive run with pending work remains alive beyond the former 120m cap.
+    assert kill_chain_runtime_stop_reason(
+        elapsed_seconds=121 * 60, last_progress_age_seconds=5 * 60,
+        max_runtime_minutes=480,
+    ) is None
+    # The 104 scenario is the same policy condition: pending work is not a stop signal.
+    assert kill_chain_runtime_stop_reason(
+        elapsed_seconds=121 * 60, last_progress_age_seconds=29 * 60,
+        max_runtime_minutes=480,
+    ) is None
+    assert kill_chain_runtime_stop_reason(
+        elapsed_seconds=30 * 60, last_progress_age_seconds=30 * 60,
+        max_runtime_minutes=480,
+    ) == "stalled"
+    assert kill_chain_runtime_stop_reason(
+        elapsed_seconds=cap, last_progress_age_seconds=1,
+        max_runtime_minutes=480,
+    ) == "absolute_cap"
 
 
 def test_kill_chain_parallel_fanout_default_is_bounded() -> None:
@@ -96,7 +119,7 @@ def test_kill_chain_parallel_fanout_default_is_bounded() -> None:
     assert normalize_kill_chain_parallel_fanout("0") == 1
 
     options = _runtime_options()
-    assert options.max_runtime_minutes == 120
+    assert options.max_runtime_minutes == 480
     assert options.parallel_fanout == 6
     assert options.parallel_workers == 6
     assert 1 <= options.parallel_workers <= 8
