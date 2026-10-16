@@ -42,6 +42,7 @@ from forge.config import (
 from forge.db.control import index_engagement_db_file
 from forge.db.session import get_engagement_db
 from forge.domain_validation import canonicalize_domain
+from forge.iana_tlds import DELEGATED_TLDS
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
 from forge.governance.scope_gate import is_roe_wildcard
 from forge.onboard.patterns import is_denied_target
@@ -857,6 +858,8 @@ def _coerce_feed_item(
     if normalized is None:
         return None
     target_type, canonical_value = normalized
+    if not _feed_value_has_delegated_hostname(target_type, canonical_value):
+        return None
     if is_denied_target(canonical_value):
         return None
     target_key = external_target_key(target_type, canonical_value)
@@ -926,6 +929,33 @@ def _coerce_feed_item(
         first_seen_at=_bounded_text(raw_item.get("first_seen_at"), 80),
         provenance=_bounded_text(raw_item.get("provenance"), 240),
     )
+
+
+def _feed_value_has_delegated_hostname(target_type: str, value: str) -> bool:
+    """Require delegated TLDs for feed values that contain DNS hostnames."""
+    hostname = ""
+    if target_type in {"domain", "subdomain"}:
+        hostname = value
+    elif target_type in {"url", "apk_url"}:
+        hostname = urlsplit(value).hostname or ""
+    elif target_type == "email":
+        hostname = value.rsplit("@", 1)[-1]
+    elif target_type == "cloud_ref":
+        parsed = urlsplit(value)
+        if parsed.scheme in {"http", "https"}:
+            hostname = parsed.hostname or ""
+        elif "." in value and ":" not in value and "/" not in value:
+            hostname = value
+        else:
+            return True
+    else:
+        return True
+    try:
+        ipaddress.ip_address(hostname.strip("[]"))
+    except ValueError:
+        labels = hostname.lower().rstrip(".").split(".")
+        return len(labels) >= 2 and labels[-1] in DELEGATED_TLDS
+    return True
 
 
 def _normalize_target_value(raw_target_type: str, value: str) -> tuple[str, str] | None:

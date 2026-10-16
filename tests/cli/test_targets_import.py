@@ -18,6 +18,7 @@ from forge.db.session import get_engagement_db
 import forge.targets_resume_candidates as resume_candidates
 from forge.targets_import import (
     TargetImportResult,
+    _coerce_feed_item,
     _canonical_domain_value,
     _normalize_target_value,
     _start_kill_chain,
@@ -448,10 +449,32 @@ def test_domain_canonicalizer_keeps_common_and_colliding_real_tlds() -> None:
         "example.ai",
         "example.so",
         "example.zip",
+        "example.xn--p1ai",
     )
     for value in accepted_values:
         assert _canonical_domain_value(value) == value
         assert _normalize_target_value("domain", value) == ("domain", value)
+
+
+def test_feed_normalizer_requires_delegated_hostname_suffixes() -> None:
+    for value in ("package.json", "module.os.environ"):
+        assert _coerce_feed_item({"target_type": "domain", "target_value": value}) is None
+
+    assert _coerce_feed_item(
+        {"target_type": "domain", "target_value": "valid.corp-target.io"}
+    ) is not None
+    assert _coerce_feed_item(
+        {"target_type": "ipv4", "target_value": "8.8.8.8"}
+    ) is not None
+    assert _coerce_feed_item(
+        {"target_type": "url", "target_value": "https://example.invalid/path"}
+    ) is None
+    assert _coerce_feed_item(
+        {"target_type": "email", "target_value": "user@example.invalid"}
+    ) is None
+    assert _coerce_feed_item(
+        {"target_type": "email", "target_value": "user@corp-target.io"}
+    ) is not None
 
 
 def test_load_target_feed_drops_filename_values_for_domain_subdomain_and_auto(

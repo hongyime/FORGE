@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import re
 
+from forge.iana_tlds import DELEGATED_TLDS
+
 
 _DOMAIN_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
-_DOMAIN_TLD_RE = re.compile(r"^[a-z]{2,63}$")
+_DOMAIN_TLD_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 _CODE_IDENTIFIER_TLDS = frozenset(
     {
         "args",
@@ -156,6 +158,7 @@ def canonicalize_domain(value: str) -> str:
     tld = labels[-1]
     if (
         not _DOMAIN_TLD_RE.fullmatch(tld)
+        or tld not in DELEGATED_TLDS
         or tld in _CODE_IDENTIFIER_TLDS
         or tld in _FILENAME_EXTENSION_TLDS
     ):
