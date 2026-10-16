@@ -34,6 +34,7 @@ from forge.autopilot.scheduler import (
     release_lease,
     sample_process_resources,
 )
+from forge.cloud_ref import engagement_scope, parse_cloud_ref
 from forge.config import (
     ForgeConfig,
     normalize_roe_strictness,
@@ -1032,8 +1033,6 @@ def _canonical_http_url_value(value: str) -> str:
 
 
 def _canonical_cloud_target_value(value: str) -> str:
-    from forge.cloud_ref import parse_cloud_ref  # noqa: PLC0415
-
     parsed_ref = parse_cloud_ref(value)
     if parsed_ref is not None:
         return parsed_ref.canonical_value
@@ -1454,8 +1453,6 @@ def _scope_json_for_item(
         scope["domains"] = [host] if host else []
         scope["urls"] = [item.canonical_value]
     elif item.target_type == "cloud_ref":
-        from forge.cloud_ref import engagement_scope, parse_cloud_ref  # noqa: PLC0415
-
         reference = parse_cloud_ref(item.canonical_value)
         if reference is not None:
             return engagement_scope(reference)
