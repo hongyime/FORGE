@@ -68,6 +68,18 @@ def test_never_start_apex_skipped() -> None:
     assert mega_domain_decision("subdomain.google.com") == (False, "eligible")
 
 
+@pytest.mark.parametrize(
+    "apex",
+    ["gmail.com", "icloud.com", "discord.com", "supabase.com", "chatgpt.com", "claude.com"],
+)
+def test_new_never_start_apexes_skipped(apex: str) -> None:
+    assert mega_domain_decision(apex) == (True, "never_start_list")
+
+
+def test_new_never_start_apex_subdomain_is_not_skipped_by_list() -> None:
+    assert mega_domain_decision("mail.gmail.com") == (False, "eligible")
+
+
 def test_old_and_large_skipped() -> None:
     """Domains that are both OLD (>= 10 years) and LARGE (>= 500 subdomains) are skipped."""
     assert mega_domain_decision(
