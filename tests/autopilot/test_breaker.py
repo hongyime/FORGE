@@ -36,10 +36,8 @@ from forge.autopilot.breaker import (
     remaining_pause,
     set_retry_after,
 )
-from forge.autopilot.scheduler import (
-    acquire_lease,
-    scheduler_db_path,
-)
+from forge.autopilot.scheduler import acquire_lease
+from forge.autopilot.scheduler_db import ensure_breaker_schema, scheduler_db_path
 from forge.db.direct_connect import direct_connect
 from forge.targets_import import import_targets
 
@@ -300,7 +298,6 @@ def test_per_provider_threshold_adapts_and_engagement_scope_remains(tmp_path: Pa
 
     con = direct_connect(scheduler_db_path(tmp_path))
     try:
-        from forge.autopilot.breaker import ensure_breaker_schema
         ensure_breaker_schema(con)
         with con:
             for n in range(10):

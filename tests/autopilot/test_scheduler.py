@@ -45,8 +45,8 @@ from forge.autopilot.scheduler import (
     reap_stale_leases,
     release_lease,
     sample_process_resources,
-    scheduler_db_path,
 )
+from forge.autopilot.scheduler_db import scheduler_db_path
 from forge.targets_import import import_targets
 from forge.targets_resume_candidates import _execute_resume_item
 

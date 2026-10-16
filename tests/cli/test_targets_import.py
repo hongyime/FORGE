@@ -241,7 +241,7 @@ def test_import_dispatcher_strict_burst_is_serial_and_pauses(
 
 
 def test_import_dispatcher_releases_scheduler_leases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from forge.autopilot import scheduler
+    from forge.autopilot.scheduler_db import scheduler_db_path
 
     feed = tmp_path / "feed.json"
     _write_dispatch_feed(feed, 2)
@@ -258,7 +258,7 @@ def test_import_dispatcher_releases_scheduler_leases(tmp_path: Path, monkeypatch
     results = _dispatch_import(feed, cfg, max_active_targets=2)
 
     assert len(results) == 2
-    with sqlite3.connect(scheduler.scheduler_db_path(cfg.data_dir)) as con:
+    with sqlite3.connect(scheduler_db_path(cfg.data_dir)) as con:
         active_leases = con.execute("SELECT lease_id FROM leases WHERE status = 'active'").fetchall()
     assert active_leases == []
 

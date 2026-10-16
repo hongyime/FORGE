@@ -18,6 +18,11 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from forge.autopilot.jitter import retry_after_delay
+from forge.autopilot.scheduler_db import (
+    ensure_breaker_schema,
+    ensure_scheduler_schema,
+    scheduler_db_path,
+)
 from forge.db.direct_connect import direct_connect
 
 if TYPE_CHECKING:
@@ -66,8 +71,6 @@ def count_breaker_trips_7d(
     returns zero if the database cannot be read.
     """
     try:
-        from forge.autopilot.scheduler import scheduler_db_path
-
         end = _ensure_utc(now)
         start = (end - timedelta(days=7)).isoformat()
         db_path = scheduler_db_path(data_dir).resolve()
@@ -131,51 +134,6 @@ def canonical_provider(scope_or_url: str | None, url: str | None = None) -> str:
     return clean or "unknown"
 
 
-def ensure_breaker_schema(con: sqlite3.Connection) -> None:
-    """Idempotently create provider events and breaker tables."""
-    con.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS provider_events (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            provider        TEXT NOT NULL,
-            event_type      TEXT NOT NULL,
-            recorded_at     TEXT NOT NULL,
-            details         TEXT,
-            phase           TEXT NOT NULL DEFAULT 'engagement'
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_provider_events_provider_time 
-            ON provider_events(provider, recorded_at);
-        CREATE INDEX IF NOT EXISTS idx_provider_events_time 
-            ON provider_events(recorded_at);
-
-        CREATE TABLE IF NOT EXISTS provider_breakers (
-            provider        TEXT PRIMARY KEY,
-            paused_until    TEXT,
-            trip_reason     TEXT,
-            last_tripped_at TEXT,
-            updated_at      TEXT NOT NULL,
-            consecutive_trips INTEGER NOT NULL DEFAULT 0,
-            recent_429_count INTEGER NOT NULL DEFAULT 0,
-            last_429_at TEXT,
-            probe_pending INTEGER NOT NULL DEFAULT 0
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_provider_breakers_paused 
-            ON provider_breakers(paused_until);
-        """
-    )
-    columns = {row[1] for row in con.execute("PRAGMA table_info(provider_events)")}
-    if "phase" not in columns:
-        # Historical rows have no trustworthy phase metadata; exclude them from
-        # engagement thresholds instead of guessing that they were engagement.
-        con.execute("ALTER TABLE provider_events ADD COLUMN phase TEXT NOT NULL DEFAULT 'discovery'")
-    breaker_columns = {row[1] for row in con.execute("PRAGMA table_info(provider_breakers)")}
-    for name, declaration in (("consecutive_trips", "INTEGER NOT NULL DEFAULT 0"), ("recent_429_count", "INTEGER NOT NULL DEFAULT 0"), ("last_429_at", "TEXT"), ("probe_pending", "INTEGER NOT NULL DEFAULT 0")):
-        if name not in breaker_columns:
-            con.execute(f"ALTER TABLE provider_breakers ADD COLUMN {name} {declaration}")
-
-
 def record_child_failure(
     provider: str | None = None,
     reason: str | None = None,
@@ -186,7 +144,6 @@ def record_child_failure(
     """Persist a child failure and reevaluate the global breaker."""
     ref_time = _ensure_utc(now)
     prov = canonical_provider(provider) if provider else GLOBAL_PROVIDER_KEY
-    from forge.autopilot.scheduler import scheduler_db_path
 
     con = direct_connect(scheduler_db_path(data_dir))
     try:
@@ -256,7 +213,6 @@ def record_rate_limit(provider: str, *, data_dir: Path | str | None = None, now:
             base_pause = int(getattr(ForgeConfig.load(), "breaker_pause_s", DEFAULT_PAUSE_SECONDS))
         except Exception:
             pass
-    from forge.autopilot.scheduler import scheduler_db_path
     con = direct_connect(scheduler_db_path(data_dir))
     tripped = False
     try:
@@ -309,7 +265,6 @@ def provider_admission_status(provider: str, *, data_dir: Path | str | None = No
     canonical = canonical_provider(provider)
     key = f"discovery:{canonical}" if phase == "discovery" else canonical
     ref = _ensure_utc(now)
-    from forge.autopilot.scheduler import scheduler_db_path
     con = direct_connect(scheduler_db_path(data_dir))
     try:
         ensure_breaker_schema(con)
@@ -331,7 +286,6 @@ def record_probe_success(provider: str, *, data_dir: Path | str | None = None, n
         raise ValueError("phase must be 'discovery' or 'engagement'")
     canonical = canonical_provider(provider)
     key = f"discovery:{canonical}" if phase == "discovery" else canonical
-    from forge.autopilot.scheduler import scheduler_db_path
     con = direct_connect(scheduler_db_path(data_dir))
     try:
         ensure_breaker_schema(con)
@@ -344,7 +298,6 @@ def record_provider_backoff(
     provider: str, *, data_dir: Path | str | None = None, now: datetime | None = None
 ) -> None:
     """Persist a provider backoff in the scheduler event stream."""
-    from forge.autopilot.scheduler import scheduler_db_path
 
     con = direct_connect(scheduler_db_path(data_dir))
     try:
@@ -376,7 +329,6 @@ def is_provider_paused(
         raise ValueError("phase must be 'discovery' or 'engagement'")
     canonical = canonical_provider(provider)
     prov = f"discovery:{canonical}" if phase == "discovery" else canonical
-    from forge.autopilot.scheduler import scheduler_db_path
 
     db_path = scheduler_db_path(data_dir)
     con = direct_connect(db_path)
@@ -403,7 +355,6 @@ def remaining_pause(
     """Return remaining pause duration in seconds (0.0 if not paused)."""
     ref_time = _ensure_utc(now)
     prov = canonical_provider(provider)
-    from forge.autopilot.scheduler import scheduler_db_path
 
     db_path = scheduler_db_path(data_dir)
     con = direct_connect(db_path)
@@ -448,7 +399,6 @@ def set_retry_after(
     new_pause_until = (ref_time + timedelta(seconds=delay)).isoformat()
     now_iso = ref_time.isoformat()
 
-    from forge.autopilot.scheduler import scheduler_db_path
 
     db_path = scheduler_db_path(data_dir)
     con = direct_connect(db_path)
@@ -528,7 +478,6 @@ def check_and_update_global_breaker(
             pass
 
     window_cutoff = (ref_time - timedelta(seconds=window_s)).isoformat()
-    from forge.autopilot.scheduler import scheduler_db_path
 
     db_path = scheduler_db_path(data_dir)
     con = direct_connect(db_path)
@@ -625,7 +574,6 @@ def record_global_rate_limit(
     ref_time = _ensure_utc(now)
     now_iso = ref_time.isoformat()
     pause_until_iso = (ref_time + timedelta(seconds=pause_seconds)).isoformat()
-    from forge.autopilot.scheduler import scheduler_db_path
 
     db_path = scheduler_db_path(data_dir)
     con = direct_connect(db_path)
@@ -681,7 +629,6 @@ def can_start_provider(
     prov = canonical_provider(provider)
     if not prov or prov == "unknown":
         return True
-    from forge.autopilot.scheduler import ensure_scheduler_schema, scheduler_db_path
 
     db_path = scheduler_db_path(data_dir)
     con = direct_connect(db_path)

@@ -4,7 +4,8 @@ import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 from forge.autopilot.events import AutopilotEventWriter
-from forge.autopilot.scheduler import ensure_scheduler_schema, get_budget_snapshot
+from forge.autopilot.scheduler import get_budget_snapshot
+from forge.autopilot.scheduler_db import ensure_scheduler_schema
 from forge.autopilot.tuning_apply import apply_tuning_decision, create_tuning_approval
 from forge.db.migrations import run_migrations
 

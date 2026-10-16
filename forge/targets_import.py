@@ -43,9 +43,13 @@ from forge.config import (
 from forge.db.control import index_engagement_db_file
 from forge.db.session import get_engagement_db
 from forge.domain_validation import canonicalize_domain
-from forge.iana_tlds import DELEGATED_TLDS
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
 from forge.governance.scope_gate import is_roe_wildcard
+from forge.iana_tlds import DELEGATED_TLDS
+from forge.monitoring.continuous import (
+    create_monitoring_snapshot,
+    upsert_monitoring_policy,
+)
 from forge.onboard.patterns import is_denied_target
 from forge.onboard.mega_domain import mega_domain_decision, mega_domain_signals
 from forge.subprocess_tree import run_contained_subprocess
@@ -55,6 +59,31 @@ from forge.utils.kill_chain_options import (
 )
 from forge.utils.kill_chain_fanout import cap_fanout
 from forge.utils.target_keys import external_target_key
+
+try:
+    from forge.engagement_orchestrator import _canonical_cloud_ref_value
+except Exception:
+    _canonical_cloud_ref_value = None
+
+try:
+    from forge.engagement_orchestrator import _classify_seed_value
+except Exception:
+    _classify_seed_value = None
+
+try:
+    from forge.engagement_orchestrator import _is_mobile_bundle_url
+except Exception:
+    _is_mobile_bundle_url = None
+
+try:
+    from forge.engagement_orchestrator import _hostname_is_cloud_ref
+except Exception:
+    _hostname_is_cloud_ref = None
+
+try:
+    from forge.engagement_orchestrator import _normalize_phone_seed_value
+except Exception:
+    _normalize_phone_seed_value = None
 
 _DEFAULT_SLEEP = time.sleep
 
@@ -1037,11 +1066,6 @@ def _canonical_cloud_target_value(value: str) -> str:
     if parsed_ref is not None:
         return parsed_ref.canonical_value
 
-    try:
-        from forge.engagement_orchestrator import _canonical_cloud_ref_value  # noqa: PLC0415
-    except Exception:  # noqa: BLE001
-        _canonical_cloud_ref_value = None
-
     if _canonical_cloud_ref_value is not None:
         canonical_ref = _canonical_cloud_ref_value(value)
         if canonical_ref:
@@ -1070,9 +1094,7 @@ def _canonical_ip_target_value(value: str, target_type: str) -> str:
 
 
 def _classify_target_value(value: str) -> str:
-    try:
-        from forge.engagement_orchestrator import _classify_seed_value  # noqa: PLC0415
-    except Exception:  # noqa: BLE001
+    if _classify_seed_value is None:
         return _fallback_classify_target_value(value)
     target_type = str(_classify_seed_value(str(value or "")) or "").strip().lower()
     return target_type if target_type in CANONICAL_TARGET_TYPES else ""
@@ -1107,9 +1129,7 @@ def _fallback_classify_target_value(value: str) -> str:
 
 
 def _is_mobile_bundle_target_url(value: str) -> bool:
-    try:
-        from forge.engagement_orchestrator import _is_mobile_bundle_url  # noqa: PLC0415
-    except Exception:  # noqa: BLE001
+    if _is_mobile_bundle_url is None:
         parsed = urlsplit(value)
         return parsed.scheme.lower() in {"http", "https"} and parsed.path.lower().endswith(
             (".apk", ".ipa", ".aab", ".apkm", ".apks", ".xapk")
@@ -1118,9 +1138,7 @@ def _is_mobile_bundle_target_url(value: str) -> bool:
 
 
 def _hostname_is_cloud_target(hostname: str) -> bool:
-    try:
-        from forge.engagement_orchestrator import _hostname_is_cloud_ref  # noqa: PLC0415
-    except Exception:  # noqa: BLE001
+    if _hostname_is_cloud_ref is None:
         return False
     return bool(_hostname_is_cloud_ref(str(hostname or "")))
 
@@ -1131,9 +1149,7 @@ def _url_is_cloud_target(value: str) -> bool:
 
 
 def _normalize_phone_target_value(value: str) -> str:
-    try:
-        from forge.engagement_orchestrator import _normalize_phone_seed_value  # noqa: PLC0415
-    except Exception:  # noqa: BLE001
+    if _normalize_phone_seed_value is None:
         candidate = re.sub(r"[^\d+]", "", str(value or "").strip())
         if candidate.startswith("00") and len(candidate) > 3:
             candidate = f"+{candidate[2:]}"
@@ -1334,11 +1350,6 @@ def _ensure_target_import_monitoring(
     engagement_id: int,
     item: TargetFeedItem,
 ) -> None:
-    from forge.monitoring.continuous import (  # noqa: PLC0415
-        create_monitoring_snapshot,
-        upsert_monitoring_policy,
-    )
-
     db_path = cfg.engagement_db_path(str(engagement_id))
     con = get_engagement_db(db_path)
     try:

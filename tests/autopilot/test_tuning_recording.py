@@ -5,7 +5,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from forge.autopilot.breaker import count_breaker_trips_7d, ensure_breaker_schema
+from forge.autopilot.breaker import count_breaker_trips_7d
 from forge.autopilot.defaults import AutopilotDefaults
 from forge.autopilot.events import (
     record_tuning_decision,
@@ -13,6 +13,7 @@ from forge.autopilot.events import (
 )
 from forge.autopilot.loop import ForgeAutopilot
 from forge.autopilot.tuning import TuningDecision, decide_tuning
+from forge.autopilot.scheduler_db import ensure_breaker_schema, ensure_scheduler_schema
 from forge.db.migrations import run_migrations
 
 
@@ -181,8 +182,6 @@ def test_tuning_history_appends_across_two_loop_runs(tmp_path: Path) -> None:
 
 
 def test_deciding_and_recording_tuning_does_not_touch_scheduler_leases(tmp_path: Path) -> None:
-    from forge.autopilot.scheduler import ensure_scheduler_schema
-
     _data_db(tmp_path)
     scheduler_db = tmp_path / "scheduler.db"
     with sqlite3.connect(scheduler_db) as conn:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from forge.autopilot.scheduler import scheduler_db_path
+from forge.autopilot.scheduler_db import scheduler_db_path
 from forge.db.direct_connect import direct_connect
 from forge.onboard.rate_limit import request_with_rate_limit_backoff
 
