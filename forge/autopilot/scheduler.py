@@ -138,6 +138,24 @@ def ensure_scheduler_schema(con: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_leases_engagement_status ON leases(engagement_id, status);
         CREATE INDEX IF NOT EXISTS idx_leases_expires ON leases(expires_at) WHERE status = 'active';
         CREATE INDEX IF NOT EXISTS idx_leases_provider_status ON leases(provider, status);
+
+        CREATE TABLE IF NOT EXISTS tuning_overrides (
+            key TEXT PRIMARY KEY CHECK (key IN ('global_slots', 'max_active_targets')),
+            value INTEGER NOT NULL,
+            updated_at TEXT NOT NULL,
+            applied_decision_id TEXT
+        );
+        CREATE TABLE IF NOT EXISTS tuning_approvals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT NOT NULL,
+            slot_delta INTEGER NOT NULL,
+            target_delta INTEGER NOT NULL,
+            approver TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            consumed_at TEXT,
+            consumed_by_decision_id TEXT
+        );
         """
     )
     cur = con.execute("PRAGMA table_info(leases)")
@@ -156,6 +174,19 @@ def ensure_scheduler_schema(con: sqlite3.Connection) -> None:
         ensure_breaker_schema(con)
     except Exception:
         pass
+
+
+def _read_tuning_overrides(
+    data_dir: Path | str | None, slots: int, targets: int
+) -> tuple[int, int]:
+    """Resolve configured limits from durable scheduler overrides when present."""
+    con = direct_connect(scheduler_db_path(data_dir))
+    try:
+        ensure_scheduler_schema(con)
+        rows = dict(con.execute("SELECT key, value FROM tuning_overrides"))
+        return int(rows.get("global_slots", slots)), int(rows.get("max_active_targets", targets))
+    finally:
+        con.close()
 
 
 def ensure_child_memory_schema(con: sqlite3.Connection) -> None:
@@ -402,12 +433,12 @@ def get_budget_snapshot(
         except Exception:
             config = None
 
+    configured_slots = getattr(config, "autopilot_global_slots", DEFAULT_GLOBAL_SLOTS) if config else DEFAULT_GLOBAL_SLOTS
+    configured_targets = getattr(config, "autopilot_max_active_targets", DEFAULT_MAX_ACTIVE_TARGETS) if config else DEFAULT_MAX_ACTIVE_TARGETS
+    configured_slots, configured_targets = _read_tuning_overrides(data_dir, configured_slots, configured_targets)
+
     if total_slots is None:
-        cfg_slots = (
-            getattr(config, "autopilot_global_slots", DEFAULT_GLOBAL_SLOTS)
-            if config
-            else DEFAULT_GLOBAL_SLOTS
-        )
+        cfg_slots = configured_slots
         p95_mem = resolve_p95_worker_memory_mb(config, data_dir=data_dir)
         reserve_mb = (
             getattr(config, "autopilot_memory_reserve_mb", DEFAULT_MEMORY_RESERVE_MB)
@@ -423,11 +454,7 @@ def get_budget_snapshot(
         resolved_total_slots = max(0, int(total_slots))
 
     if max_active_targets is None:
-        resolved_max_targets = (
-            getattr(config, "autopilot_max_active_targets", DEFAULT_MAX_ACTIVE_TARGETS)
-            if config
-            else DEFAULT_MAX_ACTIVE_TARGETS
-        )
+        resolved_max_targets = configured_targets
     else:
         resolved_max_targets = max(0, int(max_active_targets))
 
@@ -634,6 +661,10 @@ def acquire_lease(
         if config
         else DEFAULT_GLOBAL_SLOTS
     )
+    cfg_slots, max_active_targets = _read_tuning_overrides(
+        data_dir, cfg_slots,
+        getattr(config, "autopilot_max_active_targets", DEFAULT_MAX_ACTIVE_TARGETS) if config else DEFAULT_MAX_ACTIVE_TARGETS,
+    )
     p95_mem = resolve_p95_worker_memory_mb(config, data_dir=data_dir)
     reserve_mb = (
         getattr(config, "autopilot_memory_reserve_mb", DEFAULT_MEMORY_RESERVE_MB)
@@ -644,11 +675,6 @@ def acquire_lease(
         configured_slots=cfg_slots,
         p95_worker_memory_mb=p95_mem,
         memory_reserve_mb=reserve_mb,
-    )
-    max_active_targets = (
-        getattr(config, "autopilot_max_active_targets", DEFAULT_MAX_ACTIVE_TARGETS)
-        if config
-        else DEFAULT_MAX_ACTIVE_TARGETS
     )
     provider_max_inflight = (
         getattr(config, "provider_max_inflight", 2)

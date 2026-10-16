@@ -49,6 +49,7 @@ from forge.autopilot.scheduler import (
     record_worker_memory_p95,
 )
 from forge.autopilot.tuning import decide_tuning
+from forge.autopilot.tuning_apply import apply_tuning_decision
 from forge.config import ForgeConfig
 
 
@@ -418,6 +419,15 @@ class ForgeAutopilot:
                     data_dir=self.data_dir,
                     occurred_at=finished_at,
                     _writer=self._event_writer,
+                )
+                apply_tuning_decision(
+                    decision,
+                    data_dir=self.data_dir,
+                    cycle_id=self._event_writer.cycle_id or "",
+                    cycle_number=self._event_writer.cycle_number,
+                    occurred_at=finished_at,
+                    _writer=self._event_writer,
+                    _config=self._cfg,
                 )
             except Exception:
                 # Tuning is advisory telemetry; it must never interrupt a cycle.
