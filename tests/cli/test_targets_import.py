@@ -3760,6 +3760,7 @@ def test_import_targets_strict_roe_gives_strict_caps(
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
+    monkeypatch.setattr("forge.autopilot.breaker.check_resource_pressure", lambda: (False, ""))
 
     # Via explicit parameter
     results = import_targets(
@@ -3794,6 +3795,7 @@ def test_import_targets_unknown_missing_strictness_fail_closed_to_strict(
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
+    monkeypatch.setattr("forge.autopilot.breaker.check_resource_pressure", lambda: (False, ""))
 
     # Case 1: missing parameter, config without roe_strictness, env unset
     monkeypatch.delenv("FORGE_ROE_STRICTNESS", raising=False)
@@ -3864,6 +3866,7 @@ def test_import_targets_standard_and_permissive_behave_as_before(
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
+    monkeypatch.setattr("forge.autopilot.breaker.check_resource_pressure", lambda: (False, ""))
 
     # 1. Explicit standard config -> cap 4
     import_targets(
