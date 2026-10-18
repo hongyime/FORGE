@@ -12545,6 +12545,19 @@ def test_artifact_url_social_pivot_entries_promotes_handle_domain_company_and_na
     ]
 
 
+def test_artifact_url_social_pivot_entries_rejects_filename_as_username() -> None:
+    entries = artifact_url_social_pivot_entries(
+        "https://github.com/fluidicon.png",
+        social_profile_platform_hint=lambda _profile: "github",
+        extract_social_profile_handle_from_url=lambda _url: "fluidicon.png",
+        classify_seed_value=lambda _value: "other",
+        social_profile_company_name=lambda *_args, **_kwargs: "",
+        social_profile_name=lambda _profile: "",
+    )
+
+    assert entries == []
+
+
 def test_artifact_social_profile_url_pivot_entry_normalizes_values() -> None:
     assert artifact_social_profile_url_pivot_entry(
         (

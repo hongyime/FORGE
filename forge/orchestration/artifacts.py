@@ -98,6 +98,7 @@ from forge.orchestration.artifact_queue import (
     sweep_completed_artifact_metadata,
     update_artifact_status,
 )
+from forge.utils.filename_seeds import is_filename_like_identity_seed
 
 
 RunOrderedBatch = Callable[..., list[Any]]
@@ -8556,7 +8557,7 @@ def artifact_url_social_pivot_entries(
     entries: list[dict[str, Any]] = []
 
     handle = extract_social_profile_handle_from_url(url)
-    if handle:
+    if handle and not is_filename_like_identity_seed(handle):
         entries.append(
             {
                 "seed_value": handle,

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
+
+from forge.utils.filename_seeds import is_filename_like_identity_seed
 
 CloudSeedRefExtractor = Callable[[str], list[tuple[str, str]]]
 LiteralCloudRefParser = Callable[[str], tuple[str, str] | None]
@@ -11,22 +12,6 @@ SeedUpserter = Callable[..., None]
 SeedClassifier = Callable[[str], str]
 SocialHandleExtractor = Callable[[str], str | None]
 SocialPlatformHint = Callable[[Mapping[str, object]], str | None]
-
-_FILENAME_SUFFIXES = {
-    ".7z", ".apk", ".css", ".csv", ".doc", ".docx", ".gif", ".html",
-    ".ico", ".jpeg", ".jpg", ".js", ".json", ".map", ".pdf", ".php",
-    ".png", ".svg", ".txt", ".wasm", ".webp", ".xml", ".yaml", ".yml",
-    ".zip",
-}
-
-
-def _filename_like_social_handle(value: str) -> bool:
-    """Reject extracted asset filenames before treating them as usernames."""
-    text = str(value or "").strip().rstrip("./")
-    if not text or any(char.isspace() for char in text):
-        return False
-    suffix = "." + text.rsplit(".", 1)[-1].casefold() if "." in text else ""
-    return suffix in _FILENAME_SUFFIXES and bool(re.fullmatch(r"[\w.-]+", text))
 SocialCompanyExtractor = Callable[..., str | None]
 SocialNameExtractor = Callable[[Mapping[str, object]], str | None]
 
@@ -116,7 +101,7 @@ def promote_social_url_seed_refs(
         return
 
     handle = extract_handle(seed_value)
-    if handle and not _filename_like_social_handle(handle):
+    if handle and not is_filename_like_identity_seed(handle):
         upsert_engagement_seed(
             con,
             handle,
