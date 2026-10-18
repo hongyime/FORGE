@@ -12545,11 +12545,12 @@ def test_artifact_url_social_pivot_entries_promotes_handle_domain_company_and_na
     ]
 
 
-def test_artifact_url_social_pivot_entries_rejects_filename_as_username() -> None:
+@pytest.mark.parametrize("filename", ["fluidicon.png", "opensearch.xml", "sitemap.xml"])
+def test_artifact_url_social_pivot_entries_rejects_filename_as_username(filename: str) -> None:
     entries = artifact_url_social_pivot_entries(
-        "https://github.com/fluidicon.png",
+        f"https://github.com/{filename}",
         social_profile_platform_hint=lambda _profile: "github",
-        extract_social_profile_handle_from_url=lambda _url: "fluidicon.png",
+        extract_social_profile_handle_from_url=lambda _url: filename,
         classify_seed_value=lambda _value: "other",
         social_profile_company_name=lambda *_args, **_kwargs: "",
         social_profile_name=lambda _profile: "",

@@ -1718,12 +1718,12 @@ def _completed_kill_chain_run(
     try:
         row = conn.execute(
             """
-            SELECT 1
+            SELECT status
             FROM engagement_runs
             WHERE engagement_id=?
               AND run_kind='kill_chain'
               AND seed_value=?
-              AND status='completed'
+            ORDER BY rowid DESC
             LIMIT 1
             """,
             (engagement_id, seed),
@@ -1732,7 +1732,7 @@ def _completed_kill_chain_run(
         return False
     finally:
         conn.close()
-    return row is not None
+    return row is not None and str(row[0]) == "completed"
 
 
 def _failed_kill_chain_run(
@@ -1748,12 +1748,12 @@ def _failed_kill_chain_run(
     try:
         row = conn.execute(
             """
-            SELECT 1
+            SELECT status
             FROM engagement_runs
             WHERE engagement_id=?
               AND run_kind='kill_chain'
               AND seed_value=?
-              AND status='failed'
+            ORDER BY rowid DESC
             LIMIT 1
             """,
             (engagement_id, seed),
@@ -1762,4 +1762,4 @@ def _failed_kill_chain_run(
         return False
     finally:
         conn.close()
-    return row is not None
+    return row is not None and str(row[0]) == "failed"

@@ -213,6 +213,22 @@ def test_stale_lease_reaping_expired_ttl(tmp_path: Path) -> None:
     assert res.lease is not None
     lease_id = res.lease.lease_id
 
+    # Model a crashed owner so expiry remains a valid cleanup condition.
+    dead_pid = 4194300
+    for _ in range(500):
+        try:
+            os.kill(dead_pid, 0)
+            dead_pid += 1
+        except ProcessLookupError:
+            break
+        except OSError:
+            dead_pid += 1
+    with sqlite3.connect(scheduler_db_path(tmp_path)) as con:
+        con.execute(
+            "UPDATE leases SET owner_pid = ? WHERE lease_id = ?",
+            (dead_pid, lease_id),
+        )
+
     # Simulate time advancing beyond expires_at
     future_now = datetime.now(timezone.utc) + timedelta(seconds=60)
     reaped = reap_stale_leases(data_dir=tmp_path, now=future_now)
@@ -247,6 +263,48 @@ def test_stale_lease_reaping_expired_ttl(tmp_path: Path) -> None:
     )
     assert reacquire.acquired is True
     assert reacquire.reason == "ok"
+
+
+def test_expired_lease_with_live_owner_keeps_slots_reserved(tmp_path: Path) -> None:
+    """An expired lease is not reaped while its owner process is still alive."""
+    cfg = _FakeConfig(tmp_path, autopilot_global_slots=4, autopilot_max_active_targets=3)
+    held = acquire_lease(
+        target_key="domain:live-owner.example",
+        target_value="live-owner.example",
+        target_type="domain",
+        engagement_id=1,
+        requested_slots=2,
+        ttl_seconds=10,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert held.acquired and held.lease is not None
+
+    expired_at = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    with sqlite3.connect(scheduler_db_path(tmp_path)) as con:
+        con.execute(
+            "UPDATE leases SET expires_at = ? WHERE lease_id = ?",
+            (expired_at, held.lease.lease_id),
+        )
+
+    assert reap_stale_leases(data_dir=tmp_path) == []
+    next_lease = acquire_lease(
+        target_key="domain:second-target.example",
+        target_value="second-target.example",
+        target_type="domain",
+        engagement_id=2,
+        requested_slots=3,
+        data_dir=tmp_path,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    assert next_lease.acquired and next_lease.lease is not None
+    assert next_lease.allocated_slots == 2
+
+    with sqlite3.connect(scheduler_db_path(tmp_path)) as con:
+        rows = con.execute(
+            "SELECT engagement_id, status, slot_count FROM leases ORDER BY engagement_id"
+        ).fetchall()
+    assert rows == [(1, "active", 2), (2, "active", 2)]
 
 
 # ---------------------------------------------------------------------------

@@ -451,10 +451,10 @@ def reap_stale_leases(
 ) -> list[str]:
     """Reap leases that have expired or whose owner PID has died.
 
-    Finds all rows WHERE status = 'active':
-      - If expires_at <= current_time: mark reaped (reason='expired_no_heartbeat').
-      - If owner_pid is on localhost and os.kill(owner_pid, 0) raises ProcessLookupError:
-        mark reaped (reason='owner_pid_dead').
+    Finds all rows WHERE status = 'active'. A live or unverifiable owner PID
+    keeps its lease even past expiry; only a dead owner can have an expired
+    lease reaped. This prevents a still-running worker's slots from being
+    reassigned when its heartbeat is delayed or unavailable.
     Returns list of reaped lease_ids.
     """
     db_path = scheduler_db_path(data_dir)
@@ -469,6 +469,19 @@ def reap_stale_leases(
             )
             rows = cur.fetchall()
             for lease_id, owner_pid, expires_at_str in rows:
+                pid_dead = False
+                try:
+                    os.kill(int(owner_pid), 0)
+                except ProcessLookupError:
+                    pid_dead = True
+                except (PermissionError, OSError):
+                    # If liveness cannot be disproved, retain the lease.
+                    continue
+                else:
+                    # An expired lease owned by a live process must not free
+                    # capacity while that process may still be running work.
+                    continue
+
                 is_expired = False
                 try:
                     exp_dt = datetime.fromisoformat(expires_at_str)
@@ -490,16 +503,6 @@ def reap_stale_leases(
                     )
                     reaped_ids.append(lease_id)
                     continue
-
-                pid_dead = False
-                try:
-                    os.kill(int(owner_pid), 0)
-                except ProcessLookupError:
-                    pid_dead = True
-                except PermissionError:
-                    pid_dead = False
-                except OSError:
-                    pass
 
                 if pid_dead:
                     con.execute(

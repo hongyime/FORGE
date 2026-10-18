@@ -2682,8 +2682,29 @@ def test_start_does_not_treat_exit_two_output_as_completed_without_completed_db_
     feed_path = tmp_path / "feed.json"
     _write_feed(feed_path)
     cfg = _FakeConfig(tmp_path / "data")
+    progress_events: list[tuple[str, dict[str, object]]] = []
 
     def _fake_run(command: list[str], **_: object) -> object:
+        db_path = cfg.engagement_db_path("1")
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE engagement_runs (
+                    id INTEGER PRIMARY KEY,
+                    engagement_id INTEGER,
+                    run_kind TEXT,
+                    status TEXT,
+                    seed_value TEXT
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO engagement_runs VALUES (1, 1, 'kill_chain', 'completed', 'corp-target.io')"
+            )
+            conn.execute(
+                "INSERT INTO engagement_runs VALUES (2, 1, 'kill_chain', 'failed', 'corp-target.io')"
+            )
         return subprocess.CompletedProcess(
             command,
             2,
@@ -2704,10 +2725,20 @@ def test_start_does_not_treat_exit_two_output_as_completed_without_completed_db_
         max_iter=3,
         config=cfg,  # type: ignore[arg-type]
         sleep_fn=lambda _: None,
+        progress_callback=lambda event, details: progress_events.append((event, details)),
     )
 
     assert results[0].started is False
     assert results[0].start_failed is True
+    assert [event for event, _details in progress_events].count("target_failed") == 1
+    assert "target_completed" not in [event for event, _details in progress_events]
+    from forge.autopilot.scheduler_db import scheduler_db_path
+
+    with sqlite3.connect(scheduler_db_path(cfg.data_dir)) as conn:
+        lease = conn.execute(
+            "SELECT status, release_reason FROM leases WHERE engagement_id=1"
+        ).fetchone()
+    assert lease == ("released", "failed")
 
 
 def test_start_does_not_treat_zero_exit_as_completed_when_db_run_failed(
