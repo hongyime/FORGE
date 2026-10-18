@@ -37,6 +37,7 @@ from forge.autopilot.scheduler import (
     heartbeat,
     is_kill_switch_active,
     list_active_leases,
+    maintain_lease_heartbeat,
     provider_inflight_count,
     read_recorded_worker_memory_p95,
     record_child_memory_sample,
@@ -345,6 +346,44 @@ def test_lease_heartbeat_extends_ttl(tmp_path: Path) -> None:
     # Heartbeat on released lease returns False
     assert release_lease(initial_lease.lease_id, data_dir=tmp_path) is True
     assert heartbeat(initial_lease.lease_id, data_dir=tmp_path) is False
+
+
+def test_held_lease_automatically_refreshes_heartbeat(tmp_path: Path) -> None:
+    """The lease-hold context refreshes heartbeat_at before the lease is released."""
+    result = acquire_lease(
+        target_key="domain:held-heartbeat.example",
+        target_value="held-heartbeat.example",
+        target_type="domain",
+        engagement_id=2,
+        ttl_seconds=1200,
+        data_dir=tmp_path,
+    )
+    assert result.acquired and result.lease is not None
+
+    with maintain_lease_heartbeat(
+        result.lease.lease_id,
+        ttl_seconds=1200,
+        interval_seconds=0.02,
+        data_dir=tmp_path,
+    ):
+        deadline = time.monotonic() + 2
+        refreshed_at = result.lease.heartbeat_at
+        while time.monotonic() < deadline:
+            con = sqlite3.connect(scheduler_db_path(tmp_path))
+            try:
+                row = con.execute(
+                    "SELECT heartbeat_at FROM leases WHERE lease_id=? AND status='active'",
+                    (result.lease.lease_id,),
+                ).fetchone()
+            finally:
+                con.close()
+            assert row is not None
+            if str(row[0]) > refreshed_at:
+                break
+            time.sleep(0.01)
+        assert str(row[0]) > refreshed_at
+
+    assert release_lease(result.lease.lease_id, data_dir=tmp_path)
 
 
 # ---------------------------------------------------------------------------

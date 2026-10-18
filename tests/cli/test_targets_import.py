@@ -2675,7 +2675,7 @@ def test_start_uses_configured_kill_chain_runtime_timeout(
     assert calls[0][1] == 13 * 60 + 120
 
 
-def test_start_treats_completed_kill_chain_exit_two_as_success(
+def test_start_does_not_treat_exit_two_output_as_completed_without_completed_db_run(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2706,7 +2706,55 @@ def test_start_treats_completed_kill_chain_exit_two_as_success(
         sleep_fn=lambda _: None,
     )
 
-    assert results[0].started is True
+    assert results[0].started is False
+    assert results[0].start_failed is True
+
+
+def test_start_does_not_treat_zero_exit_as_completed_when_db_run_failed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+
+    def _fake_run(command: list[str], **_: object) -> object:
+        db_path = cfg.engagement_db_path("1")
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                """
+                CREATE TABLE engagement_runs (
+                    engagement_id INTEGER, run_kind TEXT, status TEXT, seed_value TEXT
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO engagement_runs VALUES (1, 'kill_chain', 'failed', 'corp-target.io')"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("forge.targets_import.run_contained_subprocess", _fake_run)
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        config=cfg,  # type: ignore[arg-type]
+        sleep_fn=lambda _: None,
+    )
+
+    assert results[0].started is False
+    assert results[0].start_failed is True
 
 
 def test_start_treats_exit_two_with_completed_db_run_as_success(

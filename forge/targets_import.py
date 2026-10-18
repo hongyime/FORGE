@@ -29,6 +29,7 @@ from forge.autopilot.scheduler import (
     acquire_lease,
     get_budget_snapshot,
     is_kill_switch_active,
+    maintain_lease_heartbeat,
     provider_inflight_count,
     record_child_memory_sample,
     release_lease,
@@ -672,17 +673,20 @@ def _run_one_import_target(
                         progress_details.pop(key, None)
                 _notify_progress(progress_callback, "target_engaged", progress_details)
                 try:
-                    _start_kill_chain(
-                        engagement_id=engagement_id, seed=item.canonical_value,
-                        target_type=item.target_type, roe_id=str(roe_id or "").strip(),
-                        scope_manifest=manifest_path, max_iter=max_iter,
-                        max_runtime_minutes=max_runtime_minutes,
-                        parallel_fanout=effective_fanout,
-                        engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
-                        roe_strictness=roe_strictness, config=cfg, sleep_fn=sleep,
-                        retry_after_seconds=retry_after_seconds,
-                        roe_minimum_delay_seconds=roe_minimum_delay_seconds,
-                    )
+                    with maintain_lease_heartbeat(
+                        lease.lease_id, data_dir=cfg.data_dir
+                    ):
+                        _start_kill_chain(
+                            engagement_id=engagement_id, seed=item.canonical_value,
+                            target_type=item.target_type, roe_id=str(roe_id or "").strip(),
+                            scope_manifest=manifest_path, max_iter=max_iter,
+                            max_runtime_minutes=max_runtime_minutes,
+                            parallel_fanout=effective_fanout,
+                            engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
+                            roe_strictness=roe_strictness, config=cfg, sleep_fn=sleep,
+                            retry_after_seconds=retry_after_seconds,
+                            roe_minimum_delay_seconds=roe_minimum_delay_seconds,
+                        )
                 except Exception as exc:
                     try:
                         from forge.autopilot.breaker import record_child_failure
@@ -1669,16 +1673,24 @@ def _start_kill_chain(
     if proc.stderr:
         sys.stderr.write(proc.stderr)
         sys.stderr.flush()
+    if proc.returncode == 0 and _failed_kill_chain_run(
+        engagement_db_path,
+        engagement_id=engagement_id,
+        seed=seed,
+    ):
+        raise subprocess.CalledProcessError(
+            proc.returncode,
+            command,
+            output=proc.stdout,
+            stderr=proc.stderr,
+        )
     if proc.returncode == 0:
         return
-    combined_output = f"{proc.stdout or ''}\n{proc.stderr or ''}"
     if _completed_kill_chain_run(
         engagement_db_path,
         engagement_id=engagement_id,
         seed=seed,
     ):
-        return
-    if proc.returncode == 2 and "Kill-chain complete" in combined_output and "Report:" in combined_output:
         return
     raise subprocess.CalledProcessError(
         proc.returncode,
@@ -1712,6 +1724,36 @@ def _completed_kill_chain_run(
               AND run_kind='kill_chain'
               AND seed_value=?
               AND status='completed'
+            LIMIT 1
+            """,
+            (engagement_id, seed),
+        ).fetchone()
+    except sqlite3.Error:
+        return False
+    finally:
+        conn.close()
+    return row is not None
+
+
+def _failed_kill_chain_run(
+    db_path: Path,
+    *,
+    engagement_id: int,
+    seed: str,
+) -> bool:
+    """Return whether the matching persisted kill-chain run failed."""
+    if not db_path.exists():
+        return False
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT 1
+            FROM engagement_runs
+            WHERE engagement_id=?
+              AND run_kind='kill_chain'
+              AND seed_value=?
+              AND status='failed'
             LIMIT 1
             """,
             (engagement_id, seed),

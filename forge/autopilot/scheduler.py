@@ -12,11 +12,13 @@ import math
 import os
 import secrets
 import sqlite3
+import threading
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 from forge.config import ForgeConfig
 from forge.autopilot.scheduler_db import ensure_scheduler_schema, scheduler_db_path
@@ -777,6 +779,41 @@ def heartbeat(
             return cur.rowcount > 0
     finally:
         con.close()
+
+
+@contextmanager
+def maintain_lease_heartbeat(
+    lease_id: str,
+    *,
+    ttl_seconds: int = DEFAULT_LEASE_TTL_SECONDS,
+    interval_seconds: float | None = None,
+    data_dir: Path | str | None = None,
+) -> Iterator[None]:
+    """Refresh an active lease periodically while its child work is running."""
+    interval = interval_seconds
+    if interval is None:
+        interval = max(1.0, min(60.0, max(1, ttl_seconds) / 3))
+    stop_event = threading.Event()
+
+    def _refresh() -> None:
+        while not stop_event.wait(interval):
+            try:
+                if not heartbeat(lease_id, ttl_seconds=ttl_seconds, data_dir=data_dir):
+                    return
+            except Exception:  # noqa: BLE001 - heartbeat must not interrupt child execution
+                _LOG.exception("lease heartbeat refresh failed for %s", lease_id)
+
+    worker = threading.Thread(
+        target=_refresh,
+        name=f"forge-lease-heartbeat-{lease_id[:8]}",
+        daemon=True,
+    )
+    worker.start()
+    try:
+        yield
+    finally:
+        stop_event.set()
+        worker.join(timeout=max(1.0, interval + 0.5))
 
 
 def list_active_leases(

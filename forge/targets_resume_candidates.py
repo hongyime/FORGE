@@ -22,6 +22,7 @@ from forge.autopilot.scheduler import (
     acquire_lease,
     get_budget_snapshot,
     is_kill_switch_active,
+    maintain_lease_heartbeat,
     provider_inflight_count,
     record_child_memory_sample,
     release_lease,
@@ -909,11 +910,12 @@ def _execute_resume_item(
     )
     completed = None
     try:
-        completed = _run_resume_child(
-            command,
-            timeout_seconds=timeout_seconds,
-            runner=runner,
-        )
+        with maintain_lease_heartbeat(lease.lease_id, data_dir=target_data_dir):
+            completed = _run_resume_child(
+                command,
+                timeout_seconds=timeout_seconds,
+                runner=runner,
+            )
     except Exception as exc:
         try:
             from forge.autopilot.breaker import record_child_failure

@@ -272,6 +272,34 @@ def test_promote_social_url_seed_refs_expands_profile_context_and_bluesky_domain
     }
 
 
+def test_promote_social_url_seed_refs_does_not_create_filename_username() -> None:
+    con = _seed_relation_con()
+    con.execute(
+        """
+        INSERT INTO engagement_seeds (id, engagement_id, seed_value, seed_type)
+        VALUES (1, 42, 'https://github.com/fluidicon.png', 'url')
+        """
+    )
+
+    promote_social_url_seed_refs(
+        con,
+        42,
+        "https://github.com/fluidicon.png",
+        "url",
+        upsert_engagement_seed=_upsert_seed_for_engagement(42),
+        platform_hint=lambda _profile: "github",
+        extract_handle=lambda _url: "fluidicon.png",
+        extract_company_name=lambda _profile, **_kwargs: None,
+        extract_profile_name=lambda _profile: None,
+        classify_seed_value=lambda _value: "other",
+    )
+
+    assert con.execute(
+        "SELECT seed_value, seed_type FROM engagement_seeds ORDER BY id"
+    ).fetchall() == [("https://github.com/fluidicon.png", "url")]
+    assert con.execute("SELECT COUNT(*) FROM seed_relations").fetchone()[0] == 0
+
+
 def test_promote_cloud_asset_seed_refs_merges_literal_and_url_refs() -> None:
     con = _cloud_con()
 
