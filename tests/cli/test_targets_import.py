@@ -374,6 +374,85 @@ def test_load_target_feed_drops_placeholder_hosts_and_subdomains(
     assert [item.canonical_value for item in items] == ["portal.corp-target.io"]
 
 
+def test_load_target_feed_coerces_only_top_ranked_unique_items(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import forge.targets_import as targets_import
+
+    feed_path = tmp_path / "large-feed.json"
+    feed_path.write_text(json.dumps({
+        "schema_version": "target-feed.v1",
+        "items": [
+            {"target_type": "domain", "target_value": f"host-{index}.corp-target.io",
+             "priority": index, "source_count": 1}
+            for index in range(250)
+        ],
+    }), encoding="utf-8")
+    coerced: list[str] = []
+    original = targets_import._coerce_feed_item
+
+    def spy(raw: object):
+        coerced.append(str(raw.get("target_value")))  # type: ignore[union-attr]
+        return original(raw)
+
+    monkeypatch.setattr(targets_import, "_coerce_feed_item", spy)
+    items = load_target_feed(
+        feed_url=None, feed_file=feed_path, auth_header_env=None, limit=10
+    )
+
+    assert len(coerced) == 10
+    assert len(items) == 10
+    assert items[0].canonical_value == "host-100.corp-target.io"
+
+
+def test_load_target_feed_stops_coercing_at_time_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    import forge.targets_import as targets_import
+
+    feed_path = tmp_path / "budget-feed.json"
+    feed_path.write_text(json.dumps({
+        "schema_version": "target-feed.v1",
+        "items": [
+            {"target_type": "domain", "target_value": f"host-{index}.corp-target.io"}
+            for index in range(3)
+        ],
+    }), encoding="utf-8")
+    ticks = iter((0.0, 0.0, 121.0))
+    monkeypatch.setattr(targets_import.time, "monotonic", lambda: next(ticks))
+
+    items = load_target_feed(
+        feed_url=None, feed_file=feed_path, auth_header_env=None, limit=3
+    )
+
+    assert len(items) == 1
+    assert "exceeded 120 second budget" in caplog.text
+
+
+def test_import_targets_keeps_unknown_mega_domain_signals_eligible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    feed_path = tmp_path / "unknown-signals.json"
+    feed_path.write_text(json.dumps({
+        "schema_version": "target-feed.v1",
+        "items": [{"target_type": "domain", "target_value": "ordinary.corp-target.io"}],
+    }), encoding="utf-8")
+
+    def no_network(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("Phase 5 must use cached signals and never fetch them")
+
+    monkeypatch.setattr("forge.onboard.mega_domain.mega_domain_signals", no_network)
+    results = import_targets(
+        feed_url=None, feed_file=feed_path, auth_header_env=None, roe_id=None,
+        start=False, dry_run=True, limit=1, max_iter=1,
+        config=_FakeConfig(tmp_path / "data"),
+    )
+
+    assert len(results) == 1
+    assert results[0].scan_eligible is True
+    assert results[0].scan_eligibility_reason == "eligible"
+
+
 def test_load_target_feed_rejects_code_identifiers_as_domains(
     tmp_path: Path,
 ) -> None:

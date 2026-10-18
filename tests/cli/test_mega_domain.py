@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import threading
+
 import pytest
 
+import forge.onboard.mega_domain as mega_domain_module
 from forge.onboard.mega_domain import (
     LARGE_SUBDOMAIN_COUNT,
     NEVER_START_APEXES,
@@ -12,6 +15,7 @@ from forge.onboard.mega_domain import (
     domain_age_years,
     estimate_subdomain_count,
     mega_domain_decision,
+    mega_domain_signals,
 )
 from forge.targets_import import _coerce_feed_item, target_scan_eligible
 
@@ -38,6 +42,25 @@ def test_rdap_and_crtsh_signal_producers_parse_mock_payloads() -> None:
     assert domain_age_years("example.test", fetch_json=mocked_fetch) == pytest.approx(15, abs=0.02)
     assert crtsh_first_seen_age_years("example.test", fetch_json=mocked_fetch) == pytest.approx(8, abs=0.02)
     assert estimate_subdomain_count("example.test", fetch_json=mocked_fetch) == 3
+
+
+def test_mega_domain_signals_fetch_age_and_surface_concurrently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    barrier = threading.Barrier(2)
+
+    def age(_domain: str) -> float:
+        barrier.wait(timeout=2)
+        return 12.0
+
+    def surface(_domain: str) -> int:
+        barrier.wait(timeout=2)
+        return 700
+
+    monkeypatch.setattr(mega_domain_module, "_domain_age_with_fallback", age)
+    monkeypatch.setattr(mega_domain_module, "estimate_subdomain_count", surface)
+
+    assert mega_domain_signals("example.test") == (12.0, 700)
 
 
 @pytest.mark.parametrize(

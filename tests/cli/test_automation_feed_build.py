@@ -14,6 +14,7 @@ from typer.testing import CliRunner
 import forge.automation_cycle as automation_cycle_module
 from forge.automation_cli import register_automation_commands
 from forge.automation_target_feed import build_target_feed
+import forge.automation_target_feed as target_feed_module
 from forge.connectors.secrets import store_connector_secret
 from forge.db.session import get_engagement_db
 
@@ -21,6 +22,15 @@ from forge.db.session import get_engagement_db
 app = typer.Typer()
 register_automation_commands(app)
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _offline_cached_signals(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        target_feed_module,
+        "mega_domain_signals_batch",
+        lambda domains, **_kwargs: {str(domain).lower(): (None, None) for domain in domains},
+    )
 
 
 def _make_engagement_db(
@@ -122,6 +132,28 @@ def test_feed_build_dry_run_merges_sources_with_provenance_and_writes_nothing(
     ordered_keys = [item["target_key"] for item in payload["items"]]
     assert ordered_keys == sorted(ordered_keys)
     assert any(item["source_group"] == "report_family:abc123" for item in payload["items"])
+
+
+def test_feed_build_caches_mega_domain_signals_on_items(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data_dir = tmp_path / "data"
+    _make_engagement_db(data_dir, 1, [("legacy.corp-target.io", "domain")])
+
+    def cached(domains, **_kwargs):
+        return {str(domain).lower(): (12.0, 700) for domain in domains}
+
+    monkeypatch.setattr(target_feed_module, "mega_domain_signals_batch", cached)
+    payload = build_target_feed(
+        sources=["db"], data_dir=data_dir, reports_dir=None, imports_dir=None,
+        limit=None, existing_feed_path=None, apply=False,
+    )
+
+    item = next(row for row in payload["items"] if row["target_value"] == "legacy.corp-target.io")
+    assert item["age_years"] == 12.0
+    assert item["estimated_subdomains"] == 700
+    assert item["scan_eligible"] is False
+    assert item["scan_eligibility_reason"] == "mega_domain_old_and_large"
 
 
 def test_feed_build_drops_placeholder_domains_from_database_seeds(

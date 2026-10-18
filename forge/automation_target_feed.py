@@ -33,7 +33,10 @@ from forge.automation_secret_auto_feed import auto_feed_secrets_to_target_feed
 from forge.connectors.secrets import resolve_connector_secret_value
 from forge.db.session import get_engagement_db
 from forge.engagement_ids import numeric_engagement_db_files
-from forge.onboard.mega_domain import mega_domain_decision, mega_domain_signals
+from forge.onboard.mega_domain import (
+    mega_domain_decision,
+    mega_domain_signals_batch,
+)
 from forge.onboard.patterns import is_denied_target
 from forge.targets_import import (
     MAX_TARGET_FEED_IMPORT_ITEMS,
@@ -540,9 +543,9 @@ def _link_urlscan_observation_candidates(
             except ValueError:
                 candidate_domain = host
 
-        if candidate_domain:
+        if candidate_domain and signal_provider is not None:
             try:
-                age, surface = (signal_provider or mega_domain_signals)(candidate_domain)
+                age, surface = signal_provider(candidate_domain)
             except Exception:  # noqa: BLE001
                 age, surface = None, None
             skip, _ = mega_domain_decision(candidate_domain, age_years=age, estimated_subdomains=surface)
@@ -1677,6 +1680,70 @@ def _target_priority(*, source_count: int, scan_eligible: bool) -> int:
     return 90 if source_count >= 2 else 60
 
 
+def _cache_mega_domain_signals(
+    items: list[dict[str, object]], *, signal_provider: Any = None
+) -> None:
+    """Cache domain signals in feed rows so Phase 5 stays network-free."""
+    domains: list[str] = []
+    for item in items:
+        target_type = str(item.get("target_type") or "")
+        value = str(item.get("canonical_value") or item.get("target_value") or "")
+        domain = value if target_type in {"domain", "subdomain"} else ""
+        if target_type in {"url", "apk_url"}:
+            domain = urlsplit(value).hostname or ""
+        if domain:
+            try:
+                ipaddress.ip_address(domain)
+            except ValueError:
+                domains.append(domain)
+    signals = mega_domain_signals_batch(
+        domains,
+        signal_provider=signal_provider,
+    )
+    for item in items:
+        target_type = str(item.get("target_type") or "")
+        value = str(item.get("canonical_value") or item.get("target_value") or "")
+        domain = value if target_type in {"domain", "subdomain"} else ""
+        if target_type in {"url", "apk_url"}:
+            domain = urlsplit(value).hostname or ""
+        try:
+            ipaddress.ip_address(domain)
+        except ValueError:
+            if domain:
+                age, surface = signals.get(domain.strip().lower().rstrip("."), (None, None))
+                if age is None and item.get("age_years") is not None:
+                    try:
+                        age = float(item["age_years"])
+                    except (TypeError, ValueError):
+                        age = None
+                if surface is None and item.get("estimated_subdomains") is not None:
+                    try:
+                        surface = int(item["estimated_subdomains"])
+                    except (TypeError, ValueError):
+                        surface = None
+                item["age_years"] = age
+                item["estimated_subdomains"] = surface
+                eligible, reason = target_scan_eligible(
+                    target_type, value, age_years=age, estimated_subdomains=surface
+                )
+                prior_reason = str(item.get("scan_eligibility_reason") or "")
+                if item.get("scan_eligible") is False and not prior_reason.startswith(
+                    "mega_domain_"
+                ):
+                    eligible = False
+                    reason = prior_reason or "feed_marked_ineligible"
+                item["scan_eligible"] = eligible
+                item["scan_eligibility_reason"] = reason
+                if not eligible:
+                    try:
+                        source_count = int(item.get("source_count") or 1)
+                    except (TypeError, ValueError):
+                        source_count = 1
+                    item["priority"] = _target_priority(
+                        source_count=source_count, scan_eligible=False
+                    )
+
+
 def _load_supabase_projects_config(
     config_path: Path | None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
@@ -2594,6 +2661,8 @@ def build_target_feed(
                     "confidence": item.confidence,
                     "first_seen_at": item.first_seen_at,
                     "provenance": item.provenance,
+                    "age_years": item.age_years,
+                    "estimated_subdomains": item.estimated_subdomains,
                 }
                 for item in loaded_existing
             ]
@@ -2624,6 +2693,7 @@ def build_target_feed(
     if limit is not None and limit >= 0:
         items = items[:limit]
     omitted_by_limit = total_before_limit - len(items)
+    _cache_mega_domain_signals(items, signal_provider=mega_domain_signal_provider)
 
     per_group: dict[str, int] = {}
     for source_name in SUPPORTED_SOURCES:

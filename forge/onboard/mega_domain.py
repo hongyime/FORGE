@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Callable, Collection
 
@@ -148,9 +149,55 @@ def estimate_subdomain_count(
 
 def mega_domain_signals(domain: str) -> tuple[float | None, int | None]:
     """Resolve age and surface independently; either failed lookup stays unknown."""
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        age_future = executor.submit(_domain_age_with_fallback, domain)
+        surface_future = executor.submit(estimate_subdomain_count, domain)
+        return age_future.result(), surface_future.result()
+
+
+def _domain_age_with_fallback(domain: str) -> float | None:
     rdap_age = domain_age_years(domain)
-    ct_age = crtsh_first_seen_age_years(domain) if rdap_age is None else None
-    return rdap_age if rdap_age is not None else ct_age, estimate_subdomain_count(domain)
+    return rdap_age if rdap_age is not None else crtsh_first_seen_age_years(domain)
+
+
+def mega_domain_signals_batch(
+    domains: Collection[str],
+    *,
+    signal_provider: Callable[[str], tuple[float | None, int | None]] | None = None,
+    max_workers: int = 32,
+) -> dict[str, tuple[float | None, int | None]]:
+    """Fetch unique domain signals concurrently, returning unknown on failure."""
+    unique_domains = tuple(dict.fromkeys(
+        str(domain).strip().lower().rstrip(".") for domain in domains if str(domain).strip()
+    ))
+    with ThreadPoolExecutor(max_workers=max(1, int(max_workers))) as executor:
+        results: dict[str, tuple[float | None, int | None]] = {}
+        if signal_provider is not None:
+            futures = {domain: executor.submit(signal_provider, domain) for domain in unique_domains}
+            for domain, future in futures.items():
+                try:
+                    results[domain] = future.result()
+                except Exception:  # noqa: BLE001
+                    results[domain] = (None, None)
+        else:
+            futures = {
+                domain: (
+                    executor.submit(_domain_age_with_fallback, domain),
+                    executor.submit(estimate_subdomain_count, domain),
+                )
+                for domain in unique_domains
+            }
+            for domain, (age_future, surface_future) in futures.items():
+                try:
+                    age = age_future.result()
+                except Exception:  # noqa: BLE001
+                    age = None
+                try:
+                    surface = surface_future.result()
+                except Exception:  # noqa: BLE001
+                    surface = None
+                results[domain] = age, surface
+    return results
 
 
 def mega_domain_decision(

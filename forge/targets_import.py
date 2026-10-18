@@ -51,7 +51,7 @@ from forge.monitoring.continuous import (
     upsert_monitoring_policy,
 )
 from forge.onboard.patterns import is_denied_target
-from forge.onboard.mega_domain import mega_domain_decision, mega_domain_signals
+from forge.onboard.mega_domain import mega_domain_decision
 from forge.subprocess_tree import run_contained_subprocess
 from forge.utils.kill_chain_options import (
     DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES,
@@ -95,6 +95,7 @@ DEFAULT_TARGET_IMPORT_MAX_RUNTIME_MINUTES = DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUT
 TARGET_IMPORT_CHILD_TIMEOUT_GRACE_SECONDS = 120
 TARGET_IMPORT_PROGRESS_EVENT_CANDIDATES = 250
 TARGET_IMPORT_PROGRESS_EVENT_SECONDS = 60.0
+LOAD_TARGET_FEED_TIME_BUDGET_SECONDS = 120.0
 TARGET_FAILURE_STDERR_MAX_BYTES = 2048
 # Consecutive failed start attempts are bounded independently of the success limit.
 # A successful start resets this counter; skipped candidates do not affect it.
@@ -179,6 +180,8 @@ class TargetFeedItem:
     confidence: float
     first_seen_at: str
     provenance: str
+    age_years: float | None = None
+    estimated_subdomains: int | None = None
 
 
 @dataclass(frozen=True)
@@ -217,8 +220,8 @@ def load_target_feed(
     feed_file: Path | None,
     auth_header_env: str | None,
     limit: int | None,
-    mega_domain_signal_provider: Callable[[str], tuple[float | None, int | None]] | None = None,
 ) -> list[TargetFeedItem]:
+    started_at = time.monotonic()
     if bool(feed_url) == bool(feed_file):
         raise ValueError("specify exactly one of --feed-url or --feed-file")
     payload = _fetch_feed(feed_url, auth_header_env) if feed_url else _read_feed_file(feed_file)
@@ -235,16 +238,57 @@ def load_target_feed(
         raise ValueError("target feed items must be a list")
 
     max_items = _normalize_limit(limit)
-    ranked_items: list[tuple[int, TargetFeedItem]] = []
-    seen: set[str] = set()
+    # Rank lightweight raw metadata before coercion. Canonicalize only to avoid
+    # duplicate raw rows consuming the bounded coercion budget.
+    raw_ranked: list[tuple[int, int, int, str, object]] = []
     for index, raw_item in enumerate(raw_items):
-        item = _coerce_feed_item(raw_item, signal_provider=mega_domain_signal_provider)
-        if item is None or item.target_key in seen:
+        if not isinstance(raw_item, dict):
             continue
-        seen.add(item.target_key)
-        ranked_items.append((index, item))
+        source_group = _bounded_text(raw_item.get("source_group") or raw_item.get("source_kind"), 120)
+        source_groups = _coerce_source_groups(raw_item.get("source_groups"), fallback=source_group)
+        source_count = _coerce_source_count(raw_item.get("source_count"), source_groups)
+        eligible = raw_item.get("scan_eligible") is not False
+        priority = _coerce_priority(
+            raw_item.get("priority"), source_count=source_count, scan_eligible=eligible
+        )
+        normalized = None
+        try:
+            normalized = _normalize_target_value(
+                str(raw_item.get("target_type") or "").strip().lower(),
+                str(raw_item.get("target_value") or ""),
+            )
+        except ValueError:
+            pass
+        if normalized is None:
+            continue
+        target_key = external_target_key(*normalized)
+        raw_ranked.append((-priority, -source_count, index, target_key, raw_item))
+    raw_ranked.sort(key=lambda ranked: ranked[:4])
+
+    selected_raw: list[object] = []
+    seen_keys: set[str] = set()
+    for _priority, _source_count, _index, target_key, raw_item in raw_ranked:
+        if target_key in seen_keys:
+            continue
+        seen_keys.add(target_key)
+        selected_raw.append(raw_item)
+        if len(selected_raw) >= max_items:
+            break
+
+    ranked_items: list[tuple[int, TargetFeedItem]] = []
+    for index, raw_item in enumerate(selected_raw):
+        if time.monotonic() - started_at >= LOAD_TARGET_FEED_TIME_BUDGET_SECONDS:
+            _LOG.warning(
+                "target feed load exceeded %.0f second budget; proceeding with %d coerced items",
+                LOAD_TARGET_FEED_TIME_BUDGET_SECONDS,
+                len(ranked_items),
+            )
+            break
+        item = _coerce_feed_item(raw_item)
+        if item is not None:
+            ranked_items.append((index, item))
     ranked_items.sort(key=lambda ranked: (-ranked[1].priority, -ranked[1].source_count, ranked[0]))
-    return [item for _, item in ranked_items[:max_items]]
+    return [item for _, item in ranked_items]
 
 
 def import_targets(
@@ -268,7 +312,6 @@ def import_targets(
     retry_after_seconds: float | None = None,
     roe_minimum_delay_seconds: float | None = None,
     sleep_fn: Callable[[float], None] | None = None,
-    mega_domain_signal_provider: Callable[[str], tuple[float | None, int | None]] | None = None,
     max_active_targets: int = 2,
     _monotonic: Callable[[], float] = time.monotonic,
 ) -> list[TargetImportResult]:
@@ -294,7 +337,6 @@ def import_targets(
         feed_file=feed_file,
         auth_header_env=auth_header_env,
         limit=limit,
-        mega_domain_signal_provider=mega_domain_signal_provider or mega_domain_signals,
     )
     indexed_results: list[tuple[int, TargetImportResult]] = []
     counters = _TargetImportCounters(
@@ -869,8 +911,6 @@ def _normalize_min_start_source_count(value: int | None) -> int:
 
 def _coerce_feed_item(
     raw_item: object,
-    *,
-    signal_provider: Callable[[str], tuple[float | None, int | None]] | None = None,
 ) -> TargetFeedItem | None:
     if not isinstance(raw_item, dict):
         return None
@@ -893,15 +933,6 @@ def _coerce_feed_item(
     if is_denied_target(canonical_value):
         return None
     target_key = external_target_key(target_type, canonical_value)
-    candidate_domain: str | None = None
-    if target_type in {"domain", "subdomain"}:
-        candidate_domain = canonical_value
-    elif target_type in {"url", "apk_url"}:
-        host = urlsplit(canonical_value).hostname or ""
-        try:
-            ipaddress.ip_address(host)
-        except ValueError:
-            candidate_domain = host
     source_group = _bounded_text(
         raw_item.get("source_group") or raw_item.get("source_kind"), 120
     )
@@ -921,15 +952,6 @@ def _coerce_feed_item(
             estimated_subdomains = int(raw_subdomains)
         except (ValueError, TypeError):
             estimated_subdomains = None
-    if candidate_domain and signal_provider is not None and (age_years is None or estimated_subdomains is None):
-        try:
-            produced_age, produced_surface = signal_provider(candidate_domain)
-            age_years = age_years if age_years is not None else produced_age
-            estimated_subdomains = (
-                estimated_subdomains if estimated_subdomains is not None else produced_surface
-            )
-        except Exception:  # noqa: BLE001
-            pass
     scan_eligible, scan_reason = target_scan_eligible(
         target_type,
         canonical_value,
@@ -958,6 +980,8 @@ def _coerce_feed_item(
         confidence=_coerce_confidence(raw_item.get("confidence")),
         first_seen_at=_bounded_text(raw_item.get("first_seen_at"), 80),
         provenance=_bounded_text(raw_item.get("provenance"), 240),
+        age_years=age_years,
+        estimated_subdomains=estimated_subdomains,
     )
 
 
