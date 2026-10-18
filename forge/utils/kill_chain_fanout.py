@@ -33,7 +33,7 @@ from threading import Lock
 from typing import Literal
 from urllib.parse import urlsplit
 
-from forge.utils.kill_chain_options import (
+from forge.utils.kill_chain_policy import (
     DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
     MAX_KILL_CHAIN_PARALLEL_FANOUT,
     MIN_KILL_CHAIN_PARALLEL_FANOUT,

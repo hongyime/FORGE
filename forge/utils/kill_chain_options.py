@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from forge.utils.kill_chain_policy import (
+    DEFAULT_KILL_CHAIN_PARALLEL_FANOUT,
+    MAX_KILL_CHAIN_PARALLEL_FANOUT,
+    MIN_KILL_CHAIN_PARALLEL_FANOUT,
+)
+from forge.utils.kill_chain_fanout import cap_fanout
+
 # Absolute child-process safety cap. Progress is monitored by kill-chain runtime
 # logic; this is only the final backstop, not the normal stopping condition.
 DEFAULT_KILL_CHAIN_MAX_RUNTIME_MINUTES = 480
-DEFAULT_KILL_CHAIN_PARALLEL_FANOUT = 6
-MIN_KILL_CHAIN_PARALLEL_FANOUT = 1
-MAX_KILL_CHAIN_PARALLEL_FANOUT = 8
 
 
 def kill_chain_runtime_stop_reason(
@@ -115,8 +119,6 @@ def normalize_kill_chain_parallel_fanout(
             candidate = int(value)
         except (TypeError, ValueError) as exc:
             raise ValueError("parallel_fanout must be an integer.") from exc
-    from forge.utils.kill_chain_fanout import cap_fanout  # noqa: PLC0415
-
     decision = cap_fanout(
         candidate,
         seed=seed,

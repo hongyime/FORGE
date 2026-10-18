@@ -19,6 +19,8 @@ from typing import Any, Optional
 
 import typer
 
+from forge.cli_console import console
+
 __all__ = ["register_attack_path_commands"]
 
 
@@ -34,8 +36,6 @@ def _load_graph_manager(engagement: str) -> Any:
 
 def register_attack_path_commands(graph_app: typer.Typer) -> None:
     """Register attack-path commands on an existing ``graph`` Typer app."""
-    from forge.cli import console  # noqa: PLC0415
-
     @graph_app.command("attack-paths")
     def graph_attack_paths(
         engagement: str = typer.Option(..., "--engagement", "-e"),

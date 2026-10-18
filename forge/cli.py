@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 # a caller replaced the handlers.
 
 import typer
-from rich.console import Console
+from forge.cli_console import console
 from typer import rich_utils
 
 from forge import VERSION
@@ -118,7 +118,6 @@ from forge.cli_recon import (
     _print_recon_subdomain_summary,
 )
 
-console = Console(stderr=True)
 # Keep long operational flag names readable in Typer/Rich help output.
 rich_utils.MAX_WIDTH = 120
 

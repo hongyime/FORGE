@@ -9,8 +9,9 @@ import subprocess
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
+from forge.automation_queue_status import unavailable_queue_status
 from forge.config import ForgeConfig
 from forge.subprocess_tree import run_contained_subprocess
 
@@ -301,6 +302,7 @@ def run_guarded_autostart(
     docker_probe_mode: str | None = None,
     command_runner: Any | None = None,
     preflight_only: bool = False,
+    queue_status_provider: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     root = Path(repo_root or Path.cwd())
     cfg_data_dir = data_dir or ForgeConfig.load().data_dir
@@ -338,10 +340,10 @@ def run_guarded_autostart(
         probe_docker=True,
         docker_probe_mode=str(config["docker_probe_mode"]),
     )
-    source_queue_status = _direct_source_queue_status(
-        root=root,
-        config=config,
-        skip_feed_build=skip_feed_build,
+    source_queue_status = (
+        queue_status_provider(root=root, config=config, skip_feed_build=skip_feed_build)
+        if queue_status_provider is not None
+        else unavailable_queue_status()
     )
     mode = "apply" if apply else "dry_run"
     blockers: list[str] = []
@@ -539,80 +541,6 @@ def _autopilot_timeout_seconds(config: dict[str, Any]) -> int:
     overhead_minutes = 30
     return min(6 * 60 * 60, (per_target_minutes * start_limit + overhead_minutes) * 60)
 
-
-def _direct_source_queue_status(
-    *,
-    root: Path,
-    config: dict[str, Any],
-    skip_feed_build: bool,
-) -> dict[str, Any]:
-    if skip_feed_build:
-        return {
-            "checked": False,
-            "reason": "skip_feed_build",
-            "next_action": None,
-            "total": 0,
-            "ready": 0,
-            "blocked": 0,
-            "ignored": 0,
-            "total_count": 0,
-            "ready_count": 0,
-            "blocked_count": 0,
-            "ignored_count": 0,
-        }
-    imports_dir = root / "imports"
-    try:
-        from forge.automation_cycle import (  # noqa: PLC0415
-            DEFAULT_ENGAGEMENT_ENV,
-            _classify_queue_items,
-            _load_queue_items,
-            _safe_positive_int,
-        )
-
-        engagement = _safe_positive_int(config.get("engagement_id"))
-        if engagement is None:
-            engagement = _safe_positive_int(os.environ.get(DEFAULT_ENGAGEMENT_ENV))
-        items = _load_queue_items(imports_dir)
-        ready, blocked, ignored = _classify_queue_items(
-            items,
-            imports_dir=imports_dir,
-            engagement=engagement,
-            import_item_limit=int(config["queue_import_item_limit"]),
-            promote_targets=bool(config["queue_promote_targets"]),
-        )
-    except Exception as exc:  # noqa: BLE001
-        return {
-            "checked": False,
-            "reason": f"queue_status_unavailable:{type(exc).__name__}",
-            "next_action": "Run forge automation status --json to inspect source queues.",
-            "total": 0,
-            "ready": 0,
-            "blocked": 0,
-            "ignored": 0,
-            "total_count": 0,
-            "ready_count": 0,
-            "blocked_count": 0,
-            "ignored_count": 0,
-        }
-    return {
-        "checked": True,
-        "reason": "direct_guarded_autostart_queue_check",
-        "next_action": (
-            "Run forge automation cycle --apply --live --json so ready local "
-            "source queues are consumed before guarded live work."
-            if ready
-            else None
-        ),
-        "total": len(items),
-        "ready": len(ready),
-        "blocked": len(blocked),
-        "ignored": len(ignored),
-        "total_count": len(items),
-        "ready_count": len(ready),
-        "blocked_count": len(blocked),
-        "ignored_count": len(ignored),
-        "ready_connectors": sorted({str(item["connector_id"]) for item in ready}),
-    }
 
 
 def _load_autostart_config(config_path: Path) -> tuple[dict[str, Any], list[str]]:

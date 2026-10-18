@@ -52,6 +52,8 @@ import questionary
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFound
 
 from forge.core.errors import ProviderUnavailableError
+from forge.phase6.llm_validator import validate_report
+from forge.phase6.report_models import MANDATORY_SECTIONS, OngoingIntelligenceContext
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.phase6.artifact_inventory import load_artifact_inventory
@@ -122,16 +124,6 @@ def _stable_validation_proof_summary(method: object, *values: object) -> str:
             return _safe_validation_summary(proof["validation_proof"])
     return ""
 
-
-MANDATORY_SECTIONS = [
-    "## 1. Executive Summary",
-    "## 2. Engagement Scope & Methodology",
-    "## 3. Reconnaissance Findings",
-    "## 4. OSINT & Credential Intelligence",
-    "## 5. Vulnerability & Exposure Correlation",
-    "## 6. Validation Boundaries & Evidence Handling",
-    "## 7. Risk Ratings & Remediation Recommendations",
-]
 
 # Credential patterns that must never appear in a prompt or report
 _CRED_LEAK_RE = re.compile(
@@ -268,18 +260,6 @@ class PostExploitContext:
     techniques: list[str] = field(default_factory=list)
     artifact_summary: dict[str, int] = field(default_factory=dict)
     artifact_type_summary: dict[str, dict[str, int]] = field(default_factory=dict)
-
-
-@dataclass
-class OngoingIntelligenceContext:
-    monitoring_enabled: bool = False
-    monitored_keywords: list[str] = field(default_factory=list)
-    monitoring_window_start: datetime | None = None
-    monitoring_window_end: datetime | None = None
-    new_findings_count: int = 0
-    high_severity_count: int = 0
-    new_breach_sources: list[str] = field(default_factory=list)
-    summary_narrative: str = ""
 
 
 @dataclass
@@ -2339,8 +2319,6 @@ class ReportSynthesizer:
                     )
 
         # 4. Generate and iteratively self-correct
-        from forge.phase6.llm_validator import validate_report
-
         logger.info("Running inference (this may take 30–60 s on CPU)...")
         response_text = ""
         telemetry = ValidationTelemetry(

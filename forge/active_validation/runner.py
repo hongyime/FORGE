@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 import httpx
 from forge.active_validation.evidence import active_validation_proof_summary
+from forge.remediation.retest_state import apply_active_validation_retest_result
 from forge.active_validation.methods import (
     active_validation_method_ids,
     get_active_validation_method,
@@ -1482,10 +1483,6 @@ def run_active_validation_job(
     )
     remediation_retest: dict[str, Any] = {"linked": False}
     try:
-        from forge.remediation.workflow import (  # noqa: PLC0415
-            apply_active_validation_retest_result,
-        )
-
         remediation_retest = apply_active_validation_retest_result(
             con,
             engagement_id=engagement_id,

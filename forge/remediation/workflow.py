@@ -7,6 +7,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from forge.graph.assets import list_asset_graph, resolve_asset_owner, sync_engagement_asset_graph
+from forge.active_validation.runner import create_active_validation_job
+from forge.remediation.retest_state import apply_active_validation_retest_result as _apply_retest_state
 from forge.monitoring.continuous import monitoring_alert_payload
 from forge.monitoring.delivery import matching_monitoring_alert_routes
 from forge.utils.artifact_url_sanitizer import strip_sensitive_url_query
@@ -1464,8 +1466,6 @@ def request_active_validation_retest(
     }
     job_metadata.update(metadata or {})
 
-    from forge.active_validation.runner import create_active_validation_job  # noqa: PLC0415
-
     job = create_active_validation_job(
         con,
         engagement_id=engagement_id,
@@ -1546,34 +1546,6 @@ def request_active_validation_retest(
     }
 
 
-def _expected_retest_result(job_metadata: dict[str, Any]) -> str:
-    return str(job_metadata.get("retest_expected_result") or "").strip().lower()
-
-
-def _retest_status_from_active_validation(
-    *,
-    run_status: str,
-    run_result: str,
-    expected_result: str,
-) -> tuple[str, str]:
-    status = str(run_status or "").strip().lower()
-    result = str(run_result or "").strip().lower()
-    expected = str(expected_result or "").strip().lower()
-    if status in {"blocked", "failed"}:
-        return "blocked", "retest_pending"
-    if status != "completed":
-        return "pending", "retest_pending"
-    if result == "planned":
-        return "pending", "retest_pending"
-    if expected:
-        return ("passed", "resolved") if result == expected else ("failed", "in_progress")
-    if result in {"simulated_pass", "not_reachable"}:
-        return "passed", "resolved"
-    if result == "reachable":
-        return "failed", "in_progress"
-    return "failed", "in_progress"
-
-
 def apply_active_validation_retest_result(
     con: sqlite3.Connection,
     *,
@@ -1583,109 +1555,19 @@ def apply_active_validation_retest_result(
     commit: bool = True,
     now: str | None = None,
 ) -> dict[str, Any]:
-    _ensure_rows(con)
-    row = con.execute(
-        """
-        SELECT r.id AS run_id, r.engagement_id, r.job_id, r.status AS run_status,
-               r.result AS run_result, r.evidence_json, r.error, r.completed_at,
-               j.metadata_json AS job_metadata_json
-        FROM active_validation_runs r
-        JOIN active_validation_jobs j
-          ON j.engagement_id=r.engagement_id AND j.id=r.job_id
-        WHERE r.engagement_id=? AND r.id=?
-        """,
-        (engagement_id, run_id),
-    ).fetchone()
-    if row is None:
-        raise LookupError(f"active validation run not found: {run_id}")
-    job_metadata = _safe_json_loads(str(row["job_metadata_json"] or "{}"))
-    if not isinstance(job_metadata, dict):
-        job_metadata = {}
-    if str(job_metadata.get("source") or "") != "remediation_retest":
-        return {"linked": False, "run_id": int(run_id)}
-    remediation_item_id = _coerce_int(job_metadata.get("remediation_item_id"))
-    if remediation_item_id is None:
-        return {"linked": False, "run_id": int(run_id)}
-
-    item = remediation_item_payload(
-        _remediation_item_row_by_id(
-            con,
-            engagement_id=engagement_id,
-            remediation_item_id=remediation_item_id,
-        )
-    )
-    retest_status, item_status = _retest_status_from_active_validation(
-        run_status=str(row["run_status"] or ""),
-        run_result=str(row["run_result"] or ""),
-        expected_result=_expected_retest_result(job_metadata),
-    )
-    completed_at = str(row["completed_at"] or now or _utc_timestamp()).strip()
-    item_metadata = dict(item["metadata"] or {})
-    retest = _append_retest_history(
-        item_metadata,
-        {
-            "run_id": int(row["run_id"]),
-            "job_id": int(row["job_id"]),
-            "run_status": str(row["run_status"] or ""),
-            "run_result": str(row["run_result"] or ""),
-            "retest_status": retest_status,
-            "applied_at": now or _utc_timestamp(),
-        },
-        key="runs",
-    )
-    retest.update(
-        {
-            "latest_job_id": int(row["job_id"]),
-            "latest_run_id": int(row["run_id"]),
-            "latest_result": str(row["run_result"] or ""),
-            "latest_retest_status": retest_status,
-            "status_source": "active_validation",
-        }
-    )
-    con.execute(
-        """
-        UPDATE remediation_items
-        SET status=CASE
-                WHEN status IN ('risk_accepted','false_positive') THEN status
-                ELSE ?
-            END,
-            retest_status=?,
-            retested_at=CASE WHEN ? IN ('passed','failed','blocked') THEN ? ELSE retested_at END,
-            metadata_json=?,
-            updated_at=CURRENT_TIMESTAMP
-        WHERE engagement_id=? AND id=?
-        """,
-        (
-            item_status,
-            retest_status,
-            retest_status,
-            completed_at,
-            _safe_json_dumps(item_metadata),
-            engagement_id,
-            remediation_item_id,
-        ),
-    )
-    _audit_remediation(
+    result = _apply_retest_state(
         con,
         engagement_id=engagement_id,
-        action="remediation_retest_result",
-        target=f"remediation_items:{remediation_item_id}",
-        result=f"run={run_id} retest={retest_status} validation={row['run_status']}:{row['run_result']}",
-        operator=str(operator or ""),
+        run_id=run_id,
+        operator=operator,
+        commit=commit,
+        now=now,
     )
-    if commit:
-        con.commit()
-    return {
-        "linked": True,
-        "run_id": int(run_id),
-        "remediation_item_id": remediation_item_id,
-        "retest_status": retest_status,
-        "status": item_status,
-        "remediation_item": remediation_item_payload(
+    if result.get("linked"):
+        item_id = int(result["remediation_item_id"])
+        result["remediation_item"] = remediation_item_payload(
             _remediation_item_row_by_id(
-                con,
-                engagement_id=engagement_id,
-                remediation_item_id=remediation_item_id,
+                con, engagement_id=engagement_id, remediation_item_id=item_id
             )
-        ),
-    }
+        )
+    return result

@@ -31,10 +31,7 @@ import re
 import ipaddress
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from forge.phase6.report_synthesizer import OngoingIntelligenceContext
+from forge.phase6.report_models import MANDATORY_SECTIONS, OngoingIntelligenceContext
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +134,6 @@ class ValidationResult:
 
 def _v01_mandatory_sections(text: str, result: ValidationResult, strict: bool) -> None:
     """V-01: All mandatory sections must be present."""
-    from forge.phase6.report_synthesizer import MANDATORY_SECTIONS
 
     for section in MANDATORY_SECTIONS:
         if section not in text:
@@ -264,7 +260,6 @@ def _v04_no_credential_leaks(text: str, result: ValidationResult, strict: bool) 
 
 def _v05_minimum_section_length(text: str, result: ValidationResult, strict: bool) -> None:
     """V-05: Each mandatory section must contain ≥50 words of prose."""
-    from forge.phase6.report_synthesizer import MANDATORY_SECTIONS
 
     for section in MANDATORY_SECTIONS:
         idx = text.find(section)

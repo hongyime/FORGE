@@ -45,7 +45,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from forge.connectors.validation_import import (
+from forge.connectors.validation_import_shared import (
     MAX_VALIDATION_XML_BYTES,
     ValidationArtifactImportConfig,
     _audit_validation_import,

@@ -15,6 +15,7 @@ from urllib.parse import quote
 import httpx
 
 from forge.automation_self_heal import run_guarded_autostart
+from forge.automation_queue_status import direct_source_queue_status
 from forge.automation_target_feed import build_target_feed, write_target_feed
 from forge.config import ForgeConfig
 from forge.connectors.secrets import list_connector_secrets
@@ -83,6 +84,23 @@ URLHAUS_RECENT_CSV_URL_REDACTED = (
 )
 URLHAUS_REFRESH_FILENAME = "urlhaus-observations.local.json"
 DEFAULT_URLHAUS_KEY_ENV = "FORGE_URLHAUS_AUTH_KEY"
+
+
+def _direct_source_queue_status(
+    *,
+    root: Path,
+    config: dict[str, Any],
+    skip_feed_build: bool,
+) -> dict[str, Any]:
+    return direct_source_queue_status(
+        root=root,
+        config=config,
+        skip_feed_build=skip_feed_build,
+        default_engagement_env=DEFAULT_ENGAGEMENT_ENV,
+        load_queue_items=_load_queue_items,
+        classify_queue_items=_classify_queue_items,
+        safe_positive_int=_safe_positive_int,
+    )
 
 
 def automation_status(
@@ -264,6 +282,7 @@ def automation_cycle(
             skip_feed_build=True,
             docker_probe_mode=docker_probe_mode,
             preflight_only=True,
+            queue_status_provider=_direct_source_queue_status,
         )
         if str(preflight.get("status") or "") == "blocked":
             return _blocked_live_cycle_preflight_payload(
@@ -336,6 +355,7 @@ def automation_cycle(
             apply=apply,
             skip_feed_build=True,
             docker_probe_mode=docker_probe_mode,
+            queue_status_provider=_direct_source_queue_status,
         )
     execution_policy = "dry_run_no_writes_or_live_commands_executed"
     if apply and live:
@@ -2832,6 +2852,7 @@ def _status_autostart_probe(
         apply=False,
         skip_feed_build=True,
         docker_probe_mode="compose-dependency",
+        queue_status_provider=_direct_source_queue_status,
     )
     return {
         "status": payload.get("status"),

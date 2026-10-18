@@ -904,6 +904,7 @@ def test_remediation_retest_request_links_active_validation_job_and_safe_lab_pas
     assert run["status"] == "completed"
     assert run["result"] == "simulated_pass"
     assert run["remediation_retest"]["linked"] is True
+    assert run["remediation_retest"]["remediation_item"]["status"] == "resolved"
     assert item["status"] == "resolved"
     assert item["retest_status"] == "passed"
     assert item["retest_requested_at"]

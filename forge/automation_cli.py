@@ -10,6 +10,7 @@ from rich.table import Table
 from forge.automation_cycle import (
     automation_cycle,
     automation_status,
+    _direct_source_queue_status,
     configure_source_input,
     refresh_public_cti_input,
 )
@@ -621,6 +622,7 @@ def register_automation_commands(app: typer.Typer) -> None:
             config_path=config,
             apply=apply,
             docker_probe_mode=docker_probe_mode,
+            queue_status_provider=_direct_source_queue_status,
         )
         if json_output:
             typer.echo(json.dumps(payload, sort_keys=True))

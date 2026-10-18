@@ -12,6 +12,7 @@ import typer
 from typer.testing import CliRunner
 
 import forge.automation_self_heal as self_heal
+import forge.automation_cycle as automation_cycle
 from forge.automation_cli import register_automation_commands
 from forge.automation_self_heal import automation_self_heal_plan
 from forge.automation_self_heal import run_guarded_autostart
@@ -818,7 +819,7 @@ def test_guarded_autostart_can_skip_feed_build_for_parent_cycle(
 
 
 def test_guarded_autostart_skip_feed_build_queue_aliases(tmp_path: Path) -> None:
-    payload = self_heal._direct_source_queue_status(
+    payload = automation_cycle._direct_source_queue_status(
         root=tmp_path,
         config=self_heal.DEFAULT_AUTOSTART_CONFIG,
         skip_feed_build=True,
@@ -840,15 +841,13 @@ def test_guarded_autostart_unavailable_queue_aliases(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    import forge.automation_cycle as automation_cycle
-
     monkeypatch.setattr(
         automation_cycle,
         "_load_queue_items",
         lambda _imports_dir: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    payload = self_heal._direct_source_queue_status(
+    payload = automation_cycle._direct_source_queue_status(
         root=tmp_path,
         config=self_heal.DEFAULT_AUTOSTART_CONFIG,
         skip_feed_build=False,
@@ -1565,6 +1564,7 @@ def test_guarded_autostart_apply_blocks_ready_source_queue_bypass(
         repo_root=tmp_path,
         data_dir=tmp_path / "data",
         apply=True,
+        queue_status_provider=automation_cycle._direct_source_queue_status,
         command_runner=lambda command, _cwd: calls.append(command) or {"returncode": 0},
     )
 
