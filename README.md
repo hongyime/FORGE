@@ -17,53 +17,13 @@ Goal lock: `FORGE-DETERMINISTIC-EXPLOITATION-PIPELINE-v2`.
 Supersedes `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. The v1 contract framed FORGE
 as validation-only ASM. The v2 contract adds scoped authorized exploitation as
 a first-class pipeline phase. ROE, scope manifest, hash-chained audit,
-deterministic scoring, and `FORGE_SAFE_MODE` all remain — their role shifts
-from "prevent exploitation" to "ensure exploitation is scoped, ROE-authorized,
-and audited".
+FORGE's purpose and non-negotiable product rules are defined in the
+[canonical rules index](docs/RULES.md) and its linked specifications. Those
+rules describe authorized assessment through pre-exploitation and supersede
+older goal text that describes exploitation or post-exploitation.
 
-Canonical one-line answer: FORGE must be one comprehensive, deterministic,
-authorized engagement pipeline from scoped multi-seed intake through bounded
-recursive discovery, static artifact enrichment, validation, scoped authorized
-exploitation, rule-engine scoring, graph/dashboard/report/audit review,
-guaranteed template/raw fallback, and test-data cleanup.
-
-FORGE's end goal is one comprehensive, deterministic, authorized offensive
-security workflow: multi-seed engagement intake, bounded recursive discovery,
-passive artifact and provider enrichment, scoped live checks when ROE/scope
-explicitly allows them, validation, scoped authorized exploitation (credential
-capture via reverse-proxy transport, post-login browser automation, autonomous
-exploit chaining, goal-directed Bootstrap/Reason/Explore progression) when the
-scope manifest grants the capability, deterministic risk scoring,
-graph/dashboard/report/audit review, and guaranteed template/raw exports when
-LLM/API narrative providers fail, hit quota, have no key, or exceed token
-limits.
-
-Implementation work should strengthen that workflow or its tests. It should not
-move the goal to UI-only polish, provider breadth without recursive value, or
-any path that weakens scope gates, ROE gates, auditability, deterministic
-severity, or report fallback.
-
-Before editing code, state the deterministic gate being advanced: intake,
-discovery, recursion, artifact analysis, validation, exploitation, scoring,
-review, fallback, or testing/cleanup. If none applies, stop and choose a
-concrete release-gate gap instead.
-
-Do not replace this goal with a new project direction in a task handoff. If the
-goal needs clarification, update `END_GOAL.md` and `SPEC.md` together so every
-agent sees the same locked target. Keep
-`docs/competitive_upgrade_consolidated_backlog.md` aligned with that contract.
-Refresh `.agents/STATE.md` and append the decision to `.agents/JOURNAL.md` when
-active continuation wording would mislead the next agent.
-
-If runtime `/goal` text, chat summaries, or historical handoffs disagree with
-that chain, treat them as stale. Continue against the goal lock above and update
-the stale continuation note only when it would mislead the next agent.
-
-Fast project goal entry point: [END_GOAL.md](END_GOAL.md). Root implementer
-spec: [SPEC.md](SPEC.md). Normative project end goal:
-[END_GOAL.md](END_GOAL.md).
-Acceptance criteria: [Done Means](END_GOAL.md#done-means) and
-[release gate semantics](END_GOAL.md#release-gate-semantics).
+Implementation work should advance those rules and retain scope gates,
+determinism, evidence provenance, and auditability.
 Active backlog:
 [competitive upgrade backlog](docs/competitive_upgrade_consolidated_backlog.md).
 
@@ -71,8 +31,7 @@ Continuation order for future agents:
 
 1. Read [.agents/STATE.md](.agents/STATE.md) for current progress and blockers,
    then [.agents/JOURNAL.md](.agents/JOURNAL.md) for recent decisions.
-2. Read [END_GOAL.md](END_GOAL.md) for the locked goal and acceptance criteria.
-3. Read [SPEC.md](SPEC.md) for the invariant and task contract.
+2. Read [docs/RULES.md](docs/RULES.md) and the rule pages relevant to the task.
 4. Use the `Do Now`, `Do Next`, and `Explore` sections in the
    [competitive upgrade backlog](docs/competitive_upgrade_consolidated_backlog.md)
    for priorities. Reconcile each item with verified state and code before
@@ -1549,8 +1508,8 @@ Current baseline: **2,100+ passing** / 0 failing.
 ## Documentation
 
 - `README.md` (this file) — main reference
-- `END_GOAL.md` — fast end-goal entry point for operators and future agents
-- `SPEC.md` — root implementer invariant and task contract
+- `docs/RULES.md` — canonical FORGE rules index
+- `docs/PURPOSE.md`, `docs/AUTOMATION.md`, `docs/ATTACK.md`, `docs/BOUNDARIES.md`, `docs/TARGETS.md`, and `docs/ENGAGEMENT.md` — canonical rule specifications
 - `docs/competitive_upgrade_consolidated_backlog.md` — prioritized upgrade backlog, subject to the locked goal
 - `.agents/STATE.md` — latest verified progress, blockers, and next steps
 - `.agents/JOURNAL.md` — append-only decisions and historical verification

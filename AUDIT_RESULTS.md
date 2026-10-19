@@ -1,9 +1,9 @@
 # FORGE Toolkit — Deep Audit
 
 > Historical audit snapshot from 2026-07-09. This file is not the FORGE end-goal
-> source of truth. Current goal and release gates live in `END_GOAL.md`,
-> `docs/end_goal.md`, `docs/deterministic_engagement_contract.md`, and
-> `docs/engagement_overhaul_tasklist.md`.
+> source of truth. Current FORGE purpose and policy live in
+> [`docs/RULES.md`](docs/RULES.md) and its linked rule specifications. This
+> 2026-07-09 audit is historical and does not override those rules.
 
 ---
 
