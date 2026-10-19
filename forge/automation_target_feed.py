@@ -39,6 +39,7 @@ from forge.onboard.mega_domain import (
 )
 from forge.onboard.patterns import is_denied_target
 from forge.targets_import import (
+    ALLOWED_TARGET_FEED_TYPES,
     MAX_TARGET_FEED_IMPORT_ITEMS,
     TARGET_FEED_SCHEMA_VERSION,
     _normalize_target_value,
@@ -266,6 +267,8 @@ def _candidate(
     if normalized is None:
         return None
     target_type, canonical_value = normalized
+    if target_type not in ALLOWED_TARGET_FEED_TYPES:
+        return None
     if is_denied_target(value) or is_denied_target(canonical_value):
         return None
     return FeedCandidate(
@@ -286,7 +289,8 @@ def _candidate_is_valid(candidate: FeedCandidate) -> bool:
     except (TypeError, ValueError):
         return False
     return (
-        normalized == (candidate.target_type, candidate.canonical_value)
+        candidate.target_type in ALLOWED_TARGET_FEED_TYPES
+        and normalized == (candidate.target_type, candidate.canonical_value)
         and not is_denied_target(candidate.target_value)
         and not is_denied_target(candidate.canonical_value)
     )
@@ -727,6 +731,8 @@ def _typed_candidate(
     if normalized is None:
         return None
     target_type, canonical_value = normalized
+    if target_type not in ALLOWED_TARGET_FEED_TYPES:
+        return None
     if is_denied_target(value) or is_denied_target(canonical_value):
         return None
     return FeedCandidate(
@@ -2511,6 +2517,7 @@ def build_target_feed(
                     candidate
                     for account in accounts
                     for candidate in cloud_account_to_all_candidates(account)
+                    if candidate.target_type in ALLOWED_TARGET_FEED_TYPES
                 ]
             except Exception as exc:
                 errors.append(
@@ -2569,6 +2576,8 @@ def build_target_feed(
                     if normalized is None:
                         continue
                     normalized_type, canonical_value = normalized
+                    if normalized_type not in ALLOWED_TARGET_FEED_TYPES:
+                        continue
                     secret_targets.append(FeedCandidate(
                         target_type=normalized_type,
                         target_value=target["target"],

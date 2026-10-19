@@ -149,6 +149,7 @@ CANONICAL_TARGET_TYPES = {
     "url",
     "username",
 }
+ALLOWED_TARGET_FEED_TYPES = frozenset({"cloud_ref", "domain", "ipv4", "url"})
 TARGET_TYPE_ALIASES = {
     "artifact_url": "artifact_url",
     "email_address": "email",
@@ -932,6 +933,8 @@ def _coerce_feed_item(
     if normalized is None:
         return None
     target_type, canonical_value = normalized
+    if target_type not in ALLOWED_TARGET_FEED_TYPES:
+        return None
     if not _feed_value_has_delegated_hostname(target_type, canonical_value):
         return None
     if is_denied_target(canonical_value):

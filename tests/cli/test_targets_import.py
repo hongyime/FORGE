@@ -309,6 +309,11 @@ def _write_multi_seed_feed(path: Path) -> None:
                     {"target_type": "person", "target_value": "Jane Doe"},
                     {"target_type": "ip", "target_value": "203.0.113.7"},
                     {"target_type": "ipv6", "target_value": "2001:db8::1"},
+                    {"target_type": "domain", "target_value": "portal.corp-target.io"},
+                    {
+                        "target_type": "url",
+                        "target_value": "https://portal.corp-target.io/path",
+                    },
                     {"target_type": "cloud_ref", "target_value": "s3://Acme-Artifacts/mobile"},
                     {"target_type": "cloud_ref", "target_value": "aws_s3:acme-artifacts"},
                     {
@@ -320,6 +325,8 @@ def _write_multi_seed_feed(path: Path) -> None:
                         "target_value": "https://demo.supabase.co:443/rest/v1?apikey=drop",
                     },
                     {"target_type": "password", "target_value": "must-not-import"},
+                    {"target_type": "junk", "target_value": "not-a-target"},
+                    {"target_type": "domain", "target_value": "package.json"},
                 ],
             }
         ),
@@ -499,7 +506,6 @@ def test_load_target_feed_rejects_code_identifiers_as_domains(
 
     assert {item.canonical_value for item in items} == {
         "corp-target.io",
-        "sub.example.co.uk",
         "api.example.io",
     }
 
@@ -553,7 +559,7 @@ def test_feed_normalizer_requires_delegated_hostname_suffixes() -> None:
     ) is None
     assert _coerce_feed_item(
         {"target_type": "email", "target_value": "user@corp-target.io"}
-    ) is not None
+    ) is None
 
 
 def test_load_target_feed_drops_filename_values_for_domain_subdomain_and_auto(
@@ -589,7 +595,6 @@ def test_load_target_feed_drops_filename_values_for_domain_subdomain_and_auto(
 
     assert {item.canonical_value for item in items} == {
         "corp-target.io",
-        "api.example.io",
         "shop.example.co.uk",
     }
 
@@ -921,10 +926,24 @@ def test_import_feed_skips_allocator_id_with_existing_engagement(
     assert cfg.engagement_db_path("2").exists()
 
 
-def test_import_feed_accepts_canonical_multi_seed_targets(tmp_path: Path) -> None:
+def test_import_feed_keeps_only_approved_types_and_rejects_junk(tmp_path: Path) -> None:
     feed_path = tmp_path / "multi-seed-feed.json"
     _write_multi_seed_feed(feed_path)
     cfg = _FakeConfig(tmp_path / "data")
+
+    loaded = load_target_feed(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        limit=None,
+    )
+    assert {(item.target_type, item.canonical_value) for item in loaded} == {
+        ("cloud_ref", "aws_s3:acme-artifacts"),
+        ("cloud_ref", "https://demo.supabase.co:443/rest/v1"),
+        ("domain", "portal.corp-target.io"),
+        ("ipv4", "203.0.113.7"),
+        ("url", "https://portal.corp-target.io/path"),
+    }
 
     results = import_targets(
         feed_url=None,
@@ -938,26 +957,15 @@ def test_import_feed_accepts_canonical_multi_seed_targets(tmp_path: Path) -> Non
         config=cfg,  # type: ignore[arg-type]
     )
 
-    assert [(result.target_type, result.target_value) for result in results] == [
-        ("email", "security@corp-target.io"),
-        ("phone", "+15551234567"),
-        ("username", "@forge_handle"),
-        ("company", "Example Holdings Inc"),
-        ("name", "Jane Doe"),
+    assert {(result.target_type, result.target_value) for result in results} == {
         ("cloud_ref", "aws_s3:acme-artifacts"),
-        ("apk_url", "https://files.corp-target.io/releases/app.apk"),
         ("cloud_ref", "https://demo.supabase.co:443/rest/v1"),
+        ("domain", "portal.corp-target.io"),
         ("ipv4", "203.0.113.7"),
-        ("ipv6", "2001:db8::1"),
-    ]
-    assert len(results) == 10
+        ("url", "https://portal.corp-target.io/path"),
+    }
+    assert len(results) == 5
     assert all(result.scope_manifest is not None for result in results)
-
-    email_manifest = json.loads(results[0].scope_manifest.read_text(encoding="utf-8"))
-    assert email_manifest["authorized_seeds"] == ["security@corp-target.io"]
-    assert email_manifest["domains"] == []
-    assert email_manifest["ip_ranges"] == []
-    assert email_manifest["urls"] == []
 
     by_target = {result.target_value: result for result in results}
     ipv4_manifest = json.loads(
@@ -965,15 +973,6 @@ def test_import_feed_accepts_canonical_multi_seed_targets(tmp_path: Path) -> Non
     )
     assert ipv4_manifest["authorized_seeds"] == ["203.0.113.7"]
     assert ipv4_manifest["ip_ranges"] == ["203.0.113.7/32"]
-
-    apk_manifest = json.loads(
-        by_target["https://files.corp-target.io/releases/app.apk"].scope_manifest.read_text(
-            encoding="utf-8"
-        )
-    )
-    assert apk_manifest["domains"] == ["files.corp-target.io"]
-    assert apk_manifest["urls"] == ["https://files.corp-target.io/releases/app.apk"]
-    assert apk_manifest["authorized_seeds"] == ["https://files.corp-target.io/releases/app.apk"]
 
     cloud_url_manifest = json.loads(
         by_target["https://demo.supabase.co:443/rest/v1"].scope_manifest.read_text(
@@ -993,12 +992,7 @@ def test_import_feed_accepts_canonical_multi_seed_targets(tmp_path: Path) -> Non
         scope_row = conn.execute("SELECT scope_json FROM engagements").fetchone()
     finally:
         conn.close()
-    assert seed_row == ("security@corp-target.io", "email")
-    assert json.loads(scope_row[0]) == {
-        "authorized_seeds": ["security@corp-target.io"],
-        "domains": [],
-        "urls": [],
-    }
+    assert seed_row[1] in {"cloud_ref", "domain", "ipv4", "url"}
     assert "must-not-import" not in json.dumps([result.target_value for result in results])
 
 

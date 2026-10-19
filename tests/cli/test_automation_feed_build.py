@@ -125,13 +125,58 @@ def test_feed_build_dry_run_merges_sources_with_provenance_and_writes_nothing(
     assert counts["total"] == len(payload["items"])
     assert counts["total"] >= 4
     assert counts["by_source"]["db"] >= 1
-    assert counts["by_source"]["reports"] == 3
+    assert counts["by_source"]["reports"] == 2
     assert counts["by_source"]["cti"] == 1
-    assert counts["by_source_group"]["report_family:abc123"] == 3
+    assert counts["by_source_group"]["report_family:abc123"] == 2
     # deterministic ordering by target_key
     ordered_keys = [item["target_key"] for item in payload["items"]]
     assert ordered_keys == sorted(ordered_keys)
     assert any(item["source_group"] == "report_family:abc123" for item in payload["items"])
+
+
+def test_feed_build_emits_only_operator_approved_target_types(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    _make_engagement_db(
+        data_dir,
+        1,
+        [
+            ("portal.corp-target.io", "domain"),
+            ("https://portal.corp-target.io/login", "url"),
+            ("203.0.113.7", "ipv4"),
+            ("aws_s3:corp-artifacts", "cloud_ref"),
+            ("@operator", "username"),
+            ("ops@corp-target.io", "email"),
+            ("+15551234567", "phone"),
+            ("Jane Doe", "name"),
+            ("Example Holdings", "company"),
+            ("2001:db8::1", "ipv6"),
+            ("fluidicon.png", "username"),
+            ("package.json", "domain"),
+        ],
+    )
+
+    payload = build_target_feed(
+        sources=["db"],
+        data_dir=data_dir,
+        reports_dir=None,
+        imports_dir=None,
+        limit=None,
+        existing_feed_path=None,
+    )
+
+    items = payload["items"]
+    assert {item["target_type"] for item in items} == {
+        "url",
+        "domain",
+        "ipv4",
+        "cloud_ref",
+    }
+    assert {item["canonical_value"] for item in items} == {
+        "portal.corp-target.io",
+        "https://portal.corp-target.io/login",
+        "203.0.113.7",
+        "aws_s3:corp-artifacts",
+    }
 
 
 def test_feed_build_caches_mega_domain_signals_on_items(
@@ -2184,9 +2229,9 @@ def test_feed_build_supabase_selects_configured_columns_with_env_key(
     }
     assert ("domain", "portal.corp-target.io") in typed_items
     assert ("url", "https://app.corp-target.io/path") in typed_items
-    assert ("email", "ops@corp-target.io") in typed_items
+    assert ("email", "ops@corp-target.io") not in typed_items
     assert all("skip.corp-target.io" not in item["canonical_value"] for item in payload["items"])
-    assert payload["counts"]["by_source"]["supabase"] == 3
+    assert payload["counts"]["by_source"]["supabase"] == 2
     assert payload["counts"]["by_source_group"]["supabase:abc123:targets"] == 2
     assert all(
         item["source_group"] == "supabase:abc123:targets"
@@ -2367,10 +2412,10 @@ def test_feed_build_supabase_derives_url_and_discovers_all_tables_and_columns(
         for item in payload["items"]
     }
     assert ("url", "https://app.corp-target.io/path", "supabase:abc123:assets") in typed_items
-    assert ("email", "ops@corp-target.io", "supabase:abc123:assets") in typed_items
-    assert ("username", "@alice", "supabase:abc123:assets") in typed_items
+    assert ("email", "ops@corp-target.io", "supabase:abc123:assets") not in typed_items
+    assert ("username", "@alice", "supabase:abc123:assets") not in typed_items
     assert ("domain", "api.corp-target.io", "supabase:abc123:observations") in typed_items
-    assert payload["counts"]["by_source"]["supabase"] == 4
+    assert payload["counts"]["by_source"]["supabase"] == 2
     assert payload["counts"]["by_source_group"]["supabase:abc123:assets"] == 1
     assert payload["counts"]["by_source_group"]["supabase:abc123:observations"] == 1
     assert payload["supabase_table_discovery"] == [
