@@ -99,6 +99,7 @@ def _write_timeout_resume_candidate(data_dir: Path) -> tuple[Path, Path]:
 
 def _record_timeout_cycle(writer: AutopilotEventWriter) -> int:
     from forge.targets_import import external_target_key
+
     _cycle_id, cycle_number = writer.start_cycle(details={"mode": "apply"})
     writer.emit(
         "target_failed",
@@ -121,6 +122,7 @@ def _record_retry_attempt_cycle(
     retry_attempt: int,
 ) -> int:
     from forge.targets_import import external_target_key
+
     _cycle_id, cycle_number = writer.start_cycle(details={"mode": "apply"})
     writer.emit(
         "target_retry_attempted",
@@ -177,11 +179,67 @@ def _run_resume_phase_next_cycle(
     return result.to_dict(), commands
 
 
+def test_start_cycle_aborts_an_interrupted_prior_cycle(tmp_path: Path) -> None:
+    _make_data_db(tmp_path)
+    writer = AutopilotEventWriter(tmp_path)
+    prior_id, prior_number = writer.start_cycle(details={"mode": "apply"})
+    writer.emit("phase_start", phase_name="feed_fetch", phase_index=1)
+
+    next_id, next_number = writer.start_cycle(details={"mode": "apply"})
+
+    assert prior_id != next_id
+    assert next_number == prior_number + 1
+    conn = sqlite3.connect(tmp_path / "engagements" / "1001.db")
+    try:
+        aborted = conn.execute(
+            """SELECT details_json FROM autopilot_cycle_events
+               WHERE cycle_id=? AND event_type='cycle_end'""",
+            (prior_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    assert aborted is not None
+    assert json.loads(aborted[0]) == {
+        "reason": "interrupted_before_cycle_end",
+        "status": "aborted",
+    }
+
+
+def test_abort_incomplete_cycle_does_not_allocate_a_new_cycle(tmp_path: Path) -> None:
+    _make_data_db(tmp_path)
+    writer = AutopilotEventWriter(tmp_path)
+    cycle_id, cycle_number = writer.start_cycle(details={"mode": "apply"})
+    writer.emit("phase_start", phase_name="feed_fetch", phase_index=1)
+
+    assert writer.abort_incomplete_cycle() is True
+
+    conn = sqlite3.connect(tmp_path / "engagements" / "1001.db")
+    try:
+        numbers = [
+            row[0]
+            for row in conn.execute(
+                "SELECT DISTINCT cycle_number FROM autopilot_cycle_events ORDER BY cycle_number"
+            )
+        ]
+        status = conn.execute(
+            """SELECT details_json FROM autopilot_cycle_events
+               WHERE cycle_id=? AND event_type='cycle_end'""",
+            (cycle_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    assert numbers == [cycle_number]
+    assert status is not None and json.loads(status[0])["status"] == "aborted"
+
+
 def test_m0053_to_m0055_apply_to_fresh_and_v52_databases(tmp_path: Path) -> None:
     fresh = sqlite3.connect(tmp_path / "fresh.db")
     try:
         run_migrations(fresh)
-        assert fresh.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == TARGET_VERSION
+        assert (
+            fresh.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0]
+            == TARGET_VERSION
+        )
         assert fresh.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='autopilot_cycle_events'"
         ).fetchone()
@@ -212,7 +270,10 @@ def test_m0053_to_m0055_apply_to_fresh_and_v52_databases(tmp_path: Path) -> None
         from_v52.execute("CREATE TABLE _schema_version (version INTEGER NOT NULL)")
         from_v52.execute("INSERT INTO _schema_version (version) VALUES (52)")
         run_migrations(from_v52)
-        assert from_v52.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == TARGET_VERSION
+        assert (
+            from_v52.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0]
+            == TARGET_VERSION
+        )
         columns = {row[1] for row in from_v52.execute("PRAGMA table_info(autopilot_cycle_events)")}
         assert columns == {
             "id",
@@ -282,12 +343,10 @@ def test_m0055_preserves_existing_events_and_allows_retry_event_types(
             ],
         )
         conn.commit()
-        assert conn.execute(
-            "SELECT COUNT(*) FROM autopilot_cycle_events"
-        ).fetchone()[0] == 4
-        assert conn.execute(
-            "SELECT MAX(version) FROM _schema_version"
-        ).fetchone()[0] == TARGET_VERSION
+        assert conn.execute("SELECT COUNT(*) FROM autopilot_cycle_events").fetchone()[0] == 4
+        assert (
+            conn.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0] == TARGET_VERSION
+        )
     finally:
         conn.close()
 
@@ -393,11 +452,25 @@ def test_conversion_7d_uses_distinct_cohort_keys_and_completion_deadline(tmp_pat
     too_late = (now + timedelta(days=2)).isoformat().replace("+00:00", "Z")
     conn = sqlite3.connect(db_path)
     try:
-        conn.execute("CREATE TABLE autopilot_cycle_events (id INTEGER PRIMARY KEY, cycle_id TEXT, cycle_number INTEGER, event_type TEXT, phase_name TEXT, phase_index INTEGER, occurred_at TEXT, details_json TEXT)")
-        rows = [("phase_end", "feed_build", cohort, {"status": "ok", "cohort_keys": [{"target_key": key} for key in ("a", "b", "c")]})]
-        rows.extend(("target_completed", None, in_window, {"target_key": key}) for key in ("a", "b"))
+        conn.execute(
+            "CREATE TABLE autopilot_cycle_events (id INTEGER PRIMARY KEY, cycle_id TEXT, cycle_number INTEGER, event_type TEXT, phase_name TEXT, phase_index INTEGER, occurred_at TEXT, details_json TEXT)"
+        )
+        rows = [
+            (
+                "phase_end",
+                "feed_build",
+                cohort,
+                {"status": "ok", "cohort_keys": [{"target_key": key} for key in ("a", "b", "c")]},
+            )
+        ]
+        rows.extend(
+            ("target_completed", None, in_window, {"target_key": key}) for key in ("a", "b")
+        )
         rows.append(("target_completed", None, too_late, {"target_key": "c"}))
-        conn.executemany("INSERT INTO autopilot_cycle_events (cycle_id, cycle_number, event_type, phase_name, phase_index, occurred_at, details_json) VALUES ('c', 1, ?, ?, 1, ?, ?)", [(e, p, t, json.dumps(d)) for e, p, t, d in rows])
+        conn.executemany(
+            "INSERT INTO autopilot_cycle_events (cycle_id, cycle_number, event_type, phase_name, phase_index, occurred_at, details_json) VALUES ('c', 1, ?, ?, 1, ?, ?)",
+            [(e, p, t, json.dumps(d)) for e, p, t, d in rows],
+        )
         conn.commit()
     finally:
         conn.close()
@@ -415,8 +488,22 @@ def test_conversion_7d_for_data_dir_without_database_is_unavailable(tmp_path: Pa
 
 def test_feed_precision_is_unknown_until_reviewed_and_uses_reviewed_sample(tmp_path: Path) -> None:
     assert feed_precision_for_data_dir(tmp_path)["precision"] is None
-    record_feed_review(tmp_path, target_key="hash-a", source_family="cloud", target_type="domain", confirmed_owned=True, in_scope=True)
-    record_feed_review(tmp_path, target_key="hash-b", source_family="cloud", target_type="domain", confirmed_owned=False, in_scope=False)
+    record_feed_review(
+        tmp_path,
+        target_key="hash-a",
+        source_family="cloud",
+        target_type="domain",
+        confirmed_owned=True,
+        in_scope=True,
+    )
+    record_feed_review(
+        tmp_path,
+        target_key="hash-b",
+        source_family="cloud",
+        target_type="domain",
+        confirmed_owned=False,
+        in_scope=False,
+    )
     result = feed_precision_for_data_dir(tmp_path)
     assert result["precision"] == 0.5
     assert result["by_source_family_target_type"]["cloud:domain"]["reviewed"] == 2
@@ -424,6 +511,7 @@ def test_feed_precision_is_unknown_until_reviewed_and_uses_reviewed_sample(tmp_p
 
 def test_scoreboard_for_data_dir_aggregates_recent_telemetry(tmp_path: Path) -> None:
     from forge.targets_import import external_target_key
+
     db_path = tmp_path / "engagements" / "1001.db"
     db_path.parent.mkdir(parents=True)
     now = datetime(2026, 10, 15, tzinfo=UTC)
@@ -439,23 +527,46 @@ def test_scoreboard_for_data_dir_aggregates_recent_telemetry(tmp_path: Path) -> 
         rows = []
         for i, target in enumerate(("t1", "t2", "t3"), 1):
             details = {
-                "engagement_id": 1, "target_type": "domain", "target_key": external_target_key("domain", target), "queue_seconds": float(i),
-                "active_targets": i, "leased_slots": i * 2,
-                "memory_peak_kb": i * 100, "cpu_user_seconds": float(i) / 2,
+                "engagement_id": 1,
+                "target_type": "domain",
+                "target_key": external_target_key("domain", target),
+                "queue_seconds": float(i),
+                "active_targets": i,
+                "leased_slots": i * 2,
+                "memory_peak_kb": i * 100,
+                "cpu_user_seconds": float(i) / 2,
                 "cpu_sys_seconds": float(i) / 2,
             }
             rows.append(("target_engaged", None, recent.isoformat(), json.dumps(details)))
         for target, seconds in (("t1", 10), ("t2", 20)):
-            rows.append(("target_completed", None, (recent + timedelta(seconds=seconds)).isoformat(),
-                         json.dumps({"engagement_id": 1, "target_type": "domain", "target_key": external_target_key("domain", target)})))
-        rows.append(("phase_end", "import_targets", recent.isoformat(), json.dumps(
-            {"scheduler": {"active_targets_count": 5, "leased_slots": 8}}
-        )))
+            rows.append(
+                (
+                    "target_completed",
+                    None,
+                    (recent + timedelta(seconds=seconds)).isoformat(),
+                    json.dumps(
+                        {
+                            "engagement_id": 1,
+                            "target_type": "domain",
+                            "target_key": external_target_key("domain", target),
+                        }
+                    ),
+                )
+            )
+        rows.append(
+            (
+                "phase_end",
+                "import_targets",
+                recent.isoformat(),
+                json.dumps({"scheduler": {"active_targets_count": 5, "leased_slots": 8}}),
+            )
+        )
         rows.append(("target_engaged", None, old.isoformat(), json.dumps({"queue_seconds": 99})))
         rows.append(("target_engaged", None, recent.isoformat(), "not-json"))
         conn.executemany(
             "INSERT INTO autopilot_cycle_events (event_type, phase_name, occurred_at, details_json) "
-            "VALUES (?, ?, ?, ?)", rows
+            "VALUES (?, ?, ?, ?)",
+            rows,
         )
         conn.commit()
     finally:
@@ -488,8 +599,12 @@ def test_scoreboard_for_data_dir_without_database_is_unavailable(tmp_path: Path)
     assert result["invariant"]["active_targets_violations"] is None
     assert result["invariant"]["leased_slots_violations"] is None
     assert result["failures"] == {
-        "timeouts": 0, "ooms": 0, "sqlite_errors": 0, "scope_rejects": 0,
-        "scope_rejects_by_reason": {}, "rate_limit_by_provider": {},
+        "timeouts": 0,
+        "ooms": 0,
+        "sqlite_errors": 0,
+        "scope_rejects": 0,
+        "scope_rejects_by_reason": {},
+        "rate_limit_by_provider": {},
         "backoff_by_provider": {},
     }
 
@@ -502,20 +617,55 @@ def test_scoreboard_for_data_dir_aggregates_failures_and_provider_pressure(
     event_db.parent.mkdir(parents=True)
     conn = sqlite3.connect(event_db)
     rows = [
-        ("target_failed", None, now.isoformat(), json.dumps({"return_code": 124}))
-        for _ in range(2)
+        ("target_failed", None, now.isoformat(), json.dumps({"return_code": 124})) for _ in range(2)
     ]
     rows += [
-        ("target_failed", None, now.isoformat(), json.dumps({"return_code": 137, "stderr_tail": "Out of memory: Killed process"})),
-        ("target_failed", None, now.isoformat(), json.dumps({"return_code": 137, "stderr_tail": "manual kill"})),
-        ("target_failed", None, now.isoformat(), json.dumps({"return_code": 1, "stderr_tail": "MemoryError: allocation failed"})),
+        (
+            "target_failed",
+            None,
+            now.isoformat(),
+            json.dumps({"return_code": 137, "stderr_tail": "Out of memory: Killed process"}),
+        ),
+        (
+            "target_failed",
+            None,
+            now.isoformat(),
+            json.dumps({"return_code": 137, "stderr_tail": "manual kill"}),
+        ),
+        (
+            "target_failed",
+            None,
+            now.isoformat(),
+            json.dumps({"return_code": 1, "stderr_tail": "MemoryError: allocation failed"}),
+        ),
         ("target_failed", None, now.isoformat(), json.dumps({"return_code": 0})),
-        ("target_failed", None, now.isoformat(), json.dumps({"error_type": "OperationalError", "return_code": 1})),
-        ("target_failed", None, now.isoformat(), json.dumps({"error_type": "RuntimeError", "return_code": 1})),
-        ("phase_end", "import_targets", now.isoformat(), json.dumps({
-            "skip_reason_counts": {"non_global_ip": 2, "mega_domain_old_and_large": 1,
-                                   "invalid_ip": 5, "eligible": 3}
-        })),
+        (
+            "target_failed",
+            None,
+            now.isoformat(),
+            json.dumps({"error_type": "OperationalError", "return_code": 1}),
+        ),
+        (
+            "target_failed",
+            None,
+            now.isoformat(),
+            json.dumps({"error_type": "RuntimeError", "return_code": 1}),
+        ),
+        (
+            "phase_end",
+            "import_targets",
+            now.isoformat(),
+            json.dumps(
+                {
+                    "skip_reason_counts": {
+                        "non_global_ip": 2,
+                        "mega_domain_old_and_large": 1,
+                        "invalid_ip": 5,
+                        "eligible": 3,
+                    }
+                }
+            ),
+        ),
     ]
     try:
         conn.execute(
@@ -524,7 +674,8 @@ def test_scoreboard_for_data_dir_aggregates_failures_and_provider_pressure(
         )
         conn.executemany(
             "INSERT INTO autopilot_cycle_events (event_type, phase_name, occurred_at, details_json) "
-            "VALUES (?, ?, ?, ?)", rows,
+            "VALUES (?, ?, ?, ?)",
+            rows,
         )
         conn.commit()
     finally:
@@ -538,14 +689,19 @@ def test_scoreboard_for_data_dir_aggregates_failures_and_provider_pressure(
         )
         conn.executemany(
             "INSERT INTO provider_events VALUES (?, ?, ?, ?)",
-            [("github", "rate_limit", (now - timedelta(hours=1)).isoformat(), "{}") for _ in range(2)]
-            + [("shodan", "rate_limit", (now - timedelta(hours=1)).isoformat(), "{}"),
-               ("github", "other", (now - timedelta(hours=1)).isoformat(), "{}"),
-               ("three-day", "rate_limit", (now - timedelta(days=3)).isoformat(), "{}"),
-               ("old", "rate_limit", (now - timedelta(days=8)).isoformat(), "{}"),
-               ("provider-a", "backoff", (now - timedelta(hours=1)).isoformat(), "{}"),
-               ("provider-a", "backoff", (now - timedelta(hours=1)).isoformat(), "{}"),
-               ("provider-b", "backoff", (now - timedelta(hours=1)).isoformat(), "{}")],
+            [
+                ("github", "rate_limit", (now - timedelta(hours=1)).isoformat(), "{}")
+                for _ in range(2)
+            ]
+            + [
+                ("shodan", "rate_limit", (now - timedelta(hours=1)).isoformat(), "{}"),
+                ("github", "other", (now - timedelta(hours=1)).isoformat(), "{}"),
+                ("three-day", "rate_limit", (now - timedelta(days=3)).isoformat(), "{}"),
+                ("old", "rate_limit", (now - timedelta(days=8)).isoformat(), "{}"),
+                ("provider-a", "backoff", (now - timedelta(hours=1)).isoformat(), "{}"),
+                ("provider-a", "backoff", (now - timedelta(hours=1)).isoformat(), "{}"),
+                ("provider-b", "backoff", (now - timedelta(hours=1)).isoformat(), "{}"),
+            ],
         )
         conn.commit()
     finally:
@@ -557,7 +713,8 @@ def test_scoreboard_for_data_dir_aggregates_failures_and_provider_pressure(
     assert failures["sqlite_errors"] == 1
     assert failures["scope_rejects"] == 3
     assert failures["scope_rejects_by_reason"] == {
-        "non_global_ip": 2, "mega_domain_old_and_large": 1
+        "non_global_ip": 2,
+        "mega_domain_old_and_large": 1,
     }
     assert failures["rate_limit_by_provider"] == {"github": 2, "shodan": 1, "three-day": 1}
     assert failures["backoff_by_provider"] == {"provider-a": 2, "provider-b": 1}
@@ -585,9 +742,7 @@ def test_scoreboard_for_data_dir_without_limits_has_no_violation_counts(tmp_path
     assert result["invariant"]["leased_slots_violations"] is None
 
 
-def test_autopilot_records_cooldown_before_next_iteration(
-    tmp_path: Path, monkeypatch: Any
-) -> None:
+def test_autopilot_records_cooldown_before_next_iteration(tmp_path: Path, monkeypatch: Any) -> None:
     data_dir = tmp_path / "data"
     db_path = _make_data_db(data_dir)
     autopilot = _make_autopilot(data_dir, cooldown_minutes=1)
@@ -683,20 +838,39 @@ def test_loop_threads_target_progress_callbacks_to_existing_phases(
 
     def fake_import_targets(**kwargs: Any) -> list[object]:
         callback = kwargs["progress_callback"]
-        callback("target_engaged", {"engagement_id": 1001, "target_type": "domain", "target_value": "private.example.test"})
-        callback("target_completed", {"engagement_id": 1001, "target_type": "domain", "target_value": "private.example.test"})
+        callback(
+            "target_engaged",
+            {
+                "engagement_id": 1001,
+                "target_type": "domain",
+                "target_value": "private.example.test",
+            },
+        )
+        callback(
+            "target_completed",
+            {
+                "engagement_id": 1001,
+                "target_type": "domain",
+                "target_value": "private.example.test",
+            },
+        )
         return []
 
     def fake_resume(**kwargs: Any) -> dict[str, Any]:
         callback = kwargs["progress_callback"]
-        callback("target_engaged", {"engagement_id": 1001, "target_type": "domain", "target_value": "private.example.test"})
+        callback(
+            "target_engaged",
+            {
+                "engagement_id": 1001,
+                "target_type": "domain",
+                "target_value": "private.example.test",
+            },
+        )
         callback("target_failed", {"engagement_id": 1001})
         return {"status": "completed", "planned_count": 1, "skipped_count": 0}
 
     monkeypatch.setattr("forge.targets_import.import_targets", fake_import_targets)
-    monkeypatch.setattr(
-        "forge.targets_resume_candidates.execute_target_resume_plan", fake_resume
-    )
+    monkeypatch.setattr("forge.targets_resume_candidates.execute_target_resume_plan", fake_resume)
 
     autopilot.run_once(dry_run=True)
 
@@ -715,6 +889,7 @@ def test_loop_threads_target_progress_callbacks_to_existing_phases(
         ("target_failed", "resume_candidates", 6),
     ]
     from forge.targets_import import external_target_key
+
     expected_hash = external_target_key("domain", "private.example.test")
     assert any(expected_hash in row[3] for row in target_events)
     for _event, _phase, _index, details_json in target_events:
@@ -744,9 +919,7 @@ def test_timed_out_target_is_resumed_in_a_later_cycle(
         "forge.targets_resume_candidates.run_contained_subprocess",
         fake_contained_runner,
     )
-    _cycle_id, timeout_cycle = autopilot._event_writer.start_cycle(
-        details={"mode": "apply"}
-    )
+    _cycle_id, timeout_cycle = autopilot._event_writer.start_cycle(details={"mode": "apply"})
     autopilot._event_writer.emit(
         "target_failed",
         phase_name="import_targets",
@@ -811,9 +984,7 @@ def test_timeout_retry_budget_excludes_target_and_records_exhaustion(
     finally:
         conn.close()
     assert phase["data"]["planned_count"] == 0
-    assert phase["data"]["skipped_blocker_counts"][
-        "timeout_retry_budget_exhausted"
-    ] == 1
+    assert phase["data"]["skipped_blocker_counts"]["timeout_retry_budget_exhausted"] == 1
     assert commands == []
     assert len(exhausted) == 1
     assert exhausted[0][0] == 4
@@ -858,8 +1029,10 @@ def test_status_reports_cooldown_next_cycle_time(tmp_path: Path) -> None:
     writer = AutopilotEventWriter(data_dir)
     writer.start_cycle(details={"mode": "apply"})
     next_cycle_at = (
-        datetime.now(UTC).replace(microsecond=0) + timedelta(minutes=30)
-    ).isoformat().replace("+00:00", "Z")
+        (datetime.now(UTC).replace(microsecond=0) + timedelta(minutes=30))
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
     writer.emit("cycle_end", details={"status": "ok"})
     writer.emit(
         "cooldown_start",

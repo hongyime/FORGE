@@ -252,6 +252,7 @@ class AutopilotEventWriter:
             try:
                 conn = self._open_writer()
                 try:
+                    self._abort_incomplete_cycle(conn)
                     latest = conn.execute(
                         "SELECT COALESCE(MAX(cycle_number), 0) FROM autopilot_cycle_events"
                     ).fetchone()
@@ -267,6 +268,48 @@ class AutopilotEventWriter:
             except Exception as exc:  # noqa: BLE001 - observability must never stop a cycle
                 self._warn("cycle_start", exc)
         return self.cycle_id, self.cycle_number
+
+    def abort_incomplete_cycle(self) -> bool:
+        """Mark the latest incomplete cycle aborted without starting a new one."""
+        with self._lock:
+            try:
+                conn = self._open_writer()
+                try:
+                    return self._abort_incomplete_cycle(conn)
+                finally:
+                    conn.close()
+            except Exception as exc:  # noqa: BLE001 - recovery must not crash an operator command
+                self._warn("cycle_abort", exc)
+                return False
+
+    def _abort_incomplete_cycle(self, conn: sqlite3.Connection) -> bool:
+        """Close an interrupted cycle before assigning the next cycle number."""
+        row = conn.execute(
+            """SELECT cycle_id, cycle_number FROM autopilot_cycle_events
+               ORDER BY id DESC LIMIT 1"""
+        ).fetchone()
+        if row is None:
+            return False
+        cycle_id, cycle_number = str(row[0]), int(row[1])
+        ended = conn.execute(
+            "SELECT 1 FROM autopilot_cycle_events WHERE cycle_id=? AND event_type='cycle_end'",
+            (cycle_id,),
+        ).fetchone()
+        if ended is not None:
+            return False
+        conn.execute(
+            """INSERT INTO autopilot_cycle_events
+                (cycle_id, cycle_number, event_type, occurred_at, details_json)
+               VALUES (?, ?, 'cycle_end', ?, ?)""",
+            (
+                cycle_id,
+                cycle_number,
+                _now_iso(),
+                json.dumps({"status": "aborted", "reason": "interrupted_before_cycle_end"}),
+            ),
+        )
+        conn.commit()
+        return True
 
     def emit(
         self,

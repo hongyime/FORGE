@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import tempfile
 import time
@@ -46,6 +47,7 @@ from forge.autopilot.scheduler import (
     get_budget_snapshot,
     is_kill_switch_active,
     read_mem_available_mb,
+    reap_stale_leases,
     record_worker_memory_p95,
 )
 from forge.autopilot.tuning import decide_tuning
@@ -54,6 +56,7 @@ from forge.config import ForgeConfig
 
 
 AUTOPILOT_SCHEMA_VERSION = "forge.autopilot.v1"
+_LOG = logging.getLogger(__name__)
 _DEFAULT_SCOPE_MANIFEST_CANDIDATES = (
     Path("manifests") / "default.json",
     Path("imports") / "scope-manifest.local.json",
@@ -229,6 +232,11 @@ class ForgeAutopilot:
         is_dry_run = mode == "dry_run"
         started_at = _now_iso()
         self._event_writer.start_cycle(details={"mode": mode, "dry_run": is_dry_run, "path": path})
+        reaped_leases = reap_stale_leases(data_dir=self.data_dir)
+        if reaped_leases:
+            _LOG.info(
+                "autopilot reaped %d stale scheduler lease(s) before phase 1", len(reaped_leases)
+            )
         phases: list[AutopilotPhaseResult] = []
         cycle_status = "error"
         finished_at = ""
@@ -683,6 +691,9 @@ class ForgeAutopilot:
     @staticmethod
     def _phase_end_details(phase: AutopilotPhaseResult) -> dict[str, Any]:
         details: dict[str, Any] = {"status": phase.status}
+        if phase.status == "error":
+            details["error_type"] = str(phase.data.get("error_type") or "unknown")
+            details["error_detail"] = _bounded_text(phase.detail)
         if phase.name == "feed_build":
             counts = phase.data.get("counts")
             counts = counts if isinstance(counts, dict) else {}
@@ -1078,9 +1089,7 @@ class ForgeAutopilot:
                 "secret_hits": 0,
             }
         try:
-            scanner = GitHubDeepScanner(
-                token=token, max_repos=100, data_dir=self.data_dir
-            )
+            scanner = GitHubDeepScanner(token=token, max_repos=100, data_dir=self.data_dir)
             result = scanner.scan_all(orgs=orgs or None, users=users or None)
         except GitHubSpiderError as exc:
             return {
@@ -1640,6 +1649,39 @@ class ForgeAutopilot:
             # has been pinned (or from the original path during dry-run).
             pass
 
+        authorized_scope: dict[str, Any] | None = None
+        if (
+            not effective_dry_run
+            and self.scope_manifest is not None
+            and Path(self.scope_manifest).is_file()
+        ):
+            try:
+                scope_payload = json.loads(Path(self.scope_manifest).read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                return AutopilotPhaseResult(
+                    name="import_targets",
+                    status="error",
+                    detail=f"scope_read_error:{_bounded_text(exc)}",
+                    data={**feed_pin, "error_type": type(exc).__name__},
+                )
+            if not isinstance(scope_payload, dict):
+                return AutopilotPhaseResult(
+                    name="import_targets",
+                    status="blocked",
+                    detail="human_authorized_scope_required",
+                    data={**feed_pin, "scope_manifest": str(self.scope_manifest)},
+                )
+            from forge.governance.scope_gate import has_scope_wildcard
+
+            if has_scope_wildcard(scope_payload):
+                return AutopilotPhaseResult(
+                    name="import_targets",
+                    status="blocked",
+                    detail="human_authorized_scope_required",
+                    data={**feed_pin, "scope_manifest": str(self.scope_manifest)},
+                )
+            authorized_scope = scope_payload
+
         try:
             from forge.targets_import import import_targets  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
@@ -1666,14 +1708,16 @@ class ForgeAutopilot:
                 start_limit=self.defaults.start_limit,
                 min_start_source_count=self.defaults.min_start_source_count,
                 config=self._cfg,
+                human_authorized_scope=authorized_scope,
                 progress_callback=self._target_progress_callback("import_targets", 5),
             )
         except Exception as exc:  # noqa: BLE001
+            _LOG.exception("autopilot import_targets failed")
             return AutopilotPhaseResult(
                 name="import_targets",
                 status="error",
                 detail=_bounded_text(exc),
-                data=feed_pin,
+                data={**feed_pin, "error_type": type(exc).__name__},
             )
 
         created = sum(1 for r in results if r.created)

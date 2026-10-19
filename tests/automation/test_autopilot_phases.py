@@ -198,6 +198,81 @@ def test_import_targets_single_phase_continues_after_failed_start(
     assert phase["data"]["started"] == 1
 
 
+def test_import_phase_passes_specific_manifest_scope_to_importer(tmp_path: Path) -> None:
+    manifest = tmp_path / "scope.json"
+    scope = {"domains": ["corp-target.io"]}
+    manifest.write_text(json.dumps(scope), encoding="utf-8")
+    autopilot = _make_autopilot(tmp_path)
+    autopilot.scope_manifest = manifest
+    autopilot.feed_file.write_text(
+        json.dumps({"items": [{"target_type": "domain", "target_value": "corp-target.io"}]}),
+        encoding="utf-8",
+    )
+    seen: dict[str, object] = {}
+
+    def fake_import_targets(**kwargs: object) -> list[SimpleNamespace]:
+        seen.update(kwargs)
+        return [SimpleNamespace(created=True, started=False, start_failed=False)]
+
+    from unittest.mock import patch
+
+    with patch("forge.targets_import.import_targets", fake_import_targets):
+        result = autopilot._phase_import_targets(dry_run=False)
+
+    assert result.status == "ok"
+    assert seen["human_authorized_scope"] == scope
+
+
+def test_import_phase_blocks_wildcard_manifest_without_calling_importer(tmp_path: Path) -> None:
+    manifest = tmp_path / "scope.json"
+    manifest.write_text(json.dumps({"domains": ["*"]}), encoding="utf-8")
+    autopilot = _make_autopilot(tmp_path)
+    autopilot.scope_manifest = manifest
+    autopilot.feed_file.write_text(json.dumps({"items": []}), encoding="utf-8")
+
+    result = autopilot._phase_import_targets(dry_run=False)
+
+    assert result.status == "blocked"
+    assert result.detail == "human_authorized_scope_required"
+
+
+def test_run_once_reaps_stale_leases_before_first_phase(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    autopilot = _make_autopilot(tmp_path)
+    autopilot.skip_phases = set(autopilot._PHASE_DISPATCH)
+    calls: list[Path] = []
+
+    def fake_reap(*, data_dir: Path) -> list[str]:
+        calls.append(data_dir)
+        return ["stale-lease"]
+
+    monkeypatch.setattr("forge.autopilot.loop.reap_stale_leases", fake_reap)
+
+    autopilot.run_once(dry_run=True)
+
+    assert calls == [autopilot.data_dir]
+
+
+def test_import_phase_logs_full_exception_and_records_error_type(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    autopilot = _make_autopilot(tmp_path)
+    autopilot.feed_file.write_text(json.dumps({"items": []}), encoding="utf-8")
+
+    def fail_import(**_kwargs: object) -> list[object]:
+        raise RuntimeError("reproducible import failure")
+
+    from unittest.mock import patch
+
+    with patch("forge.targets_import.import_targets", fail_import), caplog.at_level("ERROR"):
+        result = autopilot._phase_import_targets(dry_run=True)
+
+    assert result.status == "error"
+    assert result.data["error_type"] == "RuntimeError"
+    assert any(record.exc_info for record in caplog.records)
+
+
 def test_single_phase_respects_existing_skip_configuration(tmp_path: Path) -> None:
     autopilot = _make_autopilot(tmp_path)
     autopilot.skip_phases = {"monitoring"}

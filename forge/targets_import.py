@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Mapping
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
@@ -314,6 +315,7 @@ def import_targets(
     min_start_source_count: int = 1,
     config: ForgeConfig | None = None,
     progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
+    human_authorized_scope: Mapping[str, Any] | None = None,
     roe_scope: str | None = None,
     roe_strictness: str | None = None,
     retry_after_seconds: float | None = None,
@@ -337,7 +339,9 @@ def import_targets(
         os.environ.get("FORGE_ROE_SCOPE", "") if roe_scope is None else roe_scope
     ).strip()
     resolved_roe_strictness = resolve_roe_strictness(roe_strictness, config=cfg)
-    authorization_scope = _load_human_authorized_scope() if not dry_run else None
+    authorization_scope = (
+        _load_human_authorized_scope(human_authorized_scope) if not dry_run else None
+    )
     sleep = sleep_fn if sleep_fn is not None else _DEFAULT_SLEEP
     items = load_target_feed(
         feed_url=feed_url,
@@ -859,18 +863,26 @@ def _run_one_import_target(
     )
 
 
-def _load_human_authorized_scope() -> tuple[ScopeGate, frozenset[str]]:
+def _load_human_authorized_scope(
+    payload: Mapping[str, Any] | None = None,
+) -> tuple[ScopeGate, frozenset[str]]:
     """Load the human-set, specific scope required for persistent imports."""
-    raw = os.environ.get("FORGE_SCOPE_JSON", "").strip()
-    if not raw:
-        raise ValueError("persistent target imports require a human-set specific FORGE_SCOPE_JSON")
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError("FORGE_SCOPE_JSON must be valid JSON") from exc
-    if not isinstance(payload, dict) or has_scope_wildcard(payload):
+    if payload is None:
+        raw = os.environ.get("FORGE_SCOPE_JSON", "").strip()
+        if not raw:
+            raise ValueError(
+                "persistent target imports require a human-set specific FORGE_SCOPE_JSON"
+            )
+        try:
+            decoded = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("FORGE_SCOPE_JSON must be valid JSON") from exc
+        if not isinstance(decoded, dict):
+            raise ValueError("FORGE_SCOPE_JSON must decode to a JSON object")
+        payload = decoded
+    if has_scope_wildcard(payload):
         raise ValueError(
-            "FORGE_SCOPE_JSON must contain specific human-authorized targets; "
+            "human-authorized scope must contain specific targets; "
             "wildcards do not authorize targets"
         )
     scope = EngagementScope.model_validate(payload)

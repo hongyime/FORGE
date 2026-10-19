@@ -834,6 +834,7 @@ def test_import_targets_skips_when_budget_exhausted_without_error(
         limit=2,
         max_iter=3,
         config=cfg_a,  # type: ignore[arg-type]
+        human_authorized_scope={"domains": ["target-alpha.corp-target.io"]},
         sleep_fn=lambda _: None,
     )
 
@@ -886,6 +887,7 @@ def test_import_targets_skips_when_budget_exhausted_without_error(
         limit=2,
         max_iter=3,
         config=cfg_b,  # type: ignore[arg-type]
+        human_authorized_scope={"domains": ["target-alpha.corp-target.io"]},
         sleep_fn=lambda _: None,
     )
 
@@ -925,12 +927,19 @@ def test_import_targets_engaged_progress_includes_scheduler_telemetry(
         limit=1,
         max_iter=1,
         config=cfg,  # type: ignore[arg-type]
+        human_authorized_scope={"domains": ["target-alpha.corp-target.io"]},
         progress_callback=lambda event, details: events.append((event, details)),
         sleep_fn=lambda _seconds: None,
     )
     details = next(details for event, details in events if event == "target_engaged")
     assert isinstance(details["queue_seconds"], float) and details["queue_seconds"] >= 0.05
-    for key in ("requested_slots", "effective_slots", "active_targets", "leased_slots", "total_slots"):
+    for key in (
+        "requested_slots",
+        "effective_slots",
+        "active_targets",
+        "leased_slots",
+        "total_slots",
+    ):
         assert isinstance(details[key], int)
     assert isinstance(details["memory_peak_kb"], int) and details["memory_peak_kb"] >= 0
     for key in ("cpu_user_seconds", "cpu_sys_seconds"):
@@ -958,9 +967,17 @@ def test_import_targets_failed_progress_includes_exit_status(
 
     monkeypatch.setattr("forge.targets_import._start_kill_chain", fail_start)
     import_targets(
-        feed_url=None, feed_file=feed, auth_header_env=None, roe_id="ROE-TEST",
-        roe_scope="target-alpha.corp-target.io", start=True, dry_run=False,
-        limit=1, max_iter=1, config=cfg,  # type: ignore[arg-type]
+        feed_url=None,
+        feed_file=feed,
+        auth_header_env=None,
+        roe_id="ROE-TEST",
+        roe_scope="target-alpha.corp-target.io",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=1,
+        config=cfg,  # type: ignore[arg-type]
+        human_authorized_scope={"domains": ["target-alpha.corp-target.io"]},
         progress_callback=lambda event, details: events.append((event, details)),
         sleep_fn=lambda _seconds: None,
     )
@@ -1008,6 +1025,7 @@ def test_resume_item_progress_carries_scheduler_telemetry(
 
     engaged = next(details for event, details in captured if event == "target_engaged")
     from forge.targets_import import external_target_key
+
     assert engaged["target_key"] == external_target_key("domain", "resume-target.example.com")
     assert engaged["target_type"] == "domain"
     assert isinstance(engaged["queue_seconds"], float) and engaged["queue_seconds"] >= 0
@@ -1179,7 +1197,9 @@ def test_child_memory_p95_record_read_and_empty_state(tmp_path: Path) -> None:
         assert con.execute("SELECT COUNT(*) FROM worker_memory_stats").fetchone()[0] == 0
 
 
-def test_child_memory_invalid_samples_and_pruning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_child_memory_invalid_samples_and_pruning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     for peak in (None, 0, -5, "x", True):
         assert record_child_memory_sample(peak, data_dir=tmp_path) is False
     db_path = scheduler_db_path(tmp_path)
@@ -1204,24 +1224,39 @@ def test_resolve_p95_worker_memory_precedence(tmp_path: Path) -> None:
     assert recorded is not None
     assert recorded["p95_worker_memory_mb"] == pytest.approx(102_495 / 1024.0)
 
-    assert resolve_p95_worker_memory_mb(
-        SimpleNamespace(autopilot_p95_worker_memory_mb=512), data_dir=tmp_path
-    ) == 512
-    assert resolve_p95_worker_memory_mb(
-        SimpleNamespace(autopilot_p95_worker_memory_mb=0), data_dir=tmp_path
-    ) == 100
+    assert (
+        resolve_p95_worker_memory_mb(
+            SimpleNamespace(autopilot_p95_worker_memory_mb=512), data_dir=tmp_path
+        )
+        == 512
+    )
+    assert (
+        resolve_p95_worker_memory_mb(
+            SimpleNamespace(autopilot_p95_worker_memory_mb=0), data_dir=tmp_path
+        )
+        == 100
+    )
 
     empty_dir = tmp_path / "empty"
-    assert resolve_p95_worker_memory_mb(
-        SimpleNamespace(autopilot_p95_worker_memory_mb=0), data_dir=empty_dir
-    ) == 0
+    assert (
+        resolve_p95_worker_memory_mb(
+            SimpleNamespace(autopilot_p95_worker_memory_mb=0), data_dir=empty_dir
+        )
+        == 0
+    )
     assert resolve_p95_worker_memory_mb(None, data_dir=tmp_path) == 100
-    assert resolve_p95_worker_memory_mb(
-        SimpleNamespace(autopilot_p95_worker_memory_mb=-5), data_dir=tmp_path
-    ) == 100
-    assert resolve_p95_worker_memory_mb(
-        SimpleNamespace(autopilot_p95_worker_memory_mb="abc"), data_dir=tmp_path
-    ) == 100
+    assert (
+        resolve_p95_worker_memory_mb(
+            SimpleNamespace(autopilot_p95_worker_memory_mb=-5), data_dir=tmp_path
+        )
+        == 100
+    )
+    assert (
+        resolve_p95_worker_memory_mb(
+            SimpleNamespace(autopilot_p95_worker_memory_mb="abc"), data_dir=tmp_path
+        )
+        == 100
+    )
 
 
 def test_recorded_p95_tightens_budget_snapshot(tmp_path: Path) -> None:
@@ -1278,7 +1313,9 @@ def test_acquire_lease_uses_recorded_p95_budget(tmp_path: Path) -> None:
     assert with_recorded.reason == "slots_exhausted"
 
 
-def test_start_kill_chain_records_child_memory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_start_kill_chain_records_child_memory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from forge.config import ForgeConfig
     from forge.targets_import import _start_kill_chain
 
@@ -1304,7 +1341,9 @@ def test_start_kill_chain_records_child_memory(tmp_path: Path, monkeypatch: pyte
         assert con.execute("SELECT peak_rss_kb FROM child_memory_samples").fetchall() == [(123456,)]
 
 
-def test_resume_child_records_memory_sample(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resume_child_records_memory_sample(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import sys
 
     monkeypatch.setattr(

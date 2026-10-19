@@ -151,11 +151,16 @@ _CONNECTOR_SOURCE_EXCLUDED_NAMES = {
     "target-feed.json",
 }
 _PAYLOAD_TEXT_SUFFIXES = {".json", ".jsonl", ".csv", ".xml", ".txt", ".log", ".gz", ".zip"}
-_SUPABASE_PROJECT_REF_RE = re.compile(
-    r"(?i)\b([a-z0-9][a-z0-9-]{4,62})\.supabase\.(?:co|in)\b"
-)
+_SUPABASE_PROJECT_REF_RE = re.compile(r"(?i)\b([a-z0-9][a-z0-9-]{4,62})\.supabase\.(?:co|in)\b")
 _SUPABASE_PROJECT_REF_ONLY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{4,62}$")
 _ENV_VAR_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_FILENAME_LIKE_SUFFIX_RE = re.compile(
+    r"(?i)\.(?:7z|aab|apk|bin|csv|dll|docx?|env|gif|html?|jar|jpe?g|json|lock|log|pdf|png|py|ya?ml|zip)$"
+)
+_CODE_TOKEN_RE = re.compile(
+    r"(?i)^(?:async|await|class|const|def|else|false|for|from|function|import|let|"
+    r"module|none|null|return|self|true|undefined|var|while)$"
+)
 _TEXT_TARGET_RE = re.compile(
     r"(?ix)"
     r"(https?://[^\s<>'\"(){}\[\],]+)"
@@ -269,6 +274,10 @@ def _candidate(
     target_type, canonical_value = normalized
     if target_type not in ALLOWED_TARGET_FEED_TYPES:
         return None
+    if _is_filename_like_target(value, target_type) or _is_filename_like_target(
+        canonical_value, target_type
+    ):
+        return None
     if is_denied_target(value) or is_denied_target(canonical_value):
         return None
     return FeedCandidate(
@@ -291,9 +300,34 @@ def _candidate_is_valid(candidate: FeedCandidate) -> bool:
     return (
         candidate.target_type in ALLOWED_TARGET_FEED_TYPES
         and normalized == (candidate.target_type, candidate.canonical_value)
+        and not _is_filename_like_target(candidate.target_value, candidate.target_type)
+        and not _is_filename_like_target(candidate.canonical_value, candidate.target_type)
         and not is_denied_target(candidate.target_value)
         and not is_denied_target(candidate.canonical_value)
     )
+
+
+def _is_filename_like_target(value: str, target_type: str) -> bool:
+    """Reject local-path, source-token, and filename values from all feed types."""
+    text = str(value or "").strip()
+    if not text:
+        return True
+    split = urlsplit(text)
+    if split.scheme and split.hostname:
+        target_type = "url"
+    if _CODE_TOKEN_RE.fullmatch(text) or any(
+        token in text for token in ("{", "}", "[", "]", ";", "=>")
+    ):
+        return True
+    if target_type == "url":
+        if not split.scheme or not split.hostname:
+            return True
+        leaf = split.path.rsplit("/", 1)[-1]
+        return bool(_FILENAME_LIKE_SUFFIX_RE.search(leaf))
+    if "/" in text or "\\" in text:
+        return True
+    candidate_leaf = text.rsplit(":", 1)[-1]
+    return bool(_FILENAME_LIKE_SUFFIX_RE.search(candidate_leaf))
 
 
 def _target_type_from_key_hint(key_hint: str) -> str:
@@ -370,7 +404,7 @@ def _read_zip_text_values(path: Path) -> tuple[list[str], str | None]:
                 info
                 for info in sorted(archive.infolist(), key=lambda item: item.filename)
                 if not info.is_dir()
-            ][: _MAX_ZIP_MEMBERS]
+            ][:_MAX_ZIP_MEMBERS]
             for info in members:
                 if info.file_size > _MAX_TEXT_FILE_BYTES:
                     continue
@@ -430,12 +464,11 @@ def _harvest_text_candidates(
 
 
 def _is_urlscan_observation(meta: dict[str, Any], path: Path) -> bool:
-    source_id = str(
-        meta.get("source_id")
-        or meta.get("source")
-        or meta.get("fetcher")
-        or ""
-    ).strip().lower()
+    source_id = (
+        str(meta.get("source_id") or meta.get("source") or meta.get("fetcher") or "")
+        .strip()
+        .lower()
+    )
     if source_id:
         return "urlscan" in source_id
     schema_version = str(meta.get("schema_version") or "").strip().lower()
@@ -552,14 +585,14 @@ def _link_urlscan_observation_candidates(
                 age, surface = signal_provider(candidate_domain)
             except Exception:  # noqa: BLE001
                 age, surface = None, None
-            skip, _ = mega_domain_decision(candidate_domain, age_years=age, estimated_subdomains=surface)
+            skip, _ = mega_domain_decision(
+                candidate_domain, age_years=age, estimated_subdomains=surface
+            )
             if skip:
                 continue
 
         # Domain/IP validation and scan eligibility (e.g. global IP check)
-        eligible, _ = target_scan_eligible(
-            candidate.target_type, candidate.canonical_value
-        )
+        eligible, _ = target_scan_eligible(candidate.target_type, candidate.canonical_value)
         if not eligible:
             continue
 
@@ -592,9 +625,7 @@ def _harvest_file_candidates(
             meta_dict = meta if isinstance(meta, dict) else {}
             feed_class = str(meta_dict.get("feed_class") or "").strip().lower()
             if feed_class in _NON_ASSET_FEED_CLASSES:
-                if feed_class == "observation" and _is_urlscan_observation(
-                    meta_dict, path
-                ):
+                if feed_class == "observation" and _is_urlscan_observation(meta_dict, path):
                     linked = _link_urlscan_observation_candidates(
                         payload,
                         source_group=source_group,
@@ -680,9 +711,7 @@ def _harvest_json_candidates(
     return candidates
 
 
-def _extract_db_source(
-    data_dir: Path, first_seen_at: str
-) -> tuple[list[FeedCandidate], list[str]]:
+def _extract_db_source(data_dir: Path, first_seen_at: str) -> tuple[list[FeedCandidate], list[str]]:
     candidates: list[FeedCandidate] = []
     errors: list[str] = []
     db_paths = numeric_engagement_db_files(data_dir)[:_MAX_ENGAGEMENT_DBS]
@@ -691,8 +720,7 @@ def _extract_db_source(
             conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
             try:
                 rows = conn.execute(
-                    "SELECT engagement_id, seed_value, seed_type"
-                    " FROM engagement_seeds ORDER BY id"
+                    "SELECT engagement_id, seed_value, seed_type FROM engagement_seeds ORDER BY id"
                 ).fetchall()
             finally:
                 conn.close()
@@ -776,9 +804,7 @@ def _extract_reports_source(
                 errors.append(f"reports_parse:{error}")
                 continue
             family_id = path.stem
-            source_kind = (
-                "report_dashboard" if path.parent.name == "data" else "report_metadata"
-            )
+            source_kind = "report_dashboard" if path.parent.name == "data" else "report_metadata"
             candidates.extend(
                 _harvest_json_candidates(
                     payload,
@@ -851,9 +877,7 @@ def _extract_dir_source(
 
 def _is_connected_services_seed_drop_filename(name: str) -> bool:
     lowered = name.lower()
-    return lowered.startswith("connected-services-") and lowered.endswith(
-        "-seeds.local.json"
-    )
+    return lowered.startswith("connected-services-") and lowered.endswith("-seeds.local.json")
 
 
 def _extract_connected_services_seed_drops(
@@ -875,9 +899,7 @@ def _extract_connected_services_seed_drops(
 
     scanned = 0
     for path in sorted(imports_dir.iterdir()):
-        if not path.is_file() or not _is_connected_services_seed_drop_filename(
-            path.name
-        ):
+        if not path.is_file() or not _is_connected_services_seed_drop_filename(path.name):
             continue
         if scanned >= _MAX_FILES_PER_DIR_SOURCE:
             summary["omitted_count"] += 1
@@ -914,9 +936,7 @@ def _extract_connected_services_seed_drops(
             source_kind = str(seed.get("source_kind") or "connector_output")
             source_group = str(seed.get("source_group") or fallback_group)
             provenance = str(seed.get("provenance") or source_group)
-            seed_first_seen_at = str(
-                seed.get("first_seen_at") or drop_first_seen_at
-            )
+            seed_first_seen_at = str(seed.get("first_seen_at") or drop_first_seen_at)
             try:
                 seed_confidence = float(seed.get("confidence", confidence))
             except (TypeError, ValueError):
@@ -943,9 +963,7 @@ def _all_candidate_keys(groups: dict[str, list[FeedCandidate]]) -> set[str]:
     keys: set[str] = set()
     for candidates in groups.values():
         for candidate in candidates:
-            keys.add(
-                external_target_key(candidate.target_type, candidate.canonical_value)
-            )
+            keys.add(external_target_key(candidate.target_type, candidate.canonical_value))
     return keys
 
 
@@ -1358,11 +1376,7 @@ def _append_discovered_input_registry_items(
     existing_keys: set[str],
     imports_dir: Path | None,
 ) -> list[dict[str, object]]:
-    pending = [
-        item
-        for item in discovered_inputs
-        if _input_registry_key(item) not in existing_keys
-    ]
+    pending = [item for item in discovered_inputs if _input_registry_key(item) not in existing_keys]
     if not pending:
         return []
     path = _discovered_inputs_registry_path(imports_dir)
@@ -1641,9 +1655,7 @@ def _merge_candidates(
                 continue
             duplicates += 1
             source_groups = {
-                str(group)
-                for group in existing.get("source_groups", [])
-                if str(group).strip()
+                str(group) for group in existing.get("source_groups", []) if str(group).strip()
             }
             if str(existing.get("source_group") or "").strip():
                 source_groups.add(str(existing["source_group"]))
@@ -1912,9 +1924,7 @@ def _resolve_supabase_key(
 
 
 def _safe_supabase_identifier(value: str) -> bool:
-    return bool(value) and all(
-        part.replace("_", "").isalnum() for part in value.split(".")
-    )
+    return bool(value) and all(part.replace("_", "").isalnum() for part in value.split("."))
 
 
 def _is_connector_payload_filename(name: str) -> bool:
@@ -2227,8 +2237,7 @@ def _extract_supabase_source(
                 remaining = max(0, len(tables_to_scan) - len(scanned_tables))
                 omitted_table_count += remaining
                 project_errors.append(
-                    f"{project_ref}:project_row_limit_reached:{project['max_rows']}:"
-                    f"{remaining}"
+                    f"{project_ref}:project_row_limit_reached:{project['max_rows']}:{remaining}"
                 )
                 errors.append(project_errors[-1])
                 break
@@ -2288,48 +2297,54 @@ def _extract_supabase_source(
         )
     return candidates, errors, source_group_counts, discovery_summaries
 
+
 def _collect_secret_observations(groups: dict[str, list[FeedCandidate]]) -> list[dict[str, Any]]:
     """Collect secret observations from connector outputs.
-    
+
     Scans FeedCandidate groups for secret-like patterns in provenance
     and extracts metadata for secrets auto-feeding.
-    
+
     Args:
         groups: Dict of source groups to FeedCandidate lists.
-    
+
     Returns:
         List of secret observation dicts with redacted values.
     """
     secret_observations = []
-    
+
     # Scan connector outputs for secret patterns
     for group, candidates in groups.items():
         if not candidates:
             continue
-        
+
         for candidate in candidates:
             # Look for secret observations in provenance
             provenance = candidate.provenance or ""
-            
+
             # Detect secret types from provenance patterns
             if "gitleaks" in provenance.lower() or "trufflehog" in provenance.lower():
-                secret_observations.append({
-                    "secret_type": "detected_secret",
-                    "secret_value_redacted": candidate.target_value[:20] + "...",
-                    "source_group": group,
-                    "confidence": candidate.confidence,
-                })
+                secret_observations.append(
+                    {
+                        "secret_type": "detected_secret",
+                        "secret_value_redacted": candidate.target_value[:20] + "...",
+                        "source_group": group,
+                        "confidence": candidate.confidence,
+                    }
+                )
             elif candidate.target_type in ("email", "url", "domain", "ip"):
                 # URLs/emails/domains could contain secrets
                 if candidate.confidence >= 0.8:
-                    secret_observations.append({
-                        "secret_type": candidate.target_type,
-                        "secret_value_redacted": candidate.target_value,
-                        "source_group": group,
-                        "confidence": candidate.confidence,
-                    })
-    
+                    secret_observations.append(
+                        {
+                            "secret_type": candidate.target_type,
+                            "secret_value_redacted": candidate.target_value,
+                            "source_group": group,
+                            "confidence": candidate.confidence,
+                        }
+                    )
+
     return secret_observations
+
 
 def build_target_feed(
     *,
@@ -2399,12 +2414,10 @@ def build_target_feed(
         source_errors.extend({"source": "cti", "error": err} for err in errors)
 
     if "connectors" in active_offline:
-        seed_found, seed_errors, seed_scan_summary = (
-            _extract_connected_services_seed_drops(
-                connectors_dir or Path("imports"),
-                first_seen_at=generated_at,
-                confidence=0.5,
-            )
+        seed_found, seed_errors, seed_scan_summary = _extract_connected_services_seed_drops(
+            connectors_dir or Path("imports"),
+            first_seen_at=generated_at,
+            confidence=0.5,
         )
         generic_found, generic_errors, generic_scan_summary = _extract_dir_source(
             connectors_dir or Path("imports"),
@@ -2451,34 +2464,37 @@ def build_target_feed(
                 with drop_path.open("r", encoding="utf-8") as handle:
                     seed_payload = json.load(handle)
             except (OSError, ValueError) as exc:
-                errors.append({
-                    "source": "cloud_discovery",
-                    "error": f"{type(exc).__name__}:{drop_path.name}",
-                })
+                errors.append(
+                    {
+                        "source": "cloud_discovery",
+                        "error": f"{type(exc).__name__}:{drop_path.name}",
+                    }
+                )
             else:
                 if (
                     not isinstance(seed_payload, dict)
-                    or seed_payload.get("schema_version")
-                    != "forge.connected_services_scan.v1"
+                    or seed_payload.get("schema_version") != "forge.connected_services_scan.v1"
                 ):
-                    errors.append({
-                        "source": "cloud_discovery",
-                        "error": f"invalid_schema:{drop_path.name}",
-                    })
+                    errors.append(
+                        {
+                            "source": "cloud_discovery",
+                            "error": f"invalid_schema:{drop_path.name}",
+                        }
+                    )
                 elif not isinstance(seed_payload.get("seeds"), list):
-                    errors.append({
-                        "source": "cloud_discovery",
-                        "error": f"invalid_seeds:{drop_path.name}",
-                    })
+                    errors.append(
+                        {
+                            "source": "cloud_discovery",
+                            "error": f"invalid_seeds:{drop_path.name}",
+                        }
+                    )
                 else:
                     for seed in seed_payload["seeds"]:
                         if not isinstance(seed, dict):
                             continue
                         raw_value = seed.get("target_value")
                         raw_type = seed.get("target_type")
-                        if not isinstance(raw_value, str) or not isinstance(
-                            raw_type, str
-                        ):
+                        if not isinstance(raw_value, str) or not isinstance(raw_type, str):
                             continue
                         source_kind = str(seed.get("source_kind") or "connector_output")
                         source_group = str(
@@ -2520,9 +2536,7 @@ def build_target_feed(
                     if candidate.target_type in ALLOWED_TARGET_FEED_TYPES
                 ]
             except Exception as exc:
-                errors.append(
-                    {"source": "cloud_discovery", "error": f"{type(exc).__name__}"}
-                )
+                errors.append({"source": "cloud_discovery", "error": f"{type(exc).__name__}"})
 
         # With connectors active, the drop's accounts appear in both groups;
         # _merge_candidates dedupes them at output.
@@ -2552,16 +2566,17 @@ def build_target_feed(
             # Collect secret observations from connector outputs
             secret_observations = _collect_secret_observations(groups)
             existing_target_keys = _all_candidate_keys(groups)
-            
+
             if secret_observations:
                 # Auto-feed discovered secrets into target feed
                 new_secret_targets = auto_feed_secrets_to_target_feed(
                     secret_observations=secret_observations,
                     existing_targets=existing_target_keys,
                 )
-                
+
                 # Convert to FeedCandidate format
                 from datetime import datetime
+
                 for target in new_secret_targets:
                     # Normalize the raw target value into the canonical form the
                     # rest of the feed pipeline expects. Skip any target that
@@ -2578,25 +2593,26 @@ def build_target_feed(
                     normalized_type, canonical_value = normalized
                     if normalized_type not in ALLOWED_TARGET_FEED_TYPES:
                         continue
-                    secret_targets.append(FeedCandidate(
-                        target_type=normalized_type,
-                        target_value=target["target"],
-                        canonical_value=canonical_value,
-                        source_group=target["source"],
-                        source_kind=target["provenance"]["secret_type"],
-                        provenance=target["source"],
-                        first_seen_at=target["provenance"]["extracted_at"],
-                        confidence=target["confidence"],
-                    ))
-                
+                    secret_targets.append(
+                        FeedCandidate(
+                            target_type=normalized_type,
+                            target_value=target["target"],
+                            canonical_value=canonical_value,
+                            source_group=target["source"],
+                            source_kind=target["provenance"]["secret_type"],
+                            provenance=target["source"],
+                            first_seen_at=target["provenance"]["extracted_at"],
+                            confidence=target["confidence"],
+                        )
+                    )
+
                 groups["secrets_auto_feed"] = secret_targets
                 if secret_targets:
                     source_group_counts["secrets_auto_feed"] = len(secret_targets)
         except Exception as e:
             source_errors.append({"source": "secrets_auto_feed", "error": str(e)})
-    
-    # === END SECRETS AUTO-FEED ===
 
+    # === END SECRETS AUTO-FEED ===
 
     existing_supabase_refs = _existing_supabase_project_refs(supabase_config_path)
     discovered_supabase_projects = _discovered_supabase_project_refs(groups)
@@ -2612,9 +2628,7 @@ def build_target_feed(
     )
     existing_input_keys = _existing_discovered_input_keys(imports_dir)
     new_discovered_inputs = [
-        item
-        for item in discovered_inputs
-        if _input_registry_key(item) not in existing_input_keys
+        item for item in discovered_inputs if _input_registry_key(item) not in existing_input_keys
     ]
     appended_supabase_projects: list[dict[str, str]] = []
     appended_inputs: list[dict[str, object]] = []
@@ -2677,9 +2691,7 @@ def build_target_feed(
             ]
             new_vs_existing = sum(1 for key in candidate_keys if key not in existing_keys)
         except (OSError, ValueError):
-            source_errors.append(
-                {"source": "existing_feed", "error": "unreadable_existing_feed"}
-            )
+            source_errors.append({"source": "existing_feed", "error": "unreadable_existing_feed"})
     elif existing_feed_path is not None:
         new_vs_existing = len(candidate_keys)
 
@@ -2687,15 +2699,11 @@ def build_target_feed(
     # directly constructed candidates and each rebuilt cycle on the same rules.
     for source_candidates in groups.values():
         source_candidates[:] = [
-            candidate
-            for candidate in source_candidates
-            if _candidate_is_valid(candidate)
+            candidate for candidate in source_candidates if _candidate_is_valid(candidate)
         ]
     candidate_keys = _all_candidate_keys(groups)
     if existing_feed_path is not None:
-        new_vs_existing = sum(
-            1 for key in candidate_keys if key not in existing_keys
-        )
+        new_vs_existing = sum(1 for key in candidate_keys if key not in existing_keys)
 
     items, dedupe_counts = _merge_candidates(groups, existing_items_raw)
     total_before_limit = len(items)
@@ -2743,9 +2751,7 @@ def build_target_feed(
 
     payload: dict[str, object] = {
         "schema_version": TARGET_FEED_SCHEMA_VERSION,
-        "execution_policy": (
-            "applied_local_write" if apply else "dry_run_no_writes"
-        ),
+        "execution_policy": ("applied_local_write" if apply else "dry_run_no_writes"),
         "dry_run": not apply,
         "apply_requested": bool(apply),
         "sources": selected_sources,
@@ -2753,7 +2759,9 @@ def build_target_feed(
         "counts": counts,
         "new_target_keys": [
             hashlib.sha256(
-                f"{item.get('target_type') or 'other'}:{item.get('canonical_value') or ''}".encode("utf-8")
+                f"{item.get('target_type') or 'other'}:{item.get('canonical_value') or ''}".encode(
+                    "utf-8"
+                )
             ).hexdigest()
             for item in items
             if str(item.get("target_key") or "") in candidate_keys
@@ -2764,9 +2772,7 @@ def build_target_feed(
         "supabase_table_discovery": supabase_table_discovery,
         "discovered_supabase_projects": discovered_supabase_projects,
         "new_discovered_supabase_projects": (
-            appended_supabase_projects
-            if apply
-            else new_discovered_supabase_projects
+            appended_supabase_projects if apply else new_discovered_supabase_projects
         ),
         "supabase_project_config_update": {
             "config_path": str(_supabase_config_path(supabase_config_path)),
@@ -2783,9 +2789,7 @@ def build_target_feed(
             "config_path": str(_discovered_inputs_registry_path(imports_dir)),
             "applied": bool(apply),
             "appended_count": len(appended_inputs),
-            "pending_count": len(new_discovered_inputs)
-            if not apply
-            else len(appended_inputs),
+            "pending_count": len(new_discovered_inputs) if not apply else len(appended_inputs),
         },
         "source_input_registry_updates": specific_input_registry_updates,
         "items": items,
