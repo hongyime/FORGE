@@ -38,7 +38,6 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import urlsplit
 
-from forge.governance.scope_gate import is_roe_wildcard
 from forge.onboard.patterns import is_denied_target
 
 
@@ -196,13 +195,20 @@ def expand_scope_from_feeds(
     """
     manifest_path = Path(manifest_path)
     manifest = load_scope_manifest(manifest_path)
-    roe_wildcard = is_roe_wildcard(manifest)
-    scoped_domains = {d.lower().lstrip("*.") for d in manifest.get("domains", []) if d}
-    scoped_urls = {str(u).strip() for u in manifest.get("urls", []) if u}
+    scoped_domains = {
+        str(domain).lower().rstrip(".")
+        for domain in manifest.get("domains", [])
+        if domain and "*" not in str(domain)
+    }
+    scoped_urls = {
+        str(url).strip() for url in manifest.get("urls", []) if url and "*" not in str(url)
+    }
     scoped_ips: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
     for raw_range in manifest.get("ip_ranges", []):
         try:
-            scoped_ips.append(ipaddress.ip_network(str(raw_range), strict=False))
+            network = ipaddress.ip_network(str(raw_range), strict=False)
+            if network.prefixlen:
+                scoped_ips.append(network)
         except ValueError:
             continue
 
@@ -236,17 +242,6 @@ def expand_scope_from_feeds(
         value = candidate["value"]
         related = candidate["related_domains"]
 
-        if roe_wildcard:
-            accepted.append(
-                ScopeExpansionCandidate(
-                    value=value,
-                    seed_type=seed_type,
-                    accepted=True,
-                    reason="roe_wildcard",
-                )
-            )
-            continue
-
         if seed_type == "domain" or seed_type == "subdomain":
             parent = _matching_parent_domain(value, scoped_domains)
             if value.lower() in scoped_domains:
@@ -260,14 +255,12 @@ def expand_scope_from_feeds(
                 )
                 continue
             if parent:
-                new_domains.append(value.lower())
-                scoped_domains.add(value.lower())
-                accepted.append(
+                review.append(
                     ScopeExpansionCandidate(
                         value=value,
                         seed_type="subdomain",
-                        accepted=True,
-                        reason="subdomain_of_scoped_domain",
+                        accepted=False,
+                        reason="scope_change_requires_human_review",
                         related_scope=parent,
                     )
                 )
@@ -307,17 +300,12 @@ def expand_scope_from_feeds(
                 )
                 continue
             if parent:
-                new_urls.append(value)
-                scoped_urls.add(value)
-                if host not in scoped_domains:
-                    new_domains.append(host)
-                    scoped_domains.add(host)
-                accepted.append(
+                review.append(
                     ScopeExpansionCandidate(
                         value=value,
                         seed_type="url",
-                        accepted=True,
-                        reason="url_on_scoped_domain",
+                        accepted=False,
+                        reason="scope_change_requires_human_review",
                         related_scope=parent,
                     )
                 )
@@ -355,18 +343,12 @@ def expand_scope_from_feeds(
                     related_scoped = parent
                     break
             if related_scoped:
-                prefix = 32 if parsed_ip.version == 4 else 128
-                range_str = f"{parsed_ip}/{prefix}"
-                new_ip_ranges.append(range_str)
-                scoped_ips.append(
-                    ipaddress.ip_network(range_str, strict=False)
-                )
-                accepted.append(
+                review.append(
                     ScopeExpansionCandidate(
                         value=value,
                         seed_type=seed_type,
-                        accepted=True,
-                        reason="ip_reverse_dns_to_scoped_domain",
+                        accepted=False,
+                        reason="scope_change_requires_human_review",
                         related_scope=related_scoped,
                     )
                 )
@@ -426,24 +408,14 @@ def expand_scope_from_feeds(
     if not unchanged and apply:
         merged_manifest = dict(manifest)
         merged_manifest["domains"] = sorted(
-            dict.fromkeys(
-                list(manifest.get("domains") or []) + new_domains
-            )
+            dict.fromkeys(list(manifest.get("domains") or []) + new_domains)
         )
-        merged_manifest["urls"] = sorted(
-            dict.fromkeys(
-                list(manifest.get("urls") or []) + new_urls
-            )
-        )
+        merged_manifest["urls"] = sorted(dict.fromkeys(list(manifest.get("urls") or []) + new_urls))
         merged_manifest["ip_ranges"] = sorted(
-            dict.fromkeys(
-                list(manifest.get("ip_ranges") or []) + new_ip_ranges
-            )
+            dict.fromkeys(list(manifest.get("ip_ranges") or []) + new_ip_ranges)
         )
         merged_manifest["authorized_seeds"] = sorted(
-            dict.fromkeys(
-                list(manifest.get("authorized_seeds") or []) + new_authorized
-            )
+            dict.fromkeys(list(manifest.get("authorized_seeds") or []) + new_authorized)
         )
         write_scope_manifest(manifest_path, merged_manifest)
 

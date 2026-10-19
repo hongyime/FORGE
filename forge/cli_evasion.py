@@ -20,16 +20,12 @@ def register_evasion_commands(evasion_app: typer.Typer, *, console: Console) -> 
         target_os: str = typer.Option("windows", "--os", help="windows|linux|macos"),
         strip_metadata: bool = typer.Option(True, "--strip-metadata/--no-strip-metadata"),
     ) -> None:
-        """Generate an obfuscated payload using the 6-criterion matrix (Phase 3)."""
-        from forge.config import is_offensive_enabled, prompt_offensive_upgrade  # noqa: PLC0415
-
-        if not is_offensive_enabled():
-            if not prompt_offensive_upgrade("Phase 3 payload generation"):
-                console.print(
-                    "[bold red]ERROR:[/bold red] Phase 3 payload generation is disabled "
-                    "(FORGE_SAFE_MODE=1). Set FORGE_SAFE_MODE=0 to enable offensive modules."
-                )
-                raise typer.Exit(code=1)
+        """Policy-disabled: defense evasion and payload obfuscation are prohibited."""
+        console.print(
+            "[bold red]BLOCKED:[/bold red] FORGE v2 prohibits defense evasion and "
+            "payload obfuscation."
+        )
+        raise typer.Exit(code=1)
 
         from forge.phase3.payload_builder import EncodingChain, PayloadBuilder  # noqa: PLC0415
 

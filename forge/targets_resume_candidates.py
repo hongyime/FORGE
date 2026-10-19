@@ -230,9 +230,7 @@ def collect_target_resume_plan(
     )
     plan_limit = _normalize_limit(limit)
     candidate_items = list(payload["items"])
-    selected_items = (
-        candidate_items[:plan_limit] if plan_limit is not None else candidate_items
-    )
+    selected_items = candidate_items[:plan_limit] if plan_limit is not None else candidate_items
     runtime_minutes = _normalize_positive_int(
         max_runtime_minutes,
         default=DEFAULT_RESUME_PLAN_MAX_RUNTIME_MINUTES,
@@ -300,12 +298,8 @@ def collect_target_resume_plan(
                 "expected_execution": "manual_sequential",
             }
         )
-    selected_reason_counts = Counter(
-        str(item.get("reason") or "") for item in selected_items
-    )
-    selected_ready_count = sum(
-        1 for item in selected_items if bool(item.get("resume_ready"))
-    )
+    selected_reason_counts = Counter(str(item.get("reason") or "") for item in selected_items)
+    selected_ready_count = sum(1 for item in selected_items if bool(item.get("resume_ready")))
     selected_count = len(selected_items)
     total_count = int(payload["candidate_count"])
     return {
@@ -406,7 +400,11 @@ def execute_target_resume_plan(
     resolved_data_dir = (
         data_dir
         if data_dir is not None
-        else (Path(config.data_dir) if config is not None and getattr(config, "data_dir", None) else None)
+        else (
+            Path(config.data_dir)
+            if config is not None and getattr(config, "data_dir", None)
+            else None
+        )
     )
     plan = collect_target_resume_plan(
         data_dir=resolved_data_dir,
@@ -874,9 +872,7 @@ def _execute_resume_item(
         progress_details["provider_paused"] = bool(
             is_provider_paused(provider, data_dir=target_data_dir)
         )
-        progress_details["global_paused"] = bool(
-            is_global_paused(data_dir=target_data_dir)
-        )
+        progress_details["global_paused"] = bool(is_global_paused(data_dir=target_data_dir))
         progress_details["provider_inflight"] = provider_inflight_count(
             provider, data_dir=target_data_dir
         )
@@ -922,7 +918,9 @@ def _execute_resume_item(
 
             record_child_failure(
                 provider=target_value,
-                reason="timeout" if isinstance(exc, subprocess.TimeoutExpired) else type(exc).__name__,
+                reason="timeout"
+                if isinstance(exc, subprocess.TimeoutExpired)
+                else type(exc).__name__,
                 data_dir=target_data_dir,
             )
         except Exception:
@@ -1089,7 +1087,9 @@ def _latest_run_candidate(
                 "updated_at",
             )
         ]
-        where_clause = "WHERE COALESCE(run_kind, 'kill_chain')='kill_chain'" if "run_kind" in columns else ""
+        where_clause = (
+            "WHERE COALESCE(run_kind, 'kill_chain')='kill_chain'" if "run_kind" in columns else ""
+        )
         row = conn.execute(
             f"""
             SELECT {", ".join(select_parts)}
@@ -1327,7 +1327,7 @@ def _recovered_scope_manifest_payload(
 ) -> dict[str, Any]:
     scope = _engagement_scope_json(db_path)
     roe_wildcard = is_roe_wildcard(scope)
-    if not roe_wildcard and not _scope_manifest_has_narrow_scope(scope):
+    if roe_wildcard or not _scope_manifest_has_narrow_scope(scope):
         scope = _scope_from_seed(seed_value, seed_type)
     authorized = list(dict.fromkeys([*scope.get("authorized_seeds", []), seed_value]))
     payload = {
@@ -1342,8 +1342,6 @@ def _recovered_scope_manifest_payload(
             "seed_type": seed_type,
         },
     }
-    if roe_wildcard:
-        payload["roe_scope"] = str(scope.get("roe_scope") or scope.get("scope") or "*")
     return payload
 
 
@@ -1404,10 +1402,7 @@ def _scope_from_seed(seed_value: str, seed_type: str) -> dict[str, list[str]]:
 
 
 def _scope_manifest_has_narrow_scope(payload: dict[str, Any]) -> bool:
-    return is_roe_wildcard(payload) or any(
-        payload.get(key)
-        for key in ("domains", "ip_ranges", "urls", "authorized_seeds")
-    )
+    return any(payload.get(key) for key in ("domains", "ip_ranges", "urls", "authorized_seeds"))
 
 
 def _write_recovered_scope_manifest(
@@ -1703,9 +1698,7 @@ def _resume_lock_status(lock_path: Path, *, stale_lock_minutes: int) -> dict[str
     created_at = str(metadata.get("created_at") or "").strip()
     age_seconds = _lock_age_seconds(lock_path, created_at=created_at)
     stale_by_age = (
-        pid_alive is not True
-        and age_seconds is not None
-        and age_seconds >= stale_minutes * 60
+        pid_alive is not True and age_seconds is not None and age_seconds >= stale_minutes * 60
     )
     stale_by_dead_pid = pid > 0 and pid_alive is False
     stale = bool(stale_by_age or stale_by_dead_pid)

@@ -35,6 +35,8 @@ import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+from forge.governance.rules import deny_prohibited_activity
 from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
@@ -189,6 +191,7 @@ class ReverseShellGenerator:
         Render and return a ShellPayload. Does NOT write to disk.
         Call save() separately after operator confirmation.
         """
+        deny_prohibited_activity("post-exploitation reverse-shell generation")
         if lport not in STEALTH_PORTS:
             _LOG.warning(
                 "Port %d is non-standard. Consider 443/80/8443 to blend with HTTPS traffic.",
@@ -240,6 +243,7 @@ class ReverseShellGenerator:
         Write payload to disk after operator confirmation.
         Registers file with cleanup.py. Persists sha256 to DB (not raw command).
         """
+        deny_prohibited_activity("post-exploitation reverse-shell writing")
         try:
             import questionary
 
@@ -328,6 +332,7 @@ def generate_shell(
     lport: int,
     gen_cert: bool = False,
 ) -> Path:
+    deny_prohibited_activity("post-exploitation payload generation")
     from forge.config import ForgeConfig
 
     cfg = ForgeConfig.load()

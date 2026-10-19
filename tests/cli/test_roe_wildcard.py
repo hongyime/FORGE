@@ -16,7 +16,7 @@ from forge.cli_helpers import (
     _validate_scope_manifest_seed_values,
 )
 from forge.onboard.auto_scope import expand_scope_from_feeds
-from forge.opsec.scope_gate import assert_in_scope, assert_url_in_scope
+from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope, assert_url_in_scope
 from forge.targets_import import import_targets, target_scan_eligible
 from forge.targets_import_cli import register_target_import_commands
 from forge.targets_resume_candidates import (
@@ -43,15 +43,15 @@ def test_canonical_detector_recognizes_roe_wildcard(scope: dict[str, object]) ->
     assert is_roe_wildcard(scope)
 
 
-def test_governance_scope_gate_allows_every_target_under_roe_wildcard() -> None:
+def test_governance_scope_gate_never_authorizes_roe_wildcard() -> None:
     gate = ScopeGate(EngagementScope(roe_scope="*"))
 
-    assert gate.is_in_scope("thirdparty.example")
-    assert gate.is_in_scope("https://unrelated.example/path")
-    assert gate.is_in_scope("192.0.2.1")
+    assert not gate.is_in_scope("thirdparty.example")
+    assert not gate.is_in_scope("https://unrelated.example/path")
+    assert not gate.is_in_scope("192.0.2.1")
 
 
-def test_cli_scope_loader_accepts_exact_seed_and_scope_alias_wildcards(
+def test_cli_scope_loader_rejects_wildcard_authorization(
     tmp_path: Path,
 ) -> None:
     exact_seed_manifest = _load_scope_manifest(json.dumps({"exact_seeds": ["*"]}))
@@ -60,23 +60,25 @@ def test_cli_scope_loader_accepts_exact_seed_and_scope_alias_wildcards(
         exact_seed_manifest,
         [{"value": "thirdparty.example.net", "seed_type": "domain"}],
     )
-    assert validation["authorized"]
+    assert not validation["authorized"]
 
-    scope, urls = _direct_cli_load_scope_lists(
-        engagement_id=1001,
-        db_path=tmp_path / "engagement.db",
-        scope_manifest=json.dumps({"scope": "*"}),
-        target="thirdparty.example.net",
-        seed_type="domain",
-    )
-    assert "*" in scope
-    assert urls == []
+    with pytest.raises(typer.BadParameter, match="wildcard scope entries do not authorize"):
+        _direct_cli_load_scope_lists(
+            engagement_id=1001,
+            db_path=tmp_path / "engagement.db",
+            scope_manifest=json.dumps({"scope": "*"}),
+            target="thirdparty.example.net",
+            seed_type="domain",
+        )
 
 
-def test_opsec_scope_gate_and_match_helper_allow_roe_wildcard() -> None:
-    assert_in_scope("thirdparty.example", ["*"])
-    assert_in_scope("192.168.1.20", ["0.0.0.0/0"])
-    assert_url_in_scope("https://unrelated.example/admin", ["*"])
+def test_opsec_scope_gate_rejects_broad_wildcards() -> None:
+    with pytest.raises(ScopeViolationError):
+        assert_in_scope("thirdparty.example", ["*"])
+    with pytest.raises(ScopeViolationError):
+        assert_in_scope("192.168.1.20", ["0.0.0.0/0"])
+    with pytest.raises(ScopeViolationError):
+        assert_url_in_scope("https://unrelated.example/admin", ["*"])
 
 
 def test_post_boundary_gate_reads_wildcard_scope_json(tmp_path: Path) -> None:
@@ -88,7 +90,7 @@ def test_post_boundary_gate_reads_wildcard_scope_json(tmp_path: Path) -> None:
             (1001, json.dumps({"roe_scope": "*"})),
         )
 
-    assert boundary_is_in_scope("https://thirdparty.example/path", 1001, db_path)
+    assert not boundary_is_in_scope("https://thirdparty.example/path", 1001, db_path)
 
 
 class _TestConfig:
@@ -112,7 +114,7 @@ def _write_feed(path: Path) -> None:
     )
 
 
-def test_target_import_writes_wildcard_manifest_and_engagement_scope(
+def test_target_import_rejects_wildcard_authorization(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -120,35 +122,18 @@ def test_target_import_writes_wildcard_manifest_and_engagement_scope(
     _write_feed(feed_path)
     cfg = _TestConfig(tmp_path / "data")
     monkeypatch.setenv("FORGE_ROE_SCOPE", "*")
-    monkeypatch.setattr("forge.targets_import._ensure_target_import_monitoring", lambda *_a, **_k: None)
-
-    results = import_targets(
-        feed_url=None,
-        feed_file=feed_path,
-        auth_header_env=None,
-        roe_id="ROE-TEST",
-        start=False,
-        dry_run=False,
-        limit=None,
-        max_iter=3,
-        config=cfg,  # type: ignore[arg-type]
-    )
-
-    assert len(results) == 1
-    manifest = json.loads(Path(str(results[0].scope_manifest)).read_text(encoding="utf-8"))
-    assert manifest["roe_scope"] == "*"
-    assert manifest["domains"] == ["*"]
-    assert manifest["authorized_seeds"] == ["*"]
-    assert manifest["ip_ranges"] == ["0.0.0.0/0", "::/0"]
-    assert manifest["urls"] == ["*"]
-
-    db_path = cfg.engagement_db_path(str(results[0].engagement_id))
-    with sqlite3.connect(db_path) as conn:
-        scope_json = json.loads(
-            conn.execute("SELECT scope_json FROM engagements WHERE id=?", (results[0].engagement_id,)).fetchone()[0]
+    with pytest.raises(ValueError, match="human-set specific FORGE_SCOPE_JSON"):
+        import_targets(
+            feed_url=None,
+            feed_file=feed_path,
+            auth_header_env=None,
+            roe_id="ROE-TEST",
+            start=False,
+            dry_run=False,
+            limit=None,
+            max_iter=3,
+            config=cfg,  # type: ignore[arg-type]
         )
-    assert is_roe_wildcard(scope_json)
-    assert scope_json["domains"] == ["*"]
 
 
 def test_target_import_cli_accepts_roe_scope_option(
@@ -176,7 +161,7 @@ def test_target_import_cli_accepts_roe_scope_option(
     assert calls[0]["roe_scope"] == "*"
 
 
-def test_resume_manifest_backfill_preserves_roe_wildcard(tmp_path: Path) -> None:
+def test_resume_manifest_replaces_wildcard_with_specific_seed_scope(tmp_path: Path) -> None:
     db_path = tmp_path / "engagements" / "1001.db"
     db_path.parent.mkdir(parents=True)
     with sqlite3.connect(db_path) as conn:
@@ -194,12 +179,12 @@ def test_resume_manifest_backfill_preserves_roe_wildcard(tmp_path: Path) -> None
         seed_type="domain",
         roe_id="ROE-TEST",
     )
-    assert recovered["roe_scope"] == "*"
-    assert recovered["domains"] == ["*"]
+    assert "roe_scope" not in recovered
+    assert recovered["domains"] == ["thirdparty.example.org"]
     assert "thirdparty.example.org" in recovered["authorized_seeds"]
 
 
-def test_auto_scope_accepts_third_party_candidates_under_roe_wildcard(tmp_path: Path) -> None:
+def test_auto_scope_requires_human_review_for_wildcard_scope_candidates(tmp_path: Path) -> None:
     manifest_path = tmp_path / "scope.json"
     manifest_path.write_text(json.dumps({"roe_scope": "*"}), encoding="utf-8")
 
@@ -213,8 +198,9 @@ def test_auto_scope_accepts_third_party_candidates_under_roe_wildcard(tmp_path: 
         apply=False,
     )
 
-    assert [item.value for item in expansion.accepted] == ["portal.corp-target.io"]
-    assert not expansion.review_required
+    assert not expansion.accepted
+    assert expansion.review_required
+    assert expansion.review_required[0].reason == "unrelated_to_scope"
 
 
 def test_target_scan_import_still_rejects_private_ip_addresses() -> None:

@@ -565,15 +565,19 @@ def _load_scope_manifest(value: str) -> dict[str, Any]:
 
 
 def _scope_manifest_broad_reasons(manifest: dict[str, Any]) -> list[str]:
-    """Return reasons a manifest authorizes an unbounded live surface."""
-    from forge.governance.scope_gate import is_roe_wildcard  # noqa: PLC0415
+    """Return reasons a manifest contains a wildcard that is not authorization."""
+    from forge.governance.scope_gate import has_scope_wildcard  # noqa: PLC0415
 
-    return ["manifest explicitly grants ROE '*' (no scope gate)"] if is_roe_wildcard(manifest) else []
+    return (
+        ["wildcard scope entries do not authorize targets"] if has_scope_wildcard(manifest) else []
+    )
 
 
 def _reject_broad_scope_manifest_for_live(manifest: dict[str, Any]) -> None:
-    """Retain the live-preflight hook while accepting explicit ROE ``*``."""
-    _ = manifest
+    """Reject wildcard scope entries at live-operation boundaries."""
+    reasons = _scope_manifest_broad_reasons(manifest)
+    if reasons:
+        raise ValueError("; ".join(reasons))
 
 
 def _scope_manifest_seed_targets(seed_value: str, seed_type: str) -> list[str]:
@@ -625,8 +629,6 @@ def _validate_scope_manifest_seed_values(
         if str(value or "").strip()
     }
 
-    wildcard_authorize_all = is_roe_wildcard(manifest)
-
     gate = ScopeGate(
         EngagementScope(
             domains=list(manifest.get("domains") or []),
@@ -640,16 +642,6 @@ def _validate_scope_manifest_seed_values(
         seed_value = str(entry.get("value") or "").strip()
         seed_type = str(entry.get("seed_type") or "").strip().lower()
         if not seed_value:
-            continue
-        if wildcard_authorize_all:
-            authorized.append(
-                {
-                    "seed_value": seed_value,
-                    "seed_type": seed_type,
-                    "matched": "*",
-                    "match_type": "wildcard_all",
-                }
-            )
             continue
         if seed_value.casefold() in exact_seeds:
             authorized.append(
@@ -742,10 +734,6 @@ def _direct_cli_load_scope_lists(
                     f"target is outside scope manifest: target={target!r} source={source!r}"
                 )
         manifest_domains = list(manifest.get("domains") or [])
-        from forge.governance.scope_gate import is_roe_wildcard  # noqa: PLC0415
-
-        if is_roe_wildcard(manifest) and not is_roe_wildcard({"domains": manifest_domains}):
-            manifest_domains.insert(0, "*")
         return (
             [
                 str(item)

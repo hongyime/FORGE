@@ -113,11 +113,31 @@ def is_roe_wildcard(scope: object) -> bool:
     return False
 
 
+def has_scope_wildcard(scope: object) -> bool:
+    """Return whether scope contains a wildcard token or wildcard pattern."""
+    if is_roe_wildcard(scope):
+        return True
+    if isinstance(scope, Mapping):
+        values = []
+        for key in ("domains", "urls", "authorized_seeds", "exact_seeds", "scope"):
+            raw = scope.get(key)
+            if isinstance(raw, (list, tuple, set)):
+                values.extend(raw)
+            elif raw is not None:
+                values.append(raw)
+    elif isinstance(scope, Sequence) and not isinstance(scope, (str, bytes)):
+        values = list(scope)
+    else:
+        values = []
+    return any("*" in str(value or "") for value in values)
+
+
 class EngagementScope(BaseModel):
     """Declared engagement perimeter.
 
     The three perimeter lists default to empty. An empty scope denies every
-    target unless the explicit ROE wildcard fields grant ROE ``*``.
+    target unless a specific human-authorized scope entry matches it. Wildcard
+    values are recognized for diagnostics but never authorize a target.
     """
 
     domains: list[str] = Field(default_factory=list)
@@ -144,7 +164,6 @@ class ScopeGate:
         audit_logger: "AuditLogger | None" = None,
     ) -> None:
         self.scope = scope
-        self._roe_wildcard = is_roe_wildcard(scope)
         self.audit_logger = audit_logger
         # P2-6: hold strong refs to fire-and-forget audit tasks so the
         # event loop's weak-reference scheduling cannot GC them mid-flight.
@@ -154,13 +173,15 @@ class ScopeGate:
         self._networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
         for cidr in scope.ip_ranges:
             try:
-                self._networks.append(ipaddress.ip_network(cidr, strict=False))
+                network = ipaddress.ip_network(cidr, strict=False)
+                if network.prefixlen:
+                    self._networks.append(network)
             except ValueError:
                 _LOG.warning("ScopeGate: ignoring invalid CIDR %r", cidr)
 
         # Lower-case domain entries for case-insensitive comparison.
-        self._domains_lower: list[str] = [d.lower() for d in scope.domains]
-        self._url_prefixes: list[str] = list(scope.urls)
+        self._domains_lower: list[str] = [d.lower() for d in scope.domains if "*" not in d]
+        self._url_prefixes: list[str] = [url for url in scope.urls if "*" not in url]
 
     # ------------------------------------------------------------------ env
     @classmethod
@@ -189,9 +210,6 @@ class ScopeGate:
         """
         if not isinstance(target, str) or not target:
             return False
-        if self._roe_wildcard:
-            return True
-
         # 1. URL form: scheme://host[:port]/path
         if "://" in target:
             return self._url_in_scope(target)
@@ -260,19 +278,8 @@ class ScopeGate:
         host_lc = host.lower().rstrip(".")
         for entry in self._domains_lower:
             entry_clean = entry.rstrip(".")
-            if entry_clean.startswith("*."):
-                suffix = entry_clean[2:]
-                if not suffix:
-                    continue
-                # "*.example.com" matches a.example.com, deep.a.example.com
-                # but never the apex example.com itself.
-                if host_lc == suffix:
-                    continue
-                if host_lc.endswith("." + suffix):
-                    return True
-            else:
-                if host_lc == entry_clean:
-                    return True
+            if "*" not in entry_clean and host_lc == entry_clean:
+                return True
         return False
 
     def _emit_decision(self, target: str, allowed: bool, correlation_id: str | None) -> None:

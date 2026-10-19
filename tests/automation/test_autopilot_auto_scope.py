@@ -69,7 +69,9 @@ def test_auto_scope_phase_is_wired_after_feed_build(tmp_path: Path) -> None:
     assert phases.index("auto_scope") < phases.index("import_targets")
 
 
-def test_auto_scope_skipped_without_scope_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_auto_scope_skipped_without_scope_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.chdir(tmp_path)
     autopilot = _mk_autopilot(tmp_path, scope_manifest=None)
     result = autopilot._phase_auto_scope(dry_run=False)
@@ -90,7 +92,7 @@ def test_auto_scope_skipped_without_feed_file(tmp_path: Path) -> None:
     assert "no_feed_file_present" in result.detail
 
 
-def test_auto_scope_expands_subdomain_of_scoped_domain(tmp_path: Path) -> None:
+def test_auto_scope_queues_subdomain_for_human_review(tmp_path: Path) -> None:
     manifest = tmp_path / "manifests" / "default.json"
     manifest.parent.mkdir(parents=True)
     manifest.write_text(
@@ -114,10 +116,10 @@ def test_auto_scope_expands_subdomain_of_scoped_domain(tmp_path: Path) -> None:
     )
     result = autopilot._phase_auto_scope(dry_run=False)
     assert result.status == "ok"
-    assert result.data["accepted_count"] == 1
-    assert result.data["review_required_count"] == 1
+    assert result.data["accepted_count"] == 0
+    assert result.data["review_required_count"] == 2
     stored = json.loads(manifest.read_text(encoding="utf-8"))
-    assert "api.corp-target.io" in stored["domains"]
+    assert stored["domains"] == ["corp-target.io"]
 
 
 def test_auto_scope_skips_placeholder_hosts_from_stale_feed(tmp_path: Path) -> None:

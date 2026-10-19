@@ -3114,6 +3114,172 @@ def _m0059_tuning_apply_event_type(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _m0060_vulnerability_attack_mapping(conn: sqlite3.Connection) -> None:
+    """Require tactic and technique mapping metadata for vulnerability findings."""
+    if not _table_exists(conn, "vulnerability_findings"):
+        conn.commit()
+        return
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(vulnerability_findings)")}
+    if "attack_tactics" not in columns:
+        conn.execute(
+            "ALTER TABLE vulnerability_findings "
+            "ADD COLUMN attack_tactics TEXT NOT NULL DEFAULT '[]'"
+        )
+    mapping_tactic = """CASE
+        WHEN upper(vuln_type) IN ('INFO', 'INFORMATIONAL') THEN '["TA0043"]'
+        WHEN upper(vuln_type) LIKE '%CREDENTIAL%'
+          OR upper(vuln_type) LIKE '%SECRET%'
+          OR upper(vuln_type) LIKE '%KEY_EXPOSURE%'
+          THEN '["TA0006"]'
+        WHEN upper(vuln_type) LIKE '%CLOUD%'
+          OR upper(vuln_type) LIKE '%FIREBASE%'
+          OR upper(vuln_type) LIKE '%SUPABASE%'
+          OR upper(vuln_type) LIKE '%AWS_MISCONFIG%'
+          OR upper(vuln_type) LIKE '%AZURE_MISCONFIG%'
+          THEN '["TA0007"]'
+        ELSE '["TA0001"]'
+    END"""
+    mapping_technique = """CASE
+        WHEN upper(vuln_type) IN ('INFO', 'INFORMATIONAL') THEN '["T1595"]'
+        WHEN upper(vuln_type) LIKE '%CREDENTIAL%'
+          OR upper(vuln_type) LIKE '%SECRET%'
+          OR upper(vuln_type) LIKE '%KEY_EXPOSURE%'
+          THEN '["T1552.001"]'
+        WHEN upper(vuln_type) LIKE '%CLOUD%'
+          OR upper(vuln_type) LIKE '%FIREBASE%'
+          OR upper(vuln_type) LIKE '%SUPABASE%'
+          OR upper(vuln_type) LIKE '%AWS_MISCONFIG%'
+          OR upper(vuln_type) LIKE '%AZURE_MISCONFIG%'
+          THEN '["T1580"]'
+        ELSE '["T1190"]'
+    END"""
+    conn.execute(
+        f"""UPDATE vulnerability_findings
+            SET attack_tactics={mapping_tactic},
+                attack_techniques=CASE
+                    WHEN attack_techniques IS NULL OR attack_techniques IN ('', '[]')
+                    THEN {mapping_technique}
+                    ELSE attack_techniques
+                END
+            WHERE attack_tactics IS NULL OR attack_tactics IN ('', '[]')"""
+    )
+    conn.execute(
+        f"""CREATE TRIGGER IF NOT EXISTS trg_vulnerability_attack_mapping_insert
+            AFTER INSERT ON vulnerability_findings
+            WHEN NEW.attack_tactics IS NULL OR NEW.attack_tactics IN ('', '[]')
+              OR NEW.attack_techniques IS NULL OR NEW.attack_techniques IN ('', '[]')
+            BEGIN
+                UPDATE vulnerability_findings
+                SET attack_tactics=CASE
+                    WHEN attack_tactics IS NULL OR attack_tactics IN ('', '[]')
+                    THEN {mapping_tactic} ELSE attack_tactics END,
+                    attack_techniques=CASE
+                        WHEN NEW.attack_techniques IS NULL OR NEW.attack_techniques IN ('', '[]')
+                        THEN {mapping_technique}
+                        ELSE NEW.attack_techniques
+                    END
+                WHERE id=NEW.id;
+            END"""
+    )
+    conn.commit()
+
+
+def _m0061_high_severity_confirmation(conn: sqlite3.Connection) -> None:
+    """Keep high-severity findings pending until a human confirms them."""
+    if not _table_exists(conn, "vulnerability_findings"):
+        conn.commit()
+        return
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(vulnerability_findings)")}
+    for column, declaration in (
+        ("severity_confirmation_status", "TEXT NOT NULL DEFAULT 'not_required'"),
+        ("severity_reviewed_by", "TEXT"),
+        ("severity_reviewed_at", "TEXT"),
+    ):
+        if column not in columns:
+            conn.execute(f"ALTER TABLE vulnerability_findings ADD COLUMN {column} {declaration}")
+    conn.execute(
+        """UPDATE vulnerability_findings
+           SET severity_confirmation_status='pending'
+           WHERE upper(severity) IN ('HIGH', 'CRITICAL')
+             AND severity_confirmation_status='not_required'"""
+    )
+    conn.executescript(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_high_severity_confirmation_insert
+        AFTER INSERT ON vulnerability_findings
+        WHEN upper(NEW.severity) IN ('HIGH', 'CRITICAL')
+        BEGIN
+            UPDATE vulnerability_findings
+            SET severity_confirmation_status='pending',
+                severity_reviewed_by=NULL,
+                severity_reviewed_at=NULL
+            WHERE id=NEW.id;
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_high_severity_confirmation_update
+        AFTER UPDATE OF severity ON vulnerability_findings
+        WHEN upper(NEW.severity) IN ('HIGH', 'CRITICAL')
+             AND upper(OLD.severity) NOT IN ('HIGH', 'CRITICAL')
+        BEGIN
+            UPDATE vulnerability_findings
+            SET severity_confirmation_status='pending',
+                severity_reviewed_by=NULL,
+                severity_reviewed_at=NULL
+            WHERE id=NEW.id;
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_non_high_severity_reset
+        AFTER UPDATE OF severity ON vulnerability_findings
+        WHEN upper(NEW.severity) NOT IN ('HIGH', 'CRITICAL')
+        BEGIN
+            UPDATE vulnerability_findings
+            SET severity_confirmation_status='not_required',
+                severity_reviewed_by=NULL,
+                severity_reviewed_at=NULL
+            WHERE id=NEW.id;
+        END;
+        """
+    )
+    conn.commit()
+
+
+def _m0062_routine_finding_automation(conn: sqlite3.Connection) -> None:
+    """Deterministically triage, prioritize, and queue every finding for reporting."""
+    if not _table_exists(conn, "vulnerability_findings"):
+        conn.commit()
+        return
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(vulnerability_findings)")}
+    for column, declaration in (
+        ("triage_status", "TEXT NOT NULL DEFAULT 'untriaged'"),
+        ("priority_score", "INTEGER NOT NULL DEFAULT 0"),
+        ("reporting_status", "TEXT NOT NULL DEFAULT 'queued'"),
+    ):
+        if column not in columns:
+            conn.execute(f"ALTER TABLE vulnerability_findings ADD COLUMN {column} {declaration}")
+    priority = """CASE upper(severity)
+        WHEN 'CRITICAL' THEN 100 WHEN 'HIGH' THEN 90 WHEN 'MEDIUM' THEN 60
+        WHEN 'LOW' THEN 30 ELSE 10 END"""
+    conn.execute(
+        f"""UPDATE vulnerability_findings
+            SET triage_status='triaged', priority_score={priority}, reporting_status='queued'
+            WHERE triage_status IS NULL OR triage_status='' OR triage_status='untriaged'"""
+    )
+    conn.executescript(
+        f"""
+        CREATE TRIGGER IF NOT EXISTS trg_routine_finding_automation_insert
+        AFTER INSERT ON vulnerability_findings
+        BEGIN
+            UPDATE vulnerability_findings
+            SET triage_status='triaged',
+                priority_score={priority},
+                reporting_status='queued'
+            WHERE id=NEW.id;
+        END;
+        """
+    )
+    conn.commit()
+
+
 def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
     return (
         conn.execute(
@@ -3192,6 +3358,9 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (57, "provider_breaker_adaptation", _m0057_provider_breaker_adaptation),
     (58, "candidate_evaluation_event_type", _m0058_candidate_evaluation_event_type),
     (59, "tuning_apply_event_type", _m0059_tuning_apply_event_type),
+    (60, "vulnerability_attack_mapping", _m0060_vulnerability_attack_mapping),
+    (61, "high_severity_confirmation", _m0061_high_severity_confirmation),
+    (62, "routine_finding_automation", _m0062_routine_finding_automation),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)

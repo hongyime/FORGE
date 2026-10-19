@@ -11,6 +11,7 @@ import typer
 
 import forge.cli as cli
 from forge.db.session import get_engagement_db
+from forge.governance.rules import PolicyViolation
 from forge.phase1 import crawler
 from forge.phase4 import auth_bypass as auth_bypass_mod
 
@@ -297,25 +298,24 @@ def test_direct_recon_crawl_scope_manifest_url_prefix_denies_same_host_drift(
     assert calls == []
 
 
-def test_direct_scope_manifest_accepts_global_allowlist(tmp_path: Path) -> None:
-    scope, urls = cli._direct_cli_load_scope_lists(
-        engagement_id=1001,
-        db_path=tmp_path / "engagement.db",
-        scope_manifest=json.dumps(
-            {
-                "roe_id": "ROE-ACME-2026-07",
-                "ip_ranges": ["0.0.0.0/0", "::/0"],
-                "authorized_seeds": ["*"],
-            }
-        ),
-        target="thirdparty.example",
-        seed_type="domain",
-    )
-    assert scope == ["*", "0.0.0.0/0", "::/0"]
-    assert urls == []
+def test_direct_scope_manifest_rejects_global_allowlist(tmp_path: Path) -> None:
+    with pytest.raises(typer.BadParameter, match="wildcard scope entries"):
+        cli._direct_cli_load_scope_lists(
+            engagement_id=1001,
+            db_path=tmp_path / "engagement.db",
+            scope_manifest=json.dumps(
+                {
+                    "roe_id": "ROE-ACME-2026-07",
+                    "ip_ranges": ["0.0.0.0/0", "::/0"],
+                    "authorized_seeds": ["*"],
+                }
+            ),
+            target="thirdparty.example",
+            seed_type="domain",
+        )
 
 
-def test_kill_chain_scope_manifest_accepts_global_scope_before_attack_env(
+def test_kill_chain_scope_manifest_rejects_global_scope_before_attack_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("FORGE_ATTACK_MODE_AUTO", raising=False)
@@ -332,12 +332,13 @@ def test_kill_chain_scope_manifest_accepts_global_scope_before_attack_env(
             }
         )
     )
-    cli._reject_broad_scope_manifest_for_live(manifest)
+    with pytest.raises(ValueError, match="wildcard scope entries"):
+        cli._reject_broad_scope_manifest_for_live(manifest)
     validation = cli._validate_scope_manifest_seed_values(
-        manifest,
+        {"domains": ["example.com"], "authorized_seeds": []},
         [{"value": "thirdparty.example", "seed_type": "domain"}],
     )
-    assert validation["authorized"]
+    assert not validation["authorized"]
 
     assert os.environ.get("FORGE_ATTACK_MODE_AUTO") is None
     assert os.environ.get("FORGE_KEYSCAN_ASSUME_YES") is None
@@ -390,7 +391,7 @@ def test_direct_auth_bypass_requires_roe_before_network(
         auth_bypass_mod, "run_bypass_assessment", lambda *args, **kwargs: calls.append("called")
     )
 
-    with pytest.raises(typer.BadParameter, match="requires --roe-id"):
+    with pytest.raises(PolicyViolation, match="prohibits authentication bypass"):
         cli.auth_bypass(
             engagement="1001",
             target="https://allowed.example/login",
@@ -416,7 +417,7 @@ def test_direct_auth_bypass_scope_manifest_denies_before_network(
         auth_bypass_mod, "run_bypass_assessment", lambda *args, **kwargs: calls.append("called")
     )
 
-    with pytest.raises(typer.BadParameter, match="outside scope manifest"):
+    with pytest.raises(PolicyViolation, match="prohibits authentication bypass"):
         cli.auth_bypass(
             engagement="1001",
             target="https://allowed.example/admin/login",
@@ -448,7 +449,7 @@ def test_direct_auth_bypass_module_scope_gate_denies_before_post(
 
     monkeypatch.setattr(auth_bypass_mod.httpx, "post", _fail_post)
 
-    with pytest.raises(Exception, match="not within engagement scope"):
+    with pytest.raises(PolicyViolation, match="prohibits authentication bypass"):
         auth_bypass_mod.run_bypass_assessment(
             engagement_id=1001,
             db_path=db_path,
@@ -623,7 +624,7 @@ def test_direct_auth_brute_requires_roe_before_post(
     calls: list[str] = []
     monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: calls.append("called"))
 
-    with pytest.raises(typer.BadParameter, match="requires --roe-id"):
+    with pytest.raises(PolicyViolation, match="prohibits credential brute force"):
         cli.auth_brute(
             engagement="1001",
             target="https://allowed.example/login",
@@ -651,7 +652,7 @@ def test_direct_auth_brute_scope_denies_before_post(
     calls: list[str] = []
     monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: calls.append("called"))
 
-    with pytest.raises(typer.BadParameter, match="outside scope"):
+    with pytest.raises(PolicyViolation, match="prohibits credential brute force"):
         cli.auth_brute(
             engagement="1001",
             target="https://evil.example/login",
@@ -1049,9 +1050,7 @@ def test_direct_post_shell_requires_roe_before_payload_generation(
     monkeypatch.setattr(
         cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
     )
-    monkeypatch.setattr(cli, "_assert_offensive_cli", lambda *_args, **_kwargs: None)
-
-    with pytest.raises(typer.BadParameter, match="requires --roe-id"):
+    with pytest.raises(typer.Exit) as exc_info:
         cli.post_shell(
             engagement="1001",
             lhost="127.0.0.1",
@@ -1059,6 +1058,7 @@ def test_direct_post_shell_requires_roe_before_payload_generation(
             gen_cert=False,
             roe_id=None,
         )
+    assert exc_info.value.exit_code == 1
 
 
 def test_direct_post_beacon_requires_roe_before_generation(
@@ -1070,9 +1070,7 @@ def test_direct_post_beacon_requires_roe_before_generation(
     monkeypatch.setattr(
         cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
     )
-    monkeypatch.setattr(cli, "_assert_offensive_cli", lambda *_args, **_kwargs: None)
-
-    with pytest.raises(typer.BadParameter, match="requires --roe-id"):
+    with pytest.raises(typer.Exit) as exc_info:
         cli.post_beacon(
             engagement="1001",
             agent_type="python",
@@ -1091,6 +1089,7 @@ def test_direct_post_beacon_requires_roe_before_generation(
             enable_fallback=True,
             roe_id=None,
         )
+    assert exc_info.value.exit_code == 1
 
 
 def test_direct_post_lateral_scope_denies_before_run(
@@ -1104,12 +1103,7 @@ def test_direct_post_lateral_scope_denies_before_run(
     monkeypatch.setattr(
         cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
     )
-    monkeypatch.setattr(cli, "_assert_offensive_cli", lambda *_args, **_kwargs: None)
-
-    calls: list[str] = []
-    monkeypatch.setattr(remote_exec, "run_lateral", lambda *args, **kwargs: calls.append("called"))
-
-    with pytest.raises(typer.BadParameter, match="outside scope"):
+    with pytest.raises(typer.Exit) as exc_info:
         cli.post_lateral(
             engagement="1001",
             target_host="evil.example",
@@ -1118,7 +1112,7 @@ def test_direct_post_lateral_scope_denies_before_run(
             roe_id="ROE-ACME-2026-07",
             scope_manifest=None,
         )
-    assert calls == []
+    assert exc_info.value.exit_code == 1
 
 
 def test_phase5_boundary_check_reads_scope_json(

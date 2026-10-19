@@ -53,13 +53,19 @@ def test_subdomain_of_scoped_domain_is_accepted(tmp_path: Path) -> None:
         ],
     )
     assert result.schema_version == AUTO_SCOPE_SCHEMA_VERSION
-    assert result.unchanged is False
-    assert len(result.accepted) == 2
-    assert set(result.added_domains) == {"api.corp-target.io", "auth.sub.corp-target.io"}
+    assert result.unchanged is True
+    assert result.accepted == []
+    assert {candidate.value for candidate in result.review_required} == {
+        "api.corp-target.io",
+        "auth.sub.corp-target.io",
+    }
+    assert all(
+        candidate.reason == "scope_change_requires_human_review"
+        for candidate in result.review_required
+    )
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert "api.corp-target.io" in manifest["domains"]
-    assert "auth.sub.corp-target.io" in manifest["domains"]
+    assert manifest["domains"] == ["corp-target.io"]
 
 
 def test_url_on_scoped_host_is_accepted(tmp_path: Path) -> None:
@@ -69,10 +75,11 @@ def test_url_on_scoped_host_is_accepted(tmp_path: Path) -> None:
         manifest_path,
         [normalize_candidate("https://portal.corp-target.io/login")],
     )
-    assert len(result.accepted) == 1
+    assert result.accepted == []
+    assert result.review_required[0].reason == "scope_change_requires_human_review"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert "https://portal.corp-target.io/login" in manifest["urls"]
-    assert "portal.corp-target.io" in manifest["domains"]
+    assert manifest["urls"] == []
+    assert manifest["domains"] == ["corp-target.io"]
 
 
 def test_ip_with_related_scoped_domain_is_accepted(tmp_path: Path) -> None:
@@ -87,10 +94,10 @@ def test_ip_with_related_scoped_domain_is_accepted(tmp_path: Path) -> None:
             )
         ],
     )
-    assert len(result.accepted) == 1
-    assert result.accepted[0].reason == "ip_reverse_dns_to_scoped_domain"
+    assert result.accepted == []
+    assert result.review_required[0].reason == "scope_change_requires_human_review"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert "203.0.113.5/32" in manifest["ip_ranges"]
+    assert manifest["ip_ranges"] == []
 
 
 def test_unrelated_domain_stays_in_review(tmp_path: Path) -> None:
@@ -121,9 +128,7 @@ def test_unrelated_ip_stays_in_review(tmp_path: Path) -> None:
 
 def test_already_in_scope_is_reported_without_rewrite(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifests" / "default.json"
-    _write_manifest(
-        manifest_path, domains=["api.corp-target.io", "corp-target.io"]
-    )
+    _write_manifest(manifest_path, domains=["api.corp-target.io", "corp-target.io"])
     pre_mtime = manifest_path.stat().st_mtime_ns
     result = expand_scope_from_feeds(
         manifest_path,
@@ -156,8 +161,9 @@ def test_dry_run_does_not_write(tmp_path: Path) -> None:
         [normalize_candidate("api.corp-target.io")],
         apply=False,
     )
-    assert len(result.accepted) == 1
-    assert result.added_domains == ["api.corp-target.io"]
+    assert result.accepted == []
+    assert result.added_domains == []
+    assert result.review_required[0].reason == "scope_change_requires_human_review"
     assert manifest_path.stat().st_mtime_ns == pre_mtime
     # On-disk manifest never gained the new entry.
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -192,7 +198,8 @@ def test_scope_expansion_rejects_placeholder_domains_before_widening(
         manifest_path,
         ["company.com", "api.company.com", "api.corp-target.io"],
     )
-    assert result.added_domains == ["api.corp-target.io"]
+    assert result.added_domains == []
+    assert result.review_required[0].reason == "scope_change_requires_human_review"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert "company.com" not in manifest["domains"]
     assert "api.company.com" not in manifest["domains"]
@@ -228,18 +235,24 @@ def test_feed_raw_string_candidates_classify_and_expand(tmp_path: Path) -> None:
         manifest_path,
         ["api.corp-target.io", "other.unrelated.org"],
     )
-    assert "api.corp-target.io" in result.added_domains
+    assert result.added_domains == []
+    assert any(
+        candidate.value == "api.corp-target.io"
+        and candidate.reason == "scope_change_requires_human_review"
+        for candidate in result.review_required
+    )
     assert any(
         r.value == "other.unrelated.org" and r.reason == "unrelated_to_scope"
         for r in result.review_required
     )
 
 
-def test_wildcard_scoped_domain_still_matches_subdomains(tmp_path: Path) -> None:
+def test_wildcard_scoped_domain_does_not_authorize_subdomains(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifests" / "default.json"
     _write_manifest(manifest_path, domains=["*.corp-target.io"])
     result = expand_scope_from_feeds(
         manifest_path,
         [normalize_candidate("api.corp-target.io")],
     )
-    assert len(result.accepted) == 1
+    assert result.accepted == []
+    assert result.review_required[0].reason == "unrelated_to_scope"

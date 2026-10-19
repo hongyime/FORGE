@@ -77,7 +77,7 @@ def _make_autopilot(tmp_path: Path, *, start_limit: int = 1) -> ForgeAutopilot:
             3,
         ),
         ("feed_build", "ok", "fixture_items=2 written=False", "fixture_items", 2),
-        ("auto_scope", "ok", "accepted=1 review=1", "accepted_count", 1),
+        ("auto_scope", "ok", "accepted=0 review=2", "accepted_count", 0),
         ("import_targets", "ok", "total=2 created=2", "total", 2),
         (
             "resume_candidates",
@@ -169,6 +169,10 @@ def test_import_targets_single_phase_continues_after_failed_start(
     See ``test_targets_import.py::test_start_failure_records_and_continues_without_consuming_start_limit``.
     """
     autopilot = _make_autopilot(tmp_path, start_limit=1)
+    monkeypatch.setenv(
+        "FORGE_SCOPE_JSON",
+        json.dumps({"exact_seeds": ["first.corp-target.io", "second.corp-target.io"]}),
+    )
     attempts: list[str] = []
 
     def fake_start(**kwargs: object) -> None:
@@ -221,9 +225,7 @@ def test_single_phase_keeps_existing_feed_file_input(
 
     def fake_import_targets(**kwargs: Any) -> list[SimpleNamespace]:
         received_feed_files.append(Path(kwargs["feed_file"]))
-        received = json.loads(
-            received_feed_files[-1].read_text(encoding="utf-8")
-        )["items"]
+        received = json.loads(received_feed_files[-1].read_text(encoding="utf-8"))["items"]
         assert received == [item]
         return [SimpleNamespace(created=True, started=False, start_failed=False)]
 
@@ -414,9 +416,7 @@ def test_feed_build_phase_end_details_handles_missing_data() -> None:
 
 def test_phase_end_details_keep_other_phase_fields_unchanged() -> None:
     imported = ForgeAutopilot._phase_end_details(
-        AutopilotPhaseResult(
-            name="import_targets", status="ok", data={"feed_sha256": "x"}
-        )
+        AutopilotPhaseResult(name="import_targets", status="ok", data={"feed_sha256": "x"})
     )
     fetched = ForgeAutopilot._phase_end_details(
         AutopilotPhaseResult(name="feed_fetch", status="ok", data={})
@@ -512,14 +512,9 @@ def test_feed_build_phase_forwards_source_scan_limits(
         "source_errors": [],
         "source_scan_limits": {"db": {"scanned_count": 2}},
     }
-    monkeypatch.setattr(
-        "forge.automation_target_feed.build_target_feed", lambda **_: payload
-    )
+    monkeypatch.setattr("forge.automation_target_feed.build_target_feed", lambda **_: payload)
     result = autopilot._phase_feed_build(dry_run=True)
 
     assert result.data["source_scan_limits"] == payload["source_scan_limits"]
     metrics = ForgeAutopilot._phase_end_details(result)["discovery_metrics"]
-    assert (
-        sum(metrics["candidates_by_source"].values())
-        == metrics["generated_candidate_total"]
-    )
+    assert sum(metrics["candidates_by_source"].values()) == metrics["generated_candidate_total"]

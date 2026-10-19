@@ -1,18 +1,8 @@
-"""Phase 5 operator approval gate.
-
-All destructive Phase 5 actions must pass through request_approval().
-FORGE_SAFE_MODE=1 blocks all destructive actions without prompting.
-
-Automation bypass:
-  FORGE_ATTACK_MODE_AUTO=1 auto-approves DESTRUCTIVE actions (with audit entry)
-  when kill-chain sets it from ``--attack-mode`` + valid ROE/scope-manifest.
-  Scope gates in each caller (``_assert_targets_in_scope`` etc.) still run.
-"""
+"""Phase 5 policy gate for routine and prohibited actions."""
 
 from __future__ import annotations
 
 import logging
-import os
 import sqlite3
 from enum import Enum
 from typing import Optional
@@ -26,18 +16,6 @@ class ActionClassification(str, Enum):
     DESTRUCTIVE = "destructive"  # requires operator approval or SAFE_MODE blocks
 
 
-def _attack_mode_auto_enabled() -> bool:
-    """FORGE_ATTACK_MODE_AUTO=1 elevates DESTRUCTIVE to auto-approved.
-
-    Blocked when FORGE_SAFE_MODE=1 — safe-mode always wins.
-    Kill-chain sets this env var only when ``--attack-mode`` is active AND
-    ``--roe-id``/``--scope-manifest`` (or their env equivalents) are supplied.
-    """
-    if os.environ.get("FORGE_SAFE_MODE", "0") == "1":
-        return False
-    return os.environ.get("FORGE_ATTACK_MODE_AUTO", "0").strip() == "1"
-
-
 def request_approval(
     action_name: str,
     description: str,
@@ -45,66 +23,16 @@ def request_approval(
     db: sqlite3.Connection,
     classification: ActionClassification = ActionClassification.DESTRUCTIVE,
 ) -> bool:
-    """Gate destructive actions behind operator approval.
-
-    Returns True if the action may proceed, False if blocked or pending.
-    PASSIVE and ACTIVE actions are auto-approved.
-    DESTRUCTIVE actions require explicit operator sign-off unless SAFE_MODE=1.
-    When FORGE_ATTACK_MODE_AUTO=1 (kill-chain attack-mode with ROE/scope),
-    DESTRUCTIVE actions are auto-approved with an audit trail entry.
-    """
+    """Allow routine/passive actions; never approve destructive post-exploitation."""
     if classification == ActionClassification.PASSIVE:
+        _audit(db, engagement_id, action_name, description, "auto_approved")
         return True
-
     if classification == ActionClassification.ACTIVE:
         _audit(db, engagement_id, action_name, description, "auto_approved")
         return True
-
-    # DESTRUCTIVE — check SAFE_MODE first
-    safe_mode = os.environ.get("FORGE_SAFE_MODE", "0") == "1"
-    if safe_mode:
-        _LOG.warning("[SAFE MODE] Blocked destructive action: %s", action_name)
-        print(f"[SAFE MODE] BLOCKED: {action_name} — set FORGE_SAFE_MODE=0 to enable.")
-        return False
-
-    # Attack-mode auto-approve — kill-chain wires this when attack_mode=True
-    # AND ROE/scope-manifest is present. Scope gates in each caller still run
-    # before the action executes, so this only skips the operator TTY prompt.
-    if _attack_mode_auto_enabled():
-        _LOG.info(
-            "[ATTACK MODE AUTO] Auto-approving destructive action: %s (%s)",
-            action_name,
-            description[:80],
-        )
-        _audit(
-            db,
-            engagement_id,
-            action_name,
-            description,
-            "attack_mode_auto_approved",
-        )
-        return True
-
-    # Insert into approval_queue
-    try:
-        cur = db.execute(
-            """INSERT INTO approval_queue (engagement_id, action_name, description)
-               VALUES (?, ?, ?)""",
-            (engagement_id, action_name, description),
-        )
-        db.commit()
-        queue_id = cur.lastrowid
-    except sqlite3.OperationalError:
-        _LOG.warning("approval_queue table missing — defaulting to blocked")
-        return False
-
-    print(
-        f"\n[APPROVAL REQUIRED] Action: {action_name}\n"
-        f"  Description: {description}\n"
-        f"  Queue ID: {queue_id}\n"
-        f"  Approve via: forge phase5 approve --id {queue_id}\n"
-    )
-    return False  # caller must wait for operator to approve via CLI
+    _audit(db, engagement_id, action_name, description, "blocked_by_canonical_policy")
+    _LOG.warning("FORGE policy blocked prohibited destructive action: %s", action_name)
+    return False
 
 
 def check_approval(action_id: int, db: sqlite3.Connection) -> bool:

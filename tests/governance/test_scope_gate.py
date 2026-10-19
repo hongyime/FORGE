@@ -1,7 +1,7 @@
 """
 tests/governance/test_scope_gate.py — Unit tests for the engagement scope gate.
 
-Covers domain (exact + wildcard), IP (CIDR membership), and URL (prefix +
+    Covers domain (exact), IP (CIDR membership), and URL (prefix +
 host) classification, plus environment-variable construction and the
 SCOPE_DECISION audit emission contract.
 
@@ -65,7 +65,7 @@ class TestFromEnv:
 
 
 class TestDomainMatching:
-    """Exact + wildcard domain checks (case-insensitive)."""
+    """Specific domain checks (case-insensitive)."""
 
     def test_exact_match(self) -> None:
         gate = ScopeGate(EngagementScope(domains=["example.com"]))
@@ -81,9 +81,9 @@ class TestDomainMatching:
 
     def test_wildcard_matches_subdomains(self) -> None:
         gate = ScopeGate(EngagementScope(domains=["*.example.com"]))
-        assert gate.is_in_scope("a.example.com") is True
-        assert gate.is_in_scope("deep.a.example.com") is True
-        assert gate.is_in_scope("DEEP.A.example.COM") is True
+        assert gate.is_in_scope("a.example.com") is False
+        assert gate.is_in_scope("deep.a.example.com") is False
+        assert gate.is_in_scope("DEEP.A.example.COM") is False
 
     def test_wildcard_excludes_apex(self) -> None:
         """'*.example.com' matches subdomains only, not example.com itself."""
@@ -97,10 +97,10 @@ class TestDomainMatching:
         assert gate.is_in_scope("aexample.com") is False
 
     def test_wildcard_plus_apex(self) -> None:
-        """Listing both '*.example.com' and 'example.com' covers both."""
+        """An exact apex is authorized; wildcard entries authorize nothing."""
         gate = ScopeGate(EngagementScope(domains=["example.com", "*.example.com"]))
         assert gate.is_in_scope("example.com") is True
-        assert gate.is_in_scope("a.example.com") is True
+        assert gate.is_in_scope("a.example.com") is False
 
     def test_unrelated_domain_rejected(self) -> None:
         gate = ScopeGate(EngagementScope(domains=["example.com"]))
@@ -154,7 +154,7 @@ class TestUrlMatching:
 
     def test_url_with_wildcard_domain(self) -> None:
         gate = ScopeGate(EngagementScope(domains=["*.example.com"]))
-        assert gate.is_in_scope("https://api.example.com/v1") is True
+        assert gate.is_in_scope("https://api.example.com/v1") is False
         assert gate.is_in_scope("https://example.com/") is False
 
     def test_url_with_ip_host(self) -> None:

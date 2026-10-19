@@ -16,6 +16,7 @@ import sqlite3
 import sys
 from typing import Any, Optional
 
+from forge.governance.rules import deny_prohibited_activity
 from forge.opsec.resilience import _SHUTDOWN, _interruptible_sleep, wait_for_internet
 from forge.opsec.rate_limiter import AdaptiveRateLimiter
 
@@ -53,6 +54,7 @@ def run_waf_evasion_playbook(
     failed_responses: list of {url, status_code, headers} from failed requests.
     Returns: {'waf_detected': str, 'evasion_succeeded': bool, 'passive_results': list}
     """
+    deny_prohibited_activity("defense evasion playbook")
     if _SHUTDOWN.is_set():
         return _empty_result()
 

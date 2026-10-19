@@ -19,15 +19,8 @@ from forge.db.direct_connect import direct_connect
 
 
 def _assert_offensive_cli(phase_label: str) -> None:
-    from forge.config import is_offensive_enabled, prompt_offensive_upgrade  # noqa: PLC0415
-
-    if not is_offensive_enabled():
-        if not prompt_offensive_upgrade(phase_label):
-            console.print(
-                f"[bold red]ERROR:[/bold red] {phase_label} is disabled "
-                "(FORGE_SAFE_MODE=1). Set FORGE_SAFE_MODE=0 to enable offensive modules."
-            )
-            raise typer.Exit(code=1)
+    console.print(f"[bold red]BLOCKED:[/bold red] {phase_label} is prohibited by FORGE v2 policy.")
+    raise typer.Exit(code=1)
 
 
 @post_app.command("shell")

@@ -45,7 +45,8 @@ from forge.db.control import index_engagement_db_file
 from forge.db.session import get_engagement_db
 from forge.domain_validation import canonicalize_domain
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
-from forge.governance.scope_gate import is_roe_wildcard
+from forge.governance.rules import ALLOWED_TARGET_TYPES
+from forge.governance.scope_gate import EngagementScope, ScopeGate, has_scope_wildcard
 from forge.iana_tlds import DELEGATED_TLDS
 from forge.monitoring.continuous import (
     create_monitoring_snapshot,
@@ -149,7 +150,7 @@ CANONICAL_TARGET_TYPES = {
     "url",
     "username",
 }
-ALLOWED_TARGET_FEED_TYPES = frozenset({"cloud_ref", "domain", "ipv4", "url"})
+ALLOWED_TARGET_FEED_TYPES = ALLOWED_TARGET_TYPES
 TARGET_TYPE_ALIASES = {
     "artifact_url": "artifact_url",
     "email_address": "email",
@@ -166,6 +167,8 @@ TARGET_TYPE_ALIASES = {
     "web_url": "url",
     "website": "url",
 }
+
+
 @dataclass(frozen=True)
 class TargetFeedItem:
     target_type: str
@@ -246,7 +249,9 @@ def load_target_feed(
     for index, raw_item in enumerate(raw_items):
         if not isinstance(raw_item, dict):
             continue
-        source_group = _bounded_text(raw_item.get("source_group") or raw_item.get("source_kind"), 120)
+        source_group = _bounded_text(
+            raw_item.get("source_group") or raw_item.get("source_kind"), 120
+        )
         source_groups = _coerce_source_groups(raw_item.get("source_groups"), fallback=source_group)
         source_count = _coerce_source_count(raw_item.get("source_count"), source_groups)
         eligible = raw_item.get("scan_eligible") is not False
@@ -332,7 +337,7 @@ def import_targets(
         os.environ.get("FORGE_ROE_SCOPE", "") if roe_scope is None else roe_scope
     ).strip()
     resolved_roe_strictness = resolve_roe_strictness(roe_strictness, config=cfg)
-    roe_wildcard = is_roe_wildcard({"roe_scope": resolved_roe_scope})
+    authorization_scope = _load_human_authorized_scope() if not dry_run else None
     sleep = sleep_fn if sleep_fn is not None else _DEFAULT_SLEEP
     items = load_target_feed(
         feed_url=feed_url,
@@ -341,9 +346,7 @@ def import_targets(
         limit=limit,
     )
     indexed_results: list[tuple[int, TargetImportResult]] = []
-    counters = _TargetImportCounters(
-        starts_remaining=_normalize_start_limit(start_limit)
-    )
+    counters = _TargetImportCounters(starts_remaining=_normalize_start_limit(start_limit))
     min_start_sources = _normalize_min_start_source_count(min_start_source_count)
     existing_targets = _external_target_engagement_index(cfg)
     existing_targets_lock = threading.RLock()
@@ -365,19 +368,22 @@ def import_targets(
         reason = str(result.scan_eligibility_reason or "eligible")
         progress_reason_counts[reason] = progress_reason_counts.get(reason, 0) + 1
         now = _monotonic()
-        if (
-            progress_callback is not None
-            and (evaluated % TARGET_IMPORT_PROGRESS_EVENT_CANDIDATES == 0
-                 or now - last_progress_event_at >= TARGET_IMPORT_PROGRESS_EVENT_SECONDS)
+        if progress_callback is not None and (
+            evaluated % TARGET_IMPORT_PROGRESS_EVENT_CANDIDATES == 0
+            or now - last_progress_event_at >= TARGET_IMPORT_PROGRESS_EVENT_SECONDS
         ):
-            progress_callback("candidate_evaluation_progress", {
-                "evaluated": evaluated,
-                "skip_reason_counts": dict(progress_reason_counts),
-                "top_skip_reasons": sorted(
-                    progress_reason_counts.items(), key=lambda pair: (-pair[1], pair[0])
-                )[:5],
-            })
+            progress_callback(
+                "candidate_evaluation_progress",
+                {
+                    "evaluated": evaluated,
+                    "skip_reason_counts": dict(progress_reason_counts),
+                    "top_skip_reasons": sorted(
+                        progress_reason_counts.items(), key=lambda pair: (-pair[1], pair[0])
+                    )[:5],
+                },
+            )
             last_progress_event_at = now
+
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_active_targets)
     pending: dict[concurrent.futures.Future[TargetImportResult], tuple[int, TargetFeedItem]] = {}
     burst_starts_by_strictness: dict[str, int] = {}
@@ -393,15 +399,19 @@ def import_targets(
         if start and not dry_run:
             with counters.lock:
                 remaining = counters.starts_remaining
-            if remaining is not None and remaining > 0 and sum(
-                1 for _, candidate in pending.values() if candidate.scan_eligible
-            ) >= remaining:
+            if (
+                remaining is not None
+                and remaining > 0
+                and sum(1 for _, candidate in pending.values() if candidate.scan_eligible)
+                >= remaining
+            ):
                 return False
             with counters.lock:
                 failed = counters.consecutive_start_failures
-            if failed + sum(
-                1 for _, candidate in pending.values() if candidate.scan_eligible
-            ) >= MAX_CONSECUTIVE_START_FAILURES:
+            if (
+                failed + sum(1 for _, candidate in pending.values() if candidate.scan_eligible)
+                >= MAX_CONSECUTIVE_START_FAILURES
+            ):
                 return False
         try:
             item_index, item = next(candidates)
@@ -420,7 +430,7 @@ def import_targets(
             start=start,
             dry_run=dry_run,
             roe_id=roe_id,
-            roe_wildcard=roe_wildcard,
+            authorization_scope=authorization_scope,
             roe_scope=resolved_roe_scope,
             roe_strictness=resolved_roe_strictness,
             max_iter=max_iter,
@@ -437,9 +447,7 @@ def import_targets(
     try:
         initial_admission_limit = max_active_targets
         if start and not dry_run:
-            initial_admission_limit = min(
-                max_active_targets, burst_size(resolved_roe_strictness)
-            )
+            initial_admission_limit = min(max_active_targets, burst_size(resolved_roe_strictness))
         for _ in range(initial_admission_limit):
             if not submit_next():
                 break
@@ -475,10 +483,7 @@ def import_targets(
                     )
                     burst_count = burst_starts_by_strictness[resolved_roe_strictness]
                 burst_limit = burst_size(resolved_roe_strictness)
-                if (
-                    burst_count % burst_limit == 0
-                    and item_index < len(items) - 1
-                ):
+                if burst_count % burst_limit == 0 and item_index < len(items) - 1:
                     sleep(burst_pause_seconds(resolved_roe_strictness))
                 elif pending:
                     # Let the already-admitted candidates finish this burst
@@ -515,7 +520,7 @@ def _run_one_import_target(
     start: bool,
     dry_run: bool,
     roe_id: str | None,
-    roe_wildcard: bool,
+    authorization_scope: tuple[ScopeGate, frozenset[str]] | None,
     roe_scope: str,
     roe_strictness: str,
     max_iter: int,
@@ -548,13 +553,30 @@ def _run_one_import_target(
             start_skipped_reason="dry_run",
         )
 
+    if authorization_scope is None or not _item_is_human_authorized(item, authorization_scope):
+        return TargetImportResult(
+            engagement_id=None,
+            target_type=item.target_type,
+            target_value=item.canonical_value,
+            target_key=item.target_key,
+            scope_manifest=None,
+            created=False,
+            started=False,
+            dry_run=False,
+            source_count=item.source_count,
+            priority=item.priority,
+            scan_eligible=False,
+            scan_eligibility_reason="outside_human_authorized_scope",
+            start_skipped_reason="outside_human_authorized_scope",
+        )
+
     with existing_targets_lock:
         engagement_id, created = _create_or_reuse_engagement(cfg, item, existing_targets)
-    if roe_wildcard:
-        _write_engagement_scope_json(
-            cfg, engagement_id=engagement_id,
-            scope=_scope_json_for_item(item, roe_scope=roe_scope),
-        )
+    _write_engagement_scope_json(
+        cfg,
+        engagement_id=engagement_id,
+        scope=_scope_json_for_item(item),
+    )
     try:
         _ensure_target_import_monitoring(cfg, engagement_id=engagement_id, item=item)
     except Exception as exc:  # noqa: BLE001
@@ -563,7 +585,7 @@ def _run_one_import_target(
             f"engagement={engagement_id} error={_bounded_text(exc, 180)}",
             file=sys.stderr,
         )
-    manifest_path = _write_scope_manifest(cfg, engagement_id, item, roe_id, roe_scope)
+    manifest_path = _write_scope_manifest(cfg, engagement_id, item, roe_id)
     started = False
     start_failed = False
     start_error_type = ""
@@ -584,15 +606,21 @@ def _run_one_import_target(
             unprocessed_count = len(items) - item_index - 1
         else:
             fanout_decision = cap_fanout(
-                parallel_fanout, seed=item.canonical_value,
-                target_type=item.target_type, roe_strictness=roe_strictness,
+                parallel_fanout,
+                seed=item.canonical_value,
+                target_type=item.target_type,
+                roe_strictness=roe_strictness,
                 requested_by="targets-import",
             )
             requested_slots = fanout_decision.effective
             lease_result = acquire_lease(
-                target_key=item.target_key, target_value=item.canonical_value,
-                target_type=item.target_type, engagement_id=engagement_id,
-                requested_slots=requested_slots, kind="start", data_dir=cfg.data_dir,
+                target_key=item.target_key,
+                target_value=item.canonical_value,
+                target_type=item.target_type,
+                engagement_id=engagement_id,
+                requested_slots=requested_slots,
+                kind="start",
+                data_dir=cfg.data_dir,
                 config=cfg,
             )
             provider_admission_blocked = False
@@ -603,7 +631,8 @@ def _run_one_import_target(
                     provider_admission_blocked = (
                         provider_admission_status(
                             item.canonical_value, data_dir=cfg.data_dir, phase="engagement"
-                        ) == "BLOCKED"
+                        )
+                        == "BLOCKED"
                     )
                 except Exception:
                     release_lease(
@@ -622,11 +651,14 @@ def _run_one_import_target(
             if provider_admission_blocked or not lease_result.acquired:
                 start_skipped_reason = (
                     "provider_circuit_breaker_active"
-                    if provider_admission_blocked else lease_result.reason
+                    if provider_admission_blocked
+                    else lease_result.reason
                 )
                 if not provider_admission_blocked and lease_result.reason in (
-                    "slots_exhausted", "max_active_targets_reached",
-                    "kill_switch_active", "global_circuit_breaker_active",
+                    "slots_exhausted",
+                    "max_active_targets_reached",
+                    "kill_switch_active",
+                    "global_circuit_breaker_active",
                 ):
                     start_stop_reason = lease_result.reason
                     unprocessed_count = len(items) - item_index - 1
@@ -646,11 +678,13 @@ def _run_one_import_target(
                     "effective_slots": effective_fanout,
                 }
                 if snapshot is not None:
-                    progress_details.update({
-                        "active_targets": snapshot.active_targets_count,
-                        "leased_slots": snapshot.leased_slots,
-                        "total_slots": snapshot.total_slots,
-                    })
+                    progress_details.update(
+                        {
+                            "active_targets": snapshot.active_targets_count,
+                            "leased_slots": snapshot.leased_slots,
+                            "total_slots": snapshot.total_slots,
+                        }
+                    )
                 progress_details.update(sample_process_resources())
                 try:
                     parsed = datetime.fromisoformat(str(item.first_seen_at).replace("Z", "+00:00"))
@@ -662,29 +696,46 @@ def _run_one_import_target(
                     pass
                 try:
                     from forge.autopilot.breaker import (
-                        canonical_provider, is_global_paused, is_provider_paused,
+                        canonical_provider,
+                        is_global_paused,
+                        is_provider_paused,
                     )
+
                     provider = canonical_provider(item.canonical_value)
                     progress_details["provider"] = provider
-                    progress_details["provider_paused"] = bool(is_provider_paused(provider, data_dir=cfg.data_dir))
-                    progress_details["global_paused"] = bool(is_global_paused(data_dir=cfg.data_dir))
-                    progress_details["provider_inflight"] = provider_inflight_count(provider, data_dir=cfg.data_dir)
+                    progress_details["provider_paused"] = bool(
+                        is_provider_paused(provider, data_dir=cfg.data_dir)
+                    )
+                    progress_details["global_paused"] = bool(
+                        is_global_paused(data_dir=cfg.data_dir)
+                    )
+                    progress_details["provider_inflight"] = provider_inflight_count(
+                        provider, data_dir=cfg.data_dir
+                    )
                 except Exception:
-                    for key in ("provider", "provider_paused", "global_paused", "provider_inflight"):
+                    for key in (
+                        "provider",
+                        "provider_paused",
+                        "global_paused",
+                        "provider_inflight",
+                    ):
                         progress_details.pop(key, None)
                 _notify_progress(progress_callback, "target_engaged", progress_details)
                 try:
-                    with maintain_lease_heartbeat(
-                        lease.lease_id, data_dir=cfg.data_dir
-                    ):
+                    with maintain_lease_heartbeat(lease.lease_id, data_dir=cfg.data_dir):
                         _start_kill_chain(
-                            engagement_id=engagement_id, seed=item.canonical_value,
-                            target_type=item.target_type, roe_id=str(roe_id or "").strip(),
-                            scope_manifest=manifest_path, max_iter=max_iter,
+                            engagement_id=engagement_id,
+                            seed=item.canonical_value,
+                            target_type=item.target_type,
+                            roe_id=str(roe_id or "").strip(),
+                            scope_manifest=manifest_path,
+                            max_iter=max_iter,
                             max_runtime_minutes=max_runtime_minutes,
                             parallel_fanout=effective_fanout,
                             engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
-                            roe_strictness=roe_strictness, config=cfg, sleep_fn=sleep,
+                            roe_strictness=roe_strictness,
+                            config=cfg,
+                            sleep_fn=sleep,
                             retry_after_seconds=retry_after_seconds,
                             roe_minimum_delay_seconds=roe_minimum_delay_seconds,
                         )
@@ -694,33 +745,47 @@ def _run_one_import_target(
 
                         record_child_failure(
                             provider=item.canonical_value,
-                            reason=("timeout" if isinstance(exc, subprocess.CalledProcessError) and exc.returncode == 124 else type(exc).__name__),
+                            reason=(
+                                "timeout"
+                                if isinstance(exc, subprocess.CalledProcessError)
+                                and exc.returncode == 124
+                                else type(exc).__name__
+                            ),
                             data_dir=cfg.data_dir,
                         )
                     except Exception:
                         pass
                     failure_details: dict[str, Any] = {
-                        **progress_details, "error_type": type(exc).__name__,
+                        **progress_details,
+                        "error_type": type(exc).__name__,
                         "exit_status": "failed",
                     }
                     if isinstance(exc, subprocess.CalledProcessError):
-                        failure_details.update({
-                            "return_code": exc.returncode,
-                            "argv": _sanitize_failure_argv(exc.cmd),
-                            "stderr_tail": _bounded_failure_stderr(exc.stderr),
-                        })
+                        failure_details.update(
+                            {
+                                "return_code": exc.returncode,
+                                "argv": _sanitize_failure_argv(exc.cmd),
+                                "stderr_tail": _bounded_failure_stderr(exc.stderr),
+                            }
+                        )
                         if exc.returncode == 124:
-                            from forge.orchestration.run_tracking import mark_timed_out_kill_chain_run_failed
+                            from forge.orchestration.run_tracking import (
+                                mark_timed_out_kill_chain_run_failed,
+                            )
+
                             mark_timed_out_kill_chain_run_failed(
                                 cfg.engagement_db_path(str(engagement_id)),
-                                engagement_id=engagement_id, seed_value=item.canonical_value,
+                                engagement_id=engagement_id,
+                                seed_value=item.canonical_value,
                             )
                     _notify_progress(progress_callback, "target_failed", failure_details)
                     start_failed = True
                     start_error_type = type(exc).__name__
                     with counters.lock:
                         counters.consecutive_start_failures += 1
-                        exhausted = counters.consecutive_start_failures >= MAX_CONSECUTIVE_START_FAILURES
+                        exhausted = (
+                            counters.consecutive_start_failures >= MAX_CONSECUTIVE_START_FAILURES
+                        )
                         if exhausted:
                             counters.stop_admission = True
                     if exhausted:
@@ -735,7 +800,11 @@ def _run_one_import_target(
                         )
                     except Exception:
                         pass
-                    _notify_progress(progress_callback, "target_completed", {**progress_details, "exit_status": "completed"})
+                    _notify_progress(
+                        progress_callback,
+                        "target_completed",
+                        {**progress_details, "exit_status": "completed"},
+                    )
                     started = True
                     with counters.lock:
                         counters.consecutive_start_failures = 0
@@ -756,22 +825,79 @@ def _run_one_import_target(
     elif start and not item.scan_eligible:
         start_skipped_reason = item.scan_eligibility_reason
     elif start and item.source_count < min_start_sources:
-        start_skipped_reason = f"source_count_below_min_start_threshold:{item.source_count}<{min_start_sources}"
+        start_skipped_reason = (
+            f"source_count_below_min_start_threshold:{item.source_count}<{min_start_sources}"
+        )
     elif start and starts_remaining == 0:
         start_skipped_reason = "start_limit_reached"
-    if start and not dry_run and not start_stop_reason and counters.starts_remaining != 0 and item_index == len(items) - 1:
+    if (
+        start
+        and not dry_run
+        and not start_stop_reason
+        and counters.starts_remaining != 0
+        and item_index == len(items) - 1
+    ):
         start_stop_reason = "no_more_candidates"
     return TargetImportResult(
-        engagement_id=engagement_id, target_type=item.target_type,
-        target_value=item.canonical_value, target_key=item.target_key,
-        scope_manifest=manifest_path, created=created, started=started, dry_run=False,
-        source_count=item.source_count, priority=item.priority,
+        engagement_id=engagement_id,
+        target_type=item.target_type,
+        target_value=item.canonical_value,
+        target_key=item.target_key,
+        scope_manifest=manifest_path,
+        created=created,
+        started=started,
+        dry_run=False,
+        source_count=item.source_count,
+        priority=item.priority,
         scan_eligible=item.scan_eligible,
         scan_eligibility_reason=item.scan_eligibility_reason,
-        start_skipped_reason=start_skipped_reason, start_failed=start_failed,
-        start_error_type=start_error_type, start_stop_reason=start_stop_reason,
+        start_skipped_reason=start_skipped_reason,
+        start_failed=start_failed,
+        start_error_type=start_error_type,
+        start_stop_reason=start_stop_reason,
         unprocessed_count=unprocessed_count,
     )
+
+
+def _load_human_authorized_scope() -> tuple[ScopeGate, frozenset[str]]:
+    """Load the human-set, specific scope required for persistent imports."""
+    raw = os.environ.get("FORGE_SCOPE_JSON", "").strip()
+    if not raw:
+        raise ValueError("persistent target imports require a human-set specific FORGE_SCOPE_JSON")
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("FORGE_SCOPE_JSON must be valid JSON") from exc
+    if not isinstance(payload, dict) or has_scope_wildcard(payload):
+        raise ValueError(
+            "FORGE_SCOPE_JSON must contain specific human-authorized targets; "
+            "wildcards do not authorize targets"
+        )
+    scope = EngagementScope.model_validate(payload)
+    exact_seeds = frozenset(
+        str(value).strip().casefold()
+        for key in ("authorized_seeds", "exact_seeds")
+        for value in payload.get(key, [])
+        if str(value).strip() and str(value).strip() != "*"
+    )
+    if not (scope.domains or scope.ip_ranges or scope.urls or exact_seeds):
+        raise ValueError("FORGE_SCOPE_JSON must include at least one specific target")
+    return ScopeGate(scope), exact_seeds
+
+
+def _item_is_human_authorized(
+    item: TargetFeedItem,
+    authorization_scope: tuple[ScopeGate, frozenset[str]],
+) -> bool:
+    gate, exact_seeds = authorization_scope
+    canonical = item.canonical_value.strip()
+    if canonical.casefold() in exact_seeds:
+        return True
+    if item.target_type == "cloud_ref":
+        # Cloud references are authorization identifiers and must match an
+        # exact human-approved seed; a provider or host scope is insufficient.
+        return False
+    return gate.is_in_scope(canonical)
 
 
 def _notify_progress(
@@ -791,9 +917,7 @@ _SENSITIVE_ARGUMENT_RE = re.compile(
     r"(?i)(?:token|secret|password|passwd|credential|api[-_]?key|"
     r"(?:^|[-_])key(?:$|[-_])|authorization|bearer)"
 )
-_ENV_ASSIGNMENT_RE = re.compile(
-    r"(\b[A-Z_][A-Z0-9_]*\s*=\s*)([^\s&,;]+)"
-)
+_ENV_ASSIGNMENT_RE = re.compile(r"(\b[A-Z_][A-Z0-9_]*\s*=\s*)([^\s&,;]+)")
 _SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"(?i)(\b(?:[A-Z_][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API_KEY)|"
     r"token|secret|password|passwd|credential|api[-_]?key|authorization|bearer)"
@@ -851,7 +975,7 @@ def _bounded_failure_stderr(value: object) -> str:
     encoded = text.encode("utf-8", errors="replace")
     if len(encoded) <= TARGET_FAILURE_STDERR_MAX_BYTES:
         return text
-    tail = encoded[-TARGET_FAILURE_STDERR_MAX_BYTES :].decode("utf-8", errors="replace")
+    tail = encoded[-TARGET_FAILURE_STDERR_MAX_BYTES:].decode("utf-8", errors="replace")
     return f"[stderr truncated; showing last {TARGET_FAILURE_STDERR_MAX_BYTES} bytes]\n{tail}"
 
 
@@ -940,9 +1064,7 @@ def _coerce_feed_item(
     if is_denied_target(canonical_value):
         return None
     target_key = external_target_key(target_type, canonical_value)
-    source_group = _bounded_text(
-        raw_item.get("source_group") or raw_item.get("source_kind"), 120
-    )
+    source_group = _bounded_text(raw_item.get("source_group") or raw_item.get("source_kind"), 120)
     source_groups = _coerce_source_groups(raw_item.get("source_groups"), fallback=source_group)
     source_count = _coerce_source_count(raw_item.get("source_count"), source_groups)
     raw_age = raw_item.get("age_years")
@@ -967,7 +1089,9 @@ def _coerce_feed_item(
     )
     if raw_item.get("scan_eligible") is False:
         scan_eligible = False
-        scan_reason = _bounded_text(raw_item.get("scan_eligibility_reason"), 80) or "feed_marked_ineligible"
+        scan_reason = (
+            _bounded_text(raw_item.get("scan_eligibility_reason"), 80) or "feed_marked_ineligible"
+        )
     return TargetFeedItem(
         target_type=target_type,
         target_value=target_value,
@@ -1107,7 +1231,13 @@ def _canonical_cloud_target_value(value: str) -> str:
         return canonical_url
 
     host = " ".join(str(value or "").strip().split()).lower().strip(".")
-    if host and "://" not in host and "/" not in host and "@" not in host and _hostname_is_cloud_target(host):
+    if (
+        host
+        and "://" not in host
+        and "/" not in host
+        and "@" not in host
+        and _hostname_is_cloud_target(host)
+    ):
         return host
     return ""
 
@@ -1362,8 +1492,7 @@ def _engagement_db_has_existing_engagement(db_path: Path) -> bool:
     conn = sqlite3.connect(db_path)
     try:
         tables = {
-            str(row[0])
-            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            str(row[0]) for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
         if "engagements" not in tables:
             return False
@@ -1475,18 +1604,7 @@ def _external_target_engagement_index(cfg: ForgeConfig) -> dict[str, int]:
 
 def _scope_json_for_item(
     item: TargetFeedItem,
-    *,
-    roe_scope: str | None = None,
 ) -> dict[str, Any]:
-    if is_roe_wildcard({"roe_scope": str(roe_scope or "").strip()}):
-        return {
-            "roe_scope": "*",
-            "domains": ["*"],
-            "authorized_seeds": ["*"],
-            "ip_ranges": ["0.0.0.0/0", "::/0"],
-            "urls": ["*"],
-        }
-
     scope: dict[str, list[str]] = {"domains": [], "urls": []}
     if item.target_type in {"domain", "subdomain"}:
         scope["domains"] = [item.canonical_value]
@@ -1538,24 +1656,20 @@ def _write_scope_manifest(
     engagement_id: int,
     item: TargetFeedItem,
     roe_id: str | None,
-    roe_scope: str | None = None,
 ) -> Path:
     manifest_dir = cfg.data_dir / "target_imports"
     manifest_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = manifest_dir / f"scope_{engagement_id}_{item.target_key[:12]}.json"
-    scope = _scope_json_for_item(item, roe_scope=roe_scope)
+    scope = _scope_json_for_item(item)
     payload = {
         "roe_id": str(roe_id or "").strip(),
-        **({"roe_scope": "*"} if is_roe_wildcard(scope) else {}),
         "domains": scope.get("domains", []),
         "ip_ranges": scope.get("ip_ranges", []),
         "urls": scope.get("urls", []),
-        "authorized_seeds": (
-            ["*"] if is_roe_wildcard(scope) else [item.canonical_value]
-        ),
+        "authorized_seeds": [item.canonical_value],
         "policy": {
-            "destructive_actions_allowed": True,
-            "post_exploitation_allowed": True,
+            "destructive_actions_allowed": False,
+            "post_exploitation_allowed": False,
         },
         "metadata": {
             "external_feed": TARGET_FEED_SCHEMA_VERSION,
@@ -1617,11 +1731,13 @@ def _start_kill_chain(
     resolved_strictness = resolve_roe_strictness(roe_strictness, config=config)
     sleep = sleep_fn if sleep_fn is not None else _DEFAULT_SLEEP
     # Start delay before the kill chain starts.
-    sleep(effective_start_delay(
-        resolved_strictness,
-        retry_after_seconds=retry_after_seconds,
-        roe_minimum_delay_seconds=roe_minimum_delay_seconds,
-    ))
+    sleep(
+        effective_start_delay(
+            resolved_strictness,
+            retry_after_seconds=retry_after_seconds,
+            roe_minimum_delay_seconds=roe_minimum_delay_seconds,
+        )
+    )
     fanout_decision = cap_fanout(
         parallel_fanout,
         seed=seed,

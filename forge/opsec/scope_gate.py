@@ -97,8 +97,8 @@ def _matches_scope_entry(normalised_target: str, entry: str) -> bool:
     entry_lower = entry.strip().lower().rstrip(".")
     if not entry_lower:
         return False
-    if is_roe_wildcard([entry]):
-        return True
+    if "*" in entry or is_roe_wildcard([entry]):
+        return False
     if "://" in entry_lower:
         parsed = urlparse(entry_lower)
         entry_host = str(parsed.hostname or parsed.netloc or "").strip().lower().rstrip(".")
@@ -120,9 +120,8 @@ def _matches_scope_entry(normalised_target: str, entry: str) -> bool:
     # 3. CIDR.
     if "/" in entry_lower:
         try:
-            return ipaddress.ip_address(normalised_target) in ipaddress.ip_network(
-                entry_lower, strict=False
-            )
+            network = ipaddress.ip_network(entry_lower, strict=False)
+            return network.prefixlen > 0 and ipaddress.ip_address(normalised_target) in network
         except ValueError:
             pass
 
@@ -179,8 +178,6 @@ def email_address_in_scope(email: str, scope: Optional[list[str]] = None) -> boo
     """Return True when an email is covered by exact-email or domain scope."""
     if not scope:
         return False
-    if is_roe_wildcard(scope):
-        return True
     normalised_email = str(email or "").lower().strip()
     if "@" not in normalised_email:
         return False
@@ -262,9 +259,6 @@ def assert_in_scope(target: str, scope: Optional[list[str]] = None) -> None:
     """
     if not scope:
         raise ScopeViolationError(target, [])
-
-    if is_roe_wildcard(scope):
-        return
 
     normalised = _normalise(target)
     if not normalised:

@@ -609,6 +609,9 @@ def run_lateral(
     technique: str = "smb_exec",
     cleanup_on_exit: bool = True,
 ) -> None:
+    from forge.governance.rules import deny_prohibited_activity
+
+    deny_prohibited_activity("lateral movement")
     from pydantic import SecretStr
 
     from forge.config import ForgeConfig

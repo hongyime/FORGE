@@ -40,6 +40,48 @@ from forge.targets_resume_candidates import (
 @pytest.fixture(autouse=True)
 def _noop_targets_import_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("forge.targets_import._DEFAULT_SLEEP", lambda _: None)
+    monkeypatch.setenv(
+        "FORGE_SCOPE_JSON",
+        json.dumps(
+            {
+                "domains": [
+                    "corp-target.io",
+                    "company.com",
+                    "example.com",
+                    "example.org",
+                    "test.com",
+                ],
+                "ip_ranges": ["203.0.113.0/24"],
+                "urls": ["https://portal.corp-target.io/path"],
+                "exact_seeds": [
+                    "Corp-Target.IO",
+                    "corp-target.io",
+                    "portal.corp-target.io",
+                    "api.company.com",
+                    "api.example.org",
+                    "https://portal.corp-target.io/path",
+                    "https://portal.corp-target.io/login",
+                    *(f"host{index}.corp-target.io" for index in range(10)),
+                    "https://ui.test.com/login",
+                    "https://files.corp-target.io/releases/app.apk",
+                    "https://demo.supabase.co:443/rest/v1",
+                    "s3://Acme-Artifacts/mobile",
+                    "aws_s3:acme-artifacts",
+                    "https://app.corp-target.io/login",
+                    "company.com",
+                    "ordinary.corp-target.io",
+                    "valid.corp-target.io",
+                    "shared.corp-target.io",
+                    "single.corp-target.io",
+                    "target.corp-target.io",
+                    "large-feed.corp-target.io",
+                    "203.0.113.7",
+                    "8.8.8.8",
+                    "0.0.0.0",
+                ],
+            }
+        ),
+    )
 
 
 class _FakeConfig:
@@ -94,41 +136,63 @@ def _write_feed(path: Path) -> None:
 
 def _write_dispatch_feed(path: Path, count: int = 3) -> list[str]:
     values = [f"target-{index}.corp-target.io" for index in range(count)]
-    path.write_text(json.dumps({
-        "schema_version": "target-feed.v1",
-        "generated_at": "2026-10-15T00:00:00Z",
-        "items": [
+    path.write_text(
+        json.dumps(
             {
-                "target_type": "domain",
-                "target_value": value,
-                "source_kind": "dispatcher_test",
-                "confidence": 0.9,
-                "first_seen_at": "2026-10-14T00:00:00Z",
-                "provenance": "dispatcher_test_fixture",
+                "schema_version": "target-feed.v1",
+                "generated_at": "2026-10-15T00:00:00Z",
+                "items": [
+                    {
+                        "target_type": "domain",
+                        "target_value": value,
+                        "source_kind": "dispatcher_test",
+                        "confidence": 0.9,
+                        "first_seen_at": "2026-10-14T00:00:00Z",
+                        "provenance": "dispatcher_test_fixture",
+                    }
+                    for value in values
+                ],
             }
-            for value in values
-        ],
-    }), encoding="utf-8")
+        ),
+        encoding="utf-8",
+    )
     return values
 
 
 def _dispatch_result(kwargs: dict[str, object]) -> TargetImportResult:
     item = kwargs["item"]
     return TargetImportResult(
-        engagement_id=None, target_type=item.target_type, target_value=item.canonical_value,
-        target_key=item.target_key, scope_manifest=None, created=False, started=True,
+        engagement_id=None,
+        target_type=item.target_type,
+        target_value=item.canonical_value,
+        target_key=item.target_key,
+        scope_manifest=None,
+        created=False,
+        started=True,
         dry_run=False,
     )
 
 
-def _dispatch_import(feed_path: Path, cfg: _FakeConfig, *, max_active_targets: int = 2) -> list[TargetImportResult]:
+def _dispatch_import(
+    feed_path: Path, cfg: _FakeConfig, *, max_active_targets: int = 2
+) -> list[TargetImportResult]:
     return import_targets(
-        feed_url=None, feed_file=feed_path, auth_header_env=None, roe_id="ROE-TEST",
-        start=True, dry_run=False, limit=None, max_iter=1, config=cfg, max_active_targets=max_active_targets,
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-TEST",
+        start=True,
+        dry_run=False,
+        limit=None,
+        max_iter=1,
+        config=cfg,
+        max_active_targets=max_active_targets,
     )
 
 
-def test_import_dispatcher_runs_two_targets_concurrently(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_import_dispatcher_runs_two_targets_concurrently(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     feed = tmp_path / "feed.json"
     _write_dispatch_feed(feed, 2)
     barrier = threading.Barrier(2, timeout=3)
@@ -145,7 +209,9 @@ def test_import_dispatcher_runs_two_targets_concurrently(tmp_path: Path, monkeyp
     assert all(result.started for result in results)
 
 
-def test_import_dispatcher_respects_active_target_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_import_dispatcher_respects_active_target_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     feed = tmp_path / "feed.json"
     _write_dispatch_feed(feed, 4)
     lock = threading.Lock()
@@ -171,7 +237,9 @@ def test_import_dispatcher_respects_active_target_limit(tmp_path: Path, monkeypa
     assert peak == 2
 
 
-def test_import_dispatcher_serializes_with_single_slot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_import_dispatcher_serializes_with_single_slot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     feed = tmp_path / "feed.json"
     values = _write_dispatch_feed(feed, 2)
     first_finished = threading.Event()
@@ -192,7 +260,8 @@ def test_import_dispatcher_serializes_with_single_slot(tmp_path: Path, monkeypat
 
 
 def test_import_dispatcher_strict_burst_is_serial_and_pauses(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     feed = tmp_path / "feed.json"
     values = _write_dispatch_feed(feed, 3)
@@ -225,7 +294,8 @@ def test_import_dispatcher_strict_burst_is_serial_and_pauses(
     monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
     monkeypatch.setattr("forge.targets_import._run_one_import_target", run)
     results = _dispatch_import(
-        feed, _FakeConfig(tmp_path / "data", roe_strictness="strict"),
+        feed,
+        _FakeConfig(tmp_path / "data", roe_strictness="strict"),
         max_active_targets=2,
     )
 
@@ -234,24 +304,32 @@ def test_import_dispatcher_strict_burst_is_serial_and_pauses(
     assert starts == values
     assert pause_count == 2
     assert events == [
-        ("start", values[0]), ("pause", None),
-        ("start", values[1]), ("pause", None),
+        ("start", values[0]),
+        ("pause", None),
+        ("start", values[1]),
+        ("pause", None),
         ("start", values[2]),
     ]
 
 
-def test_import_dispatcher_releases_scheduler_leases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from forge.autopilot.scheduler_db import scheduler_db_path
+def test_import_dispatcher_releases_scheduler_leases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from forge.autopilot.scheduler_db import ensure_scheduler_schema, scheduler_db_path
 
     feed = tmp_path / "feed.json"
     _write_dispatch_feed(feed, 2)
     cfg = _FakeConfig(tmp_path / "data")
     cfg.autopilot_global_slots = 2
     cfg.autopilot_max_active_targets = 2
+    with sqlite3.connect(scheduler_db_path(cfg.data_dir)) as con:
+        ensure_scheduler_schema(con)
     monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
     monkeypatch.setattr("forge.targets_import._create_or_reuse_engagement", lambda *_: (1, False))
     monkeypatch.setattr("forge.targets_import._ensure_target_import_monitoring", lambda **_: None)
-    monkeypatch.setattr("forge.targets_import._write_scope_manifest", lambda *_: tmp_path / "scope.json")
+    monkeypatch.setattr(
+        "forge.targets_import._write_scope_manifest", lambda *_: tmp_path / "scope.json"
+    )
     monkeypatch.setattr("forge.targets_import._has_kill_chain_run", lambda *_: False)
     monkeypatch.setattr("forge.targets_import._start_kill_chain", lambda **_: None)
 
@@ -259,11 +337,15 @@ def test_import_dispatcher_releases_scheduler_leases(tmp_path: Path, monkeypatch
 
     assert len(results) == 2
     with sqlite3.connect(scheduler_db_path(cfg.data_dir)) as con:
-        active_leases = con.execute("SELECT lease_id FROM leases WHERE status = 'active'").fetchall()
+        active_leases = con.execute(
+            "SELECT lease_id FROM leases WHERE status = 'active'"
+        ).fetchall()
     assert active_leases == []
 
 
-def test_import_dispatcher_preserves_input_result_order(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_import_dispatcher_preserves_input_result_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     feed = tmp_path / "feed.json"
     values = _write_dispatch_feed(feed, 3)
 
@@ -279,18 +361,26 @@ def test_import_dispatcher_preserves_input_result_order(tmp_path: Path, monkeypa
     assert [result.target_value for result in results] == values
 
 
-def test_import_dispatcher_kill_switch_stops_admission(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_import_dispatcher_kill_switch_stops_admission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     feed = tmp_path / "feed.json"
     _write_dispatch_feed(feed, 2)
     loaded_items = load_target_feed(
-        feed_url=None, feed_file=feed, auth_header_env=None, limit=None,
+        feed_url=None,
+        feed_file=feed,
+        auth_header_env=None,
+        limit=None,
     )
     assert len(loaded_items) == 2
     cfg = _FakeConfig(tmp_path / "data", roe_strictness="strict")
     launched: list[str] = []
     monkeypatch.setattr("forge.targets_import._external_target_engagement_index", lambda _: {})
     monkeypatch.setattr("forge.targets_import.is_kill_switch_active", lambda **_: True)
-    monkeypatch.setattr("forge.targets_import._run_one_import_target", lambda **kw: launched.append(kw["item"].canonical_value))
+    monkeypatch.setattr(
+        "forge.targets_import._run_one_import_target",
+        lambda **kw: launched.append(kw["item"].canonical_value),
+    )
     assert _dispatch_import(feed, cfg) == []
     assert launched == []
 
@@ -387,14 +477,23 @@ def test_load_target_feed_coerces_only_top_ranked_unique_items(
     import forge.targets_import as targets_import
 
     feed_path = tmp_path / "large-feed.json"
-    feed_path.write_text(json.dumps({
-        "schema_version": "target-feed.v1",
-        "items": [
-            {"target_type": "domain", "target_value": f"host-{index}.corp-target.io",
-             "priority": index, "source_count": 1}
-            for index in range(250)
-        ],
-    }), encoding="utf-8")
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [
+                    {
+                        "target_type": "domain",
+                        "target_value": f"host-{index}.corp-target.io",
+                        "priority": index,
+                        "source_count": 1,
+                    }
+                    for index in range(250)
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
     coerced: list[str] = []
     original = targets_import._coerce_feed_item
 
@@ -403,9 +502,7 @@ def test_load_target_feed_coerces_only_top_ranked_unique_items(
         return original(raw)
 
     monkeypatch.setattr(targets_import, "_coerce_feed_item", spy)
-    items = load_target_feed(
-        feed_url=None, feed_file=feed_path, auth_header_env=None, limit=10
-    )
+    items = load_target_feed(feed_url=None, feed_file=feed_path, auth_header_env=None, limit=10)
 
     assert len(coerced) == 10
     assert len(items) == 10
@@ -418,19 +515,22 @@ def test_load_target_feed_stops_coercing_at_time_budget(
     import forge.targets_import as targets_import
 
     feed_path = tmp_path / "budget-feed.json"
-    feed_path.write_text(json.dumps({
-        "schema_version": "target-feed.v1",
-        "items": [
-            {"target_type": "domain", "target_value": f"host-{index}.corp-target.io"}
-            for index in range(3)
-        ],
-    }), encoding="utf-8")
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [
+                    {"target_type": "domain", "target_value": f"host-{index}.corp-target.io"}
+                    for index in range(3)
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
     ticks = iter((0.0, 0.0, 121.0))
     monkeypatch.setattr(targets_import.time, "monotonic", lambda: next(ticks))
 
-    items = load_target_feed(
-        feed_url=None, feed_file=feed_path, auth_header_env=None, limit=3
-    )
+    items = load_target_feed(feed_url=None, feed_file=feed_path, auth_header_env=None, limit=3)
 
     assert len(items) == 1
     assert "exceeded 120 second budget" in caplog.text
@@ -440,18 +540,29 @@ def test_import_targets_keeps_unknown_mega_domain_signals_eligible(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     feed_path = tmp_path / "unknown-signals.json"
-    feed_path.write_text(json.dumps({
-        "schema_version": "target-feed.v1",
-        "items": [{"target_type": "domain", "target_value": "ordinary.corp-target.io"}],
-    }), encoding="utf-8")
+    feed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [{"target_type": "domain", "target_value": "ordinary.corp-target.io"}],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     def no_network(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("Phase 5 must use cached signals and never fetch them")
 
     monkeypatch.setattr("forge.onboard.mega_domain.mega_domain_signals", no_network)
     results = import_targets(
-        feed_url=None, feed_file=feed_path, auth_header_env=None, roe_id=None,
-        start=False, dry_run=True, limit=1, max_iter=1,
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id=None,
+        start=False,
+        dry_run=True,
+        limit=1,
+        max_iter=1,
         config=_FakeConfig(tmp_path / "data"),
     )
 
@@ -545,21 +656,21 @@ def test_feed_normalizer_requires_delegated_hostname_suffixes() -> None:
     for value in ("package.json", "module.os.environ"):
         assert _coerce_feed_item({"target_type": "domain", "target_value": value}) is None
 
-    assert _coerce_feed_item(
-        {"target_type": "domain", "target_value": "valid.corp-target.io"}
-    ) is not None
-    assert _coerce_feed_item(
-        {"target_type": "ipv4", "target_value": "8.8.8.8"}
-    ) is not None
-    assert _coerce_feed_item(
-        {"target_type": "url", "target_value": "https://example.invalid/path"}
-    ) is None
-    assert _coerce_feed_item(
-        {"target_type": "email", "target_value": "user@example.invalid"}
-    ) is None
-    assert _coerce_feed_item(
-        {"target_type": "email", "target_value": "user@corp-target.io"}
-    ) is None
+    assert (
+        _coerce_feed_item({"target_type": "domain", "target_value": "valid.corp-target.io"})
+        is not None
+    )
+    assert _coerce_feed_item({"target_type": "ipv4", "target_value": "8.8.8.8"}) is not None
+    assert (
+        _coerce_feed_item({"target_type": "url", "target_value": "https://example.invalid/path"})
+        is None
+    )
+    assert (
+        _coerce_feed_item({"target_type": "email", "target_value": "user@example.invalid"}) is None
+    )
+    assert (
+        _coerce_feed_item({"target_type": "email", "target_value": "user@corp-target.io"}) is None
+    )
 
 
 def test_load_target_feed_drops_filename_values_for_domain_subdomain_and_auto(
@@ -653,8 +764,7 @@ def test_import_start_never_launches_denylisted_placeholder_targets(
     assert len(calls) == 1
     assert calls[0][4] == "portal.corp-target.io"
     assert not any(
-        placeholder in calls[0]
-        for placeholder in ("company.com", "api.company.com", "ui.test.com")
+        placeholder in calls[0] for placeholder in ("company.com", "api.company.com", "ui.test.com")
     )
 
 
@@ -731,8 +841,8 @@ def test_import_feed_file_creates_deduped_engagements_and_manifests(tmp_path: Pa
     assert manifest["domains"] == ["corp-target.io"]
     assert manifest["urls"] == []
     assert manifest["policy"] == {
-        "destructive_actions_allowed": True,
-        "post_exploitation_allowed": True,
+        "destructive_actions_allowed": False,
+        "post_exploitation_allowed": False,
     }
 
     db_path = cfg.engagement_db_path("1")
@@ -968,16 +1078,12 @@ def test_import_feed_keeps_only_approved_types_and_rejects_junk(tmp_path: Path) 
     assert all(result.scope_manifest is not None for result in results)
 
     by_target = {result.target_value: result for result in results}
-    ipv4_manifest = json.loads(
-        by_target["203.0.113.7"].scope_manifest.read_text(encoding="utf-8")
-    )
+    ipv4_manifest = json.loads(by_target["203.0.113.7"].scope_manifest.read_text(encoding="utf-8"))
     assert ipv4_manifest["authorized_seeds"] == ["203.0.113.7"]
     assert ipv4_manifest["ip_ranges"] == ["203.0.113.7/32"]
 
     cloud_url_manifest = json.loads(
-        by_target["https://demo.supabase.co:443/rest/v1"].scope_manifest.read_text(
-            encoding="utf-8"
-        )
+        by_target["https://demo.supabase.co:443/rest/v1"].scope_manifest.read_text(encoding="utf-8")
     )
     assert cloud_url_manifest["domains"] == ["demo.supabase.co"]
     assert cloud_url_manifest["urls"] == ["https://demo.supabase.co:443/rest/v1"]
@@ -986,9 +1092,7 @@ def test_import_feed_keeps_only_approved_types_and_rejects_junk(tmp_path: Path) 
     db_path = cfg.engagement_db_path("1")
     conn = sqlite3.connect(db_path)
     try:
-        seed_row = conn.execute(
-            "SELECT seed_value, seed_type FROM engagement_seeds"
-        ).fetchone()
+        seed_row = conn.execute("SELECT seed_value, seed_type FROM engagement_seeds").fetchone()
         scope_row = conn.execute("SELECT scope_json FROM engagements").fetchone()
     finally:
         conn.close()
@@ -1041,9 +1145,7 @@ def test_reimport_reuses_existing_engagement_ids(tmp_path: Path) -> None:
     assert second[0].created is False
     conn = sqlite3.connect(db_path)
     try:
-        policy_rows = conn.execute(
-            "SELECT next_run_at FROM monitoring_policies"
-        ).fetchall()
+        policy_rows = conn.execute("SELECT next_run_at FROM monitoring_policies").fetchall()
         snapshot_count = conn.execute("SELECT COUNT(*) FROM monitoring_snapshots").fetchone()[0]
     finally:
         conn.close()
@@ -1491,9 +1593,7 @@ def test_resume_plan_carries_forward_prior_fanout_signal_counts(tmp_path: Path) 
     assert item["rate_limit_events"] == 1
     assert item["backoff_events"] == 1
     assert item["parallel_fanout"] == 1
-    assert item["fanout_cap_decision"]["reason"] == (
-        "reduced by prior rate-limit/backoff signals"
-    )
+    assert item["fanout_cap_decision"]["reason"] == ("reduced by prior rate-limit/backoff signals")
     command = item["command"]
     assert command[command.index("--prior-rate-limit-events") + 1] == "1"
     assert command[command.index("--prior-backoff-events") + 1] == "1"
@@ -2929,7 +3029,8 @@ def test_start_failure_records_and_continues_without_consuming_start_limit(
 
 
 def test_candidate_evaluation_progress_is_batched_with_skip_counts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     feed_path = tmp_path / "feed.json"
     _write_feed(feed_path)
@@ -2938,9 +3039,16 @@ def test_candidate_evaluation_progress_is_batched_with_skip_counts(
     monkeypatch.setattr("forge.targets_import.TARGET_IMPORT_PROGRESS_EVENT_CANDIDATES", 2)
     monkeypatch.setattr("forge.targets_import.TARGET_IMPORT_PROGRESS_EVENT_SECONDS", 60.0)
     results = import_targets(
-        feed_url=None, feed_file=feed_path, auth_header_env=None,
-        roe_id=None, start=False, dry_run=True, limit=None, max_iter=3,
-        config=cfg, progress_callback=lambda event, details: events.append((event, details)),
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id=None,
+        start=False,
+        dry_run=True,
+        limit=None,
+        max_iter=3,
+        config=cfg,
+        progress_callback=lambda event, details: events.append((event, details)),
         _monotonic=lambda: 0.0,
     )
     progress = [details for event, details in events if event == "candidate_evaluation_progress"]
@@ -2953,7 +3061,8 @@ def test_candidate_evaluation_progress_is_batched_with_skip_counts(
 
 
 def test_candidate_evaluation_time_threshold_surfaces_long_skip_stretch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     feed_path = tmp_path / "feed.json"
     _write_dispatch_feed(feed_path, count=5)
@@ -2962,9 +3071,16 @@ def test_candidate_evaluation_time_threshold_surfaces_long_skip_stretch(
     ticks = iter([0.0, 61.0, 122.0, 183.0, 244.0, 305.0])
     monkeypatch.setattr("forge.targets_import.TARGET_IMPORT_PROGRESS_EVENT_CANDIDATES", 100)
     results = import_targets(
-        feed_url=None, feed_file=feed_path, auth_header_env=None,
-        roe_id=None, start=False, dry_run=True, limit=None, max_iter=3,
-        config=cfg, progress_callback=lambda event, details: events.append((event, details)),
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id=None,
+        start=False,
+        dry_run=True,
+        limit=None,
+        max_iter=3,
+        config=cfg,
+        progress_callback=lambda event, details: events.append((event, details)),
         _monotonic=lambda: next(ticks),
     )
     progress = [details for event, details in events if event == "candidate_evaluation_progress"]
@@ -3060,10 +3176,7 @@ def test_consecutive_start_failures_stop_feed_early_and_report_reason(
         json.dumps(
             {
                 "schema_version": "target-feed.v1",
-                "items": [
-                    {"target_type": "domain", "target_value": target}
-                    for target in targets
-                ],
+                "items": [{"target_type": "domain", "target_value": target} for target in targets],
             }
         ),
         encoding="utf-8",
@@ -4110,7 +4223,9 @@ def test_import_targets_standard_and_permissive_behave_as_before(
     assert calls[0][-4:] == ["--max-runtime-minutes", "480", "--parallel-fanout", "4"]
 
 
-def test_targets_import_cli_roe_strictness_option(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_targets_import_cli_roe_strictness_option(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     captured: dict[str, object] = {}
 
     def _fake_import_targets(**kwargs: object) -> list[object]:

@@ -31,6 +31,10 @@ def run_auth_brute(
 ) -> None:
     """Run the direct authentication brute-force command body."""
 
+    from forge.governance.rules import deny_prohibited_activity
+
+    deny_prohibited_activity("credential brute force and defense evasion")
+
     import httpx  # noqa: PLC0415
 
     from forge.utils.intel.credential_generator import generate_dynamic_passwords  # noqa: PLC0415
@@ -116,6 +120,10 @@ def run_auth_bypass(
     load_scope_lists: Callable[..., tuple[list[str], list[str]]] = _direct_cli_load_scope_lists,
 ) -> None:
     """Run the direct authentication-bypass command body."""
+
+    from forge.governance.rules import deny_prohibited_activity
+
+    deny_prohibited_activity("authentication bypass testing")
 
     from forge.phase4.auth_bypass import run_bypass_assessment  # noqa: PLC0415
 

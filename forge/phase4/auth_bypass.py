@@ -95,6 +95,9 @@ def run_bypass_assessment(
     url_prefixes: Sequence[str] | None = None,
     require_scope: bool = False,
 ) -> AuthBypassResult:
+    from forge.governance.rules import deny_prohibited_activity
+
+    deny_prohibited_activity("authentication bypass testing")
     _assert_target_in_scope(
         engagement_id=engagement_id,
         db_path=db_path,

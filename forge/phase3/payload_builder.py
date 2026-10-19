@@ -39,6 +39,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from forge.phase3.obfuscator import ObfuscationCriterion, ObfuscationEngine
+from forge.governance.rules import deny_prohibited_activity
 from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
@@ -234,6 +235,7 @@ class PayloadBuilder:
             chain:         EncodingChain to apply. Defaults to base64 only if None.
             lport:         Listener port — passed to ObfuscationEngine for stealth warning.
         """
+        deny_prohibited_activity("defense evasion payload generation")
         if chain is None:
             chain = EncodingChain().add("base64")
 
@@ -289,6 +291,7 @@ class PayloadBuilder:
         OPSEC: Register with cleanup.py immediately after this call.
         If the chain includes XOR, the recipe contains the key — treat as sensitive.
         """
+        deny_prohibited_activity("defense evasion payload recipe export")
         output_path.write_text(
             json.dumps(payload.cyberchef_recipe, indent=2),
             encoding="utf-8",
@@ -307,6 +310,7 @@ class PayloadBuilder:
         Args:
             use_encoded: Write encoded variant if True, obfuscated if available, else raw.
         """
+        deny_prohibited_activity("defense evasion payload writing")
         if use_encoded and payload.obfuscated:
             content = payload.obfuscated
         elif use_encoded:
@@ -337,6 +341,7 @@ class PayloadBuilder:
 
         Returns the inserted row id.
         """
+        deny_prohibited_activity("defense evasion payload persistence")
         with direct_connect(db_path) as conn:
             conn.execute("PRAGMA foreign_keys = ON")
             cur = conn.execute(
@@ -451,6 +456,7 @@ class HTMLSmuggler:
             title:         HTML page title (should look benign).
             mime_type:     MIME type for the Blob; use 'application/x-msdownload' for PE.
         """
+        deny_prohibited_activity("HTML payload smuggling and defense evasion")
         b64 = base64.b64encode(payload_bytes).decode()
         return self._TEMPLATE.format(
             b64_payload=b64,
@@ -461,6 +467,7 @@ class HTMLSmuggler:
 
     def write(self, payload_bytes: bytes, filename: str, output_path: Path, **kwargs) -> str:
         """Write smuggled HTML to disk. Returns sha256 of the written file."""
+        deny_prohibited_activity("HTML payload smuggling and defense evasion")
         html = self.build(payload_bytes, filename, **kwargs)
         output_path.write_text(html, encoding="utf-8")
         return hashlib.sha256(html.encode()).hexdigest()

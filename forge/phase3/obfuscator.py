@@ -31,6 +31,8 @@ import re
 import string
 from enum import Flag, auto
 
+from forge.governance.rules import deny_prohibited_activity
+
 # ── Obfuscation criterion flags ───────────────────────────────────────────────
 
 
@@ -410,6 +412,7 @@ class ObfuscationEngine:
         Raises:
             ValueError if a banned pattern survives obfuscation.
         """
+        deny_prohibited_activity("defense evasion code obfuscation")
         if lport is not None and lport not in STEALTH_PORTS:
             import logging
 

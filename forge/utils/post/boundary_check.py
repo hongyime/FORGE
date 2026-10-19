@@ -81,7 +81,7 @@ def _load_scope_entries(db_path: Path, engagement_id: int) -> list[str]:
 
                 scope_payload = json.loads(str(scope_row[0]))
                 if is_roe_wildcard(scope_payload):
-                    return ["*"]
+                    return []
                 if not entries:
                     return scope_entries_from_payload(scope_payload)
             except json.JSONDecodeError:
@@ -107,7 +107,7 @@ def _matches_entry(host: str, entry: str) -> bool:
     """Return True if host falls within scope entry."""
     entry = entry.strip()
     if is_roe_wildcard([entry]):
-        return True
+        return False
     if "://" in entry:
         parsed = urlparse(entry)
         entry_host = parsed.hostname or parsed.netloc

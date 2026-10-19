@@ -55,7 +55,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
             None,
             "--roe-scope",
             envvar="FORGE_ROE_SCOPE",
-            help="ROE scope value; '*' explicitly disables the scope gate.",
+            help="ROE reference. Wildcards do not authorize targets.",
         ),
         roe_strictness: Optional[str] = typer.Option(
             None,
@@ -155,9 +155,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
         )
         if start and not dry_run and not start_stop_reason:
             start_stop_reason = "no_more_candidates"
-        unprocessed_count = sum(
-            int(getattr(item, "unprocessed_count", 0) or 0) for item in results
-        )
+        unprocessed_count = sum(int(getattr(item, "unprocessed_count", 0) or 0) for item in results)
         if json_output:
             payload = {
                 "schema_version": "forge.targets_import.v1",
@@ -361,7 +359,6 @@ def register_target_import_commands(app: typer.Typer) -> None:
         )
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
-
     def _target_import_result_payload(result: object) -> dict[str, object]:
         scope_manifest = getattr(result, "scope_manifest", None)
         return {
@@ -376,9 +373,7 @@ def register_target_import_commands(app: typer.Typer) -> None:
             "source_count": int(getattr(result, "source_count", 1)),
             "priority": int(getattr(result, "priority", 60)),
             "scan_eligible": bool(getattr(result, "scan_eligible", True)),
-            "scan_eligibility_reason": str(
-                getattr(result, "scan_eligibility_reason", "eligible")
-            ),
+            "scan_eligibility_reason": str(getattr(result, "scan_eligibility_reason", "eligible")),
             "start_skipped_reason": str(getattr(result, "start_skipped_reason", "")),
             "start_failed": bool(getattr(result, "start_failed", False)),
             "start_error_type": str(getattr(result, "start_error_type", "")),
