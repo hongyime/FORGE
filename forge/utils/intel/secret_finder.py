@@ -3113,13 +3113,20 @@ def _gitlab_keyscan(
             continue
 
         if resp.status_code == 429 or resp.status_code == 403:
-            retry_after = resp.headers.get("Retry-After") or resp.headers.get("RateLimit-Reset")
-            try:
-                wait = int(retry_after or "60")
-            except ValueError:
-                wait = 60
+            retry_after = resp.headers.get("Retry-After")
+            if retry_after is not None:
+                try:
+                    wait = max(0, int(retry_after))
+                except (TypeError, ValueError, OverflowError):
+                    wait = 60
+            else:
+                reset = resp.headers.get("RateLimit-Reset")
+                try:
+                    wait = max(0, int(reset) - int(time.time())) if reset is not None else 60
+                except (TypeError, ValueError, OverflowError):
+                    wait = 60
             _LOG.warning("GitLab rate limit — waiting %ds", wait)
-            time.sleep(max(0, wait))
+            time.sleep(wait)
             continue
         if resp.status_code != 200:
             continue

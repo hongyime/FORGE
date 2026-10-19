@@ -42,6 +42,7 @@ from forge.utils.intel.secret_finder import (
     ValidationState,
     ValidationResult,
     _redact,
+    _gitlab_keyscan,
     _store_key_finding,
     load_key_patterns,
     load_validatable_primary_patterns,
@@ -927,6 +928,46 @@ def test_gitlab_pat_validator_rate_limited_stays_unconfirmed(monkeypatch):
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "HTTP 429"
     http_pacing._clear_rate_limit_cooldowns_for_tests()
+
+
+@pytest.mark.parametrize(
+    ("headers", "expected_wait"),
+    [
+        ({"RateLimit-Reset": "1800000120"}, 120),
+        ({"RateLimit-Reset": "1799999900"}, 0),
+        ({"Retry-After": "45", "RateLimit-Reset": "1800000120"}, 45),
+    ],
+)
+def test_gitlab_keyscan_rate_limit_wait_uses_duration_or_reset_epoch(
+    monkeypatch, headers, expected_wait
+):
+    from forge.utils.intel import secret_finder  # noqa: PLC0415
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(secret_finder.time, "time", lambda: 1_800_000_000)
+    monkeypatch.setattr(secret_finder.time, "sleep", sleeps.append)
+
+    class _Response:
+        status_code = 429
+
+        def __init__(self) -> None:
+            self.headers = headers
+
+    class _Client:
+        def get(self, *_args, **_kwargs):  # noqa: ANN002, ANN003
+            return _Response()
+
+    pattern = KeyPattern(
+        name="test_pattern",
+        service="gitlab",
+        regex=re.compile("token"),
+        confidence="high",
+        group=0,
+        validation_method=None,
+    )
+
+    assert _gitlab_keyscan("example.com", None, [pattern], ["token"], _Client(), 0) == []
+    assert sleeps == [0, expected_wait]
 
 
 def test_aws_validator_unconfirmed_no_secret():
