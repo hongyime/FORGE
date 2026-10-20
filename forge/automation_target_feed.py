@@ -25,13 +25,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 import httpx
 
 from forge.automation_secret_auto_feed import auto_feed_secrets_to_target_feed
 from forge.connectors.secrets import resolve_connector_secret_value
 from forge.db.session import get_engagement_db
+from forge.domain_validation import FILENAME_LIKE_SUFFIXES
 from forge.engagement_ids import numeric_engagement_db_files
 from forge.onboard.mega_domain import (
     mega_domain_decision,
@@ -155,7 +156,8 @@ _SUPABASE_PROJECT_REF_RE = re.compile(r"(?i)\b([a-z0-9][a-z0-9-]{4,62})\.supabas
 _SUPABASE_PROJECT_REF_ONLY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{4,62}$")
 _ENV_VAR_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _FILENAME_LIKE_SUFFIX_RE = re.compile(
-    r"(?i)\.(?:7z|aab|apk|bin|csv|dll|docx?|env|gif|html?|jar|jpe?g|json|lock|log|pdf|png|py|ya?ml|zip)$"
+    r"\.(?:" + "|".join(sorted(FILENAME_LIKE_SUFFIXES, key=len, reverse=True)) + r")(?:$|[?#])",
+    re.IGNORECASE,
 )
 _CODE_TOKEN_RE = re.compile(
     r"(?i)^(?:async|await|class|const|def|else|false|for|from|function|import|let|"
@@ -307,16 +309,31 @@ def _candidate_is_valid(candidate: FeedCandidate) -> bool:
     )
 
 
+def _preserved_feed_item_is_valid(item: dict[str, object]) -> bool:
+    """Apply the same value-level checks to entries retained from prior feeds."""
+    target_type = str(item.get("target_type") or "").strip()
+    target_value = str(item.get("target_value") or "")
+    canonical_value = str(item.get("canonical_value") or "")
+    return (
+        target_type in ALLOWED_TARGET_FEED_TYPES
+        and not _is_filename_like_target(target_value, target_type)
+        and not _is_filename_like_target(canonical_value, target_type)
+        and not is_denied_target(target_value)
+        and not is_denied_target(canonical_value)
+    )
+
+
 def _is_filename_like_target(value: str, target_type: str) -> bool:
     """Reject local-path, source-token, and filename values from all feed types."""
     text = str(value or "").strip()
     if not text:
         return True
-    split = urlsplit(text)
+    decoded_text = unquote(text)
+    split = urlsplit(decoded_text)
     if split.scheme and split.hostname:
         target_type = "url"
     if _CODE_TOKEN_RE.fullmatch(text) or any(
-        token in text for token in ("{", "}", "[", "]", ";", "=>")
+        token in decoded_text for token in ("{", "}", "[", "]", ";", "=>", "data:")
     ):
         return True
     if target_type == "url":
@@ -2689,6 +2706,13 @@ def build_target_feed(
                 }
                 for item in loaded_existing
             ]
+            # Existing entries used to bypass the final candidate filter,
+            # allowing filename-like values from an earlier feed to persist
+            # forever even after source filtering was tightened.
+            existing_items_raw = [
+                item for item in existing_items_raw if _preserved_feed_item_is_valid(item)
+            ]
+            existing_keys = {str(item["target_key"]) for item in existing_items_raw}
             new_vs_existing = sum(1 for key in candidate_keys if key not in existing_keys)
         except (OSError, ValueError):
             source_errors.append({"source": "existing_feed", "error": "unreadable_existing_feed"})

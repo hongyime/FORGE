@@ -553,6 +553,59 @@ def test_feed_candidate_rejects_filename_like_values_for_every_kept_type() -> No
     )
 
 
+def test_feed_build_drops_filename_like_entries_preserved_from_prior_feed(tmp_path: Path) -> None:
+    """A rebuilt feed must not retain stale file/path/code values."""
+    existing = tmp_path / "existing-feed.json"
+    existing.write_text(
+        json.dumps(
+            {
+                "schema_version": "target-feed.v1",
+                "items": [
+                    {
+                        "target_type": "domain",
+                        "target_value": "readme.md",
+                        "source_kind": "old",
+                        "source_group": "old",
+                        "confidence": 1.0,
+                        "first_seen_at": "2026-10-20T00:00:00Z",
+                        "provenance": "old",
+                    },
+                    {
+                        "target_type": "url",
+                        "target_value": "https://example.test/static/app.js",
+                        "source_kind": "old",
+                        "source_group": "old",
+                        "confidence": 1.0,
+                        "first_seen_at": "2026-10-20T00:00:00Z",
+                        "provenance": "old",
+                    },
+                    {
+                        "target_type": "domain",
+                        "target_value": "api.corp-target.io",
+                        "source_kind": "old",
+                        "source_group": "old",
+                        "confidence": 1.0,
+                        "first_seen_at": "2026-10-20T00:00:00Z",
+                        "provenance": "old",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_target_feed(
+        sources=["db"],
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        imports_dir=tmp_path / "imports",
+        limit=None,
+        existing_feed_path=existing,
+    )
+
+    assert [item["canonical_value"] for item in payload["items"]] == ["api.corp-target.io"]
+
+
 def test_feed_build_prioritizes_targets_seen_from_multiple_sources(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     reports_dir = tmp_path / "reports"

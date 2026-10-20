@@ -13,7 +13,7 @@ import typer
 from typer.testing import CliRunner
 
 from forge.autopilot import AutopilotPhaseResult
-from forge.autopilot.cli import register_autopilot_commands
+from forge.autopilot.cli import _resolve_iterations, register_autopilot_commands
 from forge.autopilot.defaults import AutopilotDefaults
 from forge.autopilot.loop import ForgeAutopilot
 from forge.db.migrations import run_migrations
@@ -223,6 +223,34 @@ def test_import_phase_passes_specific_manifest_scope_to_importer(tmp_path: Path)
     assert seen["human_authorized_scope"] == scope
 
 
+def test_import_phase_prefers_explicit_scope_over_default_wildcard_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = tmp_path / "default.json"
+    manifest.write_text(json.dumps({"domains": ["*"]}), encoding="utf-8")
+    autopilot = _make_autopilot(tmp_path)
+    autopilot.scope_manifest = manifest
+    autopilot.feed_file.write_text(json.dumps({"items": []}), encoding="utf-8")
+    scope = {"domains": ["corp-target.io"]}
+    monkeypatch.setenv("FORGE_SCOPE_JSON", json.dumps(scope))
+    seen: dict[str, object] = {}
+
+    def fake_import_targets(**kwargs: object) -> list[SimpleNamespace]:
+        seen.update(kwargs)
+        return [SimpleNamespace(created=True, started=True, start_failed=False)]
+
+    from unittest.mock import patch
+
+    with patch("forge.targets_import.import_targets", fake_import_targets):
+        result = autopilot._phase_import_targets(dry_run=False)
+
+    assert result.status == "ok"
+    assert result.data["created"] == 1
+    assert result.data["attempted"] == 1
+    assert result.data["scope_source"] == "FORGE_SCOPE_JSON"
+    assert seen["human_authorized_scope"] == scope
+
+
 def test_import_phase_blocks_wildcard_manifest_without_calling_importer(tmp_path: Path) -> None:
     manifest = tmp_path / "scope.json"
     manifest.write_text(json.dumps({"domains": ["*"]}), encoding="utf-8")
@@ -388,6 +416,12 @@ def test_cli_single_phase_rejects_loop_and_multiple_iterations(tmp_path: Path) -
         )
         assert result.exit_code != 0
         assert "--only-phase runs once" in result.output
+
+
+def test_run_once_environment_overrides_loop_iteration_request() -> None:
+    assert _resolve_iterations(once=False, iterations=None, run_once=True) == 1
+    assert _resolve_iterations(once=False, iterations=24, run_once=True) == 1
+    assert _resolve_iterations(once=False, iterations=None, run_once=False) == 24
 
 
 def test_cli_single_phase_defaults_to_dry_run_and_requires_apply_for_live(

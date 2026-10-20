@@ -58,8 +58,8 @@ from forge.config import ForgeConfig
 AUTOPILOT_SCHEMA_VERSION = "forge.autopilot.v1"
 _LOG = logging.getLogger(__name__)
 _DEFAULT_SCOPE_MANIFEST_CANDIDATES = (
-    Path("manifests") / "default.json",
     Path("imports") / "scope-manifest.local.json",
+    Path("manifests") / "default.json",
 )
 
 
@@ -690,7 +690,7 @@ class ForgeAutopilot:
 
     @staticmethod
     def _phase_end_details(phase: AutopilotPhaseResult) -> dict[str, Any]:
-        details: dict[str, Any] = {"status": phase.status}
+        details: dict[str, Any] = {"status": phase.status, "detail": phase.detail}
         if phase.status == "error":
             details["error_type"] = str(phase.data.get("error_type") or "unknown")
             details["error_detail"] = _bounded_text(phase.detail)
@@ -1650,7 +1650,20 @@ class ForgeAutopilot:
             pass
 
         authorized_scope: dict[str, Any] | None = None
-        if (
+        scope_source: str | None = None
+        explicit_scope = os.environ.get("FORGE_SCOPE_JSON", "").strip()
+        if not effective_dry_run and explicit_scope:
+            try:
+                scope_payload = json.loads(explicit_scope)
+            except json.JSONDecodeError as exc:
+                return AutopilotPhaseResult(
+                    name="import_targets",
+                    status="error",
+                    detail=f"scope_read_error:{_bounded_text(exc)}",
+                    data={**feed_pin, "error_type": type(exc).__name__},
+                )
+            scope_source = "FORGE_SCOPE_JSON"
+        elif (
             not effective_dry_run
             and self.scope_manifest is not None
             and Path(self.scope_manifest).is_file()
@@ -1664,6 +1677,16 @@ class ForgeAutopilot:
                     detail=f"scope_read_error:{_bounded_text(exc)}",
                     data={**feed_pin, "error_type": type(exc).__name__},
                 )
+            scope_source = str(self.scope_manifest)
+        elif not effective_dry_run:
+            return AutopilotPhaseResult(
+                name="import_targets",
+                status="blocked",
+                detail="human_authorized_scope_required",
+                data=feed_pin,
+            )
+
+        if not effective_dry_run:
             if not isinstance(scope_payload, dict):
                 return AutopilotPhaseResult(
                     name="import_targets",
@@ -1770,6 +1793,7 @@ class ForgeAutopilot:
                 "start_stop_reason": start_stop_reason or None,
                 "unprocessed_count": unprocessed_count,
                 "skip_reason_counts": skip_reason_counts,
+                "scope_source": scope_source,
                 **self._scheduler_snapshot_data(),
             },
         )
@@ -2028,7 +2052,15 @@ class ForgeAutopilot:
         The autopilot never fabricates a manifest.
         """
         for candidate in _DEFAULT_SCOPE_MANIFEST_CANDIDATES:
-            if candidate.is_file():
+            if not candidate.is_file():
+                continue
+            try:
+                payload = json.loads(candidate.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            from forge.governance.scope_gate import has_scope_wildcard
+
+            if isinstance(payload, dict) and not has_scope_wildcard(payload):
                 return candidate
         return None
 

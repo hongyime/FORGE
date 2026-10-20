@@ -63,6 +63,11 @@ def _mk_autopilot(
     imports_dir.mkdir(parents=True, exist_ok=True)
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
+    if scope_manifest is None:
+        scope_manifest = imports_dir / "scope-manifest.local.json"
+        scope_manifest.write_text(
+            json.dumps({"domains": ["corp-target.io"]}), encoding="utf-8"
+        )
     cfg = _FakeConfig(data_dir=data_dir, safe_mode=safe_mode)
     return ForgeAutopilot(
         data_dir=data_dir,

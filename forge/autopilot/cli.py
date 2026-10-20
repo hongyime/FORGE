@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from enum import Enum
 from pathlib import Path
@@ -429,7 +430,12 @@ def register_autopilot_commands(app: typer.Typer) -> None:
             _print_summary(payload)
             return
 
-        resolved_iterations = _resolve_iterations(once=once, iterations=iterations)
+        resolved_iterations = _resolve_iterations(
+            once=once,
+            iterations=iterations,
+            run_once=os.environ.get("FORGE_RUN_ONCE", "").strip().lower()
+            in {"1", "true", "yes", "on"},
+        )
         payload = autopilot.run(
             dry_run=resolved_dry_run,
             path=path_value,
@@ -526,7 +532,9 @@ def _resolve_dry_run_arg(
     return True
 
 
-def _resolve_iterations(*, once: bool, iterations: Optional[int]) -> int:
+def _resolve_iterations(*, once: bool, iterations: Optional[int], run_once: bool = False) -> int:
+    if run_once:
+        return 1
     if iterations is not None and iterations > 0:
         return int(iterations)
     if once:
