@@ -53,6 +53,7 @@ from forge.autopilot.scheduler import (
 from forge.autopilot.tuning import decide_tuning
 from forge.autopilot.tuning_apply import apply_tuning_decision
 from forge.config import ForgeConfig
+from forge.governance.scope_gate import is_roe_wildcard
 
 
 AUTOPILOT_SCHEMA_VERSION = "forge.autopilot.v1"
@@ -1694,15 +1695,6 @@ class ForgeAutopilot:
                     detail="human_authorized_scope_required",
                     data={**feed_pin, "scope_manifest": str(self.scope_manifest)},
                 )
-            from forge.governance.scope_gate import has_scope_wildcard
-
-            if has_scope_wildcard(scope_payload):
-                return AutopilotPhaseResult(
-                    name="import_targets",
-                    status="blocked",
-                    detail="human_authorized_scope_required",
-                    data={**feed_pin, "scope_manifest": str(self.scope_manifest)},
-                )
             authorized_scope = scope_payload
 
         try:
@@ -1732,6 +1724,7 @@ class ForgeAutopilot:
                 min_start_source_count=self.defaults.min_start_source_count,
                 config=self._cfg,
                 human_authorized_scope=authorized_scope,
+                allow_wildcard_authorization=True,
                 progress_callback=self._target_progress_callback("import_targets", 5),
             )
         except Exception as exc:  # noqa: BLE001
@@ -1794,6 +1787,11 @@ class ForgeAutopilot:
                 "unprocessed_count": unprocessed_count,
                 "skip_reason_counts": skip_reason_counts,
                 "scope_source": scope_source,
+                "authorization_mode": (
+                    "wildcard"
+                    if authorized_scope is not None and is_roe_wildcard(authorized_scope)
+                    else "specific"
+                ),
                 **self._scheduler_snapshot_data(),
             },
         )
@@ -2058,9 +2056,7 @@ class ForgeAutopilot:
                 payload = json.loads(candidate.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            from forge.governance.scope_gate import has_scope_wildcard
-
-            if isinstance(payload, dict) and not has_scope_wildcard(payload):
+            if isinstance(payload, dict):
                 return candidate
         return None
 

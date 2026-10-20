@@ -47,7 +47,12 @@ from forge.db.session import get_engagement_db
 from forge.domain_validation import canonicalize_domain
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
 from forge.governance.rules import ALLOWED_TARGET_TYPES
-from forge.governance.scope_gate import EngagementScope, ScopeGate, has_scope_wildcard
+from forge.governance.scope_gate import (
+    EngagementScope,
+    ScopeGate,
+    has_scope_wildcard,
+    is_roe_wildcard,
+)
 from forge.iana_tlds import DELEGATED_TLDS
 from forge.monitoring.continuous import (
     create_monitoring_snapshot,
@@ -316,6 +321,7 @@ def import_targets(
     config: ForgeConfig | None = None,
     progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
     human_authorized_scope: Mapping[str, Any] | None = None,
+    allow_wildcard_authorization: bool = False,
     roe_scope: str | None = None,
     roe_strictness: str | None = None,
     retry_after_seconds: float | None = None,
@@ -340,7 +346,12 @@ def import_targets(
     ).strip()
     resolved_roe_strictness = resolve_roe_strictness(roe_strictness, config=cfg)
     authorization_scope = (
-        _load_human_authorized_scope(human_authorized_scope) if not dry_run else None
+        _load_human_authorized_scope(
+            human_authorized_scope,
+            allow_wildcard_authorization=allow_wildcard_authorization,
+        )
+        if not dry_run
+        else None
     )
     sleep = sleep_fn if sleep_fn is not None else _DEFAULT_SLEEP
     items = load_target_feed(
@@ -524,7 +535,7 @@ def _run_one_import_target(
     start: bool,
     dry_run: bool,
     roe_id: str | None,
-    authorization_scope: tuple[ScopeGate, frozenset[str]] | None,
+    authorization_scope: tuple[ScopeGate, frozenset[str], bool] | None,
     roe_scope: str,
     roe_strictness: str,
     max_iter: int,
@@ -865,8 +876,14 @@ def _run_one_import_target(
 
 def _load_human_authorized_scope(
     payload: Mapping[str, Any] | None = None,
-) -> tuple[ScopeGate, frozenset[str]]:
-    """Load the human-set, specific scope required for persistent imports."""
+    *,
+    allow_wildcard_authorization: bool = False,
+) -> tuple[ScopeGate, frozenset[str], bool]:
+    """Load the human-approved scope required for persistent imports.
+
+    Wildcards remain rejected by direct import callers unless they explicitly
+    opt into the Phase 5 approval path.
+    """
     if payload is None:
         raw = os.environ.get("FORGE_SCOPE_JSON", "").strip()
         if not raw:
@@ -881,6 +898,8 @@ def _load_human_authorized_scope(
             raise ValueError("FORGE_SCOPE_JSON must decode to a JSON object")
         payload = decoded
     if has_scope_wildcard(payload):
+        if allow_wildcard_authorization and is_roe_wildcard(payload):
+            return ScopeGate(EngagementScope.model_validate(payload)), frozenset(), True
         raise ValueError(
             "human-authorized scope must contain specific targets; "
             "wildcards do not authorize targets"
@@ -894,14 +913,16 @@ def _load_human_authorized_scope(
     )
     if not (scope.domains or scope.ip_ranges or scope.urls or exact_seeds):
         raise ValueError("FORGE_SCOPE_JSON must include at least one specific target")
-    return ScopeGate(scope), exact_seeds
+    return ScopeGate(scope), exact_seeds, False
 
 
 def _item_is_human_authorized(
     item: TargetFeedItem,
-    authorization_scope: tuple[ScopeGate, frozenset[str]],
+    authorization_scope: tuple[ScopeGate, frozenset[str], bool],
 ) -> bool:
-    gate, exact_seeds = authorization_scope
+    gate, exact_seeds, wildcard_authorized = authorization_scope
+    if wildcard_authorized:
+        return True
     canonical = item.canonical_value.strip()
     if canonical.casefold() in exact_seeds:
         return True

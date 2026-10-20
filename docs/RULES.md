@@ -1,7 +1,9 @@
 # FORGE Rules
 
 FORGE is an automated, deterministic, traceable security assessment platform
-for human-authorized, specifically scoped work. This index links to its
+for human-authorized work. Phase 5 target engagement may use an explicitly
+human-approved wildcard authorization; all other hard boundaries remain in
+force. This index links to its
 canonical rules, approved by Bryan on 2026-10-19:
 
 - [Purpose](PURPOSE.md)

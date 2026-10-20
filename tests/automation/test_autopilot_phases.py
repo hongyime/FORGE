@@ -251,17 +251,28 @@ def test_import_phase_prefers_explicit_scope_over_default_wildcard_manifest(
     assert seen["human_authorized_scope"] == scope
 
 
-def test_import_phase_blocks_wildcard_manifest_without_calling_importer(tmp_path: Path) -> None:
+def test_import_phase_accepts_approved_wildcard_manifest(tmp_path: Path) -> None:
     manifest = tmp_path / "scope.json"
     manifest.write_text(json.dumps({"domains": ["*"]}), encoding="utf-8")
     autopilot = _make_autopilot(tmp_path)
     autopilot.scope_manifest = manifest
     autopilot.feed_file.write_text(json.dumps({"items": []}), encoding="utf-8")
 
-    result = autopilot._phase_import_targets(dry_run=False)
+    seen: dict[str, object] = {}
 
-    assert result.status == "blocked"
-    assert result.detail == "human_authorized_scope_required"
+    def fake_import_targets(**kwargs: object) -> list[SimpleNamespace]:
+        seen.update(kwargs)
+        return [SimpleNamespace(created=True, started=True, start_failed=False)]
+
+    from unittest.mock import patch
+
+    with patch("forge.targets_import.import_targets", fake_import_targets):
+        result = autopilot._phase_import_targets(dry_run=False)
+
+    assert result.status == "ok"
+    assert result.data["authorization_mode"] == "wildcard"
+    assert seen["human_authorized_scope"] == {"domains": ["*"]}
+    assert seen["allow_wildcard_authorization"] is True
 
 
 def test_run_once_reaps_stale_leases_before_first_phase(

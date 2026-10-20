@@ -111,6 +111,25 @@ def test_wildcard_scope_values_do_not_authorize_targets() -> None:
         assert not ScopeGate(scope).is_in_scope("192.0.2.3")
 
 
+def test_phase5_can_explicitly_authorize_wildcard_feed_scope() -> None:
+    scope = _load_human_authorized_scope(
+        {"domains": ["*"]}, allow_wildcard_authorization=True
+    )
+    domain = _coerce_feed_item({"target_type": "domain", "target_value": "outside.org"})
+    cloud_ref = _coerce_feed_item(
+        {"target_type": "cloud_ref", "target_value": "aws:123456789012"}
+    )
+    assert domain is not None and _item_is_human_authorized(domain, scope)
+    assert cloud_ref is not None and _item_is_human_authorized(cloud_ref, scope)
+
+
+def test_phase5_wildcard_approval_does_not_expand_scoped_patterns() -> None:
+    with pytest.raises(ValueError, match="wildcards do not authorize"):
+        _load_human_authorized_scope(
+            {"domains": ["*.corp-target.io"]}, allow_wildcard_authorization=True
+        )
+
+
 def test_destructive_action_cannot_be_enabled_by_attack_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
