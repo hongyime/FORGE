@@ -8,17 +8,29 @@ from forge import subprocess_tree
 
 
 class _FakeProcess:
-    def __init__(self, command: list[str], *, timeout: bool = False) -> None:
+    def __init__(
+        self,
+        command: list[str],
+        *,
+        timeout: bool = False,
+        timeout_child_stderr: str = "",
+    ) -> None:
         self.args = command
         self.returncode = 0
         self.pid = 4242
         self._timeout = timeout
+        self._timeout_child_stderr = timeout_child_stderr
         self._calls = 0
 
     def communicate(self, timeout: float | None = None) -> tuple[str, str]:
         self._calls += 1
         if self._timeout and self._calls == 1:
-            raise subprocess.TimeoutExpired(self.args, timeout or 0, output="partial")
+            raise subprocess.TimeoutExpired(
+                self.args,
+                timeout or 0,
+                output="partial",
+                stderr=self._timeout_child_stderr,
+            )
         return "stdout", "stderr"
 
     def poll(self) -> int | None:
@@ -95,8 +107,12 @@ def test_run_contained_subprocess_terminates_tree_on_timeout(
 ) -> None:
     terminated: list[int] = []
 
+    child_stderr = "child diagnostic output\n" + "x" * 2100
+
     def fake_popen(command: list[str], **_kwargs: object) -> _FakeProcess:
-        return _FakeProcess(command, timeout=True)
+        return _FakeProcess(
+            command, timeout=True, timeout_child_stderr=child_stderr
+        )
 
     monkeypatch.setattr(subprocess_tree.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(
@@ -114,7 +130,49 @@ def test_run_contained_subprocess_terminates_tree_on_timeout(
     assert terminated == [4242]
     assert result.returncode == 124
     assert result.stdout == "partialstdout"
-    assert result.stderr == "child timed out"
+    assert result.stderr.startswith("child timed out\n")
+    assert result.stderr.endswith((child_stderr + "stderr")[-2000:])
+
+
+def test_success_predicate_timeout_preserves_pending_child_stderr_tail(
+    monkeypatch,
+) -> None:
+    class _PendingStderrProcess:
+        args = ["forge", "kill-chain", "example.com"]
+        pid = 4242
+        returncode = 0
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def communicate(self, timeout: float | None = None) -> tuple[str, str]:
+            if timeout is None:
+                return "", "after termination\n"
+            self.calls += 1
+            if self.calls == 1:
+                raise subprocess.TimeoutExpired(self.args, timeout, stderr="early stderr\n")
+            raise subprocess.TimeoutExpired(self.args, timeout, stderr="late stderr\n")
+
+    proc = _PendingStderrProcess()
+    timestamps = iter([0.0, 0.0, 0.5, 1.0])
+    monkeypatch.setattr(subprocess_tree.time, "monotonic", lambda: next(timestamps))
+    monkeypatch.setattr(subprocess_tree, "_terminate_process_tree", lambda _proc: None)
+
+    result = subprocess_tree._communicate_until_success_or_timeout(
+        proc,  # type: ignore[arg-type]
+        proc.args,
+        timeout=1.0,
+        timeout_returncode=124,
+        timeout_stderr="target import child exceeded timeout_seconds=28920",
+        success_when=lambda: False,
+        check_interval_seconds=0.25,
+    )
+
+    assert result.returncode == 124
+    assert result.stderr.startswith(
+        "target import child exceeded timeout_seconds=28920\n"
+    )
+    assert result.stderr.endswith("early stderr\nlate stderr\nafter termination\n")
 
 
 def test_run_contained_subprocess_terminates_tree_when_success_predicate_passes(
@@ -140,6 +198,7 @@ def test_run_contained_subprocess_terminates_tree_when_success_predicate_passes(
     result = subprocess_tree.run_contained_subprocess(
         ["forge", "kill-chain", "example.com"],
         timeout_seconds=30,
+        timeout_stderr="must not replace non-timeout stderr",
         success_when=success_when,
         success_check_interval_seconds=0.25,
     )

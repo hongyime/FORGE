@@ -177,10 +177,13 @@ def _communicate_with_timeout(
             args,
             timeout_returncode,
             _coerce_stream_text(exc.stdout) + _coerce_stream_text(stdout),
-            timeout_stderr
-            or _coerce_stream_text(exc.stderr)
-            or _coerce_stream_text(stderr)
-            or f"subprocess exceeded timeout_seconds={timeout:g}",
+            _timeout_error_stderr(
+                timeout_stderr,
+                _accumulate_stream_text(
+                    _coerce_stream_text(exc.stderr), _coerce_stream_text(stderr)
+                ),
+                timeout=timeout,
+            ),
         )
 
 
@@ -207,17 +210,20 @@ def _communicate_until_success_or_timeout(
                 args,
                 timeout_returncode,
                 pending_stdout + _coerce_stream_text(stdout),
-                timeout_stderr
-                or pending_stderr
-                or _coerce_stream_text(stderr)
-                or f"subprocess exceeded timeout_seconds={timeout:g}",
+                _timeout_error_stderr(
+                    timeout_stderr,
+                    _accumulate_stream_text(pending_stderr, _coerce_stream_text(stderr)),
+                    timeout=timeout,
+                ),
             )
         try:
             stdout, stderr = proc.communicate(timeout=min(interval, remaining))
             return subprocess.CompletedProcess(args, proc.returncode, stdout, stderr)
         except subprocess.TimeoutExpired as exc:
             pending_stdout = _coerce_stream_text(exc.stdout) or pending_stdout
-            pending_stderr = _coerce_stream_text(exc.stderr) or pending_stderr
+            pending_stderr = _accumulate_stream_text(
+                pending_stderr, _coerce_stream_text(exc.stderr)
+            )
             if success_when():
                 _terminate_process_tree(proc)
                 stdout, stderr = proc.communicate()
@@ -227,6 +233,27 @@ def _communicate_until_success_or_timeout(
                     pending_stdout + _coerce_stream_text(stdout),
                     pending_stderr + _coerce_stream_text(stderr),
                 )
+
+
+def _accumulate_stream_text(accumulated: str, captured: str) -> str:
+    """Merge repeated ``communicate`` output without losing distinct chunks."""
+    if not captured:
+        return accumulated
+    if not accumulated or captured.startswith(accumulated):
+        return captured
+    if accumulated.endswith(captured):
+        return accumulated
+    return accumulated + captured
+
+
+def _timeout_error_stderr(
+    timeout_stderr: str | None, captured_stderr: str, *, timeout: float
+) -> str:
+    """Return a timeout marker plus the diagnostic tail captured from the child."""
+    marker = timeout_stderr or f"subprocess exceeded timeout_seconds={timeout:g}"
+    if not captured_stderr:
+        return marker
+    return f"{marker}\n{captured_stderr[-2000:]}"
 
 
 def _windows_creation_flags() -> int:

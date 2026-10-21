@@ -40,6 +40,7 @@ import re
 import sys
 import sqlite3
 import subprocess
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
@@ -118,6 +119,87 @@ from forge.cli_recon import (
     _print_recon_subdomain_summary,
 )
 
+
+_FANOUT_AUDIT_HEARTBEAT_SECONDS = 10 * 60
+_POST_SHELL_FINALIZATION_LABEL = "phase5 post-shell payload"
+
+
+def _record_child_execution_audit(
+    audit_callback: Callable[..., object],
+    *,
+    db_path: Path,
+    engagement_id: int,
+    cmd_argv: Sequence[str],
+    label: str,
+    event: str,
+    loop_name: str | None = None,
+    returncode: int | None = None,
+    error_text: str = "",
+) -> None:
+    """Write fanout and post-shell child lifecycle events to ``audit_log``."""
+    if loop_name:
+        phase = "fanout"
+        module = loop_name
+        action = f"fanout_module_{event}"
+    elif label == _POST_SHELL_FINALIZATION_LABEL:
+        phase = "finalization"
+        module = "report_finalization"
+        action = f"finalization_step_{event}"
+    else:
+        return
+
+    result_parts = [f"argv={json.dumps(list(cmd_argv))}"]
+    if returncode is not None:
+        result_parts.append(f"exit={returncode}")
+    if error_text:
+        result_parts.append(f"stderr={error_text}")
+    audit_callback(
+        db_path,
+        engagement_id,
+        phase,
+        module,
+        action,
+        target=label,
+        result=" ".join(result_parts),
+    )
+
+
+def _start_fanout_audit_heartbeat(
+    audit_callback: Callable[..., object],
+    *,
+    db_path: Path,
+    engagement_id: int,
+    cmd_argv: Sequence[str],
+    label: str,
+    loop_name: str | None,
+    interval_seconds: float = _FANOUT_AUDIT_HEARTBEAT_SECONDS,
+) -> tuple[threading.Event, threading.Thread] | None:
+    """Emit lightweight audit heartbeats while a fanout child is still running."""
+    if not loop_name:
+        return None
+    stop_event = threading.Event()
+
+    def _heartbeat() -> None:
+        while not stop_event.wait(max(0.01, float(interval_seconds))):
+            _record_child_execution_audit(
+                audit_callback,
+                db_path=db_path,
+                engagement_id=engagement_id,
+                cmd_argv=cmd_argv,
+                label=label,
+                event="progress",
+                loop_name=loop_name,
+            )
+
+    thread = threading.Thread(
+        target=_heartbeat,
+        name=f"fanout-audit-{loop_name}",
+        daemon=True,
+    )
+    thread.start()
+    return stop_event, thread
+
+
 # Keep long operational flag names readable in Typer/Rich help output.
 rich_utils.MAX_WIDTH = 120
 
@@ -164,6 +246,7 @@ from forge.cli_helpers import (  # noqa: F401, E402
     _direct_cli_scope_manifest_value,
     _direct_cli_split_scope_entries,
     _empty_html_mined_result,
+    _extract_child_error_text,
     _extract_html_surface_urls,
     _extract_passive_text_urls,
     _identity_lookup_max_workers,
@@ -1545,26 +1628,84 @@ def kill_chain(
             )
             return 0
         _log(label, "starting")
-        proc = _run_forge_module_subprocess(
-            cmd_argv,
-            tor_prefix=_tor_prefix,
-            timeout_seconds=timeout_seconds,
+        _record_child_execution_audit(
+            _cli_audit,
+            db_path=db_path,
+            engagement_id=engagement_id,
+            cmd_argv=cmd_argv,
+            label=label,
+            event="start",
+            loop_name=loop_name,
         )
+        audit_heartbeat = _start_fanout_audit_heartbeat(
+            _cli_audit,
+            db_path=db_path,
+            engagement_id=engagement_id,
+            cmd_argv=cmd_argv,
+            label=label,
+            loop_name=loop_name,
+        )
+        try:
+            proc = _run_forge_module_subprocess(
+                cmd_argv,
+                tor_prefix=_tor_prefix,
+                timeout_seconds=timeout_seconds,
+            )
+        except Exception as exc:
+            error_text = f"{type(exc).__name__}: {exc}"
+            _record_child_execution_audit(
+                _cli_audit,
+                db_path=db_path,
+                engagement_id=engagement_id,
+                cmd_argv=cmd_argv,
+                label=label,
+                event="failed",
+                loop_name=loop_name,
+                error_text=error_text,
+            )
+            raise
+        finally:
+            if audit_heartbeat is not None:
+                stop_event, heartbeat_thread = audit_heartbeat
+                stop_event.set()
+                heartbeat_thread.join(timeout=0.1)
         if proc.returncode != 0:
+            error_text = _extract_child_error_text(proc.stderr)
             _log(label, f"[yellow]exit={proc.returncode}[/yellow] "
-                        f"stderr={proc.stderr[-200:] if proc.stderr else 'none'}")
+                        f"stderr={error_text or 'none'}")
+            _record_child_execution_audit(
+                _cli_audit,
+                db_path=db_path,
+                engagement_id=engagement_id,
+                cmd_argv=cmd_argv,
+                label=label,
+                event="failed",
+                loop_name=loop_name,
+                returncode=proc.returncode,
+                error_text=error_text,
+            )
             _finalize_module_seed_runs(
                 run_handles,
                 base_metadata_value=base_metadata,
                 status="failed",
                 output_count=0,
-                error=proc.stderr[-512:] if proc.stderr else f"exit={proc.returncode}",
+                error=error_text or f"exit={proc.returncode}",
                 extra_metadata={"returncode": proc.returncode},
                 progress_label_prefix=label,
             )
         else:
             tail = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else "ok"
             _log(label, f"[green]done[/green]  {tail[:100]}")
+            _record_child_execution_audit(
+                _cli_audit,
+                db_path=db_path,
+                engagement_id=engagement_id,
+                cmd_argv=cmd_argv,
+                label=label,
+                event="completed",
+                loop_name=loop_name,
+                returncode=proc.returncode,
+            )
             _finalize_module_seed_runs(
                 run_handles,
                 base_metadata_value=base_metadata,

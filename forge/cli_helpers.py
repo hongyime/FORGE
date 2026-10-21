@@ -46,6 +46,7 @@ __all__ = [
     "_direct_cli_split_scope_entries",
     "_DNS_DEFAULT_MAX_WORKERS",
     "_empty_html_mined_result",
+    "_extract_child_error_text",
     "_extract_html_surface_urls",
     "_extract_passive_text_urls",
     "_HTML_ATTRIBUTE_URL_RE",
@@ -266,6 +267,56 @@ def _timeout_stream_text(value: object) -> str:
     return str(value or "")
 
 
+_ANSI_ESCAPE_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|[@-_][0-?]*[ -/]*[@-~])")
+_RICH_PANEL_VERTICAL_CHARS = "│┃║"
+_RICH_PANEL_FRAME_START_CHARS = "╭╰┌└╔╚"
+_RICH_PANEL_FRAME_END_CHARS = "╮╯┐┘╗╝"
+_CHILD_ERROR_LINE_RE = re.compile(
+    r"\b(?:error|exception|traceback|no such option|invalid|missing|cannot|can't|"
+    r"failed|failure|denied|not found|[a-z_]*(?:error|exception))\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_child_error_text(value: object, *, limit: int = 1000) -> str:
+    """Return a bounded, readable error excerpt from child-process stderr."""
+    text = _ANSI_ESCAPE_RE.sub("", _timeout_stream_text(value))
+    if not text:
+        return ""
+    bounded_limit = max(0, int(limit))
+    if bounded_limit == 0:
+        return ""
+
+    lines = text.splitlines()
+    is_rich_panel = any(
+        bool(line.strip())
+        and (
+            line.strip()[:1] in _RICH_PANEL_FRAME_START_CHARS
+            or line.strip()[-1:] in _RICH_PANEL_FRAME_END_CHARS
+            or line.strip()[:1] in _RICH_PANEL_VERTICAL_CHARS
+        )
+        for line in lines
+    )
+    if not is_rich_panel:
+        return text[-bounded_limit:]
+
+    content_lines: list[str] = []
+    for line in lines:
+        content = line.strip()
+        if not content or content[:1] in _RICH_PANEL_FRAME_START_CHARS:
+            continue
+        if content[:1] in _RICH_PANEL_VERTICAL_CHARS:
+            content = content[1:].strip()
+        if content[-1:] in _RICH_PANEL_VERTICAL_CHARS:
+            content = content[:-1].rstrip()
+        if content:
+            content_lines.append(content)
+    meaningful_lines = [
+        line for line in content_lines if _CHILD_ERROR_LINE_RE.search(line)
+    ]
+    return "\n".join(meaningful_lines or content_lines)[-bounded_limit:]
+
+
 def _run_forge_module_subprocess(
     cmd_argv: Sequence[str],
     *,
@@ -286,7 +337,7 @@ def _run_forge_module_subprocess(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        stderr_tail = _timeout_stream_text(exc.stderr)[-512:]
+        stderr_tail = _extract_child_error_text(exc.stderr, limit=512)
         timeout_message = f"timeout after {timeout:g}s"
         if stderr_tail:
             timeout_message = f"{timeout_message}; {stderr_tail}"

@@ -3129,7 +3129,10 @@ def test_start_timeout_marks_running_kill_chain_failed_for_resume(
         raise subprocess.CalledProcessError(
             124,
             ["kill-chain", str(kwargs["seed"])],
-            stderr="target import child exceeded timeout_seconds=28920",
+            stderr=(
+                "target import child exceeded timeout_seconds=28920\n"
+                "child diagnostic tail"
+            ),
         )
 
     monkeypatch.setattr("forge.targets_import._start_kill_chain", _fake_start)
@@ -3164,6 +3167,10 @@ def test_start_timeout_marks_running_kill_chain_failed_for_resume(
     assert "watchdog timeout" in run[1]
     assert run[2]
     assert timeout_event["return_code"] == 124
+    assert isinstance(timeout_event["stderr_tail"], str)
+    assert timeout_event["stderr_tail"] == (
+        "target import child exceeded timeout_seconds=28920\nchild diagnostic tail"
+    )
 
 
 def test_consecutive_start_failures_stop_feed_early_and_report_reason(

@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -96,6 +97,109 @@ def test_run_forge_module_subprocess_returns_missing_executable_exit_code(
     assert result.returncode == 127
     assert result.stdout == ""
     assert "FileNotFoundError: missing executable" in result.stderr
+
+
+def test_extract_child_error_text_reads_rich_panel_message() -> None:
+    stderr = (
+        "\x1b[91m╭──────────── Error ────────────╮\x1b[0m\n"
+        "\x1b[91m│ No such option: --bad-option  │\x1b[0m\n"
+        "\x1b[91m│                                │\x1b[0m\n"
+        "\x1b[91m╰────────────────────────────────╯\x1b[0m\n"
+    )
+
+    assert cli._extract_child_error_text(stderr) == "No such option: --bad-option"
+
+
+def test_extract_child_error_text_keeps_plain_stderr_tail() -> None:
+    stderr = "prefix\n" + "x" * 1100
+
+    assert cli._extract_child_error_text(stderr) == stderr[-1000:]
+
+
+def test_extract_child_error_text_keeps_empty_stderr_empty() -> None:
+    assert cli._extract_child_error_text("") == ""
+
+
+def test_fanout_child_audit_records_lifecycle_and_progress() -> None:
+    events: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    progress_emitted = threading.Event()
+
+    def _audit(*args: object, **kwargs: object) -> None:
+        events.append((args, kwargs))
+        if args[4] == "fanout_module_progress":
+            progress_emitted.set()
+
+    kwargs = {
+        "db_path": Path("engagement.db"),
+        "engagement_id": 139,
+        "cmd_argv": ["osint", "keyscan", "--engagement", "139"],
+        "label": "1.F keyscan (example.test)",
+        "loop_name": "fanout_f_keyscan",
+    }
+    cli._record_child_execution_audit(_audit, event="start", **kwargs)
+    heartbeat = cli._start_fanout_audit_heartbeat(
+        _audit, interval_seconds=0.01, **kwargs
+    )
+    assert heartbeat is not None
+    stop_event, heartbeat_thread = heartbeat
+    assert progress_emitted.wait(timeout=0.5)
+    stop_event.set()
+    heartbeat_thread.join(timeout=1)
+    cli._record_child_execution_audit(
+        _audit,
+        event="failed",
+        returncode=2,
+        error_text="No such option: --scope-manifest",
+        **kwargs,
+    )
+
+    actions = [str(args[4]) for args, _kwargs in events]
+    assert actions[0] == "fanout_module_start"
+    assert "fanout_module_progress" in actions
+    assert actions[-1] == "fanout_module_failed"
+    failed_args, failed_kwargs = events[-1]
+    assert failed_args[2:4] == ("fanout", "fanout_f_keyscan")
+    assert failed_kwargs["target"] == "1.F keyscan (example.test)"
+    assert failed_kwargs["result"] == (
+        'argv=["osint", "keyscan", "--engagement", "139"] '
+        "exit=2 stderr=No such option: --scope-manifest"
+    )
+
+
+def test_post_shell_finalization_audit_records_success_and_real_failure_text() -> None:
+    events: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    def _audit(*args: object, **kwargs: object) -> None:
+        events.append((args, kwargs))
+
+    kwargs = {
+        "db_path": Path("engagement.db"),
+        "engagement_id": 142,
+        "cmd_argv": ["post", "shell", "--engagement", "142", "--lhost", "127.0.0.1"],
+        "label": "phase5 post-shell payload",
+    }
+    cli._record_child_execution_audit(_audit, event="start", **kwargs)
+    cli._record_child_execution_audit(_audit, event="completed", returncode=0, **kwargs)
+    cli._record_child_execution_audit(
+        _audit,
+        event="failed",
+        returncode=2,
+        error_text="No such option: --scope-manifest",
+        **kwargs,
+    )
+
+    assert [str(args[4]) for args, _kwargs in events] == [
+        "finalization_step_start",
+        "finalization_step_completed",
+        "finalization_step_failed",
+    ]
+    failed_args, failed_kwargs = events[-1]
+    assert failed_args[2:4] == ("finalization", "report_finalization")
+    assert failed_kwargs["target"] == "phase5 post-shell payload"
+    assert failed_kwargs["result"] == (
+        'argv=["post", "shell", "--engagement", "142", "--lhost", "127.0.0.1"] '
+        "exit=2 stderr=No such option: --scope-manifest"
+    )
 
 
 def test_detected_prereq_child_argv_adds_live_authorization_once() -> None:
